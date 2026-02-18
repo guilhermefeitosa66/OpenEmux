@@ -20,6 +20,7 @@
    - Remove visible dependence on external emulator menus/windows.
 
 ## Deliverables
-- Runtime mode abstraction used by UI launch actions.
-- External kiosk controls documented per emulator.
+- Runtime mode abstraction used by UI launch actions. (implemented for external mode)
+- External kiosk controls documented per emulator. (implemented as config-driven best-effort flags)
+- Runtime lifecycle controls for external mode (single active game, stop action, process polling).
 - Design-ready interface for embedded core migration.

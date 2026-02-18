@@ -70,9 +70,12 @@ class Launcher:
     def _build_command(self, emu_binary, rom_path, console):
         """Build the command list with any emulator-specific flags."""
         cmd = [emu_binary]
+        fullscreen_tokens = {"--fullscreen", "-f", "-fullscreen"}
 
         if self.config_manager.is_external_kiosk_enabled():
             for flag in self.config_manager.get_external_flags(console):
+                if self.config_manager.prefer_windowed_runtime() and flag in fullscreen_tokens:
+                    continue
                 if self._supports_flag(emu_binary, flag):
                     cmd.append(flag)
                     break
@@ -80,7 +83,7 @@ class Launcher:
         cmd.append(rom_path)
         return cmd
 
-    def launch(self, rom_path, console):
+    def launch_process(self, rom_path, console):
         emu_binary, is_vendored = self.get_emulator_path(console)
 
         if not emu_binary:
@@ -90,7 +93,7 @@ class Launcher:
                 f"or install the system package."
             )
             print(f"Error: {error_msg}")
-            return False, error_msg
+            return None, error_msg
 
         cmd = self._build_command(emu_binary, rom_path, console)
 
@@ -104,13 +107,19 @@ class Launcher:
             if emu_dir:
                 env = os.environ.copy()
                 env["PWD"] = emu_dir
-            subprocess.Popen(cmd, cwd=emu_dir or None, env=env)
-            return True, None
+            proc = subprocess.Popen(cmd, cwd=emu_dir or None, env=env)
+            return proc, None
         except FileNotFoundError:
             error_msg = f"Emulator binary not found: {emu_binary}"
             print(f"Error: {error_msg}")
-            return False, error_msg
+            return None, error_msg
         except Exception as e:
             error_msg = f"Error launching emulator: {e}"
             print(error_msg)
+            return None, error_msg
+
+    def launch(self, rom_path, console):
+        proc, error_msg = self.launch_process(rom_path, console)
+        if not proc:
             return False, error_msg
+        return True, None

@@ -27,8 +27,8 @@ This document outlines delivery phases and current status.
 
 ## Phase 4: Integrated Runtime Experience
 **Goal**: Reduce external emulator UX and move toward OpenEmu-style runtime.
--   [ ] Add external wrapper "kiosk mode" behavior (best-effort flags per emulator).
--   [ ] Build integrated runtime bridge in Opemux (single app workflow and lifecycle handling).
+-   [x] Add external wrapper "kiosk mode" behavior (best-effort flags per emulator).
+-   [x] Build runtime bridge in Opemux for external mode (single active process, lifecycle handling).
 -   [ ] Migrate to embedded core runtime (`runtime.mode=integrated_core`) for unified window experience.
 
 ## Phase 5: Input Management (Application-Level)

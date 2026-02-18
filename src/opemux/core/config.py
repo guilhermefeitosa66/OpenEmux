@@ -12,10 +12,11 @@ DEFAULT_CONFIG = {
     "runtime": {
         "mode": "external_wrapper",
         "external_kiosk": True,
+        "prefer_windowed": True,
         "external_flags": {
             "nes": [],
-            "snes": ["--fullscreen", "-f"],
-            "gba": ["--fullscreen", "-f"],
+            "snes": [],
+            "gba": [],
         },
     },
     "controls": {
@@ -55,6 +56,7 @@ class ConfigManager:
             with open(self.config_file, 'r') as f:
                 raw = yaml.safe_load(f) or {}
                 config = _merge_defaults(DEFAULT_CONFIG, raw)
+                config = self._migrate_runtime_config(config)
                 if config != raw:
                     self.save_config(config)
                 return config
@@ -64,7 +66,24 @@ class ConfigManager:
 
     def create_default_config(self):
         config = _merge_defaults(DEFAULT_CONFIG, {})
+        config = self._migrate_runtime_config(config)
         self.save_config(config)
+        return config
+
+    def _migrate_runtime_config(self, config):
+        runtime = config.get("runtime", {})
+        runtime.setdefault("prefer_windowed", True)
+
+        if runtime.get("prefer_windowed", True):
+            fullscreen_tokens = {"--fullscreen", "-f", "-fullscreen"}
+            flags_by_console = runtime.get("external_flags", {})
+            for console, flags in flags_by_console.items():
+                flags_by_console[console] = [
+                    flag for flag in flags if str(flag).strip() not in fullscreen_tokens
+                ]
+            runtime["external_flags"] = flags_by_console
+
+        config["runtime"] = runtime
         return config
 
     def save_config(self, config=None):
@@ -95,6 +114,9 @@ class ConfigManager:
 
     def get_external_flags(self, console):
         return self.config.get("runtime", {}).get("external_flags", {}).get(console, [])
+
+    def prefer_windowed_runtime(self):
+        return bool(self.config.get("runtime", {}).get("prefer_windowed", True))
 
     def get_controls_profile(self, console):
         return self.config.get("controls", {}).get("profiles", {}).get(console, {})

@@ -72,6 +72,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.main_box.append(self.content_box)
 
         self.refresh_library()
+        GLib.timeout_add_seconds(1, self._poll_runtime_state)
 
     def load_css(self):
         css_provider = Gtk.CssProvider()
@@ -85,6 +86,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         )
 
     def _build_header(self, header_bar):
+        self.stop_btn = Gtk.Button()
+        self.stop_btn.set_icon_name("media-playback-stop-symbolic")
+        self.stop_btn.set_tooltip_text("Stop running game")
+        self.stop_btn.set_sensitive(False)
+        self.stop_btn.connect("clicked", self._on_stop_game_clicked)
+        header_bar.pack_end(self.stop_btn)
+
         # Search toggle button
         self.search_button = Gtk.ToggleButton()
         self.search_button.set_icon_name("system-search-symbolic")
@@ -190,9 +198,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def on_launch_game(self, rom):
         success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        self._sync_runtime_controls()
         if not success and error_msg:
             toast = Adw.Toast(title=error_msg)
             toast.set_timeout(5)
+            self.toast_overlay.add_toast(toast)
+        elif success:
+            toast = Adw.Toast(title=f"Running {rom['name']} ({rom['console'].upper()})")
+            toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
 
     def _on_console_selected(self, listbox, row):
@@ -222,3 +235,27 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 matches = query in inner.rom["name"].lower()
                 flow_child.set_visible(matches or not query)
             child = child.get_next_sibling()
+
+    def _on_stop_game_clicked(self, _button):
+        success, error_msg = self.runtime_manager.stop_active()
+        self._sync_runtime_controls()
+        if not success and error_msg:
+            toast = Adw.Toast(title=error_msg)
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+
+    def _poll_runtime_state(self):
+        result = self.runtime_manager.poll_active()
+        if result is not None:
+            rom = result.get("rom") or {}
+            rom_name = rom.get("path", "Game").split("/")[-1]
+            title = f"{rom_name} finished (code {result['exit_code']})"
+            toast = Adw.Toast(title=title)
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        self._sync_runtime_controls()
+        return True
+
+    def _sync_runtime_controls(self):
+        is_running = self.runtime_manager.is_running()
+        self.stop_btn.set_sensitive(is_running)
