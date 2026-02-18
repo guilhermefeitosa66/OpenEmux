@@ -1,0 +1,27 @@
+.sidebar {
+    background-color: @window_bg_color;
+}
+
+.rom-cover-placeholder {
+    background-color: @card_bg_color;
+    border-radius: 8px;
+    border: 1px solid @card_shade_color;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease-in-out;
+}
+
+.rom-cover-placeholder:hover {
+    transform: scale(1.05);
+    border-color: @accent_bg_color;
+}
+
+.rom-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+
+.heading {
+    font-weight: bold;
+    color: @secondary_fg_color;
+}

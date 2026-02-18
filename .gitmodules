@@ -1,0 +1,3 @@
+[submodule "vendors/nestopia"]
+	path = vendors/nestopia
+	url = https://github.com/rdanbrook/nestopia.git
