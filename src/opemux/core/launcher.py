@@ -5,9 +5,10 @@ import os.path
 from pathlib import Path
 
 class Launcher:
-    def __init__(self, project_root):
+    def __init__(self, project_root, config_manager):
         self.project_root = Path(project_root)
         self.vendors_path = self.project_root / "vendors"
+        self.config_manager = config_manager
 
     def get_emulator_path(self, console):
         """Returns (binary_path, is_vendored) tuple."""
@@ -52,9 +53,32 @@ class Launcher:
 
         return None, False
 
+    def _supports_flag(self, emu_binary, flag):
+        try:
+            result = subprocess.run(
+                [emu_binary, "--help"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            return flag in (result.stdout or "")
+        except Exception:
+            return False
+
     def _build_command(self, emu_binary, rom_path, console):
         """Build the command list with any emulator-specific flags."""
-        return [emu_binary, rom_path]
+        cmd = [emu_binary]
+
+        if self.config_manager.is_external_kiosk_enabled():
+            for flag in self.config_manager.get_external_flags(console):
+                if self._supports_flag(emu_binary, flag):
+                    cmd.append(flag)
+                    break
+
+        cmd.append(rom_path)
+        return cmd
 
     def launch(self, rom_path, console):
         emu_binary, is_vendored = self.get_emulator_path(console)

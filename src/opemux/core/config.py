@@ -1,10 +1,46 @@
-import os
 import yaml
 from pathlib import Path
 
 DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
 DEFAULT_ROMS_PATH = Path.home() / "games" / "roms"
+DEFAULT_COVERS_DIR = DEFAULT_ROMS_PATH / "covers"
+
+DEFAULT_CONFIG = {
+    "roms_path": str(DEFAULT_ROMS_PATH),
+    "consoles": ["nes", "snes", "gba"],
+    "runtime": {
+        "mode": "external_wrapper",
+        "external_kiosk": True,
+        "external_flags": {
+            "nes": [],
+            "snes": ["--fullscreen", "-f"],
+            "gba": ["--fullscreen", "-f"],
+        },
+    },
+    "controls": {
+        "profiles": {
+            "nes": {},
+            "snes": {},
+            "gba": {},
+        }
+    },
+    "covers": {
+        "dir": str(DEFAULT_COVERS_DIR),
+        "providers": ["screenscraper"],
+        "preferred_ext_order": ["png", "jpg", "webp"],
+    },
+}
+
+
+def _merge_defaults(defaults, data):
+    merged = dict(defaults)
+    for key, value in (data or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_defaults(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
@@ -14,19 +50,20 @@ class ConfigManager:
     def load_config(self):
         if not self.config_file.exists():
             return self.create_default_config()
-        
+
         try:
             with open(self.config_file, 'r') as f:
-                return yaml.safe_load(f) or self.create_default_config()
+                raw = yaml.safe_load(f) or {}
+                config = _merge_defaults(DEFAULT_CONFIG, raw)
+                if config != raw:
+                    self.save_config(config)
+                return config
         except Exception as e:
             print(f"Error loading config: {e}")
             return self.create_default_config()
 
     def create_default_config(self):
-        config = {
-            "roms_path": str(DEFAULT_ROMS_PATH),
-            "consoles": ["nes", "snes", "gba"]
-        }
+        config = _merge_defaults(DEFAULT_CONFIG, {})
         self.save_config(config)
         return config
 
@@ -44,7 +81,26 @@ class ConfigManager:
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
 
+    def get_covers_dir(self):
+        covers_cfg = self.config.get("covers", {}).get("dir")
+        if covers_cfg:
+            return Path(covers_cfg)
+        return self.get_roms_path() / "covers"
+
+    def get_runtime_mode(self):
+        return self.config.get("runtime", {}).get("mode", "external_wrapper")
+
+    def is_external_kiosk_enabled(self):
+        return bool(self.config.get("runtime", {}).get("external_kiosk", True))
+
+    def get_external_flags(self, console):
+        return self.config.get("runtime", {}).get("external_flags", {}).get(console, [])
+
+    def get_controls_profile(self, console):
+        return self.config.get("controls", {}).get("profiles", {}).get(console, {})
+
     def ensure_rom_directories(self):
         base_path = self.get_roms_path()
         for console in self.config.get("consoles", []):
             (base_path / console).mkdir(parents=True, exist_ok=True)
+            (self.get_covers_dir() / console).mkdir(parents=True, exist_ok=True)

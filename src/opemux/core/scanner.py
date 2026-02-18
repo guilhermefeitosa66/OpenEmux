@@ -1,4 +1,5 @@
 from pathlib import Path
+from opemux.core.hasher import compute_rom_id
 
 SUPPORTED_EXTENSIONS = {
     "nes": [".nes"],
@@ -23,13 +24,20 @@ class RomScanner:
 
         roms = []
         extensions = SUPPORTED_EXTENSIONS.get(console, [])
-        
-        for file in console_path.iterdir():
-            if file.suffix.lower() in extensions:
+
+        for file in console_path.rglob("*"):
+            if file.is_file() and file.suffix.lower() in extensions:
+                rom_id = None
+                try:
+                    rom_id = compute_rom_id(str(file))
+                except Exception:
+                    # Keep scanning even if hashing fails for one file.
+                    rom_id = None
                 roms.append({
                     "name": file.stem,
                     "path": str(file),
-                    "console": console
+                    "console": console,
+                    "rom_id": rom_id,
                 })
-        
+
         return sorted(roms, key=lambda x: x["name"])
