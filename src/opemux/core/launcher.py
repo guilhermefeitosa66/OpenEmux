@@ -10,7 +10,6 @@ class Launcher:
     def get_emulator_path(self, console):
         if console == "nes":
             # Check for vendorized nestopia binary
-            # Try root folder (Autotools) and build folder (previous attempt/CMake)
             paths = [
                 self.vendors_path / "nestopia" / "nestopia",
                 self.vendors_path / "nestopia" / "build" / "nestopia"
@@ -20,7 +19,28 @@ class Launcher:
                     return str(path)
             return "nestopia" # Fallback to system path
 
+        if console == "snes":
+            # Check for vendorized snes9x binary
+            paths = [
+                self.vendors_path / "snes9x" / "gtk" / "build" / "snes9x-gtk",
+            ]
+            for path in paths:
+                if path.exists():
+                    return str(path)
+            return "snes9x-gtk" # Fallback to system path
+
+        if console == "gba":
+            # Check for vendorized mgba binary
+            paths = [
+                self.vendors_path / "mgba" / "build" / "sdl" / "mgba-sdl",
+            ]
+            for path in paths:
+                if path.exists():
+                    return str(path)
+            return "mgba-sdl" # Fallback to system path
+
         return None
+
 
     def launch(self, rom_path, console):
         emu_binary = self.get_emulator_path(console)
@@ -32,7 +52,9 @@ class Launcher:
         
         try:
             print(f"Launching: {' '.join(cmd)}")
-            # We use Popen so we don't block the UI
-            subprocess.Popen(cmd)
+            # Set working directory to the emulator's folder so it finds its database
+            emu_dir = os.path.dirname(emu_binary)
+            subprocess.Popen(cmd, cwd=emu_dir)
         except Exception as e:
             print(f"Error launching emulator: {e}")
+
