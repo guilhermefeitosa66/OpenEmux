@@ -13,6 +13,8 @@ DEFAULT_CONFIG = {
         "mode": "external_wrapper",
         "console_backend": {
             "nes": "retroarch_wrapper",
+            "snes": "retroarch_wrapper",
+            "gba": "retroarch_wrapper",
         },
         "external_kiosk": True,
         "prefer_windowed": True,
@@ -85,6 +87,11 @@ class ConfigManager:
     def _migrate_runtime_config(self, config):
         runtime = config.get("runtime", {})
         runtime.setdefault("prefer_windowed", True)
+        runtime.setdefault("console_backend", {})
+
+        # Default all supported consoles to RetroArch wrapper unless user explicitly changed.
+        for console in ("nes", "snes", "gba"):
+            runtime["console_backend"].setdefault(console, "retroarch_wrapper")
 
         if runtime.get("prefer_windowed", True):
             fullscreen_tokens = {"--fullscreen", "-f", "-fullscreen"}
