@@ -1,27 +1,84 @@
+/* ===== Sidebar ===== */
 .sidebar {
     background-color: @window_bg_color;
 }
 
-.rom-cover-placeholder {
-    background-color: @card_bg_color;
+.sidebar list {
+    background: transparent;
+}
+
+.sidebar row {
     border-radius: 8px;
-    border: 1px solid @card_shade_color;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease-in-out;
+    margin: 2px 8px;
+    transition: background-color 0.15s ease;
 }
 
-.rom-cover-placeholder:hover {
-    transform: scale(1.05);
-    border-color: @accent_bg_color;
+.sidebar row:selected {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
 }
-
-.rom-title {
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
 
 .heading {
     font-weight: bold;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: @secondary_fg_color;
+}
+
+/* ===== ROM Cards ===== */
+.rom-card {
+    border-radius: 10px;
+    padding: 8px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.rom-card-hover {
+    background-color: alpha(@accent_bg_color, 0.12);
+    transform: translateY(-3px);
+}
+
+.rom-cover {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.rom-cover-placeholder {
+    background: linear-gradient(145deg, @card_bg_color, alpha(@accent_bg_color, 0.15));
+    border-radius: 8px;
+    border: 1px solid alpha(@card_shade_color, 0.6);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    min-width: 140px;
+    min-height: 190px;
+}
+
+.placeholder-icon {
+    opacity: 0.4;
+}
+
+/* ===== Play Overlay ===== */
+.play-overlay {
+    background-color: alpha(black, 0.55);
+    border-radius: 8px;
+    min-width: 140px;
+    min-height: 190px;
+}
+
+.play-icon {
+    color: white;
+    opacity: 0.95;
+}
+
+/* ===== ROM Title ===== */
+.rom-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: @window_fg_color;
+}
+
+/* ===== Search Bar ===== */
+.search-bar-box {
+    padding: 6px 12px;
+    background-color: @headerbar_bg_color;
+    border-bottom: 1px solid alpha(@headerbar_shade_color, 0.5);
 }

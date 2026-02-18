@@ -8,6 +8,7 @@
    - Keep subprocess strategy for stability.
    - Add best-effort fullscreen/menu-minimizing flags per emulator.
    - Keep fallback when flags are unsupported.
+   - Add optional `retroarch_wrapper` backend for more consistent cross-system behavior.
 
 2. **Runtime Bridge (mid term)**
    - Centralize runtime lifecycle in a dedicated manager.

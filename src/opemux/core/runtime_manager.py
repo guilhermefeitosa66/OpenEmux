@@ -1,16 +1,19 @@
 from opemux.core.launcher import Launcher
+from opemux.core.retroarch_launcher import RetroArchLauncher
 
 
 class RuntimeManager:
     """
     Runtime strategy entrypoint.
     - external_wrapper: launches vendored/system emulators as subprocesses.
+    - retroarch_wrapper: launches RetroArch with libretro core + ROM.
     - integrated_core: reserved for future embedded core runtime.
     """
 
     def __init__(self, project_root, config_manager):
         self.config_manager = config_manager
         self.external_launcher = Launcher(project_root, config_manager)
+        self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
 
@@ -18,10 +21,18 @@ class RuntimeManager:
         if self.is_running():
             return False, "A game is already running. Close it before launching another one."
 
-        mode = self.config_manager.get_runtime_mode()
+        mode = self.config_manager.get_runtime_mode_for_console(console)
 
         if mode == "external_wrapper":
             proc, error_msg = self.external_launcher.launch_process(rom_path, console)
+            if not proc:
+                return False, error_msg
+            self.active_process = proc
+            self.active_rom = {"path": rom_path, "console": console}
+            return True, None
+
+        if mode == "retroarch_wrapper":
+            proc, error_msg = self.retroarch_launcher.launch_process(rom_path, console)
             if not proc:
                 return False, error_msg
             self.active_process = proc

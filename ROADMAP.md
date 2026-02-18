@@ -29,6 +29,7 @@ This document outlines delivery phases and current status.
 **Goal**: Reduce external emulator UX and move toward OpenEmu-style runtime.
 -   [x] Add external wrapper "kiosk mode" behavior (best-effort flags per emulator).
 -   [x] Build runtime bridge in Opemux for external mode (single active process, lifecycle handling).
+-   [x] Add optional `retroarch_wrapper` mode (`retroarch -L <core> <rom>`).
 -   [ ] Migrate to embedded core runtime (`runtime.mode=integrated_core`) for unified window experience.
 
 ## Phase 5: Input Management (Application-Level)

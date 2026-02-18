@@ -1,0 +1,105 @@
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+
+DEFAULT_CORE_CANDIDATES = {
+    "nes": [
+        "nestopia_libretro.so",
+        "fceumm_libretro.so",
+        "mesen_libretro.so",
+    ],
+    "snes": [
+        "snes9x_libretro.so",
+        "bsnes_libretro.so",
+    ],
+    "gba": [
+        "mgba_libretro.so",
+        "gpsp_libretro.so",
+    ],
+}
+
+DEFAULT_CORE_DIRS = [
+    "/usr/lib/libretro",
+    "/usr/lib64/libretro",
+    "/usr/lib/x86_64-linux-gnu/libretro",
+    "/usr/local/lib/libretro",
+]
+
+
+class RetroArchLauncher:
+    def __init__(self, project_root, config_manager):
+        self.project_root = Path(project_root)
+        self.config_manager = config_manager
+
+    def _resolve_retroarch_binary(self):
+        configured = self.config_manager.get_retroarch_binary()
+        configured_path = Path(configured).expanduser()
+
+        if configured_path.exists():
+            return str(configured_path)
+
+        resolved = shutil.which(configured)
+        if resolved:
+            return resolved
+
+        vendor_candidates = [
+            self.project_root / "vendors" / "RetroArch-Linux-x86_64.AppImage",
+            self.project_root / "vendors" / "retroarch.AppImage",
+        ]
+        for candidate in vendor_candidates:
+            if candidate.exists():
+                return str(candidate)
+
+        return None
+
+    def _find_core_path(self, console):
+        for hint in self.config_manager.get_retroarch_core_hints(console):
+            hint_path = Path(hint).expanduser()
+            if hint_path.exists():
+                return str(hint_path)
+
+        candidates = DEFAULT_CORE_CANDIDATES.get(console, [])
+        home_dirs = [
+            Path.home() / ".config" / "retroarch" / "cores",
+            Path.home() / ".var" / "app" / "org.libretro.RetroArch" / "config" / "retroarch" / "cores",
+        ]
+        search_dirs = [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
+
+        for core_dir in search_dirs:
+            base = Path(core_dir)
+            if not base.exists():
+                continue
+            for name in candidates:
+                candidate = base / name
+                if candidate.exists():
+                    return str(candidate)
+        return None
+
+    def launch_process(self, rom_path, console):
+        retroarch_path = self._resolve_retroarch_binary()
+        if not retroarch_path:
+            return None, (
+                "RetroArch binary not found. Set runtime.retroarch.binary "
+                "or add RetroArch AppImage under vendors/."
+            )
+
+        core_path = self._find_core_path(console)
+        if not core_path:
+            candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(console, []))
+            return None, (
+                f"No RetroArch core found for {console.upper()}. "
+                f"Tried common core dirs and these core names: {candidates}. "
+                "Configure runtime.retroarch.cores in config.yaml."
+            )
+
+        cmd = [retroarch_path, "-L", core_path]
+        cmd.extend(self.config_manager.get_retroarch_extra_flags())
+        cmd.append(rom_path)
+
+        try:
+            proc = subprocess.Popen(cmd, cwd=os.getcwd(), env=os.environ.copy())
+            return proc, None
+        except Exception as exc:
+            return None, f"Failed to launch RetroArch: {exc}"

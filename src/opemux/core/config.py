@@ -11,12 +11,24 @@ DEFAULT_CONFIG = {
     "consoles": ["nes", "snes", "gba"],
     "runtime": {
         "mode": "external_wrapper",
+        "console_backend": {
+            "nes": "retroarch_wrapper",
+        },
         "external_kiosk": True,
         "prefer_windowed": True,
         "external_flags": {
             "nes": [],
             "snes": [],
             "gba": [],
+        },
+        "retroarch": {
+            "binary": "retroarch",
+            "extra_flags": [],
+            "cores": {
+                "nes": [],
+                "snes": [],
+                "gba": [],
+            },
         },
     },
     "controls": {
@@ -109,6 +121,11 @@ class ConfigManager:
     def get_runtime_mode(self):
         return self.config.get("runtime", {}).get("mode", "external_wrapper")
 
+    def get_runtime_mode_for_console(self, console):
+        runtime = self.config.get("runtime", {})
+        per_console = runtime.get("console_backend", {})
+        return per_console.get(console, runtime.get("mode", "external_wrapper"))
+
     def is_external_kiosk_enabled(self):
         return bool(self.config.get("runtime", {}).get("external_kiosk", True))
 
@@ -120,6 +137,15 @@ class ConfigManager:
 
     def get_controls_profile(self, console):
         return self.config.get("controls", {}).get("profiles", {}).get(console, {})
+
+    def get_retroarch_binary(self):
+        return self.config.get("runtime", {}).get("retroarch", {}).get("binary", "retroarch")
+
+    def get_retroarch_extra_flags(self):
+        return self.config.get("runtime", {}).get("retroarch", {}).get("extra_flags", [])
+
+    def get_retroarch_core_hints(self, console):
+        return self.config.get("runtime", {}).get("retroarch", {}).get("cores", {}).get(console, [])
 
     def ensure_rom_directories(self):
         base_path = self.get_roms_path()
