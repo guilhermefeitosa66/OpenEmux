@@ -4,20 +4,26 @@
 
 Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, elegance, and native integration with the Linux ecosystem. It is distributed as an **AppImage** for universal compatibility across Linux distributions.
 
-## Features (Planned)
+## Features
 
 -   **Native Linux Design**: Built with GTK4 for a modern, responsive interface that feels at home on GNOME and other desktop environments.
--   **Multi-System Support**: Initially supporting **NES**, **SNES**, and **GBA**.
+-   **Multi-System Support**: **NES**, **SNES**, and **GBA** via RetroArch + libretro cores.
 -   **Game Library Organization**: Automatically scans and organizes your ROM collection.
     -   Default ROM path: `~/games/roms/` (Configurable).
--   **Visual Enhancements**: Support for **CRT shaders** (geom-crt) and dot-matrix filters for handhelds.
--   **Keyboard Input**: Initially keyboard-only, with future gamepad support planned.
+-   **Cover Pipeline**: Local-first covers from `~/games/roms/covers/<console>/` with ScreenScraper fallback.
+-   **Runtime Control**: Launch/stop flow managed by Opemux while RetroArch runs externally.
+-   **Visual Enhancements**: Shader/filter configuration roadmap (in progress).
+-   **Input Mapping**: Application-level mapping roadmap (in progress).
 
-## Technology Stack
+## Runtime Backend
 
--   **Language**: Python 3
--   **GUI Framework**: GTK4 + LibAdwaita (via PyGObject)
--   **Distribution**: AppImage
+-   **Preferred**: `vendors/RetroArch-Linux-x86_64.AppImage`
+-   **Fallback**: system `retroarch` binary
+-   **Cores**: libretro cores per console (`nestopia`/`fceumm`, `snes9x`, `mgba`)
+
+## Planning Docs
+
+-   Implementation phase notes live in `implementation_notes/`.
 
 ## License
 

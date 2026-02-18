@@ -10,21 +10,14 @@ DEFAULT_CONFIG = {
     "roms_path": str(DEFAULT_ROMS_PATH),
     "consoles": ["nes", "snes", "gba"],
     "runtime": {
-        "mode": "external_wrapper",
+        "mode": "retroarch_wrapper",
         "console_backend": {
             "nes": "retroarch_wrapper",
             "snes": "retroarch_wrapper",
             "gba": "retroarch_wrapper",
         },
-        "external_kiosk": True,
-        "prefer_windowed": True,
-        "external_flags": {
-            "nes": [],
-            "snes": [],
-            "gba": [],
-        },
         "retroarch": {
-            "binary": "retroarch",
+            "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
             "extra_flags": [],
             "cores": {
                 "nes": [],
@@ -86,21 +79,17 @@ class ConfigManager:
 
     def _migrate_runtime_config(self, config):
         runtime = config.get("runtime", {})
-        runtime.setdefault("prefer_windowed", True)
+        runtime.setdefault("mode", "retroarch_wrapper")
         runtime.setdefault("console_backend", {})
 
-        # Default all supported consoles to RetroArch wrapper unless user explicitly changed.
+        runtime.setdefault("retroarch", {})
+        runtime["retroarch"].setdefault("binary", "vendors/RetroArch-Linux-x86_64.AppImage")
+        runtime["retroarch"].setdefault("extra_flags", [])
+        runtime["retroarch"].setdefault("cores", {})
+
         for console in ("nes", "snes", "gba"):
             runtime["console_backend"].setdefault(console, "retroarch_wrapper")
-
-        if runtime.get("prefer_windowed", True):
-            fullscreen_tokens = {"--fullscreen", "-f", "-fullscreen"}
-            flags_by_console = runtime.get("external_flags", {})
-            for console, flags in flags_by_console.items():
-                flags_by_console[console] = [
-                    flag for flag in flags if str(flag).strip() not in fullscreen_tokens
-                ]
-            runtime["external_flags"] = flags_by_console
+            runtime["retroarch"]["cores"].setdefault(console, [])
 
         config["runtime"] = runtime
         return config
@@ -126,21 +115,12 @@ class ConfigManager:
         return self.get_roms_path() / "covers"
 
     def get_runtime_mode(self):
-        return self.config.get("runtime", {}).get("mode", "external_wrapper")
+        return self.config.get("runtime", {}).get("mode", "retroarch_wrapper")
 
     def get_runtime_mode_for_console(self, console):
         runtime = self.config.get("runtime", {})
         per_console = runtime.get("console_backend", {})
-        return per_console.get(console, runtime.get("mode", "external_wrapper"))
-
-    def is_external_kiosk_enabled(self):
-        return bool(self.config.get("runtime", {}).get("external_kiosk", True))
-
-    def get_external_flags(self, console):
-        return self.config.get("runtime", {}).get("external_flags", {}).get(console, [])
-
-    def prefer_windowed_runtime(self):
-        return bool(self.config.get("runtime", {}).get("prefer_windowed", True))
+        return per_console.get(console, runtime.get("mode", "retroarch_wrapper"))
 
     def get_controls_profile(self, console):
         return self.config.get("controls", {}).get("profiles", {}).get(console, {})

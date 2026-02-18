@@ -1,9 +1,0 @@
-[submodule "vendors/nestopia"]
-	path = vendors/nestopia
-	url = https://github.com/rdanbrook/nestopia.git
-[submodule "vendors/mgba"]
-	path = vendors/mgba
-	url = https://github.com/mgba-emu/mgba.git
-[submodule "vendors/snes9x"]
-	path = vendors/snes9x
-	url = https://github.com/snes9xgit/snes9x.git
