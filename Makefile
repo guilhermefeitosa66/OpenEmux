@@ -4,9 +4,15 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run clean build-nestopia install-sys-deps
+.PHONY: all setup venv run clean build-emulators build-nestopia build-mgba build-snes9x \
+        install-sys-deps vendor-init bootstrap
 
-all: setup build-nestopia
+all: setup build-emulators
+
+# Full bootstrap: from fresh clone to running (requires sudo for sys deps)
+bootstrap: install-sys-deps vendor-init venv setup build-emulators
+	@echo ""
+	@echo "✅ Opemux is ready! Run 'make run' to start."
 
 # System dependencies for Ubuntu/Mint
 install-sys-deps:
@@ -20,13 +26,18 @@ install-sys-deps:
 		libx11-dev libxext-dev libxv-dev libasound2-dev libpulse-dev \
 		libgtkmm-3.0-dev libxrandr-dev libwayland-dev wayland-protocols libvulkan-dev portaudio19-dev
 
+# Vendor submodule setup (pulls emulator source code)
+vendor-init:
+	@echo "Initializing vendor submodules..."
+	git submodule update --init --recursive
+	@echo "Vendor submodules ready."
 
 # Environment setup
 venv:
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
-setup:
+setup: vendor-init
 	$(PIP) install -r requirements.txt
 
 

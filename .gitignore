@@ -37,3 +37,9 @@ venv.bak/
 # Project specific
 app_data/
 *.log
+
+# Vendor build artifacts (compiled binaries — use 'make build-emulators' to rebuild)
+vendors/nestopia/nestopia
+vendors/nestopia/build/
+vendors/mgba/build/
+vendors/snes9x/gtk/build/

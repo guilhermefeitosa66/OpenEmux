@@ -132,7 +132,18 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self.content_stack.add_titled(scroll, console, console.upper())
 
     def on_launch_game(self, rom):
-        self.launcher.launch(rom["path"], rom["console"])
+        success, error_msg = self.launcher.launch(rom["path"], rom["console"])
+        if not success and error_msg:
+            # Show error as a toast notification
+            toast = Adw.Toast(title=error_msg)
+            toast.set_timeout(5)
+            # Add toast overlay if not already present
+            if not hasattr(self, '_toast_overlay'):
+                self._toast_overlay = Adw.ToastOverlay()
+                self.content_box.remove(self.content_stack)
+                self._toast_overlay.set_child(self.content_stack)
+                self.content_box.append(self._toast_overlay)
+            self._toast_overlay.add_toast(toast)
 
     def on_console_selected(self, listbox, row):
 
