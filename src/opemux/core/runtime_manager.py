@@ -1,4 +1,5 @@
 from opemux.core.retroarch_launcher import RetroArchLauncher
+from opemux.core.systems import resolve_system_id
 
 
 class RuntimeManager:
@@ -15,17 +16,18 @@ class RuntimeManager:
         self.active_rom = None
 
     def launch(self, rom_path, console):
+        system_id = resolve_system_id(console)
         if self.is_running():
             return False, "A game is already running. Close it before launching another one."
 
-        mode = self.config_manager.get_runtime_mode_for_console(console)
+        mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
         if mode == "retroarch_wrapper":
-            proc, error_msg = self.retroarch_launcher.launch_process(rom_path, console)
+            proc, error_msg = self.retroarch_launcher.launch_process(rom_path, system_id)
             if not proc:
                 return False, error_msg
             self.active_process = proc
-            self.active_rom = {"path": rom_path, "console": console}
+            self.active_rom = {"path": rom_path, "console": system_id}
             return True, None
 
         if mode == "integrated_core":

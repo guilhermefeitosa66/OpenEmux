@@ -11,23 +11,10 @@ from opemux.core.cover_sync import sync_covers_async
 from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scanner import RomScanner
+from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from opemux.i18n import tr
 from opemux.ui.grid import RomGrid
 from opemux.ui.settings_grid import SettingsGrid
-
-CONSOLE_KEYS = ["nes", "snes", "gba"]
-
-CONSOLE_LABELS = {
-    "nes": "NES",
-    "snes": "SNES",
-    "gba": "GBA",
-}
-
-FALLBACK_CONSOLE_ICONS = {
-    "nes": "applications-games-symbolic",
-    "snes": "applications-games-symbolic",
-    "gba": "phone-symbolic",
-}
 
 SETTINGS_ITEMS = [
     ("roms", "folder-symbolic"),
@@ -48,10 +35,11 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.set_default_size(1200, 800)
         self.load_css()
 
-        self.scanner = RomScanner(self.config_manager.get_roms_path())
+        self.roms_path = self.config_manager.get_roms_path()
+        self.scanner = RomScanner(self.roms_path)
         self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
-        self.covers_dir = self.config_manager.get_covers_dir()
-        self.current_console = "nes"
+        self.current_console = None
+        self.visible_consoles = []
         self._cover_sync_running = False
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -139,27 +127,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.console_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.console_list.connect("row-selected", self._on_console_selected)
         self.console_list.add_css_class("navigation-sidebar")
-
-        for console_id in CONSOLE_KEYS:
-            row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            box.set_margin_top(10)
-            box.set_margin_bottom(10)
-            box.set_margin_start(16)
-            box.set_margin_end(16)
-
-            icon_widget = self._build_console_icon(console_id)
-            box.append(icon_widget)
-
-            name = Gtk.Label(label=self._console_sidebar_label(console_id))
-            name.set_halign(Gtk.Align.START)
-            name.set_hexpand(True)
-            box.append(name)
-
-            row.set_child(box)
-            row.id = console_id
-            self.console_list.append(row)
-
         sidebar_box.append(self.console_list)
 
         spacer = Gtk.Box()
@@ -185,20 +152,43 @@ class OpemuxWindow(Adw.ApplicationWindow):
         settings_btn.set_child(btn_box)
         settings_btn.connect("clicked", lambda _: self._open_settings_main())
         sidebar_box.append(settings_btn)
+        self._rebuild_console_sidebar([])
         return sidebar_box
 
     def _console_sidebar_label(self, console_id):
-        acronym = CONSOLE_LABELS[console_id]
-        full_name = self.t(f"console.{console_id}.full")
-        return f"{acronym} - {full_name}"
+        return f"{console_id} - {get_system_display_name(console_id)}"
 
     def _build_console_icon(self, console_id):
-        icon_path = self._asset_path("systems", f"{console_id}.png")
+        icon_path = self._asset_path("systems", f"{console_id.lower()}.png")
         if icon_path.exists():
             pic = Gtk.Picture.new_for_filename(str(icon_path))
             pic.set_size_request(22, 22)
             return pic
-        return Gtk.Image.new_from_icon_name(FALLBACK_CONSOLE_ICONS[console_id])
+        return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
+
+    def _rebuild_console_sidebar(self, consoles):
+        while child := self.console_list.get_first_child():
+            self.console_list.remove(child)
+
+        for console_id in consoles:
+            row = Gtk.ListBoxRow()
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box.set_margin_top(10)
+            box.set_margin_bottom(10)
+            box.set_margin_start(16)
+            box.set_margin_end(16)
+
+            icon_widget = self._build_console_icon(console_id)
+            box.append(icon_widget)
+
+            name = Gtk.Label(label=self._console_sidebar_label(console_id))
+            name.set_halign(Gtk.Align.START)
+            name.set_hexpand(True)
+            box.append(name)
+
+            row.set_child(box)
+            row.id = console_id
+            self.console_list.append(row)
 
     def _asset_path(self, category, filename):
         return Path(__file__).parent / "assets" / "icons" / category / filename
@@ -210,23 +200,60 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._grids = {}
         self._console_pages = {}
         self._console_loaded = {}
+        self._initial_roms = {}
 
-        for console in CONSOLE_KEYS:
+        self.visible_consoles = self._discover_visible_consoles()
+        self._rebuild_console_sidebar(self.visible_consoles)
+
+        for console in self.visible_consoles:
             scroll = Gtk.ScrolledWindow()
             scroll.set_vexpand(True)
-            placeholder = Gtk.Label(label=self.t("empty.select_console", console=CONSOLE_LABELS[console]))
+            placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
             placeholder.add_css_class("dim-label")
             placeholder.set_margin_top(32)
             scroll.set_child(placeholder)
             self._console_pages[console] = scroll
             self._console_loaded[console] = False
-            self.content_stack.add_titled(scroll, console, CONSOLE_LABELS[console])
+            self.content_stack.add_titled(scroll, console, console)
+
+        if not self.visible_consoles:
+            empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            empty.set_valign(Gtk.Align.CENTER)
+            empty.set_halign(Gtk.Align.CENTER)
+            icon = Gtk.Image.new_from_icon_name("folder-open-symbolic")
+            icon.set_pixel_size(64)
+            icon.set_opacity(0.4)
+            empty.append(icon)
+            label = Gtk.Label(label="No ROMs found in configured system folders.")
+            label.add_css_class("dim-label")
+            empty.append(label)
+            self.content_stack.add_titled(empty, "library-empty", "Library")
 
         self._build_settings_views()
 
-        first_row = self.console_list.get_row_at_index(0)
-        if first_row:
-            self.console_list.select_row(first_row)
+        if self.visible_consoles:
+            first_row = self.console_list.get_row_at_index(0)
+            if first_row:
+                self.console_list.select_row(first_row)
+        else:
+            self.current_console = None
+            self._set_search_enabled(False)
+            self.content_stack.set_visible_child_name("library-empty")
+
+    def _discover_visible_consoles(self):
+        visible = []
+        for console in SYSTEM_IDS:
+            if self.playlist_manager.playlist_exists(console):
+                roms = self.playlist_manager.load_playlist(console)
+            elif self.config_manager.auto_scan_on_first_open():
+                roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+            else:
+                roms = []
+
+            if roms:
+                visible.append(console)
+                self._initial_roms[console] = roms
+        return visible
 
     def _build_settings_views(self):
         settings_scroll = Gtk.ScrolledWindow()
@@ -315,10 +342,15 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.content_stack.set_visible_child_name("settings-roms")
 
     def _ensure_console_loaded(self, console, force_rescan=False):
+        if console not in self._console_pages:
+            return
+
         created_playlist = False
         if force_rescan:
             roms = self.playlist_manager.scan_and_rebuild_playlist(console)
             created_playlist = True
+        elif not self._console_loaded.get(console) and console in self._initial_roms:
+            roms = self._initial_roms[console]
         else:
             if not self.playlist_manager.playlist_exists(console):
                 if self.config_manager.auto_scan_on_first_open():
@@ -347,7 +379,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             empty_icon.set_opacity(0.4)
             empty_box.append(empty_icon)
 
-            empty_label = Gtk.Label(label=self.t("empty.indexed", console=CONSOLE_LABELS.get(console, console.upper())))
+            empty_label = Gtk.Label(label=self.t("empty.indexed", console=console))
             empty_label.add_css_class("dim-label")
             empty_box.append(empty_label)
 
@@ -359,17 +391,25 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self._grids.pop(console, None)
             return
 
-        grid = RomGrid(console, roms, self.on_launch_game, self.covers_dir)
+        grid = RomGrid(console, roms, self.on_launch_game, self.roms_path)
         self._grids[console] = grid
         scroll.set_child(grid)
 
     def _scan_current_console(self):
+        if not self.current_console:
+            return
         self._ensure_console_loaded(self.current_console, force_rescan=True)
-        toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=self.current_console.upper()))
+        toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=self.current_console))
         toast.set_timeout(4)
         self.toast_overlay.add_toast(toast)
 
     def _show_sync_covers_dialog(self):
+        if not self.visible_consoles:
+            toast = Adw.Toast(title="No indexed consoles to sync covers.")
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+
         dialog = Gtk.Dialog(transient_for=self, modal=True)
         dialog.set_title(self.t("dialog.sync.title"))
         dialog.set_default_size(360, 120)
@@ -389,14 +429,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         combo = Gtk.ComboBoxText()
         combo.append("all", self.t("dialog.sync.all"))
-        for console in CONSOLE_KEYS:
-            combo.append(console, self.t("dialog.sync.console", console=CONSOLE_LABELS.get(console, console.upper())))
-        combo.set_active_id(self.current_console)
+        for console in self.visible_consoles:
+            combo.append(console, self.t("dialog.sync.console", console=console))
+        combo.set_active_id(self.current_console or self.visible_consoles[0])
         content.append(combo)
 
         def _on_response(_dlg, response):
             if response == Gtk.ResponseType.OK:
-                selected = combo.get_active_id() or self.current_console
+                selected = combo.get_active_id() or self.current_console or self.visible_consoles[0]
                 if selected == "all":
                     self._start_cover_sync(scope="all", selected_console=None)
                 else:
@@ -414,12 +454,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return
 
         library = {}
-        if scope == "console" and selected_console in CONSOLE_KEYS:
+        if scope == "console" and selected_console in self.visible_consoles:
             library[selected_console] = self.playlist_manager.load_playlist(selected_console)
         else:
-            for console in CONSOLE_KEYS:
-                if not self.playlist_manager.playlist_exists(console) and self.config_manager.auto_scan_on_first_open():
-                    self.playlist_manager.scan_and_rebuild_playlist(console)
+            for console in self.visible_consoles:
                 library[console] = self.playlist_manager.load_playlist(console)
 
         self._cover_sync_running = True
@@ -432,7 +470,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         sync_covers_async(
             library_by_console=library,
-            covers_dir=self.covers_dir,
+            covers_dir=self.roms_path,
             scope=scope,
             selected_console=selected_console,
             on_done=_on_done,
@@ -457,7 +495,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _on_refresh_clicked(self, _button):
         visible = self.content_stack.get_visible_child_name()
-        if visible in tuple(CONSOLE_KEYS):
+        if visible in set(self.visible_consoles):
             self._ensure_console_loaded(visible)
         elif visible == "settings-roms":
             self._scan_current_console()
@@ -471,7 +509,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(toast)
         elif success:
             toast = Adw.Toast(
-                title=self.t("toast.running", name=rom["name"], console=rom["console"].upper())
+                title=self.t("toast.running", name=rom["name"], console=rom["console"])
             )
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)

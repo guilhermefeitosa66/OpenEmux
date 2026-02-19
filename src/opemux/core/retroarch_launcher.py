@@ -3,22 +3,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from opemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
-DEFAULT_CORE_CANDIDATES = {
-    "nes": [
-        "nestopia_libretro.so",
-        "fceumm_libretro.so",
-        "mesen_libretro.so",
-    ],
-    "snes": [
-        "snes9x_libretro.so",
-        "bsnes_libretro.so",
-    ],
-    "gba": [
-        "mgba_libretro.so",
-        "gpsp_libretro.so",
-    ],
-}
+DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
 
 DEFAULT_CORE_DIRS = [
     "/usr/lib/libretro",
@@ -55,12 +42,13 @@ class RetroArchLauncher:
         return None
 
     def _find_core_path(self, console):
-        for hint in self.config_manager.get_retroarch_core_hints(console):
+        system_id = resolve_system_id(console)
+        for hint in self.config_manager.get_retroarch_core_hints(system_id):
             hint_path = Path(hint).expanduser()
             if hint_path.exists():
                 return str(hint_path)
 
-        candidates = DEFAULT_CORE_CANDIDATES.get(console, [])
+        candidates = DEFAULT_CORE_CANDIDATES.get(system_id, [])
         home_dirs = [
             Path.home() / ".config" / "retroarch" / "cores",
             Path.home() / ".var" / "app" / "org.libretro.RetroArch" / "config" / "retroarch" / "cores",
@@ -78,6 +66,7 @@ class RetroArchLauncher:
         return None
 
     def launch_process(self, rom_path, console):
+        system_id = resolve_system_id(console)
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
             return None, (
@@ -85,11 +74,11 @@ class RetroArchLauncher:
                 "or add RetroArch AppImage under vendors/."
             )
 
-        core_path = self._find_core_path(console)
+        core_path = self._find_core_path(system_id)
         if not core_path:
-            candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(console, []))
+            candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
             return None, (
-                f"No RetroArch core found for {console.upper()}. "
+                f"No RetroArch core found for {system_id}. "
                 f"Tried common core dirs and these core names: {candidates}. "
                 "Configure runtime.retroarch.cores in config.yaml."
             )

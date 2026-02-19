@@ -6,18 +6,18 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
 from opemux.core.scraper import fetch_cover
 
 CONSOLE_COVER_SIZES = {
-    "nes": (140, 190),
-    "snes": (158, 220),
-    "gba": (132, 188),
+    "FC": (140, 190),
+    "SFC": (158, 220),
+    "GBA": (132, 188),
 }
 
 
 class RomItem(Gtk.Box):
-    def __init__(self, rom, on_launch_callback, covers_dir, cover_size):
+    def __init__(self, rom, on_launch_callback, roms_dir, cover_size):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
         self.on_launch_callback = on_launch_callback
-        self.covers_dir = covers_dir
+        self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
         self.add_css_class("rom-card")
         self.set_size_request(self.cover_width + 24, -1)
@@ -70,14 +70,14 @@ class RomItem(Gtk.Box):
         self.append(self.name_label)
 
         # Trigger async cover art fetch
-        fetch_cover(rom, self.covers_dir, self._on_cover_fetched)
+        fetch_cover(rom, self.roms_dir, self._on_cover_fetched)
 
     def _set_placeholder(self):
         """Show a styled placeholder with console-specific icon."""
         console_icons = {
-            "nes": "applications-games-symbolic",
-            "snes": "applications-games-symbolic",
-            "gba": "phone-symbolic",
+            "FC": "applications-games-symbolic",
+            "SFC": "applications-games-symbolic",
+            "GBA": "phone-symbolic",
         }
         icon_name = console_icons.get(self.rom.get("console", ""), "package-x-generic-symbolic")
 
@@ -133,11 +133,11 @@ class RomItem(Gtk.Box):
 
 
 class RomGrid(Gtk.FlowBox):
-    def __init__(self, console, roms, on_launch_callback, covers_dir):
+    def __init__(self, console, roms, on_launch_callback, roms_dir):
         super().__init__()
         self.console = console
         self.on_launch_callback = on_launch_callback
-        self.covers_dir = covers_dir
+        self.roms_dir = roms_dir
         self.set_valign(Gtk.Align.START)
         self.set_row_spacing(24)
         self.set_column_spacing(24)
@@ -148,8 +148,8 @@ class RomGrid(Gtk.FlowBox):
         self.set_margin_end(28)
         self.set_homogeneous(False)
 
-        cover_size = CONSOLE_COVER_SIZES.get(console, CONSOLE_COVER_SIZES["nes"])
+        cover_size = CONSOLE_COVER_SIZES.get(console, CONSOLE_COVER_SIZES["FC"])
 
         for rom in roms:
-            item = RomItem(rom, self.on_launch_callback, self.covers_dir, cover_size)
+            item = RomItem(rom, self.on_launch_callback, self.roms_dir, cover_size)
             self.append(item)

@@ -7,15 +7,9 @@ from pathlib import Path
 from threading import Thread
 
 from opemux.core.scraper import find_local_cover
+from opemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
-
-LIBRETRO_SYSTEM_MAP = {
-    "nes": "Nintendo - Nintendo Entertainment System",
-    "snes": "Nintendo - Super Nintendo Entertainment System",
-    "gba": "Nintendo - Game Boy Advance",
-}
-
 
 def _build_cover_url(system, game_name):
     return (
@@ -89,7 +83,8 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
 
 
 def _remote_cover_candidates(console, rom_name, sync_settings):
-    system = LIBRETRO_SYSTEM_MAP.get(console)
+    system_id = resolve_system_id(console)
+    system = get_thumbnail_system(system_id)
     if not system:
         return []
 
@@ -121,7 +116,7 @@ def _download_cover(url, dest):
 
 def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_settings=None):
     sync_settings = sync_settings or {}
-    covers_dir_path = Path(covers_dir)
+    roms_dir_path = Path(covers_dir)
     consoles = (
         [selected_console]
         if scope == "console" and selected_console in library_by_console
@@ -140,12 +135,12 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
             total += 1
             name = rom["name"]
 
-            if find_local_cover(covers_dir_path, console, name):
+            if find_local_cover(roms_dir_path, console, name):
                 logger.info("cover_sync skip existing: console=%s rom=%s", console, name)
                 skipped += 1
                 continue
 
-            target = covers_dir_path / console / f"{name}.png"
+            target = roms_dir_path / console / "covers" / f"{name}.png"
             urls = _remote_cover_candidates(console, name, sync_settings)
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
             found = False
