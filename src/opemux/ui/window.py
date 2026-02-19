@@ -20,6 +20,7 @@ SETTINGS_ITEMS = [
     ("roms", "folder-symbolic"),
     ("bios", "media-floppy-symbolic"),
     ("input", "input-gaming-symbolic"),
+    ("ui", "preferences-desktop-theme-symbolic"),
     ("shaders", "applications-graphics-symbolic"),
     ("system", "applications-system-symbolic"),
 ]
@@ -270,6 +271,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
         settings_scroll = Gtk.ScrolledWindow()
         settings_scroll.set_vexpand(True)
         settings_grid = SettingsGrid()
+        settings_callbacks = {
+            "roms": self._open_settings_roms,
+            "ui": self._open_settings_ui,
+        }
         for item_id, fallback_icon in SETTINGS_ITEMS:
             icon_path = self._asset_path("settings", f"{item_id}.png")
             settings_grid.add_card(
@@ -277,7 +282,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 subtitle=self.t(f"settings.{item_id}.subtitle"),
                 icon_path=str(icon_path) if icon_path.exists() else None,
                 icon_name=fallback_icon,
-                on_click=(self._open_settings_roms if item_id == "roms" else None),
+                on_click=settings_callbacks.get(item_id),
             )
         settings_scroll.set_child(settings_grid)
         self.content_stack.add_titled(settings_scroll, "settings-main", self.t("settings.title"))
@@ -327,6 +332,63 @@ class OpemuxWindow(Adw.ApplicationWindow):
         roms_scroll.set_child(roms_container)
         self.content_stack.add_titled(roms_scroll, "settings-roms", self.t("settings.roms.title"))
 
+        ui_scroll = Gtk.ScrolledWindow()
+        ui_scroll.set_vexpand(True)
+        ui_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        ui_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        ui_breadcrumb.set_margin_top(14)
+        ui_breadcrumb.set_margin_start(20)
+        ui_breadcrumb.set_margin_end(20)
+        ui_breadcrumb.set_margin_bottom(6)
+
+        ui_back_btn = Gtk.Button()
+        ui_back_btn.set_icon_name("go-previous-symbolic")
+        ui_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        ui_back_btn.connect("clicked", lambda _: self._open_settings_main())
+        ui_breadcrumb.append(ui_back_btn)
+
+        ui_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.ui.title')}")
+        ui_crumb_label.set_halign(Gtk.Align.START)
+        ui_crumb_label.add_css_class("dim-label")
+        ui_breadcrumb.append(ui_crumb_label)
+        ui_container.append(ui_breadcrumb)
+
+        ui_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        ui_panel.set_margin_top(12)
+        ui_panel.set_margin_start(24)
+        ui_panel.set_margin_end(24)
+        ui_panel.set_margin_bottom(24)
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row.set_halign(Gtk.Align.FILL)
+        row.set_hexpand(True)
+
+        labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        labels.set_halign(Gtk.Align.START)
+        labels.set_hexpand(True)
+        title = Gtk.Label(label=self.t("settings.ui.render_cartridge.title"))
+        title.set_halign(Gtk.Align.START)
+        labels.append(title)
+        subtitle = Gtk.Label(label=self.t("settings.ui.render_cartridge.subtitle"))
+        subtitle.set_halign(Gtk.Align.START)
+        subtitle.add_css_class("dim-label")
+        labels.append(subtitle)
+        row.append(labels)
+
+        self.render_cartridge_check = Gtk.CheckButton()
+        self.render_cartridge_check.set_halign(Gtk.Align.END)
+        self.render_cartridge_check.set_active(
+            self.config_manager.get_ui_settings().get("render_cartridge_overlay", False)
+        )
+        self.render_cartridge_check.connect("toggled", self._on_toggle_render_cartridge)
+        row.append(self.render_cartridge_check)
+
+        ui_panel.append(row)
+        ui_container.append(ui_panel)
+        ui_scroll.set_child(ui_container)
+        self.content_stack.add_titled(ui_scroll, "settings-ui", self.t("settings.ui.title"))
+
     def _on_console_selected(self, _listbox, row):
         if not row:
             return
@@ -351,6 +413,16 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-roms")
+
+    def _open_settings_ui(self):
+        self._set_search_enabled(False)
+        self.console_list.unselect_all()
+        self.content_stack.set_visible_child_name("settings-ui")
+
+    def _on_toggle_render_cartridge(self, button):
+        self.config_manager.set_render_cartridge_overlay(button.get_active())
+        if self.current_console in self._console_pages:
+            self._ensure_console_loaded(self.current_console)
 
     def _ensure_console_loaded(self, console, force_rescan=False):
         if console not in self._console_pages:
@@ -402,7 +474,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self._grids.pop(console, None)
             return
 
-        grid = RomGrid(console, roms, self.on_launch_game, self.roms_path)
+        grid = RomGrid(
+            console,
+            roms,
+            self.on_launch_game,
+            self.roms_path,
+            ui_settings=self.config_manager.get_ui_settings(),
+        )
         self._grids[console] = grid
         scroll.set_child(grid)
 

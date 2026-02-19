@@ -28,6 +28,9 @@ DEFAULT_CONFIG = {
     "controls": {
         "profiles": {system_id: {} for system_id in SYSTEM_IDS}
     },
+    "ui": {
+        "render_cartridge_overlay": False,
+    },
     "covers": {
         "providers": ["libretro_thumbnails"],
         "preferred_ext_order": ["png", "jpg", "webp"],
@@ -125,6 +128,10 @@ class ConfigManager:
             controls["profiles"].setdefault(system_id, {})
         config["controls"] = controls
 
+        ui = config.get("ui", {})
+        ui.setdefault("render_cartridge_overlay", False)
+        config["ui"] = ui
+
         config.setdefault("locale", "en")
         config["consoles"] = [system_id for system_id in config.get("consoles", SYSTEM_IDS) if resolve_system_id(system_id) in SYSTEM_IDS]
         if not config["consoles"]:
@@ -189,6 +196,17 @@ class ConfigManager:
             "region_priority": sync.get("region_priority", ["USA", "World", "Europe", "Japan"]),
             "name_cleanup": bool(sync.get("name_cleanup", True)),
         }
+
+    def get_ui_settings(self):
+        ui = self.config.get("ui", {})
+        return {
+            "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", False)),
+        }
+
+    def set_render_cartridge_overlay(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["render_cartridge_overlay"] = bool(enabled)
+        self.save_config()
 
     def get_runtime_mode(self):
         return self.config.get("runtime", {}).get("mode", "retroarch_wrapper")

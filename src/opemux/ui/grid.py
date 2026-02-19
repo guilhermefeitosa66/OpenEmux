@@ -2,10 +2,12 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
+from pathlib import Path
 
 from opemux.core.scraper import fetch_cover
 
 DEFAULT_ITEM_SIZE = (200, 200)
+FIXED_ITEM_WIDTH = 200
 
 CONSOLE_COVER_SIZES = {
     # Width fixed at 200px. Heights keep cartridge image proportions:
@@ -19,7 +21,7 @@ CONSOLE_COVER_SIZES = {
 
 
 class RomItem(Gtk.Box):
-    def __init__(self, rom, on_launch_callback, roms_dir, cover_size):
+    def __init__(self, rom, on_launch_callback, roms_dir, cover_size, cartridge_overlay_path=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
         self.on_launch_callback = on_launch_callback
@@ -68,6 +70,15 @@ class RomItem(Gtk.Box):
         play_icon.set_pixel_size(40)
         play_icon.add_css_class("play-icon")
         self.play_overlay.append(play_icon)
+
+        self.cartridge_overlay = None
+        if cartridge_overlay_path:
+            self.cartridge_overlay = Gtk.Picture.new_for_filename(str(cartridge_overlay_path))
+            self.cartridge_overlay.set_size_request(self.cover_width, self.cover_height)
+            # Preserve cartridge image ratio to avoid distortion.
+            self.cartridge_overlay.set_content_fit(Gtk.ContentFit.CONTAIN)
+            self.cartridge_overlay.set_can_shrink(True)
+            self.cover_overlay.add_overlay(self.cartridge_overlay)
         self.cover_overlay.add_overlay(self.play_overlay)
 
         self.append(self.cover_overlay)
@@ -149,11 +160,12 @@ class RomItem(Gtk.Box):
 
 
 class RomGrid(Gtk.FlowBox):
-    def __init__(self, console, roms, on_launch_callback, roms_dir):
+    def __init__(self, console, roms, on_launch_callback, roms_dir, ui_settings=None):
         super().__init__()
         self.console = console
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
+        self.ui_settings = ui_settings or {}
         self.set_valign(Gtk.Align.START)
         self.set_row_spacing(24)
         self.set_column_spacing(24)
@@ -164,8 +176,25 @@ class RomGrid(Gtk.FlowBox):
         self.set_margin_end(28)
         self.set_homogeneous(False)
 
+        cartridge_overlay_path = None
         cover_size = CONSOLE_COVER_SIZES.get(console, DEFAULT_ITEM_SIZE)
+        if self.ui_settings.get("render_cartridge_overlay", False):
+            candidate = Path(__file__).parent / "assets" / "images" / "cartridges" / f"{console}.png"
+            if candidate.exists():
+                cartridge_overlay_path = candidate
+                size_info = GdkPixbuf.Pixbuf.get_file_info(str(candidate))
+                if size_info:
+                    _, width, height = size_info
+                    if width and height:
+                        proportional_height = int(round((FIXED_ITEM_WIDTH * height) / width))
+                        cover_size = (FIXED_ITEM_WIDTH, max(1, proportional_height))
 
         for rom in roms:
-            item = RomItem(rom, self.on_launch_callback, self.roms_dir, cover_size)
+            item = RomItem(
+                rom,
+                self.on_launch_callback,
+                self.roms_dir,
+                cover_size,
+                cartridge_overlay_path=cartridge_overlay_path,
+            )
             self.append(item)
