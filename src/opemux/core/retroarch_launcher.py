@@ -16,6 +16,26 @@ DEFAULT_CORE_DIRS = [
     "/usr/local/lib/libretro",
 ]
 
+# Runtime OSD policy:
+# - Hide startup/runtime noise (content/core/autoconfig/override/remap/etc).
+# - Keep only save/load state and fast-forward notifications enabled.
+DEFAULT_NOTIFICATION_OVERRIDES = {
+    "menu_show_load_content_animation": '"false"',
+    "notification_show_autoconfig": '"false"',
+    "notification_show_autoconfig_fails": '"false"',
+    "notification_show_remap_load": '"false"',
+    "notification_show_cheats_applied": '"false"',
+    "notification_show_patch_applied": '"false"',
+    "notification_show_config_override_load": '"false"',
+    "notification_show_set_initial_disk": '"false"',
+    "notification_show_disk_control": '"false"',
+    "notification_show_refresh_rate": '"false"',
+    "notification_show_netplay_extra": '"false"',
+    "notification_show_when_menu_is_alive": '"false"',
+    "notification_show_save_state": '"true"',
+    "notification_show_fast_forward": '"true"',
+}
+
 
 class RetroArchLauncher:
     def __init__(self, project_root, config_manager):
@@ -67,18 +87,19 @@ class RetroArchLauncher:
                     return str(candidate)
         return None
 
-    def _write_input_override(self, console):
+    def _write_runtime_override(self, console):
         profile = self.config_manager.get_input_profile(console)
         active_device = profile.get("active_device", "keyboard")
         device = profile.get("devices", {}).get(active_device, {})
         device_type = device.get("type", "keyboard")
         bindings = device.get("bindings", {})
         overrides = to_retroarch_overrides(bindings, device_type, console=console)
+        overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        override_path = runtime_dir / f"input_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+        override_path = runtime_dir / f"runtime_{resolve_system_id(console).lower()}_{timestamp}.cfg"
 
         lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -103,8 +124,8 @@ class RetroArchLauncher:
             )
 
         cmd = [retroarch_path, "-L", core_path]
-        input_override = self._write_input_override(system_id)
-        cmd.extend(["--appendconfig", input_override])
+        runtime_override = self._write_runtime_override(system_id)
+        cmd.extend(["--appendconfig", runtime_override])
         cmd.extend(self.config_manager.get_retroarch_extra_flags())
         cmd.append(rom_path)
 

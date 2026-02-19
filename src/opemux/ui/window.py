@@ -978,11 +978,11 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _on_refresh_clicked(self, _button):
         visible = self.content_stack.get_visible_child_name()
         if visible == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
+            self._ensure_all_loaded(force_rescan=True)
             self._on_search_changed(self.search_entry)
             return
         if visible in set(self.visible_consoles):
-            self._ensure_console_loaded(visible)
+            self._ensure_console_loaded(visible, force_rescan=True)
             self._on_search_changed(self.search_entry)
         elif visible == "settings-roms":
             self._scan_current_console()
