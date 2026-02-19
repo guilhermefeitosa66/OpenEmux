@@ -388,15 +388,19 @@ class OpemuxWindow(Adw.ApplicationWindow):
         content.append(label)
 
         combo = Gtk.ComboBoxText()
-        combo.append("console", self.t("dialog.sync.current", console=self.current_console.upper()))
         combo.append("all", self.t("dialog.sync.all"))
-        combo.set_active_id("console")
+        for console in CONSOLE_KEYS:
+            combo.append(console, self.t("dialog.sync.console", console=CONSOLE_LABELS.get(console, console.upper())))
+        combo.set_active_id(self.current_console)
         content.append(combo)
 
         def _on_response(_dlg, response):
             if response == Gtk.ResponseType.OK:
-                scope = combo.get_active_id() or "console"
-                self._start_cover_sync(scope=scope, selected_console=self.current_console)
+                selected = combo.get_active_id() or self.current_console
+                if selected == "all":
+                    self._start_cover_sync(scope="all", selected_console=None)
+                else:
+                    self._start_cover_sync(scope="console", selected_console=selected)
             dialog.close()
 
         dialog.connect("response", _on_response)
@@ -410,7 +414,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return
 
         library = {}
-        if scope == "console":
+        if scope == "console" and selected_console in CONSOLE_KEYS:
             library[selected_console] = self.playlist_manager.load_playlist(selected_console)
         else:
             for console in CONSOLE_KEYS:
