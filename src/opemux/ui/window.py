@@ -60,6 +60,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.toast_overlay.set_child(self.main_box)
         self.set_content(self.toast_overlay)
         self._input_buttons = {}
+        self._input_rows = {}
         self._input_loaded_profile = None
         self._input_bindings_buffer = {}
         self._capture_active_action = None
@@ -555,6 +556,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
         while child := self.input_bindings_list.get_first_child():
             self.input_bindings_list.remove(child)
         self._input_buttons = {}
+        self._input_rows = {}
+
+    def _set_active_input_row(self, action=None):
+        for row_action, row in self._input_rows.items():
+            if row_action == action:
+                row.add_css_class("input-mapping-current")
+            else:
+                row.remove_css_class("input-mapping-current")
 
     def _refresh_input_bindings(self):
         if not hasattr(self, "input_bindings_list"):
@@ -601,6 +610,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
             row.set_child(box)
             self.input_bindings_list.append(row)
+            self._input_rows[action] = row
 
     def _binding_display_text(self, value):
         if not value:
@@ -643,6 +653,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._capture_active_action = action
         self._capture_sequence_mode = sequence_mode
         self._input_buttons[action].set_label(self.t("input.capture.waiting"))
+        self._set_active_input_row(action)
         self._set_capture_status(self.t("input.capture.waiting_for", action=self._input_action_label(action)))
 
     def _cancel_input_capture(self, show_toast=False):
@@ -653,6 +664,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         was_sequence = self._capture_sequence_mode
         self._capture_sequence_mode = False
         self._capture_sequence_index = -1
+        self._set_active_input_row(None)
         self._set_capture_status("")
         if show_toast and was_sequence:
             toast = Adw.Toast(title=self.t("input.capture.cancelled"))

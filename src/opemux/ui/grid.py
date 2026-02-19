@@ -76,16 +76,26 @@ class RomItem(Gtk.Box):
 
         # Play button overlay (hidden by default)
         self.play_overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.play_overlay.set_valign(Gtk.Align.CENTER)
-        self.play_overlay.set_halign(Gtk.Align.CENTER)
+        self.play_overlay.set_valign(Gtk.Align.FILL)
+        self.play_overlay.set_halign(Gtk.Align.FILL)
+        self.play_overlay.set_hexpand(True)
+        self.play_overlay.set_vexpand(True)
         self.play_overlay.set_size_request(self.cover_width, self.cover_height)
         self.play_overlay.add_css_class("play-overlay")
         self.play_overlay.set_visible(False)
 
         play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
         play_icon.set_pixel_size(40)
+        play_icon.set_halign(Gtk.Align.CENTER)
+        play_icon.set_valign(Gtk.Align.CENTER)
         play_icon.add_css_class("play-icon")
-        self.play_overlay.append(play_icon)
+        play_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        play_center.set_hexpand(True)
+        play_center.set_vexpand(True)
+        play_center.set_halign(Gtk.Align.CENTER)
+        play_center.set_valign(Gtk.Align.CENTER)
+        play_center.append(play_icon)
+        self.play_overlay.append(play_center)
 
         self.cartridge_overlay = None
         if cartridge_overlay_path:
@@ -112,12 +122,7 @@ class RomItem(Gtk.Box):
 
     def _set_placeholder(self):
         """Show a styled placeholder with console-specific icon."""
-        console_icons = {
-            "FC": "applications-games-symbolic",
-            "SFC": "applications-games-symbolic",
-            "GBA": "phone-symbolic",
-        }
-        icon_name = console_icons.get(self.rom.get("console", ""), "package-x-generic-symbolic")
+        icon_name = "applications-games-symbolic"
 
         placeholder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         placeholder.set_valign(Gtk.Align.CENTER)
@@ -129,8 +134,16 @@ class RomItem(Gtk.Box):
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
         icon.set_pixel_size(48)
+        icon.set_halign(Gtk.Align.CENTER)
+        icon.set_valign(Gtk.Align.CENTER)
         icon.add_css_class("placeholder-icon")
-        placeholder.append(icon)
+        placeholder_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        placeholder_center.set_hexpand(True)
+        placeholder_center.set_vexpand(True)
+        placeholder_center.set_halign(Gtk.Align.CENTER)
+        placeholder_center.set_valign(Gtk.Align.CENTER)
+        placeholder_center.append(icon)
+        placeholder.append(placeholder_center)
 
         # Replace cover image with placeholder in the configured cover area.
         self.cover_image.set_visible(False)
