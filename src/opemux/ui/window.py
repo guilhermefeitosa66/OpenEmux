@@ -25,6 +25,11 @@ SETTINGS_ITEMS = [
     ("system", "applications-system-symbolic"),
 ]
 ALL_CONSOLES_ID = "__all__"
+SIDEBAR_ICON_FILES = {
+    "FC": "nintendo_fds__famicom_library@2x.png",
+    "SFC": "supernes__snes_usa_library@2x.png",
+    "GBA": "gameboy_advance__gba_library@2x.png",
+}
 
 
 class OpemuxWindow(Adw.ApplicationWindow):
@@ -169,7 +174,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _build_console_icon(self, console_id):
         if console_id == ALL_CONSOLES_ID:
             return Gtk.Image.new_from_icon_name("view-grid-symbolic")
-        icon_path = self._asset_path("systems", f"{console_id.lower()}.png")
+        icon_filename = SIDEBAR_ICON_FILES.get(console_id, f"{console_id.lower()}.png")
+        icon_path = self._asset_path("systems", icon_filename)
         if icon_path.exists():
             pic = Gtk.Picture.new_for_filename(str(icon_path))
             pic.set_size_request(22, 22)
