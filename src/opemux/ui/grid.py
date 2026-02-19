@@ -19,14 +19,30 @@ CONSOLE_COVER_SIZES = {
     "GBA": (200, 115),
 }
 
+CARTRIDGE_COVER_FRAMES = {
+    # x, y, width, height for cover placement when cartridge overlay is enabled
+    "GBA": (26.6, 25.7, 147, 75.3),
+    "FC": (80.9, 0, 93.1, 153),
+    "SFC": (38.6, 0, 122.5, 57.2),
+}
+
 
 class RomItem(Gtk.Box):
-    def __init__(self, rom, on_launch_callback, roms_dir, cover_size, cartridge_overlay_path=None):
+    def __init__(
+        self,
+        rom,
+        on_launch_callback,
+        roms_dir,
+        cover_size,
+        cartridge_overlay_path=None,
+        cover_frame=None,
+    ):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
+        self.cover_frame = cover_frame
         self.add_css_class("rom-card")
         self.set_size_request(self.cover_width, self.cover_height + 44)
         self.set_halign(Gtk.Align.START)
@@ -51,12 +67,12 @@ class RomItem(Gtk.Box):
 
         # Cover image (placeholder initially)
         self.cover_image = Gtk.Picture()
-        self.cover_image.set_size_request(self.cover_width, self.cover_height)
+        self.cover_image.set_size_request(*self._cover_target_size())
         self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
         self.cover_image.set_can_shrink(True)
         self.cover_image.add_css_class("rom-cover")
+        self._setup_cover_host()
         self._set_placeholder()
-        self.cover_overlay.set_child(self.cover_image)
 
         # Play button overlay (hidden by default)
         self.play_overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -108,7 +124,7 @@ class RomItem(Gtk.Box):
         placeholder.set_halign(Gtk.Align.CENTER)
         placeholder.set_hexpand(True)
         placeholder.set_vexpand(True)
-        placeholder.set_size_request(self.cover_width, self.cover_height)
+        placeholder.set_size_request(*self._cover_target_size())
         placeholder.add_css_class("rom-cover-placeholder")
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
@@ -116,9 +132,9 @@ class RomItem(Gtk.Box):
         icon.add_css_class("placeholder-icon")
         placeholder.append(icon)
 
-        # Replace cover_image with a box for placeholder
+        # Replace cover image with placeholder in the configured cover area.
         self.cover_image.set_visible(False)
-        self.cover_overlay.set_child(placeholder)
+        self._set_cover_widget(placeholder)
         self._placeholder_widget = placeholder
 
     def _on_cover_fetched(self, rom, cover_path):
@@ -132,19 +148,51 @@ class RomItem(Gtk.Box):
         try:
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                 cover_path,
-                self.cover_width,
-                self.cover_height,
+                self._cover_target_size()[0],
+                self._cover_target_size()[1],
                 True,
             )
             self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
             # Remove placeholder if present
             if hasattr(self, "_placeholder_widget"):
-                self.cover_overlay.set_child(self.cover_image)
-                self.cover_overlay.add_overlay(self.play_overlay)
+                self._set_cover_widget(self.cover_image)
+                del self._placeholder_widget
         except Exception:
             pass  # Keep placeholder on error
         return False  # Don't repeat idle callback
+
+    def _cover_target_size(self):
+        if self.cover_frame:
+            _, _, width, height = self.cover_frame
+            return int(round(width)), int(round(height))
+        return self.cover_width, self.cover_height
+
+    def _cover_target_position(self):
+        if self.cover_frame:
+            x, y, _, _ = self.cover_frame
+            return int(round(x)), int(round(y))
+        return 0, 0
+
+    def _setup_cover_host(self):
+        if self.cover_frame:
+            self._cover_host = Gtk.Fixed()
+            self._cover_host.set_size_request(self.cover_width, self.cover_height)
+            self.cover_overlay.set_child(self._cover_host)
+            self._set_cover_widget(self.cover_image)
+        else:
+            self._cover_host = None
+            self.cover_overlay.set_child(self.cover_image)
+
+    def _set_cover_widget(self, widget):
+        if self._cover_host is None:
+            self.cover_overlay.set_child(widget)
+            return
+        child = self._cover_host.get_first_child()
+        if child:
+            self._cover_host.remove(child)
+        x, y = self._cover_target_position()
+        self._cover_host.put(widget, x, y)
 
     def _on_hover_enter(self, controller, x, y):
         self.play_overlay.set_visible(True)
@@ -188,6 +236,7 @@ class RomGrid(Gtk.FlowBox):
                     if width and height:
                         proportional_height = int(round((FIXED_ITEM_WIDTH * height) / width))
                         cover_size = (FIXED_ITEM_WIDTH, max(1, proportional_height))
+        cover_frame = CARTRIDGE_COVER_FRAMES.get(console) if cartridge_overlay_path else None
 
         for rom in roms:
             item = RomItem(
@@ -196,5 +245,6 @@ class RomGrid(Gtk.FlowBox):
                 self.roms_dir,
                 cover_size,
                 cartridge_overlay_path=cartridge_overlay_path,
+                cover_frame=cover_frame,
             )
             self.append(item)
