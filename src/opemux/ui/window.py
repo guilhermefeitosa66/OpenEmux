@@ -436,6 +436,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             scope=scope,
             selected_console=selected_console,
             on_done=_on_done,
+            sync_settings=self.config_manager.get_cover_sync_settings(),
         )
 
     def _on_cover_sync_done_ui(self, summary):

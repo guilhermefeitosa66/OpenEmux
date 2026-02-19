@@ -42,6 +42,9 @@ DEFAULT_CONFIG = {
         "sync": {
             "provider": "libretro_thumbnails",
             "policy": "missing_only",
+            "matching_mode": "normalized_region_priority",
+            "region_priority": ["USA", "World", "Europe", "Japan"],
+            "name_cleanup": True,
         },
     },
     "library": {
@@ -107,6 +110,9 @@ class ConfigManager:
         covers.setdefault("sync", {})
         covers["sync"].setdefault("provider", "libretro_thumbnails")
         covers["sync"].setdefault("policy", "missing_only")
+        covers["sync"].setdefault("matching_mode", "normalized_region_priority")
+        covers["sync"].setdefault("region_priority", ["USA", "World", "Europe", "Japan"])
+        covers["sync"].setdefault("name_cleanup", True)
         config["covers"] = covers
 
         library = config.get("library", {})
@@ -137,6 +143,14 @@ class ConfigManager:
         if covers_cfg:
             return Path(covers_cfg)
         return self.get_roms_path() / "covers"
+
+    def get_cover_sync_settings(self):
+        sync = self.config.get("covers", {}).get("sync", {})
+        return {
+            "matching_mode": sync.get("matching_mode", "normalized_region_priority"),
+            "region_priority": sync.get("region_priority", ["USA", "World", "Europe", "Japan"]),
+            "name_cleanup": bool(sync.get("name_cleanup", True)),
+        }
 
     def get_runtime_mode(self):
         return self.config.get("runtime", {}).get("mode", "retroarch_wrapper")
