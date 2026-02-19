@@ -69,6 +69,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._visible_input_actions = list(ACTION_ORDER)
 
         self._input_key_controller = Gtk.EventControllerKey()
+        self._input_key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         self._input_key_controller.connect("key-pressed", self._on_input_key_pressed)
         self.add_controller(self._input_key_controller)
 
@@ -606,6 +607,23 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return self.t("input.binding.empty")
         return value
 
+    def _set_binding_value(self, action, value):
+        value = (value or "").strip().lower()
+
+        # Enforce unique mapping per visible action list.
+        if value:
+            for other_action, other_value in list(self._input_bindings_buffer.items()):
+                if other_action == action:
+                    continue
+                if other_value == value:
+                    self._input_bindings_buffer[other_action] = ""
+                    if other_action in self._input_buttons:
+                        self._input_buttons[other_action].set_label(self._binding_display_text(""))
+
+        self._input_bindings_buffer[action] = value
+        if action in self._input_buttons:
+            self._input_buttons[action].set_label(self._binding_display_text(value))
+
     def _set_capture_status(self, text=""):
         if hasattr(self, "input_capture_status"):
             self.input_capture_status.set_text(text)
@@ -697,16 +715,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
             if self._capture_sequence_mode:
                 self._cancel_input_capture(show_toast=True)
             else:
-                self._input_bindings_buffer[action] = ""
-                self._input_buttons[action].set_label(self._binding_display_text(""))
+                self._set_binding_value(action, "")
                 self._cancel_input_capture()
             return True
 
         if not key_name:
             return True
 
-        self._input_bindings_buffer[action] = key_name
-        self._input_buttons[action].set_label(self._binding_display_text(key_name))
+        self._set_binding_value(action, key_name)
 
         if not self._capture_sequence_mode:
             self._cancel_input_capture()
