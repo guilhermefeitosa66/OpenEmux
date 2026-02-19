@@ -5,14 +5,22 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
 
 from opemux.core.scraper import fetch_cover
 
+CONSOLE_COVER_SIZES = {
+    "nes": (140, 190),
+    "snes": (158, 220),
+    "gba": (132, 188),
+}
+
 
 class RomItem(Gtk.Box):
-    def __init__(self, rom, on_launch_callback, covers_dir):
+    def __init__(self, rom, on_launch_callback, covers_dir, cover_size):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
         self.on_launch_callback = on_launch_callback
         self.covers_dir = covers_dir
+        self.cover_width, self.cover_height = cover_size
         self.add_css_class("rom-card")
+        self.set_size_request(self.cover_width + 24, -1)
 
         # Click gesture
         gesture = Gtk.GestureClick()
@@ -27,11 +35,11 @@ class RomItem(Gtk.Box):
 
         # Cover art overlay (image + play button on hover)
         self.cover_overlay = Gtk.Overlay()
-        self.cover_overlay.set_size_request(140, 190)
+        self.cover_overlay.set_size_request(self.cover_width, self.cover_height)
 
         # Cover image (placeholder initially)
         self.cover_image = Gtk.Picture()
-        self.cover_image.set_size_request(140, 190)
+        self.cover_image.set_size_request(self.cover_width, self.cover_height)
         self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
         self.cover_image.add_css_class("rom-cover")
         self._set_placeholder()
@@ -41,6 +49,7 @@ class RomItem(Gtk.Box):
         self.play_overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.play_overlay.set_valign(Gtk.Align.CENTER)
         self.play_overlay.set_halign(Gtk.Align.CENTER)
+        self.play_overlay.set_size_request(self.cover_width, self.cover_height)
         self.play_overlay.add_css_class("play-overlay")
         self.play_overlay.set_visible(False)
 
@@ -77,6 +86,7 @@ class RomItem(Gtk.Box):
         placeholder.set_halign(Gtk.Align.CENTER)
         placeholder.set_hexpand(True)
         placeholder.set_vexpand(True)
+        placeholder.set_size_request(self.cover_width, self.cover_height)
         placeholder.add_css_class("rom-cover-placeholder")
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
@@ -129,8 +139,6 @@ class RomGrid(Gtk.FlowBox):
         self.on_launch_callback = on_launch_callback
         self.covers_dir = covers_dir
         self.set_valign(Gtk.Align.START)
-        self.set_max_children_per_line(10)
-        self.set_min_children_per_line(2)
         self.set_row_spacing(24)
         self.set_column_spacing(24)
         self.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -138,8 +146,10 @@ class RomGrid(Gtk.FlowBox):
         self.set_margin_bottom(28)
         self.set_margin_start(28)
         self.set_margin_end(28)
-        self.set_homogeneous(True)
+        self.set_homogeneous(False)
+
+        cover_size = CONSOLE_COVER_SIZES.get(console, CONSOLE_COVER_SIZES["nes"])
 
         for rom in roms:
-            item = RomItem(rom, self.on_launch_callback, self.covers_dir)
+            item = RomItem(rom, self.on_launch_callback, self.covers_dir, cover_size)
             self.append(item)

@@ -8,6 +8,7 @@ DEFAULT_COVERS_DIR = DEFAULT_ROMS_PATH / "covers"
 DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 
 DEFAULT_CONFIG = {
+    "locale": "en",
     "roms_path": str(DEFAULT_ROMS_PATH),
     "consoles": ["nes", "snes", "gba"],
     "runtime": {
@@ -101,6 +102,7 @@ class ConfigManager:
             runtime["retroarch"]["cores"].setdefault(console, [])
 
         config["runtime"] = runtime
+        config.setdefault("locale", "en")
         covers = config.get("covers", {})
         covers.setdefault("sync", {})
         covers["sync"].setdefault("provider", "libretro_thumbnails")
@@ -126,6 +128,9 @@ class ConfigManager:
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
+
+    def get_locale(self):
+        return self.config.get("locale", "en")
 
     def get_covers_dir(self):
         covers_cfg = self.config.get("covers", {}).get("dir")

@@ -11,8 +11,11 @@ from opemux.core.cover_sync import sync_covers_async
 from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scanner import RomScanner
+from opemux.i18n import tr
 from opemux.ui.grid import RomGrid
 from opemux.ui.settings_grid import SettingsGrid
+
+CONSOLE_KEYS = ["nes", "snes", "gba"]
 
 CONSOLE_LABELS = {
     "nes": "NES",
@@ -27,11 +30,11 @@ FALLBACK_CONSOLE_ICONS = {
 }
 
 SETTINGS_ITEMS = [
-    ("roms", "ROMS", "Library paths and sync jobs", "folder-symbolic"),
-    ("bios", "BIOS", "Core BIOS management", "media-floppy-symbolic"),
-    ("input", "Input", "Keyboard and gamepad mapping", "input-gaming-symbolic"),
-    ("shaders", "Shaders", "Visual filters and presets", "applications-graphics-symbolic"),
-    ("system", "System", "Runtime and backend settings", "applications-system-symbolic"),
+    ("roms", "folder-symbolic"),
+    ("bios", "media-floppy-symbolic"),
+    ("input", "input-gaming-symbolic"),
+    ("shaders", "applications-graphics-symbolic"),
+    ("system", "applications-system-symbolic"),
 ]
 
 
@@ -39,11 +42,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def __init__(self, application, **kwargs):
         super().__init__(application=application, **kwargs)
 
+        self.config_manager = application.config_manager
+        self.locale = self.config_manager.get_locale()
         self.set_title("Opemux")
         self.set_default_size(1200, 800)
         self.load_css()
 
-        self.config_manager = application.config_manager
         self.scanner = RomScanner(self.config_manager.get_roms_path())
         self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
         self.covers_dir = self.config_manager.get_covers_dir()
@@ -85,6 +89,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.refresh_library()
         GLib.timeout_add_seconds(1, self._poll_runtime_state)
 
+    def t(self, key, **kwargs):
+        return tr(self.locale, key, **kwargs)
+
     def load_css(self):
         css_provider = Gtk.CssProvider()
         css_path = os.path.join(os.path.dirname(__file__), "style.css")
@@ -98,29 +105,29 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _build_header(self, header_bar):
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
-        self.stop_btn.set_tooltip_text("Stop running game")
+        self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header_bar.pack_end(self.stop_btn)
 
         self.search_button = Gtk.ToggleButton()
         self.search_button.set_icon_name("system-search-symbolic")
-        self.search_button.set_tooltip_text("Search ROMs")
+        self.search_button.set_tooltip_text(self.t("header.search"))
         self.search_button.connect("toggled", self._on_search_toggled)
         header_bar.pack_end(self.search_button)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
-        refresh_btn.set_tooltip_text("Reload visible page")
+        refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header_bar.pack_end(refresh_btn)
 
     def _build_sidebar(self):
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        sidebar_box.set_size_request(220, -1)
+        sidebar_box.set_size_request(360, -1)
         sidebar_box.add_css_class("sidebar")
 
-        label = Gtk.Label(label="Library")
+        label = Gtk.Label(label=self.t("sidebar.library"))
         label.set_halign(Gtk.Align.START)
         label.set_margin_top(18)
         label.set_margin_bottom(12)
@@ -133,7 +140,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.console_list.connect("row-selected", self._on_console_selected)
         self.console_list.add_css_class("navigation-sidebar")
 
-        for console_id in ["nes", "snes", "gba"]:
+        for console_id in CONSOLE_KEYS:
             row = Gtk.ListBoxRow()
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             box.set_margin_top(10)
@@ -144,7 +151,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             icon_widget = self._build_console_icon(console_id)
             box.append(icon_widget)
 
-            name = Gtk.Label(label=CONSOLE_LABELS[console_id])
+            name = Gtk.Label(label=self._console_sidebar_label(console_id))
             name.set_halign(Gtk.Align.START)
             name.set_hexpand(True)
             box.append(name)
@@ -159,15 +166,31 @@ class OpemuxWindow(Adw.ApplicationWindow):
         spacer.set_vexpand(True)
         sidebar_box.append(spacer)
 
-        settings_btn = Gtk.Button(label="Configurações")
-        settings_btn.set_icon_name("emblem-system-symbolic")
+        settings_btn = Gtk.Button()
         settings_btn.add_css_class("pill")
         settings_btn.set_margin_start(12)
         settings_btn.set_margin_end(12)
         settings_btn.set_margin_bottom(12)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        btn_box.set_margin_top(6)
+        btn_box.set_margin_bottom(6)
+
+        gear_icon = Gtk.Image.new_from_icon_name("preferences-system-symbolic")
+        gear_icon.set_pixel_size(18)
+        btn_box.append(gear_icon)
+        btn_box.append(Gtk.Label(label=self.t("sidebar.settings")))
+
+        settings_btn.set_child(btn_box)
         settings_btn.connect("clicked", lambda _: self._open_settings_main())
         sidebar_box.append(settings_btn)
         return sidebar_box
+
+    def _console_sidebar_label(self, console_id):
+        acronym = CONSOLE_LABELS[console_id]
+        full_name = self.t(f"console.{console_id}.full")
+        return f"{acronym} - {full_name}"
 
     def _build_console_icon(self, console_id):
         icon_path = self._asset_path("systems", f"{console_id}.png")
@@ -188,10 +211,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._console_pages = {}
         self._console_loaded = {}
 
-        for console in ["nes", "snes", "gba"]:
+        for console in CONSOLE_KEYS:
             scroll = Gtk.ScrolledWindow()
             scroll.set_vexpand(True)
-            placeholder = Gtk.Label(label=f"Select {CONSOLE_LABELS[console]} to load playlist")
+            placeholder = Gtk.Label(label=self.t("empty.select_console", console=CONSOLE_LABELS[console]))
             placeholder.add_css_class("dim-label")
             placeholder.set_margin_top(32)
             scroll.set_child(placeholder)
@@ -209,46 +232,62 @@ class OpemuxWindow(Adw.ApplicationWindow):
         settings_scroll = Gtk.ScrolledWindow()
         settings_scroll.set_vexpand(True)
         settings_grid = SettingsGrid()
-        for item_id, title, subtitle, fallback_icon in SETTINGS_ITEMS:
+        for item_id, fallback_icon in SETTINGS_ITEMS:
             icon_path = self._asset_path("settings", f"{item_id}.png")
             settings_grid.add_card(
-                title=title,
-                subtitle=subtitle,
+                title=self.t(f"settings.{item_id}.title"),
+                subtitle=self.t(f"settings.{item_id}.subtitle"),
                 icon_path=str(icon_path) if icon_path.exists() else None,
                 icon_name=fallback_icon,
                 on_click=(self._open_settings_roms if item_id == "roms" else None),
             )
         settings_scroll.set_child(settings_grid)
-        self.content_stack.add_titled(settings_scroll, "settings-main", "Configurações")
+        self.content_stack.add_titled(settings_scroll, "settings-main", self.t("settings.title"))
 
         roms_scroll = Gtk.ScrolledWindow()
         roms_scroll.set_vexpand(True)
+        roms_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        breadcrumb_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        breadcrumb_bar.set_margin_top(14)
+        breadcrumb_bar.set_margin_start(20)
+        breadcrumb_bar.set_margin_end(20)
+        breadcrumb_bar.set_margin_bottom(6)
+
+        back_btn = Gtk.Button()
+        back_btn.set_icon_name("go-previous-symbolic")
+        back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        back_btn.connect("clicked", lambda _: self._open_settings_main())
+        breadcrumb_bar.append(back_btn)
+
+        crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.roms.title')}")
+        crumb_label.set_halign(Gtk.Align.START)
+        crumb_label.add_css_class("dim-label")
+        breadcrumb_bar.append(crumb_label)
+        roms_container.append(breadcrumb_bar)
+
         roms_grid = SettingsGrid()
         roms_grid.add_card(
-            title="Path",
+            title=self.t("settings.path.title"),
             subtitle=str(self.config_manager.get_roms_path()),
             icon_name="folder-symbolic",
         )
         roms_grid.add_card(
-            title="Scan ROMs",
-            subtitle="Rebuild playlist for selected console",
+            title=self.t("settings.scan.title"),
+            subtitle=self.t("settings.scan.subtitle"),
             icon_name="view-refresh-symbolic",
             on_click=self._scan_current_console,
         )
         roms_grid.add_card(
-            title="Sync Covers",
-            subtitle="Download missing covers in background",
+            title=self.t("settings.sync.title"),
+            subtitle=self.t("settings.sync.subtitle"),
             icon_name="folder-download-symbolic",
             on_click=self._show_sync_covers_dialog,
         )
-        roms_grid.add_card(
-            title="Back",
-            subtitle="Return to settings categories",
-            icon_name="go-previous-symbolic",
-            on_click=self._open_settings_main,
-        )
-        roms_scroll.set_child(roms_grid)
-        self.content_stack.add_titled(roms_scroll, "settings-roms", "ROMS")
+
+        roms_container.append(roms_grid)
+        roms_scroll.set_child(roms_container)
+        self.content_stack.add_titled(roms_scroll, "settings-roms", self.t("settings.roms.title"))
 
     def _on_console_selected(self, _listbox, row):
         if not row:
@@ -308,7 +347,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             empty_icon.set_opacity(0.4)
             empty_box.append(empty_icon)
 
-            empty_label = Gtk.Label(label=f"No {CONSOLE_LABELS.get(console, console.upper())} ROMs indexed")
+            empty_label = Gtk.Label(label=self.t("empty.indexed", console=CONSOLE_LABELS.get(console, console.upper())))
             empty_label.add_css_class("dim-label")
             empty_box.append(empty_label)
 
@@ -326,16 +365,16 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _scan_current_console(self):
         self._ensure_console_loaded(self.current_console, force_rescan=True)
-        toast = Adw.Toast(title=f"Playlist rebuilt for {self.current_console.upper()}")
+        toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=self.current_console.upper()))
         toast.set_timeout(4)
         self.toast_overlay.add_toast(toast)
 
     def _show_sync_covers_dialog(self):
         dialog = Gtk.Dialog(transient_for=self, modal=True)
-        dialog.set_title("Sync Covers")
+        dialog.set_title(self.t("dialog.sync.title"))
         dialog.set_default_size(360, 120)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Start", Gtk.ResponseType.OK)
+        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
 
         content = dialog.get_content_area()
         content.set_spacing(10)
@@ -344,13 +383,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         content.set_margin_start(12)
         content.set_margin_end(12)
 
-        label = Gtk.Label(label="Scope")
+        label = Gtk.Label(label=self.t("dialog.sync.scope"))
         label.set_halign(Gtk.Align.START)
         content.append(label)
 
         combo = Gtk.ComboBoxText()
-        combo.append("console", f"Current console ({self.current_console.upper()})")
-        combo.append("all", "All consoles")
+        combo.append("console", self.t("dialog.sync.current", console=self.current_console.upper()))
+        combo.append("all", self.t("dialog.sync.all"))
         combo.set_active_id("console")
         content.append(combo)
 
@@ -365,7 +404,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _start_cover_sync(self, scope, selected_console):
         if self._cover_sync_running:
-            toast = Adw.Toast(title="Cover sync already running")
+            toast = Adw.Toast(title=self.t("toast.sync_running"))
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             return
@@ -374,13 +413,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         if scope == "console":
             library[selected_console] = self.playlist_manager.load_playlist(selected_console)
         else:
-            for console in ["nes", "snes", "gba"]:
+            for console in CONSOLE_KEYS:
                 if not self.playlist_manager.playlist_exists(console) and self.config_manager.auto_scan_on_first_open():
                     self.playlist_manager.scan_and_rebuild_playlist(console)
                 library[console] = self.playlist_manager.load_playlist(console)
 
         self._cover_sync_running = True
-        toast = Adw.Toast(title="Cover sync started in background")
+        toast = Adw.Toast(title=self.t("toast.sync_started"))
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
 
@@ -397,11 +436,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _on_cover_sync_done_ui(self, summary):
         self._cover_sync_running = False
-        title = (
-            f"Cover sync done: {summary['downloaded']} downloaded, "
-            f"{summary['skipped']} skipped, {summary['errors']} missed"
+        toast = Adw.Toast(
+            title=self.t(
+                "toast.sync_done",
+                downloaded=summary["downloaded"],
+                skipped=summary["skipped"],
+                errors=summary["errors"],
+            )
         )
-        toast = Adw.Toast(title=title)
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
         if self.current_console in self._grids:
@@ -410,7 +452,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _on_refresh_clicked(self, _button):
         visible = self.content_stack.get_visible_child_name()
-        if visible in ("nes", "snes", "gba"):
+        if visible in tuple(CONSOLE_KEYS):
             self._ensure_console_loaded(visible)
         elif visible == "settings-roms":
             self._scan_current_console()
@@ -423,7 +465,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(5)
             self.toast_overlay.add_toast(toast)
         elif success:
-            toast = Adw.Toast(title=f"Running {rom['name']} ({rom['console'].upper()})")
+            toast = Adw.Toast(
+                title=self.t("toast.running", name=rom["name"], console=rom["console"].upper())
+            )
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
 
@@ -460,8 +504,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         if result is not None:
             rom = result.get("rom") or {}
             rom_name = rom.get("path", "Game").split("/")[-1]
-            title = f"{rom_name} finished (code {result['exit_code']})"
-            toast = Adw.Toast(title=title)
+            toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
         self._sync_runtime_controls()
