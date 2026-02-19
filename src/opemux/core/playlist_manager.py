@@ -1,7 +1,10 @@
 from pathlib import Path
+import logging
 
 from opemux.core.hasher import compute_rom_id
 from opemux.core.scanner import SUPPORTED_EXTENSIONS
+
+logger = logging.getLogger(__name__)
 
 
 class PlaylistManager:
@@ -24,9 +27,11 @@ class PlaylistManager:
     def load_playlist(self, console):
         playlist_path = self.get_playlist_path(console)
         if not playlist_path.exists():
+            logger.info("playlist load skipped: console=%s path=%s reason=missing_file", console, playlist_path)
             return []
 
         entries = []
+        logger.info("playlist load started: console=%s path=%s", console, playlist_path)
         with open(playlist_path, "r", encoding="utf-8") as f:
             for line in f:
                 path_str = line.strip()
@@ -39,17 +44,28 @@ class PlaylistManager:
                     continue
                 entries.append(self._rom_entry(path, console))
 
-        return sorted(entries, key=lambda x: x["name"])
+        sorted_entries = sorted(entries, key=lambda x: x["name"])
+        logger.info("playlist load finished: console=%s total=%d", console, len(sorted_entries))
+        return sorted_entries
 
     def scan_and_rebuild_playlist(self, console):
+        logger.info("playlist rebuild started: console=%s", console)
         roms = self.scanner.scan_console(console)
         playlist_path = self.get_playlist_path(console)
         playlist_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(playlist_path, "w", encoding="utf-8") as f:
             for rom in roms:
+                logger.info(
+                    "playlist add rom: console=%s rom=%s path=%s playlist=%s",
+                    console,
+                    rom["name"],
+                    rom["path"],
+                    playlist_path,
+                )
                 f.write(f"{rom['path']}\n")
 
+        logger.info("playlist rebuild finished: console=%s total=%d path=%s", console, len(roms), playlist_path)
         return roms
 
     def _rom_entry(self, path, console):

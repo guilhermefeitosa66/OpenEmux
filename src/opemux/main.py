@@ -1,4 +1,5 @@
 import sys
+import logging
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -7,6 +8,13 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw
 from opemux.ui.window import OpemuxWindow
 from opemux.core.config import ConfigManager
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 
 class OpemuxApplication(Adw.Application):
     def __init__(self):

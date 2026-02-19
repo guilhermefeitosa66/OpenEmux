@@ -37,15 +37,18 @@ def _remote_cover_candidates(console, rom_name):
 
 def _download_cover(url, dest):
     try:
+        logger.info("cover_sync downloading: url=%s target=%s", url, dest)
         with urllib.request.urlopen(url, timeout=12) as resp:
             data = resp.read()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
+        logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", url, dest, len(data))
         return True
     except urllib.error.HTTPError:
+        logger.info("cover_sync not_found: url=%s", url)
         return False
     except Exception as exc:
-        logger.debug("Cover sync failed for %s: %s", url, exc)
+        logger.warning("cover_sync error: url=%s error=%s", url, exc)
         return False
 
 
@@ -57,6 +60,7 @@ def sync_covers_async(library_by_console, covers_dir, scope, selected_console, o
             if scope == "console" and selected_console in library_by_console
             else list(library_by_console.keys())
         )
+        logger.info("cover_sync started: scope=%s selected_console=%s consoles=%s", scope, selected_console, consoles)
 
         total = 0
         downloaded = 0
@@ -70,6 +74,7 @@ def sync_covers_async(library_by_console, covers_dir, scope, selected_console, o
                 name = rom["name"]
 
                 if find_local_cover(covers_dir_path, console, name):
+                    logger.info("cover_sync skip existing: console=%s rom=%s", console, name)
                     skipped += 1
                     continue
 
@@ -82,8 +87,18 @@ def sync_covers_async(library_by_console, covers_dir, scope, selected_console, o
                         break
 
                 if not found:
+                    logger.info("cover_sync missed: console=%s rom=%s", console, name)
                     errors += 1
 
+        logger.info(
+            "cover_sync finished: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d",
+            scope,
+            selected_console,
+            total,
+            downloaded,
+            skipped,
+            errors,
+        )
         if on_done:
             on_done(
                 {
