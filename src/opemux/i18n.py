@@ -1,6 +1,7 @@
 TRANSLATIONS = {
     "en": {
         "sidebar.library": "Library",
+        "sidebar.all": "All",
         "sidebar.settings": "Settings",
         "header.stop": "Stop running game",
         "header.search": "Search ROMs",
@@ -9,6 +10,7 @@ TRANSLATIONS = {
         "console.snes.full": "Super Nintendo Entertainment System",
         "console.gba.full": "Game Boy Advance",
         "empty.indexed": "No {console} ROMs indexed",
+        "empty.all_indexed": "No ROMs indexed across all consoles",
         "empty.select_console": "Select {console} to load playlist",
         "toast.playlist_rebuilt": "Playlist rebuilt for {console}",
         "toast.sync_running": "Cover sync already running",
@@ -48,6 +50,7 @@ TRANSLATIONS = {
     },
     "pt_BR": {
         "sidebar.library": "Biblioteca",
+        "sidebar.all": "Todos",
         "sidebar.settings": "Configurações",
         "header.stop": "Parar jogo em execução",
         "header.search": "Buscar ROMs",
@@ -56,6 +59,7 @@ TRANSLATIONS = {
         "console.snes.full": "Super Nintendo Entertainment System",
         "console.gba.full": "Game Boy Advance",
         "empty.indexed": "Nenhuma ROM de {console} indexada",
+        "empty.all_indexed": "Nenhuma ROM indexada em todos os consoles",
         "empty.select_console": "Selecione {console} para carregar a playlist",
         "toast.playlist_rebuilt": "Playlist recriada para {console}",
         "toast.sync_running": "Sincronização de capas já está em execução",

@@ -24,6 +24,7 @@ SETTINGS_ITEMS = [
     ("shaders", "applications-graphics-symbolic"),
     ("system", "applications-system-symbolic"),
 ]
+ALL_CONSOLES_ID = "__all__"
 
 
 class OpemuxWindow(Adw.ApplicationWindow):
@@ -64,14 +65,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._build_header(self.header_bar)
         self.content_box.append(self.header_bar)
 
-        self.search_bar = Gtk.SearchBar()
-        self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_hexpand(True)
-        self.search_entry.connect("search-changed", self._on_search_changed)
-        self.search_bar.set_child(self.search_entry)
-        self.search_bar.set_show_close_button(True)
-        self.content_box.append(self.search_bar)
-
         self.content_stack = Adw.ViewStack()
         self.content_box.append(self.content_stack)
         self.main_box.append(self.content_box)
@@ -103,18 +96,19 @@ class OpemuxWindow(Adw.ApplicationWindow):
         )
 
     def _build_header(self, header_bar):
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_hexpand(True)
+        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self.search_entry.set_tooltip_text(self.t("header.search"))
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        header_bar.set_title_widget(self.search_entry)
+
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header_bar.pack_end(self.stop_btn)
-
-        self.search_button = Gtk.ToggleButton()
-        self.search_button.set_icon_name("system-search-symbolic")
-        self.search_button.set_tooltip_text(self.t("header.search"))
-        self.search_button.connect("toggled", self._on_search_toggled)
-        header_bar.pack_end(self.search_button)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -168,9 +162,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         return sidebar_box
 
     def _console_sidebar_label(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            return self.t("sidebar.all")
         return f"{console_id} - {get_system_display_name(console_id)}"
 
     def _build_console_icon(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            return Gtk.Image.new_from_icon_name("view-grid-symbolic")
         icon_path = self._asset_path("systems", f"{console_id.lower()}.png")
         if icon_path.exists():
             pic = Gtk.Picture.new_for_filename(str(icon_path))
@@ -182,25 +180,30 @@ class OpemuxWindow(Adw.ApplicationWindow):
         while child := self.console_list.get_first_child():
             self.console_list.remove(child)
 
+        if consoles:
+            self._append_console_sidebar_row(ALL_CONSOLES_ID)
         for console_id in consoles:
-            row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            box.set_margin_top(10)
-            box.set_margin_bottom(10)
-            box.set_margin_start(16)
-            box.set_margin_end(16)
+            self._append_console_sidebar_row(console_id)
 
-            icon_widget = self._build_console_icon(console_id)
-            box.append(icon_widget)
+    def _append_console_sidebar_row(self, console_id):
+        row = Gtk.ListBoxRow()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
 
-            name = Gtk.Label(label=self._console_sidebar_label(console_id))
-            name.set_halign(Gtk.Align.START)
-            name.set_hexpand(True)
-            box.append(name)
+        icon_widget = self._build_console_icon(console_id)
+        box.append(icon_widget)
 
-            row.set_child(box)
-            row.id = console_id
-            self.console_list.append(row)
+        name = Gtk.Label(label=self._console_sidebar_label(console_id))
+        name.set_halign(Gtk.Align.START)
+        name.set_hexpand(True)
+        box.append(name)
+
+        row.set_child(box)
+        row.id = console_id
+        self.console_list.append(row)
 
     def _asset_path(self, category, filename):
         return Path(__file__).parent / "assets" / "icons" / category / filename
@@ -217,16 +220,23 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = self._discover_visible_consoles()
         self._rebuild_console_sidebar(self.visible_consoles)
 
-        for console in self.visible_consoles:
-            scroll = Gtk.ScrolledWindow()
-            scroll.set_vexpand(True)
-            placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
-            placeholder.add_css_class("dim-label")
-            placeholder.set_margin_top(32)
-            scroll.set_child(placeholder)
-            self._console_pages[console] = scroll
-            self._console_loaded[console] = False
-            self.content_stack.add_titled(scroll, console, console)
+        if self.visible_consoles:
+            all_scroll = Gtk.ScrolledWindow()
+            all_scroll.set_vexpand(True)
+            self._console_pages[ALL_CONSOLES_ID] = all_scroll
+            self._console_loaded[ALL_CONSOLES_ID] = False
+            self.content_stack.add_titled(all_scroll, ALL_CONSOLES_ID, self.t("sidebar.all"))
+
+            for console in self.visible_consoles:
+                scroll = Gtk.ScrolledWindow()
+                scroll.set_vexpand(True)
+                placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
+                placeholder.add_css_class("dim-label")
+                placeholder.set_margin_top(32)
+                scroll.set_child(placeholder)
+                self._console_pages[console] = scroll
+                self._console_loaded[console] = False
+                self.content_stack.add_titled(scroll, console, console)
 
         if not self.visible_consoles:
             empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -394,14 +404,16 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return
         self.current_console = row.id
         self._set_search_enabled(True)
-        self._ensure_console_loaded(self.current_console)
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        else:
+            self._ensure_console_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
         self.search_entry.set_text("")
 
     def _set_search_enabled(self, enabled):
         if not enabled:
-            self.search_button.set_active(False)
-        self.search_button.set_sensitive(enabled)
+            self.search_entry.set_text("")
         self.search_entry.set_sensitive(enabled)
 
     def _open_settings_main(self):
@@ -421,10 +433,15 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def _on_toggle_render_cartridge(self, button):
         self.config_manager.set_render_cartridge_overlay(button.get_active())
-        if self.current_console in self._console_pages:
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console in self._console_pages:
             self._ensure_console_loaded(self.current_console)
 
     def _ensure_console_loaded(self, console, force_rescan=False):
+        if console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded(force_rescan=force_rescan)
+            return
         if console not in self._console_pages:
             return
 
@@ -450,6 +467,25 @@ class OpemuxWindow(Adw.ApplicationWindow):
         if created_playlist and roms and not self._cover_sync_running:
             self._start_cover_sync(scope="console", selected_console=console)
 
+    def _ensure_all_loaded(self, force_rescan=False):
+        if ALL_CONSOLES_ID not in self._console_pages:
+            return
+
+        all_roms = []
+        for console in self.visible_consoles:
+            if force_rescan:
+                roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+                self._console_loaded[console] = True
+            elif not self._console_loaded.get(console) and console in self._initial_roms:
+                roms = self._initial_roms[console]
+            else:
+                roms = self.playlist_manager.load_playlist(console)
+            all_roms.extend(roms)
+
+        all_roms.sort(key=lambda rom: (rom.get("console", ""), rom.get("name", "").lower()))
+        self._render_console_page(ALL_CONSOLES_ID, all_roms)
+        self._console_loaded[ALL_CONSOLES_ID] = True
+
     def _render_console_page(self, console, roms):
         scroll = self._console_pages[console]
         if not roms:
@@ -462,14 +498,18 @@ class OpemuxWindow(Adw.ApplicationWindow):
             empty_icon.set_opacity(0.4)
             empty_box.append(empty_icon)
 
-            empty_label = Gtk.Label(label=self.t("empty.indexed", console=console))
+            if console == ALL_CONSOLES_ID:
+                empty_label = Gtk.Label(label=self.t("empty.all_indexed"))
+            else:
+                empty_label = Gtk.Label(label=self.t("empty.indexed", console=console))
             empty_label.add_css_class("dim-label")
             empty_box.append(empty_label)
 
-            path_label = Gtk.Label(label=str(self.playlist_manager.get_playlist_path(console)))
-            path_label.add_css_class("caption")
-            path_label.add_css_class("dim-label")
-            empty_box.append(path_label)
+            if console != ALL_CONSOLES_ID:
+                path_label = Gtk.Label(label=str(self.playlist_manager.get_playlist_path(console)))
+                path_label.add_css_class("caption")
+                path_label.add_css_class("dim-label")
+                empty_box.append(path_label)
             scroll.set_child(empty_box)
             self._grids.pop(console, None)
             return
@@ -485,7 +525,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         scroll.set_child(grid)
 
     def _scan_current_console(self):
-        if not self.current_console:
+        if not self.current_console or self.current_console == ALL_CONSOLES_ID:
             return
         self._ensure_console_loaded(self.current_console, force_rescan=True)
         toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=self.current_console))
@@ -520,7 +560,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         combo.append("all", self.t("dialog.sync.all"))
         for console in self.visible_consoles:
             combo.append(console, self.t("dialog.sync.console", console=console))
-        combo.set_active_id(self.current_console or self.visible_consoles[0])
+        default_scope = "all" if self.current_console == ALL_CONSOLES_ID else (self.current_console or self.visible_consoles[0])
+        combo.set_active_id(default_scope)
         content.append(combo)
 
         def _on_response(_dlg, response):
@@ -578,14 +619,21 @@ class OpemuxWindow(Adw.ApplicationWindow):
         )
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
-        if self.current_console in self._grids:
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console in self._grids:
             self._ensure_console_loaded(self.current_console)
         return False
 
     def _on_refresh_clicked(self, _button):
         visible = self.content_stack.get_visible_child_name()
+        if visible == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+            self._on_search_changed(self.search_entry)
+            return
         if visible in set(self.visible_consoles):
             self._ensure_console_loaded(visible)
+            self._on_search_changed(self.search_entry)
         elif visible == "settings-roms":
             self._scan_current_console()
 
@@ -602,11 +650,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
             )
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
-
-    def _on_search_toggled(self, button):
-        self.search_bar.set_search_mode(button.get_active())
-        if button.get_active():
-            self.search_entry.grab_focus()
 
     def _on_search_changed(self, entry):
         query = entry.get_text().lower()
