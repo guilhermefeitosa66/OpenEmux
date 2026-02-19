@@ -32,6 +32,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.config_manager = application.config_manager
         self.locale = self.config_manager.get_locale()
         self.set_title("Opemux")
+        self._setup_window_icon()
         self.set_default_size(1200, 800)
         self.load_css()
 
@@ -79,6 +80,16 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
     def t(self, key, **kwargs):
         return tr(self.locale, key, **kwargs)
+
+    def _setup_window_icon(self):
+        images_dir = Path(__file__).parent / "assets" / "images"
+        icon_theme = Gtk.IconTheme.get_for_display(self.get_display())
+        icon_theme.add_search_path(str(images_dir))
+        icon_name = self.get_application().get_application_id() or "logo"
+        if hasattr(Gtk.Window, "set_default_icon_name"):
+            Gtk.Window.set_default_icon_name(icon_name)
+        if hasattr(self, "set_icon_name"):
+            self.set_icon_name(icon_name)
 
     def load_css(self):
         css_provider = Gtk.CssProvider()
