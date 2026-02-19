@@ -20,6 +20,8 @@ This document outlines delivery phases and current status.
 **Goal**: Unify local and downloaded cover art in a single strategy.
 -   [x] Read local covers from `<roms>/covers/<console>/<rom_name>.png|jpg|webp`.
 -   [x] Save downloaded covers into the same local structure.
+-   [x] Add async `Sync Covers` background job with scope selector (current console or all).
+-   [x] Add playlist index files (`~/.opemux/playlists/<console>.list`) and manual rescan flow.
 -   [ ] Add cover metadata index and refresh/re-download policy.
 
 ## Phase 4: Runtime UX Integration

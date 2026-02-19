@@ -10,8 +10,9 @@ Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, el
 -   **Multi-System Support**: **NES**, **SNES**, and **GBA** via RetroArch + libretro cores.
 -   **Game Library Organization**: Automatically scans and organizes your ROM collection.
     -   Default ROM path: `~/games/roms/` (Configurable).
--   **Cover Pipeline**: Local-first covers from `~/games/roms/covers/<console>/` with ScreenScraper fallback.
+-   **Cover Pipeline**: Local-first covers from `~/games/roms/covers/<console>/` with Libretro Thumbnails sync.
 -   **Runtime Control**: Launch/stop flow managed by Opemux while RetroArch runs externally.
+-   **Settings UI**: Sidebar `Configurações` with ROM management actions (`Path`, `Scan ROMs`, `Sync Covers`).
 -   **Visual Enhancements**: Shader/filter configuration roadmap (in progress).
 -   **Input Mapping**: Application-level mapping roadmap (in progress).
 

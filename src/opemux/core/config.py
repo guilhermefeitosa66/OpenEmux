@@ -5,6 +5,7 @@ DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
 DEFAULT_ROMS_PATH = Path.home() / "games" / "roms"
 DEFAULT_COVERS_DIR = DEFAULT_ROMS_PATH / "covers"
+DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 
 DEFAULT_CONFIG = {
     "roms_path": str(DEFAULT_ROMS_PATH),
@@ -35,8 +36,16 @@ DEFAULT_CONFIG = {
     },
     "covers": {
         "dir": str(DEFAULT_COVERS_DIR),
-        "providers": ["screenscraper"],
+        "providers": ["libretro_thumbnails"],
         "preferred_ext_order": ["png", "jpg", "webp"],
+        "sync": {
+            "provider": "libretro_thumbnails",
+            "policy": "missing_only",
+        },
+    },
+    "library": {
+        "playlists_dir": str(DEFAULT_PLAYLISTS_DIR),
+        "auto_scan_on_first_open": True,
     },
 }
 
@@ -92,6 +101,16 @@ class ConfigManager:
             runtime["retroarch"]["cores"].setdefault(console, [])
 
         config["runtime"] = runtime
+        covers = config.get("covers", {})
+        covers.setdefault("sync", {})
+        covers["sync"].setdefault("provider", "libretro_thumbnails")
+        covers["sync"].setdefault("policy", "missing_only")
+        config["covers"] = covers
+
+        library = config.get("library", {})
+        library.setdefault("playlists_dir", str(DEFAULT_PLAYLISTS_DIR))
+        library.setdefault("auto_scan_on_first_open", True)
+        config["library"] = library
         return config
 
     def save_config(self, config=None):
@@ -122,6 +141,12 @@ class ConfigManager:
         per_console = runtime.get("console_backend", {})
         return per_console.get(console, runtime.get("mode", "retroarch_wrapper"))
 
+    def get_playlists_dir(self):
+        return Path(self.config.get("library", {}).get("playlists_dir", DEFAULT_PLAYLISTS_DIR))
+
+    def auto_scan_on_first_open(self):
+        return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
+
     def get_controls_profile(self, console):
         return self.config.get("controls", {}).get("profiles", {}).get(console, {})
 
@@ -136,6 +161,7 @@ class ConfigManager:
 
     def ensure_rom_directories(self):
         base_path = self.get_roms_path()
+        self.get_playlists_dir().mkdir(parents=True, exist_ok=True)
         for console in self.config.get("consoles", []):
             (base_path / console).mkdir(parents=True, exist_ok=True)
             (self.get_covers_dir() / console).mkdir(parents=True, exist_ok=True)

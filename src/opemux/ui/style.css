@@ -76,6 +76,30 @@
     color: @window_fg_color;
 }
 
+/* ===== Settings Cards ===== */
+.settings-card {
+    border-radius: 10px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.settings-card:hover {
+    background-color: alpha(@accent_bg_color, 0.10);
+    transform: translateY(-2px);
+}
+
+.settings-card-button {
+    border-radius: 10px;
+}
+
+.settings-card-icon {
+    opacity: 0.9;
+}
+
+.settings-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
 /* ===== Search Bar ===== */
 .search-bar-box {
     padding: 6px 12px;
