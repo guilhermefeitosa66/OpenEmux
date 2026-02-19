@@ -5,10 +5,16 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
 
 from opemux.core.scraper import fetch_cover
 
+DEFAULT_ITEM_SIZE = (200, 200)
+
 CONSOLE_COVER_SIZES = {
-    "FC": (140, 190),
-    "SFC": (158, 220),
-    "GBA": (132, 188),
+    # Width fixed at 200px. Heights keep cartridge image proportions:
+    # FC: 698x784 -> 200x225
+    # SFC: 811x518 -> 200x128
+    # GBA: 1000x574 -> 200x115
+    "FC": (200, 225),
+    "SFC": (200, 128),
+    "GBA": (200, 115),
 }
 
 
@@ -20,7 +26,11 @@ class RomItem(Gtk.Box):
         self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
         self.add_css_class("rom-card")
-        self.set_size_request(self.cover_width + 24, -1)
+        self.set_size_request(self.cover_width, self.cover_height + 44)
+        self.set_halign(Gtk.Align.START)
+        self.set_valign(Gtk.Align.START)
+        self.set_hexpand(False)
+        self.set_vexpand(False)
 
         # Click gesture
         gesture = Gtk.GestureClick()
@@ -41,6 +51,7 @@ class RomItem(Gtk.Box):
         self.cover_image = Gtk.Picture()
         self.cover_image.set_size_request(self.cover_width, self.cover_height)
         self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
+        self.cover_image.set_can_shrink(True)
         self.cover_image.add_css_class("rom-cover")
         self._set_placeholder()
         self.cover_overlay.set_child(self.cover_image)
@@ -108,7 +119,12 @@ class RomItem(Gtk.Box):
     def _load_cover_image(self, cover_path):
         """Load cover image into the widget (must run on main thread)."""
         try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(cover_path)
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                cover_path,
+                self.cover_width,
+                self.cover_height,
+                True,
+            )
             self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
             # Remove placeholder if present
@@ -148,7 +164,7 @@ class RomGrid(Gtk.FlowBox):
         self.set_margin_end(28)
         self.set_homogeneous(False)
 
-        cover_size = CONSOLE_COVER_SIZES.get(console, CONSOLE_COVER_SIZES["FC"])
+        cover_size = CONSOLE_COVER_SIZES.get(console, DEFAULT_ITEM_SIZE)
 
         for rom in roms:
             item = RomItem(rom, self.on_launch_callback, self.roms_dir, cover_size)
