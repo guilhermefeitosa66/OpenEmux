@@ -8,6 +8,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib
 
 from opemux.core.cover_sync import sync_covers_async
+from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scanner import RomScanner
@@ -58,6 +59,18 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.toast_overlay = Adw.ToastOverlay()
         self.toast_overlay.set_child(self.main_box)
         self.set_content(self.toast_overlay)
+        self._input_buttons = {}
+        self._input_loaded_profile = None
+        self._input_bindings_buffer = {}
+        self._capture_active_action = None
+        self._capture_sequence_mode = False
+        self._capture_sequence_index = -1
+        self._capture_sequence_actions = list(ACTION_ORDER)
+        self._visible_input_actions = list(ACTION_ORDER)
+
+        self._input_key_controller = Gtk.EventControllerKey()
+        self._input_key_controller.connect("key-pressed", self._on_input_key_pressed)
+        self.add_controller(self._input_key_controller)
 
         self.sidebar = self._build_sidebar()
         self.main_box.append(self.sidebar)
@@ -289,6 +302,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         settings_grid = SettingsGrid()
         settings_callbacks = {
             "roms": self._open_settings_roms,
+            "input": self._open_settings_input,
             "ui": self._open_settings_ui,
         }
         for item_id, fallback_icon in SETTINGS_ITEMS:
@@ -348,6 +362,84 @@ class OpemuxWindow(Adw.ApplicationWindow):
         roms_scroll.set_child(roms_container)
         self.content_stack.add_titled(roms_scroll, "settings-roms", self.t("settings.roms.title"))
 
+        input_scroll = Gtk.ScrolledWindow()
+        input_scroll.set_vexpand(True)
+        input_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        input_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        input_breadcrumb.set_margin_top(14)
+        input_breadcrumb.set_margin_start(20)
+        input_breadcrumb.set_margin_end(20)
+        input_breadcrumb.set_margin_bottom(6)
+
+        input_back_btn = Gtk.Button()
+        input_back_btn.set_icon_name("go-previous-symbolic")
+        input_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        input_back_btn.connect("clicked", lambda _: self._open_settings_main())
+        input_breadcrumb.append(input_back_btn)
+
+        input_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.input.title')}")
+        input_crumb_label.set_halign(Gtk.Align.START)
+        input_crumb_label.add_css_class("dim-label")
+        input_breadcrumb.append(input_crumb_label)
+        input_container.append(input_breadcrumb)
+
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        toolbar.set_margin_start(20)
+        toolbar.set_margin_end(20)
+        toolbar.set_margin_top(4)
+        toolbar.set_margin_bottom(6)
+
+        console_label = Gtk.Label(label=self.t("input.console"))
+        console_label.set_halign(Gtk.Align.START)
+        toolbar.append(console_label)
+
+        self.input_console_combo = Gtk.ComboBoxText()
+        for console_id in SYSTEM_IDS:
+            self.input_console_combo.append(console_id, f"{console_id} - {get_system_display_name(console_id)}")
+        self.input_console_combo.connect("changed", self._on_input_console_changed)
+        toolbar.append(self.input_console_combo)
+
+        device_label = Gtk.Label(label=self.t("input.device"))
+        device_label.set_halign(Gtk.Align.START)
+        toolbar.append(device_label)
+
+        self.input_device_combo = Gtk.ComboBoxText()
+        self.input_device_combo.append("keyboard", self.t("input.device.keyboard"))
+        self.input_device_combo.append("gamepad_p1", self.t("input.device.gamepad_p1"))
+        self.input_device_combo.connect("changed", self._on_input_device_changed)
+        toolbar.append(self.input_device_combo)
+
+        save_btn = Gtk.Button(label=self.t("input.save"))
+        save_btn.connect("clicked", lambda _: self._save_input_settings())
+        toolbar.append(save_btn)
+
+        reset_btn = Gtk.Button(label=self.t("input.reset"))
+        reset_btn.connect("clicked", lambda _: self._reset_input_defaults())
+        toolbar.append(reset_btn)
+
+        self.input_map_all_btn = Gtk.Button(label=self.t("input.map_all"))
+        self.input_map_all_btn.connect("clicked", lambda _: self._start_map_all_sequence())
+        toolbar.append(self.input_map_all_btn)
+
+        self.input_capture_status = Gtk.Label(label="")
+        self.input_capture_status.set_halign(Gtk.Align.START)
+        self.input_capture_status.add_css_class("dim-label")
+        self.input_capture_status.set_hexpand(True)
+        toolbar.append(self.input_capture_status)
+
+        input_container.append(toolbar)
+
+        self.input_bindings_list = Gtk.ListBox()
+        self.input_bindings_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.input_bindings_list.set_margin_start(20)
+        self.input_bindings_list.set_margin_end(20)
+        self.input_bindings_list.set_margin_bottom(24)
+        input_container.append(self.input_bindings_list)
+
+        input_scroll.set_child(input_container)
+        self.content_stack.add_titled(input_scroll, "settings-input", self.t("settings.input.title"))
+
         ui_scroll = Gtk.ScrolledWindow()
         ui_scroll.set_vexpand(True)
         ui_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -405,6 +497,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
         ui_scroll.set_child(ui_container)
         self.content_stack.add_titled(ui_scroll, "settings-ui", self.t("settings.ui.title"))
 
+        self.input_console_combo.set_active_id(self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0])
+        self.input_device_combo.set_active_id("keyboard")
+        self._refresh_input_bindings()
+
     def _on_console_selected(self, _listbox, row):
         if not row:
             return
@@ -436,6 +532,226 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-ui")
+
+    def _open_settings_input(self):
+        self._set_search_enabled(False)
+        self.console_list.unselect_all()
+        self.content_stack.set_visible_child_name("settings-input")
+        self._refresh_input_bindings()
+
+    def _on_input_console_changed(self, _combo):
+        self._cancel_input_capture()
+        self._refresh_input_bindings()
+
+    def _on_input_device_changed(self, _combo):
+        self._cancel_input_capture()
+        self._refresh_input_bindings()
+
+    def _input_action_label(self, action):
+        return self.t(f"input.action.{action}")
+
+    def _clear_input_bindings_rows(self):
+        while child := self.input_bindings_list.get_first_child():
+            self.input_bindings_list.remove(child)
+        self._input_buttons = {}
+
+    def _refresh_input_bindings(self):
+        if not hasattr(self, "input_bindings_list"):
+            return
+        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        device_id = self.input_device_combo.get_active_id() or "keyboard"
+        profile = self.config_manager.get_input_profile(console_id)
+        if device_id not in profile.get("devices", {}):
+            device_id = "keyboard"
+            self.input_device_combo.set_active_id(device_id)
+        device = profile.get("devices", {}).get(device_id, {})
+        bindings = device.get("bindings", {})
+        visible_actions = get_actions_for_console(console_id)
+
+        self._input_loaded_profile = profile
+        self._visible_input_actions = list(visible_actions)
+        self._capture_sequence_actions = list(visible_actions)
+        self._input_bindings_buffer = {
+            action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
+        }
+        self._clear_input_bindings_rows()
+        self.input_map_all_btn.set_sensitive(device_id == "keyboard")
+        self.input_capture_status.set_text("")
+
+        for action in visible_actions:
+            row = Gtk.ListBoxRow()
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            box.set_margin_top(6)
+            box.set_margin_bottom(6)
+            box.set_margin_start(8)
+            box.set_margin_end(8)
+
+            label = Gtk.Label(label=self._input_action_label(action))
+            label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            box.append(label)
+
+            button = Gtk.Button(label=self._binding_display_text(self._input_bindings_buffer.get(action, "")))
+            button.set_hexpand(False)
+            button.set_size_request(180, -1)
+            button.connect("clicked", self._on_binding_button_clicked, action)
+            box.append(button)
+            self._input_buttons[action] = button
+
+            row.set_child(box)
+            self.input_bindings_list.append(row)
+
+    def _binding_display_text(self, value):
+        if not value:
+            return self.t("input.binding.empty")
+        return value
+
+    def _set_capture_status(self, text=""):
+        if hasattr(self, "input_capture_status"):
+            self.input_capture_status.set_text(text)
+
+    def _on_binding_button_clicked(self, _button, action):
+        device_id = self.input_device_combo.get_active_id() or "keyboard"
+        if device_id != "keyboard":
+            toast = Adw.Toast(title=self.t("input.capture.keyboard_only"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+        self._start_action_capture(action, sequence_mode=False)
+
+    def _start_action_capture(self, action, sequence_mode):
+        if action not in self._input_buttons:
+            return
+        self._capture_active_action = action
+        self._capture_sequence_mode = sequence_mode
+        self._input_buttons[action].set_label(self.t("input.capture.waiting"))
+        self._set_capture_status(self.t("input.capture.waiting_for", action=self._input_action_label(action)))
+
+    def _cancel_input_capture(self, show_toast=False):
+        if self._capture_active_action in self._input_buttons:
+            action = self._capture_active_action
+            self._input_buttons[action].set_label(self._binding_display_text(self._input_bindings_buffer.get(action, "")))
+        self._capture_active_action = None
+        was_sequence = self._capture_sequence_mode
+        self._capture_sequence_mode = False
+        self._capture_sequence_index = -1
+        self._set_capture_status("")
+        if show_toast and was_sequence:
+            toast = Adw.Toast(title=self.t("input.capture.cancelled"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+
+    def _start_map_all_sequence(self):
+        device_id = self.input_device_combo.get_active_id() or "keyboard"
+        if device_id != "keyboard":
+            toast = Adw.Toast(title=self.t("input.capture.keyboard_only"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+        if not self._capture_sequence_actions:
+            return
+        self._cancel_input_capture()
+        self._capture_sequence_mode = True
+        self._capture_sequence_index = 0
+        self._start_action_capture(self._capture_sequence_actions[0], sequence_mode=True)
+
+    def _normalize_captured_key(self, keyval):
+        key_name = Gdk.keyval_name(keyval)
+        if not key_name:
+            return ""
+        special = {
+            "Return": "enter",
+            "KP_Enter": "enter",
+            "Escape": "escape",
+            "space": "space",
+            "Up": "up",
+            "Down": "down",
+            "Left": "left",
+            "Right": "right",
+            "Shift_L": "left shift",
+            "Shift_R": "right shift",
+            "Control_L": "left ctrl",
+            "Control_R": "right ctrl",
+            "Alt_L": "left alt",
+            "Alt_R": "right alt",
+            "Super_L": "left super",
+            "Super_R": "right super",
+        }
+        if key_name in special:
+            return special[key_name]
+        return key_name.lower()
+
+    def _on_input_key_pressed(self, _controller, keyval, _keycode, _state):
+        visible = self.content_stack.get_visible_child_name()
+        if visible != "settings-input":
+            return False
+        if not self._capture_active_action:
+            return False
+        device_id = self.input_device_combo.get_active_id() or "keyboard"
+        if device_id != "keyboard":
+            return False
+
+        key_name = self._normalize_captured_key(keyval)
+        action = self._capture_active_action
+        if key_name == "escape":
+            if self._capture_sequence_mode:
+                self._cancel_input_capture(show_toast=True)
+            else:
+                self._input_bindings_buffer[action] = ""
+                self._input_buttons[action].set_label(self._binding_display_text(""))
+                self._cancel_input_capture()
+            return True
+
+        if not key_name:
+            return True
+
+        self._input_bindings_buffer[action] = key_name
+        self._input_buttons[action].set_label(self._binding_display_text(key_name))
+
+        if not self._capture_sequence_mode:
+            self._cancel_input_capture()
+            return True
+
+        self._capture_sequence_index += 1
+        if self._capture_sequence_index >= len(self._capture_sequence_actions):
+            self._cancel_input_capture()
+            toast = Adw.Toast(title=self.t("input.capture.completed"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return True
+
+        next_action = self._capture_sequence_actions[self._capture_sequence_index]
+        self._start_action_capture(next_action, sequence_mode=True)
+        return True
+
+    def _save_input_settings(self):
+        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        device_id = self.input_device_combo.get_active_id() or "keyboard"
+        profile = self._input_loaded_profile or self.config_manager.get_input_profile(console_id)
+        devices = profile.setdefault("devices", {})
+        device = devices.setdefault(device_id, {"type": "keyboard" if device_id == "keyboard" else "gamepad", "bindings": {}})
+        bindings = device.setdefault("bindings", {})
+        valid_actions = get_actions_for_console(console_id)
+        new_bindings = {}
+        for action in valid_actions:
+            new_bindings[action] = self._input_bindings_buffer.get(action, "")
+        device["bindings"] = new_bindings
+        profile["active_device"] = device_id
+        self.config_manager.save_input_profile(console_id, profile)
+        self._input_loaded_profile = profile
+        toast = Adw.Toast(title=self.t("toast.input_saved", console=console_id))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+    def _reset_input_defaults(self):
+        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        profile = self.config_manager.reset_input_profile(console_id)
+        self._input_loaded_profile = profile
+        self._cancel_input_capture()
+        self._refresh_input_bindings()
+        toast = Adw.Toast(title=self.t("toast.input_reset", console=console_id))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
 
     def _on_toggle_render_cartridge(self, button):
         self.config_manager.set_render_cartridge_overlay(button.get_active())

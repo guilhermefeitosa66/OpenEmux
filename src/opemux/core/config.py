@@ -4,12 +4,15 @@ from pathlib import Path
 
 import yaml
 
+from opemux.core.input_profiles import InputProfileManager
 from opemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 
 DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
 DEFAULT_ROMS_PATH = Path.home() / "games" / "roms"
 DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
+DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
+DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
 MIGRATION_VERSION = 2
 
 DEFAULT_CONFIG = {
@@ -63,6 +66,7 @@ def _merge_defaults(defaults, data):
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
         self.config_file = config_file
+        self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.config = self.load_config()
 
     def load_config(self):
@@ -220,12 +224,30 @@ class ConfigManager:
     def get_playlists_dir(self):
         return Path(self.config.get("library", {}).get("playlists_dir", DEFAULT_PLAYLISTS_DIR))
 
+    def get_input_dir(self):
+        return DEFAULT_INPUT_DIR
+
+    def get_runtime_dir(self):
+        return DEFAULT_RUNTIME_DIR
+
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
 
     def get_controls_profile(self, console):
         canonical = resolve_system_id(console)
         return self.config.get("controls", {}).get("profiles", {}).get(canonical, {})
+
+    def get_input_profile(self, console):
+        return self.input_profiles.load_profile(console)
+
+    def save_input_profile(self, console, profile):
+        return self.input_profiles.save_profile(console, profile)
+
+    def reset_input_profile(self, console):
+        return self.input_profiles.reset_console(console)
+
+    def ensure_input_profiles(self):
+        self.input_profiles.ensure_default_profiles(SYSTEM_IDS)
 
     def get_retroarch_binary(self):
         return self.config.get("runtime", {}).get("retroarch", {}).get("binary", "retroarch")
@@ -240,6 +262,7 @@ class ConfigManager:
     def ensure_rom_directories(self):
         base_path = self.get_roms_path()
         self.get_playlists_dir().mkdir(parents=True, exist_ok=True)
+        self.get_runtime_dir().mkdir(parents=True, exist_ok=True)
 
         for system_id in SYSTEM_IDS:
             self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
@@ -252,6 +275,8 @@ class ConfigManager:
             self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
             self.get_console_covers_dir(system_id).mkdir(parents=True, exist_ok=True)
             self.get_console_bios_dir(system_id).mkdir(parents=True, exist_ok=True)
+
+        self.ensure_input_profiles()
 
     def _run_library_migration_if_needed(self, base_path):
         migration = self.config.setdefault("library", {}).setdefault("migration", {})

@@ -1,8 +1,10 @@
 import os
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
+from opemux.core.input_actions import to_retroarch_overrides
 from opemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
@@ -65,6 +67,23 @@ class RetroArchLauncher:
                     return str(candidate)
         return None
 
+    def _write_input_override(self, console):
+        profile = self.config_manager.get_input_profile(console)
+        active_device = profile.get("active_device", "keyboard")
+        device = profile.get("devices", {}).get(active_device, {})
+        device_type = device.get("type", "keyboard")
+        bindings = device.get("bindings", {})
+        overrides = to_retroarch_overrides(bindings, device_type, console=console)
+
+        runtime_dir = self.config_manager.get_runtime_dir()
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        override_path = runtime_dir / f"input_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+
+        lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
+        override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(override_path)
+
     def launch_process(self, rom_path, console):
         system_id = resolve_system_id(console)
         retroarch_path = self._resolve_retroarch_binary()
@@ -84,6 +103,8 @@ class RetroArchLauncher:
             )
 
         cmd = [retroarch_path, "-L", core_path]
+        input_override = self._write_input_override(system_id)
+        cmd.extend(["--appendconfig", input_override])
         cmd.extend(self.config_manager.get_retroarch_extra_flags())
         cmd.append(rom_path)
 
