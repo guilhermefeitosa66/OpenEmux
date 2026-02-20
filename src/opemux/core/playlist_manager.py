@@ -16,6 +16,9 @@ class PlaylistManager:
         system_id = resolve_system_id(console)
         return self.config_manager.get_playlists_dir() / f"{system_id}.list"
 
+    def get_favorites_playlist_path(self):
+        return self.config_manager.get_playlists_dir() / "FAVORITES.list"
+
     def playlist_exists(self, console):
         return self.get_playlist_path(console).exists()
 
@@ -50,6 +53,68 @@ class PlaylistManager:
         sorted_entries = sorted(entries, key=lambda x: x["name"])
         logger.info("playlist load finished: console=%s total=%d", system_id, len(sorted_entries))
         return sorted_entries
+
+    def load_favorites_playlist(self):
+        playlist_path = self.get_favorites_playlist_path()
+        if not playlist_path.exists():
+            return []
+
+        entries = []
+        seen = set()
+        with open(playlist_path, "r", encoding="utf-8") as f:
+            for line in f:
+                path_str = line.strip()
+                if not path_str or path_str in seen:
+                    continue
+                seen.add(path_str)
+                path = Path(path_str)
+                if not path.exists() or not path.is_file():
+                    continue
+                console = self._console_from_rom_path(path)
+                if not console:
+                    continue
+                if path.suffix.lower() not in get_supported_extensions(console):
+                    continue
+                entries.append(self._rom_entry(path, console))
+
+        return sorted(entries, key=lambda x: x["name"].lower())
+
+    def list_favorite_paths(self):
+        return {entry["path"] for entry in self.load_favorites_playlist()}
+
+    def is_favorite(self, rom_path):
+        rom_path = str(Path(rom_path))
+        return rom_path in self.list_favorite_paths()
+
+    def toggle_favorite(self, rom):
+        rom_path = str(Path(rom["path"]))
+        playlist_path = self.get_favorites_playlist_path()
+        playlist_path.parent.mkdir(parents=True, exist_ok=True)
+        current = self.list_favorite_paths()
+        is_now_favorite = rom_path not in current
+        if is_now_favorite:
+            current.add(rom_path)
+        else:
+            current.discard(rom_path)
+
+        with open(playlist_path, "w", encoding="utf-8") as f:
+            for path in sorted(current):
+                f.write(f"{path}\n")
+        return is_now_favorite
+
+    def remove_missing_favorites(self):
+        playlist_path = self.get_favorites_playlist_path()
+        if not playlist_path.exists():
+            return 0
+        with open(playlist_path, "r", encoding="utf-8") as f:
+            original = [line.strip() for line in f if line.strip()]
+        valid = [path for path in original if Path(path).exists()]
+        removed = len(original) - len(valid)
+        if removed > 0:
+            with open(playlist_path, "w", encoding="utf-8") as f:
+                for path in sorted(set(valid)):
+                    f.write(f"{path}\n")
+        return removed
 
     def scan_and_rebuild_playlist(self, console):
         system_id = resolve_system_id(console)
@@ -110,3 +175,14 @@ class PlaylistManager:
             "console": console,
             "rom_id": rom_id,
         }
+
+    def _console_from_rom_path(self, path):
+        roms_base = self.config_manager.get_roms_path()
+        try:
+            relative = path.resolve().relative_to(roms_base.resolve())
+        except Exception:
+            return None
+        if len(relative.parts) < 2:
+            return None
+        console = resolve_system_id(relative.parts[0])
+        return console if console in SYSTEM_IDS else None

@@ -14,6 +14,7 @@ from opemux.core.cover_sync import sync_covers_async
 from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.runtime_manager import RuntimeManager
+from opemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
 from opemux.core.scanner import RomScanner
 from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from opemux.i18n import tr
@@ -29,6 +30,7 @@ SETTINGS_ITEMS = [
     ("system", "applications-system-symbolic"),
 ]
 ALL_CONSOLES_ID = "__all__"
+FAVORITES_ID = "__favorites__"
 SIDEBAR_ICON_FILES = {
     "FC": "nintendo_fds__famicom_library@2x.png",
     "SFC": "supernes__snes_usa_library@2x.png",
@@ -289,11 +291,17 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _console_sidebar_label(self, console_id):
         if console_id == ALL_CONSOLES_ID:
             return self.t("sidebar.all")
+        if console_id == FAVORITES_ID:
+            return self.t("sidebar.favorites")
         return f"{console_id} - {get_system_display_name(console_id)}"
 
     def _build_console_icon(self, console_id):
         if console_id == ALL_CONSOLES_ID:
             return Gtk.Image.new_from_icon_name("view-grid-symbolic")
+        if console_id == FAVORITES_ID:
+            icon = Gtk.Image.new_from_icon_name("starred-symbolic")
+            icon.add_css_class("favorites-sidebar-icon")
+            return icon
         candidates = []
         preferred = SIDEBAR_ICON_FILES.get(console_id)
         if preferred:
@@ -316,6 +324,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         if consoles:
             self._append_console_sidebar_row(ALL_CONSOLES_ID)
+        self._append_console_sidebar_row(FAVORITES_ID)
         for console_id in consoles:
             self._append_console_sidebar_row(console_id)
 
@@ -371,6 +380,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self._console_loaded[ALL_CONSOLES_ID] = False
             self.content_stack.add_titled(all_scroll, ALL_CONSOLES_ID, self.t("sidebar.all"))
 
+        favorites_scroll = Gtk.ScrolledWindow()
+        favorites_scroll.set_vexpand(True)
+        self._console_pages[FAVORITES_ID] = favorites_scroll
+        self._console_loaded[FAVORITES_ID] = False
+        self.content_stack.add_titled(favorites_scroll, FAVORITES_ID, self.t("sidebar.favorites"))
+
+        if self.visible_consoles:
             for console in self.visible_consoles:
                 scroll = Gtk.ScrolledWindow()
                 scroll.set_vexpand(True)
@@ -408,9 +424,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return
 
         if self.visible_consoles:
-            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID}) else None
+            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}) else None
             if desired is None:
-                desired = ALL_CONSOLES_ID
+                desired = FAVORITES_ID
             row = self._find_console_row(desired)
             if row:
                 self.console_list.select_row(row)
@@ -418,6 +434,11 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 first_row = self.console_list.get_row_at_index(0)
                 if first_row:
                     self.console_list.select_row(first_row)
+            return
+
+        row = self._find_console_row(FAVORITES_ID)
+        if row:
+            self.console_list.select_row(row)
             return
 
         self.current_console = None
@@ -762,6 +783,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(True)
         if self.current_console == ALL_CONSOLES_ID:
             self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
         else:
             self._ensure_console_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
@@ -1182,12 +1205,17 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.config_manager.set_render_cartridge_overlay(button.get_active())
         if self.current_console == ALL_CONSOLES_ID:
             self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
         elif self.current_console in self._console_pages:
             self._ensure_console_loaded(self.current_console)
 
     def _ensure_console_loaded(self, console, force_rescan=False):
         if console == ALL_CONSOLES_ID:
             self._ensure_all_loaded(force_rescan=force_rescan)
+            return
+        if console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
             return
         if console not in self._console_pages:
             return
@@ -1213,6 +1241,14 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         if created_playlist and roms and not self._cover_sync_running:
             self._start_cover_sync(scope="console", selected_console=console)
+
+    def _ensure_favorites_loaded(self):
+        if FAVORITES_ID not in self._console_pages:
+            return
+        self.playlist_manager.remove_missing_favorites()
+        favorites = self.playlist_manager.load_favorites_playlist()
+        self._render_console_page(FAVORITES_ID, favorites)
+        self._console_loaded[FAVORITES_ID] = True
 
     def _ensure_all_loaded(self, force_rescan=False):
         if ALL_CONSOLES_ID not in self._console_pages:
@@ -1247,6 +1283,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
             if console == ALL_CONSOLES_ID:
                 empty_label = Gtk.Label(label=self.t("empty.all_indexed"))
+            elif console == FAVORITES_ID:
+                empty_label = Gtk.Label(label=self.t("favorites.empty"))
             else:
                 empty_label = Gtk.Label(label=self.t("empty.indexed", console=console))
             empty_label.add_css_class("dim-label")
@@ -1265,11 +1303,87 @@ class OpemuxWindow(Adw.ApplicationWindow):
             console,
             roms,
             self.on_launch_game,
+            self._toggle_favorite_from_ui,
+            self._choose_cover_for_rom,
+            self._remove_cover_for_rom,
+            self._is_favorite_rom,
+            self._has_local_cover,
+            self.t,
             self.roms_path,
             ui_settings=self.config_manager.get_ui_settings(),
         )
         self._grids[console] = grid
         scroll.set_child(grid)
+
+    def _is_favorite_rom(self, rom):
+        return self.playlist_manager.is_favorite(rom["path"])
+
+    def _has_local_cover(self, rom):
+        return bool(find_local_cover(Path(self.roms_path), rom["console"], rom["name"]))
+
+    def _toggle_favorite_from_ui(self, rom):
+        is_now_favorite = self.playlist_manager.toggle_favorite(rom)
+        toast_key = "toast.favorite.added" if is_now_favorite else "toast.favorite.removed"
+        toast = Adw.Toast(title=self.t(toast_key, name=rom["name"]))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+        if self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif FAVORITES_ID in self._grids:
+            self._ensure_favorites_loaded()
+        return is_now_favorite
+
+    def _choose_cover_for_rom(self, rom, on_done=None):
+        chooser = Gtk.FileChooserDialog(
+            title=self.t("dialog.cover.choose.title"),
+            transient_for=self,
+            modal=True,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        chooser.add_button(self.t("dialog.start"), Gtk.ResponseType.ACCEPT)
+        filter_img = Gtk.FileFilter()
+        filter_img.set_name("Images")
+        for ext in SUPPORTED_COVER_EXTS:
+            filter_img.add_pattern(f"*.{ext}")
+            filter_img.add_pattern(f"*.{ext.upper()}")
+        chooser.add_filter(filter_img)
+
+        def _on_response(dialog, response):
+            if response != Gtk.ResponseType.ACCEPT:
+                dialog.destroy()
+                return
+            selected = dialog.get_file()
+            dialog.destroy()
+            if not selected:
+                return
+            path = selected.get_path()
+            if not path:
+                return
+            suffix = Path(path).suffix.lower().lstrip(".")
+            if suffix not in SUPPORTED_COVER_EXTS:
+                toast = Adw.Toast(title=self.t("toast.cover.invalid_extension"))
+                toast.set_timeout(4)
+                self.toast_overlay.add_toast(toast)
+                return
+            save_local_cover(Path(self.roms_path), rom["console"], rom["name"], path)
+            toast = Adw.Toast(title=self.t("toast.cover.updated", name=rom["name"]))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            if callable(on_done):
+                on_done()
+
+        chooser.connect("response", _on_response)
+        chooser.show()
+
+    def _remove_cover_for_rom(self, rom, on_done=None):
+        removed = remove_local_covers(Path(self.roms_path), rom["console"], rom["name"])
+        if removed:
+            toast = Adw.Toast(title=self.t("toast.cover.removed", name=rom["name"]))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            if callable(on_done):
+                on_done()
 
     def _scan_current_console(self):
         self._show_scan_roms_dialog()
@@ -1383,7 +1497,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         combo.append("all", self.t("dialog.sync.all"))
         for console in self.visible_consoles:
             combo.append(console, self.t("dialog.sync.console", console=console))
-        default_scope = "all" if self.current_console == ALL_CONSOLES_ID else (self.current_console or self.visible_consoles[0])
+        default_scope = "all"
+        if self.current_console in self.visible_consoles:
+            default_scope = self.current_console
+        elif self.current_console == ALL_CONSOLES_ID:
+            default_scope = "all"
+        elif self.visible_consoles:
+            default_scope = self.visible_consoles[0]
         combo.set_active_id(default_scope)
         content.append(combo)
 
@@ -1495,6 +1615,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(toast)
         if self.current_console == ALL_CONSOLES_ID:
             self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
         elif self.current_console in self._grids:
             self._ensure_console_loaded(self.current_console)
         return False
@@ -1504,6 +1626,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
         selected_console = getattr(selected_row, "id", None) if selected_row else self.current_console
         if selected_console == ALL_CONSOLES_ID:
             self._rescan_all_consoles(show_toast=False)
+            return
+        if selected_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
             return
         if selected_console in SYSTEM_IDS:
             self._rescan_single_console(selected_console, show_toast=False)

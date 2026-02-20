@@ -65,6 +65,17 @@
     opacity: 0.95;
 }
 
+.favorite-badge {
+    color: #f6c90e;
+    background-color: alpha(black, 0.45);
+    border-radius: 999px;
+    padding: 4px;
+}
+
+.favorites-sidebar-icon {
+    color: #f6c90e;
+}
+
 /* ===== Input Mapping ===== */
 .input-mapping-current {
     background-color: alpha(@accent_bg_color, 0.18);

@@ -7,11 +7,15 @@ from opemux.core.scanner import RomScanner
 
 
 class _DummyConfig:
-    def __init__(self, playlists_dir):
+    def __init__(self, playlists_dir, roms_path=None):
         self._playlists_dir = Path(playlists_dir)
+        self._roms_path = Path(roms_path) if roms_path else Path(playlists_dir).parent / "roms"
 
     def get_playlists_dir(self):
         return self._playlists_dir
+
+    def get_roms_path(self):
+        return self._roms_path
 
 
 class PlaylistManagerTests(unittest.TestCase):
@@ -83,6 +87,49 @@ class PlaylistManagerTests(unittest.TestCase):
             content = playlist_path.read_text(encoding="utf-8")
             self.assertIn("Ridge Racer.cue", content)
             self.assertNotIn("Ridge Racer (Track 1).bin", content)
+
+    def test_toggle_favorite_adds_and_removes(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms_dir = base / "roms"
+            (roms_dir / "GBA").mkdir(parents=True, exist_ok=True)
+            rom_path = roms_dir / "GBA" / "Golden Sun.gba"
+            rom_path.write_bytes(b"rom-data")
+            manager = PlaylistManager(_DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir))
+            rom = {"name": "Golden Sun", "path": str(rom_path), "console": "GBA"}
+
+            added = manager.toggle_favorite(rom)
+            self.assertTrue(added)
+            self.assertTrue(manager.is_favorite(str(rom_path)))
+            self.assertEqual(len(manager.load_favorites_playlist()), 1)
+
+            removed = manager.toggle_favorite(rom)
+            self.assertFalse(removed)
+            self.assertFalse(manager.is_favorite(str(rom_path)))
+            self.assertEqual(manager.load_favorites_playlist(), [])
+
+    def test_load_favorites_ignores_missing_or_invalid_entries(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms_dir = base / "roms"
+            (roms_dir / "PS").mkdir(parents=True, exist_ok=True)
+            valid = roms_dir / "PS" / "Game.cue"
+            valid.write_bytes(b"cue")
+            invalid_ext = roms_dir / "PS" / "Readme.txt"
+            invalid_ext.write_text("x", encoding="utf-8")
+
+            manager = PlaylistManager(_DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir))
+            favorites_path = manager.get_favorites_playlist_path()
+            favorites_path.parent.mkdir(parents=True, exist_ok=True)
+            favorites_path.write_text(
+                f"{valid}\n{invalid_ext}\n{base / 'missing.gba'}\n",
+                encoding="utf-8",
+            )
+
+            loaded = manager.load_favorites_playlist()
+
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0]["path"], str(valid))
 
 
 if __name__ == "__main__":
