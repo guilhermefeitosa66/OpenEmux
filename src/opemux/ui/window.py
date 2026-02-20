@@ -686,7 +686,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _build_settings_views(self):
         settings_scroll = Gtk.ScrolledWindow()
         settings_scroll.set_vexpand(True)
-        settings_grid = SettingsGrid()
+        settings_grid = SettingsGrid(layout_variant="settings_main")
         settings_callbacks = {
             "roms": self._open_settings_roms,
             "bios": self._open_settings_bios,

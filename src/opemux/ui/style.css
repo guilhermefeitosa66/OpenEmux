@@ -115,6 +115,27 @@
     font-weight: 600;
 }
 
+.settings-card-main {
+    min-width: 220px;
+    min-height: 220px;
+}
+
+.settings-card-main-icon-box {
+    min-height: 176px;
+}
+
+.settings-card-main-text-box {
+    min-height: 44px;
+}
+
+.settings-card-main-title {
+    min-height: 18px;
+}
+
+.settings-card-main-subtitle {
+    min-height: 18px;
+}
+
 /* ===== Search Bar ===== */
 .search-bar-box {
     padding: 6px 12px;
