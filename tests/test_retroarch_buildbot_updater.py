@@ -20,6 +20,8 @@ class _FakeConfigManager:
             "core_dir": str(self._core_dir),
             "cores_base_url": "https://example.invalid/buildbot/",
             "core_info_base_url": "https://example.invalid/info.zip",
+            "shader_glsl_url": "https://example.invalid/shaders_glsl.zip",
+            "shader_slang_url": "https://example.invalid/shaders_slang.zip",
             "request_timeout_sec": 5,
             "retries": 1,
             "parallel_downloads": 1,
@@ -88,6 +90,37 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             self.assertEqual(summary["failed"], 0)
             self.assertTrue(core_path.exists())
             self.assertEqual(core_path.read_bytes(), b"core-binary")
+
+    def test_download_shader_packs_extracts_presets(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+
+            glsl_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(glsl_zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_glsl/handheld/dot.glslp", b"dot")
+            glsl_zip_bytes = glsl_zip_buffer.getvalue()
+
+            slang_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(slang_zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_slang/crt/geom.slangp", b"geom")
+            slang_zip_bytes = slang_zip_buffer.getvalue()
+
+            def _fake_urlopen(url, timeout=5):
+                url_str = str(url)
+                if url_str.endswith("shaders_glsl.zip"):
+                    return _FakeResponse(glsl_zip_bytes)
+                if url_str.endswith("shaders_slang.zip"):
+                    return _FakeResponse(slang_zip_bytes)
+                raise AssertionError(f"unexpected url: {url}")
+
+            with patch("opemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+                summary = updater.download_shader_packs_if_missing()
+
+            self.assertEqual(summary["downloaded"], 2)
+            self.assertEqual(summary["failed"], 0)
+            self.assertTrue((updater.shader_glsl_dir / "handheld" / "dot.glslp").exists())
+            self.assertTrue((updater.shader_slang_dir / "crt" / "geom.slangp").exists())
 
 
 if __name__ == "__main__":

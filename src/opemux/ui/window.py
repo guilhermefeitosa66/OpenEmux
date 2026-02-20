@@ -17,6 +17,7 @@ from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
 from opemux.core.scanner import RomScanner
+from opemux.core.shaders import ShaderCatalog, normalize_shader_id
 from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from opemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale, tr
 from opemux.ui.grid import RomGrid
@@ -93,6 +94,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
         self.project_root = Path(project_root)
+        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
 
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.toast_overlay = Adw.ToastOverlay()
@@ -690,6 +692,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             "bios": self._open_settings_bios,
             "input": self._open_settings_input,
             "ui": self._open_settings_ui,
+            "shaders": self._open_settings_shaders,
             "system": self._open_settings_system,
         }
         for item_id, fallback_icon in SETTINGS_ITEMS:
@@ -936,6 +939,54 @@ class OpemuxWindow(Adw.ApplicationWindow):
         ui_scroll.set_child(ui_container)
         self.content_stack.add_titled(ui_scroll, "settings-ui", self.t("settings.ui.title"))
 
+        shaders_scroll = Gtk.ScrolledWindow()
+        shaders_scroll.set_vexpand(True)
+        shaders_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        shaders_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        shaders_breadcrumb.set_margin_top(14)
+        shaders_breadcrumb.set_margin_start(20)
+        shaders_breadcrumb.set_margin_end(20)
+        shaders_breadcrumb.set_margin_bottom(6)
+
+        shaders_back_btn = Gtk.Button()
+        shaders_back_btn.set_icon_name("go-previous-symbolic")
+        shaders_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        shaders_back_btn.connect("clicked", lambda _: self._open_settings_main())
+        shaders_breadcrumb.append(shaders_back_btn)
+
+        shaders_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.shaders.title')}")
+        shaders_crumb_label.set_halign(Gtk.Align.START)
+        shaders_crumb_label.add_css_class("dim-label")
+        shaders_breadcrumb.append(shaders_crumb_label)
+        shaders_container.append(shaders_breadcrumb)
+
+        shaders_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        shaders_toolbar.set_margin_start(20)
+        shaders_toolbar.set_margin_end(20)
+        shaders_toolbar.set_margin_top(8)
+        shaders_toolbar.set_margin_bottom(4)
+
+        self.shaders_show_all_check = Gtk.CheckButton(label=self.t("settings.shaders.show_all"))
+        self.shaders_show_all_check.set_active(self.config_manager.get_shader_settings().get("show_all_shaders", False))
+        self.shaders_show_all_check.connect("toggled", self._on_shader_show_all_toggled)
+        shaders_toolbar.append(self.shaders_show_all_check)
+
+        restore_btn = Gtk.Button(label=self.t("settings.shaders.restore_defaults"))
+        restore_btn.connect("clicked", self._on_restore_shader_defaults_clicked)
+        shaders_toolbar.append(restore_btn)
+        shaders_container.append(shaders_toolbar)
+
+        self.shaders_list_box = Gtk.ListBox()
+        self.shaders_list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.shaders_list_box.set_margin_start(20)
+        self.shaders_list_box.set_margin_end(20)
+        self.shaders_list_box.set_margin_bottom(24)
+        shaders_container.append(self.shaders_list_box)
+
+        shaders_scroll.set_child(shaders_container)
+        self.content_stack.add_titled(shaders_scroll, "settings-shaders", self.t("settings.shaders.title"))
+
         system_scroll = Gtk.ScrolledWindow()
         system_scroll.set_vexpand(True)
         system_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1013,6 +1064,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.input_device_combo.set_active_id("keyboard")
         self._refresh_input_bindings()
         self._reload_bios_status(show_toast=False)
+        self._reload_shader_rows()
 
     def _on_console_selected(self, _listbox, row):
         if not row:
@@ -1101,6 +1153,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-ui")
+
+    def _open_settings_shaders(self):
+        logger.info("ui action: open settings shaders")
+        self._set_search_enabled(False)
+        self.console_list.unselect_all()
+        self._reload_shader_rows()
+        self.content_stack.set_visible_child_name("settings-shaders")
 
     def _open_settings_input(self):
         logger.info("ui action: open settings input")
@@ -1446,6 +1505,81 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._cancel_input_capture()
         self._refresh_input_bindings()
         toast = Adw.Toast(title=self.t("toast.input_reset", console=console_id))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+    def _build_shader_dropdown(self, options, selected_id):
+        labels = [label for _shader_id, label in options]
+        ids = [shader_id for shader_id, _label in options]
+        model = Gtk.StringList.new(labels)
+        dropdown = Gtk.DropDown.new(model, None)
+        dropdown._shader_ids = ids
+        dropdown.set_enable_search(True)
+        dropdown.set_hexpand(True)
+        if selected_id in ids:
+            dropdown.set_selected(ids.index(selected_id))
+        else:
+            dropdown.set_selected(0)
+        return dropdown
+
+    def _get_shader_dropdown_active_id(self, dropdown):
+        idx = int(dropdown.get_selected())
+        ids = getattr(dropdown, "_shader_ids", [])
+        if idx < 0 or idx >= len(ids):
+            return "disabled"
+        return normalize_shader_id(ids[idx])
+
+    def _shader_options_for_console(self, console_id):
+        show_all = bool(self.shaders_show_all_check.get_active())
+        selected = normalize_shader_id(self.config_manager.get_shader_for_console(console_id))
+        options = self.shader_catalog.get_options(show_all=show_all)
+        option_ids = [shader_id for shader_id, _label in options]
+        if selected not in option_ids:
+            options.append((selected, self.shader_catalog.label_for_shader(selected)))
+        return options, selected
+
+    def _reload_shader_rows(self):
+        if not hasattr(self, "shaders_list_box"):
+            return
+        while child := self.shaders_list_box.get_first_child():
+            self.shaders_list_box.remove(child)
+
+        for console_id in SYSTEM_IDS:
+            row = Gtk.ListBoxRow()
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box.set_margin_top(8)
+            box.set_margin_bottom(8)
+            box.set_margin_start(8)
+            box.set_margin_end(8)
+
+            icon = self._build_console_icon(console_id)
+            box.append(icon)
+
+            title = Gtk.Label(label=f"{console_id} - {get_system_display_name(console_id)}")
+            title.set_halign(Gtk.Align.START)
+            title.set_hexpand(True)
+            box.append(title)
+
+            options, selected = self._shader_options_for_console(console_id)
+            dropdown = self._build_shader_dropdown(options, selected)
+            dropdown.connect("notify::selected", self._on_shader_dropdown_changed, console_id)
+            box.append(dropdown)
+
+            row.set_child(box)
+            self.shaders_list_box.append(row)
+
+    def _on_shader_dropdown_changed(self, dropdown, _param, console_id):
+        shader_id = self._get_shader_dropdown_active_id(dropdown)
+        self.config_manager.set_shader_for_console(console_id, shader_id)
+
+    def _on_shader_show_all_toggled(self, button):
+        self.config_manager.set_show_all_shaders(button.get_active())
+        self._reload_shader_rows()
+
+    def _on_restore_shader_defaults_clicked(self, _button):
+        self.config_manager.reset_shader_defaults()
+        self._reload_shader_rows()
+        toast = Adw.Toast(title=self.t("toast.shaders.defaults_restored"))
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
 

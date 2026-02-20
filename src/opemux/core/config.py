@@ -6,6 +6,7 @@ import yaml
 
 from opemux.i18n import normalize_locale
 from opemux.core.input_profiles import InputProfileManager
+from opemux.core.shaders import ShaderConfigStore
 from opemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 
 DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
@@ -33,6 +34,8 @@ DEFAULT_CONFIG = {
                 "core_dir": None,
                 "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
+                "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
+                "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
                 "request_timeout_sec": 30,
                 "retries": 3,
                 "parallel_downloads": 4,
@@ -91,6 +94,7 @@ class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
         self.config_file = config_file
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
+        self.shaders = ShaderConfigStore()
         self.config = self.load_config()
 
     def load_config(self):
@@ -134,6 +138,14 @@ class ConfigManager:
         runtime["retroarch"]["updater"].setdefault(
             "core_info_base_url",
             "https://buildbot.libretro.com/assets/frontend/info.zip",
+        )
+        runtime["retroarch"]["updater"].setdefault(
+            "shader_glsl_url",
+            "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
+        )
+        runtime["retroarch"]["updater"].setdefault(
+            "shader_slang_url",
+            "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
         )
         runtime["retroarch"]["updater"].setdefault("request_timeout_sec", 30)
         runtime["retroarch"]["updater"].setdefault("retries", 3)
@@ -338,10 +350,36 @@ class ConfigManager:
                 "core_info_base_url",
                 "https://buildbot.libretro.com/assets/frontend/info.zip",
             ),
+            "shader_glsl_url": updater.get(
+                "shader_glsl_url",
+                "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
+            ),
+            "shader_slang_url": updater.get(
+                "shader_slang_url",
+                "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
+            ),
             "request_timeout_sec": int(updater.get("request_timeout_sec", 30)),
             "retries": int(updater.get("retries", 3)),
             "parallel_downloads": int(updater.get("parallel_downloads", 4)),
         }
+
+    def get_shaders_config_file(self):
+        return self.shaders.config_file
+
+    def get_shader_settings(self):
+        return self.shaders.get_settings()
+
+    def get_shader_for_console(self, console):
+        return self.shaders.get_console_shader(console)
+
+    def set_shader_for_console(self, console, shader_id):
+        return self.shaders.set_console_shader(console, shader_id)
+
+    def set_show_all_shaders(self, enabled):
+        return self.shaders.set_show_all_shaders(enabled)
+
+    def reset_shader_defaults(self):
+        return self.shaders.reset_defaults()
 
     def get_bootstrap_state(self):
         return self.config.get("setup", {}).get("bootstrap", {})

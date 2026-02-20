@@ -8,6 +8,7 @@ import logging
 from opemux.core.bios_catalog import get_required_for_core
 from opemux.core.bios_manager import find_missing_required_for_core
 from opemux.core.input_actions import to_retroarch_overrides
+from opemux.core.shaders import ShaderCatalog, normalize_shader_id
 from opemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class RetroArchLauncher:
     def __init__(self, project_root, config_manager):
         self.project_root = Path(project_root)
         self.config_manager = config_manager
+        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
 
     def _resolve_retroarch_binary(self):
         configured = self.config_manager.get_retroarch_binary()
@@ -144,6 +146,14 @@ class RetroArchLauncher:
         cmd = [retroarch_path, "-L", core_path]
         runtime_override = self._write_runtime_override(system_id, core_filename=core_filename)
         cmd.extend(["--appendconfig", runtime_override])
+        shader_id = "disabled"
+        if hasattr(self.config_manager, "get_shader_for_console"):
+            shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
+        shader_path = self.shader_catalog.resolve_shader_path(shader_id)
+        if shader_path:
+            cmd.extend(["--set-shader", shader_path])
+        elif shader_id != "disabled":
+            logger.info("shader preset not found, running without shader: console=%s shader=%s", system_id, shader_id)
         extra_flags = list(self.config_manager.get_retroarch_extra_flags())
         if "--verbose" not in extra_flags and "-v" not in extra_flags:
             extra_flags.append("--verbose")

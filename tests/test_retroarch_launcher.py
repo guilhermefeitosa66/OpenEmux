@@ -7,12 +7,13 @@ from opemux.core.retroarch_launcher import RetroArchLauncher
 
 
 class _DummyConfig:
-    def __init__(self, base_dir, binary_path, core_path):
+    def __init__(self, base_dir, binary_path, core_path, shader_by_console=None):
         self.base_dir = Path(base_dir)
         self.binary_path = str(binary_path)
         self.core_path = str(core_path)
         self.input_dir = self.base_dir / "input"
         self.runtime_dir = self.base_dir / "runtime"
+        self.shader_by_console = shader_by_console or {}
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -39,6 +40,9 @@ class _DummyConfig:
 
     def get_console_bios_dir(self, console):
         return self.base_dir / "roms" / console / "bios"
+
+    def get_shader_for_console(self, console):
+        return self.shader_by_console.get(console, "disabled")
 
 
 class RetroArchLauncherTests(unittest.TestCase):
@@ -84,6 +88,30 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIsNotNone(proc)
         self.assertIsNone(error)
         self.assertIn("system_directory", content)
+
+    def test_launch_applies_shader_when_available(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            shader = base / "runtime" / "shaders_glsl" / "handheld" / "dot.glslp"
+            shader.parent.mkdir(parents=True, exist_ok=True)
+            shader.write_text("shader preset", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
+            launcher = RetroArchLauncher(base, cfg)
+
+            with patch("opemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                args, kwargs = popen_mock.call_args
+                cmd = args[0]
+
+        self.assertIsNotNone(proc)
+        self.assertIsNone(error)
+        self.assertIn("--set-shader", cmd)
+        self.assertIn(str(shader), cmd)
 
 
 if __name__ == "__main__":

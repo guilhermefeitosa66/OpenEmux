@@ -21,6 +21,8 @@ class RetroArchBuildbotUpdater:
         self.runtime_dir = self.config_manager.get_runtime_dir()
         self.cache_dir = self.runtime_dir / "buildbot_cache"
         self.core_dir = self._resolve_core_dir()
+        self.shader_glsl_dir = self.runtime_dir / "shaders_glsl"
+        self.shader_slang_dir = self.runtime_dir / "shaders_slang"
 
     def _resolve_core_dir(self):
         configured = self.settings.get("core_dir")
@@ -39,9 +41,13 @@ class RetroArchBuildbotUpdater:
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.core_dir.mkdir(parents=True, exist_ok=True)
+        self.shader_glsl_dir.mkdir(parents=True, exist_ok=True)
+        self.shader_slang_dir.mkdir(parents=True, exist_ok=True)
         return {
             "core_dir": str(self.core_dir),
             "cache_dir": str(self.cache_dir),
+            "shader_glsl_dir": str(self.shader_glsl_dir),
+            "shader_slang_dir": str(self.shader_slang_dir),
         }
 
     def fetch_manifest(self):
@@ -175,6 +181,83 @@ class RetroArchBuildbotUpdater:
             target_name = os.path.basename(selected) or fallback_core_name
             target_path = self.core_dir / target_name
             self._atomic_write_bytes(target_path, core_bytes)
+
+    def download_shader_packs_if_missing(self, on_progress=None):
+        self.ensure_environment()
+        packs = [
+            ("shaders_glsl", self.settings.get("shader_glsl_url", ""), self.shader_glsl_dir, ".glslp"),
+            ("shaders_slang", self.settings.get("shader_slang_url", ""), self.shader_slang_dir, ".slangp"),
+        ]
+        summary = {
+            "total": len(packs),
+            "downloaded": 0,
+            "skipped": 0,
+            "failed": 0,
+            "failures": [],
+            "targets": [str(self.shader_glsl_dir), str(self.shader_slang_dir)],
+        }
+
+        for index, (pack_name, url, target_dir, extension) in enumerate(packs, start=1):
+            if on_progress:
+                on_progress(
+                    {
+                        "type": "download_progress",
+                        "current": index,
+                        "total": len(packs),
+                        "core_name": pack_name,
+                    }
+                )
+            if not url:
+                summary["failed"] += 1
+                summary["failures"].append({"artifact": pack_name, "error": "missing url"})
+                continue
+            if self._directory_has_files_with_extension(target_dir, extension):
+                summary["skipped"] += 1
+                continue
+            archive_path = self.cache_dir / f"{pack_name}.zip"
+            try:
+                self._download_file_with_retries(url, archive_path)
+                self._extract_shader_archive(archive_path, pack_name, target_dir)
+                if self._directory_has_files_with_extension(target_dir, extension):
+                    summary["downloaded"] += 1
+                else:
+                    raise RuntimeError(f"pack extracted with no {extension} presets")
+            except Exception as exc:
+                summary["failed"] += 1
+                summary["failures"].append({"artifact": pack_name, "error": str(exc)})
+                logger.warning("buildbot shader download failed: pack=%s error=%s", pack_name, exc)
+        return summary
+
+    def _directory_has_files_with_extension(self, directory, extension):
+        if not directory.exists():
+            return False
+        for candidate in directory.rglob(f"*{extension}"):
+            if candidate.is_file():
+                return True
+        return False
+
+    def _extract_shader_archive(self, archive_path, pack_name, target_dir):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            members = [member for member in archive.namelist() if member and not member.endswith("/")]
+            preferred_prefix = f"{pack_name}/"
+            preferred = [member for member in members if member.startswith(preferred_prefix)]
+            selected = preferred if preferred else members
+
+            if not selected:
+                raise RuntimeError(f"empty shader archive: {archive_path}")
+
+            for member in selected:
+                data = archive.read(member)
+                relative = member
+                if member.startswith(preferred_prefix):
+                    relative = member[len(preferred_prefix):]
+                relative_path = Path(relative)
+                if not str(relative_path) or str(relative_path).startswith("../"):
+                    continue
+                destination = target_dir / relative_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                self._atomic_write_bytes(destination, data)
 
     def _atomic_write_bytes(self, target_path, data):
         target_path.parent.mkdir(parents=True, exist_ok=True)

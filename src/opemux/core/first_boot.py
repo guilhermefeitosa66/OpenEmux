@@ -145,4 +145,9 @@ class FirstBootBootstrapper:
             if on_event:
                 on_event(evt)
 
-        return self.updater.download_all(on_progress=_progress)
+        cores_summary = self.updater.download_all(on_progress=_progress)
+        shaders_summary = self.updater.download_shader_packs_if_missing(on_progress=_progress)
+        return {
+            "cores": cores_summary,
+            "shaders": shaders_summary,
+        }
