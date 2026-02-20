@@ -216,10 +216,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
         if not self._tasks:
             self.status_spinner.stop()
             self.status_label.set_text(self.t("status.idle"))
+            self.status_progress.set_visible(False)
             self.status_progress.set_fraction(0.0)
             self.status_progress.set_text("")
             return
 
+        self.status_progress.set_visible(True)
         task = next(iter(self._tasks.values()))
         pending = max(0, len(self._tasks) - 1)
         label = task["label"]
@@ -349,7 +351,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
 
-    def refresh_library(self):
+    def refresh_library(self, preferred_view=None):
+        previous_visible = self.content_stack.get_visible_child_name() if hasattr(self, "content_stack") else None
         while child := self.content_stack.get_first_child():
             self.content_stack.remove(child)
 
@@ -393,15 +396,41 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self.content_stack.add_titled(empty, "library-empty", "Library")
 
         self._build_settings_views()
+        target_view = preferred_view
+        if target_view is None:
+            target_view = previous_visible or self.current_console
 
-        if self.visible_consoles:
-            first_row = self.console_list.get_row_at_index(0)
-            if first_row:
-                self.console_list.select_row(first_row)
-        else:
+        if target_view and str(target_view).startswith("settings-"):
             self.current_console = None
             self._set_search_enabled(False)
-            self.content_stack.set_visible_child_name("library-empty")
+            self.console_list.unselect_all()
+            self.content_stack.set_visible_child_name(target_view)
+            return
+
+        if self.visible_consoles:
+            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID}) else None
+            if desired is None:
+                desired = ALL_CONSOLES_ID
+            row = self._find_console_row(desired)
+            if row:
+                self.console_list.select_row(row)
+            else:
+                first_row = self.console_list.get_row_at_index(0)
+                if first_row:
+                    self.console_list.select_row(first_row)
+            return
+
+        self.current_console = None
+        self._set_search_enabled(False)
+        self.content_stack.set_visible_child_name("library-empty")
+
+    def _find_console_row(self, console_id):
+        row = self.console_list.get_first_child()
+        while row:
+            if getattr(row, "id", None) == console_id:
+                return row
+            row = row.get_next_sibling()
+        return None
 
     def _discover_visible_consoles(self):
         visible = []
@@ -1243,13 +1272,29 @@ class OpemuxWindow(Adw.ApplicationWindow):
         scroll.set_child(grid)
 
     def _scan_current_console(self):
-        # Settings > ROMs > Scan ROMs now performs a global library rebuild.
-        self._rescan_all_consoles(show_toast=True)
+        self._show_scan_roms_dialog()
 
     def _rescan_single_console(self, console, show_toast=False):
         if not console or console == ALL_CONSOLES_ID:
             return self._rescan_all_consoles(show_toast=show_toast)
-        return self._rescan_all_consoles(show_toast=show_toast)
+        if self._scan_running:
+            if show_toast:
+                toast = Adw.Toast(title=self.t("toast.scan_running"))
+                toast.set_timeout(3)
+                self.toast_overlay.add_toast(toast)
+            return None
+
+        origin_view = self.content_stack.get_visible_child_name()
+        self._scan_running = True
+        task_id = self._begin_task("scan", self.t("status.scan.starting"), total=1)
+
+        def _worker():
+            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+            summary = {"console": console, "roms": len(roms)}
+            GLib.idle_add(self._on_rescan_single_done_ui, task_id, summary, show_toast, origin_view)
+
+        Thread(target=_worker, daemon=True).start()
+        return {"started": True}
 
     def _rescan_all_consoles(self, show_toast=False):
         if self._scan_running:
@@ -1258,6 +1303,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 toast.set_timeout(3)
                 self.toast_overlay.add_toast(toast)
             return None
+        origin_view = self.content_stack.get_visible_child_name()
         self._scan_running = True
         task_id = self._begin_task("scan", self.t("status.scan.starting"))
 
@@ -1272,15 +1318,27 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         def _worker():
             summary = self.playlist_manager.scan_and_rebuild_all_playlists(on_progress=_on_progress)
-            GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast)
+            GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast, origin_view)
 
         Thread(target=_worker, daemon=True).start()
         return {"started": True}
 
-    def _on_rescan_all_done_ui(self, task_id, summary, show_toast):
+    def _on_rescan_single_done_ui(self, task_id, summary, show_toast, origin_view):
+        self._scan_running = False
+        self._update_task(task_id, current=1, total=1)
+        self._finish_task(task_id)
+        self.refresh_library(preferred_view=origin_view or summary.get("console"))
+        self._on_search_changed(self.search_entry)
+        if show_toast:
+            toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=summary.get("console")))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        return False
+
+    def _on_rescan_all_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
         self._finish_task(task_id)
-        self.refresh_library()
+        self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
         if show_toast:
             toast = Adw.Toast(
@@ -1336,6 +1394,45 @@ class OpemuxWindow(Adw.ApplicationWindow):
                     self._start_cover_sync(scope="all", selected_console=None)
                 else:
                     self._start_cover_sync(scope="console", selected_console=selected)
+            dialog.close()
+
+        dialog.connect("response", _on_response)
+        dialog.show()
+
+    def _show_scan_roms_dialog(self):
+        dialog = Gtk.Dialog(transient_for=self, modal=True)
+        dialog.set_title(self.t("dialog.scan.title"))
+        dialog.set_default_size(380, 120)
+        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        label = Gtk.Label(label=self.t("dialog.scan.scope"))
+        label.set_halign(Gtk.Align.START)
+        content.append(label)
+
+        combo = Gtk.ComboBoxText()
+        combo.append("all", self.t("dialog.scan.all"))
+        for console in SYSTEM_IDS:
+            combo.append(console, self.t("dialog.scan.console", console=console))
+
+        default_scope = self.current_console if self.current_console in SYSTEM_IDS else "all"
+        combo.set_active_id(default_scope)
+        content.append(combo)
+
+        def _on_response(_dlg, response):
+            if response == Gtk.ResponseType.OK:
+                selected = combo.get_active_id() or "all"
+                if selected == "all":
+                    self._rescan_all_consoles(show_toast=True)
+                else:
+                    self._rescan_single_console(selected, show_toast=True)
             dialog.close()
 
         dialog.connect("response", _on_response)
@@ -1403,14 +1500,13 @@ class OpemuxWindow(Adw.ApplicationWindow):
         return False
 
     def _on_refresh_clicked(self, _button):
-        visible = self.content_stack.get_visible_child_name()
-        if visible == ALL_CONSOLES_ID:
+        selected_row = self.console_list.get_selected_row()
+        selected_console = getattr(selected_row, "id", None) if selected_row else self.current_console
+        if selected_console == ALL_CONSOLES_ID:
             self._rescan_all_consoles(show_toast=False)
             return
-        if visible in set(self.visible_consoles):
-            self._rescan_single_console(visible, show_toast=False)
-        elif visible == "settings-roms":
-            self._rescan_all_consoles(show_toast=False)
+        if selected_console in SYSTEM_IDS:
+            self._rescan_single_console(selected_console, show_toast=False)
 
     def on_launch_game(self, rom):
         success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
