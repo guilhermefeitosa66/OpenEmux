@@ -268,17 +268,19 @@ class RomItem(Gtk.Box):
         content.set_margin_start(8)
         content.set_margin_end(8)
 
-        favorite_label = self.t("context.favorite.remove") if self.is_favorite(self.rom) else self.t("context.favorite.add")
-        favorite_btn = Gtk.Button(label=favorite_label)
+        is_favorite = self.is_favorite(self.rom)
+        favorite_label = self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
+        favorite_icon = "starred-symbolic" if is_favorite else "non-starred-symbolic"
+        favorite_btn = self._context_action_button(favorite_label, favorite_icon)
         favorite_btn.connect("clicked", self._on_context_toggle_favorite)
         content.append(favorite_btn)
 
-        choose_cover_btn = Gtk.Button(label=self.t("context.cover.choose"))
+        choose_cover_btn = self._context_action_button(self.t("context.cover.choose"), "image-x-generic-symbolic")
         choose_cover_btn.connect("clicked", self._on_context_choose_cover)
         content.append(choose_cover_btn)
 
         if self.has_local_cover(self.rom):
-            remove_cover_btn = Gtk.Button(label=self.t("context.cover.remove"))
+            remove_cover_btn = self._context_action_button(self.t("context.cover.remove"), "user-trash-symbolic")
             remove_cover_btn.connect("clicked", self._on_context_remove_cover)
             content.append(remove_cover_btn)
 
@@ -304,6 +306,25 @@ class RomItem(Gtk.Box):
 
     def _refresh_cover_after_change(self):
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched)
+
+    def _context_action_button(self, label_text, icon_name):
+        button = Gtk.Button()
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_margin_top(4)
+        row.set_margin_bottom(4)
+        row.set_margin_start(4)
+        row.set_margin_end(4)
+
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(16)
+        row.append(icon)
+
+        label = Gtk.Label(label=label_text)
+        label.set_halign(Gtk.Align.START)
+        label.set_xalign(0)
+        row.append(label)
+        button.set_child(row)
+        return button
 
 
 class RomGrid(Gtk.FlowBox):

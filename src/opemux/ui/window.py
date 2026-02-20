@@ -31,14 +31,38 @@ SETTINGS_ITEMS = [
 ]
 ALL_CONSOLES_ID = "__all__"
 FAVORITES_ID = "__favorites__"
-SIDEBAR_ICON_FILES = {
+CONSOLE_ICON_FILES = {
+    "A2600": "atari_2600__atari2600_library@2x.png",
+    "A5200": "atari_5200__atari5200_library@2x.png",
+    "A7800": "atari_7800__atari7800_library@2x.png",
+    "LYNX": "lynx__lynx_library@2x.png",
+    "CV": "colecovision__colecovision_library@2x.png",
+    "FDS": "nintendo_fds__famicom_library@2x.png",
     "FC": "nintendo_fds__famicom_library@2x.png",
-    "SFC": "supernes__snes_usa_library@2x.png",
-    "GBA": "gameboy_advance__gba_library@2x.png",
-    "N64": "n64__n64_library@2x.png",
+    "GB": "gameboy__gameboy_library@2x.png",
     "GBC": "gameboy__gameboy_library@2x.png",
+    "GBA": "gameboy_advance__gba_library@2x.png",
+    "GG": "gamegear__gamegear_library@2x.png",
+    "INTV": "intellivision__intellivision_library@2x.png",
+    "NGP": "neogeopocket__neogeopocket_library@2x.png",
+    "N64": "n64__n64_library@2x.png",
+    "NDS": "nds__nds_library@2x.png",
+    "GC": "gamecube__gamecube_library@2x.png",
+    "O2": "odyssey2__odyssey2_library@2x.png",
+    "SG1000": "sg_1000__sg1000_library@2x.png",
+    "S32X": "sega_32x__32x_na_library@2x.png",
+    "MCD": "sega_cd__segacd_library@2x.png",
     "MD": "genesis__megadrive_library@2x.png",
+    "SMS": "segamastersystem__sms_library@2x.png",
+    "SATURN": "saturn__saturn_library@2x.png",
     "PS": "playstation__psx_library@2x.png",
+    "PSP": "psp__psp_library@2x.png",
+    "SFC": "supernes__snes_usa_library@2x.png",
+    "PCE": "pc_engine__pcengine_library@2x.png",
+    "PCECD": "pc_engine_cd__pcenginecd_library@2x.png",
+    "VECTREX": "vectrex__vectrex_library@2x.png",
+    "VB": "virtual_boy__vb_library@2x.png",
+    "WS": "wonderswan__wonderswan_library@2x.png",
 }
 
 
@@ -152,6 +176,75 @@ class OpemuxWindow(Adw.ApplicationWindow):
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header_bar.pack_end(refresh_btn)
+
+    def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
+        ids = []
+        if include_all:
+            ids.append(ALL_CONSOLES_ID)
+        ids.extend(console_ids)
+
+        model = Gtk.StringList.new(ids)
+        dropdown = Gtk.DropDown.new(model, None)
+        dropdown._console_ids = ids
+        dropdown._all_label_key = all_label_key
+
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_console_dropdown_setup)
+        factory.connect("bind", self._on_console_dropdown_bind)
+        dropdown.set_factory(factory)
+
+        list_factory = Gtk.SignalListItemFactory()
+        list_factory.connect("setup", self._on_console_dropdown_setup)
+        list_factory.connect("bind", self._on_console_dropdown_bind)
+        dropdown.set_list_factory(list_factory)
+
+        self._set_console_dropdown_active_id(dropdown, default_id or (ALL_CONSOLES_ID if include_all else ids[0]))
+        return dropdown
+
+    def _on_console_dropdown_setup(self, _factory, list_item):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_margin_top(4)
+        row.set_margin_bottom(4)
+        row.set_margin_start(4)
+        row.set_margin_end(4)
+        list_item.set_child(row)
+
+    def _on_console_dropdown_bind(self, _factory, list_item):
+        row = list_item.get_child()
+        while child := row.get_first_child():
+            row.remove(child)
+
+        item = list_item.get_item()
+        console_id = item.get_string() if item else ""
+
+        icon = self._build_console_icon(console_id)
+        row.append(icon)
+
+        if console_id == ALL_CONSOLES_ID:
+            label_text = self.t("sidebar.all")
+        else:
+            label_text = f"{console_id} - {get_system_display_name(console_id)}"
+
+        label = Gtk.Label(label=label_text)
+        label.set_halign(Gtk.Align.START)
+        label.set_xalign(0)
+        row.append(label)
+
+    def _get_console_dropdown_active_id(self, dropdown):
+        idx = int(dropdown.get_selected())
+        ids = getattr(dropdown, "_console_ids", [])
+        if idx < 0 or idx >= len(ids):
+            return None
+        return ids[idx]
+
+    def _set_console_dropdown_active_id(self, dropdown, console_id):
+        ids = getattr(dropdown, "_console_ids", [])
+        if not ids:
+            return
+        if console_id not in ids:
+            dropdown.set_selected(0)
+            return
+        dropdown.set_selected(ids.index(console_id))
 
     def _build_status_bar(self):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -303,7 +396,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             icon.add_css_class("favorites-sidebar-icon")
             return icon
         candidates = []
-        preferred = SIDEBAR_ICON_FILES.get(console_id)
+        preferred = CONSOLE_ICON_FILES.get(console_id)
         if preferred:
             candidates.append(preferred)
             if preferred.endswith("@2x.png"):
@@ -620,10 +713,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         console_label.set_halign(Gtk.Align.START)
         toolbar.append(console_label)
 
-        self.input_console_combo = Gtk.ComboBoxText()
-        for console_id in SYSTEM_IDS:
-            self.input_console_combo.append(console_id, f"{console_id} - {get_system_display_name(console_id)}")
-        self.input_console_combo.connect("changed", self._on_input_console_changed)
+        self.input_console_combo = self._build_console_dropdown(SYSTEM_IDS, default_id=SYSTEM_IDS[0])
+        self.input_console_combo.connect("notify::selected", self._on_input_console_changed)
         toolbar.append(self.input_console_combo)
 
         device_label = Gtk.Label(label=self.t("input.device"))
@@ -771,7 +862,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
         system_scroll.set_child(system_container)
         self.content_stack.add_titled(system_scroll, "settings-system", self.t("settings.system.title"))
 
-        self.input_console_combo.set_active_id(self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0])
+        self._set_console_dropdown_active_id(
+            self.input_console_combo,
+            self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0],
+        )
         self.input_device_combo.set_active_id("keyboard")
         self._refresh_input_bindings()
         self._reload_bios_status(show_toast=False)
@@ -961,7 +1055,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             container.append(row)
         return container
 
-    def _on_input_console_changed(self, _combo):
+    def _on_input_console_changed(self, *_args):
         self._cancel_input_capture()
         self._refresh_input_bindings()
 
@@ -988,7 +1082,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _refresh_input_bindings(self):
         if not hasattr(self, "input_bindings_list"):
             return
-        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
         device_id = self.input_device_combo.get_active_id() or "keyboard"
         profile = self.config_manager.get_input_profile(console_id)
         if device_id not in profile.get("devices", {}):
@@ -1173,7 +1267,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         return True
 
     def _save_input_settings(self):
-        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
         device_id = self.input_device_combo.get_active_id() or "keyboard"
         profile = self._input_loaded_profile or self.config_manager.get_input_profile(console_id)
         devices = profile.setdefault("devices", {})
@@ -1192,7 +1286,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(toast)
 
     def _reset_input_defaults(self):
-        console_id = self.input_console_combo.get_active_id() or SYSTEM_IDS[0]
+        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
         profile = self.config_manager.reset_input_profile(console_id)
         self._input_loaded_profile = profile
         self._cancel_input_capture()
@@ -1493,24 +1587,27 @@ class OpemuxWindow(Adw.ApplicationWindow):
         label.set_halign(Gtk.Align.START)
         content.append(label)
 
-        combo = Gtk.ComboBoxText()
-        combo.append("all", self.t("dialog.sync.all"))
-        for console in self.visible_consoles:
-            combo.append(console, self.t("dialog.sync.console", console=console))
+        combo = self._build_console_dropdown(
+            self.visible_consoles,
+            default_id=None,
+            include_all=True,
+        )
         default_scope = "all"
         if self.current_console in self.visible_consoles:
             default_scope = self.current_console
         elif self.current_console == ALL_CONSOLES_ID:
-            default_scope = "all"
+            default_scope = ALL_CONSOLES_ID
         elif self.visible_consoles:
             default_scope = self.visible_consoles[0]
-        combo.set_active_id(default_scope)
+        if default_scope == "all":
+            default_scope = ALL_CONSOLES_ID
+        self._set_console_dropdown_active_id(combo, default_scope)
         content.append(combo)
 
         def _on_response(_dlg, response):
             if response == Gtk.ResponseType.OK:
-                selected = combo.get_active_id() or self.current_console or self.visible_consoles[0]
-                if selected == "all":
+                selected = self._get_console_dropdown_active_id(combo) or self.current_console or self.visible_consoles[0]
+                if selected == ALL_CONSOLES_ID:
                     self._start_cover_sync(scope="all", selected_console=None)
                 else:
                     self._start_cover_sync(scope="console", selected_console=selected)
@@ -1537,19 +1634,20 @@ class OpemuxWindow(Adw.ApplicationWindow):
         label.set_halign(Gtk.Align.START)
         content.append(label)
 
-        combo = Gtk.ComboBoxText()
-        combo.append("all", self.t("dialog.scan.all"))
-        for console in SYSTEM_IDS:
-            combo.append(console, self.t("dialog.scan.console", console=console))
+        combo = self._build_console_dropdown(
+            SYSTEM_IDS,
+            default_id=None,
+            include_all=True,
+        )
 
-        default_scope = self.current_console if self.current_console in SYSTEM_IDS else "all"
-        combo.set_active_id(default_scope)
+        default_scope = self.current_console if self.current_console in SYSTEM_IDS else ALL_CONSOLES_ID
+        self._set_console_dropdown_active_id(combo, default_scope)
         content.append(combo)
 
         def _on_response(_dlg, response):
             if response == Gtk.ResponseType.OK:
-                selected = combo.get_active_id() or "all"
-                if selected == "all":
+                selected = self._get_console_dropdown_active_id(combo) or ALL_CONSOLES_ID
+                if selected == ALL_CONSOLES_ID:
                     self._rescan_all_consoles(show_toast=True)
                 else:
                     self._rescan_single_console(selected, show_toast=True)

@@ -116,7 +116,7 @@ TRANSLATIONS = {
         "context.favorite.add": "Add to favorites",
         "context.favorite.remove": "Remove from favorites",
         "context.cover.choose": "Choose cover image",
-        "context.cover.remove": "Remove image",
+        "context.cover.remove": "Remove cover image",
         "dialog.cancel": "Cancel",
         "dialog.start": "Start",
         "bootstrap.title": "Preparing first-time setup",
