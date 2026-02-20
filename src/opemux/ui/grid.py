@@ -3,8 +3,11 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
 from pathlib import Path
+import logging
 
 from opemux.core.scraper import fetch_cover
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
@@ -248,6 +251,16 @@ class RomItem(Gtk.Box):
 
     def on_click(self, gesture, n_press, x, y):
         button = gesture.get_current_button()
+        logger.info(
+            "rom card click: button=%s presses=%s rom=%s console=%s path=%s x=%.1f y=%.1f",
+            button,
+            n_press,
+            self.rom.get("name"),
+            self.rom.get("console"),
+            self.rom.get("path"),
+            x,
+            y,
+        )
         if button == Gdk.BUTTON_SECONDARY:
             self._show_context_menu()
             return
@@ -255,6 +268,12 @@ class RomItem(Gtk.Box):
             self.on_launch_callback(self.rom)
 
     def _show_context_menu(self):
+        logger.info(
+            "rom context menu open: rom=%s console=%s path=%s",
+            self.rom.get("name"),
+            self.rom.get("console"),
+            self.rom.get("path"),
+        )
         if self._context_popover:
             self._context_popover.popdown()
             self._context_popover = None
@@ -289,17 +308,35 @@ class RomItem(Gtk.Box):
         popover.popup()
 
     def _on_context_toggle_favorite(self, _button):
+        logger.info(
+            "rom context action: toggle_favorite rom=%s console=%s path=%s",
+            self.rom.get("name"),
+            self.rom.get("console"),
+            self.rom.get("path"),
+        )
         if self._context_popover:
             self._context_popover.popdown()
         is_favorite_now = self.on_toggle_favorite(self.rom)
         self.favorite_badge.set_visible(bool(is_favorite_now))
 
     def _on_context_choose_cover(self, _button):
+        logger.info(
+            "rom context action: choose_cover rom=%s console=%s path=%s",
+            self.rom.get("name"),
+            self.rom.get("console"),
+            self.rom.get("path"),
+        )
         if self._context_popover:
             self._context_popover.popdown()
         self.on_choose_cover(self.rom, self._refresh_cover_after_change)
 
     def _on_context_remove_cover(self, _button):
+        logger.info(
+            "rom context action: remove_cover rom=%s console=%s path=%s",
+            self.rom.get("name"),
+            self.rom.get("console"),
+            self.rom.get("path"),
+        )
         if self._context_popover:
             self._context_popover.popdown()
         self.on_remove_cover(self.rom, self._refresh_cover_after_change)

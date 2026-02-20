@@ -1,5 +1,6 @@
 import os
 import subprocess
+import logging
 from threading import Thread
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_na
 from opemux.i18n import tr
 from opemux.ui.grid import RomGrid
 from opemux.ui.settings_grid import SettingsGrid
+
+logger = logging.getLogger(__name__)
 
 SETTINGS_ITEMS = [
     ("roms", "folder-symbolic"),
@@ -123,15 +126,60 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.content_box.append(self.header_bar)
 
         self.content_stack = Adw.ViewStack()
+        self.content_stack.connect("notify::visible-child-name", self._on_visible_child_changed)
         self.content_box.append(self.content_stack)
         self.status_bar = self._build_status_bar()
         self.content_box.append(self.status_bar)
         self.main_box.append(self.content_box)
 
+        self._click_debug_controller = Gtk.GestureClick()
+        self._click_debug_controller.set_button(0)
+        self._click_debug_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self._click_debug_controller.connect("pressed", self._on_global_click_pressed)
+        self.add_controller(self._click_debug_controller)
+
         self.refresh_library()
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
         GLib.timeout_add_seconds(1, self._poll_runtime_state)
+
+    def _on_global_click_pressed(self, gesture, n_press, x, y):
+        button = gesture.get_current_button()
+        # Avoid Gtk.Widget.pick() here: dropdown/popover interactions may trigger
+        # compute_point assertions while transient widgets are being recycled.
+        target = self.get_focus()
+        logger.info(
+            "ui click: button=%s presses=%s target=%s view=%s current_console=%s x=%.1f y=%.1f",
+            button,
+            n_press,
+            self._describe_widget(target),
+            self.content_stack.get_visible_child_name(),
+            self.current_console,
+            x,
+            y,
+        )
+
+    def _describe_widget(self, widget):
+        if widget is None:
+            return "None"
+        name = widget.__class__.__name__
+        if isinstance(widget, Gtk.Button):
+            child = widget.get_child()
+            if isinstance(child, Gtk.Label):
+                return f"{name}(label={child.get_text()})"
+            return f"{name}(button)"
+        if isinstance(widget, Gtk.Label):
+            return f"{name}(text={widget.get_text()})"
+        if isinstance(widget, Gtk.Image):
+            return f"{name}(icon={widget.get_icon_name()})"
+        return name
+
+    def _on_visible_child_changed(self, _stack, _param):
+        logger.info(
+            "ui view changed: visible_view=%s current_console=%s",
+            self.content_stack.get_visible_child_name(),
+            self.current_console,
+        )
 
     def t(self, key, **kwargs):
         return tr(self.locale, key, **kwargs)
@@ -406,9 +454,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
             icon_path = self._asset_path("systems", icon_filename)
             if not icon_path.exists():
                 continue
-            pic = Gtk.Picture.new_for_filename(str(icon_path))
-            pic.set_size_request(22, 22)
-            return pic
+            img = Gtk.Image.new_from_file(str(icon_path))
+            img.set_size_request(22, 22)
+            return img
         return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
 
     def _rebuild_console_sidebar(self, consoles):
@@ -874,6 +922,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         if not row:
             return
         self.current_console = row.id
+        logger.info("ui sidebar select: console_id=%s", self.current_console)
         self._set_search_enabled(True)
         if self.current_console == ALL_CONSOLES_ID:
             self._ensure_all_loaded()
@@ -890,16 +939,19 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_sensitive(enabled)
 
     def _open_settings_main(self):
+        logger.info("ui action: open settings main")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-main")
 
     def _open_settings_roms(self):
+        logger.info("ui action: open settings roms")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-roms")
 
     def _open_settings_bios(self):
+        logger.info("ui action: open settings bios")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-bios")
@@ -949,17 +1001,20 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(toast)
 
     def _open_settings_ui(self):
+        logger.info("ui action: open settings ui")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-ui")
 
     def _open_settings_input(self):
+        logger.info("ui action: open settings input")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-input")
         self._refresh_input_bindings()
 
     def _open_settings_system(self):
+        logger.info("ui action: open settings system")
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-system")
