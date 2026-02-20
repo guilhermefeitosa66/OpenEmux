@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 
+from opemux.i18n import normalize_locale
 from opemux.core.input_profiles import InputProfileManager
 from opemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 
@@ -174,7 +175,7 @@ class ConfigManager:
         ui.setdefault("render_cartridge_overlay", False)
         config["ui"] = ui
 
-        config.setdefault("locale", "en")
+        config["locale"] = normalize_locale(config.get("locale", "en"))
         config["consoles"] = [system_id for system_id in config.get("consoles", SYSTEM_IDS) if resolve_system_id(system_id) in SYSTEM_IDS]
         if not config["consoles"]:
             config["consoles"] = list(SYSTEM_IDS)
@@ -235,7 +236,11 @@ class ConfigManager:
         self.save_config()
 
     def get_locale(self):
-        return self.config.get("locale", "en")
+        return normalize_locale(self.config.get("locale", "en"))
+
+    def set_locale(self, locale):
+        self.config["locale"] = normalize_locale(locale)
+        self.save_config()
 
     def get_console_dir(self, system_id):
         canonical = resolve_system_id(system_id)

@@ -35,7 +35,17 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             manager.request_bootstrap_retry()
             self.assertTrue(manager.bootstrap_needs_run())
 
+    def test_locale_setter_normalizes_invalid_values(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+
+            manager.set_locale("de")
+            self.assertEqual(manager.get_locale(), "de")
+
+            manager.set_locale("invalid-locale")
+            self.assertEqual(manager.get_locale(), "en")
+
 
 if __name__ == "__main__":
     unittest.main()
-
