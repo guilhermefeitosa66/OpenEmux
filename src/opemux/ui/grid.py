@@ -32,6 +32,12 @@ class RomItem(Gtk.Box):
         self,
         rom,
         on_launch_callback,
+        on_toggle_favorite,
+        on_choose_cover,
+        on_remove_cover,
+        is_favorite,
+        has_local_cover,
+        t,
         roms_dir,
         cover_size,
         cartridge_overlay_path=None,
@@ -40,6 +46,12 @@ class RomItem(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
         self.on_launch_callback = on_launch_callback
+        self.on_toggle_favorite = on_toggle_favorite
+        self.on_choose_cover = on_choose_cover
+        self.on_remove_cover = on_remove_cover
+        self.is_favorite = is_favorite
+        self.has_local_cover = has_local_cover
+        self.t = t
         self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
         self.cover_frame = cover_frame
@@ -52,6 +64,8 @@ class RomItem(Gtk.Box):
 
         # Click gesture
         gesture = Gtk.GestureClick()
+        # Listen to all mouse buttons (primary + secondary for context menu).
+        gesture.set_button(0)
         gesture.connect("released", self.on_click)
         self.add_controller(gesture)
 
@@ -106,6 +120,14 @@ class RomItem(Gtk.Box):
             self.cartridge_overlay.set_can_shrink(True)
             self.cover_overlay.add_overlay(self.cartridge_overlay)
         self.cover_overlay.add_overlay(self.play_overlay)
+        self.favorite_badge = Gtk.Image.new_from_icon_name("starred-symbolic")
+        self.favorite_badge.add_css_class("favorite-badge")
+        self.favorite_badge.set_halign(Gtk.Align.END)
+        self.favorite_badge.set_valign(Gtk.Align.START)
+        self.favorite_badge.set_margin_top(6)
+        self.favorite_badge.set_margin_end(6)
+        self.favorite_badge.set_visible(bool(self.is_favorite(self.rom)))
+        self.cover_overlay.add_overlay(self.favorite_badge)
 
         self.append(self.cover_overlay)
 
@@ -119,6 +141,8 @@ class RomItem(Gtk.Box):
 
         # Trigger async cover art fetch
         fetch_cover(rom, self.roms_dir, self._on_cover_fetched)
+
+        self._context_popover = None
 
     def _set_placeholder(self):
         """Show a styled placeholder with console-specific icon."""
@@ -216,12 +240,80 @@ class RomItem(Gtk.Box):
         self.remove_css_class("rom-card-hover")
 
     def on_click(self, gesture, n_press, x, y):
-        if self.on_launch_callback:
+        button = gesture.get_current_button()
+        if button == Gdk.BUTTON_SECONDARY:
+            self._show_context_menu()
+            return
+        if button == Gdk.BUTTON_PRIMARY and self.on_launch_callback:
             self.on_launch_callback(self.rom)
+
+    def _show_context_menu(self):
+        if self._context_popover:
+            self._context_popover.popdown()
+            self._context_popover = None
+
+        popover = Gtk.Popover.new()
+        popover.set_parent(self)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        content.set_margin_top(8)
+        content.set_margin_bottom(8)
+        content.set_margin_start(8)
+        content.set_margin_end(8)
+
+        favorite_label = self.t("context.favorite.remove") if self.is_favorite(self.rom) else self.t("context.favorite.add")
+        favorite_btn = Gtk.Button(label=favorite_label)
+        favorite_btn.connect("clicked", self._on_context_toggle_favorite)
+        content.append(favorite_btn)
+
+        choose_cover_btn = Gtk.Button(label=self.t("context.cover.choose"))
+        choose_cover_btn.connect("clicked", self._on_context_choose_cover)
+        content.append(choose_cover_btn)
+
+        if self.has_local_cover(self.rom):
+            remove_cover_btn = Gtk.Button(label=self.t("context.cover.remove"))
+            remove_cover_btn.connect("clicked", self._on_context_remove_cover)
+            content.append(remove_cover_btn)
+
+        popover.set_child(content)
+        self._context_popover = popover
+        popover.popup()
+
+    def _on_context_toggle_favorite(self, _button):
+        if self._context_popover:
+            self._context_popover.popdown()
+        is_favorite_now = self.on_toggle_favorite(self.rom)
+        self.favorite_badge.set_visible(bool(is_favorite_now))
+
+    def _on_context_choose_cover(self, _button):
+        if self._context_popover:
+            self._context_popover.popdown()
+        self.on_choose_cover(self.rom, self._refresh_cover_after_change)
+
+    def _on_context_remove_cover(self, _button):
+        if self._context_popover:
+            self._context_popover.popdown()
+        self.on_remove_cover(self.rom, self._refresh_cover_after_change)
+
+    def _refresh_cover_after_change(self):
+        fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched)
 
 
 class RomGrid(Gtk.FlowBox):
-    def __init__(self, console, roms, on_launch_callback, roms_dir, ui_settings=None):
+    def __init__(
+        self,
+        console,
+        roms,
+        on_launch_callback,
+        on_toggle_favorite,
+        on_choose_cover,
+        on_remove_cover,
+        is_favorite,
+        has_local_cover,
+        t,
+        roms_dir,
+        ui_settings=None,
+    ):
         super().__init__()
         self.console = console
         self.on_launch_callback = on_launch_callback
@@ -255,6 +347,12 @@ class RomGrid(Gtk.FlowBox):
             item = RomItem(
                 rom,
                 self.on_launch_callback,
+                on_toggle_favorite,
+                on_choose_cover,
+                on_remove_cover,
+                is_favorite,
+                has_local_cover,
+                t,
                 self.roms_dir,
                 cover_size,
                 cartridge_overlay_path=cartridge_overlay_path,
