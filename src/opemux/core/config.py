@@ -229,6 +229,11 @@ class ConfigManager:
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
 
+    def set_roms_path(self, path_value):
+        new_path = Path(path_value).expanduser()
+        self.config["roms_path"] = str(new_path)
+        self.save_config()
+
     def get_locale(self):
         return self.config.get("locale", "en")
 
