@@ -31,6 +31,8 @@ CARTRIDGE_COVER_FRAMES = {
 
 
 class RomItem(Gtk.Box):
+    NAME_PREVIEW_LIMIT = 30
+
     def __init__(
         self,
         rom,
@@ -134,11 +136,16 @@ class RomItem(Gtk.Box):
 
         self.append(self.cover_overlay)
 
+        full_name = rom["name"]
+        display_name = self._truncate_name(full_name)
+        self.set_tooltip_text(full_name)
+
         # ROM Name
-        self.name_label = Gtk.Label(label=rom["name"])
+        self.name_label = Gtk.Label(label=display_name)
         self.name_label.set_halign(Gtk.Align.CENTER)
-        self.name_label.set_max_width_chars(16)
-        self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.name_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+        self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
+        self.name_label.set_tooltip_text(full_name)
         self.name_label.add_css_class("rom-title")
         self.append(self.name_label)
 
@@ -146,6 +153,12 @@ class RomItem(Gtk.Box):
         fetch_cover(rom, self.roms_dir, self._on_cover_fetched)
 
         self._context_popover = None
+
+    @classmethod
+    def _truncate_name(cls, name):
+        if len(name) <= cls.NAME_PREVIEW_LIMIT:
+            return name
+        return f"{name[:cls.NAME_PREVIEW_LIMIT]}..."
 
     def _set_placeholder(self):
         """Show a styled placeholder with console-specific icon."""
