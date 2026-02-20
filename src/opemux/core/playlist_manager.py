@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 
 from opemux.core.hasher import compute_rom_id
-from opemux.core.systems import get_supported_extensions, resolve_system_id
+from opemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,21 @@ class PlaylistManager:
 
         logger.info("playlist rebuild finished: console=%s total=%d path=%s", system_id, len(roms), playlist_path)
         return roms
+
+    def scan_and_rebuild_all_playlists(self, consoles=None):
+        selected_consoles = list(consoles or SYSTEM_IDS)
+        summary = {
+            "consoles": {},
+            "total_consoles": len(selected_consoles),
+            "total_roms": 0,
+        }
+        for console in selected_consoles:
+            roms = self.scan_and_rebuild_playlist(console)
+            system_id = resolve_system_id(console)
+            count = len(roms)
+            summary["consoles"][system_id] = count
+            summary["total_roms"] += count
+        return summary
 
     def _rom_entry(self, path, console):
         rom_id = None

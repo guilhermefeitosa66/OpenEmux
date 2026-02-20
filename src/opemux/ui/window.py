@@ -5,7 +5,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, Gdk, GLib
+from gi.repository import Gtk, Adw, Gdk, GLib, Gio
 
 from opemux.core.cover_sync import sync_covers_async
 from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
@@ -357,6 +357,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             title=self.t("settings.path.title"),
             subtitle=str(self.config_manager.get_roms_path()),
             icon_name="folder-symbolic",
+            on_click=self._choose_roms_path,
         )
         roms_grid.add_card(
             title=self.t("settings.scan.title"),
@@ -588,6 +589,49 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-roms")
+
+    def _choose_roms_path(self):
+        chooser = Gtk.FileChooserDialog(
+            title=self.t("settings.path.dialog_title"),
+            transient_for=self,
+            modal=True,
+            action=Gtk.FileChooserAction.SELECT_FOLDER,
+        )
+        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        chooser.add_button(self.t("settings.path.select_button"), Gtk.ResponseType.ACCEPT)
+        current = self.config_manager.get_roms_path()
+        if current.exists():
+            chooser.set_current_folder(Gio.File.new_for_path(str(current)))
+        chooser.connect("response", self._on_choose_roms_path_response)
+        chooser.show()
+
+    def _on_choose_roms_path_response(self, chooser, response):
+        if response != Gtk.ResponseType.ACCEPT:
+            chooser.destroy()
+            return
+
+        selected_file = chooser.get_file()
+        chooser.destroy()
+        if not selected_file:
+            return
+
+        selected_path = selected_file.get_path()
+        if not selected_path:
+            toast = Adw.Toast(title=self.t("toast.path_invalid"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+
+        self.config_manager.set_roms_path(selected_path)
+        self.config_manager.ensure_rom_directories()
+        self.roms_path = self.config_manager.get_roms_path()
+        self.scanner = RomScanner(self.roms_path)
+        self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
+        self._rescan_all_consoles(show_toast=False)
+
+        toast = Adw.Toast(title=self.t("toast.path_updated", path=str(self.roms_path)))
+        toast.set_timeout(4)
+        self.toast_overlay.add_toast(toast)
 
     def _open_settings_ui(self):
         self._set_search_enabled(False)
@@ -939,12 +983,35 @@ class OpemuxWindow(Adw.ApplicationWindow):
         scroll.set_child(grid)
 
     def _scan_current_console(self):
-        if not self.current_console or self.current_console == ALL_CONSOLES_ID:
-            return
-        self._ensure_console_loaded(self.current_console, force_rescan=True)
-        toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=self.current_console))
-        toast.set_timeout(4)
-        self.toast_overlay.add_toast(toast)
+        # Settings > ROMs > Scan ROMs now performs a global library rebuild.
+        self._rescan_all_consoles(show_toast=True)
+
+    def _rescan_single_console(self, console, show_toast=False):
+        if not console or console == ALL_CONSOLES_ID:
+            return self._rescan_all_consoles(show_toast=show_toast)
+        self._ensure_console_loaded(console, force_rescan=True)
+        self._on_search_changed(self.search_entry)
+        if show_toast:
+            toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=console))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        return {"console": console}
+
+    def _rescan_all_consoles(self, show_toast=False):
+        summary = self.playlist_manager.scan_and_rebuild_all_playlists()
+        self.refresh_library()
+        self._on_search_changed(self.search_entry)
+        if show_toast:
+            toast = Adw.Toast(
+                title=self.t(
+                    "toast.playlists_rebuilt_all",
+                    consoles=summary["total_consoles"],
+                    roms=summary["total_roms"],
+                )
+            )
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        return summary
 
     def _show_sync_covers_dialog(self):
         if not self.visible_consoles:
@@ -1042,14 +1109,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _on_refresh_clicked(self, _button):
         visible = self.content_stack.get_visible_child_name()
         if visible == ALL_CONSOLES_ID:
-            self._ensure_all_loaded(force_rescan=True)
-            self._on_search_changed(self.search_entry)
+            self._rescan_all_consoles(show_toast=False)
             return
         if visible in set(self.visible_consoles):
-            self._ensure_console_loaded(visible, force_rescan=True)
-            self._on_search_changed(self.search_entry)
+            self._rescan_single_console(visible, show_toast=False)
         elif visible == "settings-roms":
-            self._scan_current_console()
+            self._rescan_all_consoles(show_toast=False)
 
     def on_launch_game(self, rom):
         success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
