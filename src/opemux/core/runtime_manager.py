@@ -68,5 +68,10 @@ class RuntimeManager:
         return {"exit_code": exit_code, "rom": rom}
 
     def _clear_active(self):
+        if self.active_process and hasattr(self.active_process, "_opemux_log_handle"):
+            try:
+                self.active_process._opemux_log_handle.close()
+            except Exception:
+                pass
         self.active_process = None
         self.active_rom = None

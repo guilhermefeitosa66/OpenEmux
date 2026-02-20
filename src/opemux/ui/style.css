@@ -110,3 +110,18 @@
     background-color: @headerbar_bg_color;
     border-bottom: 1px solid alpha(@headerbar_shade_color, 0.5);
 }
+
+/* ===== BIOS ===== */
+.bios-group {
+    border: 1px solid alpha(@card_shade_color, 0.5);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.bios-ok {
+    color: #2f9e44;
+}
+
+.bios-missing {
+    color: #d94841;
+}

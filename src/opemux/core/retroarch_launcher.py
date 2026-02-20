@@ -3,9 +3,14 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+import logging
 
+from opemux.core.bios_catalog import get_required_for_core
+from opemux.core.bios_manager import find_missing_required_for_core
 from opemux.core.input_actions import to_retroarch_overrides
 from opemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
 
@@ -87,7 +92,7 @@ class RetroArchLauncher:
                     return str(candidate)
         return None
 
-    def _write_runtime_override(self, console):
+    def _write_runtime_override(self, console, core_filename=None):
         profile = self.config_manager.get_input_profile(console)
         active_device = profile.get("active_device", "keyboard")
         device = profile.get("devices", {}).get(active_device, {})
@@ -95,6 +100,10 @@ class RetroArchLauncher:
         bindings = device.get("bindings", {})
         overrides = to_retroarch_overrides(bindings, device_type, console=console)
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
+        required_for_core = get_required_for_core(console, core_filename) if core_filename else []
+        if required_for_core:
+            bios_dir = self.config_manager.get_console_bios_dir(console)
+            overrides["system_directory"] = f'"{bios_dir}"'
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -122,15 +131,51 @@ class RetroArchLauncher:
                 f"Tried common core dirs and these core names: {candidates}. "
                 "Configure runtime.retroarch.cores in config.yaml."
             )
+        core_filename = Path(core_path).name
+        missing_bios = find_missing_required_for_core(self.config_manager, system_id, core_filename)
+        if missing_bios:
+            bios_dir = self.config_manager.get_console_bios_dir(system_id)
+            missing_str = ", ".join(missing_bios)
+            return None, (
+                f"Missing required BIOS for {system_id} ({core_filename}): {missing_str}. "
+                f"Place BIOS files in: {bios_dir}"
+            )
 
         cmd = [retroarch_path, "-L", core_path]
-        runtime_override = self._write_runtime_override(system_id)
+        runtime_override = self._write_runtime_override(system_id, core_filename=core_filename)
         cmd.extend(["--appendconfig", runtime_override])
-        cmd.extend(self.config_manager.get_retroarch_extra_flags())
+        extra_flags = list(self.config_manager.get_retroarch_extra_flags())
+        if "--verbose" not in extra_flags and "-v" not in extra_flags:
+            extra_flags.append("--verbose")
+        cmd.extend(extra_flags)
         cmd.append(rom_path)
 
         try:
-            proc = subprocess.Popen(cmd, cwd=os.getcwd(), env=os.environ.copy())
+            runtime_dir = self.config_manager.get_runtime_dir()
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            log_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.log"
+            cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
+            cmd_path.write_text(" ".join(cmd), encoding="utf-8")
+            log_handle = open(log_path, "w", encoding="utf-8")
+            proc = subprocess.Popen(
+                cmd,
+                cwd=os.getcwd(),
+                env=os.environ.copy(),
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+            )
+            # Keep a reference attached to process object to avoid GC closing the file descriptor too early.
+            proc._opemux_log_handle = log_handle
+            proc._opemux_log_path = str(log_path)
+            logger.info(
+                "retroarch launch started: console=%s core=%s rom=%s log=%s cmd_file=%s",
+                system_id,
+                core_filename,
+                rom_path,
+                log_path,
+                cmd_path,
+            )
             return proc, None
         except Exception as exc:
             return None, f"Failed to launch RetroArch: {exc}"

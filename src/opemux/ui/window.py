@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import gi
@@ -7,6 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib, Gio
 
+from opemux.core.bios_manager import get_console_bios_dir, scan_all_bios_status
 from opemux.core.cover_sync import sync_covers_async
 from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from opemux.core.playlist_manager import PlaylistManager
@@ -68,6 +70,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._capture_sequence_index = -1
         self._capture_sequence_actions = list(ACTION_ORDER)
         self._visible_input_actions = list(ACTION_ORDER)
+        self._bios_status_by_console = {}
 
         self._input_key_controller = Gtk.EventControllerKey()
         self._input_key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
@@ -314,6 +317,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         settings_grid = SettingsGrid()
         settings_callbacks = {
             "roms": self._open_settings_roms,
+            "bios": self._open_settings_bios,
             "input": self._open_settings_input,
             "ui": self._open_settings_ui,
             "system": self._open_settings_system,
@@ -375,6 +379,59 @@ class OpemuxWindow(Adw.ApplicationWindow):
         roms_container.append(roms_grid)
         roms_scroll.set_child(roms_container)
         self.content_stack.add_titled(roms_scroll, "settings-roms", self.t("settings.roms.title"))
+
+        bios_scroll = Gtk.ScrolledWindow()
+        bios_scroll.set_vexpand(True)
+        bios_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+
+        bios_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bios_breadcrumb.set_margin_top(14)
+        bios_breadcrumb.set_margin_start(20)
+        bios_breadcrumb.set_margin_end(20)
+        bios_breadcrumb.set_margin_bottom(6)
+
+        bios_back_btn = Gtk.Button()
+        bios_back_btn.set_icon_name("go-previous-symbolic")
+        bios_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        bios_back_btn.connect("clicked", lambda _: self._open_settings_main())
+        bios_breadcrumb.append(bios_back_btn)
+
+        bios_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.bios.title')}")
+        bios_crumb_label.set_halign(Gtk.Align.START)
+        bios_crumb_label.add_css_class("dim-label")
+        bios_breadcrumb.append(bios_crumb_label)
+        bios_container.append(bios_breadcrumb)
+
+        bios_header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        bios_header.set_margin_start(20)
+        bios_header.set_margin_end(20)
+        bios_header.set_margin_bottom(8)
+
+        bios_intro = Gtk.Label(label=self.t("bios.instructions"))
+        bios_intro.set_wrap(True)
+        bios_intro.set_halign(Gtk.Align.START)
+        bios_intro.add_css_class("dim-label")
+        bios_header.append(bios_intro)
+
+        bios_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        open_roms_btn = Gtk.Button(label=self.t("bios.open_roms_folder"))
+        open_roms_btn.connect("clicked", lambda _: self._open_roms_folder())
+        bios_actions.append(open_roms_btn)
+
+        reload_bios_btn = Gtk.Button(label=self.t("bios.reload"))
+        reload_bios_btn.connect("clicked", lambda _: self._reload_bios_status(show_toast=True))
+        bios_actions.append(reload_bios_btn)
+        bios_header.append(bios_actions)
+        bios_container.append(bios_header)
+
+        self.bios_groups_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.bios_groups_box.set_margin_start(20)
+        self.bios_groups_box.set_margin_end(20)
+        self.bios_groups_box.set_margin_bottom(24)
+        bios_container.append(self.bios_groups_box)
+
+        bios_scroll.set_child(bios_container)
+        self.content_stack.add_titled(bios_scroll, "settings-bios", self.t("settings.bios.title"))
 
         input_scroll = Gtk.ScrolledWindow()
         input_scroll.set_vexpand(True)
@@ -562,6 +619,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.input_console_combo.set_active_id(self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0])
         self.input_device_combo.set_active_id("keyboard")
         self._refresh_input_bindings()
+        self._reload_bios_status(show_toast=False)
 
     def _on_console_selected(self, _listbox, row):
         if not row:
@@ -589,6 +647,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-roms")
+
+    def _open_settings_bios(self):
+        self._set_search_enabled(False)
+        self.console_list.unselect_all()
+        self.content_stack.set_visible_child_name("settings-bios")
+        self._reload_bios_status(show_toast=False)
 
     def _choose_roms_path(self):
         chooser = Gtk.FileChooserDialog(
@@ -648,6 +712,97 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-system")
+
+    def _open_roms_folder(self):
+        self._open_path_in_file_manager(self.config_manager.get_roms_path())
+
+    def _open_console_bios_folder(self, console):
+        bios_dir = get_console_bios_dir(self.config_manager, console)
+        bios_dir.mkdir(parents=True, exist_ok=True)
+        self._open_path_in_file_manager(bios_dir)
+
+    def _open_path_in_file_manager(self, path):
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            Gio.AppInfo.launch_default_for_uri(path.as_uri(), None)
+            return
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(["xdg-open", str(path)])
+            return
+        except Exception as exc:
+            toast = Adw.Toast(title=self.t("bios.open_path_failed", path=str(path), error=str(exc)))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+
+    def _reload_bios_status(self, show_toast=False):
+        if not hasattr(self, "bios_groups_box"):
+            return
+        self._bios_status_by_console = scan_all_bios_status(self.config_manager)
+        while child := self.bios_groups_box.get_first_child():
+            self.bios_groups_box.remove(child)
+
+        if not self._bios_status_by_console:
+            label = Gtk.Label(label=self.t("bios.no_requirements"))
+            label.set_halign(Gtk.Align.START)
+            label.add_css_class("dim-label")
+            self.bios_groups_box.append(label)
+            return
+
+        for console_id in sorted(self._bios_status_by_console.keys()):
+            status = self._bios_status_by_console[console_id]
+            group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            group.add_css_class("bios-group")
+
+            header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            title = Gtk.Label(label=f"{console_id} - {status['display_name']}")
+            title.set_halign(Gtk.Align.START)
+            title.set_hexpand(True)
+            title.add_css_class("heading")
+            header.append(title)
+
+            open_btn = Gtk.Button(label=self.t("bios.open_console_folder"))
+            open_btn.connect("clicked", lambda _btn, cid=console_id: self._open_console_bios_folder(cid))
+            header.append(open_btn)
+            group.append(header)
+
+            group.append(self._build_bios_section(self.t("bios.section.required"), status["required"]))
+            group.append(self._build_bios_section(self.t("bios.section.optional"), status["optional"]))
+            self.bios_groups_box.append(group)
+
+        if show_toast:
+            toast = Adw.Toast(title=self.t("bios.reloaded"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+
+    def _build_bios_section(self, section_title, entries):
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        title = Gtk.Label(label=section_title)
+        title.set_halign(Gtk.Align.START)
+        title.add_css_class("dim-label")
+        container.append(title)
+
+        if not entries:
+            empty = Gtk.Label(label=self.t("bios.none"))
+            empty.set_halign(Gtk.Align.START)
+            empty.add_css_class("dim-label")
+            container.append(empty)
+            return container
+
+        for entry in entries:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            icon = Gtk.Image.new_from_icon_name("emblem-ok-symbolic" if entry["present"] else "dialog-error-symbolic")
+            icon.add_css_class("bios-ok" if entry["present"] else "bios-missing")
+            row.append(icon)
+
+            label = Gtk.Label(label=entry["label"])
+            label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            row.append(label)
+            container.append(row)
+        return container
 
     def _on_input_console_changed(self, _combo):
         self._cancel_input_capture()
