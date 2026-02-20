@@ -179,6 +179,13 @@ class RomItem(Gtk.Box):
         if cover_path:
             # Schedule UI update on the main thread
             GLib.idle_add(self._load_cover_image, cover_path)
+            return
+        # Cover was removed or does not exist: restore placeholder immediately.
+        GLib.idle_add(self._restore_placeholder)
+
+    def _restore_placeholder(self):
+        self._set_placeholder()
+        return False
 
     def _load_cover_image(self, cover_path):
         """Load cover image into the widget (must run on main thread)."""
