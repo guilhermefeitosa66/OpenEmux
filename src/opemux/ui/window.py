@@ -18,7 +18,7 @@ from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
 from opemux.core.scanner import RomScanner
 from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
-from opemux.i18n import tr
+from opemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale, tr
 from opemux.ui.grid import RomGrid
 from opemux.ui.settings_grid import SettingsGrid
 
@@ -224,6 +224,80 @@ class OpemuxWindow(Adw.ApplicationWindow):
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header_bar.pack_end(refresh_btn)
+
+    def _build_language_dropdown(self):
+        model = Gtk.StringList.new(SUPPORTED_LOCALES)
+        dropdown = Gtk.DropDown.new(model, None)
+        dropdown._locale_ids = list(SUPPORTED_LOCALES)
+
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_language_dropdown_setup)
+        factory.connect("bind", self._on_language_dropdown_bind)
+        dropdown.set_factory(factory)
+
+        list_factory = Gtk.SignalListItemFactory()
+        list_factory.connect("setup", self._on_language_dropdown_setup)
+        list_factory.connect("bind", self._on_language_dropdown_bind)
+        dropdown.set_list_factory(list_factory)
+
+        self._set_language_dropdown_active_id(dropdown, self.locale)
+        return dropdown
+
+    def _on_language_dropdown_setup(self, _factory, list_item):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_margin_top(4)
+        row.set_margin_bottom(4)
+        row.set_margin_start(4)
+        row.set_margin_end(4)
+        list_item.set_child(row)
+
+    def _on_language_dropdown_bind(self, _factory, list_item):
+        row = list_item.get_child()
+        while child := row.get_first_child():
+            row.remove(child)
+        item = list_item.get_item()
+        locale_id = item.get_string() if item else "en"
+        meta = LANGUAGE_META.get(locale_id, LANGUAGE_META["en"])
+        label = Gtk.Label(label=f"{meta['flag']} {meta['native_name']}")
+        label.set_halign(Gtk.Align.START)
+        label.set_xalign(0)
+        row.append(label)
+
+    def _get_language_dropdown_active_id(self, dropdown):
+        idx = int(dropdown.get_selected())
+        ids = getattr(dropdown, "_locale_ids", [])
+        if idx < 0 or idx >= len(ids):
+            return "en"
+        return normalize_locale(ids[idx])
+
+    def _set_language_dropdown_active_id(self, dropdown, locale):
+        locale = normalize_locale(locale)
+        ids = getattr(dropdown, "_locale_ids", [])
+        if locale in ids:
+            dropdown.set_selected(ids.index(locale))
+            return
+        dropdown.set_selected(0)
+
+    def _on_language_changed(self, *_args):
+        if not hasattr(self, "language_dropdown"):
+            return
+        selected = self._get_language_dropdown_active_id(self.language_dropdown)
+        if selected == self.locale:
+            return
+        self.config_manager.set_locale(selected)
+        self.locale = selected
+        language_name = LANGUAGE_META.get(selected, LANGUAGE_META["en"])["native_name"]
+        self._reload_ui_texts_after_locale_change(language_name)
+
+    def _reload_ui_texts_after_locale_change(self, language_name):
+        visible = self.content_stack.get_visible_child_name()
+        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self.search_entry.set_tooltip_text(self.t("header.search"))
+        self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.refresh_library(preferred_view=visible or "settings-system")
+        toast = Adw.Toast(title=self.t("toast.language.updated", language=language_name))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
 
     def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
         ids = []
@@ -884,6 +958,28 @@ class OpemuxWindow(Adw.ApplicationWindow):
         system_breadcrumb.append(system_crumb_label)
         system_container.append(system_breadcrumb)
 
+        language_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        language_row.set_margin_start(20)
+        language_row.set_margin_end(20)
+        language_row.set_margin_top(8)
+        language_row.set_margin_bottom(4)
+
+        language_labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        language_labels.set_hexpand(True)
+        language_title = Gtk.Label(label=self.t("settings.system.language.title"))
+        language_title.set_halign(Gtk.Align.START)
+        language_labels.append(language_title)
+        language_subtitle = Gtk.Label(label=self.t("settings.system.language.subtitle"))
+        language_subtitle.set_halign(Gtk.Align.START)
+        language_subtitle.add_css_class("dim-label")
+        language_labels.append(language_subtitle)
+        language_row.append(language_labels)
+
+        self.language_dropdown = self._build_language_dropdown()
+        self.language_dropdown.connect("notify::selected", self._on_language_changed)
+        language_row.append(self.language_dropdown)
+        system_container.append(language_row)
+
         system_grid = SettingsGrid()
         state = self.config_manager.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1103,7 +1199,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
             icon.add_css_class("bios-ok" if entry["present"] else "bios-missing")
             row.append(icon)
 
-            label = Gtk.Label(label=entry["label"])
+            label_text = entry["label"]
+            if entry.get("kind") == "any_of" and label_text:
+                label_text = self.t("bios.one_of", names=label_text)
+            label = Gtk.Label(label=label_text)
             label.set_halign(Gtk.Align.START)
             label.set_hexpand(True)
             row.append(label)

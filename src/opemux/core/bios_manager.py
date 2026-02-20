@@ -14,7 +14,7 @@ def _entry_label(entry):
     names = entry.get("any_of", [])
     if not names:
         return ""
-    return "one of: " + " | ".join(names)
+    return " | ".join(names)
 
 
 def _evaluate_entry(entry, bios_dir):
