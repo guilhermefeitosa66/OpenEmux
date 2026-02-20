@@ -26,6 +26,16 @@ DEFAULT_CONFIG = {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
             "extra_flags": [],
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
+            "updater": {
+                "mode": "buildbot_all_cores",
+                "enabled": True,
+                "core_dir": None,
+                "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+                "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
+                "request_timeout_sec": 30,
+                "retries": 3,
+                "parallel_downloads": 4,
+            },
         },
     },
     "controls": {
@@ -49,6 +59,19 @@ DEFAULT_CONFIG = {
         "playlists_dir": str(DEFAULT_PLAYLISTS_DIR),
         "auto_scan_on_first_open": True,
         "migration": {"version": 0},
+    },
+    "setup": {
+        "bootstrap": {
+            "version": 1,
+            "status": "pending",
+            "started_at": None,
+            "finished_at": None,
+            "completed_steps": [],
+            "failed_step": None,
+            "last_error": None,
+            "retry_count": 0,
+            "retry_requested": False,
+        }
     },
 }
 
@@ -99,6 +122,21 @@ class ConfigManager:
         runtime["retroarch"].setdefault("binary", "vendors/RetroArch-Linux-x86_64.AppImage")
         runtime["retroarch"].setdefault("extra_flags", [])
         runtime["retroarch"].setdefault("cores", {})
+        runtime["retroarch"].setdefault("updater", {})
+        runtime["retroarch"]["updater"].setdefault("mode", "buildbot_all_cores")
+        runtime["retroarch"]["updater"].setdefault("enabled", True)
+        runtime["retroarch"]["updater"].setdefault("core_dir", None)
+        runtime["retroarch"]["updater"].setdefault(
+            "cores_base_url",
+            "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+        )
+        runtime["retroarch"]["updater"].setdefault(
+            "core_info_base_url",
+            "https://buildbot.libretro.com/assets/frontend/info.zip",
+        )
+        runtime["retroarch"]["updater"].setdefault("request_timeout_sec", 30)
+        runtime["retroarch"]["updater"].setdefault("retries", 3)
+        runtime["retroarch"]["updater"].setdefault("parallel_downloads", 4)
 
         migrated_backend = {}
         for key, mode in runtime.get("console_backend", {}).items():
@@ -158,6 +196,23 @@ class ConfigManager:
         library.setdefault("migration", {})
         library["migration"].setdefault("version", 0)
         config["library"] = library
+
+        setup = config.get("setup", {})
+        setup.setdefault("bootstrap", {})
+        bootstrap = setup["bootstrap"]
+        bootstrap.setdefault("version", 1)
+        bootstrap.setdefault("status", "pending")
+        bootstrap.setdefault("started_at", None)
+        bootstrap.setdefault("finished_at", None)
+        bootstrap.setdefault("completed_steps", [])
+        bootstrap.setdefault("failed_step", None)
+        bootstrap.setdefault("last_error", None)
+        bootstrap.setdefault("retry_count", 0)
+        bootstrap.setdefault("retry_requested", False)
+        if not isinstance(bootstrap.get("completed_steps"), list):
+            bootstrap["completed_steps"] = []
+        setup["bootstrap"] = bootstrap
+        config["setup"] = setup
         return config
 
     def save_config(self, config=None):
@@ -258,6 +313,75 @@ class ConfigManager:
     def get_retroarch_core_hints(self, console):
         canonical = resolve_system_id(console)
         return self.config.get("runtime", {}).get("retroarch", {}).get("cores", {}).get(canonical, [])
+
+    def get_retroarch_updater_settings(self):
+        updater = self.config.get("runtime", {}).get("retroarch", {}).get("updater", {})
+        return {
+            "mode": updater.get("mode", "buildbot_all_cores"),
+            "enabled": bool(updater.get("enabled", True)),
+            "core_dir": updater.get("core_dir"),
+            "cores_base_url": updater.get(
+                "cores_base_url",
+                "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+            ),
+            "core_info_base_url": updater.get(
+                "core_info_base_url",
+                "https://buildbot.libretro.com/assets/frontend/info.zip",
+            ),
+            "request_timeout_sec": int(updater.get("request_timeout_sec", 30)),
+            "retries": int(updater.get("retries", 3)),
+            "parallel_downloads": int(updater.get("parallel_downloads", 4)),
+        }
+
+    def get_bootstrap_state(self):
+        return self.config.get("setup", {}).get("bootstrap", {})
+
+    def bootstrap_needs_run(self):
+        state = self.get_bootstrap_state()
+        status = state.get("status", "pending")
+        return bool(state.get("retry_requested", False)) or status in ("pending", "running")
+
+    def start_bootstrap_run(self):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["status"] = "running"
+        bootstrap["started_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["finished_at"] = None
+        bootstrap["failed_step"] = None
+        bootstrap["last_error"] = None
+        bootstrap["retry_requested"] = False
+        self.save_config()
+
+    def mark_bootstrap_step_completed(self, step_id):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        completed_steps = bootstrap.setdefault("completed_steps", [])
+        if step_id not in completed_steps:
+            completed_steps.append(step_id)
+        self.save_config()
+
+    def finish_bootstrap_success(self):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["status"] = "completed"
+        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["failed_step"] = None
+        bootstrap["last_error"] = None
+        bootstrap["retry_requested"] = False
+        self.save_config()
+
+    def finish_bootstrap_failure(self, step_id, error_message):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["status"] = "failed"
+        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["failed_step"] = step_id
+        bootstrap["last_error"] = str(error_message)
+        bootstrap["retry_requested"] = False
+        self.save_config()
+
+    def request_bootstrap_retry(self):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["retry_requested"] = True
+        bootstrap["status"] = "pending"
+        bootstrap["retry_count"] = int(bootstrap.get("retry_count", 0)) + 1
+        self.save_config()
 
     def ensure_rom_directories(self):
         base_path = self.get_roms_path()

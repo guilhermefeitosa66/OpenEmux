@@ -31,15 +31,24 @@ This document outlines delivery phases and current status.
 
 ## Phase 5: Input Management (Application-Level)
 **Goal**: Configure controls in Opemux, not directly in RetroArch UI.
--   [ ] Add per-system global control profiles in config.
--   [ ] Build controls settings UI for keyboard and gamepad.
--   [ ] Apply mappings consistently at runtime.
+-   [x] Add per-system global control profiles in config.
+-   [x] Build controls settings UI for keyboard and gamepad.
+-   [x] Apply mappings consistently at runtime.
 
 ## Phase 6: Shader & Visual Pipeline
 **Goal**: Deliver system-specific visual presets with backend-aware fallback.
 -   [ ] Add Visual settings UI and per-console presets.
 -   [ ] Implement shader/filter adapters for RetroArch backend and future integrated core.
 -   [ ] Add fallback behavior when a shader is unsupported by active runtime.
+
+## Phase 7: First-Boot Bootstrap
+**Goal**: Make first-time setup fully automated and transparent to users.
+-   [x] Add startup bootstrap state and first-run detection in config.
+-   [x] Create first-boot loading flow with progress messages.
+-   [x] Ensure baseline Opemux folders/files are generated on first run.
+-   [x] Seed playlists and per-console input profiles automatically.
+-   [x] Download/install RetroArch cores via Buildbot updater integration.
+-   [x] Add retry entrypoint under Settings > System for failed/pending setup.
 
 ## Future Considerations
 -   Support for more systems (Genesis, N64, PS1).

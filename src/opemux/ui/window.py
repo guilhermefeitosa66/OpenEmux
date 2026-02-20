@@ -90,6 +90,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.main_box.append(self.content_box)
 
         self.refresh_library()
+        self._maybe_show_bootstrap_warning()
         GLib.timeout_add_seconds(1, self._poll_runtime_state)
 
     def t(self, key, **kwargs):
@@ -229,6 +230,15 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _asset_path(self, category, filename):
         return Path(__file__).parent / "assets" / "icons" / category / filename
 
+    def _maybe_show_bootstrap_warning(self):
+        state = self.config_manager.get_bootstrap_state()
+        if state.get("status") != "failed":
+            return
+        failed_step = state.get("failed_step", "-")
+        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        toast.set_timeout(6)
+        self.toast_overlay.add_toast(toast)
+
     def refresh_library(self):
         while child := self.content_stack.get_first_child():
             self.content_stack.remove(child)
@@ -306,6 +316,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             "roms": self._open_settings_roms,
             "input": self._open_settings_input,
             "ui": self._open_settings_ui,
+            "system": self._open_settings_system,
         }
         for item_id, fallback_icon in SETTINGS_ITEMS:
             icon_path = self._asset_path("settings", f"{item_id}.png")
@@ -499,6 +510,54 @@ class OpemuxWindow(Adw.ApplicationWindow):
         ui_scroll.set_child(ui_container)
         self.content_stack.add_titled(ui_scroll, "settings-ui", self.t("settings.ui.title"))
 
+        system_scroll = Gtk.ScrolledWindow()
+        system_scroll.set_vexpand(True)
+        system_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        system_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        system_breadcrumb.set_margin_top(14)
+        system_breadcrumb.set_margin_start(20)
+        system_breadcrumb.set_margin_end(20)
+        system_breadcrumb.set_margin_bottom(6)
+
+        system_back_btn = Gtk.Button()
+        system_back_btn.set_icon_name("go-previous-symbolic")
+        system_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
+        system_back_btn.connect("clicked", lambda _: self._open_settings_main())
+        system_breadcrumb.append(system_back_btn)
+
+        system_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.system.title')}")
+        system_crumb_label.set_halign(Gtk.Align.START)
+        system_crumb_label.add_css_class("dim-label")
+        system_breadcrumb.append(system_crumb_label)
+        system_container.append(system_breadcrumb)
+
+        system_grid = SettingsGrid()
+        state = self.config_manager.get_bootstrap_state()
+        status = state.get("status", "pending")
+        failed_step = state.get("failed_step")
+        if status == "completed":
+            setup_subtitle = self.t("settings.system.bootstrap.ok")
+        elif status == "failed":
+            setup_subtitle = self.t("settings.system.bootstrap.failed", step=failed_step or "-")
+        else:
+            setup_subtitle = self.t("settings.system.bootstrap.pending")
+
+        system_grid.add_card(
+            title=self.t("settings.system.bootstrap.title"),
+            subtitle=setup_subtitle,
+            icon_name="system-software-update-symbolic",
+        )
+        system_grid.add_card(
+            title=self.t("settings.system.bootstrap.retry.title"),
+            subtitle=self.t("settings.system.bootstrap.retry.subtitle"),
+            icon_name="view-refresh-symbolic",
+            on_click=self._trigger_bootstrap_retry,
+        )
+        system_container.append(system_grid)
+        system_scroll.set_child(system_container)
+        self.content_stack.add_titled(system_scroll, "settings-system", self.t("settings.system.title"))
+
         self.input_console_combo.set_active_id(self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0])
         self.input_device_combo.set_active_id("keyboard")
         self._refresh_input_bindings()
@@ -540,6 +599,11 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.console_list.unselect_all()
         self.content_stack.set_visible_child_name("settings-input")
         self._refresh_input_bindings()
+
+    def _open_settings_system(self):
+        self._set_search_enabled(False)
+        self.console_list.unselect_all()
+        self.content_stack.set_visible_child_name("settings-system")
 
     def _on_input_console_changed(self, _combo):
         self._cancel_input_capture()
@@ -1038,3 +1102,28 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _sync_runtime_controls(self):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
+
+    def _trigger_bootstrap_retry(self):
+        app = self.get_application()
+        if not hasattr(app, "request_bootstrap_retry_from_ui"):
+            return
+        started = app.request_bootstrap_retry_from_ui(self)
+        if not started:
+            toast = Adw.Toast(title=self.t("toast.bootstrap.already_running"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+        toast = Adw.Toast(title=self.t("toast.bootstrap.retry_started"))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+    def on_bootstrap_finished(self, result):
+        if result.get("success"):
+            toast = Adw.Toast(title=self.t("toast.bootstrap.completed"))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+            return
+        failed_step = result.get("failed_step", "-")
+        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        toast.set_timeout(6)
+        self.toast_overlay.add_toast(toast)

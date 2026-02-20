@@ -1,5 +1,6 @@
 import sys
 import logging
+from threading import Thread
 from pathlib import Path
 import shutil
 import gi
@@ -9,7 +10,9 @@ gi.require_version('Adw', '1')
 
 from gi.repository import Gtk, Adw, GLib
 from opemux.ui.window import OpemuxWindow
+from opemux.ui.first_boot_window import FirstBootWindow
 from opemux.core.config import ConfigManager
+from opemux.core.first_boot import FirstBootBootstrapper
 
 
 logging.basicConfig(
@@ -54,14 +57,70 @@ class OpemuxApplication(Adw.Application):
         super().__init__(application_id=APP_ID,
                          flags=gi.repository.Gio.ApplicationFlags.FLAGS_NONE)
         self.config_manager = ConfigManager()
+        self._bootstrap_running = False
+        self._bootstrap_window = None
+        self.main_window = None
 
     def do_activate(self):
-        # Ensure default directories exist
+        if self._bootstrap_running:
+            if self._bootstrap_window:
+                self._bootstrap_window.present()
+            return
+
+        bootstrapper = FirstBootBootstrapper(self.config_manager)
+        if bootstrapper.needs_bootstrap():
+            self._start_bootstrap_flow(initial_boot=True, parent=None)
+            return
+
+        self._present_main_window()
+
+    def _present_main_window(self):
+        if self.main_window:
+            self.main_window.present()
+            return
         self.config_manager.ensure_rom_directories()
-        
-        # Create and show the main window
-        win = self.main_window = OpemuxWindow(application=self)
-        win.present()
+        self.main_window = OpemuxWindow(application=self)
+        self.main_window.present()
+
+    def request_bootstrap_retry_from_ui(self, parent_window):
+        if self._bootstrap_running:
+            return False
+        self.config_manager.request_bootstrap_retry()
+        self._start_bootstrap_flow(initial_boot=False, parent=parent_window)
+        return True
+
+    def _start_bootstrap_flow(self, initial_boot, parent=None):
+        self._bootstrap_running = True
+        locale = self.config_manager.get_locale()
+        self._bootstrap_window = FirstBootWindow(
+            application=self,
+            locale=locale,
+            parent=parent,
+        )
+        self._bootstrap_window.present()
+        bootstrapper = FirstBootBootstrapper(self.config_manager)
+
+        def _emit(evt):
+            GLib.idle_add(self._bootstrap_window.handle_event, evt)
+
+        def _worker():
+            result = bootstrapper.run(on_event=_emit)
+            GLib.idle_add(self._finish_bootstrap_flow, result, initial_boot)
+
+        Thread(target=_worker, daemon=True).start()
+
+    def _finish_bootstrap_flow(self, result, initial_boot):
+        self._bootstrap_running = False
+        if self._bootstrap_window:
+            self._bootstrap_window.close()
+            self._bootstrap_window = None
+
+        if initial_boot:
+            self._present_main_window()
+
+        if self.main_window and hasattr(self.main_window, "on_bootstrap_finished"):
+            self.main_window.on_bootstrap_finished(result)
+        return False
 
 def main():
     GLib.set_prgname(APP_ID)

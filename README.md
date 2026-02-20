@@ -12,6 +12,7 @@ Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, el
     -   Default ROM path: `~/games/roms/` (Configurable).
 -   **Cover Pipeline**: Local-first covers from `~/games/roms/covers/<console>/` with Libretro Thumbnails sync.
 -   **Runtime Control**: Launch/stop flow managed by Opemux while RetroArch runs externally.
+-   **First-Boot Setup**: On first launch, Opemux prepares config/filesystem structure and bootstraps RetroArch cores with a guided loading screen.
 -   **Settings UI**: Sidebar `Configurações` with ROM management actions (`Path`, `Scan ROMs`, `Sync Covers`).
 -   **Visual Enhancements**: Shader/filter configuration roadmap (in progress).
 -   **Input Mapping**: Per-console keyboard/gamepad mapping with RetroArch runtime integration.
@@ -21,6 +22,7 @@ Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, el
 -   **Preferred**: `vendors/RetroArch-Linux-x86_64.AppImage`
 -   **Fallback**: system `retroarch` binary
 -   **Cores**: libretro cores per console (`nestopia`/`fceumm`, `snes9x`, `mgba`)
+-   **Core Bootstrap**: first-boot updater downloads available cores from official RetroArch Buildbot endpoints.
 
 ## Planning Docs
 
