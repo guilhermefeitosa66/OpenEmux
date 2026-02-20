@@ -114,7 +114,7 @@ def _download_cover(url, dest):
         return False
 
 
-def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_settings=None):
+def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_settings=None, on_progress=None):
     sync_settings = sync_settings or {}
     roms_dir_path = Path(covers_dir)
     consoles = (
@@ -128,6 +128,7 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
     downloaded = 0
     skipped = 0
     errors = 0
+    total_targets = sum(len(library_by_console.get(console, [])) for console in consoles)
 
     for console in consoles:
         roms = library_by_console.get(console, [])
@@ -138,6 +139,18 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
             if find_local_cover(roms_dir_path, console, name):
                 logger.info("cover_sync skip existing: console=%s rom=%s", console, name)
                 skipped += 1
+                if on_progress:
+                    on_progress(
+                        {
+                            "console": console,
+                            "rom_name": name,
+                            "processed": total,
+                            "total": total_targets,
+                            "downloaded": downloaded,
+                            "skipped": skipped,
+                            "errors": errors,
+                        }
+                    )
                 continue
 
             target = roms_dir_path / console / "covers" / f"{name}.png"
@@ -154,6 +167,18 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
             if not found:
                 logger.info("cover_sync missed: console=%s rom=%s tried=%d", console, name, len(urls))
                 errors += 1
+            if on_progress:
+                on_progress(
+                    {
+                        "console": console,
+                        "rom_name": name,
+                        "processed": total,
+                        "total": total_targets,
+                        "downloaded": downloaded,
+                        "skipped": skipped,
+                        "errors": errors,
+                    }
+                )
 
     summary = {
         "scope": scope,
@@ -175,7 +200,15 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
     return summary
 
 
-def sync_covers_async(library_by_console, covers_dir, scope, selected_console, on_done, sync_settings=None):
+def sync_covers_async(
+    library_by_console,
+    covers_dir,
+    scope,
+    selected_console,
+    on_done,
+    sync_settings=None,
+    on_progress=None,
+):
     def _worker():
         summary = _sync_covers(
             library_by_console=library_by_console,
@@ -183,6 +216,7 @@ def sync_covers_async(library_by_console, covers_dir, scope, selected_console, o
             scope=scope,
             selected_console=selected_console,
             sync_settings=sync_settings,
+            on_progress=on_progress,
         )
         if on_done:
             on_done(summary)

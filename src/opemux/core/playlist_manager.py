@@ -72,19 +72,29 @@ class PlaylistManager:
         logger.info("playlist rebuild finished: console=%s total=%d path=%s", system_id, len(roms), playlist_path)
         return roms
 
-    def scan_and_rebuild_all_playlists(self, consoles=None):
+    def scan_and_rebuild_all_playlists(self, consoles=None, on_progress=None):
         selected_consoles = list(consoles or SYSTEM_IDS)
         summary = {
             "consoles": {},
             "total_consoles": len(selected_consoles),
             "total_roms": 0,
         }
-        for console in selected_consoles:
+        for index, console in enumerate(selected_consoles, start=1):
             roms = self.scan_and_rebuild_playlist(console)
             system_id = resolve_system_id(console)
             count = len(roms)
             summary["consoles"][system_id] = count
             summary["total_roms"] += count
+            if on_progress:
+                on_progress(
+                    {
+                        "console": system_id,
+                        "current": index,
+                        "total": len(selected_consoles),
+                        "console_roms": count,
+                        "total_roms": summary["total_roms"],
+                    }
+                )
         return summary
 
     def _rom_entry(self, path, console):

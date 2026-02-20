@@ -111,6 +111,12 @@
     border-bottom: 1px solid alpha(@headerbar_shade_color, 0.5);
 }
 
+/* ===== Status Bar ===== */
+.status-bar {
+    border-top: 1px solid alpha(@headerbar_shade_color, 0.45);
+    background-color: alpha(@window_fg_color, 0.02);
+}
+
 /* ===== BIOS ===== */
 .bios-group {
     border: 1px solid alpha(@card_shade_color, 0.5);

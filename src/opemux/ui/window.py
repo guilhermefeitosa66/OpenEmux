@@ -1,5 +1,6 @@
 import os
 import subprocess
+from threading import Thread
 from pathlib import Path
 
 import gi
@@ -32,6 +33,10 @@ SIDEBAR_ICON_FILES = {
     "FC": "nintendo_fds__famicom_library@2x.png",
     "SFC": "supernes__snes_usa_library@2x.png",
     "GBA": "gameboy_advance__gba_library@2x.png",
+    "N64": "n64__n64_library@2x.png",
+    "GBC": "gameboy__gameboy_library@2x.png",
+    "MD": "genesis__megadrive_library@2x.png",
+    "PS": "playstation__psx_library@2x.png",
 }
 
 
@@ -52,6 +57,9 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.current_console = None
         self.visible_consoles = []
         self._cover_sync_running = False
+        self._scan_running = False
+        self._task_seq = 0
+        self._tasks = {}
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
@@ -90,9 +98,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         self.content_stack = Adw.ViewStack()
         self.content_box.append(self.content_stack)
+        self.status_bar = self._build_status_bar()
+        self.content_box.append(self.status_bar)
         self.main_box.append(self.content_box)
 
         self.refresh_library()
+        self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
         GLib.timeout_add_seconds(1, self._poll_runtime_state)
 
@@ -139,6 +150,94 @@ class OpemuxWindow(Adw.ApplicationWindow):
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header_bar.pack_end(refresh_btn)
+
+    def _build_status_bar(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.add_css_class("status-bar")
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        box.set_margin_top(6)
+        box.set_margin_bottom(8)
+
+        self.status_spinner = Gtk.Spinner()
+        self.status_spinner.set_halign(Gtk.Align.START)
+        box.append(self.status_spinner)
+
+        self.status_label = Gtk.Label(label=self.t("status.idle"))
+        self.status_label.set_halign(Gtk.Align.START)
+        self.status_label.set_hexpand(True)
+        self.status_label.set_xalign(0)
+        self.status_label.add_css_class("dim-label")
+        box.append(self.status_label)
+
+        self.status_progress = Gtk.ProgressBar()
+        self.status_progress.set_hexpand(True)
+        self.status_progress.set_fraction(0.0)
+        self.status_progress.set_text("")
+        self.status_progress.set_show_text(True)
+        box.append(self.status_progress)
+        self._refresh_status_bar()
+        return box
+
+    def _begin_task(self, kind, label, total=0):
+        self._task_seq += 1
+        task_id = f"{kind}-{self._task_seq}"
+        self._tasks[task_id] = {
+            "id": task_id,
+            "kind": kind,
+            "label": label,
+            "current": 0,
+            "total": int(total or 0),
+            "pending": True,
+        }
+        self._refresh_status_bar()
+        return task_id
+
+    def _update_task(self, task_id, current=None, total=None, label=None):
+        task = self._tasks.get(task_id)
+        if not task:
+            return
+        if current is not None:
+            task["current"] = int(max(0, current))
+        if total is not None:
+            task["total"] = int(max(0, total))
+        if label is not None:
+            task["label"] = label
+        self._refresh_status_bar()
+
+    def _finish_task(self, task_id):
+        if task_id in self._tasks:
+            self._tasks.pop(task_id, None)
+        self._refresh_status_bar()
+
+    def _refresh_status_bar(self):
+        if not hasattr(self, "status_label"):
+            return
+        if not self._tasks:
+            self.status_spinner.stop()
+            self.status_label.set_text(self.t("status.idle"))
+            self.status_progress.set_fraction(0.0)
+            self.status_progress.set_text("")
+            return
+
+        task = next(iter(self._tasks.values()))
+        pending = max(0, len(self._tasks) - 1)
+        label = task["label"]
+        if pending:
+            label = f"{label} (+{pending})"
+        self.status_label.set_text(label)
+        self.status_spinner.start()
+
+        total = int(task.get("total") or 0)
+        current = int(task.get("current") or 0)
+        if total > 0:
+            progress = min(1.0, max(0.0, current / total))
+            self.status_progress.set_fraction(progress)
+            self.status_progress.set_text(f"{current}/{total}")
+        else:
+            self.status_progress.set_fraction(0.0)
+            self.status_progress.pulse()
+            self.status_progress.set_text(self.t("status.running"))
 
     def _build_sidebar(self):
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -193,9 +292,17 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _build_console_icon(self, console_id):
         if console_id == ALL_CONSOLES_ID:
             return Gtk.Image.new_from_icon_name("view-grid-symbolic")
-        icon_filename = SIDEBAR_ICON_FILES.get(console_id, f"{console_id.lower()}.png")
-        icon_path = self._asset_path("systems", icon_filename)
-        if icon_path.exists():
+        candidates = []
+        preferred = SIDEBAR_ICON_FILES.get(console_id)
+        if preferred:
+            candidates.append(preferred)
+            if preferred.endswith("@2x.png"):
+                candidates.append(preferred.replace("@2x.png", ".png"))
+
+        for icon_filename in candidates:
+            icon_path = self._asset_path("systems", icon_filename)
+            if not icon_path.exists():
+                continue
             pic = Gtk.Picture.new_for_filename(str(icon_path))
             pic.set_size_request(22, 22)
             return pic
@@ -301,8 +408,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
         for console in SYSTEM_IDS:
             if self.playlist_manager.playlist_exists(console):
                 roms = self.playlist_manager.load_playlist(console)
-            elif self.config_manager.auto_scan_on_first_open():
-                roms = self.playlist_manager.scan_and_rebuild_playlist(console)
             else:
                 roms = []
 
@@ -1144,16 +1249,37 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _rescan_single_console(self, console, show_toast=False):
         if not console or console == ALL_CONSOLES_ID:
             return self._rescan_all_consoles(show_toast=show_toast)
-        self._ensure_console_loaded(console, force_rescan=True)
-        self._on_search_changed(self.search_entry)
-        if show_toast:
-            toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=console))
-            toast.set_timeout(4)
-            self.toast_overlay.add_toast(toast)
-        return {"console": console}
+        return self._rescan_all_consoles(show_toast=show_toast)
 
     def _rescan_all_consoles(self, show_toast=False):
-        summary = self.playlist_manager.scan_and_rebuild_all_playlists()
+        if self._scan_running:
+            if show_toast:
+                toast = Adw.Toast(title=self.t("toast.scan_running"))
+                toast.set_timeout(3)
+                self.toast_overlay.add_toast(toast)
+            return None
+        self._scan_running = True
+        task_id = self._begin_task("scan", self.t("status.scan.starting"))
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("current", 0),
+                evt.get("total", 0),
+                self.t("status.scan.progress", current=evt.get("current", 0), total=evt.get("total", 0)),
+            )
+
+        def _worker():
+            summary = self.playlist_manager.scan_and_rebuild_all_playlists(on_progress=_on_progress)
+            GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast)
+
+        Thread(target=_worker, daemon=True).start()
+        return {"started": True}
+
+    def _on_rescan_all_done_ui(self, task_id, summary, show_toast):
+        self._scan_running = False
+        self._finish_task(task_id)
         self.refresh_library()
         self._on_search_changed(self.search_entry)
         if show_toast:
@@ -1166,7 +1292,10 @@ class OpemuxWindow(Adw.ApplicationWindow):
             )
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
-        return summary
+        return False
+
+    def _start_startup_scan(self):
+        self._rescan_all_consoles(show_toast=False)
 
     def _show_sync_covers_dialog(self):
         if not self.visible_consoles:
@@ -1227,12 +1356,22 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 library[console] = self.playlist_manager.load_playlist(console)
 
         self._cover_sync_running = True
+        task_id = self._begin_task("covers", self.t("status.covers.starting"))
         toast = Adw.Toast(title=self.t("toast.sync_started"))
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
 
+        def _on_progress(evt):
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("processed", 0),
+                evt.get("total", 0),
+                self.t("status.covers.progress", current=evt.get("processed", 0), total=evt.get("total", 0)),
+            )
+
         def _on_done(summary):
-            GLib.idle_add(self._on_cover_sync_done_ui, summary)
+            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
 
         sync_covers_async(
             library_by_console=library,
@@ -1241,10 +1380,12 @@ class OpemuxWindow(Adw.ApplicationWindow):
             selected_console=selected_console,
             on_done=_on_done,
             sync_settings=self.config_manager.get_cover_sync_settings(),
+            on_progress=_on_progress,
         )
 
-    def _on_cover_sync_done_ui(self, summary):
+    def _on_cover_sync_done_ui(self, task_id, summary):
         self._cover_sync_running = False
+        self._finish_task(task_id)
         toast = Adw.Toast(
             title=self.t(
                 "toast.sync_done",

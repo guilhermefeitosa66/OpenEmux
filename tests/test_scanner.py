@@ -36,6 +36,40 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(roms[0]["console"], "SFC")
         self.assertEqual(roms[0]["name"], "Chrono Trigger")
 
+    def test_scan_console_hides_bin_referenced_by_cue(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            ps_dir = base / "PS"
+            ps_dir.mkdir(parents=True, exist_ok=True)
+            (ps_dir / "Metal Gear.cue").write_text(
+                'FILE "Metal Gear (Track 1).bin" BINARY\n'
+                '  TRACK 01 MODE2/2352\n',
+                encoding="utf-8",
+            )
+            (ps_dir / "Metal Gear (Track 1).bin").write_bytes(b"track")
+
+            scanner = RomScanner(base)
+            roms = scanner.scan_console("PS")
+
+        self.assertEqual([rom["path"] for rom in roms], [str(ps_dir / "Metal Gear.cue")])
+
+    def test_scan_console_keeps_unreferenced_bin(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            ps_dir = base / "PS"
+            ps_dir.mkdir(parents=True, exist_ok=True)
+            (ps_dir / "Game.cue").write_text('FILE "Track.bin" BINARY\n', encoding="utf-8")
+            (ps_dir / "Track.bin").write_bytes(b"track")
+            (ps_dir / "Standalone.bin").write_bytes(b"standalone")
+
+            scanner = RomScanner(base)
+            roms = scanner.scan_console("PS")
+
+        paths = {rom["path"] for rom in roms}
+        self.assertIn(str(ps_dir / "Game.cue"), paths)
+        self.assertIn(str(ps_dir / "Standalone.bin"), paths)
+        self.assertNotIn(str(ps_dir / "Track.bin"), paths)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -87,6 +87,34 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 0)
         self.assertEqual(download_mock.call_count, 0)
 
+    def test_cover_sync_reports_progress(self):
+        library = {
+            "PS": [
+                {"name": "Game A", "path": "/tmp/Game A.cue", "console": "PS"},
+                {"name": "Game B", "path": "/tmp/Game B.cue", "console": "PS"},
+            ]
+        }
+        events = []
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("opemux.core.cover_sync.find_local_cover", return_value=None),
+                patch("opemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("opemux.core.cover_sync._download_cover", side_effect=[True, False]),
+            ):
+                _sync_covers(
+                    library_by_console=library,
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="PS",
+                    sync_settings={},
+                    on_progress=events.append,
+                )
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["processed"], 1)
+        self.assertEqual(events[0]["total"], 2)
+        self.assertEqual(events[1]["processed"], 2)
+        self.assertEqual(events[1]["total"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

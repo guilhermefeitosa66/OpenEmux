@@ -41,7 +41,49 @@ class PlaylistManagerTests(unittest.TestCase):
             self.assertIn("Mario.nes", fc_playlist.read_text(encoding="utf-8"))
             self.assertEqual(sfc_playlist.read_text(encoding="utf-8"), "")
 
+    def test_scan_and_rebuild_all_playlists_reports_progress(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms_dir = base / "roms"
+            (roms_dir / "FC").mkdir(parents=True, exist_ok=True)
+            (roms_dir / "FC" / "Mario.nes").write_bytes(b"rom-data")
+            (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+            (roms_dir / "SFC" / "Chrono.sfc").write_bytes(b"rom-data")
+
+            manager = PlaylistManager(_DummyConfig(base / "playlists"), RomScanner(roms_dir))
+            events = []
+
+            summary = manager.scan_and_rebuild_all_playlists(consoles=["FC", "SFC"], on_progress=events.append)
+
+        self.assertEqual(summary["total_roms"], 2)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["console"], "FC")
+        self.assertEqual(events[0]["current"], 1)
+        self.assertEqual(events[0]["total"], 2)
+        self.assertEqual(events[1]["console"], "SFC")
+
+    def test_scan_and_rebuild_playlist_ps_uses_cue_entry_only(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms_dir = base / "roms"
+            ps_dir = roms_dir / "PS"
+            ps_dir.mkdir(parents=True, exist_ok=True)
+            (ps_dir / "Ridge Racer.cue").write_text(
+                'FILE "Ridge Racer (Track 1).bin" BINARY\n',
+                encoding="utf-8",
+            )
+            (ps_dir / "Ridge Racer (Track 1).bin").write_bytes(b"track")
+
+            playlists_dir = base / "playlists"
+            manager = PlaylistManager(_DummyConfig(playlists_dir), RomScanner(roms_dir))
+            roms = manager.scan_and_rebuild_playlist("PS")
+            playlist_path = playlists_dir / "PS.list"
+            self.assertEqual(len(roms), 1)
+            self.assertTrue(playlist_path.exists())
+            content = playlist_path.read_text(encoding="utf-8")
+            self.assertIn("Ridge Racer.cue", content)
+            self.assertNotIn("Ridge Racer (Track 1).bin", content)
+
 
 if __name__ == "__main__":
     unittest.main()
-
