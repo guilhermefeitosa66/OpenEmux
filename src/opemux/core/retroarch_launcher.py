@@ -94,7 +94,7 @@ class RetroArchLauncher:
                     return str(candidate)
         return None
 
-    def _write_runtime_override(self, console, core_filename=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False):
         profile = self.config_manager.get_input_profile(console)
         active_device = profile.get("active_device", "keyboard")
         device = profile.get("devices", {}).get(active_device, {})
@@ -106,6 +106,11 @@ class RetroArchLauncher:
         if required_for_core:
             bios_dir = self.config_manager.get_console_bios_dir(console)
             overrides["system_directory"] = f'"{bios_dir}"'
+        if shader_enabled and shader_path:
+            overrides["video_shader_enable"] = '"true"'
+            overrides["video_shader"] = f'"{shader_path}"'
+        else:
+            overrides["video_shader_enable"] = '"false"'
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -143,13 +148,19 @@ class RetroArchLauncher:
                 f"Place BIOS files in: {bios_dir}"
             )
 
-        cmd = [retroarch_path, "-L", core_path]
-        runtime_override = self._write_runtime_override(system_id, core_filename=core_filename)
-        cmd.extend(["--appendconfig", runtime_override])
         shader_id = "disabled"
         if hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
         shader_path = self.shader_catalog.resolve_shader_path(shader_id)
+
+        cmd = [retroarch_path, "-L", core_path]
+        runtime_override = self._write_runtime_override(
+            system_id,
+            core_filename=core_filename,
+            shader_path=shader_path,
+            shader_enabled=bool(shader_path),
+        )
+        cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
             cmd.extend(["--set-shader", shader_path])
         elif shader_id != "disabled":

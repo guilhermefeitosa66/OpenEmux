@@ -107,11 +107,16 @@ class RetroArchLauncherTests(unittest.TestCase):
                 proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
                 args, kwargs = popen_mock.call_args
                 cmd = args[0]
+            runtime_cfgs = list((base / "runtime").glob("runtime_gba_*.cfg"))
+            self.assertTrue(runtime_cfgs)
+            runtime_content = runtime_cfgs[0].read_text(encoding="utf-8")
 
         self.assertIsNotNone(proc)
         self.assertIsNone(error)
         self.assertIn("--set-shader", cmd)
         self.assertIn(str(shader), cmd)
+        self.assertIn('video_shader_enable = "true"', runtime_content)
+        self.assertIn(f'video_shader = "{shader}"', runtime_content)
 
 
 if __name__ == "__main__":
