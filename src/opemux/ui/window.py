@@ -872,12 +872,15 @@ class OpemuxWindow(Adw.ApplicationWindow):
 
         input_container.append(toolbar)
 
-        self.input_bindings_list = Gtk.ListBox()
-        self.input_bindings_list.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.input_bindings_list.set_margin_start(20)
-        self.input_bindings_list.set_margin_end(20)
-        self.input_bindings_list.set_margin_bottom(24)
-        input_container.append(self.input_bindings_list)
+        self.input_bindings_grid = Gtk.Grid()
+        self.input_bindings_grid.set_column_spacing(12)
+        self.input_bindings_grid.set_row_spacing(8)
+        self.input_bindings_grid.set_margin_start(20)
+        self.input_bindings_grid.set_margin_end(20)
+        self.input_bindings_grid.set_margin_bottom(24)
+        self.input_bindings_grid.set_halign(Gtk.Align.START)
+        self.input_bindings_grid.set_valign(Gtk.Align.START)
+        input_container.append(self.input_bindings_grid)
 
         input_scroll.set_child(input_container)
         self.content_stack.add_titled(input_scroll, "settings-input", self.t("settings.input.title"))
@@ -977,12 +980,15 @@ class OpemuxWindow(Adw.ApplicationWindow):
         shaders_toolbar.append(restore_btn)
         shaders_container.append(shaders_toolbar)
 
-        self.shaders_list_box = Gtk.ListBox()
-        self.shaders_list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.shaders_list_box.set_margin_start(20)
-        self.shaders_list_box.set_margin_end(20)
-        self.shaders_list_box.set_margin_bottom(24)
-        shaders_container.append(self.shaders_list_box)
+        self.shaders_grid = Gtk.Grid()
+        self.shaders_grid.set_column_spacing(16)
+        self.shaders_grid.set_row_spacing(8)
+        self.shaders_grid.set_margin_start(20)
+        self.shaders_grid.set_margin_end(20)
+        self.shaders_grid.set_margin_bottom(24)
+        self.shaders_grid.set_halign(Gtk.Align.START)
+        self.shaders_grid.set_valign(Gtk.Align.START)
+        shaders_container.append(self.shaders_grid)
 
         shaders_scroll.set_child(shaders_container)
         self.content_stack.add_titled(shaders_scroll, "settings-shaders", self.t("settings.shaders.title"))
@@ -1280,20 +1286,23 @@ class OpemuxWindow(Adw.ApplicationWindow):
         return self.t(f"input.action.{action}")
 
     def _clear_input_bindings_rows(self):
-        while child := self.input_bindings_list.get_first_child():
-            self.input_bindings_list.remove(child)
+        while child := self.input_bindings_grid.get_first_child():
+            self.input_bindings_grid.remove(child)
         self._input_buttons = {}
         self._input_rows = {}
 
     def _set_active_input_row(self, action=None):
-        for row_action, row in self._input_rows.items():
+        for row_action, widgets in self._input_rows.items():
+            targets = widgets if isinstance(widgets, tuple) else (widgets,)
             if row_action == action:
-                row.add_css_class("input-mapping-current")
+                for widget in targets:
+                    widget.add_css_class("input-mapping-current")
             else:
-                row.remove_css_class("input-mapping-current")
+                for widget in targets:
+                    widget.remove_css_class("input-mapping-current")
 
     def _refresh_input_bindings(self):
-        if not hasattr(self, "input_bindings_list"):
+        if not hasattr(self, "input_bindings_grid"):
             return
         console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
         device_id = self.input_device_combo.get_active_id() or "keyboard"
@@ -1315,29 +1324,25 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.input_map_all_btn.set_sensitive(device_id == "keyboard")
         self.input_capture_status.set_text("")
 
-        for action in visible_actions:
-            row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            box.set_margin_top(6)
-            box.set_margin_bottom(6)
-            box.set_margin_start(8)
-            box.set_margin_end(8)
-
+        for row_index, action in enumerate(visible_actions):
             label = Gtk.Label(label=self._input_action_label(action))
             label.set_halign(Gtk.Align.START)
-            label.set_hexpand(True)
-            box.append(label)
+            label.set_xalign(0)
+            label.set_hexpand(False)
+            label.set_margin_top(4)
+            label.set_margin_bottom(4)
 
             button = Gtk.Button(label=self._binding_display_text(self._input_bindings_buffer.get(action, "")))
-            button.set_hexpand(False)
             button.set_size_request(180, -1)
+            button.set_halign(Gtk.Align.START)
+            button.set_margin_top(2)
+            button.set_margin_bottom(2)
             button.connect("clicked", self._on_binding_button_clicked, action)
-            box.append(button)
             self._input_buttons[action] = button
 
-            row.set_child(box)
-            self.input_bindings_list.append(row)
-            self._input_rows[action] = row
+            self.input_bindings_grid.attach(label, 0, row_index, 1, 1)
+            self.input_bindings_grid.attach(button, 1, row_index, 1, 1)
+            self._input_rows[action] = (label, button)
 
     def _binding_display_text(self, value):
         if not value:
@@ -1539,34 +1544,32 @@ class OpemuxWindow(Adw.ApplicationWindow):
         return options, selected
 
     def _reload_shader_rows(self):
-        if not hasattr(self, "shaders_list_box"):
+        if not hasattr(self, "shaders_grid"):
             return
-        while child := self.shaders_list_box.get_first_child():
-            self.shaders_list_box.remove(child)
+        while child := self.shaders_grid.get_first_child():
+            self.shaders_grid.remove(child)
 
-        for console_id in SYSTEM_IDS:
-            row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            box.set_margin_top(8)
-            box.set_margin_bottom(8)
-            box.set_margin_start(8)
-            box.set_margin_end(8)
+        for row_index, console_id in enumerate(SYSTEM_IDS):
+            console_cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            console_cell.set_halign(Gtk.Align.START)
+            console_cell.set_valign(Gtk.Align.CENTER)
 
             icon = self._build_console_icon(console_id)
-            box.append(icon)
+            console_cell.append(icon)
 
             title = Gtk.Label(label=f"{console_id} - {get_system_display_name(console_id)}")
             title.set_halign(Gtk.Align.START)
-            title.set_hexpand(True)
-            box.append(title)
+            title.set_xalign(0)
+            console_cell.append(title)
 
             options, selected = self._shader_options_for_console(console_id)
             dropdown = self._build_shader_dropdown(options, selected)
             dropdown.connect("notify::selected", self._on_shader_dropdown_changed, console_id)
-            box.append(dropdown)
+            dropdown.set_halign(Gtk.Align.START)
+            dropdown.set_size_request(320, -1)
 
-            row.set_child(box)
-            self.shaders_list_box.append(row)
+            self.shaders_grid.attach(console_cell, 0, row_index, 1, 1)
+            self.shaders_grid.attach(dropdown, 1, row_index, 1, 1)
 
     def _on_shader_dropdown_changed(self, dropdown, _param, console_id):
         shader_id = self._get_shader_dropdown_active_id(dropdown)
