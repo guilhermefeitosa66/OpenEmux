@@ -15,8 +15,7 @@ script:
   - cp README.md LICENSE AppDir/usr/lib/opemux/
   - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/opemux-pydeps.lock
   - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/opemux-pydeps.lock
-  - gcc packaging/appimage/opemux-launcher.c -O2 -s -o AppDir/usr/bin/opemux-launcher
-  - patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 AppDir/usr/bin/opemux-launcher
+  - gcc -static packaging/appimage/opemux-launcher.c -O2 -s -o AppDir/usr/bin/opemux-launcher
   - install -Dm755 packaging/appimage/AppRun AppDir/AppRun
   - install -Dm755 packaging/appimage/opemux-wrapper AppDir/usr/bin/opemux
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders

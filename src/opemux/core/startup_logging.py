@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,27 +11,39 @@ def get_startup_log_path(runtime_dir=None):
         base_dir = Path(runtime_dir).expanduser()
     else:
         base_dir = Path.home() / ".opemux" / "runtime"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return base_dir / "opemux_startup.log"
+    try:
+        base_dir.mkdir(parents=True, exist_ok=True)
+        return base_dir / "opemux_startup.log"
+    except OSError:
+        fallback_dir = Path(tempfile.gettempdir()) / "opemux"
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        return fallback_dir / "opemux_startup.log"
 
 
 def append_startup_error(message, exc_text=None, runtime_dir=None):
-    log_path = get_startup_log_path(runtime_dir=runtime_dir)
-    timestamp = datetime.now(timezone.utc).isoformat()
-    lines = [f"{timestamp} ERROR {message}"]
-    if exc_text:
-        lines.append(exc_text.rstrip())
-    with open(log_path, "a", encoding="utf-8") as handle:
-        handle.write("\n".join(lines) + "\n")
-    return log_path
+    try:
+        log_path = get_startup_log_path(runtime_dir=runtime_dir)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        lines = [f"{timestamp} ERROR {message}"]
+        if exc_text:
+            lines.append(exc_text.rstrip())
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        return log_path
+    except OSError:
+        print(f"opemux startup error: {message}", file=sys.stderr)
+        if exc_text:
+            print(exc_text.rstrip(), file=sys.stderr)
+        return None
 
 
 def configure_startup_logging(runtime_dir=None):
     log_path = get_startup_log_path(runtime_dir=runtime_dir)
-    handlers = [
-        logging.StreamHandler(),
-        logging.FileHandler(log_path, encoding="utf-8"),
-    ]
+    handlers = [logging.StreamHandler()]
+    try:
+        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+    except OSError:
+        pass
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
