@@ -1,12 +1,24 @@
 import sys
 import logging
+import traceback
 from threading import Thread
 from pathlib import Path
 import shutil
-import gi
 
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
+from opemux.core.startup_logging import append_startup_error, configure_startup_logging
+
+configure_startup_logging()
+
+try:
+    import gi
+    gi.require_version('Gtk', '4.0')
+    gi.require_version('Adw', '1')
+except Exception:
+    append_startup_error(
+        "Failed to import GTK stack (gi/Gtk/Adw)",
+        exc_text=traceback.format_exc(),
+    )
+    raise
 
 from gi.repository import Gtk, Adw, GLib
 from opemux.ui.window import OpemuxWindow
@@ -14,12 +26,6 @@ from opemux.ui.first_boot_window import FirstBootWindow
 from opemux.core.config import ConfigManager
 from opemux.core.first_boot import FirstBootBootstrapper
 from opemux.core.paths import get_project_root, is_running_in_appimage
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-)
 
 APP_ID = "org.opemux.Opemux"
 
@@ -127,10 +133,18 @@ class OpemuxApplication(Adw.Application):
         return False
 
 def main():
-    GLib.set_prgname(APP_ID)
-    _ensure_desktop_integration()
-    app = OpemuxApplication()
-    return app.run(sys.argv)
+    try:
+        GLib.set_prgname(APP_ID)
+        _ensure_desktop_integration()
+        app = OpemuxApplication()
+        return app.run(sys.argv)
+    except Exception:
+        append_startup_error(
+            "Unhandled startup exception in opemux.main",
+            exc_text=traceback.format_exc(),
+        )
+        logging.exception("Unhandled startup exception")
+        raise
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

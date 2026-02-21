@@ -4,10 +4,19 @@ script:
   - rm -rf AppDir appimage-builder-cache
   - mkdir -p AppDir/usr/lib/opemux
   - mkdir -p AppDir/usr/lib/python3/dist-packages
+  - mkdir -p AppDir/usr/bin
+  - mkdir -p AppDir/lib
+  - mkdir -p AppDir/runtime/compat/usr/lib64
+  - ln -sfn runtime/compat/usr/lib64 AppDir/lib64
   - cp -r src AppDir/usr/lib/opemux/
   - cp -r src/opemux AppDir/usr/lib/python3/dist-packages/
   - cp -r vendors AppDir/usr/lib/opemux/
+  - cp requirements.lock AppDir/usr/lib/opemux/
   - cp README.md LICENSE AppDir/usr/lib/opemux/
+  - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/opemux-pydeps.lock
+  - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/opemux-pydeps.lock
+  - gcc packaging/appimage/opemux-launcher.c -O2 -s -o AppDir/usr/bin/opemux-launcher
+  - patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 AppDir/usr/bin/opemux-launcher
   - install -Dm755 packaging/appimage/AppRun AppDir/AppRun
   - install -Dm755 packaging/appimage/opemux-wrapper AppDir/usr/bin/opemux
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
@@ -22,19 +31,17 @@ AppDir:
     name: Opemux
     icon: org.opemux.Opemux
     version: "0.1.0"
-    exec: usr/bin/python3
-    exec_args: -m opemux.main $@
+    exec: usr/bin/opemux-launcher
   apt:
     arch: amd64
     sources:
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy main universe
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble main universe
         key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy-updates main universe
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble-updates main universe
         key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
     include:
       - python3
       - python3-gi
-      - python3-yaml
       - python3-cairo
       - libgtk-4-1
       - libadwaita-1-0

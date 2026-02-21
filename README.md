@@ -1,66 +1,192 @@
-# Opemux
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Opemux" width="180"/>
+</p>
 
-**Opemux** is a Linux-native emulator frontend inspired by OpenEmu, designed to provide a seamless and visually stunning retro gaming experience on the GNOME desktop environment.
+<h1 align="center">Opemux</h1>
 
-Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, elegance, and native integration with the Linux ecosystem. It is distributed as an **AppImage** for universal compatibility across Linux distributions.
+<p align="center">
+  A beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable for everyone.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/guilhermefeitosa66/opemux/releases/latest">
+    <img src="https://img.shields.io/github/v/release/guilhermefeitosa66/opemux?label=Download&style=for-the-badge&logo=linux" alt="Download latest release"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/guilhermefeitosa66/opemux/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
+  </a>
+</p>
 
--   **Native Linux Design**: Built with GTK4 for a modern, responsive interface that feels at home on GNOME and other desktop environments.
--   **Multi-System Support**: **NES**, **SNES**, and **GBA** via RetroArch + libretro cores.
--   **Game Library Organization**: Automatically scans and organizes your ROM collection.
-    -   Default ROM path: `~/games/roms/` (Configurable).
--   **Cover Pipeline**: Local-first covers from `~/games/roms/covers/<console>/` with Libretro Thumbnails sync.
--   **Runtime Control**: Launch/stop flow managed by Opemux while RetroArch runs externally.
--   **First-Boot Setup**: On first launch, Opemux prepares config/filesystem structure and bootstraps RetroArch cores with a guided loading screen.
--   **Settings UI**: Sidebar `Configurações` with ROM management actions (`Path`, `Scan ROMs`, `Sync Covers`).
--   **Visual Enhancements**: Shader/filter configuration roadmap (in progress).
--   **Input Mapping**: Per-console keyboard/gamepad mapping with RetroArch runtime integration.
+---
 
-## Runtime Backend
+## About
 
--   **Preferred**: `vendors/RetroArch-Linux-x86_64.AppImage`
--   **Fallback**: system `retroarch` binary
--   **Cores**: libretro cores per console (`nestopia`/`fceumm`, `snes9x`, `mgba`)
--   **Core Bootstrap**: first-boot updater downloads available cores from official RetroArch Buildbot endpoints.
+[RetroArch](https://www.retroarch.com/) is one of the most powerful and versatile emulation platforms ever created — but its interface can be intimidating, especially for users who just want to pick up a controller and play. Opemux wraps RetroArch in a clean, intuitive frontend so you can enjoy your retro game library without touching a single config file.
 
-## Build AppImage (amd64)
+Opemux was directly inspired by [OpenEmu](https://openemu.org/), the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. Since OpenEmu is exclusive to macOS, I built Opemux to bring that same polished experience to Linux.
 
--   Build command: `make appimage`
--   Output artifact: `dist/*.AppImage`
--   Build environment: Docker (`ubuntu:20.04`) + `appimage-builder`
--   Packaging recipe: `packaging/appimage/AppImageBuilder.yml`
--   The AppImage bundles Python/GTK runtime, RetroArch, and vendored runtime assets.
--   First boot still attempts online update of cores/shaders; if update fails, Opemux continues using bundled local assets.
+> This project would not be possible without the incredible work done by the [RetroArch](https://www.retroarch.com/) and [libretro](https://www.libretro.com/) teams, and the design philosophy of [OpenEmu](https://openemu.org/). Huge thanks to both projects. ❤️
 
-## Planning Docs
+---
 
--   Implementation phase notes live in `implementation_notes/`.
+## Download & Install
 
-## Input Mapping
+> **Note:** The AppImage build pipeline is currently being set up. The download link will be active once the first release is published.
 
--   Profiles are saved per console in `~/.opemux/input/<CONSOLE>.config`.
--   Gameplay actions shown in the UI are console-specific (example: GBA does not show `X/Y`).
--   Each console has two editable device profiles:
-    -   `Keyboard`
-    -   `Gamepad Port 1`
--   At runtime, Opemux translates mappings to RetroArch `input_*` keys and passes them through `--appendconfig`.
+### 1. Download the AppImage
 
-Default keyboard mapping:
--   D-Pad: `up`, `down`, `left`, `right`
--   `A/B/X/Y`: `z`, `x`, `s`, `c`
--   `Start`: `enter`
--   `Select`: `space`
--   `R1/R2/R3`: `a`, `q`, `1`
--   `L1/L2/L3`: `d`, `e`, `3`
+Head to the [Releases page](https://github.com/guilhermefeitosa66/opemux/releases/latest) and download the latest `Opemux-x86_64.AppImage`.
 
-Runtime hotkeys (default):
--   `Enable hotkey`: `right shift`
--   `RetroArch menu`: `f1`
--   `Save state`: `f2`
--   `Load state`: `f4`
--   `Fast-forward toggle`: `f6`
+### 2. Make it executable
+
+```bash
+chmod +x Opemux-x86_64.AppImage
+```
+
+### 3. Run it
+
+```bash
+./Opemux-x86_64.AppImage
+```
+
+> On systems without FUSE configured, use:
+>
+> ```bash
+> APPIMAGE_EXTRACT_AND_RUN=1 ./Opemux-x86_64.AppImage
+> ```
+
+On first launch, Opemux will automatically set up its configuration directory, download the required libretro cores from the RetroArch Buildbot, and get everything ready for you.
+
+---
+
+## Screenshots
+
+### ROM Library
+
+Browse your game collection with cover art, organized by console — just like a real game shelf.
+
+<p align="center">
+  <img src="docs/assets/opemux-roms-nes.png" alt="NES Library" width="48%"/>
+  &nbsp;
+  <img src="docs/assets/opemux-roms-snes.png" alt="SNES Library" width="48%"/>
+</p>
+<p align="center">
+  <img src="docs/assets/opemux-roms-gba.png" alt="GBA Library" width="48%"/>
+  &nbsp;
+  <img src="docs/assets/opemux-roms-n64.png" alt="N64 Library" width="48%"/>
+</p>
+
+### Gameplay
+
+Launch any game directly from Opemux. RetroArch runs in the background, fully configured and ready to go.
+
+<p align="center">
+  <img src="docs/assets/opemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
+  &nbsp;
+  <img src="docs/assets/opemux-gameplay-gba.png" alt="GBA Gameplay" width="48%"/>
+</p>
+
+### Settings
+
+A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, input mappings, and shaders — all without leaving the app.
+
+<p align="center">
+  <img src="docs/assets/opemux-settings.png" alt="General Settings" width="32%"/>
+  &nbsp;
+  <img src="docs/assets/opemux-settings-bios.png" alt="BIOS Settings" width="32%"/>
+  &nbsp;
+  <img src="docs/assets/opemux-settings-input.png" alt="Input Settings" width="32%"/>
+</p>
+
+- **General / ROMs** — set your ROM directory, scan for new games, and sync cover art from the libretro thumbnail repository.
+- **BIOS** — check which required BIOS files are present for each console (e.g. PS1, Saturn).
+- **Input** — configure keyboard and gamepad mappings per console. Changes are applied at launch time via RetroArch's `--appendconfig`.
+
+---
+
+## Support the Project
+
+Opemux is free and open source. If you find it useful, consider buying me a coffee!
+
+<p align="center">
+  <a href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&no_recurring=0&item_name=Support+Opemux%3A+a+Linux+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&currency_code=BRL" target="_blank">
+    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="Donate with PayPal"/>
+  </a>
+</p>
+
+**🇧🇷 Or if you're from Brazil**, you can also donate via **Pix**:
+
+<p align="center">
+  <img src="docs/assets/pix.png" alt="Pix QR Code" width="180"/>
+  <br/>
+  <em>Scan the QR Code above to donate via Pix</em>
+</p>
+
+---
+
+## Build from Source
+
+If you want to hack on Opemux or build the AppImage yourself:
+
+```bash
+# Clone the repo
+git clone https://github.com/guilhermefeitosa66/opemux.git
+cd opemux
+
+# Install system dependencies and set up the Python venv
+make bootstrap
+
+# Run the app in development mode
+make run
+
+# Run the test suite
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+
+# Build the AppImage (requires Docker)
+make appimage
+```
+
+---
+
+## Running from Source (no build required)
+
+If you just want to run Opemux from source without building the AppImage:
+
+```bash
+# Clone the repo
+git clone https://github.com/guilhermefeitosa66/opemux.git
+cd opemux
+
+# 1. Install system dependencies (GTK4, Adwaita, PyGObject — requires sudo)
+make install-sys-deps
+
+# 2. Create the Python virtual environment
+make venv
+
+# 3. Install Python packages into the venv
+make setup
+
+# 4. Run the app
+make run
+```
+
+> Steps 1–3 can be combined with `make bootstrap` (equivalent to `install-sys-deps + venv + setup`).
+
+---
 
 ## License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  Made with lots of love and care by <strong>Guilherme Feitoza</strong> &nbsp;🇧🇷<br/>
+  <br/>
+  <a href="https://www.linkedin.com/in/guilherme-lima-0260a154/">LinkedIn</a>
+  <br/>
+  <br/>
+  I'd love to hear your feedback, ideas, and suggestions for improvement.<br/>
+  Pull requests are very welcome — this is free software, and it grows with the community. 🙌
+</p>

@@ -4,7 +4,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run clean install-sys-deps bootstrap check-retroarch
+.PHONY: all setup venv run clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: appimage appimage-docker appimage-clean
 
 all: setup
@@ -28,6 +28,9 @@ venv:
 
 setup:
 	$(PIP) install -r requirements.txt
+
+lock-deps:
+	$(PIP) freeze > requirements.lock
 
 
 # Running the app

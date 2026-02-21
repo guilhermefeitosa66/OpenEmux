@@ -28,6 +28,13 @@ class PathsTests(unittest.TestCase):
             (Path(tmp_dir) / "vendors" / "RetroArch-Linux-x86_64.AppImage").resolve(),
         )
 
+    def test_get_project_root_uses_appdir_layout_when_available(self):
+        with TemporaryDirectory() as tmp_dir:
+            bundled_root = Path(tmp_dir) / "usr" / "lib" / "opemux"
+            bundled_root.mkdir(parents=True, exist_ok=True)
+            with patch.dict(os.environ, {"APPDIR": tmp_dir}, clear=True):
+                self.assertEqual(get_project_root(), bundled_root.resolve())
+
 
 if __name__ == "__main__":
     unittest.main()
