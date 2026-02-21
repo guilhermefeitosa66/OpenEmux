@@ -92,16 +92,15 @@
 /* ===== Settings Cards ===== */
 .settings-card {
     border-radius: 10px;
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
     transition: background-color 0.15s ease, transform 0.15s ease;
 }
 
 .settings-card:hover {
     background-color: alpha(@accent_bg_color, 0.10);
     transform: translateY(-2px);
-}
-
-.settings-card-button {
-    border-radius: 10px;
 }
 
 .settings-card-icon {
