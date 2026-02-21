@@ -13,6 +13,7 @@ from opemux.ui.window import OpemuxWindow
 from opemux.ui.first_boot_window import FirstBootWindow
 from opemux.core.config import ConfigManager
 from opemux.core.first_boot import FirstBootBootstrapper
+from opemux.core.paths import get_project_root, is_running_in_appimage
 
 
 logging.basicConfig(
@@ -24,7 +25,10 @@ APP_ID = "org.opemux.Opemux"
 
 
 def _ensure_desktop_integration():
-    project_root = Path(__file__).resolve().parents[2]
+    if is_running_in_appimage():
+        return
+
+    project_root = get_project_root()
     logo_path = project_root / "src" / "opemux" / "ui" / "assets" / "images" / "logo.png"
     if not logo_path.exists():
         return

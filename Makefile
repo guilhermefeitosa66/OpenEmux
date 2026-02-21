@@ -5,6 +5,7 @@ PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
 .PHONY: all setup venv run clean install-sys-deps bootstrap check-retroarch
+.PHONY: appimage appimage-docker appimage-clean
 
 all: setup
 
@@ -43,6 +44,15 @@ check-retroarch:
 		echo "RetroArch not found. Add AppImage to vendors/ or install retroarch."; \
 		exit 1; \
 	fi
+
+appimage:
+	./packaging/appimage/build_appimage.sh
+
+appimage-docker:
+	./packaging/appimage/build_in_docker.sh
+
+appimage-clean:
+	rm -rf AppDir appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Cleaning
 clean:

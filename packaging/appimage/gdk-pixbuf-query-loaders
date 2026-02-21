@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$SELF_DIR/../lib/x86_64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders" "$@"

@@ -1,0 +1,52 @@
+version: 1
+
+script:
+  - rm -rf AppDir appimage-builder-cache
+  - mkdir -p AppDir/usr/lib/opemux
+  - mkdir -p AppDir/usr/lib/python3/dist-packages
+  - cp -r src AppDir/usr/lib/opemux/
+  - cp -r src/opemux AppDir/usr/lib/python3/dist-packages/
+  - cp -r vendors AppDir/usr/lib/opemux/
+  - cp README.md LICENSE AppDir/usr/lib/opemux/
+  - install -Dm755 packaging/appimage/AppRun AppDir/AppRun
+  - install -Dm755 packaging/appimage/opemux-wrapper AppDir/usr/bin/opemux
+  - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
+  - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
+  - install -Dm644 packaging/appimage/org.opemux.Opemux.desktop AppDir/usr/share/applications/org.opemux.Opemux.desktop
+  - install -Dm644 src/opemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/org.opemux.Opemux.png
+
+AppDir:
+  path: AppDir
+  app_info:
+    id: org.opemux.Opemux
+    name: Opemux
+    icon: org.opemux.Opemux
+    version: "0.1.0"
+    exec: usr/bin/python3
+    exec_args: -m opemux.main $@
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy main universe
+        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy-updates main universe
+        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+    include:
+      - python3
+      - python3-gi
+      - python3-yaml
+      - python3-cairo
+      - libgtk-4-1
+      - libadwaita-1-0
+      - gir1.2-gtk-4.0
+      - gir1.2-adw-1
+      - libgirepository-1.0-1
+      - libglib2.0-0
+      - libcairo2
+      - libgdk-pixbuf-2.0-0
+      - libgdk-pixbuf2.0-bin
+      - shared-mime-info
+      - hicolor-icon-theme
+
+AppImage:
+  arch: x86_64

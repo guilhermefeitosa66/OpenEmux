@@ -122,6 +122,16 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             self.assertTrue((updater.shader_glsl_dir / "handheld" / "dot.glslp").exists())
             self.assertTrue((updater.shader_slang_dir / "crt" / "geom.slangp").exists())
 
+    def test_has_local_runtime_assets_uses_runtime_dirs(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            (updater.core_dir / "mgba_libretro.so").write_bytes(b"core")
+            (updater.shader_glsl_dir / "crt").mkdir(parents=True, exist_ok=True)
+            (updater.shader_glsl_dir / "crt" / "geom.glslp").write_bytes(b"shader")
+
+            self.assertTrue(updater.has_local_runtime_assets())
+
 
 if __name__ == "__main__":
     unittest.main()

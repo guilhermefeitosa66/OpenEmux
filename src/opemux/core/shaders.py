@@ -2,6 +2,7 @@ from pathlib import Path
 
 import yaml
 
+from opemux.core.paths import get_project_root
 from opemux.core.systems import SYSTEM_IDS, resolve_system_id
 
 DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
@@ -160,8 +161,9 @@ class ShaderConfigStore:
 
 
 class ShaderCatalog:
-    def __init__(self, runtime_dir=None):
+    def __init__(self, runtime_dir=None, project_root=None):
         self.runtime_dir = Path(runtime_dir or (DEFAULT_CONFIG_DIR / "runtime")).expanduser()
+        self.project_root = Path(project_root).expanduser() if project_root else get_project_root()
         self._index = None
 
     def label_for_shader(self, shader_id):
@@ -248,6 +250,8 @@ class ShaderCatalog:
         return [
             self.runtime_dir / "shaders_glsl",
             self.runtime_dir / "shaders_slang",
+            self.project_root / "vendors" / "retroarch-assets" / "shaders_glsl",
+            self.project_root / "vendors" / "retroarch-assets" / "shaders_slang",
             Path.home() / ".config" / "retroarch" / "shaders" / "shaders_glsl",
             Path.home() / ".config" / "retroarch" / "shaders" / "shaders_slang",
             Path.home() / ".config" / "retroarch" / "shaders",

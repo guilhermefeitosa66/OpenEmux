@@ -45,16 +45,26 @@ DEFAULT_NOTIFICATION_OVERRIDES = {
 
 class RetroArchLauncher:
     def __init__(self, project_root, config_manager):
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).expanduser()
         self.config_manager = config_manager
-        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
+        self.shader_catalog = ShaderCatalog(
+            runtime_dir=self.config_manager.get_runtime_dir(),
+            project_root=self.project_root,
+        )
 
     def _resolve_retroarch_binary(self):
         configured = self.config_manager.get_retroarch_binary()
         configured_path = Path(configured).expanduser()
 
-        if configured_path.exists():
-            return str(configured_path)
+        if configured_path.is_absolute():
+            if configured_path.exists():
+                return str(configured_path)
+        else:
+            project_relative = self.project_root / configured_path
+            if project_relative.exists():
+                return str(project_relative)
+            if configured_path.exists():
+                return str(configured_path)
 
         resolved = shutil.which(configured)
         if resolved:
@@ -63,6 +73,7 @@ class RetroArchLauncher:
         vendor_candidates = [
             self.project_root / "vendors" / "RetroArch-Linux-x86_64.AppImage",
             self.project_root / "vendors" / "retroarch.AppImage",
+            self.project_root / "vendors" / "retroarch-assets" / "bin" / "retroarch",
         ]
         for candidate in vendor_candidates:
             if candidate.exists():
@@ -74,6 +85,9 @@ class RetroArchLauncher:
         system_id = resolve_system_id(console)
         for hint in self.config_manager.get_retroarch_core_hints(system_id):
             hint_path = Path(hint).expanduser()
+            resolved_hint = hint_path if hint_path.is_absolute() else self.project_root / hint_path
+            if resolved_hint.exists():
+                return str(resolved_hint)
             if hint_path.exists():
                 return str(hint_path)
 
@@ -81,6 +95,7 @@ class RetroArchLauncher:
         home_dirs = [
             Path.home() / ".config" / "retroarch" / "cores",
             Path.home() / ".var" / "app" / "org.libretro.RetroArch" / "config" / "retroarch" / "cores",
+            self.project_root / "vendors" / "retroarch-assets" / "cores",
         ]
         search_dirs = [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
 

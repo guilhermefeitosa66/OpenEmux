@@ -24,6 +24,15 @@ Built with **Python** and **GTK4** (PyGObject), Opemux focuses on simplicity, el
 -   **Cores**: libretro cores per console (`nestopia`/`fceumm`, `snes9x`, `mgba`)
 -   **Core Bootstrap**: first-boot updater downloads available cores from official RetroArch Buildbot endpoints.
 
+## Build AppImage (amd64)
+
+-   Build command: `make appimage`
+-   Output artifact: `dist/*.AppImage`
+-   Build environment: Docker (`ubuntu:20.04`) + `appimage-builder`
+-   Packaging recipe: `packaging/appimage/AppImageBuilder.yml`
+-   The AppImage bundles Python/GTK runtime, RetroArch, and vendored runtime assets.
+-   First boot still attempts online update of cores/shaders; if update fails, Opemux continues using bundled local assets.
+
 ## Planning Docs
 
 -   Implementation phase notes live in `implementation_notes/`.

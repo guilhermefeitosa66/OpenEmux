@@ -14,6 +14,7 @@ from opemux.core.bios_manager import get_console_bios_dir, scan_all_bios_status
 from opemux.core.cover_sync import sync_covers_async
 from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from opemux.core.playlist_manager import PlaylistManager
+from opemux.core.paths import get_project_root
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
 from opemux.core.scanner import RomScanner
@@ -91,7 +92,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self._task_seq = 0
         self._tasks = {}
 
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())

@@ -37,6 +37,9 @@ venv.bak/
 # Project specific
 app_data/
 *.log
+AppDir/
+appimage-builder-cache/
+appimage-build/
 
 # Vendor build artifacts (compiled binaries — use 'make build-emulators' to rebuild)
 vendors/nestopia/nestopia

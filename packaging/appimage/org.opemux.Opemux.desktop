@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Opemux
+Comment=Linux-native emulator frontend
+Exec=opemux
+Icon=org.opemux.Opemux
+Terminal=false
+Categories=Game;Emulator;
+StartupWMClass=org.opemux.Opemux

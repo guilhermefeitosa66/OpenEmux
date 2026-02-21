@@ -46,6 +46,21 @@ class _DummyConfig:
 
 
 class RetroArchLauncherTests(unittest.TestCase):
+    def test_resolve_retroarch_binary_from_project_relative_path(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "vendors" / "RetroArch-Linux-x86_64.AppImage"
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("", encoding="utf-8")
+            core = base / "mgba_libretro.so"
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, "vendors/RetroArch-Linux-x86_64.AppImage", core)
+            launcher = RetroArchLauncher(base, cfg)
+
+            resolved = launcher._resolve_retroarch_binary()
+
+        self.assertEqual(resolved, str(binary))
+
     def test_launch_blocks_when_required_bios_missing(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

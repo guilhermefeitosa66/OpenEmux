@@ -7,6 +7,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from opemux.core.paths import get_project_root
+
 logger = logging.getLogger(__name__)
 
 HREF_PATTERN = re.compile(r'href=["\']?([^"\'>\s]+)', re.IGNORECASE)
@@ -23,6 +25,10 @@ class RetroArchBuildbotUpdater:
         self.core_dir = self._resolve_core_dir()
         self.shader_glsl_dir = self.runtime_dir / "shaders_glsl"
         self.shader_slang_dir = self.runtime_dir / "shaders_slang"
+        self.project_root = get_project_root()
+        self.bundled_core_dir = self.project_root / "vendors" / "retroarch-assets" / "cores"
+        self.bundled_shader_glsl_dir = self.project_root / "vendors" / "retroarch-assets" / "shaders_glsl"
+        self.bundled_shader_slang_dir = self.project_root / "vendors" / "retroarch-assets" / "shaders_slang"
 
     def _resolve_core_dir(self):
         configured = self.settings.get("core_dir")
@@ -183,6 +189,17 @@ class RetroArchBuildbotUpdater:
             self._atomic_write_bytes(target_path, core_bytes)
 
     def download_shader_packs_if_missing(self, on_progress=None):
+        if not self.settings.get("enabled", True):
+            return {
+                "total": 0,
+                "downloaded": 0,
+                "skipped": 0,
+                "failed": 0,
+                "failures": [],
+                "targets": [str(self.shader_glsl_dir), str(self.shader_slang_dir)],
+                "disabled": True,
+            }
+
         self.ensure_environment()
         packs = [
             ("shaders_glsl", self.settings.get("shader_glsl_url", ""), self.shader_glsl_dir, ".glslp"),
@@ -235,6 +252,34 @@ class RetroArchBuildbotUpdater:
             if candidate.is_file():
                 return True
         return False
+
+    def _directory_has_cores(self, directory):
+        if not directory.exists():
+            return False
+        for candidate in directory.rglob("*_libretro.so"):
+            if candidate.is_file():
+                return True
+        return False
+
+    def has_local_core_assets(self):
+        return any(
+            self._directory_has_cores(directory)
+            for directory in (self.core_dir, self.bundled_core_dir)
+        )
+
+    def has_local_shader_assets(self):
+        glsl_ok = any(
+            self._directory_has_files_with_extension(directory, ".glslp")
+            for directory in (self.shader_glsl_dir, self.bundled_shader_glsl_dir)
+        )
+        slang_ok = any(
+            self._directory_has_files_with_extension(directory, ".slangp")
+            for directory in (self.shader_slang_dir, self.bundled_shader_slang_dir)
+        )
+        return glsl_ok or slang_ok
+
+    def has_local_runtime_assets(self):
+        return self.has_local_core_assets() and self.has_local_shader_assets()
 
     def _extract_shader_archive(self, archive_path, pack_name, target_dir):
         target_dir.mkdir(parents=True, exist_ok=True)

@@ -101,7 +101,30 @@ class FirstBootBootstrapperTests(unittest.TestCase):
         self.assertIn("retroarch_download_all_cores", cfg.state["completed_steps"])
         self.assertIn("bootstrap_completed", events)
 
+    def test_run_allows_download_failures_when_local_assets_exist(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = True
+            bootstrapper = FirstBootBootstrapper(cfg)
+            bootstrapper.updater.download_all = lambda on_progress=None: {
+                "total": 1,
+                "downloaded": 0,
+                "failed": 1,
+                "failures": [{"artifact": "core", "error": "network"}],
+            }
+            bootstrapper.updater.download_shader_packs_if_missing = lambda on_progress=None: {
+                "total": 1,
+                "downloaded": 0,
+                "failed": 1,
+                "failures": [{"artifact": "shader", "error": "network"}],
+            }
+            bootstrapper.updater.has_local_runtime_assets = lambda: True
+
+            result = bootstrapper.run()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(cfg.state["status"], "completed")
+
 
 if __name__ == "__main__":
     unittest.main()
-

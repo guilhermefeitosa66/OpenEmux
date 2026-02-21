@@ -147,7 +147,20 @@ class FirstBootBootstrapper:
 
         cores_summary = self.updater.download_all(on_progress=_progress)
         shaders_summary = self.updater.download_shader_packs_if_missing(on_progress=_progress)
+        total_failures = int(cores_summary.get("failed", 0)) + int(shaders_summary.get("failed", 0))
+        if total_failures > 0 and not self.updater.has_local_runtime_assets():
+            raise RuntimeError(
+                "RetroArch asset update failed and no local bundled assets were found. "
+                "Connect to the internet or provide local cores/shaders."
+            )
+
+        warning = None
+        if total_failures > 0:
+            warning = (
+                "RetroArch update had failures, continuing with local bundled assets."
+            )
         return {
             "cores": cores_summary,
             "shaders": shaders_summary,
+            "warning": warning,
         }
