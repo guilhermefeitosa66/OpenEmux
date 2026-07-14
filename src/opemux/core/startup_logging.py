@@ -51,13 +51,15 @@ def configure_startup_logging(runtime_dir=None):
         force=True,
     )
     logging.getLogger(__name__).info(
-        "startup context: appimage=%s appdir=%s project_root_env=%s display=%s wayland=%s session=%s python=%s",
+        "startup context: appimage=%s appdir=%s project_root_env=%s display=%s wayland=%s session=%s gsk_renderer=%s gdk_backend=%s python=%s",
         os.environ.get("APPIMAGE"),
         os.environ.get("APPDIR"),
         os.environ.get("OPEMUX_PROJECT_ROOT"),
         os.environ.get("DISPLAY"),
         os.environ.get("WAYLAND_DISPLAY"),
         os.environ.get("XDG_SESSION_TYPE"),
+        os.environ.get("GSK_RENDERER"),
+        os.environ.get("GDK_BACKEND"),
         sys.version.split()[0],
     )
     return log_path

@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 import traceback
@@ -5,8 +6,28 @@ from threading import Thread
 from pathlib import Path
 import shutil
 
+from opemux.core.paths import is_running_in_appimage
 from opemux.core.startup_logging import append_startup_error, configure_startup_logging
 
+
+def _configure_gtk_renderer():
+    """Pick a crash-safe GSK renderer default for fragile graphics stacks.
+
+    GTK4's default GL/Vulkan (ngl) renderer can hard-crash (SIGSEGV, no Python
+    traceback) at window realization when the AppImage's bundled GTK stack runs
+    against the host's own GL/Vulkan drivers -- a common failure on fresh
+    Debian/Mesa combos. The Cairo software renderer sidesteps every GPU-driver
+    mismatch and is more than adequate for Opemux's 2D cover-grid UI.
+
+    Only applied inside the AppImage and only when the user has not already
+    chosen a renderer, so a working setup can still opt back in with, e.g.,
+    GSK_RENDERER=ngl (or gl / vulkan).
+    """
+    if is_running_in_appimage() and not os.environ.get("GSK_RENDERER"):
+        os.environ["GSK_RENDERER"] = "cairo"
+
+
+_configure_gtk_renderer()
 configure_startup_logging()
 
 try:
