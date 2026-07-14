@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -43,18 +44,80 @@ def _the_variant(name):
     return None
 
 
+# Small connecting words that libretro's No-Intro thumbnail names keep lowercase
+# (e.g. "Castlevania - Harmony of Dissonance"), while handheld ROM sets often
+# title-case them ("Harmony Of Dissonance").
+_CONNECTOR_WORDS = {
+    "of", "the", "and", "in", "no", "de", "a", "to", "for", "vs", "or", "on", "at",
+}
+
+# libretro No-Intro thumbnails frequently use combined region tags rather than a
+# single region, e.g. "Sonic The Hedgehog (USA, Europe)". Try the most common
+# combos in addition to the configured single-region priority list.
+_COMMON_REGION_COMBOS = ("USA, Europe", "Japan, USA", "USA, Australia", "World")
+
+
+def _strip_accents(value):
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def _lower_connectors(name):
+    words = name.split(" ")
+    result = []
+    for index, word in enumerate(words):
+        if index > 0 and word.lower() in _CONNECTOR_WORDS:
+            result.append(word.lower())
+        else:
+            result.append(word)
+    return " ".join(result)
+
+
+def _strip_sequence_markers(name):
+    # Drop anbernic-style ordering markers embedded in the title, e.g.
+    # "Pokemon 2.1 - Gold Version" -> "Pokemon Gold Version".
+    stripped = re.sub(r"\s*\b\d+(?:\.\d+)?\s*[-–]\s*", " ", name)
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
+def _strip_trailing_number(name):
+    # Drop a trailing bare sequence number appended by some ROM sets, e.g.
+    # "Donkey Kong 1" -> "Donkey Kong", "Sonic The Hedgehog 1" -> "...Hedgehog".
+    return re.sub(r"\s+\d{1,2}$", "", name).strip()
+
+
 def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     base_names = []
 
     def _append(value):
+        if not value:
+            return
         value = value.strip()
         if value and value not in base_names:
             base_names.append(value)
 
-    _append(rom_name)
-    _append(rom_name.replace("_", " "))
+    seeds = [rom_name, rom_name.replace("_", " ")]
     if name_cleanup:
-        _append(_normalize_rom_name(rom_name))
+        seeds.append(_normalize_rom_name(rom_name))
+
+    for seed in seeds:
+        _append(seed)
+        if not name_cleanup:
+            continue
+        # Additional normalizations to bridge common ROM-set naming quirks toward
+        # libretro's No-Intro thumbnail names. Each is added as an extra candidate
+        # (tried until one URL resolves), so correct names still match first.
+        for variant in (
+            _lower_connectors(seed),
+            _strip_sequence_markers(seed),
+            _strip_trailing_number(seed),
+        ):
+            _append(variant)
+        # De-accented forms (e.g. "Pokémon" -> "Pokemon").
+        _append(_strip_accents(seed))
+        _append(_strip_accents(_lower_connectors(seed)))
+        _append(_strip_accents(_strip_sequence_markers(seed)))
+        _append(_strip_accents(_strip_trailing_number(seed)))
 
     expanded = []
     for name in base_names:
@@ -71,7 +134,7 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     for name in expanded:
         if name not in candidates:
             candidates.append(name)
-        for region in region_priority:
+        for region in list(region_priority) + list(_COMMON_REGION_COMBOS):
             candidate = f"{name} ({region})"
             if candidate not in candidates:
                 candidates.append(candidate)

@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -25,12 +26,46 @@ class CoverSyncTests(unittest.TestCase):
             region_priority=["USA", "World", "Europe", "Japan"],
             name_cleanup=True,
         )
+        # Bare name first, then the configured single regions, then the common
+        # combined-region tags, then the multi-language tag.
         self.assertEqual(candidates[0], "Chrono Trigger")
         self.assertEqual(candidates[1], "Chrono Trigger (USA)")
         self.assertEqual(candidates[2], "Chrono Trigger (World)")
         self.assertEqual(candidates[3], "Chrono Trigger (Europe)")
         self.assertEqual(candidates[4], "Chrono Trigger (Japan)")
-        self.assertEqual(candidates[5], "Chrono Trigger (En,Fr,De,Es,It)")
+        self.assertEqual(candidates[5], "Chrono Trigger (USA, Europe)")
+        self.assertIn("Chrono Trigger (En,Fr,De,Es,It)", candidates)
+
+    def test_cover_candidates_bridge_common_naming_quirks(self):
+        def bases(rom_name):
+            # Strip region/lang tags to inspect the underlying name variants.
+            names = _candidate_names(
+                rom_name=rom_name,
+                matching_mode="normalized_region_priority",
+                region_priority=["USA"],
+                name_cleanup=True,
+            )
+            return {re.sub(r"\s*\(.*\)$", "", n) for n in names}
+
+        # Trailing sequence number dropped: "Donkey Kong 1" -> "Donkey Kong".
+        self.assertIn("Donkey Kong", bases("Donkey Kong 1"))
+        # Connector word lower-cased to match No-Intro casing.
+        self.assertIn(
+            "Castlevania - Harmony of Dissonance",
+            bases("Castlevania - Harmony Of Dissonance"),
+        )
+        # Accents stripped: "Pokémon ..." -> "Pokemon ...".
+        self.assertTrue(any(b.startswith("Pokemon") for b in bases("Pokémon 2.1 - Gold Version")))
+        # Embedded ordering marker removed.
+        self.assertIn("Pokemon Gold Version", bases("Pokémon 2.1 - Gold Version"))
+        # Combined-region tag offered.
+        combos = _candidate_names(
+            rom_name="Sonic The Hedgehog",
+            matching_mode="normalized_region_priority",
+            region_priority=["USA"],
+            name_cleanup=True,
+        )
+        self.assertIn("Sonic The Hedgehog (USA, Europe)", combos)
 
     def test_cover_url_build_uses_thumbnails_libretro_domain(self):
         url = _build_cover_url(
