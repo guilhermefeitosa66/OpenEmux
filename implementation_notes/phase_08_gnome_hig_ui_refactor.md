@@ -1,11 +1,11 @@
 # Phase 08 — Refatoração da UI para o GNOME HIG
 
-> **Objetivo:** adequar toda a interface do Opemux às *GNOME Human Interface
+> **Objetivo:** adequar toda a interface do OpenEmux às *GNOME Human Interface
 > Guidelines* (HIG) atuais e ao design language Adwaita/libadwaita, preservando
 > a identidade e a experiência do OpenEmu (grade de capas por console, foco na
 > biblioteca, navegação leve) — mas nativa do GNOME/Linux em vez de macOS.
 
-Status: **planejado** · Escopo: `src/opemux/ui/*` · Sem mudanças na `core/`.
+Status: **planejado** · Escopo: `src/openemux/ui/*` · Sem mudanças na `core/`.
 
 ---
 
@@ -138,7 +138,7 @@ isoladamente (`refactor:`/`feat:` conforme a convenção do projeto).
 - Adicionar botão de busca (`system-search-symbolic`, toggle) que revela um
   `Gtk.SearchBar` sob o header; ligar ao `_on_search_changed`.
 - Adicionar `Gtk.MenuButton` (`open-menu-symbolic`) com `Gio.Menu`:
-  Preferências · Atalhos de teclado · Sobre o Opemux.
+  Preferências · Atalhos de teclado · Sobre o OpenEmux.
 - Criar `Gtk.ShortcutsWindow` e `Adw.AboutDialog` (metadados do app).
 
 ### Etapa 3 — Sidebar como painel do split view
@@ -262,6 +262,6 @@ isoladamente (`refactor:`/`feat:` conforme a convenção do projeto).
 
 > **Nota de verificação:** o `make run` da máquina de dev não roda direto porque
 > o `.venv` não inclui PyGObject/GTK4 e o typelib do GTK4 não está no path padrão
-> do sistema. A construção real de `OpemuxWindow`, do `OpemuxPreferences` e da
+> do sistema. A construção real de `OpenEmuxWindow`, do `OpenEmuxPreferences` e da
 > `FirstBootWindow` foi exercitada por smoke tests sobre os typelibs empacotados
 > em `AppDir/` (Adw 1.5.0 / GTK 4.14.5), sem `CRITICAL`/`WARNING`.

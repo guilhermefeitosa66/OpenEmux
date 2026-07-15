@@ -4,7 +4,7 @@
 
 ## Scope
 - Local-first lookup from `<roms>/covers/<console>/<rom_name>.png|jpg|webp`.
-- Playlist-driven ROM indexing (`~/.opemux/playlists/<console>.list`).
+- Playlist-driven ROM indexing (`~/.openemux/playlists/<console>.list`).
 - Background cover sync via Libretro Thumbnails (no authentication).
 - Save downloaded covers in the same local path structure.
 

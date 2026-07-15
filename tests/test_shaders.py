@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.shaders import ShaderCatalog, ShaderConfigStore
+from openemux.core.shaders import ShaderCatalog, ShaderConfigStore
 
 
 class ShaderConfigStoreTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class ShaderCatalogTests(unittest.TestCase):
     def test_resolve_prefers_glsl_then_slang(self):
         with TemporaryDirectory() as tmp_dir:
             runtime_dir = Path(tmp_dir) / "runtime"
-            shader_id = "opemux-dot-test"
+            shader_id = "openemux-dot-test"
             glsl_file = runtime_dir / "shaders_glsl" / "handheld" / f"{shader_id}.glslp"
             slang_file = runtime_dir / "shaders_slang" / "handheld" / f"{shader_id}.slangp"
             glsl_file.parent.mkdir(parents=True, exist_ok=True)

@@ -5,9 +5,9 @@ tag is cut. App ID: **`io.github.guilhermefeitosa66.OpenEmux`**.
 
 ## What was built
 
-- **`pyproject.toml`** — makes `opemux` a pip-installable package (src-layout)
-  with a console entry point (`opemux = opemux.main:main`), dynamic version from
-  `opemux.__version__`, and packaged UI assets/CSS/i18n. PyGObject/pycairo come
+- **`pyproject.toml`** — makes `openemux` a pip-installable package (src-layout)
+  with a console entry point (`openemux = openemux.main:main`), dynamic version from
+  `openemux.__version__`, and packaged UI assets/CSS/i18n. PyGObject/pycairo come
   from the GNOME runtime, so only **PyYAML** is a declared dependency.
 - **`packaging/flatpak/`**:
   - `io.github.guilhermefeitosa66.OpenEmux.yaml` — the manifest.
@@ -28,13 +28,13 @@ tag is cut. App ID: **`io.github.guilhermefeitosa66.OpenEmux`**.
 ## Architecture decision: delegate to the RetroArch Flatpak
 
 RetroArch is **not bundled**. The official `org.libretro.RetroArch` Flatpak is
-built on the KDE/Qt runtime, while Opemux needs the GNOME runtime — bundling
+built on the KDE/Qt runtime, while OpenEmux needs the GNOME runtime — bundling
 RetroArch from source would mean porting it + its cores onto a foreign runtime
-(large, fragile, and duplicates an existing Flathub app). Instead Opemux
+(large, fragile, and duplicates an existing Flathub app). Instead OpenEmux
 launches the RetroArch Flatpak on the host via `flatpak-spawn`; RetroArch manages
 its own cores (users download them via RetroArch's Online Updater). Verified:
 `flatpak-spawn` is present in the sandbox, and with `--filesystem=home` the
-sandbox's `$HOME` is the real home, so Opemux and RetroArch see the same
+sandbox's `$HOME` is the real home, so OpenEmux and RetroArch see the same
 absolute ROM/core paths.
 
 **Users must install RetroArch:** `flatpak install flathub org.libretro.RetroArch`
@@ -51,7 +51,7 @@ flatpak run io.github.guilhermefeitosa66.OpenEmux
 Confirmed: PyYAML builds offline, `pip install .` installs the app into `/app`,
 the metainfo/desktop/icon export, and the app launches and loads the library.
 
-To iterate against **uncommitted** changes, temporarily set the `opemux` module
+To iterate against **uncommitted** changes, temporarily set the `openemux` module
 source in the manifest to `- type: dir` / `path: ../..` instead of the git source.
 
 ## Linter status
@@ -67,9 +67,9 @@ passes except three items, all expected:
 
 ## Before submitting to Flathub
 1. **Cut a release** that includes this packaging (e.g. tag `v1.1.0`) and set the
-   manifest's `opemux` module source to that `commit:` (and matching `tag:`). It
+   manifest's `openemux` module source to that `commit:` (and matching `tag:`). It
    is currently pinned to the rename commit on `main`.
-2. Optionally bump `opemux.__version__` + metainfo `<releases>` for the new tag.
+2. Optionally bump `openemux.__version__` + metainfo `<releases>` for the new tag.
 
 ## Flathub submission steps
 1. Fork `flathub/flathub`; `git clone --branch=new-pr git@github.com:<you>/flathub.git`.
@@ -84,7 +84,7 @@ passes except three items, all expected:
 ## Notes
 - A test build is installed locally as `io.github.guilhermefeitosa66.OpenEmux`;
   remove with `flatpak uninstall --user io.github.guilhermefeitosa66.OpenEmux`.
-- The app ID was renamed from `org.opemux.Opemux` (which would require owning
-  opemux.org) to the code-hosting ID, updated across code + AppImage + Flatpak.
+- The app ID was renamed from `org.openemux.OpenEmux` (which would require owning
+  openemux.org) to the code-hosting ID, updated across code + AppImage + Flatpak.
   The already-published v1.0.0 GitHub release/AppImage keep the old ID; the next
   AppImage build will use the new ID.

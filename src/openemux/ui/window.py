@@ -1,0 +1,1270 @@
+import os
+import subprocess
+import logging
+from threading import Thread
+from pathlib import Path
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject
+
+from openemux.core.bios_manager import get_console_bios_dir
+from openemux.core.cover_sync import sync_covers_async
+from openemux.core.playlist_manager import PlaylistManager
+from openemux.core.paths import get_project_root
+from openemux.core.runtime_manager import RuntimeManager
+from openemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
+from openemux.core.scanner import RomScanner
+from openemux.core.shaders import ShaderCatalog
+from openemux import __version__
+from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
+from openemux.i18n import LANGUAGE_META, tr
+from openemux.ui.grid import RomGrid
+from openemux.ui.preferences import OpenEmuxPreferences
+
+logger = logging.getLogger(__name__)
+
+ALL_CONSOLES_ID = "__all__"
+FAVORITES_ID = "__favorites__"
+CONSOLE_ICON_FILES = {
+    "A2600": "atari_2600__atari2600_library@2x.png",
+    "A5200": "atari_5200__atari5200_library@2x.png",
+    "A7800": "atari_7800__atari7800_library@2x.png",
+    "LYNX": "lynx__lynx_library@2x.png",
+    "CV": "colecovision__colecovision_library@2x.png",
+    "FDS": "nintendo_fds__famicom_library@2x.png",
+    "FC": "nintendo_fds__famicom_library@2x.png",
+    "GB": "gameboy__gameboy_library@2x.png",
+    "GBC": "gameboy__gameboy_library@2x.png",
+    "GBA": "gameboy_advance__gba_library@2x.png",
+    "GG": "gamegear__gamegear_library@2x.png",
+    "INTV": "intellivision__intellivision_library@2x.png",
+    "NGP": "neogeopocket__neogeopocket_library@2x.png",
+    "N64": "n64__n64_library@2x.png",
+    "NDS": "nds__nds_library@2x.png",
+    "GC": "gamecube__gamecube_library@2x.png",
+    "O2": "odyssey2__odyssey2_library@2x.png",
+    "SG1000": "sg_1000__sg1000_library@2x.png",
+    "S32X": "sega_32x__32x_na_library@2x.png",
+    "MCD": "sega_cd__segacd_library@2x.png",
+    "MD": "genesis__megadrive_library@2x.png",
+    "SMS": "segamastersystem__sms_library@2x.png",
+    "SATURN": "saturn__saturn_library@2x.png",
+    "PS": "playstation__psx_library@2x.png",
+    "PSP": "psp__psp_library@2x.png",
+    "SFC": "supernes__snes_usa_library@2x.png",
+    "PCE": "pc_engine__pcengine_library@2x.png",
+    "PCECD": "pc_engine_cd__pcenginecd_library@2x.png",
+    "VECTREX": "vectrex__vectrex_library@2x.png",
+    "VB": "virtual_boy__vb_library@2x.png",
+    "WS": "wonderswan__wonderswan_library@2x.png",
+}
+
+
+class OpenEmuxWindow(Adw.ApplicationWindow):
+    def __init__(self, application, **kwargs):
+        super().__init__(application=application, **kwargs)
+
+        self.config_manager = application.config_manager
+        self.locale = self.config_manager.get_locale()
+        self.set_title("OpenEmux")
+        self._setup_window_icon()
+        self.set_default_size(1200, 800)
+        # Minimum size required for the adaptive breakpoint to compute layout.
+        self.set_size_request(360, 420)
+        self.load_css()
+
+        self.roms_path = self.config_manager.get_roms_path()
+        self.scanner = RomScanner(self.roms_path)
+        self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
+        self.current_console = None
+        self.visible_consoles = []
+        self._cover_sync_running = False
+        self._scan_running = False
+        self._task_seq = 0
+        self._tasks = {}
+
+        project_root = str(get_project_root())
+        self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        self.project_root = Path(project_root)
+        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
+
+        self.toast_overlay = Adw.ToastOverlay()
+        self.set_content(self.toast_overlay)
+
+        self._preferences_dialog = None
+
+        # ----- Navigation split view (sidebar + content), HIG-adaptive -----
+        self.content_stack = Adw.ViewStack()
+        self.content_stack.connect("notify::visible-child-name", self._on_visible_child_changed)
+
+        self.split_view = Adw.NavigationSplitView()
+        self.split_view.set_min_sidebar_width(260)
+        self.split_view.set_max_sidebar_width(360)
+        self.split_view.set_sidebar_width_fraction(0.28)
+        self.split_view.set_sidebar(self._build_sidebar())
+        self.split_view.set_content(self._build_content())
+        self.toast_overlay.set_child(self.split_view)
+
+        breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
+        breakpoint.add_setter(self.split_view, "collapsed", True)
+        self.add_breakpoint(breakpoint)
+
+        self._install_actions()
+
+        self._click_debug_controller = Gtk.GestureClick()
+        self._click_debug_controller.set_button(0)
+        self._click_debug_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self._click_debug_controller.connect("pressed", self._on_global_click_pressed)
+        self.add_controller(self._click_debug_controller)
+
+        self.refresh_library()
+        self._start_startup_scan()
+        self._maybe_show_bootstrap_warning()
+        GLib.timeout_add_seconds(1, self._poll_runtime_state)
+
+    def _on_global_click_pressed(self, gesture, n_press, x, y):
+        button = gesture.get_current_button()
+        # Avoid Gtk.Widget.pick() here: dropdown/popover interactions may trigger
+        # compute_point assertions while transient widgets are being recycled.
+        target = self.get_focus()
+        logger.info(
+            "ui click: button=%s presses=%s target=%s view=%s current_console=%s x=%.1f y=%.1f",
+            button,
+            n_press,
+            self._describe_widget(target),
+            self.content_stack.get_visible_child_name(),
+            self.current_console,
+            x,
+            y,
+        )
+
+    def _describe_widget(self, widget):
+        if widget is None:
+            return "None"
+        name = widget.__class__.__name__
+        if isinstance(widget, Gtk.Button):
+            child = widget.get_child()
+            if isinstance(child, Gtk.Label):
+                return f"{name}(label={child.get_text()})"
+            return f"{name}(button)"
+        if isinstance(widget, Gtk.Label):
+            return f"{name}(text={widget.get_text()})"
+        if isinstance(widget, Gtk.Image):
+            return f"{name}(icon={widget.get_icon_name()})"
+        return name
+
+    def _on_visible_child_changed(self, _stack, _param):
+        logger.info(
+            "ui view changed: visible_view=%s current_console=%s",
+            self.content_stack.get_visible_child_name(),
+            self.current_console,
+        )
+
+    def t(self, key, **kwargs):
+        return tr(self.locale, key, **kwargs)
+
+    def _setup_window_icon(self):
+        images_dir = Path(__file__).parent / "assets" / "images"
+        icon_theme = Gtk.IconTheme.get_for_display(self.get_display())
+        icon_theme.add_search_path(str(images_dir))
+        icon_name = self.get_application().get_application_id() or "logo"
+        if hasattr(Gtk.Window, "set_default_icon_name"):
+            Gtk.Window.set_default_icon_name(icon_name)
+        if hasattr(self, "set_icon_name"):
+            self.set_icon_name(icon_name)
+
+    def load_css(self):
+        css_provider = Gtk.CssProvider()
+        css_path = os.path.join(os.path.dirname(__file__), "style.css")
+        css_provider.load_from_path(css_path)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def _build_content(self):
+        """Build the content pane: an Adw.NavigationPage with a toolbar view."""
+        toolbar = Adw.ToolbarView()
+
+        header = Adw.HeaderBar()
+        self.window_title = Adw.WindowTitle.new(self.t("app.title"), "")
+        header.set_title_widget(self.window_title)
+
+        self.search_button = Gtk.ToggleButton()
+        self.search_button.set_icon_name("system-search-symbolic")
+        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
+        header.pack_end(self.search_button)
+
+        self.stop_btn = Gtk.Button()
+        self.stop_btn.set_icon_name("media-playback-stop-symbolic")
+        self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.stop_btn.set_sensitive(False)
+        self.stop_btn.connect("clicked", self._on_stop_game_clicked)
+        header.pack_end(self.stop_btn)
+
+        refresh_btn = Gtk.Button()
+        refresh_btn.set_icon_name("view-refresh-symbolic")
+        refresh_btn.set_tooltip_text(self.t("header.refresh"))
+        refresh_btn.connect("clicked", self._on_refresh_clicked)
+        header.pack_start(refresh_btn)
+        toolbar.add_top_bar(header)
+
+        # Search revealed on demand (HIG: search is a mode, not a permanent field).
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_hexpand(True)
+        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        self.search_bar = Gtk.SearchBar()
+        self.search_bar.set_key_capture_widget(self)
+        self.search_bar.connect_entry(self.search_entry)
+        self.search_bar.set_child(self.search_entry)
+        self.search_button.bind_property(
+            "active", self.search_bar, "search-mode-enabled",
+            GObject.BindingFlags.BIDIRECTIONAL,
+        )
+        toolbar.add_top_bar(self.search_bar)
+
+        # Progress banner replaces the former custom status bar (HIG feedback).
+        self.banner = Adw.Banner()
+        self.banner.set_revealed(False)
+        toolbar.add_top_bar(self.banner)
+
+        toolbar.set_content(self.content_stack)
+
+        page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
+        page.set_tag("content")
+        self.content_page = page
+        return page
+
+    def _build_primary_menu(self):
+        menu = Gio.Menu()
+        menu.append(self.t("menu.preferences"), "win.preferences")
+        menu.append(self.t("menu.shortcuts"), "win.shortcuts")
+        menu.append(self.t("menu.about"), "win.about")
+        button = Gtk.MenuButton()
+        button.set_icon_name("open-menu-symbolic")
+        button.set_menu_model(menu)
+        button.set_tooltip_text(self.t("menu.primary"))
+        button.set_primary(True)
+        return button
+
+    def _install_actions(self):
+        for name, handler, accels in (
+            ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
+            ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
+            ("about", lambda *_: self._show_about(), None),
+            ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
+        ):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", handler)
+            self.add_action(action)
+            app = self.get_application()
+            if accels and app is not None:
+                app.set_accels_for_action(f"win.{name}", accels)
+
+    def _toggle_search(self):
+        if not self.search_button.get_sensitive():
+            return
+        self.search_button.set_active(not self.search_button.get_active())
+
+    def _open_preferences(self):
+        self._preferences_dialog = OpenEmuxPreferences(self)
+        self._preferences_dialog.present(self)
+
+    def _show_about(self):
+        about = Adw.AboutDialog()
+        about.set_application_name(self.t("app.title"))
+        about.set_application_icon(self.get_application().get_application_id() or "io.github.guilhermefeitosa66.OpenEmux")
+        about.set_developer_name("OpenEmux")
+        about.set_version(__version__)
+        about.set_comments(self.t("about.comments"))
+        about.set_website("https://github.com/guilhermefeitosa66/OpenEmux")
+        about.set_license_type(Gtk.License.MIT_X11)
+        about.present(self)
+
+    def _show_shortcuts(self):
+        section = Gtk.ShortcutsSection(section_name="general", visible=True)
+        group = Gtk.ShortcutsGroup(title=self.t("shortcuts.group.general"))
+        for accel, key in (
+            ("<Ctrl>f", "shortcuts.search"),
+            ("<Ctrl>comma", "shortcuts.preferences"),
+        ):
+            group.add_shortcut(
+                Gtk.ShortcutsShortcut(accelerator=accel, title=self.t(key))
+            )
+        section.add_group(group)
+        window = Gtk.ShortcutsWindow(modal=True, transient_for=self)
+        window.add_section(section)
+        window.present()
+
+    def _toast(self, text, timeout=3):
+        toast = Adw.Toast(title=text)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
+
+    def _apply_render_cartridge(self, active):
+        self.config_manager.set_render_cartridge_overlay(active)
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif self.current_console in getattr(self, "_console_pages", {}):
+            self._ensure_console_loaded(self.current_console)
+
+    def _apply_language_change(self, locale):
+        self.config_manager.set_locale(locale)
+        self.locale = locale
+        language_name = LANGUAGE_META.get(locale, LANGUAGE_META["en"])["native_name"]
+        visible = self.content_stack.get_visible_child_name()
+        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
+        self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.sidebar_title.set_title(self.t("sidebar.header"))
+        self.refresh_library(preferred_view=visible)
+        self._toast(self.t("toast.language.updated", language=language_name))
+
+    def _update_window_title(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            title = self.t("sidebar.all")
+        elif console_id == FAVORITES_ID:
+            title = self.t("sidebar.favorites")
+        elif console_id:
+            title = f"{console_id} — {get_system_display_name(console_id)}"
+        else:
+            title = self.t("app.title")
+        subtitle = ""
+        grid = getattr(self, "_grids", {}).get(console_id)
+        if grid is not None:
+            count = 0
+            child = grid.get_first_child()
+            while child:
+                count += 1
+                child = child.get_next_sibling()
+            if count == 0:
+                subtitle = self.t("header.subtitle.no_games")
+            elif count == 1:
+                subtitle = self.t("header.subtitle.one_game")
+            else:
+                subtitle = self.t("header.subtitle.games", count=count)
+        self.window_title.set_title(title)
+        self.window_title.set_subtitle(subtitle)
+        if hasattr(self, "content_page"):
+            self.content_page.set_title(title)
+
+    def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
+        ids = []
+        if include_all:
+            ids.append(ALL_CONSOLES_ID)
+        ids.extend(console_ids)
+
+        model = Gtk.StringList.new(ids)
+        dropdown = Gtk.DropDown.new(model, None)
+        dropdown._console_ids = ids
+        dropdown._all_label_key = all_label_key
+
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_console_dropdown_setup)
+        factory.connect("bind", self._on_console_dropdown_bind)
+        dropdown.set_factory(factory)
+
+        list_factory = Gtk.SignalListItemFactory()
+        list_factory.connect("setup", self._on_console_dropdown_setup)
+        list_factory.connect("bind", self._on_console_dropdown_bind)
+        dropdown.set_list_factory(list_factory)
+
+        self._set_console_dropdown_active_id(dropdown, default_id or (ALL_CONSOLES_ID if include_all else ids[0]))
+        return dropdown
+
+    def _on_console_dropdown_setup(self, _factory, list_item):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_margin_top(4)
+        row.set_margin_bottom(4)
+        row.set_margin_start(4)
+        row.set_margin_end(4)
+        list_item.set_child(row)
+
+    def _on_console_dropdown_bind(self, _factory, list_item):
+        row = list_item.get_child()
+        while child := row.get_first_child():
+            row.remove(child)
+
+        item = list_item.get_item()
+        console_id = item.get_string() if item else ""
+
+        icon = self._build_console_icon(console_id)
+        row.append(icon)
+
+        if console_id == ALL_CONSOLES_ID:
+            label_text = self.t("sidebar.all")
+        else:
+            label_text = f"{console_id} - {get_system_display_name(console_id)}"
+
+        label = Gtk.Label(label=label_text)
+        label.set_halign(Gtk.Align.START)
+        label.set_xalign(0)
+        row.append(label)
+
+    def _get_console_dropdown_active_id(self, dropdown):
+        idx = int(dropdown.get_selected())
+        ids = getattr(dropdown, "_console_ids", [])
+        if idx < 0 or idx >= len(ids):
+            return None
+        return ids[idx]
+
+    def _set_console_dropdown_active_id(self, dropdown, console_id):
+        ids = getattr(dropdown, "_console_ids", [])
+        if not ids:
+            return
+        if console_id not in ids:
+            dropdown.set_selected(0)
+            return
+        dropdown.set_selected(ids.index(console_id))
+
+    def _begin_task(self, kind, label, total=0):
+        self._task_seq += 1
+        task_id = f"{kind}-{self._task_seq}"
+        self._tasks[task_id] = {
+            "id": task_id,
+            "kind": kind,
+            "label": label,
+            "current": 0,
+            "total": int(total or 0),
+            "pending": True,
+        }
+        self._refresh_banner()
+        return task_id
+
+    def _update_task(self, task_id, current=None, total=None, label=None):
+        task = self._tasks.get(task_id)
+        if not task:
+            return
+        if current is not None:
+            task["current"] = int(max(0, current))
+        if total is not None:
+            task["total"] = int(max(0, total))
+        if label is not None:
+            task["label"] = label
+        self._refresh_banner()
+
+    def _finish_task(self, task_id):
+        if task_id in self._tasks:
+            self._tasks.pop(task_id, None)
+        self._refresh_banner()
+
+    def _refresh_banner(self):
+        if not hasattr(self, "banner"):
+            return
+        if not self._tasks:
+            self.banner.set_revealed(False)
+            return
+
+        task = next(iter(self._tasks.values()))
+        pending = max(0, len(self._tasks) - 1)
+        label = task["label"]
+        total = int(task.get("total") or 0)
+        current = int(task.get("current") or 0)
+        if total > 0:
+            label = f"{label} ({current}/{total})"
+        if pending:
+            label = f"{label} (+{pending})"
+        self.banner.set_title(label)
+        self.banner.set_revealed(True)
+
+    def _build_sidebar(self):
+        toolbar = Adw.ToolbarView()
+
+        header = Adw.HeaderBar()
+        self.sidebar_title = Adw.WindowTitle.new(self.t("sidebar.header"), "")
+        header.set_title_widget(self.sidebar_title)
+        header.pack_end(self._build_primary_menu())
+        toolbar.add_top_bar(header)
+
+        self.console_list = Gtk.ListBox()
+        self.console_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.console_list.connect("row-selected", self._on_console_selected)
+        self.console_list.add_css_class("navigation-sidebar")
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_child(self.console_list)
+        toolbar.set_content(scroll)
+
+        page = Adw.NavigationPage.new(toolbar, self.t("sidebar.header"))
+        page.set_tag("sidebar")
+        self._rebuild_console_sidebar([])
+        return page
+
+    def _console_sidebar_label(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            return self.t("sidebar.all")
+        if console_id == FAVORITES_ID:
+            return self.t("sidebar.favorites")
+        return f"{console_id} - {get_system_display_name(console_id)}"
+
+    def _build_console_icon(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            return Gtk.Image.new_from_icon_name("view-grid-symbolic")
+        if console_id == FAVORITES_ID:
+            icon = Gtk.Image.new_from_icon_name("starred-symbolic")
+            icon.add_css_class("favorites-sidebar-icon")
+            return icon
+        candidates = []
+        preferred = CONSOLE_ICON_FILES.get(console_id)
+        if preferred:
+            candidates.append(preferred)
+            if preferred.endswith("@2x.png"):
+                candidates.append(preferred.replace("@2x.png", ".png"))
+
+        for icon_filename in candidates:
+            icon_path = self._asset_path("systems", icon_filename)
+            if not icon_path.exists():
+                continue
+            img = Gtk.Image.new_from_file(str(icon_path))
+            img.set_size_request(22, 22)
+            return img
+        return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
+
+    def _rebuild_console_sidebar(self, consoles):
+        while child := self.console_list.get_first_child():
+            self.console_list.remove(child)
+
+        if consoles:
+            self._append_console_sidebar_row(ALL_CONSOLES_ID)
+        self._append_console_sidebar_row(FAVORITES_ID)
+        for console_id in consoles:
+            self._append_console_sidebar_row(console_id)
+
+    def _append_console_sidebar_row(self, console_id):
+        row = Gtk.ListBoxRow()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        icon_widget = self._build_console_icon(console_id)
+        box.append(icon_widget)
+
+        name = Gtk.Label(label=self._console_sidebar_label(console_id))
+        name.set_halign(Gtk.Align.START)
+        name.set_hexpand(True)
+        box.append(name)
+
+        row.set_child(box)
+        row.id = console_id
+        self.console_list.append(row)
+
+    def _asset_path(self, category, filename):
+        return Path(__file__).parent / "assets" / "icons" / category / filename
+
+    def _maybe_show_bootstrap_warning(self):
+        state = self.config_manager.get_bootstrap_state()
+        if state.get("status") != "failed":
+            return
+        failed_step = state.get("failed_step", "-")
+        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        toast.set_timeout(6)
+        self.toast_overlay.add_toast(toast)
+
+    def refresh_library(self, preferred_view=None):
+        previous_visible = self.content_stack.get_visible_child_name() if hasattr(self, "content_stack") else None
+        while child := self.content_stack.get_first_child():
+            self.content_stack.remove(child)
+
+        self._grids = {}
+        self._console_pages = {}
+        self._console_loaded = {}
+        self._initial_roms = {}
+
+        self.visible_consoles = self._discover_visible_consoles()
+        self._rebuild_console_sidebar(self.visible_consoles)
+
+        if self.visible_consoles:
+            all_scroll = Gtk.ScrolledWindow()
+            all_scroll.set_vexpand(True)
+            self._console_pages[ALL_CONSOLES_ID] = all_scroll
+            self._console_loaded[ALL_CONSOLES_ID] = False
+            self.content_stack.add_titled(all_scroll, ALL_CONSOLES_ID, self.t("sidebar.all"))
+
+        favorites_scroll = Gtk.ScrolledWindow()
+        favorites_scroll.set_vexpand(True)
+        self._console_pages[FAVORITES_ID] = favorites_scroll
+        self._console_loaded[FAVORITES_ID] = False
+        self.content_stack.add_titled(favorites_scroll, FAVORITES_ID, self.t("sidebar.favorites"))
+
+        if self.visible_consoles:
+            for console in self.visible_consoles:
+                scroll = Gtk.ScrolledWindow()
+                scroll.set_vexpand(True)
+                placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
+                placeholder.add_css_class("dim-label")
+                placeholder.set_margin_top(32)
+                scroll.set_child(placeholder)
+                self._console_pages[console] = scroll
+                self._console_loaded[console] = False
+                self.content_stack.add_titled(scroll, console, console)
+
+        if not self.visible_consoles:
+            empty = Adw.StatusPage(
+                icon_name="folder-open-symbolic",
+                title=self.t("library.empty.title"),
+                description=self.t("library.empty.body"),
+            )
+            choose = Gtk.Button(label=self.t("library.empty.action"))
+            choose.add_css_class("suggested-action")
+            choose.add_css_class("pill")
+            choose.set_halign(Gtk.Align.CENTER)
+            choose.connect("clicked", lambda _b: self._choose_roms_path())
+            empty.set_child(choose)
+            self.content_stack.add_titled(empty, "library-empty", "Library")
+
+        target_view = preferred_view
+        if target_view is None:
+            target_view = previous_visible or self.current_console
+
+        if self.visible_consoles:
+            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}) else None
+            if desired is None:
+                desired = FAVORITES_ID
+            row = self._find_console_row(desired)
+            if row:
+                self.console_list.select_row(row)
+            else:
+                first_row = self.console_list.get_row_at_index(0)
+                if first_row:
+                    self.console_list.select_row(first_row)
+            return
+
+        row = self._find_console_row(FAVORITES_ID)
+        if row:
+            self.console_list.select_row(row)
+            return
+
+        self.current_console = None
+        self._set_search_enabled(False)
+        self.content_stack.set_visible_child_name("library-empty")
+        self._update_window_title(None)
+
+    def _find_console_row(self, console_id):
+        row = self.console_list.get_first_child()
+        while row:
+            if getattr(row, "id", None) == console_id:
+                return row
+            row = row.get_next_sibling()
+        return None
+
+    def _discover_visible_consoles(self):
+        visible = []
+        for console in SYSTEM_IDS:
+            if self.playlist_manager.playlist_exists(console):
+                roms = self.playlist_manager.load_playlist(console)
+            else:
+                roms = []
+
+            if roms:
+                visible.append(console)
+                self._initial_roms[console] = roms
+        return visible
+
+    def _on_console_selected(self, _listbox, row):
+        if not row:
+            return
+        self.current_console = row.id
+        logger.info("ui sidebar select: console_id=%s", self.current_console)
+        self._set_search_enabled(True)
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        else:
+            self._ensure_console_loaded(self.current_console)
+        self.content_stack.set_visible_child_name(self.current_console)
+        self.search_entry.set_text("")
+        self._update_window_title(self.current_console)
+        # On a collapsed (narrow) layout, reveal the content pane.
+        if self.split_view.get_collapsed():
+            self.split_view.set_show_content(True)
+
+    def _set_search_enabled(self, enabled):
+        if not enabled:
+            self.search_entry.set_text("")
+            if hasattr(self, "search_button"):
+                self.search_button.set_active(False)
+        if hasattr(self, "search_button"):
+            self.search_button.set_sensitive(enabled)
+        self.search_entry.set_sensitive(enabled)
+
+    def _choose_roms_path(self):
+        chooser = Gtk.FileChooserDialog(
+            title=self.t("settings.path.dialog_title"),
+            transient_for=self,
+            modal=True,
+            action=Gtk.FileChooserAction.SELECT_FOLDER,
+        )
+        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        chooser.add_button(self.t("settings.path.select_button"), Gtk.ResponseType.ACCEPT)
+        current = self.config_manager.get_roms_path()
+        if current.exists():
+            chooser.set_current_folder(Gio.File.new_for_path(str(current)))
+        chooser.connect("response", self._on_choose_roms_path_response)
+        chooser.show()
+
+    def _on_choose_roms_path_response(self, chooser, response):
+        if response != Gtk.ResponseType.ACCEPT:
+            chooser.destroy()
+            return
+
+        selected_file = chooser.get_file()
+        chooser.destroy()
+        if not selected_file:
+            return
+
+        selected_path = selected_file.get_path()
+        if not selected_path:
+            toast = Adw.Toast(title=self.t("toast.path_invalid"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+
+        self.config_manager.set_roms_path(selected_path)
+        self.config_manager.ensure_rom_directories()
+        self.roms_path = self.config_manager.get_roms_path()
+        self.scanner = RomScanner(self.roms_path)
+        self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
+        self._rescan_all_consoles(show_toast=False)
+
+        toast = Adw.Toast(title=self.t("toast.path_updated", path=str(self.roms_path)))
+        toast.set_timeout(4)
+        self.toast_overlay.add_toast(toast)
+
+    def _open_roms_folder(self):
+        self._open_path_in_file_manager(self.config_manager.get_roms_path())
+
+    def _open_console_bios_folder(self, console):
+        bios_dir = get_console_bios_dir(self.config_manager, console)
+        bios_dir.mkdir(parents=True, exist_ok=True)
+        self._open_path_in_file_manager(bios_dir)
+
+    def _open_path_in_file_manager(self, path):
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            Gio.AppInfo.launch_default_for_uri(path.as_uri(), None)
+            return
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(["xdg-open", str(path)])
+            return
+        except Exception as exc:
+            toast = Adw.Toast(title=self.t("bios.open_path_failed", path=str(path), error=str(exc)))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+
+    def _ensure_console_loaded(self, console, force_rescan=False):
+        if console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded(force_rescan=force_rescan)
+            return
+        if console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+            return
+        if console not in self._console_pages:
+            return
+
+        created_playlist = False
+        if force_rescan:
+            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+            created_playlist = True
+        elif not self._console_loaded.get(console) and console in self._initial_roms:
+            roms = self._initial_roms[console]
+        else:
+            if not self.playlist_manager.playlist_exists(console):
+                if self.config_manager.auto_scan_on_first_open():
+                    created_playlist = True
+                    roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+                else:
+                    roms = []
+            else:
+                roms = self.playlist_manager.load_playlist(console)
+
+        self._render_console_page(console, roms)
+        self._console_loaded[console] = True
+
+        if created_playlist and roms and not self._cover_sync_running:
+            self._start_cover_sync(scope="console", selected_console=console)
+
+    def _ensure_favorites_loaded(self):
+        if FAVORITES_ID not in self._console_pages:
+            return
+        self.playlist_manager.remove_missing_favorites()
+        favorites = self.playlist_manager.load_favorites_playlist()
+        self._render_console_page(FAVORITES_ID, favorites)
+        self._console_loaded[FAVORITES_ID] = True
+
+    def _ensure_all_loaded(self, force_rescan=False):
+        if ALL_CONSOLES_ID not in self._console_pages:
+            return
+
+        all_roms = []
+        for console in self.visible_consoles:
+            if force_rescan:
+                roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+                self._console_loaded[console] = True
+            elif not self._console_loaded.get(console) and console in self._initial_roms:
+                roms = self._initial_roms[console]
+            else:
+                roms = self.playlist_manager.load_playlist(console)
+            all_roms.extend(roms)
+
+        all_roms.sort(key=lambda rom: (rom.get("console", ""), rom.get("name", "").lower()))
+        self._render_console_page(ALL_CONSOLES_ID, all_roms)
+        self._console_loaded[ALL_CONSOLES_ID] = True
+
+    def _render_console_page(self, console, roms):
+        scroll = self._console_pages[console]
+        if not roms:
+            if console == FAVORITES_ID:
+                status = Adw.StatusPage(
+                    icon_name="starred-symbolic",
+                    title=self.t("favorites.empty.title"),
+                    description=self.t("favorites.empty.body"),
+                )
+            elif console == ALL_CONSOLES_ID:
+                status = Adw.StatusPage(
+                    icon_name="folder-open-symbolic",
+                    title=self.t("console.empty.title"),
+                    description=self.t("empty.all_indexed"),
+                )
+            else:
+                status = Adw.StatusPage(
+                    icon_name="applications-games-symbolic",
+                    title=self.t("console.empty.title"),
+                    description=str(self.playlist_manager.get_playlist_path(console)),
+                )
+            scroll.set_child(status)
+            self._grids.pop(console, None)
+            if console == self.current_console:
+                self._update_window_title(console)
+            return
+
+        grid = RomGrid(
+            console,
+            roms,
+            self.on_launch_game,
+            self._toggle_favorite_from_ui,
+            self._choose_cover_for_rom,
+            self._remove_cover_for_rom,
+            self._is_favorite_rom,
+            self._has_local_cover,
+            self.t,
+            self.roms_path,
+            ui_settings=self.config_manager.get_ui_settings(),
+        )
+        self._grids[console] = grid
+        scroll.set_child(grid)
+        if console == self.current_console:
+            self._update_window_title(console)
+
+    def _is_favorite_rom(self, rom):
+        return self.playlist_manager.is_favorite(rom["path"])
+
+    def _has_local_cover(self, rom):
+        return bool(find_local_cover(Path(self.roms_path), rom["console"], rom["name"]))
+
+    def _toggle_favorite_from_ui(self, rom):
+        is_now_favorite = self.playlist_manager.toggle_favorite(rom)
+        toast_key = "toast.favorite.added" if is_now_favorite else "toast.favorite.removed"
+        toast = Adw.Toast(title=self.t(toast_key, name=rom["name"]))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+        if self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif FAVORITES_ID in self._grids:
+            self._ensure_favorites_loaded()
+        return is_now_favorite
+
+    def _choose_cover_for_rom(self, rom, on_done=None):
+        chooser = Gtk.FileChooserDialog(
+            title=self.t("dialog.cover.choose.title"),
+            transient_for=self,
+            modal=True,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        chooser.add_button(self.t("dialog.start"), Gtk.ResponseType.ACCEPT)
+        filter_img = Gtk.FileFilter()
+        filter_img.set_name("Images")
+        for ext in SUPPORTED_COVER_EXTS:
+            filter_img.add_pattern(f"*.{ext}")
+            filter_img.add_pattern(f"*.{ext.upper()}")
+        chooser.add_filter(filter_img)
+
+        def _on_response(dialog, response):
+            if response != Gtk.ResponseType.ACCEPT:
+                dialog.destroy()
+                return
+            selected = dialog.get_file()
+            dialog.destroy()
+            if not selected:
+                return
+            path = selected.get_path()
+            if not path:
+                return
+            suffix = Path(path).suffix.lower().lstrip(".")
+            if suffix not in SUPPORTED_COVER_EXTS:
+                toast = Adw.Toast(title=self.t("toast.cover.invalid_extension"))
+                toast.set_timeout(4)
+                self.toast_overlay.add_toast(toast)
+                return
+            save_local_cover(Path(self.roms_path), rom["console"], rom["name"], path)
+            toast = Adw.Toast(title=self.t("toast.cover.updated", name=rom["name"]))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            if callable(on_done):
+                on_done()
+
+        chooser.connect("response", _on_response)
+        chooser.show()
+
+    def _remove_cover_for_rom(self, rom, on_done=None):
+        removed = remove_local_covers(Path(self.roms_path), rom["console"], rom["name"])
+        if removed:
+            toast = Adw.Toast(title=self.t("toast.cover.removed", name=rom["name"]))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            if callable(on_done):
+                on_done()
+
+    def _scan_current_console(self):
+        self._show_scan_roms_dialog()
+
+    def _rescan_single_console(self, console, show_toast=False):
+        if not console or console == ALL_CONSOLES_ID:
+            return self._rescan_all_consoles(show_toast=show_toast)
+        if self._scan_running:
+            if show_toast:
+                toast = Adw.Toast(title=self.t("toast.scan_running"))
+                toast.set_timeout(3)
+                self.toast_overlay.add_toast(toast)
+            return None
+
+        origin_view = self.content_stack.get_visible_child_name()
+        self._scan_running = True
+        task_id = self._begin_task("scan", self.t("status.scan.starting"), total=1)
+
+        def _worker():
+            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
+            summary = {"console": console, "roms": len(roms)}
+            GLib.idle_add(self._on_rescan_single_done_ui, task_id, summary, show_toast, origin_view)
+
+        Thread(target=_worker, daemon=True).start()
+        return {"started": True}
+
+    def _rescan_all_consoles(self, show_toast=False):
+        if self._scan_running:
+            if show_toast:
+                toast = Adw.Toast(title=self.t("toast.scan_running"))
+                toast.set_timeout(3)
+                self.toast_overlay.add_toast(toast)
+            return None
+        origin_view = self.content_stack.get_visible_child_name()
+        self._scan_running = True
+        task_id = self._begin_task("scan", self.t("status.scan.starting"))
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("current", 0),
+                evt.get("total", 0),
+                self.t("status.scan.progress", current=evt.get("current", 0), total=evt.get("total", 0)),
+            )
+
+        def _worker():
+            summary = self.playlist_manager.scan_and_rebuild_all_playlists(on_progress=_on_progress)
+            GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast, origin_view)
+
+        Thread(target=_worker, daemon=True).start()
+        return {"started": True}
+
+    def _on_rescan_single_done_ui(self, task_id, summary, show_toast, origin_view):
+        self._scan_running = False
+        self._update_task(task_id, current=1, total=1)
+        self._finish_task(task_id)
+        self.refresh_library(preferred_view=origin_view or summary.get("console"))
+        self._on_search_changed(self.search_entry)
+        if show_toast:
+            toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=summary.get("console")))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        return False
+
+    def _on_rescan_all_done_ui(self, task_id, summary, show_toast, origin_view):
+        self._scan_running = False
+        self._finish_task(task_id)
+        self.refresh_library(preferred_view=origin_view)
+        self._on_search_changed(self.search_entry)
+        if show_toast:
+            toast = Adw.Toast(
+                title=self.t(
+                    "toast.playlists_rebuilt_all",
+                    consoles=summary["total_consoles"],
+                    roms=summary["total_roms"],
+                )
+            )
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        return False
+
+    def _start_startup_scan(self):
+        self._rescan_all_consoles(show_toast=False)
+
+    def _show_sync_covers_dialog(self):
+        if not self.visible_consoles:
+            toast = Adw.Toast(title="No indexed consoles to sync covers.")
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+
+        dialog = Gtk.Dialog(transient_for=self, modal=True)
+        dialog.set_title(self.t("dialog.sync.title"))
+        dialog.set_default_size(360, 120)
+        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        label = Gtk.Label(label=self.t("dialog.sync.scope"))
+        label.set_halign(Gtk.Align.START)
+        content.append(label)
+
+        combo = self._build_console_dropdown(
+            self.visible_consoles,
+            default_id=None,
+            include_all=True,
+        )
+        default_scope = "all"
+        if self.current_console in self.visible_consoles:
+            default_scope = self.current_console
+        elif self.current_console == ALL_CONSOLES_ID:
+            default_scope = ALL_CONSOLES_ID
+        elif self.visible_consoles:
+            default_scope = self.visible_consoles[0]
+        if default_scope == "all":
+            default_scope = ALL_CONSOLES_ID
+        self._set_console_dropdown_active_id(combo, default_scope)
+        content.append(combo)
+
+        def _on_response(_dlg, response):
+            if response == Gtk.ResponseType.OK:
+                selected = self._get_console_dropdown_active_id(combo) or self.current_console or self.visible_consoles[0]
+                if selected == ALL_CONSOLES_ID:
+                    self._start_cover_sync(scope="all", selected_console=None)
+                else:
+                    self._start_cover_sync(scope="console", selected_console=selected)
+            dialog.close()
+
+        dialog.connect("response", _on_response)
+        dialog.show()
+
+    def _show_scan_roms_dialog(self):
+        dialog = Gtk.Dialog(transient_for=self, modal=True)
+        dialog.set_title(self.t("dialog.scan.title"))
+        dialog.set_default_size(380, 120)
+        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
+        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        label = Gtk.Label(label=self.t("dialog.scan.scope"))
+        label.set_halign(Gtk.Align.START)
+        content.append(label)
+
+        combo = self._build_console_dropdown(
+            SYSTEM_IDS,
+            default_id=None,
+            include_all=True,
+        )
+
+        default_scope = self.current_console if self.current_console in SYSTEM_IDS else ALL_CONSOLES_ID
+        self._set_console_dropdown_active_id(combo, default_scope)
+        content.append(combo)
+
+        def _on_response(_dlg, response):
+            if response == Gtk.ResponseType.OK:
+                selected = self._get_console_dropdown_active_id(combo) or ALL_CONSOLES_ID
+                if selected == ALL_CONSOLES_ID:
+                    self._rescan_all_consoles(show_toast=True)
+                else:
+                    self._rescan_single_console(selected, show_toast=True)
+            dialog.close()
+
+        dialog.connect("response", _on_response)
+        dialog.show()
+
+    def _start_cover_sync(self, scope, selected_console):
+        if self._cover_sync_running:
+            toast = Adw.Toast(title=self.t("toast.sync_running"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+
+        library = {}
+        if scope == "console" and selected_console in self.visible_consoles:
+            library[selected_console] = self.playlist_manager.load_playlist(selected_console)
+        else:
+            for console in self.visible_consoles:
+                library[console] = self.playlist_manager.load_playlist(console)
+
+        self._cover_sync_running = True
+        task_id = self._begin_task("covers", self.t("status.covers.starting"))
+        toast = Adw.Toast(title=self.t("toast.sync_started"))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("processed", 0),
+                evt.get("total", 0),
+                self.t("status.covers.progress", current=evt.get("processed", 0), total=evt.get("total", 0)),
+            )
+
+        def _on_done(summary):
+            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
+
+        sync_covers_async(
+            library_by_console=library,
+            covers_dir=self.roms_path,
+            scope=scope,
+            selected_console=selected_console,
+            on_done=_on_done,
+            sync_settings=self.config_manager.get_cover_sync_settings(),
+            on_progress=_on_progress,
+        )
+
+    def _on_cover_sync_done_ui(self, task_id, summary):
+        self._cover_sync_running = False
+        self._finish_task(task_id)
+        toast = Adw.Toast(
+            title=self.t(
+                "toast.sync_done",
+                downloaded=summary["downloaded"],
+                skipped=summary["skipped"],
+                errors=summary["errors"],
+            )
+        )
+        toast.set_timeout(6)
+        self.toast_overlay.add_toast(toast)
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif self.current_console in self._grids:
+            self._ensure_console_loaded(self.current_console)
+        return False
+
+    def _on_refresh_clicked(self, _button):
+        selected_row = self.console_list.get_selected_row()
+        selected_console = getattr(selected_row, "id", None) if selected_row else self.current_console
+        if selected_console == ALL_CONSOLES_ID:
+            self._rescan_all_consoles(show_toast=False)
+            return
+        if selected_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+            return
+        if selected_console in SYSTEM_IDS:
+            self._rescan_single_console(selected_console, show_toast=False)
+
+    def on_launch_game(self, rom):
+        success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        self._sync_runtime_controls()
+        if not success and error_msg:
+            toast = Adw.Toast(title=error_msg)
+            toast.set_timeout(5)
+            self.toast_overlay.add_toast(toast)
+        elif success:
+            toast = Adw.Toast(
+                title=self.t("toast.running", name=rom["name"], console=rom["console"])
+            )
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+
+    def _on_search_changed(self, entry):
+        query = entry.get_text().lower()
+        visible = self.content_stack.get_visible_child_name()
+        if not visible or visible not in self._grids:
+            return
+        grid = self._grids[visible]
+        child = grid.get_first_child()
+        while child:
+            flow_child = child
+            inner = flow_child.get_child()
+            if inner and hasattr(inner, "rom"):
+                matches = query in inner.rom["name"].lower()
+                flow_child.set_visible(matches or not query)
+            child = child.get_next_sibling()
+
+    def _on_stop_game_clicked(self, _button):
+        success, error_msg = self.runtime_manager.stop_active()
+        self._sync_runtime_controls()
+        if not success and error_msg:
+            toast = Adw.Toast(title=error_msg)
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+
+    def _poll_runtime_state(self):
+        result = self.runtime_manager.poll_active()
+        if result is not None:
+            rom = result.get("rom") or {}
+            rom_name = rom.get("path", "Game").split("/")[-1]
+            toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+        self._sync_runtime_controls()
+        return True
+
+    def _sync_runtime_controls(self):
+        is_running = self.runtime_manager.is_running()
+        self.stop_btn.set_sensitive(is_running)
+
+    def _trigger_bootstrap_retry(self):
+        app = self.get_application()
+        if not hasattr(app, "request_bootstrap_retry_from_ui"):
+            return
+        started = app.request_bootstrap_retry_from_ui(self)
+        if not started:
+            toast = Adw.Toast(title=self.t("toast.bootstrap.already_running"))
+            toast.set_timeout(3)
+            self.toast_overlay.add_toast(toast)
+            return
+        toast = Adw.Toast(title=self.t("toast.bootstrap.retry_started"))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+    def on_bootstrap_finished(self, result):
+        if result.get("success"):
+            toast = Adw.Toast(title=self.t("toast.bootstrap.completed"))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
+            return
+        failed_step = result.get("failed_step", "-")
+        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        toast.set_timeout(6)
+        self.toast_overlay.add_toast(toast)

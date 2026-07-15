@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opemux"
+name = "openemux"
 dynamic = ["version"]
 description = "A Linux-native emulator frontend for RetroArch, inspired by OpenEmu"
 readme = "README.md"
@@ -20,19 +20,19 @@ Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
 Issues = "https://github.com/guilhermefeitosa66/OpenEmux/issues"
 
 [project.scripts]
-opemux = "opemux.main:main"
+openemux = "openemux.main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.dynamic]
-version = { attr = "opemux.__version__" }
+version = { attr = "openemux.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-opemux = [
+openemux = [
     "ui/style.css",
     "ui/assets/images/*.png",
     "ui/assets/images/cartridges/*.png",

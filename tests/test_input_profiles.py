@@ -1,7 +1,7 @@
 import unittest
 from tempfile import TemporaryDirectory
 
-from opemux.core.input_profiles import InputProfileManager
+from openemux.core.input_profiles import InputProfileManager
 
 
 class InputProfilesTests(unittest.TestCase):

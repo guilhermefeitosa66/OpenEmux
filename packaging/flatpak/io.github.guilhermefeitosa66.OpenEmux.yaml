@@ -1,6 +1,6 @@
-# Flatpak manifest for Opemux.
+# Flatpak manifest for OpenEmux.
 #
-# Opemux is a GNOME-native front-end; it plays games through the *separately
+# OpenEmux is a GNOME-native front-end; it plays games through the *separately
 # installed* RetroArch Flatpak (org.libretro.RetroArch), launched on the host via
 # flatpak-spawn. RetroArch is therefore NOT bundled here — the manifest only
 # packages the Python app and PyYAML.
@@ -11,12 +11,12 @@
 #     build-dir packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml
 #   flatpak run io.github.guilhermefeitosa66.OpenEmux
 #
-# For the Flathub submission, pin the `opemux` module source to a tagged commit.
+# For the Flathub submission, pin the `openemux` module source to a tagged commit.
 app-id: io.github.guilhermefeitosa66.OpenEmux
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
-command: opemux
+command: openemux
 
 finish-args:
   # GTK UI
@@ -40,7 +40,7 @@ cleanup:
 modules:
   - python3-pyyaml.yaml
 
-  - name: opemux
+  - name: openemux
     buildsystem: simple
     build-commands:
       - pip3 install --verbose --exists-action=i --no-index --no-build-isolation

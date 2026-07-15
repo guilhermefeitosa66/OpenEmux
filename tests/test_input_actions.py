@@ -1,6 +1,6 @@
 import unittest
 
-from opemux.core.input_actions import (
+from openemux.core.input_actions import (
     get_actions_for_console,
     normalize_bindings,
     to_retroarch_overrides,

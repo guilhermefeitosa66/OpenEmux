@@ -9,7 +9,7 @@
   2. vendored AppImage (`vendors/RetroArch-Linux-x86_64.AppImage`)
   3. system `retroarch`
 - Resolve core paths from configured hints and common core directories.
-- Keep runtime lifecycle in Opemux (single active process + stop/poll).
+- Keep runtime lifecycle in OpenEmux (single active process + stop/poll).
 
 ## Delivered
 - RetroArch wrapper launcher.

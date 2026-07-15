@@ -1,0 +1,64 @@
+/* OpenEmux — only rules Adwaita does not already provide. Layout, spacing,
+   typography, dark mode and elevation come from libadwaita style classes. */
+
+/* ===== ROM Cards (cover grid) ===== */
+.rom-card {
+    border-radius: 10px;
+    padding: 8px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.rom-card-hover {
+    background-color: alpha(@accent_bg_color, 0.12);
+    transform: translateY(-3px);
+}
+
+.rom-cover {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.rom-cover-placeholder {
+    background: linear-gradient(145deg, @card_bg_color, alpha(@accent_bg_color, 0.15));
+    border-radius: 8px;
+    border: 1px solid alpha(@card_shade_color, 0.6);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.placeholder-icon {
+    opacity: 0.4;
+}
+
+.rom-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: @window_fg_color;
+}
+
+/* ===== Play Overlay ===== */
+.play-overlay {
+    background-color: alpha(black, 0.55);
+    border-radius: 8px;
+}
+
+.play-icon {
+    color: white;
+    opacity: 0.95;
+}
+
+.favorite-badge {
+    color: #f6c90e;
+    background-color: alpha(black, 0.45);
+    border-radius: 999px;
+    padding: 4px;
+}
+
+.favorites-sidebar-icon {
+    color: #f6c90e;
+}
+
+/* ===== Input Mapping (preferences) ===== */
+.input-mapping-current {
+    background-color: alpha(@accent_bg_color, 0.18);
+    border-radius: 8px;
+}

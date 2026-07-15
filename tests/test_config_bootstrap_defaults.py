@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.config import ConfigManager
+from openemux.core.config import ConfigManager
 
 
 class ConfigBootstrapDefaultsTests(unittest.TestCase):

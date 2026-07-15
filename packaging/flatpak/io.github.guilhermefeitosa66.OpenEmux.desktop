@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Opemux
+Name=OpenEmux
 Comment=Browse and play your retro game library
-Exec=opemux
+Exec=openemux
 Icon=io.github.guilhermefeitosa66.OpenEmux
 Terminal=false
 Categories=Game;Emulator;

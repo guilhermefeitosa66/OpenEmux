@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from opemux.core.cover_sync import (
+from openemux.core.cover_sync import (
     _build_cover_url,
     _candidate_names,
     _normalize_rom_name,
@@ -83,13 +83,13 @@ class CoverSyncTests(unittest.TestCase):
         library = {"snes": [{"name": "Chrono Trigger", "path": "/tmp/Chrono Trigger.sfc", "console": "snes"}]}
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("opemux.core.cover_sync.find_local_cover", return_value=None),
+                patch("openemux.core.cover_sync.find_local_cover", return_value=None),
                 patch(
-                    "opemux.core.cover_sync._remote_cover_candidates",
+                    "openemux.core.cover_sync._remote_cover_candidates",
                     return_value=["u1", "u2", "u3"],
                 ),
                 patch(
-                    "opemux.core.cover_sync._download_cover",
+                    "openemux.core.cover_sync._download_cover",
                     side_effect=[False, False, True],
                 ) as download_mock,
             ):
@@ -108,8 +108,8 @@ class CoverSyncTests(unittest.TestCase):
         library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("opemux.core.cover_sync.find_local_cover", return_value=Path(tmp_dir) / "cover.png"),
-                patch("opemux.core.cover_sync._download_cover") as download_mock,
+                patch("openemux.core.cover_sync.find_local_cover", return_value=Path(tmp_dir) / "cover.png"),
+                patch("openemux.core.cover_sync._download_cover") as download_mock,
             ):
                 summary = _sync_covers(
                     library_by_console=library,
@@ -132,9 +132,9 @@ class CoverSyncTests(unittest.TestCase):
         events = []
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("opemux.core.cover_sync.find_local_cover", return_value=None),
-                patch("opemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
-                patch("opemux.core.cover_sync._download_cover", side_effect=[True, False]),
+                patch("openemux.core.cover_sync.find_local_cover", return_value=None),
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._download_cover", side_effect=[True, False]),
             ):
                 _sync_covers(
                     library_by_console=library,

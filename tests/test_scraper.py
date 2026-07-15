@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.scraper import find_local_cover, remove_local_covers, save_local_cover
+from openemux.core.scraper import find_local_cover, remove_local_covers, save_local_cover
 
 
 class ScraperTests(unittest.TestCase):

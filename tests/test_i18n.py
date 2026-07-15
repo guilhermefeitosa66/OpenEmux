@@ -1,6 +1,6 @@
 import unittest
 
-from opemux.i18n import normalize_locale, tr
+from openemux.i18n import normalize_locale, tr
 
 
 class I18nTests(unittest.TestCase):

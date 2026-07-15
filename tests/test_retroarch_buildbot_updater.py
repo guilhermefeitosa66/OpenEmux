@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from opemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
+from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
 
 
 class _FakeConfigManager:
@@ -55,7 +55,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                 '<a href="snes9x_libretro.so.zip">snes9x</a>'
             ).encode("utf-8")
             with patch(
-                "opemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
                 return_value=_FakeResponse(listing),
             ):
                 manifest = updater.fetch_manifest()
@@ -82,7 +82,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                     return _FakeResponse(zip_bytes)
                 raise AssertionError(f"unexpected url: {url}")
 
-            with patch("opemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_all()
 
             core_path = updater.core_dir / "mgba_libretro.so"
@@ -114,7 +114,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                     return _FakeResponse(slang_zip_bytes)
                 raise AssertionError(f"unexpected url: {url}")
 
-            with patch("opemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_shader_packs_if_missing()
 
             self.assertEqual(summary["downloaded"], 2)

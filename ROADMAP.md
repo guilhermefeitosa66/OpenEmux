@@ -1,4 +1,4 @@
-# Opemux Project Roadmap
+# OpenEmux Project Roadmap
 
 This document outlines delivery phases and current status.
 
@@ -6,7 +6,7 @@ This document outlines delivery phases and current status.
 **Goal**: Establish the application structure, UI, and basic configuration management.
 -   [x] Initialize project structure (Python/GTK4).
 -   [x] Implement main window with Sidebar (Consoles) and Main Area (ROM Grid).
--   [x] Create configuration system (`~/.opemux/config.yaml`).
+-   [x] Create configuration system (`~/.openemux/config.yaml`).
 -   [x] Implement ROM scanning in `~/games/roms/` (recursive scan per console).
 -   [x] Display placeholder cover art for ROMs.
 
@@ -21,16 +21,16 @@ This document outlines delivery phases and current status.
 -   [x] Read local covers from `<roms>/covers/<console>/<rom_name>.png|jpg|webp`.
 -   [x] Save downloaded covers into the same local structure.
 -   [x] Add async `Sync Covers` background job with scope selector (current console or all).
--   [x] Add playlist index files (`~/.opemux/playlists/<console>.list`) and manual rescan flow.
+-   [x] Add playlist index files (`~/.openemux/playlists/<console>.list`) and manual rescan flow.
 -   [ ] Add cover metadata index and refresh/re-download policy.
 
 ## Phase 4: Runtime UX Integration
 **Goal**: Improve user experience while running external RetroArch process.
--   [x] Build runtime bridge in Opemux (single active process, launch/stop lifecycle handling).
+-   [x] Build runtime bridge in OpenEmux (single active process, launch/stop lifecycle handling).
 -   [ ] Add optional embedded runtime (`runtime.mode=integrated_core`) for fully unified game window.
 
 ## Phase 5: Input Management (Application-Level)
-**Goal**: Configure controls in Opemux, not directly in RetroArch UI.
+**Goal**: Configure controls in OpenEmux, not directly in RetroArch UI.
 -   [x] Add per-system global control profiles in config.
 -   [x] Build controls settings UI for keyboard and gamepad.
 -   [x] Apply mappings consistently at runtime.
@@ -45,7 +45,7 @@ This document outlines delivery phases and current status.
 **Goal**: Make first-time setup fully automated and transparent to users.
 -   [x] Add startup bootstrap state and first-run detection in config.
 -   [x] Create first-boot loading flow with progress messages.
--   [x] Ensure baseline Opemux folders/files are generated on first run.
+-   [x] Ensure baseline OpenEmux folders/files are generated on first run.
 -   [x] Seed playlists and per-console input profiles automatically.
 -   [x] Download/install RetroArch cores via Buildbot updater integration.
 -   [x] Add retry entrypoint under Settings > System for failed/pending setup.

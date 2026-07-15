@@ -31,7 +31,7 @@ jobs:
         run: python -m pip install --upgrade pip bandit pip-audit
 
       - name: Bandit (static application security testing)
-        # Skip subprocess findings (B404/B603/B607): Opemux intentionally launches
+        # Skip subprocess findings (B404/B603/B607): OpenEmux intentionally launches
         # RetroArch and xdg-open with argument lists (never shell=True).
         run: bandit -r src --severity-level medium --confidence-level medium --skip B404,B603,B607
 

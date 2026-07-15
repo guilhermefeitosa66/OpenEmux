@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.first_boot import FirstBootBootstrapper
+from openemux.core.first_boot import FirstBootBootstrapper
 
 
 class _FakeConfigManager:
@@ -97,7 +97,7 @@ class FirstBootBootstrapperTests(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(cfg.state["status"], "completed")
-        self.assertIn("opemux_config_files", cfg.state["completed_steps"])
+        self.assertIn("openemux_config_files", cfg.state["completed_steps"])
         self.assertIn("retroarch_download_all_cores", cfg.state["completed_steps"])
         self.assertIn("bootstrap_completed", events)
 

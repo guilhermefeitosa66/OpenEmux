@@ -4,13 +4,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from opemux.core.paths import get_project_root, is_running_in_appimage, resolve_project_path
+from openemux.core.paths import get_project_root, is_running_in_appimage, resolve_project_path
 
 
 class PathsTests(unittest.TestCase):
     def test_get_project_root_prefers_environment_override(self):
         with TemporaryDirectory() as tmp_dir:
-            with patch.dict(os.environ, {"OPEMUX_PROJECT_ROOT": tmp_dir}, clear=False):
+            with patch.dict(os.environ, {"OPENEMUX_PROJECT_ROOT": tmp_dir}, clear=False):
                 self.assertEqual(get_project_root(), Path(tmp_dir).resolve())
 
     def test_is_running_in_appimage_checks_standard_vars(self):
@@ -21,7 +21,7 @@ class PathsTests(unittest.TestCase):
 
     def test_resolve_project_path_uses_project_root_for_relative_values(self):
         with TemporaryDirectory() as tmp_dir:
-            with patch.dict(os.environ, {"OPEMUX_PROJECT_ROOT": tmp_dir}, clear=False):
+            with patch.dict(os.environ, {"OPENEMUX_PROJECT_ROOT": tmp_dir}, clear=False):
                 resolved = resolve_project_path("vendors/RetroArch-Linux-x86_64.AppImage")
         self.assertEqual(
             resolved,
@@ -30,7 +30,7 @@ class PathsTests(unittest.TestCase):
 
     def test_get_project_root_uses_appdir_layout_when_available(self):
         with TemporaryDirectory() as tmp_dir:
-            bundled_root = Path(tmp_dir) / "usr" / "lib" / "opemux"
+            bundled_root = Path(tmp_dir) / "usr" / "lib" / "openemux"
             bundled_root.mkdir(parents=True, exist_ok=True)
             with patch.dict(os.environ, {"APPDIR": tmp_dir}, clear=True):
                 self.assertEqual(get_project_root(), bundled_root.resolve())

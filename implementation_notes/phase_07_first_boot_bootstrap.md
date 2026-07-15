@@ -1,11 +1,11 @@
 # Phase 07: First-Boot Bootstrap
 
 ## Goal
-Deliver a transparent first-run setup that prepares Opemux and RetroArch with minimal user friction.
+Deliver a transparent first-run setup that prepares OpenEmux and RetroArch with minimal user friction.
 
 ## Scope
 - Detect first boot and run a blocking setup flow before opening the main library UI.
-- Ensure `~/.opemux` baseline is fully created (config, runtime dir, playlists, input profiles).
+- Ensure `~/.openemux` baseline is fully created (config, runtime dir, playlists, input profiles).
 - Ensure ROM canonical folder tree exists (`<roms>/<SYSTEM>/`, `<roms>/<SYSTEM>/covers`, `<roms>/<SYSTEM>/bios`).
 - Run a RetroArch core bootstrap using official Buildbot endpoints and install all available Linux x86_64 cores.
 - Expose progress to users via loading window and step/status subtitles.
@@ -22,7 +22,7 @@ Deliver a transparent first-run setup that prepares Opemux and RetroArch with mi
 - Bootstrap status persisted in `config.yaml` (`setup.bootstrap.*`).
 
 ## Failure Policy
-- If setup fails (network/offline/partial updater failures), Opemux continues to open.
+- If setup fails (network/offline/partial updater failures), OpenEmux continues to open.
 - Bootstrap state is marked `failed` and can be retried from Settings > System.
 
 ## Next

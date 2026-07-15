@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.scanner import RomScanner
+from openemux.core.scanner import RomScanner
 
 
 class ScannerTests(unittest.TestCase):

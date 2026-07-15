@@ -2,8 +2,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.playlist_manager import PlaylistManager
-from opemux.core.scanner import RomScanner
+from openemux.core.playlist_manager import PlaylistManager
+from openemux.core.scanner import RomScanner
 
 
 class _DummyConfig:

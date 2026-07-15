@@ -3,9 +3,9 @@
 **Goal:** Establish the GTK4 application shell, project structure, and ROM discovery baseline.
 
 ## Scope
-- Create `src/opemux` package and app entrypoint.
+- Create `src/openemux` package and app entrypoint.
 - Build main window with sidebar (NES/SNES/GBA) and ROM grid.
-- Implement config manager (`~/.opemux/config.yaml`).
+- Implement config manager (`~/.openemux/config.yaml`).
 - Implement recursive scanner by console folder.
 - Show placeholder cards for ROMs without cover art.
 

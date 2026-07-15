@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from opemux.core.retroarch_launcher import RetroArchLauncher
+from openemux.core.retroarch_launcher import RetroArchLauncher
 
 
 class _DummyConfig:
@@ -71,7 +71,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             cfg = _DummyConfig(base, binary, core)
             launcher = RetroArchLauncher(base, cfg)
 
-            with patch("opemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 proc, error = launcher.launch_process("/tmp/game.cue", "PS")
 
         self.assertIsNone(proc)
@@ -92,7 +92,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             (bios_dir / "scph5501.bin").write_bytes(b"bios")
             launcher = RetroArchLauncher(base, cfg)
 
-            with patch("opemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.cue", "PS")
 
@@ -117,7 +117,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
             launcher = RetroArchLauncher(base, cfg)
 
-            with patch("opemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
                 args, kwargs = popen_mock.call_args

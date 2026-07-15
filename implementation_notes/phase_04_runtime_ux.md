@@ -5,7 +5,7 @@
 ## Scope
 - Track active process state.
 - Block concurrent game launches.
-- Provide explicit stop action from Opemux UI.
+- Provide explicit stop action from OpenEmux UI.
 - Poll process completion and show user feedback.
 
 ## Delivered

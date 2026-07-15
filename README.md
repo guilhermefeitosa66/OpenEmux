@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Opemux" width="180"/>
+  <img src="docs/assets/logo.png" alt="OpenEmux" width="180"/>
 </p>
 
-<h1 align="center">Opemux</h1>
+<h1 align="center">OpenEmux</h1>
 
 <p align="center">
   A beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable for everyone.
@@ -32,9 +32,9 @@
 
 ## About
 
-[RetroArch](https://www.retroarch.com/) is one of the most powerful and versatile emulation platforms ever created — but its interface can be intimidating, especially for users who just want to pick up a controller and play. Opemux wraps RetroArch in a clean, intuitive frontend so you can enjoy your retro game library without touching a single config file.
+[RetroArch](https://www.retroarch.com/) is one of the most powerful and versatile emulation platforms ever created — but its interface can be intimidating, especially for users who just want to pick up a controller and play. OpenEmux wraps RetroArch in a clean, intuitive frontend so you can enjoy your retro game library without touching a single config file.
 
-Opemux was directly inspired by [OpenEmu](https://openemu.org/), the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. Since OpenEmu is exclusive to macOS, I built Opemux to bring that same polished experience to Linux.
+OpenEmux was directly inspired by [OpenEmu](https://openemu.org/), the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. Since OpenEmu is exclusive to macOS, I built OpenEmux to bring that same polished experience to Linux.
 
 > This project would not be possible without the incredible work done by the [RetroArch](https://www.retroarch.com/) and [libretro](https://www.libretro.com/) teams, and the design philosophy of [OpenEmu](https://openemu.org/). Huge thanks to both projects. ❤️
 
@@ -44,13 +44,13 @@ Opemux was directly inspired by [OpenEmu](https://openemu.org/), the beloved mac
 
 > *"With OpenEmu, it is extremely easy to add, browse, organize and — with a compatible gamepad — play those favorite games (ROMs) you already own."* — the OpenEmu project
 
-Opemux follows that same philosophy. It is a **front-end for RetroArch**, built to make emulation approachable and enjoyable — it is **not** a source of games. Opemux ships **no games, ROMs, or BIOS files**, and never will.
+OpenEmux follows that same philosophy. It is a **front-end for RetroArch**, built to make emulation approachable and enjoyable — it is **not** a source of games. OpenEmux ships **no games, ROMs, or BIOS files**, and never will.
 
 - **Use only content you legally own.** Dump your own cartridges and discs, or use backups of games you have purchased.
 - **We do not support or condone piracy.** Downloading copyrighted games you don't own is against the law in most countries — and it isn't what this project is for.
 - **Emulation preserves history.** So much of gaming's history lives on fragile, aging hardware and media. Emulation keeps that culture — the art, the music, the design — playable and studyable for the future. That preservation is legitimate and important, and it works best when it respects the people who created these games.
 
-Opemux exists to give that legitimate, personal-library experience the polished, native Linux home it deserves.
+OpenEmux exists to give that legitimate, personal-library experience the polished, native Linux home it deserves.
 
 ---
 
@@ -58,27 +58,27 @@ Opemux exists to give that legitimate, personal-library experience the polished,
 
 ### 1. Download the AppImage
 
-Head to the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest) and download the latest `Opemux-x86_64.AppImage`.
+Head to the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest) and download the latest `OpenEmux-x86_64.AppImage`.
 
 ### 2. Make it executable
 
 ```bash
-chmod +x Opemux-x86_64.AppImage
+chmod +x OpenEmux-x86_64.AppImage
 ```
 
 ### 3. Run it
 
 ```bash
-./Opemux-x86_64.AppImage
+./OpenEmux-x86_64.AppImage
 ```
 
 > On systems without FUSE configured, use:
 >
 > ```bash
-> APPIMAGE_EXTRACT_AND_RUN=1 ./Opemux-x86_64.AppImage
+> APPIMAGE_EXTRACT_AND_RUN=1 ./OpenEmux-x86_64.AppImage
 > ```
 
-On first launch, Opemux will automatically set up its configuration directory, download the required libretro cores from the RetroArch Buildbot, and get everything ready for you.
+On first launch, OpenEmux will automatically set up its configuration directory, download the required libretro cores from the RetroArch Buildbot, and get everything ready for you.
 
 ---
 
@@ -89,24 +89,24 @@ On first launch, Opemux will automatically set up its configuration directory, d
 Browse your game collection with cover art, organized by console — just like a real game shelf.
 
 <p align="center">
-  <img src="docs/assets/opemux-roms-nes.png" alt="NES Library" width="48%"/>
+  <img src="docs/assets/openemux-roms-nes.png" alt="NES Library" width="48%"/>
   &nbsp;
-  <img src="docs/assets/opemux-roms-snes.png" alt="SNES Library" width="48%"/>
+  <img src="docs/assets/openemux-roms-snes.png" alt="SNES Library" width="48%"/>
 </p>
 <p align="center">
-  <img src="docs/assets/opemux-roms-gba.png" alt="GBA Library" width="48%"/>
+  <img src="docs/assets/openemux-roms-gba.png" alt="GBA Library" width="48%"/>
   &nbsp;
-  <img src="docs/assets/opemux-roms-n64.png" alt="N64 Library" width="48%"/>
+  <img src="docs/assets/openemux-roms-n64.png" alt="N64 Library" width="48%"/>
 </p>
 
 ### Gameplay
 
-Launch any game directly from Opemux. RetroArch runs in the background, fully configured and ready to go.
+Launch any game directly from OpenEmux. RetroArch runs in the background, fully configured and ready to go.
 
 <p align="center">
-  <img src="docs/assets/opemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
+  <img src="docs/assets/openemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
   &nbsp;
-  <img src="docs/assets/opemux-gameplay-gba.png" alt="GBA Gameplay" width="48%"/>
+  <img src="docs/assets/openemux-gameplay-gba.png" alt="GBA Gameplay" width="48%"/>
 </p>
 
 ### Settings
@@ -114,11 +114,11 @@ Launch any game directly from Opemux. RetroArch runs in the background, fully co
 A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, input mappings, and shaders — all without leaving the app.
 
 <p align="center">
-  <img src="docs/assets/opemux-settings.png" alt="General Settings" width="32%"/>
+  <img src="docs/assets/openemux-settings.png" alt="General Settings" width="32%"/>
   &nbsp;
-  <img src="docs/assets/opemux-settings-bios.png" alt="BIOS Settings" width="32%"/>
+  <img src="docs/assets/openemux-settings-bios.png" alt="BIOS Settings" width="32%"/>
   &nbsp;
-  <img src="docs/assets/opemux-settings-input.png" alt="Input Settings" width="32%"/>
+  <img src="docs/assets/openemux-settings-input.png" alt="Input Settings" width="32%"/>
 </p>
 
 - **General / ROMs** — set your ROM directory, scan for new games, and sync cover art from the libretro thumbnail repository.
@@ -129,10 +129,10 @@ A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, 
 
 ## Support the Project
 
-Opemux is free and open source. If you find it useful, consider buying me a coffee!
+OpenEmux is free and open source. If you find it useful, consider buying me a coffee!
 
 <p align="center">
-  <a href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&no_recurring=0&item_name=Support+Opemux%3A+a+Linux+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&currency_code=BRL" target="_blank">
+  <a href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&no_recurring=0&item_name=Support+OpenEmux%3A+a+Linux+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&currency_code=BRL" target="_blank">
     <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="Donate with PayPal"/>
   </a>
 </p>
@@ -149,7 +149,7 @@ Opemux is free and open source. If you find it useful, consider buying me a coff
 
 ## Build from Source
 
-If you want to hack on Opemux or build the AppImage yourself:
+If you want to hack on OpenEmux or build the AppImage yourself:
 
 ```bash
 # Clone the repo
@@ -173,7 +173,7 @@ make appimage
 
 ## Running from Source (no build required)
 
-If you just want to run Opemux from source without building the AppImage:
+If you just want to run OpenEmux from source without building the AppImage:
 
 ```bash
 # Clone the repo
@@ -199,17 +199,17 @@ make run
 
 ## License
 
-Opemux is licensed under the **MIT License** — see the [LICENSE](LICENSE) file.
+OpenEmux is licensed under the **MIT License** — see the [LICENSE](LICENSE) file.
 
-**Is MIT compatible with RetroArch being GPLv3?** Yes. Opemux does not include,
+**Is MIT compatible with RetroArch being GPLv3?** Yes. OpenEmux does not include,
 copy, or link any RetroArch code — it launches RetroArch as a **separate
 external program**. The GPL's copyleft only extends to *derivative/combined*
 works (linking or incorporating GPL code), not to programs that merely run
-another program at arm's length, so Opemux's own code stays MIT. For reference,
+another program at arm's length, so OpenEmux's own code stays MIT. For reference,
 RetroArch is [GPLv3](https://github.com/libretro/RetroArch) while the libretro
 API itself is MIT.
 
-When Opemux **bundles and redistributes** RetroArch (the vendored AppImage) or
+When OpenEmux **bundles and redistributes** RetroArch (the vendored AppImage) or
 downloads libretro cores, those components keep their own licenses (GPLv3 and
 others) — a "mere aggregation" of independently-licensed software. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details. *(Informational,

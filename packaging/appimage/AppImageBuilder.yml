@@ -2,35 +2,35 @@ version: 1
 
 script:
   - rm -rf AppDir appimage-builder-cache
-  - mkdir -p AppDir/usr/lib/opemux
+  - mkdir -p AppDir/usr/lib/openemux
   - mkdir -p AppDir/usr/lib/python3/dist-packages
   - mkdir -p AppDir/usr/bin
   - mkdir -p AppDir/lib
   - mkdir -p AppDir/runtime/compat/usr/lib64
   - ln -sfn runtime/compat/usr/lib64 AppDir/lib64
-  - cp -r src AppDir/usr/lib/opemux/
-  - cp -r src/opemux AppDir/usr/lib/python3/dist-packages/
-  - cp -r vendors AppDir/usr/lib/opemux/
-  - cp requirements.lock AppDir/usr/lib/opemux/
-  - cp README.md LICENSE AppDir/usr/lib/opemux/
-  - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/opemux-pydeps.lock
-  - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/opemux-pydeps.lock
-  - gcc -static packaging/appimage/opemux-launcher.c -O2 -s -o AppDir/usr/bin/opemux-launcher
+  - cp -r src AppDir/usr/lib/openemux/
+  - cp -r src/openemux AppDir/usr/lib/python3/dist-packages/
+  - cp -r vendors AppDir/usr/lib/openemux/
+  - cp requirements.lock AppDir/usr/lib/openemux/
+  - cp README.md LICENSE AppDir/usr/lib/openemux/
+  - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/openemux-pydeps.lock
+  - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/openemux-pydeps.lock
+  - gcc -static packaging/appimage/openemux-launcher.c -O2 -s -o AppDir/usr/bin/openemux-launcher
   - install -Dm755 packaging/appimage/AppRun AppDir/AppRun
-  - install -Dm755 packaging/appimage/opemux-wrapper AppDir/usr/bin/opemux
+  - install -Dm755 packaging/appimage/openemux-wrapper AppDir/usr/bin/openemux
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
   - install -Dm644 packaging/appimage/io.github.guilhermefeitosa66.OpenEmux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
-  - install -Dm644 src/opemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
+  - install -Dm644 src/openemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 
 AppDir:
   path: AppDir
   app_info:
     id: io.github.guilhermefeitosa66.OpenEmux
-    name: Opemux
+    name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
     version: "1.0.0"
-    exec: usr/bin/opemux-launcher
+    exec: usr/bin/openemux-launcher
   apt:
     arch: amd64
     sources:

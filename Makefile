@@ -1,4 +1,4 @@
-# Opemux Makefile
+# OpenEmux Makefile
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python3
@@ -12,7 +12,7 @@ all: setup
 # Full bootstrap: from fresh clone to running (requires sudo for sys deps)
 bootstrap: install-sys-deps venv setup
 	@echo ""
-	@echo "✅ Opemux is ready! Run 'make run' to start."
+	@echo "✅ OpenEmux is ready! Run 'make run' to start."
 
 # System dependencies for Ubuntu/Mint
 install-sys-deps:
@@ -35,7 +35,7 @@ lock-deps:
 
 # Running the app
 run:
-	PYTHONPATH=src $(PYTHON) src/opemux/main.py
+	PYTHONPATH=src $(PYTHON) src/openemux/main.py
 
 check-retroarch:
 	@echo "Checking RetroArch binary..."

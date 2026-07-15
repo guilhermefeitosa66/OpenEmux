@@ -1,18 +1,18 @@
 # Phase 05: Input Management
 
 ## Goal
-Move input mapping ownership to Opemux while keeping RetroArch as runtime backend.
+Move input mapping ownership to OpenEmux while keeping RetroArch as runtime backend.
 
 ## Implemented Scope
 - Per-console input profiles stored outside `config.yaml`.
 - Separate mappings for keyboard and gamepad profile (`Gamepad Port 1`).
 - GTK-based input mapping screen under Settings > Input.
-- Runtime adapter that converts Opemux mappings into RetroArch overrides at launch.
+- Runtime adapter that converts OpenEmux mappings into RetroArch overrides at launch.
 - Default profile bootstrap on first run.
 
 ## Data Model
 Profiles are stored at:
-- `~/.opemux/input/<CONSOLE>.config`
+- `~/.openemux/input/<CONSOLE>.config`
 
 Format:
 - JSON with `version`, `console`, `active_device`, `devices.keyboard`, `devices.gamepad_p1`.
@@ -46,10 +46,10 @@ Current policy for complex systems:
 - `Fast-forward toggle`: `f6`
 
 ## RetroArch Integration
-At launch, Opemux now:
+At launch, OpenEmux now:
 1. Loads active input device mapping for selected console.
 2. Converts action bindings to RetroArch `input_*` keys.
-3. Writes a temporary override in `~/.opemux/runtime/input_<console>_<timestamp>.cfg`.
+3. Writes a temporary override in `~/.openemux/runtime/input_<console>_<timestamp>.cfg`.
 4. Launches RetroArch using `--appendconfig <override>`.
 
 Notes:
@@ -64,7 +64,7 @@ Settings > Input includes:
 - Editable list of action bindings
 - Buttons: `Save`, `Reset defaults`
 
-Saving writes to `~/.opemux/input/<CONSOLE>.config`.
+Saving writes to `~/.openemux/input/<CONSOLE>.config`.
 Reset restores defaults for that console.
 
 ## Known Limitations (Current Phase)

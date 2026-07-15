@@ -2,8 +2,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from opemux.core.bios_catalog import get_required_for_core
-from opemux.core.bios_manager import find_missing_required_for_core, scan_console_bios_status
+from openemux.core.bios_catalog import get_required_for_core
+from openemux.core.bios_manager import find_missing_required_for_core, scan_console_bios_status
 
 
 class _DummyConfig:
