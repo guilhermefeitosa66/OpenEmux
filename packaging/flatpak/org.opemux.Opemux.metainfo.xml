@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.opemux.Opemux</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Opemux</name>
+  <summary>Browse and play your retro game library</summary>
+
+  <developer id="io.github.guilhermefeitosa66">
+    <name>Guilherme Feitoza</name>
+  </developer>
+
+  <description>
+    <p>
+      Opemux is a clean, GNOME-native frontend that makes RetroArch simple and
+      enjoyable: add, browse and organize your retro game library by console and,
+      with a compatible gamepad, play the games you already own. It was inspired
+      by OpenEmu, bringing that same polished experience to Linux.
+    </p>
+    <p>
+      Opemux runs games through RetroArch, so the RetroArch Flatpak must be
+      installed and its cores downloaded (via RetroArch's own Online Updater).
+      Install it with: flatpak install flathub org.libretro.RetroArch
+    </p>
+    <p>
+      Opemux ships no games, ROMs or BIOS files. Use only content you legally
+      own. Emulation matters for preserving the history and culture of video
+      games — please respect the people who created them.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>A cover-art library organized by console, with favorites</li>
+      <li>Per-console keyboard and gamepad mappings</li>
+      <li>Per-console video shaders</li>
+      <li>BIOS status checks and cover-art syncing</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">org.opemux.Opemux.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>The cover-art library for a console</caption>
+      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/opemux-roms-nes.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Browsing another console's games</caption>
+      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/opemux-roms-snes.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Playing a game through RetroArch</caption>
+      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/opemux-gameplay-gba.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Preferences</caption>
+      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/opemux-settings.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/guilhermefeitosa66/OpenEmux</url>
+  <url type="bugtracker">https://github.com/guilhermefeitosa66/OpenEmux/issues</url>
+  <url type="donation">https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;currency_code=BRL</url>
+
+  <content_rating type="oars-1.1" />
+
+  <branding>
+    <color type="primary" scheme_preference="light">#3584e4</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+
+  <categories>
+    <category>Game</category>
+    <category>Emulator</category>
+  </categories>
+
+  <keywords>
+    <keyword>emulator</keyword>
+    <keyword>retro</keyword>
+    <keyword>retroarch</keyword>
+    <keyword>games</keyword>
+    <keyword>frontend</keyword>
+  </keywords>
+
+  <releases>
+    <release version="1.0.0" date="2026-07-15">
+      <description>
+        <p>First stable release.</p>
+        <ul>
+          <li>GNOME HIG interface built on libadwaita</li>
+          <li>Cover-art library, per-console input and shaders, BIOS checks</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

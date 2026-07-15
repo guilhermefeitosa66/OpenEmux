@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Opemux
+Comment=Browse and play your retro game library
+Exec=opemux
+Icon=org.opemux.Opemux
+Terminal=false
+Categories=Game;Emulator;
+StartupWMClass=org.opemux.Opemux
+Keywords=emulator;retro;retroarch;games;frontend;
