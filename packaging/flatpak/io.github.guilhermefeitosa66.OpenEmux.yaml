@@ -59,6 +59,5 @@ modules:
       # changes, temporarily replace this with:  - type: dir\n    path: ../..
       - type: git
         url: https://github.com/guilhermefeitosa66/OpenEmux.git
-        # Pin to the release commit. Add a matching `tag:` once a release that
-        # includes the Flatpak packaging is cut (e.g. v1.1.0).
-        commit: 9c9b99e58da740afde631ce7edf054d172096b50
+        tag: v1.1.0
+        commit: b40f9edae7163c9ebb2c1fcc81e7c69f7e09f82c
