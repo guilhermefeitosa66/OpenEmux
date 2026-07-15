@@ -6,7 +6,7 @@ from threading import Thread
 from pathlib import Path
 import shutil
 
-from opemux.core.paths import get_project_root, is_running_in_appimage
+from opemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
 from opemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -24,7 +24,7 @@ def _ensure_gtk_typelibs():
     Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
     remains the recommended system-wide setup.
     """
-    if is_running_in_appimage():
+    if is_running_in_appimage() or is_running_in_flatpak():
         return
 
     system_dirs = [
@@ -91,13 +91,14 @@ from opemux.ui.window import OpemuxWindow
 from opemux.ui.first_boot_window import FirstBootWindow
 from opemux.core.config import ConfigManager
 from opemux.core.first_boot import FirstBootBootstrapper
-from opemux.core.paths import get_project_root, is_running_in_appimage
+from opemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
 
 APP_ID = "org.opemux.Opemux"
 
 
 def _ensure_desktop_integration():
-    if is_running_in_appimage():
+    # In AppImage/Flatpak the desktop file + icon are installed by the package.
+    if is_running_in_appimage() or is_running_in_flatpak():
         return
 
     project_root = get_project_root()

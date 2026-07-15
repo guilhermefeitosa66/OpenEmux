@@ -6,12 +6,16 @@ import yaml
 
 from opemux.i18n import normalize_locale
 from opemux.core.input_profiles import InputProfileManager
+from opemux.core.paths import get_real_home, is_running_in_flatpak
 from opemux.core.shaders import ShaderConfigStore
 from opemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 
+# Private app data stays under the (sandbox-private, real-path) HOME; the ROM
+# library lives under the user's real home so a Flatpak build reaches the same
+# ~/games/roms as the native app via --filesystem=home.
 DEFAULT_CONFIG_DIR = Path.home() / ".opemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
-DEFAULT_ROMS_PATH = Path.home() / "games" / "roms"
+DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
 DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
 DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
@@ -30,7 +34,9 @@ DEFAULT_CONFIG = {
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 "mode": "buildbot_all_cores",
-                "enabled": True,
+                # In Flatpak, core management is delegated to the RetroArch
+                # Flatpak's own updater; Opemux must not download cores.
+                "enabled": not is_running_in_flatpak(),
                 "core_dir": None,
                 "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",

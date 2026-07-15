@@ -8,10 +8,14 @@ import logging
 from opemux.core.bios_catalog import get_required_for_core
 from opemux.core.bios_manager import find_missing_required_for_core
 from opemux.core.input_actions import to_retroarch_overrides
+from opemux.core.paths import get_real_home, is_running_in_flatpak
 from opemux.core.shaders import ShaderCatalog, normalize_shader_id
 from opemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+# The RetroArch Flatpak we delegate to when Opemux itself runs as a Flatpak.
+RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
 
@@ -51,6 +55,27 @@ class RetroArchLauncher:
             runtime_dir=self.config_manager.get_runtime_dir(),
             project_root=self.project_root,
         )
+
+    def _launch_prefix(self):
+        """Return (argv_prefix, error).
+
+        Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
+        flatpak-spawn (both apps see the same absolute paths under the real
+        home, which RetroArch reads via its own ``--filesystem=host``).
+        Otherwise resolve a native/vendored RetroArch binary.
+        """
+        if is_running_in_flatpak():
+            if not shutil.which("flatpak-spawn"):
+                return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
+            return ["flatpak-spawn", "--host", "flatpak", "run", RETROARCH_FLATPAK_ID], None
+
+        retroarch_path = self._resolve_retroarch_binary()
+        if not retroarch_path:
+            return None, (
+                "RetroArch binary not found. Set runtime.retroarch.binary "
+                "or add RetroArch AppImage under vendors/."
+            )
+        return [retroarch_path], None
 
     def _resolve_retroarch_binary(self):
         configured = self.config_manager.get_retroarch_binary()
@@ -92,9 +117,12 @@ class RetroArchLauncher:
                 return str(hint_path)
 
         candidates = DEFAULT_CORE_CANDIDATES.get(system_id, [])
+        # Use the real home so a Flatpak build resolves the RetroArch Flatpak's
+        # cores dir (get_real_home() == Path.home() outside Flatpak).
+        real_home = get_real_home()
         home_dirs = [
-            Path.home() / ".config" / "retroarch" / "cores",
-            Path.home() / ".var" / "app" / "org.libretro.RetroArch" / "config" / "retroarch" / "cores",
+            real_home / ".config" / "retroarch" / "cores",
+            real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
             self.project_root / "vendors" / "retroarch-assets" / "cores",
         ]
         search_dirs = [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
@@ -138,16 +166,19 @@ class RetroArchLauncher:
 
     def launch_process(self, rom_path, console):
         system_id = resolve_system_id(console)
-        retroarch_path = self._resolve_retroarch_binary()
-        if not retroarch_path:
-            return None, (
-                "RetroArch binary not found. Set runtime.retroarch.binary "
-                "or add RetroArch AppImage under vendors/."
-            )
+        launch_prefix, prefix_error = self._launch_prefix()
+        if prefix_error:
+            return None, prefix_error
 
         core_path = self._find_core_path(system_id)
         if not core_path:
             candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
+            if is_running_in_flatpak():
+                return None, (
+                    f"No RetroArch core found for {system_id}. Install the RetroArch "
+                    f"Flatpak and, in its Online Updater, download a core for {system_id} "
+                    f"(tried: {candidates})."
+                )
             return None, (
                 f"No RetroArch core found for {system_id}. "
                 f"Tried common core dirs and these core names: {candidates}. "
@@ -168,7 +199,7 @@ class RetroArchLauncher:
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
         shader_path = self.shader_catalog.resolve_shader_path(shader_id)
 
-        cmd = [retroarch_path, "-L", core_path]
+        cmd = [*launch_prefix, "-L", core_path]
         runtime_override = self._write_runtime_override(
             system_id,
             core_filename=core_filename,
