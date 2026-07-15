@@ -8,11 +8,11 @@
 # Local test build:
 #   flatpak install -y flathub org.gnome.Platform//48 org.gnome.Sdk//48 org.flatpak.Builder
 #   flatpak run org.flatpak.Builder --force-clean --user --install \
-#     build-dir packaging/flatpak/org.opemux.Opemux.yaml
-#   flatpak run org.opemux.Opemux
+#     build-dir packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml
+#   flatpak run io.github.guilhermefeitosa66.OpenEmux
 #
 # For the Flathub submission, pin the `opemux` module source to a tagged commit.
-app-id: org.opemux.Opemux
+app-id: io.github.guilhermefeitosa66.OpenEmux
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
@@ -45,14 +45,14 @@ modules:
     build-commands:
       - pip3 install --verbose --exists-action=i --no-index --no-build-isolation
         --prefix=${FLATPAK_DEST} .
-      - install -Dm644 packaging/flatpak/org.opemux.Opemux.metainfo.xml
-        ${FLATPAK_DEST}/share/metainfo/org.opemux.Opemux.metainfo.xml
-      - install -Dm644 packaging/flatpak/org.opemux.Opemux.desktop
-        ${FLATPAK_DEST}/share/applications/org.opemux.Opemux.desktop
-      - install -Dm644 packaging/flatpak/org.opemux.Opemux.png
-        ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/org.opemux.Opemux.png
+      - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
+        ${FLATPAK_DEST}/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
+      - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.desktop
+        ${FLATPAK_DEST}/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+      - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.png
+        ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
       - install -Dm644 LICENSE
-        ${FLATPAK_DEST}/share/licenses/org.opemux.Opemux/LICENSE
+        ${FLATPAK_DEST}/share/licenses/io.github.guilhermefeitosa66.OpenEmux/LICENSE
     sources:
       # Flathub builds from the app's git repo. Pin `commit:` (and `tag:`) to a
       # specific release for the Flathub PR. For a local test against uncommitted

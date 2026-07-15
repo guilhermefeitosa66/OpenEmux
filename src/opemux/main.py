@@ -93,7 +93,7 @@ from opemux.core.config import ConfigManager
 from opemux.core.first_boot import FirstBootBootstrapper
 from opemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
 
-APP_ID = "org.opemux.Opemux"
+APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
 
 def _ensure_desktop_integration():

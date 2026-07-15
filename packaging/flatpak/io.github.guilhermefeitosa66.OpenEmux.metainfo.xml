@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.opemux.Opemux</id>
+  <id>io.github.guilhermefeitosa66.OpenEmux</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <name>Opemux</name>
@@ -36,7 +36,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">org.opemux.Opemux.desktop</launchable>
+  <launchable type="desktop-id">io.github.guilhermefeitosa66.OpenEmux.desktop</launchable>
 
   <screenshots>
     <screenshot type="default">

@@ -278,7 +278,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _show_about(self):
         about = Adw.AboutDialog()
         about.set_application_name(self.t("app.title"))
-        about.set_application_icon(self.get_application().get_application_id() or "org.opemux.Opemux")
+        about.set_application_icon(self.get_application().get_application_id() or "io.github.guilhermefeitosa66.OpenEmux")
         about.set_developer_name("Opemux")
         about.set_version(__version__)
         about.set_comments(self.t("about.comments"))

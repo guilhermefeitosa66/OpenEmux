@@ -20,15 +20,15 @@ script:
   - install -Dm755 packaging/appimage/opemux-wrapper AppDir/usr/bin/opemux
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
-  - install -Dm644 packaging/appimage/org.opemux.Opemux.desktop AppDir/usr/share/applications/org.opemux.Opemux.desktop
-  - install -Dm644 src/opemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/org.opemux.Opemux.png
+  - install -Dm644 packaging/appimage/io.github.guilhermefeitosa66.OpenEmux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+  - install -Dm644 src/opemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 
 AppDir:
   path: AppDir
   app_info:
-    id: org.opemux.Opemux
+    id: io.github.guilhermefeitosa66.OpenEmux
     name: Opemux
-    icon: org.opemux.Opemux
+    icon: io.github.guilhermefeitosa66.OpenEmux
     version: "1.0.0"
     exec: usr/bin/opemux-launcher
   apt:
