@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opemux"
+dynamic = ["version"]
+description = "A Linux-native emulator frontend for RetroArch, inspired by OpenEmu"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Guilherme Feitoza" }]
+# PyGObject and pycairo are provided by the GNOME runtime / system packages and
+# are intentionally not listed here so `pip install .` stays buildable offline
+# (Flatpak) and against distro GObject-introspection.
+dependencies = ["PyYAML"]
+
+[project.urls]
+Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
+Issues = "https://github.com/guilhermefeitosa66/OpenEmux/issues"
+
+[project.scripts]
+opemux = "opemux.main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.dynamic]
+version = { attr = "opemux.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+opemux = [
+    "ui/style.css",
+    "ui/assets/images/*.png",
+    "ui/assets/images/cartridges/*.png",
+    "ui/assets/icons/systems/*.png",
+    "ui/assets/icons/controllers/*.png",
+    "ui/assets/icons/settings/*.png",
+]
