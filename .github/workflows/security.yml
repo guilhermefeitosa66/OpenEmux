@@ -28,17 +28,17 @@ jobs:
           python-version: '3.12'
 
       - name: Install scanners
-        run: |
-          python -m pip install --upgrade pip
-          pip install bandit pip-audit
+        run: python -m pip install --upgrade pip bandit pip-audit
 
       - name: Bandit (static application security testing)
         # Skip subprocess findings (B404/B603/B607): Opemux intentionally launches
         # RetroArch and xdg-open with argument lists (never shell=True).
         run: bandit -r src --severity-level medium --confidence-level medium --skip B404,B603,B607
 
-      - name: pip-audit (dependency vulnerabilities)
-        # --no-deps audits the exact pinned versions in the lock file without
-        # resolving/compiling them (pycairo/PyGObject need C headers this job
-        # doesn't install); requirements.lock is fully pinned so this is exact.
-        run: pip-audit -r requirements.lock --no-deps
+      - name: Install system libraries for the dependency audit
+        # pycairo/PyGObject build from sdist against these headers; pip-audit
+        # needs them to collect metadata for the pinned requirements.
+        run: make install-sys-deps
+
+      - name: pip-audit (declared dependencies)
+        run: pip-audit -r requirements.lock
