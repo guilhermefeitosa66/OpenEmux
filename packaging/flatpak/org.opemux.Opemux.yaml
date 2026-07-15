@@ -14,7 +14,7 @@
 # For the Flathub submission, pin the `opemux` module source to a tagged commit.
 app-id: org.opemux.Opemux
 runtime: org.gnome.Platform
-runtime-version: '48'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 command: opemux
 
@@ -22,6 +22,7 @@ finish-args:
   # GTK UI
   - --socket=wayland
   - --socket=fallback-x11
+  - --share=ipc
   - --device=dri
   # Cover-art sync from the libretro thumbnail servers
   - --share=network
@@ -58,4 +59,6 @@ modules:
       # changes, temporarily replace this with:  - type: dir\n    path: ../..
       - type: git
         url: https://github.com/guilhermefeitosa66/OpenEmux.git
-        branch: main
+        # Pin to the release commit. Add a matching `tag:` once a release that
+        # includes the Flatpak packaging is cut (e.g. v1.1.0).
+        commit: cf365be9e88a0ae2e73072ae6240112fb3d72bf5
