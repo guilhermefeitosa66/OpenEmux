@@ -82,6 +82,15 @@
   </keywords>
 
   <releases>
+    <release version="1.1.0" date="2026-07-15">
+      <description>
+        <p>First Flatpak release.</p>
+        <ul>
+          <li>Plays games through the RetroArch Flatpak</li>
+          <li>Renamed to OpenEmux for naming consistency</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-07-15">
       <description>
         <p>First stable release.</p>
