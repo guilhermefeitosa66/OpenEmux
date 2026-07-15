@@ -18,6 +18,16 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/guilhermefeitosa66/OpenEmux/actions/workflows/tests.yml">
+    <img src="https://github.com/guilhermefeitosa66/OpenEmux/actions/workflows/tests.yml/badge.svg" alt="Tests status"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/guilhermefeitosa66/OpenEmux/actions/workflows/security.yml">
+    <img src="https://github.com/guilhermefeitosa66/OpenEmux/actions/workflows/security.yml/badge.svg" alt="Security scan status"/>
+  </a>
+</p>
+
 ---
 
 ## About
@@ -30,9 +40,21 @@ Opemux was directly inspired by [OpenEmu](https://openemu.org/), the beloved mac
 
 ---
 
-## Download & Install
+## Play the Games You Own
 
-> **Note:** The AppImage build pipeline is currently being set up. The download link will be active once the first release is published.
+> *"With OpenEmu, it is extremely easy to add, browse, organize and — with a compatible gamepad — play those favorite games (ROMs) you already own."* — the OpenEmu project
+
+Opemux follows that same philosophy. It is a **front-end for RetroArch**, built to make emulation approachable and enjoyable — it is **not** a source of games. Opemux ships **no games, ROMs, or BIOS files**, and never will.
+
+- **Use only content you legally own.** Dump your own cartridges and discs, or use backups of games you have purchased.
+- **We do not support or condone piracy.** Downloading copyrighted games you don't own is against the law in most countries — and it isn't what this project is for.
+- **Emulation preserves history.** So much of gaming's history lives on fragile, aging hardware and media. Emulation keeps that culture — the art, the music, the design — playable and studyable for the future. That preservation is legitimate and important, and it works best when it respects the people who created these games.
+
+Opemux exists to give that legitimate, personal-library experience the polished, native Linux home it deserves.
+
+---
+
+## Download & Install
 
 ### 1. Download the AppImage
 
@@ -177,7 +199,21 @@ make run
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Opemux is licensed under the **MIT License** — see the [LICENSE](LICENSE) file.
+
+**Is MIT compatible with RetroArch being GPLv3?** Yes. Opemux does not include,
+copy, or link any RetroArch code — it launches RetroArch as a **separate
+external program**. The GPL's copyleft only extends to *derivative/combined*
+works (linking or incorporating GPL code), not to programs that merely run
+another program at arm's length, so Opemux's own code stays MIT. For reference,
+RetroArch is [GPLv3](https://github.com/libretro/RetroArch) while the libretro
+API itself is MIT.
+
+When Opemux **bundles and redistributes** RetroArch (the vendored AppImage) or
+downloads libretro cores, those components keep their own licenses (GPLv3 and
+others) — a "mere aggregation" of independently-licensed software. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details. *(Informational,
+not legal advice.)*
 
 ---
 
