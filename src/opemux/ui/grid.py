@@ -1,7 +1,7 @@
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango
+from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango, Gio
 from pathlib import Path
 import logging
 
@@ -275,106 +275,76 @@ class RomItem(Gtk.Box):
             y,
         )
         if button == Gdk.BUTTON_SECONDARY:
-            self._show_context_menu()
+            self._show_context_menu(x, y)
             return
         if button == Gdk.BUTTON_PRIMARY and self.on_launch_callback:
             self.on_launch_callback(self.rom)
 
-    def _show_context_menu(self):
+    def _ensure_action_group(self):
+        if getattr(self, "_action_group", None) is not None:
+            return
+        group = Gio.SimpleActionGroup()
+        for name, handler in (
+            ("toggle-favorite", self._act_toggle_favorite),
+            ("choose-cover", self._act_choose_cover),
+            ("remove-cover", self._act_remove_cover),
+        ):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", handler)
+            group.add_action(action)
+        self.insert_action_group("rom", group)
+        self._action_group = group
+
+    def _show_context_menu(self, x=None, y=None):
         logger.info(
             "rom context menu open: rom=%s console=%s path=%s",
             self.rom.get("name"),
             self.rom.get("console"),
             self.rom.get("path"),
         )
-        if self._context_popover:
+        self._ensure_action_group()
+        if self._context_popover is not None:
             self._context_popover.popdown()
             self._context_popover = None
 
-        popover = Gtk.Popover.new()
-        popover.set_parent(self)
-
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        content.set_margin_top(8)
-        content.set_margin_bottom(8)
-        content.set_margin_start(8)
-        content.set_margin_end(8)
-
         is_favorite = self.is_favorite(self.rom)
-        favorite_label = self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
-        favorite_icon = "starred-symbolic" if is_favorite else "non-starred-symbolic"
-        favorite_btn = self._context_action_button(favorite_label, favorite_icon)
-        favorite_btn.connect("clicked", self._on_context_toggle_favorite)
-        content.append(favorite_btn)
-
-        choose_cover_btn = self._context_action_button(self.t("context.cover.choose"), "image-x-generic-symbolic")
-        choose_cover_btn.connect("clicked", self._on_context_choose_cover)
-        content.append(choose_cover_btn)
-
+        menu = Gio.Menu()
+        fav_label = self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
+        menu.append(fav_label, "rom.toggle-favorite")
+        menu.append(self.t("context.cover.choose"), "rom.choose-cover")
         if self.has_local_cover(self.rom):
-            remove_cover_btn = self._context_action_button(self.t("context.cover.remove"), "user-trash-symbolic")
-            remove_cover_btn.connect("clicked", self._on_context_remove_cover)
-            content.append(remove_cover_btn)
+            menu.append(self.t("context.cover.remove"), "rom.remove-cover")
 
-        popover.set_child(content)
+        popover = Gtk.PopoverMenu.new_from_model(menu)
+        popover.set_parent(self)
+        popover.set_has_arrow(False)
+        popover.set_halign(Gtk.Align.START)
+        if x is not None and y is not None:
+            popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        popover.connect("closed", self._on_context_popover_closed)
         self._context_popover = popover
         popover.popup()
 
-    def _on_context_toggle_favorite(self, _button):
-        logger.info(
-            "rom context action: toggle_favorite rom=%s console=%s path=%s",
-            self.rom.get("name"),
-            self.rom.get("console"),
-            self.rom.get("path"),
-        )
-        if self._context_popover:
-            self._context_popover.popdown()
+    def _on_context_popover_closed(self, popover):
+        if self._context_popover is popover:
+            self._context_popover = None
+        GLib.idle_add(popover.unparent)
+
+    def _act_toggle_favorite(self, _action, _param):
+        logger.info("rom context action: toggle_favorite rom=%s", self.rom.get("name"))
         is_favorite_now = self.on_toggle_favorite(self.rom)
         self.favorite_badge.set_visible(bool(is_favorite_now))
 
-    def _on_context_choose_cover(self, _button):
-        logger.info(
-            "rom context action: choose_cover rom=%s console=%s path=%s",
-            self.rom.get("name"),
-            self.rom.get("console"),
-            self.rom.get("path"),
-        )
-        if self._context_popover:
-            self._context_popover.popdown()
+    def _act_choose_cover(self, _action, _param):
+        logger.info("rom context action: choose_cover rom=%s", self.rom.get("name"))
         self.on_choose_cover(self.rom, self._refresh_cover_after_change)
 
-    def _on_context_remove_cover(self, _button):
-        logger.info(
-            "rom context action: remove_cover rom=%s console=%s path=%s",
-            self.rom.get("name"),
-            self.rom.get("console"),
-            self.rom.get("path"),
-        )
-        if self._context_popover:
-            self._context_popover.popdown()
+    def _act_remove_cover(self, _action, _param):
+        logger.info("rom context action: remove_cover rom=%s", self.rom.get("name"))
         self.on_remove_cover(self.rom, self._refresh_cover_after_change)
 
     def _refresh_cover_after_change(self):
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched)
-
-    def _context_action_button(self, label_text, icon_name):
-        button = Gtk.Button()
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        row.set_margin_top(4)
-        row.set_margin_bottom(4)
-        row.set_margin_start(4)
-        row.set_margin_end(4)
-
-        icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(16)
-        row.append(icon)
-
-        label = Gtk.Label(label=label_text)
-        label.set_halign(Gtk.Align.START)
-        label.set_xalign(0)
-        row.append(label)
-        button.set_child(row)
-        return button
 
 
 class RomGrid(Gtk.FlowBox):

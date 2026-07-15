@@ -1,32 +1,7 @@
-/* ===== Sidebar ===== */
-.sidebar {
-    background-color: @window_bg_color;
-}
+/* Opemux — only rules Adwaita does not already provide. Layout, spacing,
+   typography, dark mode and elevation come from libadwaita style classes. */
 
-.sidebar list {
-    background: transparent;
-}
-
-.sidebar row {
-    border-radius: 8px;
-    margin: 2px 8px;
-    transition: background-color 0.15s ease;
-}
-
-.sidebar row:selected {
-    background-color: @accent_bg_color;
-    color: @accent_fg_color;
-}
-
-.heading {
-    font-weight: bold;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: @secondary_fg_color;
-}
-
-/* ===== ROM Cards ===== */
+/* ===== ROM Cards (cover grid) ===== */
 .rom-card {
     border-radius: 10px;
     padding: 8px;
@@ -54,6 +29,12 @@
     opacity: 0.4;
 }
 
+.rom-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: @window_fg_color;
+}
+
 /* ===== Play Overlay ===== */
 .play-overlay {
     background-color: alpha(black, 0.55);
@@ -76,89 +57,8 @@
     color: #f6c90e;
 }
 
-/* ===== Input Mapping ===== */
+/* ===== Input Mapping (preferences) ===== */
 .input-mapping-current {
     background-color: alpha(@accent_bg_color, 0.18);
     border-radius: 8px;
-}
-
-/* ===== ROM Title ===== */
-.rom-title {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: @window_fg_color;
-}
-
-/* ===== Settings Cards ===== */
-.settings-card {
-    border-radius: 10px;
-    padding: 0;
-    min-width: 0;
-    min-height: 0;
-    transition: background-color 0.15s ease, transform 0.15s ease;
-}
-
-.settings-card:hover {
-    background-color: alpha(@accent_bg_color, 0.10);
-    transform: translateY(-2px);
-}
-
-.settings-card-icon {
-    opacity: 0.9;
-    min-width: 96px;
-    min-height: 96px;
-}
-
-.settings-card-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-}
-
-.settings-card-main {
-    min-width: 220px;
-    min-height: 220px;
-}
-
-.settings-card-main-icon-box {
-    min-height: 176px;
-}
-
-.settings-card-main-text-box {
-    min-height: 44px;
-}
-
-.settings-card-main-title {
-    min-height: 18px;
-}
-
-.settings-card-main-subtitle {
-    min-height: 18px;
-}
-
-/* ===== Search Bar ===== */
-.search-bar-box {
-    padding: 6px 12px;
-    background-color: @headerbar_bg_color;
-    border-bottom: 1px solid alpha(@headerbar_shade_color, 0.5);
-}
-
-/* ===== Status Bar ===== */
-.status-bar {
-    border-top: 1px solid alpha(@headerbar_shade_color, 0.45);
-    background-color: alpha(@window_fg_color, 0.02);
-}
-
-/* ===== BIOS ===== */
-.bios-group {
-    border: 1px solid alpha(@card_shade_color, 0.5);
-    border-radius: 10px;
-    padding: 10px;
-}
-
-.bios-ok {
-    color: #2f9e44;
-}
-
-.bios-missing {
-    color: #d94841;
 }

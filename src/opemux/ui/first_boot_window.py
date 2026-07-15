@@ -12,45 +12,51 @@ class FirstBootWindow(Adw.ApplicationWindow):
         super().__init__(application=application, **kwargs)
         self.locale = locale
         self.set_title(tr(self.locale, "bootstrap.title"))
-        self.set_default_size(640, 260)
-        self.set_resizable(False)
+        self.set_default_size(640, 480)
         if parent is not None:
             self.set_transient_for(parent)
             self.set_modal(True)
 
-        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        outer.set_margin_top(28)
-        outer.set_margin_bottom(28)
-        outer.set_margin_start(28)
-        outer.set_margin_end(28)
-        self.set_content(outer)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_show_title(False)
+        toolbar.add_top_bar(header)
 
-        self.title_label = Gtk.Label(label=tr(self.locale, "bootstrap.title"))
-        self.title_label.add_css_class("title-2")
-        self.title_label.set_halign(Gtk.Align.START)
-        outer.append(self.title_label)
+        status_page = Adw.StatusPage()
+        status_page.set_icon_name("system-software-install-symbolic")
+        status_page.set_title(tr(self.locale, "bootstrap.title"))
+        self.title_label = status_page  # kept for compatibility; drives the title
+        self.status_page = status_page
+
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        body.set_halign(Gtk.Align.CENTER)
+        body.set_size_request(420, -1)
 
         self.subtitle_label = Gtk.Label(label=tr(self.locale, "bootstrap.subtitle.initial"))
         self.subtitle_label.add_css_class("dim-label")
         self.subtitle_label.set_wrap(True)
-        self.subtitle_label.set_halign(Gtk.Align.START)
-        outer.append(self.subtitle_label)
-
-        self.spinner = Gtk.Spinner()
-        self.spinner.set_halign(Gtk.Align.START)
-        self.spinner.start()
-        outer.append(self.spinner)
+        self.subtitle_label.set_justify(Gtk.Justification.CENTER)
+        body.append(self.subtitle_label)
 
         self.progress = Gtk.ProgressBar()
         self.progress.set_show_text(True)
         self.progress.set_fraction(0.0)
         self.progress.set_text("0%")
-        outer.append(self.progress)
+        body.append(self.progress)
 
         self.status_label = Gtk.Label(label="")
+        self.status_label.add_css_class("caption")
         self.status_label.add_css_class("dim-label")
-        self.status_label.set_halign(Gtk.Align.START)
-        outer.append(self.status_label)
+        self.status_label.set_wrap(True)
+        self.status_label.set_justify(Gtk.Justification.CENTER)
+        body.append(self.status_label)
+
+        # Spinner retained for API compatibility; the progress bar is the primary cue.
+        self.spinner = Gtk.Spinner()
+
+        status_page.set_child(body)
+        toolbar.set_content(status_page)
+        self.set_content(toolbar)
 
     def handle_event(self, event):
         event_type = event.get("type")

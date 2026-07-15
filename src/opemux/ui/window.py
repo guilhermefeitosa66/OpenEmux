@@ -8,32 +8,24 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, Gdk, GLib, Gio
+from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject
 
-from opemux.core.bios_manager import get_console_bios_dir, scan_all_bios_status
+from opemux.core.bios_manager import get_console_bios_dir
 from opemux.core.cover_sync import sync_covers_async
-from opemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from opemux.core.playlist_manager import PlaylistManager
 from opemux.core.paths import get_project_root
 from opemux.core.runtime_manager import RuntimeManager
 from opemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
 from opemux.core.scanner import RomScanner
-from opemux.core.shaders import ShaderCatalog, normalize_shader_id
+from opemux.core.shaders import ShaderCatalog
+from opemux import __version__
 from opemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
-from opemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale, tr
+from opemux.i18n import LANGUAGE_META, tr
 from opemux.ui.grid import RomGrid
-from opemux.ui.settings_grid import SettingsGrid
+from opemux.ui.preferences import OpemuxPreferences
 
 logger = logging.getLogger(__name__)
 
-SETTINGS_ITEMS = [
-    ("roms", "folder-symbolic"),
-    ("bios", "media-floppy-symbolic"),
-    ("input", "input-gaming-symbolic"),
-    ("ui", "preferences-desktop-theme-symbolic"),
-    ("shaders", "applications-graphics-symbolic"),
-    ("system", "applications-system-symbolic"),
-]
 ALL_CONSOLES_ID = "__all__"
 FAVORITES_ID = "__favorites__"
 CONSOLE_ICON_FILES = {
@@ -80,6 +72,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.set_title("Opemux")
         self._setup_window_icon()
         self.set_default_size(1200, 800)
+        # Minimum size required for the adaptive breakpoint to compute layout.
+        self.set_size_request(360, 420)
         self.load_css()
 
         self.roms_path = self.config_manager.get_roms_path()
@@ -97,43 +91,28 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
 
-        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.toast_overlay = Adw.ToastOverlay()
-        self.toast_overlay.set_child(self.main_box)
         self.set_content(self.toast_overlay)
-        self._input_buttons = {}
-        self._input_rows = {}
-        self._input_loaded_profile = None
-        self._input_bindings_buffer = {}
-        self._capture_active_action = None
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
-        self._capture_sequence_actions = list(ACTION_ORDER)
-        self._visible_input_actions = list(ACTION_ORDER)
-        self._bios_status_by_console = {}
 
-        self._input_key_controller = Gtk.EventControllerKey()
-        self._input_key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        self._input_key_controller.connect("key-pressed", self._on_input_key_pressed)
-        self.add_controller(self._input_key_controller)
+        self._preferences_dialog = None
 
-        self.sidebar = self._build_sidebar()
-        self.main_box.append(self.sidebar)
-        self.main_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
-
-        self.content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.content_box.set_hexpand(True)
-
-        self.header_bar = Adw.HeaderBar()
-        self._build_header(self.header_bar)
-        self.content_box.append(self.header_bar)
-
+        # ----- Navigation split view (sidebar + content), HIG-adaptive -----
         self.content_stack = Adw.ViewStack()
         self.content_stack.connect("notify::visible-child-name", self._on_visible_child_changed)
-        self.content_box.append(self.content_stack)
-        self.status_bar = self._build_status_bar()
-        self.content_box.append(self.status_bar)
-        self.main_box.append(self.content_box)
+
+        self.split_view = Adw.NavigationSplitView()
+        self.split_view.set_min_sidebar_width(260)
+        self.split_view.set_max_sidebar_width(360)
+        self.split_view.set_sidebar_width_fraction(0.28)
+        self.split_view.set_sidebar(self._build_sidebar())
+        self.split_view.set_content(self._build_content())
+        self.toast_overlay.set_child(self.split_view)
+
+        breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
+        breakpoint.add_setter(self.split_view, "collapsed", True)
+        self.add_breakpoint(breakpoint)
+
+        self._install_actions()
 
         self._click_debug_controller = Gtk.GestureClick()
         self._click_debug_controller.set_button(0)
@@ -207,100 +186,174 @@ class OpemuxWindow(Adw.ApplicationWindow):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
-    def _build_header(self, header_bar):
-        self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_hexpand(True)
-        self.search_entry.set_placeholder_text(self.t("header.search"))
-        self.search_entry.set_tooltip_text(self.t("header.search"))
-        self.search_entry.connect("search-changed", self._on_search_changed)
-        header_bar.set_title_widget(self.search_entry)
+    def _build_content(self):
+        """Build the content pane: an Adw.NavigationPage with a toolbar view."""
+        toolbar = Adw.ToolbarView()
+
+        header = Adw.HeaderBar()
+        self.window_title = Adw.WindowTitle.new(self.t("app.title"), "")
+        header.set_title_widget(self.window_title)
+
+        self.search_button = Gtk.ToggleButton()
+        self.search_button.set_icon_name("system-search-symbolic")
+        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
+        header.pack_end(self.search_button)
 
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
-        header_bar.pack_end(self.stop_btn)
+        header.pack_end(self.stop_btn)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
-        header_bar.pack_end(refresh_btn)
+        header.pack_start(refresh_btn)
+        toolbar.add_top_bar(header)
 
-    def _build_language_dropdown(self):
-        model = Gtk.StringList.new(SUPPORTED_LOCALES)
-        dropdown = Gtk.DropDown.new(model, None)
-        dropdown._locale_ids = list(SUPPORTED_LOCALES)
+        # Search revealed on demand (HIG: search is a mode, not a permanent field).
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_hexpand(True)
+        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        self.search_bar = Gtk.SearchBar()
+        self.search_bar.set_key_capture_widget(self)
+        self.search_bar.connect_entry(self.search_entry)
+        self.search_bar.set_child(self.search_entry)
+        self.search_button.bind_property(
+            "active", self.search_bar, "search-mode-enabled",
+            GObject.BindingFlags.BIDIRECTIONAL,
+        )
+        toolbar.add_top_bar(self.search_bar)
 
-        factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self._on_language_dropdown_setup)
-        factory.connect("bind", self._on_language_dropdown_bind)
-        dropdown.set_factory(factory)
+        # Progress banner replaces the former custom status bar (HIG feedback).
+        self.banner = Adw.Banner()
+        self.banner.set_revealed(False)
+        toolbar.add_top_bar(self.banner)
 
-        list_factory = Gtk.SignalListItemFactory()
-        list_factory.connect("setup", self._on_language_dropdown_setup)
-        list_factory.connect("bind", self._on_language_dropdown_bind)
-        dropdown.set_list_factory(list_factory)
+        toolbar.set_content(self.content_stack)
 
-        self._set_language_dropdown_active_id(dropdown, self.locale)
-        return dropdown
+        page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
+        page.set_tag("content")
+        self.content_page = page
+        return page
 
-    def _on_language_dropdown_setup(self, _factory, list_item):
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        row.set_margin_top(4)
-        row.set_margin_bottom(4)
-        row.set_margin_start(4)
-        row.set_margin_end(4)
-        list_item.set_child(row)
+    def _build_primary_menu(self):
+        menu = Gio.Menu()
+        menu.append(self.t("menu.preferences"), "win.preferences")
+        menu.append(self.t("menu.shortcuts"), "win.shortcuts")
+        menu.append(self.t("menu.about"), "win.about")
+        button = Gtk.MenuButton()
+        button.set_icon_name("open-menu-symbolic")
+        button.set_menu_model(menu)
+        button.set_tooltip_text(self.t("menu.primary"))
+        button.set_primary(True)
+        return button
 
-    def _on_language_dropdown_bind(self, _factory, list_item):
-        row = list_item.get_child()
-        while child := row.get_first_child():
-            row.remove(child)
-        item = list_item.get_item()
-        locale_id = item.get_string() if item else "en"
-        meta = LANGUAGE_META.get(locale_id, LANGUAGE_META["en"])
-        label = Gtk.Label(label=f"{meta['flag']} {meta['native_name']}")
-        label.set_halign(Gtk.Align.START)
-        label.set_xalign(0)
-        row.append(label)
+    def _install_actions(self):
+        for name, handler, accels in (
+            ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
+            ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
+            ("about", lambda *_: self._show_about(), None),
+            ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
+        ):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", handler)
+            self.add_action(action)
+            app = self.get_application()
+            if accels and app is not None:
+                app.set_accels_for_action(f"win.{name}", accels)
 
-    def _get_language_dropdown_active_id(self, dropdown):
-        idx = int(dropdown.get_selected())
-        ids = getattr(dropdown, "_locale_ids", [])
-        if idx < 0 or idx >= len(ids):
-            return "en"
-        return normalize_locale(ids[idx])
-
-    def _set_language_dropdown_active_id(self, dropdown, locale):
-        locale = normalize_locale(locale)
-        ids = getattr(dropdown, "_locale_ids", [])
-        if locale in ids:
-            dropdown.set_selected(ids.index(locale))
+    def _toggle_search(self):
+        if not self.search_button.get_sensitive():
             return
-        dropdown.set_selected(0)
+        self.search_button.set_active(not self.search_button.get_active())
 
-    def _on_language_changed(self, *_args):
-        if not hasattr(self, "language_dropdown"):
-            return
-        selected = self._get_language_dropdown_active_id(self.language_dropdown)
-        if selected == self.locale:
-            return
-        self.config_manager.set_locale(selected)
-        self.locale = selected
-        language_name = LANGUAGE_META.get(selected, LANGUAGE_META["en"])["native_name"]
-        self._reload_ui_texts_after_locale_change(language_name)
+    def _open_preferences(self):
+        self._preferences_dialog = OpemuxPreferences(self)
+        self._preferences_dialog.present(self)
 
-    def _reload_ui_texts_after_locale_change(self, language_name):
+    def _show_about(self):
+        about = Adw.AboutDialog()
+        about.set_application_name(self.t("app.title"))
+        about.set_application_icon(self.get_application().get_application_id() or "org.opemux.Opemux")
+        about.set_developer_name("Opemux")
+        about.set_version(__version__)
+        about.set_comments(self.t("about.comments"))
+        about.set_website("https://github.com/guilhermefeitosa66/OpenEmux")
+        about.set_license_type(Gtk.License.MIT_X11)
+        about.present(self)
+
+    def _show_shortcuts(self):
+        section = Gtk.ShortcutsSection(section_name="general", visible=True)
+        group = Gtk.ShortcutsGroup(title=self.t("shortcuts.group.general"))
+        for accel, key in (
+            ("<Ctrl>f", "shortcuts.search"),
+            ("<Ctrl>comma", "shortcuts.preferences"),
+        ):
+            group.add_shortcut(
+                Gtk.ShortcutsShortcut(accelerator=accel, title=self.t(key))
+            )
+        section.add_group(group)
+        window = Gtk.ShortcutsWindow(modal=True, transient_for=self)
+        window.add_section(section)
+        window.present()
+
+    def _toast(self, text, timeout=3):
+        toast = Adw.Toast(title=text)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
+
+    def _apply_render_cartridge(self, active):
+        self.config_manager.set_render_cartridge_overlay(active)
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif self.current_console in getattr(self, "_console_pages", {}):
+            self._ensure_console_loaded(self.current_console)
+
+    def _apply_language_change(self, locale):
+        self.config_manager.set_locale(locale)
+        self.locale = locale
+        language_name = LANGUAGE_META.get(locale, LANGUAGE_META["en"])["native_name"]
         visible = self.content_stack.get_visible_child_name()
         self.search_entry.set_placeholder_text(self.t("header.search"))
-        self.search_entry.set_tooltip_text(self.t("header.search"))
+        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
-        self.refresh_library(preferred_view=visible or "settings-system")
-        toast = Adw.Toast(title=self.t("toast.language.updated", language=language_name))
-        toast.set_timeout(3)
-        self.toast_overlay.add_toast(toast)
+        self.sidebar_title.set_title(self.t("sidebar.header"))
+        self.refresh_library(preferred_view=visible)
+        self._toast(self.t("toast.language.updated", language=language_name))
+
+    def _update_window_title(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            title = self.t("sidebar.all")
+        elif console_id == FAVORITES_ID:
+            title = self.t("sidebar.favorites")
+        elif console_id:
+            title = f"{console_id} — {get_system_display_name(console_id)}"
+        else:
+            title = self.t("app.title")
+        subtitle = ""
+        grid = getattr(self, "_grids", {}).get(console_id)
+        if grid is not None:
+            count = 0
+            child = grid.get_first_child()
+            while child:
+                count += 1
+                child = child.get_next_sibling()
+            if count == 0:
+                subtitle = self.t("header.subtitle.no_games")
+            elif count == 1:
+                subtitle = self.t("header.subtitle.one_game")
+            else:
+                subtitle = self.t("header.subtitle.games", count=count)
+        self.window_title.set_title(title)
+        self.window_title.set_subtitle(subtitle)
+        if hasattr(self, "content_page"):
+            self.content_page.set_title(title)
 
     def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
         ids = []
@@ -371,34 +424,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
             return
         dropdown.set_selected(ids.index(console_id))
 
-    def _build_status_bar(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        box.add_css_class("status-bar")
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-        box.set_margin_top(6)
-        box.set_margin_bottom(8)
-
-        self.status_spinner = Gtk.Spinner()
-        self.status_spinner.set_halign(Gtk.Align.START)
-        box.append(self.status_spinner)
-
-        self.status_label = Gtk.Label(label=self.t("status.idle"))
-        self.status_label.set_halign(Gtk.Align.START)
-        self.status_label.set_hexpand(True)
-        self.status_label.set_xalign(0)
-        self.status_label.add_css_class("dim-label")
-        box.append(self.status_label)
-
-        self.status_progress = Gtk.ProgressBar()
-        self.status_progress.set_hexpand(True)
-        self.status_progress.set_fraction(0.0)
-        self.status_progress.set_text("")
-        self.status_progress.set_show_text(True)
-        box.append(self.status_progress)
-        self._refresh_status_bar()
-        return box
-
     def _begin_task(self, kind, label, total=0):
         self._task_seq += 1
         task_id = f"{kind}-{self._task_seq}"
@@ -410,7 +435,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
             "total": int(total or 0),
             "pending": True,
         }
-        self._refresh_status_bar()
+        self._refresh_banner()
         return task_id
 
     def _update_task(self, task_id, current=None, total=None, label=None):
@@ -423,88 +448,56 @@ class OpemuxWindow(Adw.ApplicationWindow):
             task["total"] = int(max(0, total))
         if label is not None:
             task["label"] = label
-        self._refresh_status_bar()
+        self._refresh_banner()
 
     def _finish_task(self, task_id):
         if task_id in self._tasks:
             self._tasks.pop(task_id, None)
-        self._refresh_status_bar()
+        self._refresh_banner()
 
-    def _refresh_status_bar(self):
-        if not hasattr(self, "status_label"):
+    def _refresh_banner(self):
+        if not hasattr(self, "banner"):
             return
         if not self._tasks:
-            self.status_spinner.stop()
-            self.status_label.set_text(self.t("status.idle"))
-            self.status_progress.set_visible(False)
-            self.status_progress.set_fraction(0.0)
-            self.status_progress.set_text("")
+            self.banner.set_revealed(False)
             return
 
-        self.status_progress.set_visible(True)
         task = next(iter(self._tasks.values()))
         pending = max(0, len(self._tasks) - 1)
         label = task["label"]
-        if pending:
-            label = f"{label} (+{pending})"
-        self.status_label.set_text(label)
-        self.status_spinner.start()
-
         total = int(task.get("total") or 0)
         current = int(task.get("current") or 0)
         if total > 0:
-            progress = min(1.0, max(0.0, current / total))
-            self.status_progress.set_fraction(progress)
-            self.status_progress.set_text(f"{current}/{total}")
-        else:
-            self.status_progress.set_fraction(0.0)
-            self.status_progress.pulse()
-            self.status_progress.set_text(self.t("status.running"))
+            label = f"{label} ({current}/{total})"
+        if pending:
+            label = f"{label} (+{pending})"
+        self.banner.set_title(label)
+        self.banner.set_revealed(True)
 
     def _build_sidebar(self):
-        sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        sidebar_box.set_size_request(360, -1)
-        sidebar_box.add_css_class("sidebar")
+        toolbar = Adw.ToolbarView()
 
-        label = Gtk.Label(label=self.t("sidebar.library"))
-        label.set_halign(Gtk.Align.START)
-        label.set_margin_top(18)
-        label.set_margin_bottom(12)
-        label.set_margin_start(20)
-        label.add_css_class("heading")
-        sidebar_box.append(label)
+        header = Adw.HeaderBar()
+        self.sidebar_title = Adw.WindowTitle.new(self.t("sidebar.header"), "")
+        header.set_title_widget(self.sidebar_title)
+        header.pack_end(self._build_primary_menu())
+        toolbar.add_top_bar(header)
 
         self.console_list = Gtk.ListBox()
         self.console_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.console_list.connect("row-selected", self._on_console_selected)
         self.console_list.add_css_class("navigation-sidebar")
-        sidebar_box.append(self.console_list)
 
-        spacer = Gtk.Box()
-        spacer.set_vexpand(True)
-        sidebar_box.append(spacer)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_child(self.console_list)
+        toolbar.set_content(scroll)
 
-        settings_btn = Gtk.Button()
-        settings_btn.add_css_class("pill")
-        settings_btn.set_margin_start(12)
-        settings_btn.set_margin_end(12)
-        settings_btn.set_margin_bottom(12)
-
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        btn_box.set_margin_top(6)
-        btn_box.set_margin_bottom(6)
-
-        gear_icon = Gtk.Image.new_from_icon_name("preferences-system-symbolic")
-        gear_icon.set_pixel_size(18)
-        btn_box.append(gear_icon)
-        btn_box.append(Gtk.Label(label=self.t("sidebar.settings")))
-
-        settings_btn.set_child(btn_box)
-        settings_btn.connect("clicked", lambda _: self._open_settings_main())
-        sidebar_box.append(settings_btn)
+        page = Adw.NavigationPage.new(toolbar, self.t("sidebar.header"))
+        page.set_tag("sidebar")
         self._rebuild_console_sidebar([])
-        return sidebar_box
+        return page
 
     def _console_sidebar_label(self, console_id):
         if console_id == ALL_CONSOLES_ID:
@@ -617,29 +610,22 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 self.content_stack.add_titled(scroll, console, console)
 
         if not self.visible_consoles:
-            empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            empty.set_valign(Gtk.Align.CENTER)
-            empty.set_halign(Gtk.Align.CENTER)
-            icon = Gtk.Image.new_from_icon_name("folder-open-symbolic")
-            icon.set_pixel_size(64)
-            icon.set_opacity(0.4)
-            empty.append(icon)
-            label = Gtk.Label(label="No ROMs found in configured system folders.")
-            label.add_css_class("dim-label")
-            empty.append(label)
+            empty = Adw.StatusPage(
+                icon_name="folder-open-symbolic",
+                title=self.t("library.empty.title"),
+                description=self.t("library.empty.body"),
+            )
+            choose = Gtk.Button(label=self.t("library.empty.action"))
+            choose.add_css_class("suggested-action")
+            choose.add_css_class("pill")
+            choose.set_halign(Gtk.Align.CENTER)
+            choose.connect("clicked", lambda _b: self._choose_roms_path())
+            empty.set_child(choose)
             self.content_stack.add_titled(empty, "library-empty", "Library")
 
-        self._build_settings_views()
         target_view = preferred_view
         if target_view is None:
             target_view = previous_visible or self.current_console
-
-        if target_view and str(target_view).startswith("settings-"):
-            self.current_console = None
-            self._set_search_enabled(False)
-            self.console_list.unselect_all()
-            self.content_stack.set_visible_child_name(target_view)
-            return
 
         if self.visible_consoles:
             desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}) else None
@@ -662,6 +648,7 @@ class OpemuxWindow(Adw.ApplicationWindow):
         self.current_console = None
         self._set_search_enabled(False)
         self.content_stack.set_visible_child_name("library-empty")
+        self._update_window_title(None)
 
     def _find_console_row(self, console_id):
         row = self.console_list.get_first_child()
@@ -684,395 +671,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
                 self._initial_roms[console] = roms
         return visible
 
-    def _build_settings_views(self):
-        settings_scroll = Gtk.ScrolledWindow()
-        settings_scroll.set_vexpand(True)
-        settings_grid = SettingsGrid(layout_variant="settings_main")
-        settings_callbacks = {
-            "roms": self._open_settings_roms,
-            "bios": self._open_settings_bios,
-            "input": self._open_settings_input,
-            "ui": self._open_settings_ui,
-            "shaders": self._open_settings_shaders,
-            "system": self._open_settings_system,
-        }
-        for item_id, fallback_icon in SETTINGS_ITEMS:
-            icon_path = self._asset_path("settings", f"{item_id}.png")
-            settings_grid.add_card(
-                title=self.t(f"settings.{item_id}.title"),
-                subtitle=self.t(f"settings.{item_id}.subtitle"),
-                icon_path=str(icon_path) if icon_path.exists() else None,
-                icon_name=fallback_icon,
-                on_click=settings_callbacks.get(item_id),
-            )
-        settings_scroll.set_child(settings_grid)
-        self.content_stack.add_titled(settings_scroll, "settings-main", self.t("settings.title"))
-
-        roms_scroll = Gtk.ScrolledWindow()
-        roms_scroll.set_vexpand(True)
-        roms_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-
-        breadcrumb_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        breadcrumb_bar.set_margin_top(14)
-        breadcrumb_bar.set_margin_start(20)
-        breadcrumb_bar.set_margin_end(20)
-        breadcrumb_bar.set_margin_bottom(6)
-
-        back_btn = Gtk.Button()
-        back_btn.set_icon_name("go-previous-symbolic")
-        back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        back_btn.connect("clicked", lambda _: self._open_settings_main())
-        breadcrumb_bar.append(back_btn)
-
-        crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.roms.title')}")
-        crumb_label.set_halign(Gtk.Align.START)
-        crumb_label.add_css_class("dim-label")
-        breadcrumb_bar.append(crumb_label)
-        roms_container.append(breadcrumb_bar)
-
-        roms_grid = SettingsGrid()
-        roms_grid.add_card(
-            title=self.t("settings.path.title"),
-            subtitle=str(self.config_manager.get_roms_path()),
-            icon_name="folder-symbolic",
-            on_click=self._choose_roms_path,
-        )
-        roms_grid.add_card(
-            title=self.t("settings.scan.title"),
-            subtitle=self.t("settings.scan.subtitle"),
-            icon_name="view-refresh-symbolic",
-            on_click=self._scan_current_console,
-        )
-        roms_grid.add_card(
-            title=self.t("settings.sync.title"),
-            subtitle=self.t("settings.sync.subtitle"),
-            icon_name="folder-download-symbolic",
-            on_click=self._show_sync_covers_dialog,
-        )
-
-        roms_container.append(roms_grid)
-        roms_scroll.set_child(roms_container)
-        self.content_stack.add_titled(roms_scroll, "settings-roms", self.t("settings.roms.title"))
-
-        bios_scroll = Gtk.ScrolledWindow()
-        bios_scroll.set_vexpand(True)
-        bios_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-
-        bios_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        bios_breadcrumb.set_margin_top(14)
-        bios_breadcrumb.set_margin_start(20)
-        bios_breadcrumb.set_margin_end(20)
-        bios_breadcrumb.set_margin_bottom(6)
-
-        bios_back_btn = Gtk.Button()
-        bios_back_btn.set_icon_name("go-previous-symbolic")
-        bios_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        bios_back_btn.connect("clicked", lambda _: self._open_settings_main())
-        bios_breadcrumb.append(bios_back_btn)
-
-        bios_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.bios.title')}")
-        bios_crumb_label.set_halign(Gtk.Align.START)
-        bios_crumb_label.add_css_class("dim-label")
-        bios_breadcrumb.append(bios_crumb_label)
-        bios_container.append(bios_breadcrumb)
-
-        bios_header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        bios_header.set_margin_start(20)
-        bios_header.set_margin_end(20)
-        bios_header.set_margin_bottom(8)
-
-        bios_intro = Gtk.Label(label=self.t("bios.instructions"))
-        bios_intro.set_wrap(True)
-        bios_intro.set_halign(Gtk.Align.START)
-        bios_intro.add_css_class("dim-label")
-        bios_header.append(bios_intro)
-
-        bios_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        open_roms_btn = Gtk.Button(label=self.t("bios.open_roms_folder"))
-        open_roms_btn.connect("clicked", lambda _: self._open_roms_folder())
-        bios_actions.append(open_roms_btn)
-
-        reload_bios_btn = Gtk.Button(label=self.t("bios.reload"))
-        reload_bios_btn.connect("clicked", lambda _: self._reload_bios_status(show_toast=True))
-        bios_actions.append(reload_bios_btn)
-        bios_header.append(bios_actions)
-        bios_container.append(bios_header)
-
-        self.bios_groups_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        self.bios_groups_box.set_margin_start(20)
-        self.bios_groups_box.set_margin_end(20)
-        self.bios_groups_box.set_margin_bottom(24)
-        bios_container.append(self.bios_groups_box)
-
-        bios_scroll.set_child(bios_container)
-        self.content_stack.add_titled(bios_scroll, "settings-bios", self.t("settings.bios.title"))
-
-        input_scroll = Gtk.ScrolledWindow()
-        input_scroll.set_vexpand(True)
-        input_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-
-        input_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        input_breadcrumb.set_margin_top(14)
-        input_breadcrumb.set_margin_start(20)
-        input_breadcrumb.set_margin_end(20)
-        input_breadcrumb.set_margin_bottom(6)
-
-        input_back_btn = Gtk.Button()
-        input_back_btn.set_icon_name("go-previous-symbolic")
-        input_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        input_back_btn.connect("clicked", lambda _: self._open_settings_main())
-        input_breadcrumb.append(input_back_btn)
-
-        input_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.input.title')}")
-        input_crumb_label.set_halign(Gtk.Align.START)
-        input_crumb_label.add_css_class("dim-label")
-        input_breadcrumb.append(input_crumb_label)
-        input_container.append(input_breadcrumb)
-
-        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        toolbar.set_margin_start(20)
-        toolbar.set_margin_end(20)
-        toolbar.set_margin_top(4)
-        toolbar.set_margin_bottom(6)
-
-        console_label = Gtk.Label(label=self.t("input.console"))
-        console_label.set_halign(Gtk.Align.START)
-        toolbar.append(console_label)
-
-        self.input_console_combo = self._build_console_dropdown(SYSTEM_IDS, default_id=SYSTEM_IDS[0])
-        self.input_console_combo.connect("notify::selected", self._on_input_console_changed)
-        toolbar.append(self.input_console_combo)
-
-        device_label = Gtk.Label(label=self.t("input.device"))
-        device_label.set_halign(Gtk.Align.START)
-        toolbar.append(device_label)
-
-        self.input_device_combo = Gtk.ComboBoxText()
-        self.input_device_combo.append("keyboard", self.t("input.device.keyboard"))
-        self.input_device_combo.append("gamepad_p1", self.t("input.device.gamepad_p1"))
-        self.input_device_combo.connect("changed", self._on_input_device_changed)
-        toolbar.append(self.input_device_combo)
-
-        save_btn = Gtk.Button(label=self.t("input.save"))
-        save_btn.connect("clicked", lambda _: self._save_input_settings())
-        toolbar.append(save_btn)
-
-        reset_btn = Gtk.Button(label=self.t("input.reset"))
-        reset_btn.connect("clicked", lambda _: self._reset_input_defaults())
-        toolbar.append(reset_btn)
-
-        self.input_map_all_btn = Gtk.Button(label=self.t("input.map_all"))
-        self.input_map_all_btn.connect("clicked", lambda _: self._start_map_all_sequence())
-        toolbar.append(self.input_map_all_btn)
-
-        self.input_capture_status = Gtk.Label(label="")
-        self.input_capture_status.set_halign(Gtk.Align.START)
-        self.input_capture_status.add_css_class("dim-label")
-        self.input_capture_status.set_hexpand(True)
-        toolbar.append(self.input_capture_status)
-
-        input_container.append(toolbar)
-
-        self.input_bindings_grid = Gtk.Grid()
-        self.input_bindings_grid.set_column_spacing(12)
-        self.input_bindings_grid.set_row_spacing(8)
-        self.input_bindings_grid.set_margin_start(20)
-        self.input_bindings_grid.set_margin_end(20)
-        self.input_bindings_grid.set_margin_bottom(24)
-        self.input_bindings_grid.set_halign(Gtk.Align.START)
-        self.input_bindings_grid.set_valign(Gtk.Align.START)
-        input_container.append(self.input_bindings_grid)
-
-        input_scroll.set_child(input_container)
-        self.content_stack.add_titled(input_scroll, "settings-input", self.t("settings.input.title"))
-
-        ui_scroll = Gtk.ScrolledWindow()
-        ui_scroll.set_vexpand(True)
-        ui_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-
-        ui_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        ui_breadcrumb.set_margin_top(14)
-        ui_breadcrumb.set_margin_start(20)
-        ui_breadcrumb.set_margin_end(20)
-        ui_breadcrumb.set_margin_bottom(6)
-
-        ui_back_btn = Gtk.Button()
-        ui_back_btn.set_icon_name("go-previous-symbolic")
-        ui_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        ui_back_btn.connect("clicked", lambda _: self._open_settings_main())
-        ui_breadcrumb.append(ui_back_btn)
-
-        ui_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.ui.title')}")
-        ui_crumb_label.set_halign(Gtk.Align.START)
-        ui_crumb_label.add_css_class("dim-label")
-        ui_breadcrumb.append(ui_crumb_label)
-        ui_container.append(ui_breadcrumb)
-
-        ui_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        ui_panel.set_margin_top(12)
-        ui_panel.set_margin_start(24)
-        ui_panel.set_margin_end(24)
-        ui_panel.set_margin_bottom(24)
-
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        row.set_halign(Gtk.Align.FILL)
-        row.set_hexpand(True)
-
-        labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        labels.set_halign(Gtk.Align.START)
-        labels.set_hexpand(True)
-        title = Gtk.Label(label=self.t("settings.ui.render_cartridge.title"))
-        title.set_halign(Gtk.Align.START)
-        labels.append(title)
-        subtitle = Gtk.Label(label=self.t("settings.ui.render_cartridge.subtitle"))
-        subtitle.set_halign(Gtk.Align.START)
-        subtitle.add_css_class("dim-label")
-        labels.append(subtitle)
-        row.append(labels)
-
-        self.render_cartridge_check = Gtk.CheckButton()
-        self.render_cartridge_check.set_halign(Gtk.Align.END)
-        self.render_cartridge_check.set_active(
-            self.config_manager.get_ui_settings().get("render_cartridge_overlay", False)
-        )
-        self.render_cartridge_check.connect("toggled", self._on_toggle_render_cartridge)
-        row.append(self.render_cartridge_check)
-
-        ui_panel.append(row)
-        ui_container.append(ui_panel)
-        ui_scroll.set_child(ui_container)
-        self.content_stack.add_titled(ui_scroll, "settings-ui", self.t("settings.ui.title"))
-
-        shaders_scroll = Gtk.ScrolledWindow()
-        shaders_scroll.set_vexpand(True)
-        shaders_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-
-        shaders_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        shaders_breadcrumb.set_margin_top(14)
-        shaders_breadcrumb.set_margin_start(20)
-        shaders_breadcrumb.set_margin_end(20)
-        shaders_breadcrumb.set_margin_bottom(6)
-
-        shaders_back_btn = Gtk.Button()
-        shaders_back_btn.set_icon_name("go-previous-symbolic")
-        shaders_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        shaders_back_btn.connect("clicked", lambda _: self._open_settings_main())
-        shaders_breadcrumb.append(shaders_back_btn)
-
-        shaders_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.shaders.title')}")
-        shaders_crumb_label.set_halign(Gtk.Align.START)
-        shaders_crumb_label.add_css_class("dim-label")
-        shaders_breadcrumb.append(shaders_crumb_label)
-        shaders_container.append(shaders_breadcrumb)
-
-        shaders_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        shaders_toolbar.set_margin_start(20)
-        shaders_toolbar.set_margin_end(20)
-        shaders_toolbar.set_margin_top(8)
-        shaders_toolbar.set_margin_bottom(4)
-
-        self.shaders_show_all_check = Gtk.CheckButton(label=self.t("settings.shaders.show_all"))
-        self.shaders_show_all_check.set_active(self.config_manager.get_shader_settings().get("show_all_shaders", False))
-        self.shaders_show_all_check.connect("toggled", self._on_shader_show_all_toggled)
-        shaders_toolbar.append(self.shaders_show_all_check)
-
-        restore_btn = Gtk.Button(label=self.t("settings.shaders.restore_defaults"))
-        restore_btn.connect("clicked", self._on_restore_shader_defaults_clicked)
-        shaders_toolbar.append(restore_btn)
-        shaders_container.append(shaders_toolbar)
-
-        self.shaders_grid = Gtk.Grid()
-        self.shaders_grid.set_column_spacing(16)
-        self.shaders_grid.set_row_spacing(8)
-        self.shaders_grid.set_margin_start(20)
-        self.shaders_grid.set_margin_end(20)
-        self.shaders_grid.set_margin_bottom(24)
-        self.shaders_grid.set_halign(Gtk.Align.START)
-        self.shaders_grid.set_valign(Gtk.Align.START)
-        shaders_container.append(self.shaders_grid)
-
-        shaders_scroll.set_child(shaders_container)
-        self.content_stack.add_titled(shaders_scroll, "settings-shaders", self.t("settings.shaders.title"))
-
-        system_scroll = Gtk.ScrolledWindow()
-        system_scroll.set_vexpand(True)
-        system_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-
-        system_breadcrumb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        system_breadcrumb.set_margin_top(14)
-        system_breadcrumb.set_margin_start(20)
-        system_breadcrumb.set_margin_end(20)
-        system_breadcrumb.set_margin_bottom(6)
-
-        system_back_btn = Gtk.Button()
-        system_back_btn.set_icon_name("go-previous-symbolic")
-        system_back_btn.set_tooltip_text(self.t("settings.back.subtitle"))
-        system_back_btn.connect("clicked", lambda _: self._open_settings_main())
-        system_breadcrumb.append(system_back_btn)
-
-        system_crumb_label = Gtk.Label(label=f"{self.t('settings.title')} / {self.t('settings.system.title')}")
-        system_crumb_label.set_halign(Gtk.Align.START)
-        system_crumb_label.add_css_class("dim-label")
-        system_breadcrumb.append(system_crumb_label)
-        system_container.append(system_breadcrumb)
-
-        language_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        language_row.set_margin_start(20)
-        language_row.set_margin_end(20)
-        language_row.set_margin_top(8)
-        language_row.set_margin_bottom(4)
-
-        language_labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        language_labels.set_hexpand(True)
-        language_title = Gtk.Label(label=self.t("settings.system.language.title"))
-        language_title.set_halign(Gtk.Align.START)
-        language_labels.append(language_title)
-        language_subtitle = Gtk.Label(label=self.t("settings.system.language.subtitle"))
-        language_subtitle.set_halign(Gtk.Align.START)
-        language_subtitle.add_css_class("dim-label")
-        language_labels.append(language_subtitle)
-        language_row.append(language_labels)
-
-        self.language_dropdown = self._build_language_dropdown()
-        self.language_dropdown.connect("notify::selected", self._on_language_changed)
-        language_row.append(self.language_dropdown)
-        system_container.append(language_row)
-
-        system_grid = SettingsGrid()
-        state = self.config_manager.get_bootstrap_state()
-        status = state.get("status", "pending")
-        failed_step = state.get("failed_step")
-        if status == "completed":
-            setup_subtitle = self.t("settings.system.bootstrap.ok")
-        elif status == "failed":
-            setup_subtitle = self.t("settings.system.bootstrap.failed", step=failed_step or "-")
-        else:
-            setup_subtitle = self.t("settings.system.bootstrap.pending")
-
-        system_grid.add_card(
-            title=self.t("settings.system.bootstrap.title"),
-            subtitle=setup_subtitle,
-            icon_name="system-software-update-symbolic",
-        )
-        system_grid.add_card(
-            title=self.t("settings.system.bootstrap.retry.title"),
-            subtitle=self.t("settings.system.bootstrap.retry.subtitle"),
-            icon_name="view-refresh-symbolic",
-            on_click=self._trigger_bootstrap_retry,
-        )
-        system_container.append(system_grid)
-        system_scroll.set_child(system_container)
-        self.content_stack.add_titled(system_scroll, "settings-system", self.t("settings.system.title"))
-
-        self._set_console_dropdown_active_id(
-            self.input_console_combo,
-            self.current_console if self.current_console in SYSTEM_IDS else SYSTEM_IDS[0],
-        )
-        self.input_device_combo.set_active_id("keyboard")
-        self._refresh_input_bindings()
-        self._reload_bios_status(show_toast=False)
-        self._reload_shader_rows()
-
     def _on_console_selected(self, _listbox, row):
         if not row:
             return
@@ -1087,30 +685,19 @@ class OpemuxWindow(Adw.ApplicationWindow):
             self._ensure_console_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
         self.search_entry.set_text("")
+        self._update_window_title(self.current_console)
+        # On a collapsed (narrow) layout, reveal the content pane.
+        if self.split_view.get_collapsed():
+            self.split_view.set_show_content(True)
 
     def _set_search_enabled(self, enabled):
         if not enabled:
             self.search_entry.set_text("")
+            if hasattr(self, "search_button"):
+                self.search_button.set_active(False)
+        if hasattr(self, "search_button"):
+            self.search_button.set_sensitive(enabled)
         self.search_entry.set_sensitive(enabled)
-
-    def _open_settings_main(self):
-        logger.info("ui action: open settings main")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-main")
-
-    def _open_settings_roms(self):
-        logger.info("ui action: open settings roms")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-roms")
-
-    def _open_settings_bios(self):
-        logger.info("ui action: open settings bios")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-bios")
-        self._reload_bios_status(show_toast=False)
 
     def _choose_roms_path(self):
         chooser = Gtk.FileChooserDialog(
@@ -1155,32 +742,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(4)
         self.toast_overlay.add_toast(toast)
 
-    def _open_settings_ui(self):
-        logger.info("ui action: open settings ui")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-ui")
-
-    def _open_settings_shaders(self):
-        logger.info("ui action: open settings shaders")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self._reload_shader_rows()
-        self.content_stack.set_visible_child_name("settings-shaders")
-
-    def _open_settings_input(self):
-        logger.info("ui action: open settings input")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-input")
-        self._refresh_input_bindings()
-
-    def _open_settings_system(self):
-        logger.info("ui action: open settings system")
-        self._set_search_enabled(False)
-        self.console_list.unselect_all()
-        self.content_stack.set_visible_child_name("settings-system")
-
     def _open_roms_folder(self):
         self._open_path_in_file_manager(self.config_manager.get_roms_path())
 
@@ -1204,397 +765,6 @@ class OpemuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=self.t("bios.open_path_failed", path=str(path), error=str(exc)))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
-
-    def _reload_bios_status(self, show_toast=False):
-        if not hasattr(self, "bios_groups_box"):
-            return
-        self._bios_status_by_console = scan_all_bios_status(self.config_manager)
-        while child := self.bios_groups_box.get_first_child():
-            self.bios_groups_box.remove(child)
-
-        if not self._bios_status_by_console:
-            label = Gtk.Label(label=self.t("bios.no_requirements"))
-            label.set_halign(Gtk.Align.START)
-            label.add_css_class("dim-label")
-            self.bios_groups_box.append(label)
-            return
-
-        for console_id in sorted(self._bios_status_by_console.keys()):
-            status = self._bios_status_by_console[console_id]
-            group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-            group.add_css_class("bios-group")
-
-            header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            title = Gtk.Label(label=f"{console_id} - {status['display_name']}")
-            title.set_halign(Gtk.Align.START)
-            title.set_hexpand(True)
-            title.add_css_class("heading")
-            header.append(title)
-
-            open_btn = Gtk.Button(label=self.t("bios.open_console_folder"))
-            open_btn.connect("clicked", lambda _btn, cid=console_id: self._open_console_bios_folder(cid))
-            header.append(open_btn)
-            group.append(header)
-
-            group.append(self._build_bios_section(self.t("bios.section.required"), status["required"]))
-            group.append(self._build_bios_section(self.t("bios.section.optional"), status["optional"]))
-            self.bios_groups_box.append(group)
-
-        if show_toast:
-            toast = Adw.Toast(title=self.t("bios.reloaded"))
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
-
-    def _build_bios_section(self, section_title, entries):
-        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        title = Gtk.Label(label=section_title)
-        title.set_halign(Gtk.Align.START)
-        title.add_css_class("dim-label")
-        container.append(title)
-
-        if not entries:
-            empty = Gtk.Label(label=self.t("bios.none"))
-            empty.set_halign(Gtk.Align.START)
-            empty.add_css_class("dim-label")
-            container.append(empty)
-            return container
-
-        for entry in entries:
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            icon = Gtk.Image.new_from_icon_name("emblem-ok-symbolic" if entry["present"] else "dialog-error-symbolic")
-            icon.add_css_class("bios-ok" if entry["present"] else "bios-missing")
-            row.append(icon)
-
-            label_text = entry["label"]
-            if entry.get("kind") == "any_of" and label_text:
-                label_text = self.t("bios.one_of", names=label_text)
-            label = Gtk.Label(label=label_text)
-            label.set_halign(Gtk.Align.START)
-            label.set_hexpand(True)
-            row.append(label)
-            container.append(row)
-        return container
-
-    def _on_input_console_changed(self, *_args):
-        self._cancel_input_capture()
-        self._refresh_input_bindings()
-
-    def _on_input_device_changed(self, _combo):
-        self._cancel_input_capture()
-        self._refresh_input_bindings()
-
-    def _input_action_label(self, action):
-        return self.t(f"input.action.{action}")
-
-    def _clear_input_bindings_rows(self):
-        while child := self.input_bindings_grid.get_first_child():
-            self.input_bindings_grid.remove(child)
-        self._input_buttons = {}
-        self._input_rows = {}
-
-    def _set_active_input_row(self, action=None):
-        for row_action, widgets in self._input_rows.items():
-            targets = widgets if isinstance(widgets, tuple) else (widgets,)
-            if row_action == action:
-                for widget in targets:
-                    widget.add_css_class("input-mapping-current")
-            else:
-                for widget in targets:
-                    widget.remove_css_class("input-mapping-current")
-
-    def _refresh_input_bindings(self):
-        if not hasattr(self, "input_bindings_grid"):
-            return
-        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
-        device_id = self.input_device_combo.get_active_id() or "keyboard"
-        profile = self.config_manager.get_input_profile(console_id)
-        if device_id not in profile.get("devices", {}):
-            device_id = "keyboard"
-            self.input_device_combo.set_active_id(device_id)
-        device = profile.get("devices", {}).get(device_id, {})
-        bindings = device.get("bindings", {})
-        visible_actions = get_actions_for_console(console_id)
-
-        self._input_loaded_profile = profile
-        self._visible_input_actions = list(visible_actions)
-        self._capture_sequence_actions = list(visible_actions)
-        self._input_bindings_buffer = {
-            action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
-        }
-        self._clear_input_bindings_rows()
-        self.input_map_all_btn.set_sensitive(device_id == "keyboard")
-        self.input_capture_status.set_text("")
-
-        for row_index, action in enumerate(visible_actions):
-            label = Gtk.Label(label=self._input_action_label(action))
-            label.set_halign(Gtk.Align.START)
-            label.set_xalign(0)
-            label.set_hexpand(False)
-            label.set_margin_top(4)
-            label.set_margin_bottom(4)
-
-            button = Gtk.Button(label=self._binding_display_text(self._input_bindings_buffer.get(action, "")))
-            button.set_size_request(180, -1)
-            button.set_halign(Gtk.Align.START)
-            button.set_margin_top(2)
-            button.set_margin_bottom(2)
-            button.connect("clicked", self._on_binding_button_clicked, action)
-            self._input_buttons[action] = button
-
-            self.input_bindings_grid.attach(label, 0, row_index, 1, 1)
-            self.input_bindings_grid.attach(button, 1, row_index, 1, 1)
-            self._input_rows[action] = (label, button)
-
-    def _binding_display_text(self, value):
-        if not value:
-            return self.t("input.binding.empty")
-        return value
-
-    def _set_binding_value(self, action, value):
-        value = (value or "").strip().lower()
-
-        # Enforce unique mapping per visible action list.
-        if value:
-            for other_action, other_value in list(self._input_bindings_buffer.items()):
-                if other_action == action:
-                    continue
-                if other_value == value:
-                    self._input_bindings_buffer[other_action] = ""
-                    if other_action in self._input_buttons:
-                        self._input_buttons[other_action].set_label(self._binding_display_text(""))
-
-        self._input_bindings_buffer[action] = value
-        if action in self._input_buttons:
-            self._input_buttons[action].set_label(self._binding_display_text(value))
-
-    def _set_capture_status(self, text=""):
-        if hasattr(self, "input_capture_status"):
-            self.input_capture_status.set_text(text)
-
-    def _on_binding_button_clicked(self, _button, action):
-        device_id = self.input_device_combo.get_active_id() or "keyboard"
-        if device_id != "keyboard":
-            toast = Adw.Toast(title=self.t("input.capture.keyboard_only"))
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
-            return
-        self._start_action_capture(action, sequence_mode=False)
-
-    def _start_action_capture(self, action, sequence_mode):
-        if action not in self._input_buttons:
-            return
-        self._capture_active_action = action
-        self._capture_sequence_mode = sequence_mode
-        self._input_buttons[action].set_label(self.t("input.capture.waiting"))
-        self._set_active_input_row(action)
-        self._set_capture_status(self.t("input.capture.waiting_for", action=self._input_action_label(action)))
-
-    def _cancel_input_capture(self, show_toast=False):
-        if self._capture_active_action in self._input_buttons:
-            action = self._capture_active_action
-            self._input_buttons[action].set_label(self._binding_display_text(self._input_bindings_buffer.get(action, "")))
-        self._capture_active_action = None
-        was_sequence = self._capture_sequence_mode
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
-        self._set_active_input_row(None)
-        self._set_capture_status("")
-        if show_toast and was_sequence:
-            toast = Adw.Toast(title=self.t("input.capture.cancelled"))
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
-
-    def _start_map_all_sequence(self):
-        device_id = self.input_device_combo.get_active_id() or "keyboard"
-        if device_id != "keyboard":
-            toast = Adw.Toast(title=self.t("input.capture.keyboard_only"))
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
-            return
-        if not self._capture_sequence_actions:
-            return
-        self._cancel_input_capture()
-        self._capture_sequence_mode = True
-        self._capture_sequence_index = 0
-        self._start_action_capture(self._capture_sequence_actions[0], sequence_mode=True)
-
-    def _normalize_captured_key(self, keyval):
-        key_name = Gdk.keyval_name(keyval)
-        if not key_name:
-            return ""
-        special = {
-            "Return": "enter",
-            "KP_Enter": "enter",
-            "Escape": "escape",
-            "space": "space",
-            "Up": "up",
-            "Down": "down",
-            "Left": "left",
-            "Right": "right",
-            "Shift_L": "left shift",
-            "Shift_R": "right shift",
-            "Control_L": "left ctrl",
-            "Control_R": "right ctrl",
-            "Alt_L": "left alt",
-            "Alt_R": "right alt",
-            "Super_L": "left super",
-            "Super_R": "right super",
-        }
-        if key_name in special:
-            return special[key_name]
-        return key_name.lower()
-
-    def _on_input_key_pressed(self, _controller, keyval, _keycode, _state):
-        visible = self.content_stack.get_visible_child_name()
-        if visible != "settings-input":
-            return False
-        if not self._capture_active_action:
-            return False
-        device_id = self.input_device_combo.get_active_id() or "keyboard"
-        if device_id != "keyboard":
-            return False
-
-        key_name = self._normalize_captured_key(keyval)
-        action = self._capture_active_action
-        if key_name == "escape":
-            if self._capture_sequence_mode:
-                self._cancel_input_capture(show_toast=True)
-            else:
-                self._set_binding_value(action, "")
-                self._cancel_input_capture()
-            return True
-
-        if not key_name:
-            return True
-
-        self._set_binding_value(action, key_name)
-
-        if not self._capture_sequence_mode:
-            self._cancel_input_capture()
-            return True
-
-        self._capture_sequence_index += 1
-        if self._capture_sequence_index >= len(self._capture_sequence_actions):
-            self._cancel_input_capture()
-            toast = Adw.Toast(title=self.t("input.capture.completed"))
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
-            return True
-
-        next_action = self._capture_sequence_actions[self._capture_sequence_index]
-        self._start_action_capture(next_action, sequence_mode=True)
-        return True
-
-    def _save_input_settings(self):
-        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
-        device_id = self.input_device_combo.get_active_id() or "keyboard"
-        profile = self._input_loaded_profile or self.config_manager.get_input_profile(console_id)
-        devices = profile.setdefault("devices", {})
-        device = devices.setdefault(device_id, {"type": "keyboard" if device_id == "keyboard" else "gamepad", "bindings": {}})
-        bindings = device.setdefault("bindings", {})
-        valid_actions = get_actions_for_console(console_id)
-        new_bindings = {}
-        for action in valid_actions:
-            new_bindings[action] = self._input_bindings_buffer.get(action, "")
-        device["bindings"] = new_bindings
-        profile["active_device"] = device_id
-        self.config_manager.save_input_profile(console_id, profile)
-        self._input_loaded_profile = profile
-        toast = Adw.Toast(title=self.t("toast.input_saved", console=console_id))
-        toast.set_timeout(3)
-        self.toast_overlay.add_toast(toast)
-
-    def _reset_input_defaults(self):
-        console_id = self._get_console_dropdown_active_id(self.input_console_combo) or SYSTEM_IDS[0]
-        profile = self.config_manager.reset_input_profile(console_id)
-        self._input_loaded_profile = profile
-        self._cancel_input_capture()
-        self._refresh_input_bindings()
-        toast = Adw.Toast(title=self.t("toast.input_reset", console=console_id))
-        toast.set_timeout(3)
-        self.toast_overlay.add_toast(toast)
-
-    def _build_shader_dropdown(self, options, selected_id):
-        labels = [label for _shader_id, label in options]
-        ids = [shader_id for shader_id, _label in options]
-        model = Gtk.StringList.new(labels)
-        dropdown = Gtk.DropDown.new(model, None)
-        dropdown._shader_ids = ids
-        dropdown.set_enable_search(True)
-        dropdown.set_hexpand(True)
-        if selected_id in ids:
-            dropdown.set_selected(ids.index(selected_id))
-        else:
-            dropdown.set_selected(0)
-        return dropdown
-
-    def _get_shader_dropdown_active_id(self, dropdown):
-        idx = int(dropdown.get_selected())
-        ids = getattr(dropdown, "_shader_ids", [])
-        if idx < 0 or idx >= len(ids):
-            return "disabled"
-        return normalize_shader_id(ids[idx])
-
-    def _shader_options_for_console(self, console_id):
-        show_all = bool(self.shaders_show_all_check.get_active())
-        selected = normalize_shader_id(self.config_manager.get_shader_for_console(console_id))
-        options = self.shader_catalog.get_options(show_all=show_all)
-        option_ids = [shader_id for shader_id, _label in options]
-        if selected not in option_ids:
-            options.append((selected, self.shader_catalog.label_for_shader(selected)))
-        return options, selected
-
-    def _reload_shader_rows(self):
-        if not hasattr(self, "shaders_grid"):
-            return
-        while child := self.shaders_grid.get_first_child():
-            self.shaders_grid.remove(child)
-
-        for row_index, console_id in enumerate(SYSTEM_IDS):
-            console_cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            console_cell.set_halign(Gtk.Align.START)
-            console_cell.set_valign(Gtk.Align.CENTER)
-
-            icon = self._build_console_icon(console_id)
-            console_cell.append(icon)
-
-            title = Gtk.Label(label=f"{console_id} - {get_system_display_name(console_id)}")
-            title.set_halign(Gtk.Align.START)
-            title.set_xalign(0)
-            console_cell.append(title)
-
-            options, selected = self._shader_options_for_console(console_id)
-            dropdown = self._build_shader_dropdown(options, selected)
-            dropdown.connect("notify::selected", self._on_shader_dropdown_changed, console_id)
-            dropdown.set_halign(Gtk.Align.START)
-            dropdown.set_size_request(320, -1)
-
-            self.shaders_grid.attach(console_cell, 0, row_index, 1, 1)
-            self.shaders_grid.attach(dropdown, 1, row_index, 1, 1)
-
-    def _on_shader_dropdown_changed(self, dropdown, _param, console_id):
-        shader_id = self._get_shader_dropdown_active_id(dropdown)
-        self.config_manager.set_shader_for_console(console_id, shader_id)
-
-    def _on_shader_show_all_toggled(self, button):
-        self.config_manager.set_show_all_shaders(button.get_active())
-        self._reload_shader_rows()
-
-    def _on_restore_shader_defaults_clicked(self, _button):
-        self.config_manager.reset_shader_defaults()
-        self._reload_shader_rows()
-        toast = Adw.Toast(title=self.t("toast.shaders.defaults_restored"))
-        toast.set_timeout(3)
-        self.toast_overlay.add_toast(toast)
-
-    def _on_toggle_render_cartridge(self, button):
-        self.config_manager.set_render_cartridge_overlay(button.get_active())
-        if self.current_console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
-        elif self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-        elif self.current_console in self._console_pages:
-            self._ensure_console_loaded(self.current_console)
 
     def _ensure_console_loaded(self, console, force_rescan=False):
         if console == ALL_CONSOLES_ID:
@@ -1658,31 +828,28 @@ class OpemuxWindow(Adw.ApplicationWindow):
     def _render_console_page(self, console, roms):
         scroll = self._console_pages[console]
         if not roms:
-            empty_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-            empty_box.set_valign(Gtk.Align.CENTER)
-            empty_box.set_halign(Gtk.Align.CENTER)
-
-            empty_icon = Gtk.Image.new_from_icon_name("folder-open-symbolic")
-            empty_icon.set_pixel_size(64)
-            empty_icon.set_opacity(0.4)
-            empty_box.append(empty_icon)
-
-            if console == ALL_CONSOLES_ID:
-                empty_label = Gtk.Label(label=self.t("empty.all_indexed"))
-            elif console == FAVORITES_ID:
-                empty_label = Gtk.Label(label=self.t("favorites.empty"))
+            if console == FAVORITES_ID:
+                status = Adw.StatusPage(
+                    icon_name="starred-symbolic",
+                    title=self.t("favorites.empty.title"),
+                    description=self.t("favorites.empty.body"),
+                )
+            elif console == ALL_CONSOLES_ID:
+                status = Adw.StatusPage(
+                    icon_name="folder-open-symbolic",
+                    title=self.t("console.empty.title"),
+                    description=self.t("empty.all_indexed"),
+                )
             else:
-                empty_label = Gtk.Label(label=self.t("empty.indexed", console=console))
-            empty_label.add_css_class("dim-label")
-            empty_box.append(empty_label)
-
-            if console != ALL_CONSOLES_ID:
-                path_label = Gtk.Label(label=str(self.playlist_manager.get_playlist_path(console)))
-                path_label.add_css_class("caption")
-                path_label.add_css_class("dim-label")
-                empty_box.append(path_label)
-            scroll.set_child(empty_box)
+                status = Adw.StatusPage(
+                    icon_name="applications-games-symbolic",
+                    title=self.t("console.empty.title"),
+                    description=str(self.playlist_manager.get_playlist_path(console)),
+                )
+            scroll.set_child(status)
             self._grids.pop(console, None)
+            if console == self.current_console:
+                self._update_window_title(console)
             return
 
         grid = RomGrid(
@@ -1700,6 +867,8 @@ class OpemuxWindow(Adw.ApplicationWindow):
         )
         self._grids[console] = grid
         scroll.set_child(grid)
+        if console == self.current_console:
+            self._update_window_title(console)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
