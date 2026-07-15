@@ -29,7 +29,7 @@ AppDir:
     id: org.opemux.Opemux
     name: Opemux
     icon: org.opemux.Opemux
-    version: "0.1.0"
+    version: "1.0.0"
     exec: usr/bin/opemux-launcher
   apt:
     arch: amd64
@@ -53,6 +53,12 @@ AppDir:
       - libgdk-pixbuf2.0-bin
       - shared-mime-info
       - hicolor-icon-theme
+      # Symbolic icons used across the HIG UI (header bar, menus, rows, status
+      # pages) live in adwaita-icon-theme; without it none of them render.
+      - adwaita-icon-theme
+      # SVG pixbuf loader needed to rasterize the (SVG) symbolic icons.
+      - librsvg2-2
+      - librsvg2-common
 
 AppImage:
   arch: x86_64
