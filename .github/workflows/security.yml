@@ -1,0 +1,41 @@
+name: Security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Weekly scan so newly disclosed dependency CVEs are caught even without a push.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Static analysis & dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install scanners
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit pip-audit
+
+      - name: Bandit (static application security testing)
+        # Skip subprocess findings (B404/B603/B607): Opemux intentionally launches
+        # RetroArch and xdg-open with argument lists (never shell=True).
+        run: bandit -r src --severity-level medium --confidence-level medium --skip B404,B603,B607
+
+      - name: pip-audit (dependency vulnerabilities)
+        run: pip-audit -r requirements.lock

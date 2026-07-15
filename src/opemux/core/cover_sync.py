@@ -163,7 +163,8 @@ def _remote_cover_candidates(console, rom_name, sync_settings):
 def _download_cover(url, dest):
     try:
         logger.debug("cover_sync trying candidate: url=%s target=%s", url, dest)
-        with urllib.request.urlopen(url, timeout=12) as resp:
+        # url is a fixed https libretro-thumbnails endpoint (see _build_cover_url)
+        with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)

@@ -141,7 +141,8 @@ class RetroArchBuildbotUpdater:
 
     def _fetch_text(self, url):
         timeout = max(5, int(self.settings.get("request_timeout_sec", 30)))
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        # url is the configured https RetroArch buildbot base
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # nosec B310
             return resp.read().decode("utf-8", errors="replace")
 
     def _download_and_install(self, artifact):
@@ -159,7 +160,8 @@ class RetroArchBuildbotUpdater:
         last_error = None
         for attempt in range(retries + 1):
             try:
-                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                # url is an https artifact link from the RetroArch buildbot listing
+                with urllib.request.urlopen(url, timeout=timeout) as resp:  # nosec B310
                     data = resp.read()
                 self._atomic_write_bytes(destination, data)
                 return
