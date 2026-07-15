@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/guilhermefeitosa66/opemux/releases/latest">
-    <img src="https://img.shields.io/github/v/release/guilhermefeitosa66/opemux?label=Download&style=for-the-badge&logo=linux" alt="Download latest release"/>
+  <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">
+    <img src="https://img.shields.io/github/v/release/guilhermefeitosa66/OpenEmux?label=Download&style=for-the-badge&logo=linux" alt="Download latest release"/>
   </a>
   &nbsp;
-  <a href="https://github.com/guilhermefeitosa66/opemux/blob/main/LICENSE">
+  <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
   </a>
 </p>
@@ -58,7 +58,7 @@ Opemux exists to give that legitimate, personal-library experience the polished,
 
 ### 1. Download the AppImage
 
-Head to the [Releases page](https://github.com/guilhermefeitosa66/opemux/releases/latest) and download the latest `Opemux-x86_64.AppImage`.
+Head to the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest) and download the latest `Opemux-x86_64.AppImage`.
 
 ### 2. Make it executable
 
@@ -153,8 +153,8 @@ If you want to hack on Opemux or build the AppImage yourself:
 
 ```bash
 # Clone the repo
-git clone https://github.com/guilhermefeitosa66/opemux.git
-cd opemux
+git clone https://github.com/guilhermefeitosa66/OpenEmux.git
+cd OpenEmux
 
 # Install system dependencies and set up the Python venv
 make bootstrap
@@ -177,8 +177,8 @@ If you just want to run Opemux from source without building the AppImage:
 
 ```bash
 # Clone the repo
-git clone https://github.com/guilhermefeitosa66/opemux.git
-cd opemux
+git clone https://github.com/guilhermefeitosa66/OpenEmux.git
+cd OpenEmux
 
 # 1. Install system dependencies (GTK4, Adwaita, PyGObject — requires sudo)
 make install-sys-deps
