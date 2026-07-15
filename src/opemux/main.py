@@ -6,8 +6,50 @@ from threading import Thread
 from pathlib import Path
 import shutil
 
-from opemux.core.paths import is_running_in_appimage
+from opemux.core.paths import get_project_root, is_running_in_appimage
 from opemux.core.startup_logging import append_startup_error, configure_startup_logging
+
+
+def _ensure_gtk_typelibs():
+    """Make GTK4/Adwaita typelibs resolvable when the host ships the runtime
+    libraries but not the GObject-introspection typelibs.
+
+    Some distros (e.g. Linux Mint) install ``libgtk-4-1`` / ``libadwaita-1-0``
+    yet leave ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` out, so ``gi.require_version``
+    fails even though the shared libraries are present. When that happens, fall
+    back to the typelibs vendored in ``AppDir/`` (same GTK/Adw versions), pointed
+    to via ``GI_TYPELIB_PATH`` which GObject-introspection reads at lookup time.
+
+    No-op inside the AppImage and when the system already provides the typelibs.
+    Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
+    remains the recommended system-wide setup.
+    """
+    if is_running_in_appimage():
+        return
+
+    system_dirs = [
+        "/usr/lib/x86_64-linux-gnu/girepository-1.0",
+        "/usr/lib64/girepository-1.0",
+        "/usr/lib/girepository-1.0",
+    ]
+    if any(os.path.exists(os.path.join(d, "Gtk-4.0.typelib")) for d in system_dirs):
+        return  # system typelibs already available
+
+    try:
+        project_root = Path(get_project_root())
+    except Exception:
+        return
+
+    candidate = project_root / "AppDir" / "usr" / "lib" / "x86_64-linux-gnu" / "girepository-1.0"
+    if (candidate / "Gtk-4.0.typelib").exists() and (candidate / "Adw-1.typelib").exists():
+        existing = os.environ.get("GI_TYPELIB_PATH", "")
+        parts = [str(candidate)] + ([existing] if existing else [])
+        os.environ["GI_TYPELIB_PATH"] = os.pathsep.join(parts)
+        logging.getLogger(__name__).info(
+            "Using vendored GTK typelibs from %s (install gir1.2-gtk-4.0 / "
+            "gir1.2-adw-1 for a system-wide setup)",
+            candidate,
+        )
 
 
 def _configure_gtk_renderer():
@@ -29,6 +71,7 @@ def _configure_gtk_renderer():
 
 _configure_gtk_renderer()
 configure_startup_logging()
+_ensure_gtk_typelibs()
 
 try:
     import gi
@@ -36,7 +79,9 @@ try:
     gi.require_version('Adw', '1')
 except Exception:
     append_startup_error(
-        "Failed to import GTK stack (gi/Gtk/Adw)",
+        "Failed to import GTK stack (gi/Gtk/Adw). On Debian/Ubuntu/Mint install "
+        "the introspection typelibs: sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1 "
+        "(or run 'make install-sys-deps').",
         exc_text=traceback.format_exc(),
     )
     raise
