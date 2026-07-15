@@ -38,4 +38,7 @@ jobs:
         run: bandit -r src --severity-level medium --confidence-level medium --skip B404,B603,B607
 
       - name: pip-audit (dependency vulnerabilities)
-        run: pip-audit -r requirements.lock
+        # --no-deps audits the exact pinned versions in the lock file without
+        # resolving/compiling them (pycairo/PyGObject need C headers this job
+        # doesn't install); requirements.lock is fully pinned so this is exact.
+        run: pip-audit -r requirements.lock --no-deps
