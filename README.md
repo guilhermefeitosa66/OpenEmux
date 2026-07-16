@@ -17,6 +17,10 @@
     <img src="https://img.shields.io/github/v/release/guilhermefeitosa66/OpenEmux?label=Download&style=for-the-badge&logo=linux" alt="Download latest release"/>
   </a>
   &nbsp;
+  <a href="https://www.reddit.com/r/OpenEmux/">
+    <img src="https://img.shields.io/badge/Reddit-r%2FOpenEmux-ff4500?style=for-the-badge&logo=reddit&logoColor=white" alt="OpenEmux subreddit"/>
+  </a>
+  &nbsp;
   <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
   </a>
@@ -128,6 +132,12 @@ A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, 
 - **General / ROMs** — set your ROM directory, scan for new games, and sync cover art from the libretro thumbnail repository.
 - **BIOS** — check which required BIOS files are present for each console (e.g. PS1, Saturn).
 - **Input** — configure keyboard and gamepad mappings per console. Changes are applied at launch time via RetroArch's `--appendconfig`.
+
+---
+
+## Community
+
+Join the OpenEmux community on Reddit at [r/OpenEmux](https://www.reddit.com/r/OpenEmux/) — share your setup, ask for help, report issues, and follow what's coming next.
 
 ---
 
