@@ -14,10 +14,10 @@ FIXED_ITEM_WIDTH = 200
 
 CONSOLE_COVER_SIZES = {
     # Width fixed at 200px. Heights keep cartridge image proportions:
-    # FC: 698x784 -> 200x225
-    # SFC: 811x518 -> 200x128
-    # GBA: 1000x574 -> 200x115
-    "FC": (200, 225),
+    # FC: 400x449 -> 200x224
+    # SFC: 400x255 -> 200x128
+    # GBA: 400x230 -> 200x115
+    "FC": (200, 224),
     "SFC": (200, 128),
     "GBA": (200, 115),
 }
@@ -28,6 +28,20 @@ CARTRIDGE_COVER_FRAMES = {
     "FC": (80.9, 0, 93.1, 153),
     "SFC": (38.6, 0, 122.5, 57.2),
 }
+
+# One decoded texture per console, shared by every card. Loading the PNG per
+# card cost ~9ms and a full pixel copy each time, which showed up as lag on
+# consoles with large libraries.
+_CARTRIDGE_TEXTURES = {}
+
+
+def _cartridge_texture(path):
+    key = str(path)
+    texture = _CARTRIDGE_TEXTURES.get(key)
+    if texture is None:
+        texture = Gdk.Texture.new_from_filename(key)
+        _CARTRIDGE_TEXTURES[key] = texture
+    return texture
 
 
 class RomItem(Gtk.Box):
@@ -118,7 +132,9 @@ class RomItem(Gtk.Box):
 
         self.cartridge_overlay = None
         if cartridge_overlay_path:
-            self.cartridge_overlay = Gtk.Picture.new_for_filename(str(cartridge_overlay_path))
+            self.cartridge_overlay = Gtk.Picture.new_for_paintable(
+                _cartridge_texture(cartridge_overlay_path)
+            )
             self.cartridge_overlay.set_size_request(self.cover_width, self.cover_height)
             # Preserve cartridge image ratio to avoid distortion.
             self.cartridge_overlay.set_content_fit(Gtk.ContentFit.CONTAIN)
