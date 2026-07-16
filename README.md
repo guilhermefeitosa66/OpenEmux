@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <a href="https://guilhermefeitosa66.github.io/OpenEmux/">
+    <img src="https://img.shields.io/badge/Website-openemux-8b5cf6?style=for-the-badge&logo=github" alt="OpenEmux website"/>
+  </a>
+  &nbsp;
   <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">
     <img src="https://img.shields.io/github/v/release/guilhermefeitosa66/OpenEmux?label=Download&style=for-the-badge&logo=linux" alt="Download latest release"/>
   </a>
