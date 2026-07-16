@@ -145,14 +145,6 @@ OpenEmux is free and open source. If you find it useful, consider buying me a co
   </a>
 </p>
 
-**🇧🇷 Or if you're from Brazil**, you can also donate via **Pix**:
-
-<p align="center">
-  <img src="docs/assets/pix.png" alt="Pix QR Code" width="180"/>
-  <br/>
-  <em>Scan the QR Code above to donate via Pix</em>
-</p>
-
 ---
 
 ## Build from Source
