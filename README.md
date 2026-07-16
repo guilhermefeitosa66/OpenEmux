@@ -226,9 +226,6 @@ not legal advice.)*
 <p align="center">
   Made with lots of love and care by <strong>Guilherme Feitoza</strong> &nbsp;🇧🇷<br/>
   <br/>
-  <a href="https://www.linkedin.com/in/guilherme-lima-0260a154/">LinkedIn</a>
-  <br/>
-  <br/>
   I'd love to hear your feedback, ideas, and suggestions for improvement.<br/>
   Pull requests are very welcome — this is free software, and it grows with the community. 🙌
 </p>
