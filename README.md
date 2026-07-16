@@ -82,14 +82,6 @@ On first launch, OpenEmux will automatically set up its configuration directory,
 
 ---
 
-## Demo
-
-See OpenEmux running as a Flatpak — browsing the library and launching a game through RetroArch:
-
-https://github.com/user-attachments/assets/ff3690fe-cff7-4b24-9107-64e1af874a28
-
----
-
 ## Screenshots
 
 ### ROM Library
