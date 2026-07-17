@@ -15,7 +15,15 @@ from openemux.core.cover_sync import sync_covers_async
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
 from openemux.core.runtime_manager import RuntimeManager
-from openemux.core.scraper import SUPPORTED_COVER_EXTS, find_local_cover, remove_local_covers, save_local_cover
+from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
+from openemux.core.scraper import (
+    COVER_ART,
+    LABEL_ART,
+    SUPPORTED_COVER_EXTS,
+    find_local_art,
+    remove_local_art,
+    save_local_art,
+)
 from openemux.core.scanner import RomScanner
 from openemux.core.shaders import ShaderCatalog
 from openemux import __version__
@@ -95,6 +103,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.set_content(self.toast_overlay)
 
         self._preferences_dialog = None
+        self._update_download_url = DEFAULT_DOWNLOAD_URL
 
         # ----- Navigation split view (sidebar + content), HIG-adaptive -----
         self.content_stack = Adw.ViewStack()
@@ -123,7 +132,52 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.refresh_library()
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
+        self._start_update_check()
         GLib.timeout_add_seconds(1, self._poll_runtime_state)
+
+    def _start_update_check(self):
+        settings = self.config_manager.get_update_settings()
+        self._update_download_url = settings["download_url"]
+        if not settings["check_on_startup"]:
+            logger.info("update check: disabled by config")
+            return
+
+        def _on_done(release):
+            GLib.idle_add(self._on_update_check_done, release)
+
+        check_for_update_async(
+            __version__,
+            _on_done,
+            api_url=settings["api_url"],
+            timeout=settings["timeout_seconds"],
+        )
+
+    def _on_update_check_done(self, release):
+        # No release, a failed check or already up to date: stay quiet.
+        if not release:
+            return False
+        self._update_download_url = release.get("url") or self._update_download_url
+        self.update_banner.set_title(
+            self.t("banner.update.available", version=release["version"])
+        )
+        self.update_banner.set_revealed(True)
+        return False
+
+    def _on_update_banner_clicked(self, _banner):
+        logger.info("update banner: opening %s", self._update_download_url)
+        self.update_banner.set_revealed(False)
+        self._open_uri(self._update_download_url)
+
+    def _open_uri(self, uri):
+        launcher = Gtk.UriLauncher.new(uri)
+        launcher.launch(self, None, self._on_uri_launched)
+
+    def _on_uri_launched(self, launcher, result):
+        try:
+            launcher.launch_finish(result)
+        except GLib.Error as exc:
+            logger.info("failed to open uri: %s", exc)
+            self._toast(self.t("toast.update.open_failed"), timeout=4)
 
     def _on_global_click_pressed(self, gesture, n_press, x, y):
         button = gesture.get_current_button()
@@ -232,6 +286,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.banner = Adw.Banner()
         self.banner.set_revealed(False)
         toolbar.add_top_bar(self.banner)
+
+        # Kept separate from the progress banner: that one is driven by the task
+        # registry and shows one task at a time, so it has no room for a notice
+        # that stays up until acted on.
+        self.update_banner = Adw.Banner()
+        self.update_banner.set_revealed(False)
+        self.update_banner.set_button_label(self.t("banner.update.action"))
+        self.update_banner.connect("button-clicked", self._on_update_banner_clicked)
+        toolbar.add_top_bar(self.update_banner)
 
         toolbar.set_content(self.content_stack)
 
@@ -864,6 +927,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.t,
             self.roms_path,
             ui_settings=self.config_manager.get_ui_settings(),
+            mixed_consoles=console in (ALL_CONSOLES_ID, FAVORITES_ID),
         )
         self._grids[console] = grid
         scroll.set_child(grid)
@@ -873,8 +937,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
 
-    def _has_local_cover(self, rom):
-        return bool(find_local_cover(Path(self.roms_path), rom["console"], rom["name"]))
+    def _has_local_cover(self, rom, kind=COVER_ART):
+        return bool(find_local_art(Path(self.roms_path), rom["console"], rom["name"], kind))
 
     def _toggle_favorite_from_ui(self, rom):
         is_now_favorite = self.playlist_manager.toggle_favorite(rom)
@@ -888,9 +952,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._ensure_favorites_loaded()
         return is_now_favorite
 
-    def _choose_cover_for_rom(self, rom, on_done=None):
+    def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
+        title_key = "dialog.label.choose.title" if kind == LABEL_ART else "dialog.cover.choose.title"
         chooser = Gtk.FileChooserDialog(
-            title=self.t("dialog.cover.choose.title"),
+            title=self.t(title_key),
             transient_for=self,
             modal=True,
             action=Gtk.FileChooserAction.OPEN,
@@ -921,8 +986,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 toast.set_timeout(4)
                 self.toast_overlay.add_toast(toast)
                 return
-            save_local_cover(Path(self.roms_path), rom["console"], rom["name"], path)
-            toast = Adw.Toast(title=self.t("toast.cover.updated", name=rom["name"]))
+            save_local_art(Path(self.roms_path), rom["console"], rom["name"], path, kind)
+            updated_key = "toast.label.updated" if kind == LABEL_ART else "toast.cover.updated"
+            toast = Adw.Toast(title=self.t(updated_key, name=rom["name"]))
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             if callable(on_done):
@@ -931,10 +997,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         chooser.connect("response", _on_response)
         chooser.show()
 
-    def _remove_cover_for_rom(self, rom, on_done=None):
-        removed = remove_local_covers(Path(self.roms_path), rom["console"], rom["name"])
+    def _remove_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
+        removed = remove_local_art(Path(self.roms_path), rom["console"], rom["name"], kind)
         if removed:
-            toast = Adw.Toast(title=self.t("toast.cover.removed", name=rom["name"]))
+            removed_key = "toast.label.removed" if kind == LABEL_ART else "toast.cover.removed"
+            toast = Adw.Toast(title=self.t(removed_key, name=rom["name"]))
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             if callable(on_done):

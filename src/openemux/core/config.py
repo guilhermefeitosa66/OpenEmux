@@ -9,6 +9,11 @@ from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
+from openemux.core.update_checker import (
+    DEFAULT_API_URL as DEFAULT_UPDATE_API_URL,
+    DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
+    DEFAULT_TIMEOUT as DEFAULT_UPDATE_TIMEOUT,
+)
 
 # Private app data stays under the (sandbox-private, real-path) HOME; the ROM
 # library lives under the user's real home so a Flatpak build reaches the same
@@ -53,6 +58,14 @@ DEFAULT_CONFIG = {
     },
     "ui": {
         "render_cartridge_overlay": False,
+    },
+    "updates": {
+        # Packaged builds that ship through a store (Flathub) can turn the
+        # startup check off, since the store handles updates.
+        "check_on_startup": True,
+        "api_url": DEFAULT_UPDATE_API_URL,
+        "download_url": DEFAULT_UPDATE_DOWNLOAD_URL,
+        "timeout_seconds": DEFAULT_UPDATE_TIMEOUT,
     },
     "covers": {
         "providers": ["libretro_thumbnails"],
@@ -193,6 +206,13 @@ class ConfigManager:
         ui.setdefault("render_cartridge_overlay", False)
         config["ui"] = ui
 
+        updates = config.get("updates", {})
+        updates.setdefault("check_on_startup", True)
+        updates.setdefault("api_url", DEFAULT_UPDATE_API_URL)
+        updates.setdefault("download_url", DEFAULT_UPDATE_DOWNLOAD_URL)
+        updates.setdefault("timeout_seconds", DEFAULT_UPDATE_TIMEOUT)
+        config["updates"] = updates
+
         config["locale"] = normalize_locale(config.get("locale", "en"))
         config["consoles"] = [system_id for system_id in config.get("consoles", SYSTEM_IDS) if resolve_system_id(system_id) in SYSTEM_IDS]
         if not config["consoles"]:
@@ -288,6 +308,19 @@ class ConfigManager:
         ui = self.config.get("ui", {})
         return {
             "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", False)),
+        }
+
+    def get_update_settings(self):
+        updates = self.config.get("updates", {})
+        try:
+            timeout = int(updates.get("timeout_seconds", DEFAULT_UPDATE_TIMEOUT))
+        except (TypeError, ValueError):
+            timeout = DEFAULT_UPDATE_TIMEOUT
+        return {
+            "check_on_startup": bool(updates.get("check_on_startup", True)),
+            "api_url": str(updates.get("api_url") or DEFAULT_UPDATE_API_URL),
+            "download_url": str(updates.get("download_url") or DEFAULT_UPDATE_DOWNLOAD_URL),
+            "timeout_seconds": timeout,
         }
 
     def set_render_cartridge_overlay(self, enabled):

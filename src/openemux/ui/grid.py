@@ -5,15 +5,56 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango, Gio
 from pathlib import Path
 import logging
 
-from openemux.core.scraper import fetch_cover
+from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
+from openemux.core.systems import get_system_display_name
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
 
-CONSOLE_COVER_SIZES = {
-    # Width fixed at 200px. Heights keep cartridge image proportions:
+# Box art proportions (width / height) per console, so a card matches the shape
+# of the artwork it holds instead of forcing every console into a square.
+# Measured as the median of libretro Named_Boxarts samples per system (~30
+# scans each), which is where synced covers come from.
+DEFAULT_COVER_ASPECT = 1.0
+CONSOLE_COVER_ASPECTS = {
+    "A2600": 0.73,
+    "A5200": 0.73,
+    "A7800": 0.73,
+    "CV": 0.73,
+    "FC": 0.73,
+    "FDS": 0.98,
+    "GB": 1.00,
+    "GBA": 1.00,
+    "GBC": 1.00,
+    "GC": 0.71,
+    "GG": 0.71,
+    "INTV": 0.72,
+    "LYNX": 1.12,
+    "MCD": 0.71,
+    "MD": 0.70,
+    "N64": 1.37,
+    "NDS": 1.11,
+    "NGP": 0.88,
+    "O2": 0.74,
+    "PCE": 1.03,
+    "PCECD": 1.00,
+    "PS": 1.00,
+    "PSP": 0.58,
+    "S32X": 0.73,
+    "SATURN": 1.00,
+    "SFC": 1.41,
+    "SG1000": 0.73,
+    "SMS": 0.71,
+    "VB": 1.00,
+    "VECTREX": 0.74,
+    "WS": 0.81,
+}
+
+CARTRIDGE_ITEM_SIZES = {
+    # Only used while the cartridge frame is drawn: the card has to match the
+    # cartridge PNG proportions. Width fixed at 200px.
     # FC: 400x449 -> 200x224
     # SFC: 400x255 -> 200x128
     # GBA: 400x230 -> 200x115
@@ -33,6 +74,13 @@ CARTRIDGE_COVER_FRAMES = {
 # card cost ~9ms and a full pixel copy each time, which showed up as lag on
 # consoles with large libraries.
 _CARTRIDGE_TEXTURES = {}
+
+
+def cover_size_for_console(console):
+    """Card size for a console when no cartridge frame is drawn."""
+    aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
+    height = int(round(FIXED_ITEM_WIDTH / aspect)) if aspect > 0 else FIXED_ITEM_WIDTH
+    return FIXED_ITEM_WIDTH, max(1, height)
 
 
 def _cartridge_texture(path):
@@ -61,6 +109,7 @@ class RomItem(Gtk.Box):
         cover_size,
         cartridge_overlay_path=None,
         cover_frame=None,
+        mixed_consoles=False,
     ):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
@@ -74,8 +123,17 @@ class RomItem(Gtk.Box):
         self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
         self.cover_frame = cover_frame
+        # Pages that mix consoles cannot size the card to one box art shape, so
+        # the cover is centred at its own proportions over a uniform backdrop.
+        self.mixed_consoles = mixed_consoles
+        self._backdrop = None
+        # Inside a cartridge frame the label sticker is what belongs there, so
+        # prefer it and fall back to the box art when none was configured.
+        self._art_kinds = (LABEL_ART, COVER_ART) if cover_frame else (COVER_ART,)
+        self.supports_label = rom["console"] in CARTRIDGE_COVER_FRAMES
         self.add_css_class("rom-card")
-        self.set_size_request(self.cover_width, self.cover_height + 44)
+        text_height = 44 + (18 if mixed_consoles else 0)
+        self.set_size_request(self.cover_width, self.cover_height + text_height)
         self.set_halign(Gtk.Align.START)
         self.set_valign(Gtk.Align.START)
         self.set_hexpand(False)
@@ -101,7 +159,9 @@ class RomItem(Gtk.Box):
         # Cover image (placeholder initially)
         self.cover_image = Gtk.Picture()
         self.cover_image.set_size_request(*self._cover_target_size())
-        self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
+        self.cover_image.set_content_fit(
+            Gtk.ContentFit.CONTAIN if mixed_consoles else Gtk.ContentFit.COVER
+        )
         self.cover_image.set_can_shrink(True)
         self.cover_image.add_css_class("rom-cover")
         self._setup_cover_host()
@@ -156,17 +216,31 @@ class RomItem(Gtk.Box):
         display_name = self._truncate_name(full_name)
         self.set_tooltip_text(full_name)
 
-        # ROM Name
+        # ROM name, plus the console it belongs to when the page mixes consoles.
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.name_label = Gtk.Label(label=display_name)
         self.name_label.set_halign(Gtk.Align.CENTER)
         self.name_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
         self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
         self.name_label.set_tooltip_text(full_name)
         self.name_label.add_css_class("rom-title")
-        self.append(self.name_label)
+        text_box.append(self.name_label)
+
+        self.console_label = None
+        if mixed_consoles:
+            self.console_label = Gtk.Label(label=get_system_display_name(rom["console"]))
+            self.console_label.set_halign(Gtk.Align.CENTER)
+            self.console_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+            self.console_label.set_ellipsize(Pango.EllipsizeMode.END)
+            self.console_label.add_css_class("caption")
+            self.console_label.add_css_class("dim-label")
+            self.console_label.add_css_class("rom-console")
+            text_box.append(self.console_label)
+
+        self.append(text_box)
 
         # Trigger async cover art fetch
-        fetch_cover(rom, self.roms_dir, self._on_cover_fetched)
+        fetch_cover(rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
 
         self._context_popover = None
 
@@ -228,6 +302,10 @@ class RomItem(Gtk.Box):
                 self._cover_target_size()[1],
                 True,
             )
+            if self.mixed_consoles:
+                # Shrink the widget to the scaled art so the rounded corners and
+                # shadow hug the cover, not the empty area around it.
+                self.cover_image.set_size_request(pixbuf.get_width(), pixbuf.get_height())
             self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
             # Remove placeholder if present
@@ -256,11 +334,34 @@ class RomItem(Gtk.Box):
             self._cover_host.set_size_request(self.cover_width, self.cover_height)
             self.cover_overlay.set_child(self._cover_host)
             self._set_cover_widget(self.cover_image)
-        else:
-            self._cover_host = None
-            self.cover_overlay.set_child(self.cover_image)
+            return
+
+        self._cover_host = None
+        if self.mixed_consoles:
+            # Uniform box: the cover keeps its own shape and the leftover area
+            # is filled by a subtle backdrop instead of cropping the art.
+            self._backdrop = Gtk.Box()
+            self._backdrop.set_size_request(self.cover_width, self.cover_height)
+            self._backdrop.add_css_class("rom-cover-backdrop")
+            self.cover_overlay.set_child(self._backdrop)
+            self._set_cover_widget(self.cover_image)
+            return
+
+        self.cover_overlay.set_child(self.cover_image)
 
     def _set_cover_widget(self, widget):
+        if self._backdrop is not None:
+            child = self._backdrop.get_first_child()
+            if child:
+                self._backdrop.remove(child)
+            # The expands hand the child the whole box; the aligns then centre it
+            # inside that space. Without the expands a Gtk.Box packs it left.
+            widget.set_hexpand(True)
+            widget.set_vexpand(True)
+            widget.set_halign(Gtk.Align.CENTER)
+            widget.set_valign(Gtk.Align.CENTER)
+            self._backdrop.append(widget)
+            return
         if self._cover_host is None:
             self.cover_overlay.set_child(widget)
             return
@@ -304,6 +405,8 @@ class RomItem(Gtk.Box):
             ("toggle-favorite", self._act_toggle_favorite),
             ("choose-cover", self._act_choose_cover),
             ("remove-cover", self._act_remove_cover),
+            ("choose-label", self._act_choose_label),
+            ("remove-label", self._act_remove_label),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -328,8 +431,12 @@ class RomItem(Gtk.Box):
         fav_label = self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
         menu.append(fav_label, "rom.toggle-favorite")
         menu.append(self.t("context.cover.choose"), "rom.choose-cover")
-        if self.has_local_cover(self.rom):
+        if self.has_local_cover(self.rom, COVER_ART):
             menu.append(self.t("context.cover.remove"), "rom.remove-cover")
+        if self.supports_label:
+            menu.append(self.t("context.label.choose"), "rom.choose-label")
+            if self.has_local_cover(self.rom, LABEL_ART):
+                menu.append(self.t("context.label.remove"), "rom.remove-label")
 
         popover = Gtk.PopoverMenu.new_from_model(menu)
         popover.set_parent(self)
@@ -353,14 +460,22 @@ class RomItem(Gtk.Box):
 
     def _act_choose_cover(self, _action, _param):
         logger.info("rom context action: choose_cover rom=%s", self.rom.get("name"))
-        self.on_choose_cover(self.rom, self._refresh_cover_after_change)
+        self.on_choose_cover(self.rom, self._refresh_cover_after_change, COVER_ART)
 
     def _act_remove_cover(self, _action, _param):
         logger.info("rom context action: remove_cover rom=%s", self.rom.get("name"))
-        self.on_remove_cover(self.rom, self._refresh_cover_after_change)
+        self.on_remove_cover(self.rom, self._refresh_cover_after_change, COVER_ART)
+
+    def _act_choose_label(self, _action, _param):
+        logger.info("rom context action: choose_label rom=%s", self.rom.get("name"))
+        self.on_choose_cover(self.rom, self._refresh_cover_after_change, LABEL_ART)
+
+    def _act_remove_label(self, _action, _param):
+        logger.info("rom context action: remove_label rom=%s", self.rom.get("name"))
+        self.on_remove_cover(self.rom, self._refresh_cover_after_change, LABEL_ART)
 
     def _refresh_cover_after_change(self):
-        fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched)
+        fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
 
 
 class RomGrid(Gtk.FlowBox):
@@ -377,9 +492,11 @@ class RomGrid(Gtk.FlowBox):
         t,
         roms_dir,
         ui_settings=None,
+        mixed_consoles=False,
     ):
         super().__init__()
         self.console = console
+        self.mixed_consoles = mixed_consoles
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
@@ -394,11 +511,16 @@ class RomGrid(Gtk.FlowBox):
         self.set_homogeneous(False)
 
         cartridge_overlay_path = None
-        cover_size = CONSOLE_COVER_SIZES.get(console, DEFAULT_ITEM_SIZE)
-        if self.ui_settings.get("render_cartridge_overlay", False):
+        # Without the cartridge frame the card follows the console's box art
+        # proportions instead of being squeezed into a cartridge silhouette.
+        # Pages mixing consoles have no single shape to follow, so they use a
+        # uniform square box and centre each cover inside it.
+        cover_size = DEFAULT_ITEM_SIZE if mixed_consoles else cover_size_for_console(console)
+        if not mixed_consoles and self.ui_settings.get("render_cartridge_overlay", False):
             candidate = Path(__file__).parent / "assets" / "images" / "cartridges" / f"{console}.png"
             if candidate.exists():
                 cartridge_overlay_path = candidate
+                cover_size = CARTRIDGE_ITEM_SIZES.get(console, DEFAULT_ITEM_SIZE)
                 size_info = GdkPixbuf.Pixbuf.get_file_info(str(candidate))
                 if size_info:
                     _, width, height = size_info
@@ -421,5 +543,6 @@ class RomGrid(Gtk.FlowBox):
                 cover_size,
                 cartridge_overlay_path=cartridge_overlay_path,
                 cover_frame=cover_frame,
+                mixed_consoles=mixed_consoles,
             )
             self.append(item)

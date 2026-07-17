@@ -18,6 +18,13 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
+/* Fills the leftover area on pages that mix consoles, where covers keep their
+   own proportions inside a uniform box. */
+.rom-cover-backdrop {
+    background-color: alpha(@card_shade_color, 0.35);
+    border-radius: 8px;
+}
+
 .rom-cover-placeholder {
     background: linear-gradient(145deg, @card_bg_color, alpha(@accent_bg_color, 0.15));
     border-radius: 8px;
@@ -33,6 +40,11 @@
     font-size: 0.85rem;
     font-weight: 500;
     color: @window_fg_color;
+}
+
+/* Size and muting come from Adwaita's .caption and .dim-label. */
+.rom-console {
+    font-style: italic;
 }
 
 /* ===== Play Overlay ===== */

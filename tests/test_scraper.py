@@ -2,7 +2,16 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from openemux.core.scraper import find_local_cover, remove_local_covers, save_local_cover
+from openemux.core.scraper import (
+    COVER_ART,
+    LABEL_ART,
+    find_local_art,
+    find_local_cover,
+    remove_local_art,
+    remove_local_covers,
+    save_local_art,
+    save_local_cover,
+)
 
 
 class ScraperTests(unittest.TestCase):
@@ -35,6 +44,30 @@ class ScraperTests(unittest.TestCase):
 
             self.assertEqual(removed, 4)
             self.assertIsNone(find_local_cover(base / "roms", "PS", "Game"))
+
+    def test_label_art_is_stored_separately_from_cover_art(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms_dir = base / "roms"
+            cover_src = base / "cover.png"
+            cover_src.write_bytes(b"cover")
+            label_src = base / "label.png"
+            label_src.write_bytes(b"label")
+
+            save_local_art(roms_dir, "GBA", "Golden Sun", cover_src, COVER_ART)
+            save_local_art(roms_dir, "GBA", "Golden Sun", label_src, LABEL_ART)
+
+            self.assertEqual(
+                find_local_art(roms_dir, "GBA", "Golden Sun", COVER_ART).read_bytes(), b"cover"
+            )
+            self.assertEqual(
+                find_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART).read_bytes(), b"label"
+            )
+
+            # Removing the label must leave the cover untouched.
+            self.assertEqual(remove_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART), 1)
+            self.assertIsNone(find_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART))
+            self.assertIsNotNone(find_local_art(roms_dir, "GBA", "Golden Sun", COVER_ART))
 
 
 if __name__ == "__main__":
