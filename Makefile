@@ -4,8 +4,8 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: appimage appimage-docker appimage-clean
+.PHONY: all setup venv run test clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: appimage appimage-docker appimage-clean deb rpm packages packages-clean
 
 all: setup
 
@@ -37,6 +37,10 @@ lock-deps:
 run:
 	PYTHONPATH=src $(PYTHON) src/openemux/main.py
 
+# Run the unit test suite
+test:
+	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
+
 check-retroarch:
 	@echo "Checking RetroArch binary..."
 	@if [ -x vendors/RetroArch-Linux-x86_64.AppImage ]; then \
@@ -48,14 +52,33 @@ check-retroarch:
 		exit 1; \
 	fi
 
+# --- Packaging (all builds run in Docker; the AppImage build also requires an
+#     x86_64 host). Artifacts land in dist/. See docs/DEVELOPMENT.md. ---
+
+# Universal AppImage (Ubuntu 24.04 build container)
 appimage:
 	./packaging/appimage/build_appimage.sh
 
 appimage-docker:
 	./packaging/appimage/build_in_docker.sh
 
+# Debian/Ubuntu .deb — built and install-tested in an Ubuntu 24.04 container
+deb:
+	./packaging/deb/build_deb.sh
+
+# Fedora .rpm — built and install-tested in a Fedora container
+rpm:
+	./packaging/rpm/build_rpm.sh
+
+# Build all three release artifacts into dist/
+packages: appimage deb rpm
+
 appimage-clean:
 	rm -rf AppDir appimage-builder-cache dist/*.AppImage dist/*.zsync
+
+# Remove every packaged artifact
+packages-clean: appimage-clean
+	rm -f dist/*.deb dist/*.rpm
 
 # Cleaning
 clean:

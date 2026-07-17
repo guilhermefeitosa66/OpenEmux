@@ -166,7 +166,7 @@ OpenEmux is free and open source. If you find it useful, consider buying me a co
 
 ## Build from Source
 
-If you want to hack on OpenEmux or build the AppImage yourself:
+If you want to hack on OpenEmux or build the packages yourself:
 
 ```bash
 # Clone the repo
@@ -180,11 +180,18 @@ make bootstrap
 make run
 
 # Run the test suite
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+make test
 
-# Build the AppImage (requires Docker)
-make appimage
+# Build the release artifacts (all require Docker)
+make appimage   # universal AppImage
+make deb        # Debian/Ubuntu package
+make rpm        # Fedora package
+make packages   # all three at once
 ```
+
+> 📖 **Full [Developer Guide](docs/DEVELOPMENT.md)** — project layout, running
+> from source on any distro, the test suite, and how each package is built and
+> laid out.
 
 ---
 
