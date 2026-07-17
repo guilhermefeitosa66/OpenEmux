@@ -82,6 +82,26 @@
   </keywords>
 
   <releases>
+    <release version="1.2.0" date="2026-07-17">
+      <description>
+        <p>Library and packaging update.</p>
+        <ul>
+          <li>Per-console cover proportions and a separate cartridge-label image slot</li>
+          <li>Redesigned "All" library view with per-game console labels</li>
+          <li>Background check for new releases on startup</li>
+          <li>Native .deb and .rpm packages alongside the AppImage</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.1" date="2026-07-16">
+      <description>
+        <p>Maintenance release.</p>
+        <ul>
+          <li>Cached cartridge textures and smaller frame assets</li>
+          <li>Documentation and website updates</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-07-15">
       <description>
         <p>First Flatpak release.</p>

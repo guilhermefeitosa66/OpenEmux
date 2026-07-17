@@ -222,7 +222,7 @@
       <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for Linux</a>
       <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ View on GitHub</a>
     </div>
-    <p class="cta-note">Free and open source · MIT licensed · AppImage &amp; Flatpak</p>
+    <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb &amp; .rpm</p>
     <div class="shot">
       <img src="assets/openemux-roms-snes.png" alt="OpenEmux library view showing SNES games with cover art"/>
     </div>
@@ -361,26 +361,29 @@
   <div class="wrap center">
     <span class="eyebrow">Get started</span>
     <h2>Running in under a minute</h2>
-    <p class="lede">Download the AppImage, make it executable, run it. OpenEmux handles the rest on first launch.</p>
+    <p class="lede">Grab a package for your distro, or the universal AppImage. OpenEmux handles the rest on first launch.</p>
     <div class="steps">
       <div class="card">
-        <div class="step-n">1</div>
-        <h3>Download</h3>
-        <p style="margin-bottom:14px">Grab the latest <code>OpenEmux-x86_64.AppImage</code> from the releases page.</p>
-        <a class="btn btn-primary btn-sm" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases →</a>
-      </div>
-      <div class="card">
-        <div class="step-n">2</div>
-        <h3>Make it executable</h3>
-        <pre><code>chmod +x OpenEmux-x86_64.AppImage</code></pre>
-      </div>
-      <div class="card">
-        <div class="step-n">3</div>
-        <h3>Run it</h3>
-        <pre><code>./OpenEmux-x86_64.AppImage</code></pre>
+        <div class="step-n">AppImage</div>
+        <h3>Any distro</h3>
+        <pre><code>chmod +x OpenEmux-x86_64.AppImage
+./OpenEmux-x86_64.AppImage</code></pre>
         <p style="margin-top:12px;font-size:.85rem">No FUSE? Prefix with <code>APPIMAGE_EXTRACT_AND_RUN=1</code>.</p>
       </div>
+      <div class="card">
+        <div class="step-n">.deb</div>
+        <h3>Debian / Ubuntu</h3>
+        <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
+        <p style="margin-top:12px;font-size:.85rem">Ubuntu 24.04 LTS or newer.</p>
+      </div>
+      <div class="card">
+        <div class="step-n">.rpm</div>
+        <h3>Fedora</h3>
+        <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
+        <p style="margin-top:12px;font-size:.85rem">Fedora 40 or newer.</p>
+      </div>
     </div>
+    <p style="margin-top:22px"><a class="btn btn-primary btn-sm" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download from Releases →</a></p>
     <p class="lede" style="margin-top:40px">Prefer building it yourself? <code>make bootstrap &amp;&amp; make run</code> — see the <a href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">build instructions</a>.</p>
   </div>
 </section>

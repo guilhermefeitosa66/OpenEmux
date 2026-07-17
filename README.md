@@ -64,19 +64,14 @@ OpenEmux exists to give that legitimate, personal-library experience the polishe
 
 ## Download & Install
 
-### 1. Download the AppImage
+Grab the latest build from the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest). Three formats are available — pick whichever suits your distro.
 
-Head to the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest) and download the latest `OpenEmux-x86_64.AppImage`.
+On first launch, OpenEmux automatically sets up its configuration directory, downloads the required libretro cores from the RetroArch Buildbot, and gets everything ready for you.
 
-### 2. Make it executable
+### AppImage (any distro)
 
 ```bash
 chmod +x OpenEmux-x86_64.AppImage
-```
-
-### 3. Run it
-
-```bash
 ./OpenEmux-x86_64.AppImage
 ```
 
@@ -86,7 +81,23 @@ chmod +x OpenEmux-x86_64.AppImage
 > APPIMAGE_EXTRACT_AND_RUN=1 ./OpenEmux-x86_64.AppImage
 > ```
 
-On first launch, OpenEmux will automatically set up its configuration directory, download the required libretro cores from the RetroArch Buildbot, and get everything ready for you.
+### Debian / Ubuntu (`.deb`)
+
+Requires **Ubuntu 24.04 LTS or newer** (or a Debian release with libadwaita ≥ 1.5). `apt` pulls in the GTK4/Adwaita dependencies for you:
+
+```bash
+sudo apt install ./openemux_*_amd64.deb
+```
+
+### Fedora (`.rpm`)
+
+Requires **Fedora 40 or newer** (libadwaita ≥ 1.5):
+
+```bash
+sudo dnf install ./openemux-*.x86_64.rpm
+```
+
+The `.deb` and `.rpm` install OpenEmux under `/opt/openemux` and add an `openemux` launcher plus a desktop entry, so it shows up in your application menu.
 
 ---
 
