@@ -92,3 +92,21 @@
     outline-offset: -8px;
     border-radius: 12px;
 }
+
+/* ===== Context Menus =====
+   Rows are hand-built buttons (GTK4 hides icons on menu-model items), so they
+   need the padding and alignment a GtkModelButton would have given us. */
+.context-menu-box {
+    padding: 6px;
+}
+
+.context-menu-item {
+    padding: 6px 10px;
+    min-height: 22px;
+    border-radius: 6px;
+}
+
+.context-menu-item image {
+    -gtk-icon-size: 16px;
+    opacity: 0.75;
+}
