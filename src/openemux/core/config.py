@@ -85,6 +85,7 @@ DEFAULT_CONFIG = {
     },
     "ui": {
         "render_cartridge_overlay": False,
+        "show_tips": True,
     },
     "updates": {
         # Packaged builds that ship through a store (Flathub) can turn the
@@ -240,6 +241,7 @@ class ConfigManager:
 
         ui = config.get("ui", {})
         ui.setdefault("render_cartridge_overlay", False)
+        ui.setdefault("show_tips", True)
         config["ui"] = ui
 
         updates = config.get("updates", {})
@@ -370,6 +372,7 @@ class ConfigManager:
         ui = self.config.get("ui", {})
         return {
             "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", False)),
+            "show_tips": bool(ui.get("show_tips", True)),
         }
 
     def get_update_settings(self):
@@ -388,6 +391,11 @@ class ConfigManager:
     def set_render_cartridge_overlay(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["render_cartridge_overlay"] = bool(enabled)
+        self.save_config()
+
+    def set_show_tips(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["show_tips"] = bool(enabled)
         self.save_config()
 
     def get_runtime_mode(self):

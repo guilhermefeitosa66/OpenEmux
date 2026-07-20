@@ -31,7 +31,7 @@ from openemux.core.scraper import (
 )
 from openemux.core.scanner import RomScanner
 from openemux.core.shaders import ShaderCatalog
-from openemux.core.tips import TIP_KEYS, pick_next_tip, render_tip
+from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
@@ -342,19 +342,48 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tip_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.tip_label.set_single_line_mode(True)
         self.tip_label.set_hexpand(True)
+        # Without this the label centres itself across the whole bar and reads as
+        # detached from the bulb sitting at the far left.
+        self.tip_label.set_xalign(0)
+        self.tip_label.set_halign(Gtk.Align.START)
         self.tip_label.add_css_class("caption")
         self.tip_label.add_css_class("dim-label")
 
-        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        # Adwaita ships no lightbulb icon (checked against the live icon theme),
+        # so the emoji stands in as the "this is a hint" marker.
+        bulb = Gtk.Label(label=TIP_ICON)
+        bulb.add_css_class("caption")
+        bulb.add_css_class("tip-bar-icon")
+
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         bar.add_css_class("tip-bar")
+        bar.append(bulb)
         bar.append(self.tip_label)
 
+        self.tip_bar = bar
         self._current_tip_key = None
         self._tip_timeout_id = 0
         self._rotate_tip()
-        self._tip_timeout_id = GLib.timeout_add_seconds(15, self._on_tip_timeout)
         self.connect("close-request", self._on_close_stop_tips)
+        self._apply_tips_visibility(self.config_manager.get_ui_settings()["show_tips"])
         return bar
+
+    def _apply_tips_visibility(self, enabled):
+        """Show or hide the tip bar, keeping the timer in step.
+
+        Rotating while hidden would burn a wakeup every 15s for nothing, so the
+        timer is torn down rather than left running behind an invisible widget.
+        """
+        bar = getattr(self, "tip_bar", None)
+        if bar is None:
+            return
+        bar.set_visible(bool(enabled))
+        if enabled:
+            if not getattr(self, "_tip_timeout_id", 0):
+                self._rotate_tip()
+                self._tip_timeout_id = GLib.timeout_add_seconds(15, self._on_tip_timeout)
+        else:
+            self._stop_tip_rotation()
 
     def _render_tip(self):
         """Re-render the current tip (used on language change too)."""

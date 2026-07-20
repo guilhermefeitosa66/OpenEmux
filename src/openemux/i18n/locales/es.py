@@ -55,4 +55,7 @@ TRANSLATIONS = {
     "banner.cancel": "Cancelar",
     "banner.stopping": "Deteniendo...",
     "toast.sync_cancelled": "Sincronización detenida — {downloaded} descargadas, {skipped} omitidas",
+    "prefs.group.interface": "Interfaz",
+    "settings.system.tips.title": "Mostrar consejos",
+    "settings.system.tips.subtitle": "Mostrar la barra de consejos en la parte inferior",
 }

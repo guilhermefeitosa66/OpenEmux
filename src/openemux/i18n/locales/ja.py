@@ -55,4 +55,7 @@ TRANSLATIONS = {
     "banner.cancel": "キャンセル",
     "banner.stopping": "停止中...",
     "toast.sync_cancelled": "カバー同期を停止しました — {downloaded} 件取得、{skipped} 件スキップ",
+    "prefs.group.interface": "インターフェース",
+    "settings.system.tips.title": "ヒントを表示",
+    "settings.system.tips.subtitle": "ウィンドウ下部のヒントバーを表示します",
 }

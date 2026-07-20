@@ -55,4 +55,7 @@ TRANSLATIONS = {
     "banner.cancel": "Abbrechen",
     "banner.stopping": "Wird gestoppt...",
     "toast.sync_cancelled": "Cover-Sync gestoppt — {downloaded} geladen, {skipped} übersprungen",
+    "prefs.group.interface": "Oberfläche",
+    "settings.system.tips.title": "Tipps anzeigen",
+    "settings.system.tips.subtitle": "Die Tippleiste am unteren Fensterrand anzeigen",
 }

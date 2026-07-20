@@ -13,6 +13,10 @@ import random
 
 from openemux.core.input_actions import DEFAULT_KEYBOARD_BINDINGS
 
+#: Marker shown before every tip. Adwaita has no lightbulb icon (verified
+#: against the live icon theme), so an emoji carries the "hint" meaning.
+TIP_ICON = "\U0001F4A1"  # 💡
+
 # Single source of truth: adding a tip is one entry here plus one string per
 # locale catalog.
 TIP_KEYS = [
