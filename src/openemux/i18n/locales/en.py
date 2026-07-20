@@ -267,6 +267,7 @@ TRANSLATIONS = {
     "context.reveal": "Show in file manager",
     "context.reveal.missing": "“{name}” is no longer on disk",
     "context.open_folder": "Open folder",
+    "context.more_options": "More options",
     "context.rescan.console": "Rescan this console",
     "context.rescan.all": "Rescan library",
 }

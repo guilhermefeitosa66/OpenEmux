@@ -63,6 +63,7 @@ TRANSLATIONS = {
     "context.reveal": "Afficher dans le gestionnaire de fichiers",
     "context.reveal.missing": "« {name} » n'est plus sur le disque",
     "context.open_folder": "Ouvrir le dossier",
+    "context.more_options": "Plus d'options",
     "context.rescan.console": "Réanalyser cette console",
     "context.rescan.all": "Réanalyser la bibliothèque",
 }

@@ -792,10 +792,41 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         name.set_hexpand(True)
         box.append(name)
 
+        # All and Favorites are virtual views: no per-console actions apply, so
+        # they get neither the button nor the right-click menu.
+        if console_id not in (ALL_CONSOLES_ID, FAVORITES_ID):
+            menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
+            menu_button.add_css_class("flat")
+            menu_button.add_css_class("sidebar-menu-button")
+            menu_button.set_valign(Gtk.Align.CENTER)
+            menu_button.set_tooltip_text(self.t("context.more_options"))
+            menu_button.set_visible(False)
+            menu_button.connect(
+                "clicked", lambda b, cid=console_id, r=row: self._on_sidebar_menu_button(b, r, cid)
+            )
+            box.append(menu_button)
+
+            motion = Gtk.EventControllerMotion()
+            motion.connect("enter", lambda _c, _x, _y, b=menu_button: b.set_visible(True))
+            motion.connect("leave", lambda _c, b=menu_button, r=row: self._hide_sidebar_menu_button(b, r))
+            row.add_controller(motion)
+            row.menu_button = menu_button
+
         row.set_child(box)
         row.id = console_id
         self._install_sidebar_context_menu(row, console_id)
         self.console_list.append(row)
+
+    def _hide_sidebar_menu_button(self, button, row):
+        # Keep it while its own menu is open, so it does not vanish mid-click.
+        if getattr(self, "_sidebar_menu_row", None) is not row:
+            button.set_visible(False)
+
+    def _on_sidebar_menu_button(self, button, row, console_id):
+        # Coordinates are relative to the row, which the popover is parented to.
+        ok, bounds = button.compute_bounds(row)
+        x, y = (bounds.get_x(), bounds.get_y() + bounds.get_height()) if ok else (0, 0)
+        self._show_sidebar_menu(row, console_id, x, y)
 
     def _install_sidebar_context_menu(self, row, console_id):
         # "All" and "Favorites" are virtual views: none of the actions apply.
@@ -835,8 +866,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         ])
         popover.set_parent(row)
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
-        popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
+        self._sidebar_menu_row = row
+        popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
         popover.popup()
+
+    def _on_sidebar_popover_closed(self, popover, row):
+        if getattr(self, "_sidebar_menu_row", None) is row:
+            self._sidebar_menu_row = None
+        button = getattr(row, "menu_button", None)
+        # The pointer may have left the row while the menu was up; the button
+        # only belongs on the hovered row.
+        if button is not None and not row.get_state_flags() & Gtk.StateFlags.PRELIGHT:
+            button.set_visible(False)
+        GLib.idle_add(popover.unparent)
 
     def _ensure_sidebar_action_group(self):
         if getattr(self, "_sidebar_action_group", None) is not None:

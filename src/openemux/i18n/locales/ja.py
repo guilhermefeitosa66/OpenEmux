@@ -63,6 +63,7 @@ TRANSLATIONS = {
     "context.reveal": "ファイルマネージャーで表示",
     "context.reveal.missing": "「{name}」はディスク上にありません",
     "context.open_folder": "フォルダーを開く",
+    "context.more_options": "その他のオプション",
     "context.rescan.console": "このコンソールを再スキャン",
     "context.rescan.all": "ライブラリを再スキャン",
 }
