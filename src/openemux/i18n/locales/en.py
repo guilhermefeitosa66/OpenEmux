@@ -194,4 +194,20 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "Initial setup incomplete (step: {step})",
     "toast.path_invalid": "Invalid ROMs folder selected",
     "toast.path_updated": "ROMs folder updated: {path}",
+
+    # ROM import
+    "header.import": "Import ROMs",
+    "header.sync_covers": "Sync covers",
+    "import.dialog.title": "Import ROMs",
+    "import.dialog.filter": "ROMs and archives",
+    "import.running": "An import is already running",
+    "import.unknown_console": "Which console?",
+    "import.choose_console.body": "Files with the “{extension}” extension are used by more than one console. Pick the target console for this batch.",
+    "import.progress.starting": "Starting import...",
+    "import.progress": "Importing ROMs ({current}/{total})",
+    "import.done": "{imported} ROMs imported, {skipped} skipped",
+    "import.failed": "Nothing imported: {unknown} unrecognized files",
+    "import.nothing_new": "No new ROMs to import",
+    "import.drop_hint": "Drop the files here to import them",
+    "toast.sync_no_consoles": "No indexed consoles to sync covers",
 }

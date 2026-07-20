@@ -194,4 +194,20 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "Configuração inicial incompleta (etapa: {step})",
     "toast.path_invalid": "Pasta de ROMs selecionada é inválida",
     "toast.path_updated": "Pasta de ROMs atualizada: {path}",
+
+    # ROM import
+    "header.import": "Importar ROMs",
+    "header.sync_covers": "Sincronizar capas",
+    "import.dialog.title": "Importar ROMs",
+    "import.dialog.filter": "ROMs e arquivos compactados",
+    "import.running": "Já existe uma importação em andamento",
+    "import.unknown_console": "Qual console?",
+    "import.choose_console.body": "Arquivos com a extensão “{extension}” são usados por mais de um console. Escolha o console de destino para este lote.",
+    "import.progress.starting": "Iniciando importação...",
+    "import.progress": "Importando ROMs ({current}/{total})",
+    "import.done": "{imported} ROMs importadas, {skipped} ignoradas",
+    "import.failed": "Nada importado: {unknown} arquivos não reconhecidos",
+    "import.nothing_new": "Nenhuma ROM nova para importar",
+    "import.drop_hint": "Solte os arquivos aqui para importar",
+    "toast.sync_no_consoles": "Nenhum console indexado para sincronizar capas",
 }

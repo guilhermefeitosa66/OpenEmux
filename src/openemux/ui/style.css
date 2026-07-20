@@ -74,3 +74,11 @@
     background-color: alpha(@accent_bg_color, 0.18);
     border-radius: 8px;
 }
+
+/* ===== ROM Drag & Drop ===== */
+.rom-drop-active {
+    background-color: alpha(@accent_bg_color, 0.12);
+    outline: 2px dashed @accent_bg_color;
+    outline-offset: -8px;
+    border-radius: 12px;
+}
