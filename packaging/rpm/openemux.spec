@@ -62,6 +62,14 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Mon Jul 20 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.3.0-1
+- Recognize ROMs inside .zip archives; extract for cores that need a real file
+- Import ROMs from the UI, by button or drag and drop
+- Map controls with the gamepad itself; up to four gamepad ports
+- Optional ScreenScraper cover source, including cartridge labels
+- Rotating tips status bar and a customizable fullscreen toggle
+- Cancellable cover sync, console icons throughout, context menus
+
 * Fri Jul 17 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.2.0-1
 - Per-console cover proportions and separate cartridge-label images
 - Redesigned All library view with per-game console labels
