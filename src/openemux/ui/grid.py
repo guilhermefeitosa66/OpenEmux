@@ -207,12 +207,26 @@ class RomItem(Gtk.Box):
         self.cover_overlay.add_overlay(self.play_overlay)
         self.favorite_badge = Gtk.Image.new_from_icon_name("starred-symbolic")
         self.favorite_badge.add_css_class("favorite-badge")
-        self.favorite_badge.set_halign(Gtk.Align.END)
+        self.favorite_badge.set_halign(Gtk.Align.START)
         self.favorite_badge.set_valign(Gtk.Align.START)
         self.favorite_badge.set_margin_top(6)
-        self.favorite_badge.set_margin_end(6)
+        self.favorite_badge.set_margin_start(6)
         self.favorite_badge.set_visible(bool(self.is_favorite(self.rom)))
         self.cover_overlay.add_overlay(self.favorite_badge)
+
+        # Right-click is not obvious to everyone, so the same menu is one click
+        # away from a button that appears on hover.
+        self.menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
+        self.menu_button.add_css_class("rom-menu-button")
+        self.menu_button.add_css_class("circular")
+        self.menu_button.set_halign(Gtk.Align.END)
+        self.menu_button.set_valign(Gtk.Align.START)
+        self.menu_button.set_margin_top(6)
+        self.menu_button.set_margin_end(6)
+        self.menu_button.set_tooltip_text(self.t("context.more_options"))
+        self.menu_button.set_visible(False)
+        self.menu_button.connect("clicked", self._on_menu_button_clicked)
+        self.cover_overlay.add_overlay(self.menu_button)
 
         self.append(self.cover_overlay)
 
@@ -377,11 +391,28 @@ class RomItem(Gtk.Box):
 
     def _on_hover_enter(self, controller, x, y):
         self.play_overlay.set_visible(True)
+        self.menu_button.set_visible(True)
         self.add_css_class("rom-card-hover")
 
     def _on_hover_leave(self, controller):
         self.play_overlay.set_visible(False)
+        # Keep the button around while its own menu is open, otherwise it
+        # vanishes from under the pointer the moment the popover takes over.
+        if self._context_popover is None:
+            self.menu_button.set_visible(False)
         self.remove_css_class("rom-card-hover")
+
+    def _on_menu_button_clicked(self, button):
+        # Anchor the menu under the button. Coordinates are relative to the
+        # card, which is what the popover is parented to.
+        ok, bounds = button.compute_bounds(self)
+        if ok:
+            self._show_context_menu(
+                bounds.get_x() + bounds.get_width() / 2,
+                bounds.get_y() + bounds.get_height(),
+            )
+        else:
+            self._show_context_menu()
 
     def on_click(self, gesture, n_press, x, y):
         button = gesture.get_current_button()
@@ -467,6 +498,9 @@ class RomItem(Gtk.Box):
     def _on_context_popover_closed(self, popover):
         if self._context_popover is popover:
             self._context_popover = None
+        # The pointer may have left the card while the menu was up.
+        if not self.has_css_class("rom-card-hover"):
+            self.menu_button.set_visible(False)
         GLib.idle_add(popover.unparent)
 
     def _act_toggle_favorite(self, _action, _param):

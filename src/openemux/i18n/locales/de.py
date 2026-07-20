@@ -63,6 +63,7 @@ TRANSLATIONS = {
     "context.reveal": "Im Dateimanager anzeigen",
     "context.reveal.missing": "„{name}“ liegt nicht mehr auf der Festplatte",
     "context.open_folder": "Ordner öffnen",
+    "context.more_options": "Weitere Optionen",
     "context.rescan.console": "Diese Konsole neu einlesen",
     "context.rescan.all": "Bibliothek neu einlesen",
 }
