@@ -14,6 +14,11 @@ from openemux.core.bios_manager import get_console_bios_dir
 from openemux.core.cover_sync import sync_covers_async
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
+from openemux.core.rom_importer import (
+    IMPORTABLE_EXTENSIONS,
+    collect_ambiguous_extensions,
+    import_roms_async,
+)
 from openemux.core.runtime_manager import RuntimeManager
 from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
 from openemux.core.scraper import (
@@ -91,6 +96,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
+        self._import_running = False
         self._task_seq = 0
         self._tasks = {}
 
@@ -265,6 +271,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header.pack_start(refresh_btn)
+
+        self.import_btn = Gtk.Button()
+        self.import_btn.set_icon_name("folder-download-symbolic")
+        self.import_btn.set_tooltip_text(self.t("header.import"))
+        self.import_btn.connect("clicked", self._on_import_clicked)
+        header.pack_start(self.import_btn)
+
+        self.covers_btn = Gtk.Button()
+        self.covers_btn.set_icon_name("emblem-photos-symbolic")
+        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
+        self.covers_btn.connect("clicked", self._on_sync_covers_clicked)
+        header.pack_start(self.covers_btn)
+
         toolbar.add_top_bar(header)
 
         # Search revealed on demand (HIG: search is a mode, not a permanent field).
@@ -297,6 +316,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toolbar.add_top_bar(self.update_banner)
 
         toolbar.set_content(self.content_stack)
+        # Installed on the stack rather than on each grid so that every page —
+        # including the empty-library Adw.StatusPage — accepts dropped ROMs.
+        self._install_drop_target(self.content_stack)
 
         page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
         page.set_tag("content")
@@ -386,6 +408,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_placeholder_text(self.t("header.search"))
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.import_btn.set_tooltip_text(self.t("header.import"))
+        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
         self.sidebar_title.set_title(self.t("sidebar.header"))
         self.refresh_library(preferred_view=visible)
         self._toast(self.t("toast.language.updated", language=language_name))
@@ -1093,9 +1117,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _show_sync_covers_dialog(self):
         if not self.visible_consoles:
-            toast = Adw.Toast(title="No indexed consoles to sync covers.")
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
+            self._toast(self.t("toast.sync_no_consoles"))
             return
 
         dialog = Gtk.Dialog(transient_for=self, modal=True)
@@ -1183,6 +1205,170 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", _on_response)
         dialog.show()
+
+    # ----- ROM import (header button + drag and drop) -----
+
+    def _install_drop_target(self, widget):
+        drop_target = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+        drop_target.connect("enter", self._on_drop_enter)
+        drop_target.connect("leave", self._on_drop_leave)
+        drop_target.connect("drop", self._on_drop)
+        widget.add_controller(drop_target)
+
+    def _on_drop_enter(self, _target, _x, _y):
+        self.content_stack.add_css_class("rom-drop-active")
+        self.banner.set_title(self.t("import.drop_hint"))
+        self.banner.set_revealed(True)
+        return Gdk.DragAction.COPY
+
+    def _on_drop_leave(self, _target):
+        self.content_stack.remove_css_class("rom-drop-active")
+        self._refresh_banner()
+
+    def _on_drop(self, _target, value, _x, _y):
+        self.content_stack.remove_css_class("rom-drop-active")
+        self._refresh_banner()
+        paths = [f.get_path() for f in value.get_files() if f.get_path()]
+        if not paths:
+            return False
+        logger.info("rom import: dropped %d path(s)", len(paths))
+        self._begin_import(paths)
+        return True
+
+    def _on_import_clicked(self, _button):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("import.dialog.title"))
+        dialog.set_modal(True)
+
+        rom_filter = Gtk.FileFilter()
+        rom_filter.set_name(self.t("import.dialog.filter"))
+        for ext in IMPORTABLE_EXTENSIONS:
+            suffix = ext.lstrip(".")
+            rom_filter.add_pattern(f"*.{suffix}")
+            rom_filter.add_pattern(f"*.{suffix.upper()}")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(rom_filter)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(rom_filter)
+
+        dialog.open_multiple(self, None, self._on_import_files_chosen)
+
+    def _on_import_files_chosen(self, dialog, result):
+        try:
+            files = dialog.open_multiple_finish(result)
+        except GLib.Error:
+            # Dismissed by the user; nothing to report.
+            return
+        if files is None:
+            return
+        paths = []
+        for index in range(files.get_n_items()):
+            path = files.get_item(index).get_path()
+            if path:
+                paths.append(path)
+        if paths:
+            self._begin_import(paths)
+
+    def _begin_import(self, paths):
+        """Resolve ambiguous extensions, then run the import in the background."""
+        if getattr(self, "_import_running", False):
+            self._toast(self.t("import.running"))
+            return
+
+        ambiguous = collect_ambiguous_extensions(paths)
+        self._resolve_ambiguous_then_import(paths, list(ambiguous.items()), {})
+
+    def _resolve_ambiguous_then_import(self, paths, pending, overrides):
+        if not pending:
+            self._run_import(paths, overrides)
+            return
+
+        extension, candidates = pending[0]
+        remaining = pending[1:]
+
+        dialog = Adw.AlertDialog(
+            heading=self.t("import.unknown_console"),
+            body=self.t("import.choose_console.body", extension=extension),
+        )
+        dialog.add_response("cancel", self.t("dialog.cancel"))
+        for console in candidates:
+            dialog.add_response(console, f"{console} — {get_system_display_name(console)}")
+        dialog.set_default_response(candidates[0])
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response == "cancel":
+                return
+            overrides[extension] = response
+            self._resolve_ambiguous_then_import(paths, remaining, overrides)
+
+        dialog.connect("response", _on_response)
+        dialog.present(self)
+
+    def _run_import(self, paths, overrides):
+        self._import_running = True
+        task_id = self._begin_task("import", self.t("import.progress.starting"))
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("current", 0),
+                evt.get("total", 0),
+                self.t(
+                    "import.progress",
+                    current=evt.get("current", 0),
+                    total=evt.get("total", 0),
+                ),
+            )
+
+        def _on_done(summary):
+            GLib.idle_add(self._on_import_done_ui, task_id, summary)
+
+        import_roms_async(
+            paths=paths,
+            roms_dir=self.roms_path,
+            on_done=_on_done,
+            on_progress=_on_progress,
+            console_overrides=overrides,
+        )
+
+    def _on_import_done_ui(self, task_id, summary):
+        self._import_running = False
+        self._finish_task(task_id)
+
+        imported = len(summary["imported"])
+        skipped = len(summary["skipped"])
+        unknown = len(summary["unknown"])
+        errors = len(summary["errors"])
+        logger.info(
+            "rom import done: imported=%d skipped=%d unknown=%d errors=%d",
+            imported, skipped, unknown, errors,
+        )
+
+        if imported:
+            self._toast(self.t("import.done", imported=imported, skipped=skipped), timeout=5)
+            # New files on disk: rebuild the playlists so they show up.
+            self._rescan_all_consoles(show_toast=False)
+        elif unknown or errors:
+            self._toast(self.t("import.failed", unknown=unknown + errors), timeout=5)
+        else:
+            self._toast(self.t("import.nothing_new"), timeout=4)
+        return False
+
+    def _on_sync_covers_clicked(self, _button):
+        self._sync_covers_for_current_scope()
+
+    def _sync_covers_for_current_scope(self):
+        """Sync covers for the selected console, or all of them when 'All' is on."""
+        if not self.visible_consoles:
+            self._toast(self.t("toast.sync_no_consoles"))
+            return
+        selected = self.current_console
+        if selected in self.visible_consoles:
+            self._start_cover_sync(scope="console", selected_console=selected)
+        else:
+            self._start_cover_sync(scope="all", selected_console=None)
 
     def _start_cover_sync(self, scope, selected_console):
         if self._cover_sync_running:
