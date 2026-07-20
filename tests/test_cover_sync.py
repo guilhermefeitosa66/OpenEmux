@@ -7,7 +7,10 @@ from unittest.mock import patch
 from openemux.core.cover_sync import (
     _build_cover_url,
     _candidate_names,
+    _libretro_candidates,
     _normalize_rom_name,
+    _ordered_providers,
+    _remote_cover_candidates,
     _sync_covers,
 )
 
@@ -149,6 +152,60 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(events[0]["total"], 2)
         self.assertEqual(events[1]["processed"], 2)
         self.assertEqual(events[1]["total"], 2)
+
+
+class CoverSourceProviderTests(unittest.TestCase):
+    """The libretro-only default must remain byte-for-byte what it always was."""
+
+    def test_default_source_uses_libretro_provider_only(self):
+        for settings in ({}, {"cover_source": "libretro"}):
+            names = [name for name, _fn in _ordered_providers(settings)]
+            self.assertEqual(names, ["libretro"], settings)
+
+    def test_default_source_never_calls_screenscraper(self):
+        with patch("openemux.core.cover_sync._screenscraper_candidates") as ss_mock:
+            urls = _remote_cover_candidates("SFC", "Chrono Trigger", {})
+        ss_mock.assert_not_called()
+        self.assertTrue(urls)
+        self.assertTrue(all(u.startswith("https://thumbnails.libretro.com/") for u in urls))
+
+    def test_default_candidates_match_the_libretro_provider_exactly(self):
+        settings = {"region_priority": ["USA", "World"], "name_cleanup": True}
+        self.assertEqual(
+            _remote_cover_candidates("SFC", "Chrono Trigger", settings),
+            _libretro_candidates("SFC", "Chrono Trigger", settings),
+        )
+
+    def test_libretro_then_screenscraper_appends_screenscraper_candidates(self):
+        settings = {"cover_source": "libretro_then_screenscraper"}
+        with patch(
+            "openemux.core.cover_sync._screenscraper_candidates", return_value=["ss1", "ss2"]
+        ):
+            urls = _remote_cover_candidates("SFC", "Chrono Trigger", settings)
+        libretro_urls = _libretro_candidates("SFC", "Chrono Trigger", settings)
+        self.assertEqual(urls[: len(libretro_urls)], libretro_urls)
+        self.assertEqual(urls[len(libretro_urls) :], ["ss1", "ss2"])
+
+    def test_screenscraper_only_source_skips_libretro(self):
+        settings = {"cover_source": "screenscraper"}
+        with patch(
+            "openemux.core.cover_sync._screenscraper_candidates", return_value=["ss1"]
+        ):
+            urls = _remote_cover_candidates("SFC", "Chrono Trigger", settings)
+        self.assertEqual(urls, ["ss1"])
+
+    def test_unknown_source_value_falls_back_to_libretro(self):
+        names = [name for name, _fn in _ordered_providers({"cover_source": "bogus"})]
+        self.assertEqual(names, ["libretro"])
+
+    def test_screenscraper_provider_swallows_errors(self):
+        with patch(
+            "openemux.core.cover_sync.screenscraper.lookup_media_urls",
+            side_effect=RuntimeError("boom"),
+        ):
+            from openemux.core.cover_sync import _screenscraper_candidates
+
+            self.assertEqual(_screenscraper_candidates("SFC", "Game", {}), [])
 
 
 if __name__ == "__main__":

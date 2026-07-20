@@ -15,6 +15,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib
 
+from openemux.core.config import (
+    COVER_ART_TYPES,
+    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
+    COVER_SOURCE_SCREENSCRAPER,
+    COVER_SOURCES,
+    normalize_cover_art_type,
+    normalize_cover_source,
+)
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token
 from openemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from openemux.core.shaders import normalize_shader_id
@@ -114,7 +122,123 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         sync_row.connect("activated", lambda _r: self.win._show_sync_covers_dialog())
         maint_group.add(sync_row)
         page.add(maint_group)
+        page.add(self._build_cover_source_group())
         return page
+
+    # ----- Cover sources --------------------------------------------------
+    def _build_cover_source_group(self):
+        """Cover art source selection (libretro / ScreenScraper).
+
+        ScreenScraper needs the user's own credentials, so its rows only appear
+        once a ScreenScraper-backed source is picked.
+        """
+        settings = self.config.get_cover_sync_settings()
+
+        group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.cover_source"),
+            description=self.t("prefs.cover_source.description"),
+        )
+
+        self._cover_source_ids = list(COVER_SOURCES)
+        source_model = Gtk.StringList()
+        for source_id in self._cover_source_ids:
+            source_model.append(self.t(f"prefs.cover_source.option.{source_id}"))
+        self._cover_source_row = Adw.ComboRow(
+            title=self.t("prefs.cover_source.title"),
+            subtitle=self.t("prefs.cover_source.subtitle"),
+            model=source_model,
+        )
+        self._cover_source_row.set_selected(
+            self._cover_source_ids.index(normalize_cover_source(settings.get("cover_source")))
+        )
+        self._cover_source_row.connect("notify::selected", self._on_cover_source_changed)
+        group.add(self._cover_source_row)
+
+        self._cover_art_type_ids = list(COVER_ART_TYPES)
+        art_model = Gtk.StringList()
+        for art_id in self._cover_art_type_ids:
+            art_model.append(self.t(f"prefs.cover_art_type.option.{art_id}"))
+        self._cover_art_type_row = Adw.ComboRow(
+            title=self.t("prefs.cover_art_type.title"),
+            subtitle=self.t("prefs.cover_art_type.subtitle"),
+            model=art_model,
+        )
+        self._cover_art_type_row.set_selected(
+            self._cover_art_type_ids.index(normalize_cover_art_type(settings.get("cover_art_type")))
+        )
+        self._cover_art_type_row.connect("notify::selected", self._on_cover_art_type_changed)
+        group.add(self._cover_art_type_row)
+
+        self._ss_user_row = Adw.EntryRow(title=self.t("prefs.screenscraper.user"))
+        self._ss_user_row.set_text(settings.get("screenscraper_user", ""))
+        self._ss_user_row.connect(
+            "changed",
+            lambda row: self.config.set_cover_sync_setting("screenscraper_user", row.get_text()),
+        )
+        group.add(self._ss_user_row)
+
+        self._ss_password_row = Adw.PasswordEntryRow(title=self.t("prefs.screenscraper.password"))
+        self._ss_password_row.set_text(settings.get("screenscraper_password", ""))
+        self._ss_password_row.connect(
+            "changed",
+            lambda row: self.config.set_cover_sync_setting("screenscraper_password", row.get_text()),
+        )
+        group.add(self._ss_password_row)
+
+        self._ss_devid_row = Adw.EntryRow(title=self.t("prefs.screenscraper.devid"))
+        self._ss_devid_row.set_text(settings.get("screenscraper_devid", ""))
+        self._ss_devid_row.connect(
+            "changed",
+            lambda row: self.config.set_cover_sync_setting("screenscraper_devid", row.get_text()),
+        )
+        group.add(self._ss_devid_row)
+
+        self._ss_devpassword_row = Adw.PasswordEntryRow(
+            title=self.t("prefs.screenscraper.devpassword")
+        )
+        self._ss_devpassword_row.set_text(settings.get("screenscraper_devpassword", ""))
+        self._ss_devpassword_row.connect(
+            "changed",
+            lambda row: self.config.set_cover_sync_setting("screenscraper_devpassword", row.get_text()),
+        )
+        group.add(self._ss_devpassword_row)
+
+        self._ss_hint_row = Adw.ActionRow(
+            title=self.t("prefs.screenscraper.hint.title"),
+            subtitle=self.t("prefs.screenscraper.hint.subtitle"),
+        )
+        self._ss_hint_row.set_subtitle_lines(0)
+        group.add(self._ss_hint_row)
+
+        self._update_screenscraper_rows_visibility()
+        return group
+
+    def _selected_cover_source(self):
+        return self._cover_source_ids[self._cover_source_row.get_selected()]
+
+    def _update_screenscraper_rows_visibility(self):
+        uses_screenscraper = self._selected_cover_source() in (
+            COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
+            COVER_SOURCE_SCREENSCRAPER,
+        )
+        for row in (
+            self._cover_art_type_row,
+            self._ss_user_row,
+            self._ss_password_row,
+            self._ss_devid_row,
+            self._ss_devpassword_row,
+            self._ss_hint_row,
+        ):
+            row.set_visible(uses_screenscraper)
+
+    def _on_cover_source_changed(self, *_args):
+        self.config.set_cover_sync_setting("cover_source", self._selected_cover_source())
+        self._update_screenscraper_rows_visibility()
+
+    def _on_cover_art_type_changed(self, *_args):
+        self.config.set_cover_sync_setting(
+            "cover_art_type", self._cover_art_type_ids[self._cover_art_type_row.get_selected()]
+        )
 
     # ----- BIOS page ------------------------------------------------------
     def _build_bios_page(self):

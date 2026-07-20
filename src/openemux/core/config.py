@@ -26,6 +26,33 @@ DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
 DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
 MIGRATION_VERSION = 2
 
+# Cover art source selection. "libretro" is the historical (and default)
+# behavior: libretro thumbnails only, no credentials required. The
+# ScreenScraper-backed options are opt-in and require the user to configure
+# their own ScreenScraper account (see core/screenscraper.py).
+COVER_SOURCE_LIBRETRO = "libretro"
+COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
+COVER_SOURCE_SCREENSCRAPER = "screenscraper"
+COVER_SOURCES = (
+    COVER_SOURCE_LIBRETRO,
+    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
+    COVER_SOURCE_SCREENSCRAPER,
+)
+DEFAULT_COVER_SOURCE = COVER_SOURCE_LIBRETRO
+
+COVER_ART_TYPE_BOXART = "boxart"
+COVER_ART_TYPE_CARTRIDGE_LABEL = "cartridge_label"
+COVER_ART_TYPES = (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL)
+DEFAULT_COVER_ART_TYPE = COVER_ART_TYPE_BOXART
+
+
+def normalize_cover_source(value):
+    return value if value in COVER_SOURCES else DEFAULT_COVER_SOURCE
+
+
+def normalize_cover_art_type(value):
+    return value if value in COVER_ART_TYPES else DEFAULT_COVER_ART_TYPE
+
 DEFAULT_CONFIG = {
     "locale": "en",
     "roms_path": str(DEFAULT_ROMS_PATH),
@@ -76,6 +103,15 @@ DEFAULT_CONFIG = {
             "matching_mode": "normalized_region_priority",
             "region_priority": ["USA", "World", "Europe", "Japan"],
             "name_cleanup": True,
+            # Cover source order. "libretro" (default) preserves the historical
+            # behavior exactly; the ScreenScraper options are opt-in and need
+            # the user's own credentials (see core/screenscraper.py).
+            "cover_source": DEFAULT_COVER_SOURCE,
+            "cover_art_type": DEFAULT_COVER_ART_TYPE,
+            "screenscraper_user": "",
+            "screenscraper_password": "",
+            "screenscraper_devid": "",
+            "screenscraper_devpassword": "",
         },
     },
     "library": {
@@ -227,6 +263,16 @@ class ConfigManager:
         covers["sync"].setdefault("matching_mode", "normalized_region_priority")
         covers["sync"].setdefault("region_priority", ["USA", "World", "Europe", "Japan"])
         covers["sync"].setdefault("name_cleanup", True)
+        # Added after 1.2.0. Existing configs get the libretro-only default, so
+        # nothing changes for them until the user opts in.
+        covers["sync"].setdefault("cover_source", DEFAULT_COVER_SOURCE)
+        covers["sync"]["cover_source"] = normalize_cover_source(covers["sync"]["cover_source"])
+        covers["sync"].setdefault("cover_art_type", DEFAULT_COVER_ART_TYPE)
+        covers["sync"]["cover_art_type"] = normalize_cover_art_type(covers["sync"]["cover_art_type"])
+        covers["sync"].setdefault("screenscraper_user", "")
+        covers["sync"].setdefault("screenscraper_password", "")
+        covers["sync"].setdefault("screenscraper_devid", "")
+        covers["sync"].setdefault("screenscraper_devpassword", "")
         config["covers"] = covers
 
         library = config.get("library", {})
@@ -302,7 +348,23 @@ class ConfigManager:
             "matching_mode": sync.get("matching_mode", "normalized_region_priority"),
             "region_priority": sync.get("region_priority", ["USA", "World", "Europe", "Japan"]),
             "name_cleanup": bool(sync.get("name_cleanup", True)),
+            "cover_source": normalize_cover_source(sync.get("cover_source", DEFAULT_COVER_SOURCE)),
+            "cover_art_type": normalize_cover_art_type(sync.get("cover_art_type", DEFAULT_COVER_ART_TYPE)),
+            "screenscraper_user": str(sync.get("screenscraper_user", "") or ""),
+            "screenscraper_password": str(sync.get("screenscraper_password", "") or ""),
+            "screenscraper_devid": str(sync.get("screenscraper_devid", "") or ""),
+            "screenscraper_devpassword": str(sync.get("screenscraper_devpassword", "") or ""),
         }
+
+    def set_cover_sync_setting(self, key, value):
+        """Persist a single cover-sync setting, normalizing the known enums."""
+        if key == "cover_source":
+            value = normalize_cover_source(value)
+        elif key == "cover_art_type":
+            value = normalize_cover_art_type(value)
+        covers = self.config.setdefault("covers", {})
+        covers.setdefault("sync", {})[key] = value
+        self.save_config()
 
     def get_ui_settings(self):
         ui = self.config.get("ui", {})

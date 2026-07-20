@@ -7,10 +7,23 @@ import urllib.request
 from pathlib import Path
 from threading import Thread
 
+from openemux.core import screenscraper
 from openemux.core.scraper import find_local_cover
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+COVER_SOURCE_LIBRETRO = "libretro"
+COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
+COVER_SOURCE_SCREENSCRAPER = "screenscraper"
+
+# Ordered provider names per configured cover source. "libretro" is the default
+# and yields exactly the historical single-provider behavior.
+_SOURCE_ORDER = {
+    COVER_SOURCE_LIBRETRO: ("libretro",),
+    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER: ("libretro", "screenscraper"),
+    COVER_SOURCE_SCREENSCRAPER: ("screenscraper",),
+}
 
 def _build_cover_url(system, game_name):
     return (
@@ -145,7 +158,8 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     return candidates
 
 
-def _remote_cover_candidates(console, rom_name, sync_settings):
+def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
+    """libretro thumbnails provider (the historical, credential-free source)."""
     system_id = resolve_system_id(console)
     system = get_thumbnail_system(system_id)
     if not system:
@@ -160,21 +174,80 @@ def _remote_cover_candidates(console, rom_name, sync_settings):
     return [_build_cover_url(system, candidate) for candidate in names]
 
 
-def _download_cover(url, dest):
+def _screenscraper_credentials(sync_settings):
+    return screenscraper.ScreenScraperCredentials(
+        devid=sync_settings.get("screenscraper_devid", ""),
+        devpassword=sync_settings.get("screenscraper_devpassword", ""),
+        user=sync_settings.get("screenscraper_user", ""),
+        password=sync_settings.get("screenscraper_password", ""),
+    )
+
+
+def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):
+    """ScreenScraper provider. Opt-in; returns [] whenever it is unusable."""
     try:
-        logger.debug("cover_sync trying candidate: url=%s target=%s", url, dest)
-        # url is a fixed https libretro-thumbnails endpoint (see _build_cover_url)
+        return screenscraper.lookup_media_urls(
+            credentials=_screenscraper_credentials(sync_settings),
+            console=console,
+            rom_name=rom_name,
+            rom_path=rom_path,
+            art_kind=sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND),
+            region_priority=sync_settings.get("region_priority"),
+        )
+    except Exception as exc:  # noqa: BLE001 - a source must never break the sync
+        logger.warning("cover_sync screenscraper_failed: error=%s", screenscraper.redact(exc))
+        return []
+
+
+# Provider name -> module-level function name. Resolved lazily through globals()
+# so the functions stay individually patchable in tests.
+_PROVIDER_FUNCTIONS = {
+    "libretro": "_libretro_candidates",
+    "screenscraper": "_screenscraper_candidates",
+}
+
+
+def _ordered_providers(sync_settings):
+    source = sync_settings.get("cover_source", COVER_SOURCE_LIBRETRO)
+    names = _SOURCE_ORDER.get(source, _SOURCE_ORDER[COVER_SOURCE_LIBRETRO])
+    return [(name, globals()[_PROVIDER_FUNCTIONS[name]]) for name in names]
+
+
+def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
+    """Concatenate candidate URLs from each configured source, in order."""
+    urls = []
+    for name, provider in _ordered_providers(sync_settings):
+        for url in provider(console, rom_name, sync_settings, rom_path=rom_path):
+            if url not in urls:
+                urls.append(url)
+        logger.debug(
+            "cover_sync provider_candidates: provider=%s console=%s rom=%s total=%d",
+            name,
+            console,
+            rom_name,
+            len(urls),
+        )
+    return urls
+
+
+def _download_cover(url, dest):
+    # Media URLs can come from ScreenScraper, so redact before every log line in
+    # case credentials were ever carried in the query string.
+    safe_url = screenscraper.redact(url)
+    try:
+        logger.debug("cover_sync trying candidate: url=%s target=%s", safe_url, dest)
+        # url is an https cover endpoint built by one of the source providers.
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
-        logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", url, dest, len(data))
+        logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
         return True
     except urllib.error.HTTPError:
-        logger.info("cover_sync not_found: url=%s", url)
+        logger.info("cover_sync not_found: url=%s", safe_url)
         return False
     except Exception as exc:
-        logger.warning("cover_sync error: url=%s error=%s", url, exc)
+        logger.warning("cover_sync error: url=%s error=%s", safe_url, screenscraper.redact(exc))
         return False
 
 
@@ -218,14 +291,19 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
                 continue
 
             target = roms_dir_path / console / "covers" / f"{name}.png"
-            urls = _remote_cover_candidates(console, name, sync_settings)
+            urls = _remote_cover_candidates(console, name, sync_settings, rom_path=rom.get("path"))
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
             found = False
             for url in urls:
                 if _download_cover(url, target):
                     downloaded += 1
                     found = True
-                    logger.info("cover_sync selected candidate: console=%s rom=%s url=%s", console, name, url)
+                    logger.info(
+                        "cover_sync selected candidate: console=%s rom=%s url=%s",
+                        console,
+                        name,
+                        screenscraper.redact(url),
+                    )
                     break
 
             if not found:
