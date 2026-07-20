@@ -42,4 +42,14 @@ TRANSLATIONS = {
     "tips.sync_covers": "点击顶部的照片按钮可同步封面图",
     "tips.shaders": "首选项 → 视频可为每台主机单独设置着色器",
     "tips.search": "按 Ctrl+F 搜索整个游戏库",
+    # Input devices / ports
+    "input.device": "输入设备",
+    "input.device.keyboard": "键盘",
+    "input.device.gamepad_p1": "手柄端口 1",
+    "input.device.gamepad_p2": "手柄端口 2",
+    "input.device.gamepad_p3": "手柄端口 3",
+    "input.device.gamepad_p4": "手柄端口 4",
+    "input.port.enable": "启用此端口",
+    "input.port.enable.subtitle": "启动游戏时将此映射发送给 RetroArch",
+    "input.capture.port_unavailable": "请至少连接 {port} 个手柄才能设置端口 {port}",
 }

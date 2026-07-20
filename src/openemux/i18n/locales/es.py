@@ -42,4 +42,14 @@ TRANSLATIONS = {
     "tips.sync_covers": "Sincroniza carátulas con el botón de fotos de arriba",
     "tips.shaders": "Preferencias → Vídeo elige un shader por consola",
     "tips.search": "Pulsa Ctrl+F para buscar en toda tu biblioteca",
+    # Input devices / ports
+    "input.device": "Dispositivo de entrada",
+    "input.device.keyboard": "Teclado",
+    "input.device.gamepad_p1": "Mando puerto 1",
+    "input.device.gamepad_p2": "Mando puerto 2",
+    "input.device.gamepad_p3": "Mando puerto 3",
+    "input.device.gamepad_p4": "Mando puerto 4",
+    "input.port.enable": "Activar este puerto",
+    "input.port.enable.subtitle": "Enviar esta asignación a RetroArch al iniciar un juego",
+    "input.capture.port_unavailable": "Conecta al menos {port} mandos para asignar el puerto {port}",
 }

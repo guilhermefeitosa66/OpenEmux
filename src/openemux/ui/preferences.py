@@ -23,8 +23,18 @@ from openemux.core.config import (
     normalize_cover_art_type,
     normalize_cover_source,
 )
-from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token
-from openemux.core.input_actions import ACTION_ORDER, get_actions_for_console
+from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
+from openemux.core.input_actions import (
+    ACTION_ORDER,
+    GLOBAL_HOTKEY_ACTIONS,
+    get_actions_for_console,
+)
+from openemux.core.input_profiles import (
+    DEVICE_IDS,
+    EXTRA_PORT_DEVICE_IDS,
+    device_type_for,
+    player_for_device,
+)
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.core.bios_manager import scan_all_bios_status
@@ -380,6 +390,49 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             factory.connect("bind", _bind)
             setter(factory)
 
+    def _apply_device_icon_factory(self, combo_row):
+        """Render the device ComboRow as "<icon> Label".
+
+        Icons are themed symbolic names resolved by GTK, so binding stays cheap
+        and touches no filesystem -- do not swap this for a file-backed icon.
+        """
+        # The model holds translated labels; map them back to device ids so the
+        # binding never depends on a list position (which is invalid for the
+        # ComboRow's closed-state factory).
+        device_by_label = {
+            self.t(f"input.device.{device_id}"): device_id for device_id in self._device_ids
+        }
+
+        def _setup(_factory, list_item):
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            box.set_margin_top(4)
+            box.set_margin_bottom(4)
+            icon = Gtk.Image()
+            label = Gtk.Label()
+            label.set_halign(Gtk.Align.START)
+            label.set_xalign(0)
+            box.append(icon)
+            box.append(label)
+            list_item.set_child(box)
+
+        def _bind(_factory, list_item):
+            box = list_item.get_child()
+            icon = box.get_first_child()
+            label = icon.get_next_sibling()
+            item = list_item.get_item()
+            text = item.get_string() if item else ""
+            device_id = device_by_label.get(text, "keyboard")
+            icon.set_from_icon_name(
+                "input-keyboard-symbolic" if device_id == "keyboard" else "input-gaming-symbolic"
+            )
+            label.set_label(text)
+
+        for setter in (combo_row.set_factory, combo_row.set_list_factory):
+            factory = Gtk.SignalListItemFactory()
+            factory.connect("setup", _setup)
+            factory.connect("bind", _bind)
+            setter(factory)
+
     # ----- Input page -----------------------------------------------------
     def _build_input_page(self):
         page = Adw.PreferencesPage(
@@ -402,16 +455,22 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._console_combo.connect("notify::selected", self._on_console_changed)
         controller_group.add(self._console_combo)
 
-        self._device_ids = ["keyboard", "gamepad_p1"]
+        self._device_ids = list(DEVICE_IDS)
         self._device_combo = Adw.ComboRow(title=self.t("input.device"))
         self._device_combo.set_model(
-            Gtk.StringList.new(
-                [self.t("input.device.keyboard"), self.t("input.device.gamepad_p1")]
-            )
+            Gtk.StringList.new([self.t(f"input.device.{d}") for d in self._device_ids])
         )
+        self._apply_device_icon_factory(self._device_combo)
         self._device_combo.set_selected(0)
         self._device_combo.connect("notify::selected", self._on_device_changed)
         controller_group.add(self._device_combo)
+
+        self._port_enabled_switch = Adw.SwitchRow(
+            title=self.t("input.port.enable"),
+            subtitle=self.t("input.port.enable.subtitle"),
+        )
+        self._port_enabled_switch.set_visible(False)
+        controller_group.add(self._port_enabled_switch)
         page.add(controller_group)
 
         self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings"))
@@ -489,6 +548,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         device = profile.get("devices", {}).get(device_id, {})
         bindings = device.get("bindings", {})
         visible_actions = get_actions_for_console(console_id)
+        if device_id in EXTRA_PORT_DEVICE_IDS:
+            # RetroArch hotkeys are global, so ports 2-4 only map gameplay.
+            visible_actions = [a for a in visible_actions if a not in GLOBAL_HOTKEY_ACTIONS]
 
         self._loaded_profile = profile
         self._visible_actions = list(visible_actions)
@@ -496,6 +558,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._bindings_buffer = {
             action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
         }
+        is_extra_port = device_id in EXTRA_PORT_DEVICE_IDS
+        self._port_enabled_switch.set_visible(is_extra_port)
+        if is_extra_port:
+            self._port_enabled_switch.set_active(bool(device.get("enabled", False)))
         self._map_all_btn.set_sensitive(True)
         self._bindings_group.set_description(None)
 
@@ -544,10 +610,32 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._start_gamepad_reader()
 
     # -- gamepad reader plumbing ------------------------------------------
+    def _device_for_port(self, port):
+        """Pick the physical pad to listen on for RetroArch port ``port``.
+
+        Pads are taken in /dev/input/event* order, which is the same ordering
+        RetroArch's udev driver enumerates, so port N listens on the Nth pad.
+        Returns ``(device, error_key)``; ``device=None`` with no error means
+        "let the reader choose", which only happens for port 1.
+        """
+        if port <= 1:
+            return None, None
+        gamepads = list_gamepads()
+        if len(gamepads) < port:
+            return None, "input.capture.port_unavailable"
+        return gamepads[port - 1], None
+
     def _start_gamepad_reader(self):
+        port = player_for_device(self._current_device())
+        device, error_key = self._device_for_port(port)
+        if error_key:
+            self._cancel_capture()
+            self._toast(self.t(error_key, port=port), timeout=6)
+            return
         self._gamepad_reader = GamepadCaptureReader(
             on_token=lambda token: GLib.idle_add(self._on_gamepad_token, token),
             on_error=lambda reason: GLib.idle_add(self._on_gamepad_error, reason),
+            device=device,
         )
         self._gamepad_reader.start()
 
@@ -687,11 +775,18 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         devices = profile.setdefault("devices", {})
         device = devices.setdefault(
             device_id,
-            {"type": "keyboard" if device_id == "keyboard" else "gamepad", "bindings": {}},
+            {"type": device_type_for(device_id), "bindings": {}},
         )
         valid_actions = get_actions_for_console(console_id)
-        device["bindings"] = {a: self._bindings_buffer.get(a, "") for a in valid_actions}
-        profile["active_device"] = device_id
+        existing = device.get("bindings") or {}
+        device["bindings"] = {
+            a: self._bindings_buffer.get(a, existing.get(a, "")) for a in valid_actions
+        }
+        if device_id in EXTRA_PORT_DEVICE_IDS:
+            # Ports 2-4 are opt-in and never take over player 1.
+            device["enabled"] = self._port_enabled_switch.get_active()
+        else:
+            profile["active_device"] = device_id
         self.config.save_input_profile(console_id, profile)
         self._loaded_profile = profile
         self._toast(self.t("toast.input_saved", console=console_id))

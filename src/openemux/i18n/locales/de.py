@@ -42,4 +42,14 @@ TRANSLATIONS = {
     "tips.sync_covers": "Cover per Foto-Schaltfläche oben synchronisieren",
     "tips.shaders": "Einstellungen → Video: ein Shader pro Konsole",
     "tips.search": "Strg+F durchsucht die ganze Bibliothek",
+    # Input devices / ports
+    "input.device": "Eingabegerät",
+    "input.device.keyboard": "Tastatur",
+    "input.device.gamepad_p1": "Gamepad Port 1",
+    "input.device.gamepad_p2": "Gamepad Port 2",
+    "input.device.gamepad_p3": "Gamepad Port 3",
+    "input.device.gamepad_p4": "Gamepad Port 4",
+    "input.port.enable": "Diesen Port aktivieren",
+    "input.port.enable.subtitle": "Diese Belegung beim Spielstart an RetroArch senden",
+    "input.capture.port_unavailable": "Schließe mindestens {port} Controller an, um Port {port} zu belegen",
 }

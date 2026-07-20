@@ -8,6 +8,7 @@ import logging
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.input_actions import to_retroarch_overrides
+from openemux.core.input_profiles import EXTRA_PORT_DEVICE_IDS, player_for_device
 from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
@@ -139,11 +140,26 @@ class RetroArchLauncher:
 
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False):
         profile = self.config_manager.get_input_profile(console)
+        devices = profile.get("devices", {}) or {}
         active_device = profile.get("active_device", "keyboard")
-        device = profile.get("devices", {}).get(active_device, {})
+        device = devices.get(active_device, {})
         device_type = device.get("type", "keyboard")
         bindings = device.get("bindings", {})
+        # Port 1 comes from the active device, exactly as before.
         overrides = to_retroarch_overrides(bindings, device_type, console=console)
+        # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
+        for device_id in EXTRA_PORT_DEVICE_IDS:
+            extra = devices.get(device_id) or {}
+            if not extra.get("enabled"):
+                continue
+            overrides.update(
+                to_retroarch_overrides(
+                    extra.get("bindings", {}),
+                    extra.get("type", "gamepad"),
+                    console=console,
+                    player=player_for_device(device_id),
+                )
+            )
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:

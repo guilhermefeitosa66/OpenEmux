@@ -42,4 +42,14 @@ TRANSLATIONS = {
     "tips.sync_covers": "Synchronisez les jaquettes avec le bouton photos en haut",
     "tips.shaders": "Préférences → Vidéo : un shader par console",
     "tips.search": "Ctrl+F recherche dans toute votre ludothèque",
+    # Input devices / ports
+    "input.device": "Périphérique d'entrée",
+    "input.device.keyboard": "Clavier",
+    "input.device.gamepad_p1": "Manette port 1",
+    "input.device.gamepad_p2": "Manette port 2",
+    "input.device.gamepad_p3": "Manette port 3",
+    "input.device.gamepad_p4": "Manette port 4",
+    "input.port.enable": "Activer ce port",
+    "input.port.enable.subtitle": "Envoyer cette configuration à RetroArch au lancement d'un jeu",
+    "input.capture.port_unavailable": "Connectez au moins {port} manettes pour configurer le port {port}",
 }
