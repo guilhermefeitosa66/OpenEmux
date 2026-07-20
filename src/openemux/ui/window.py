@@ -797,16 +797,25 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.console_list.append(row)
 
     def _install_sidebar_context_menu(self, row, console_id):
+        # "All" and "Favorites" are virtual views: none of the actions apply.
+        if console_id in (ALL_CONSOLES_ID, FAVORITES_ID):
+            return
         gesture = Gtk.GestureClick()
         gesture.set_button(Gdk.BUTTON_SECONDARY)
+        # Popping up on "pressed" makes the matching release close the popover
+        # again, so the menu only stays while the button is held. Wait for the
+        # release, and claim the sequence so the row does not also react.
         gesture.connect(
-            "pressed",
-            lambda _g, _n, x, y, cid=console_id, r=row: self._show_sidebar_menu(r, cid, x, y),
+            "released",
+            lambda g, _n, x, y, cid=console_id, r=row: (
+                g.set_state(Gtk.EventSequenceState.CLAIMED),
+                self._show_sidebar_menu(r, cid, x, y),
+            ),
         )
         row.add_controller(gesture)
 
     def _show_sidebar_menu(self, row, console_id, x, y):
-        """Right-click actions for a sidebar entry.
+        """Right-click actions for a sidebar console.
 
         The first three mirror the header-bar buttons; "open folder" is the one
         thing that only makes sense per console.
@@ -814,21 +823,31 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._sidebar_menu_console = console_id
         self._ensure_sidebar_action_group()
 
-        is_view = console_id in (ALL_CONSOLES_ID, FAVORITES_ID)
         menu = Gio.Menu()
         # Not the header button's wording: there the action is "reload what is
         # on screen", here it is "rescan this console's folder".
-        menu.append(
-            self.t("context.rescan.all") if is_view else self.t("context.rescan.console"),
-            "sidebar.refresh",
+        menu.append_item(
+            self._menu_item_with_icon(
+                self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"
+            )
         )
-        menu.append(self.t("header.import"), "sidebar.import")
-        menu.append(self.t("header.sync_covers"), "sidebar.sync-covers")
-        # Favorites and All are views, not folders on disk.
-        if console_id not in (ALL_CONSOLES_ID, FAVORITES_ID):
-            folder_section = Gio.Menu()
-            folder_section.append(self.t("context.open_folder"), "sidebar.open-folder")
-            menu.append_section(None, folder_section)
+        menu.append_item(
+            self._menu_item_with_icon(
+                self.t("header.import"), "sidebar.import", "document-open-symbolic"
+            )
+        )
+        menu.append_item(
+            self._menu_item_with_icon(
+                self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"
+            )
+        )
+        folder_section = Gio.Menu()
+        folder_section.append_item(
+            self._menu_item_with_icon(
+                self.t("context.open_folder"), "sidebar.open-folder", "folder-symbolic"
+            )
+        )
+        menu.append_section(None, folder_section)
 
         popover = Gtk.PopoverMenu.new_from_model(menu)
         popover.set_parent(row)
@@ -837,6 +856,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
         popover.popup()
+
+    @staticmethod
+    def _menu_item_with_icon(label, action, icon_name):
+        item = Gio.MenuItem.new(label, action)
+        item.set_icon(Gio.ThemedIcon.new(icon_name))
+        return item
 
     def _ensure_sidebar_action_group(self):
         if getattr(self, "_sidebar_action_group", None) is not None:
