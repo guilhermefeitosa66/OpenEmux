@@ -7,8 +7,10 @@ import logging
 
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
+from openemux.ui.context_menu import SEPARATOR, build_context_popover
 
 logger = logging.getLogger(__name__)
+
 
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
@@ -430,25 +432,32 @@ class RomItem(Gtk.Box):
             self._context_popover = None
 
         is_favorite = self.is_favorite(self.rom)
-        menu = Gio.Menu()
-        fav_label = self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
-        menu.append(fav_label, "rom.toggle-favorite")
-        menu.append(self.t("context.cover.choose"), "rom.choose-cover")
+        entries = [
+            (
+                self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add"),
+                "rom.toggle-favorite",
+                "starred-symbolic" if is_favorite else "non-starred-symbolic",
+            ),
+            (self.t("context.cover.choose"), "rom.choose-cover", "image-x-generic-symbolic"),
+        ]
         if self.has_local_cover(self.rom, COVER_ART):
-            menu.append(self.t("context.cover.remove"), "rom.remove-cover")
+            entries.append(
+                (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
+            )
         if self.supports_label:
-            menu.append(self.t("context.label.choose"), "rom.choose-label")
+            entries.append(
+                (self.t("context.label.choose"), "rom.choose-label", "insert-image-symbolic")
+            )
             if self.has_local_cover(self.rom, LABEL_ART):
-                menu.append(self.t("context.label.remove"), "rom.remove-label")
+                entries.append(
+                    (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
+                )
         # Own section: this acts on the file on disk, not on the library entry.
-        file_section = Gio.Menu()
-        file_section.append(self.t("context.reveal"), "rom.reveal-in-files")
-        menu.append_section(None, file_section)
+        entries.append(SEPARATOR)
+        entries.append((self.t("context.reveal"), "rom.reveal-in-files", "folder-open-symbolic"))
 
-        popover = Gtk.PopoverMenu.new_from_model(menu)
+        popover = build_context_popover(entries)
         popover.set_parent(self)
-        popover.set_has_arrow(False)
-        popover.set_halign(Gtk.Align.START)
         if x is not None and y is not None:
             popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         popover.connect("closed", self._on_context_popover_closed)

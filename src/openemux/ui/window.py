@@ -36,6 +36,7 @@ from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.ui.grid import RomGrid
+from openemux.ui.context_menu import SEPARATOR, build_context_popover
 from openemux.ui.preferences import OpenEmuxPreferences
 
 logger = logging.getLogger(__name__)
@@ -823,45 +824,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._sidebar_menu_console = console_id
         self._ensure_sidebar_action_group()
 
-        menu = Gio.Menu()
-        # Not the header button's wording: there the action is "reload what is
-        # on screen", here it is "rescan this console's folder".
-        menu.append_item(
-            self._menu_item_with_icon(
-                self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"
-            )
-        )
-        menu.append_item(
-            self._menu_item_with_icon(
-                self.t("header.import"), "sidebar.import", "document-open-symbolic"
-            )
-        )
-        menu.append_item(
-            self._menu_item_with_icon(
-                self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"
-            )
-        )
-        folder_section = Gio.Menu()
-        folder_section.append_item(
-            self._menu_item_with_icon(
-                self.t("context.open_folder"), "sidebar.open-folder", "folder-symbolic"
-            )
-        )
-        menu.append_section(None, folder_section)
-
-        popover = Gtk.PopoverMenu.new_from_model(menu)
+        popover = build_context_popover([
+            # Not the header button's wording: there the action is "reload what
+            # is on screen", here it is "rescan this console's folder".
+            (self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"),
+            (self.t("header.import"), "sidebar.import", "document-open-symbolic"),
+            (self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
+            SEPARATOR,
+            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic"),
+        ])
         popover.set_parent(row)
-        popover.set_has_arrow(False)
-        popover.set_halign(Gtk.Align.START)
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
         popover.popup()
-
-    @staticmethod
-    def _menu_item_with_icon(label, action, icon_name):
-        item = Gio.MenuItem.new(label, action)
-        item.set_icon(Gio.ThemedIcon.new(icon_name))
-        return item
 
     def _ensure_sidebar_action_group(self):
         if getattr(self, "_sidebar_action_group", None) is not None:
