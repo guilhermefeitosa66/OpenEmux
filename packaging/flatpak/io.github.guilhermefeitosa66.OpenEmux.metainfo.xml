@@ -82,6 +82,19 @@
   </keywords>
 
   <releases>
+    <release version="1.3.0" date="2026-07-20">
+      <description>
+        <p>ROM import, archive support and controller mapping.</p>
+        <ul>
+          <li>ROMs inside .zip archives are recognized; archives are extracted for cores that need a real file</li>
+          <li>Import ROMs from the main window, by button or drag and drop</li>
+          <li>Map controls by pressing the buttons on the controller, with up to four gamepad ports</li>
+          <li>Optional ScreenScraper cover source, including cartridge label art</li>
+          <li>Rotating tips status bar and a rebindable fullscreen toggle</li>
+          <li>Cover sync can be stopped while it runs</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-07-17">
       <description>
         <p>Library and packaging update.</p>

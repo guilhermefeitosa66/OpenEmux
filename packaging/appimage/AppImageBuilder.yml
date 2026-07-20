@@ -29,7 +29,7 @@ AppDir:
     id: io.github.guilhermefeitosa66.OpenEmux
     name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
-    version: "1.2.0"
+    version: "1.3.0"
     exec: usr/bin/openemux-launcher
   apt:
     arch: amd64
