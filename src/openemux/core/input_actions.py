@@ -138,29 +138,55 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "fast_forward_toggle": "13",
 }
 
-RETROARCH_BASE_KEYS = {
-    "up": "input_player1_up",
-    "down": "input_player1_down",
-    "left": "input_player1_left",
-    "right": "input_player1_right",
-    "a": "input_player1_a",
-    "b": "input_player1_b",
-    "x": "input_player1_x",
-    "y": "input_player1_y",
-    "start": "input_player1_start",
-    "select": "input_player1_select",
-    "l1": "input_player1_l",
-    "l2": "input_player1_l2",
-    "l3": "input_player1_l3",
-    "r1": "input_player1_r",
-    "r2": "input_player1_r2",
-    "r3": "input_player1_r3",
+#: Highest RetroArch port OpenEmux exposes in the UI.
+MAX_PLAYERS = 4
+
+#: Gameplay action -> RetroArch key suffix. These keys ARE per-player, so the
+#: emitted key is ``input_player<N>_<suffix>``.
+PLAYER_ACTION_SUFFIXES = {
+    "up": "up",
+    "down": "down",
+    "left": "left",
+    "right": "right",
+    "a": "a",
+    "b": "b",
+    "x": "x",
+    "y": "y",
+    "start": "start",
+    "select": "select",
+    "l1": "l",
+    "l2": "l2",
+    "l3": "l3",
+    "r1": "r",
+    "r2": "r2",
+    "r3": "r3",
+}
+
+#: Hotkeys are global in RetroArch: they are NOT numbered per player and must
+#: stay exactly as-is regardless of which port is being written.
+RETROARCH_GLOBAL_HOTKEY_KEYS = {
     "enable_hotkey": "input_enable_hotkey",
     "menu_toggle": "input_menu_toggle",
     "save_state": "input_save_state",
     "load_state": "input_load_state",
     "fast_forward_toggle": "input_toggle_fast_forward",
 }
+
+#: Kept for backwards compatibility: the player-1 view of the key table.
+RETROARCH_BASE_KEYS = {
+    **{action: f"input_player1_{suffix}" for action, suffix in PLAYER_ACTION_SUFFIXES.items()},
+    **RETROARCH_GLOBAL_HOTKEY_KEYS,
+}
+
+
+def retroarch_key_for(action, player=1):
+    """Return the RetroArch config key for ``action`` on port ``player``.
+
+    Global hotkeys ignore ``player`` entirely (RetroArch has a single set).
+    """
+    if action in RETROARCH_GLOBAL_HOTKEY_KEYS:
+        return RETROARCH_GLOBAL_HOTKEY_KEYS[action]
+    return f"input_player{int(player)}_{PLAYER_ACTION_SUFFIXES[action]}"
 
 
 def default_keyboard_bindings():
@@ -230,12 +256,21 @@ def _is_axis_binding(value):
     return value[1:].isdigit()
 
 
-def to_retroarch_overrides(bindings, device_type, console=None):
+def to_retroarch_overrides(bindings, device_type, console=None, player=1):
+    """Translate a binding map into RetroArch config keys for one port.
+
+    ``player`` defaults to 1 so existing callers keep their behaviour. Ports
+    other than 1 emit only the gameplay keys: the hotkeys are global, so
+    writing them again from port 2+ would just clobber port 1's hotkeys.
+    """
+    player = int(player)
     bindings = normalize_bindings(bindings, device_type, console=console)
     allowed_actions = get_actions_for_console(console)
     overrides = {}
     for action in allowed_actions:
-        base_key = RETROARCH_BASE_KEYS[action]
+        if player != 1 and action in RETROARCH_GLOBAL_HOTKEY_KEYS:
+            continue
+        base_key = retroarch_key_for(action, player)
         bind_value = bindings.get(action, "")
         if not bind_value:
             continue

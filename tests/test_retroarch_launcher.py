@@ -14,6 +14,7 @@ class _DummyConfig:
         self.input_dir = self.base_dir / "input"
         self.runtime_dir = self.base_dir / "runtime"
         self.shader_by_console = shader_by_console or {}
+        self.input_profile = None
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -25,6 +26,8 @@ class _DummyConfig:
         return []
 
     def get_input_profile(self, _console):
+        if self.input_profile is not None:
+            return self.input_profile
         return {
             "active_device": "keyboard",
             "devices": {
@@ -132,6 +135,55 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn(str(shader), cmd)
         self.assertIn('video_shader_enable = "true"', runtime_content)
         self.assertIn(f'video_shader = "{shader}"', runtime_content)
+
+    # ----- multi-port -----------------------------------------------------
+    def _override_lines(self, profile):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg.input_profile = profile
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA")
+            return Path(path).read_text(encoding="utf-8").splitlines()
+
+    def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
+        legacy_only = {
+            "active_device": "keyboard",
+            "devices": {"keyboard": {"type": "keyboard", "bindings": {"a": "z", "b": "x"}}},
+        }
+        with_disabled_ports = {
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {"type": "keyboard", "bindings": {"a": "z", "b": "x"}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": False},
+                "gamepad_p3": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": False},
+                "gamepad_p4": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": False},
+            },
+        }
+        self.assertEqual(
+            self._override_lines(legacy_only), self._override_lines(with_disabled_ports)
+        )
+        self.assertIn('input_player1_a = "z"', self._override_lines(legacy_only))
+
+    def test_enabled_extra_ports_emit_their_own_player_keys(self):
+        profile = {
+            "active_device": "gamepad_p1",
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {"a": "1"}, "enabled": True},
+                "gamepad_p3": {"type": "gamepad", "bindings": {"a": "2"}, "enabled": False},
+                "gamepad_p4": {"type": "gamepad", "bindings": {"a": "3"}, "enabled": True},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player1_a_btn = "0"', lines)
+        self.assertIn('input_player2_a_btn = "1"', lines)
+        self.assertIn('input_player4_a_btn = "3"', lines)
+        # Port 3 stayed off.
+        self.assertFalse([line for line in lines if line.startswith("input_player3_")])
+        # Hotkeys are global: exactly one set, written by port 1.
+        self.assertEqual(len([l for l in lines if l.startswith("input_enable_hotkey")]), 1)
+        self.assertFalse([l for l in lines if "player2_enable_hotkey" in l])
 
 
 if __name__ == "__main__":

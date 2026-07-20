@@ -42,4 +42,14 @@ TRANSLATIONS = {
     "tips.sync_covers": "上部の写真ボタンでカバーアートを同期できます",
     "tips.shaders": "設定 → ビデオでコンソールごとにシェーダーを選べます",
     "tips.search": "Ctrl+Fでライブラリ全体を検索できます",
+    # Input devices / ports
+    "input.device": "入力デバイス",
+    "input.device.keyboard": "キーボード",
+    "input.device.gamepad_p1": "ゲームパッド ポート1",
+    "input.device.gamepad_p2": "ゲームパッド ポート2",
+    "input.device.gamepad_p3": "ゲームパッド ポート3",
+    "input.device.gamepad_p4": "ゲームパッド ポート4",
+    "input.port.enable": "このポートを有効にする",
+    "input.port.enable.subtitle": "ゲーム開始時にこの割り当てを RetroArch に送信します",
+    "input.capture.port_unavailable": "ポート{port}を設定するには、コントローラーを{port}台以上接続してください",
 }
