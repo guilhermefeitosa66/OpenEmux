@@ -11,7 +11,7 @@ TRANSLATIONS = {
     "import.unknown_console": "Welche Konsole?",
     "import.choose_console.body": "Dateien mit der Endung „{extension}“ werden von mehreren Konsolen verwendet. Wähle die Zielkonsole für diesen Stapel.",
     "import.progress.starting": "Import wird gestartet...",
-    "import.progress": "ROMs werden importiert ({current}/{total})",
+    "import.progress": "ROMs werden importiert",
     "import.done": "{imported} ROMs importiert, {skipped} übersprungen",
     "import.failed": "Nichts importiert: {unknown} nicht erkannte Dateien",
     "import.nothing_new": "Keine neuen ROMs zum Importieren",

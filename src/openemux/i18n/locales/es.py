@@ -11,7 +11,7 @@ TRANSLATIONS = {
     "import.unknown_console": "¿Qué consola?",
     "import.choose_console.body": "Los archivos con la extensión «{extension}» los usan varias consolas. Elige la consola de destino para este lote.",
     "import.progress.starting": "Iniciando importación...",
-    "import.progress": "Importando ROMs ({current}/{total})",
+    "import.progress": "Importando ROMs",
     "import.done": "{imported} ROMs importadas, {skipped} omitidas",
     "import.failed": "No se importó nada: {unknown} archivos no reconocidos",
     "import.nothing_new": "No hay ROMs nuevas para importar",

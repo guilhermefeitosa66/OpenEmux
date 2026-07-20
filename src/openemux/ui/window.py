@@ -1368,11 +1368,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 task_id,
                 evt.get("current", 0),
                 evt.get("total", 0),
-                self.t(
-                    "import.progress",
-                    current=evt.get("current", 0),
-                    total=evt.get("total", 0),
-                ),
+                # The counter is rendered by _refresh_banner; don't repeat it here.
+                self.t("import.progress"),
             )
 
         def _on_done(summary):
@@ -1455,7 +1452,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 task_id,
                 evt.get("processed", 0),
                 evt.get("total", 0),
-                self.t("status.covers.progress", current=evt.get("processed", 0), total=evt.get("total", 0)),
+                # The counter is rendered by _refresh_banner; don't repeat it here.
+                self.t("status.covers.progress"),
             )
 
         def _on_done(summary):
