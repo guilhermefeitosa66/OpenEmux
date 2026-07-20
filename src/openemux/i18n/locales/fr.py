@@ -55,4 +55,7 @@ TRANSLATIONS = {
     "banner.cancel": "Annuler",
     "banner.stopping": "Arrêt...",
     "toast.sync_cancelled": "Sync des jaquettes arrêtée — {downloaded} téléchargées, {skipped} ignorées",
+    "prefs.group.interface": "Interface",
+    "settings.system.tips.title": "Afficher les astuces",
+    "settings.system.tips.subtitle": "Afficher la barre d'astuces en bas de la fenêtre",
 }

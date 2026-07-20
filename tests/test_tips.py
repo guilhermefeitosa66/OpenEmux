@@ -3,6 +3,7 @@ import unittest
 
 from openemux.core.input_actions import DEFAULT_KEYBOARD_BINDINGS
 from openemux.core.tips import (
+    TIP_ICON,
     TIP_KEYS,
     format_key_label,
     pick_next_tip,
@@ -88,3 +89,9 @@ class PickNextTipTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TipIconTests(unittest.TestCase):
+    def test_tip_icon_is_the_lightbulb_emoji(self):
+        # Adwaita ships no lightbulb icon, so the marker is an emoji.
+        self.assertEqual(TIP_ICON, "\U0001F4A1")

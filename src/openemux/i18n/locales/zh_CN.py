@@ -55,4 +55,7 @@ TRANSLATIONS = {
     "banner.cancel": "取消",
     "banner.stopping": "正在停止...",
     "toast.sync_cancelled": "封面同步已停止 — 已下载 {downloaded} 个，跳过 {skipped} 个",
+    "prefs.group.interface": "界面",
+    "settings.system.tips.title": "显示提示",
+    "settings.system.tips.subtitle": "在窗口底部显示提示栏",
 }

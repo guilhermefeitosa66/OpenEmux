@@ -259,4 +259,7 @@ TRANSLATIONS = {
     "banner.cancel": "Cancelar",
     "banner.stopping": "Parando...",
     "toast.sync_cancelled": "Sync de capas interrompido — {downloaded} baixadas, {skipped} ignoradas",
+    "prefs.group.interface": "Interface",
+    "settings.system.tips.title": "Exibir dicas",
+    "settings.system.tips.subtitle": "Mostrar a barra de dicas na parte inferior da janela",
 }

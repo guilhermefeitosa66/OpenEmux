@@ -913,6 +913,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         lang_group.add(self._language_combo)
         page.add(lang_group)
 
+        interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
+        self._tips_row = Adw.SwitchRow(
+            title=self.t("settings.system.tips.title"),
+            subtitle=self.t("settings.system.tips.subtitle"),
+        )
+        self._tips_row.set_active(self.config.get_ui_settings()["show_tips"])
+        self._tips_row.connect("notify::active", self._on_show_tips_changed)
+        interface_group.add(self._tips_row)
+        page.add(interface_group)
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -944,6 +954,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    def _on_show_tips_changed(self, row, *_a):
+        enabled = row.get_active()
+        self.config.set_show_tips(enabled)
+        self.win._apply_tips_visibility(enabled)
 
     def _on_language_changed(self, *_a):
         idx = self._language_combo.get_selected()

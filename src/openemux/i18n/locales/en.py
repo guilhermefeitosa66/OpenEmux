@@ -259,4 +259,7 @@ TRANSLATIONS = {
     "banner.cancel": "Cancel",
     "banner.stopping": "Stopping...",
     "toast.sync_cancelled": "Cover sync stopped — {downloaded} downloaded, {skipped} skipped",
+    "prefs.group.interface": "Interface",
+    "settings.system.tips.title": "Show tips",
+    "settings.system.tips.subtitle": "Display the hint bar at the bottom of the window",
 }
