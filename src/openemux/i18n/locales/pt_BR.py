@@ -262,4 +262,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "Interface",
     "settings.system.tips.title": "Exibir dicas",
     "settings.system.tips.subtitle": "Mostrar a barra de dicas na parte inferior da janela",
+    "input.action.fullscreen_toggle": "Alternar tela cheia",
+    "tips.fullscreen": "Segure {hotkey} e pressione {fullscreen_key} para tela cheia",
 }

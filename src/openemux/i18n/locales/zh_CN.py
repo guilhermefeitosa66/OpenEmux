@@ -58,4 +58,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "界面",
     "settings.system.tips.title": "显示提示",
     "settings.system.tips.subtitle": "在窗口底部显示提示栏",
+    "input.action.fullscreen_toggle": "切换全屏",
+    "tips.fullscreen": "按住 {hotkey} 再按 {fullscreen_key} 切换全屏",
 }

@@ -58,4 +58,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "インターフェース",
     "settings.system.tips.title": "ヒントを表示",
     "settings.system.tips.subtitle": "ウィンドウ下部のヒントバーを表示します",
+    "input.action.fullscreen_toggle": "フルスクリーン切り替え",
+    "tips.fullscreen": "{hotkey} を押しながら {fullscreen_key} でフルスクリーン切り替え",
 }

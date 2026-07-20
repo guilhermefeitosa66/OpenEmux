@@ -1,7 +1,10 @@
 import unittest
 
 from openemux.core.input_actions import (
+    DEFAULT_GAMEPAD_BINDINGS,
+    DEFAULT_KEYBOARD_BINDINGS,
     GLOBAL_HOTKEY_ACTIONS,
+    default_bindings_for_device,
     RETROARCH_BASE_KEYS,
     get_actions_for_console,
     normalize_bindings,
@@ -99,3 +102,34 @@ class InputActionsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FullscreenToggleTests(unittest.TestCase):
+    """Fullscreen is a global RetroArch hotkey, like the other F-key actions."""
+
+    def test_emits_retroarch_fullscreen_key(self):
+        bindings = default_bindings_for_device("keyboard", console="SFC")
+        overrides = to_retroarch_overrides(bindings, "keyboard", console="SFC")
+        # Verified against a real retroarch.cfg: the key is input_toggle_fullscreen.
+        self.assertEqual(overrides["input_toggle_fullscreen"], '"f"')
+
+    def test_gamepad_binding_uses_a_button_token(self):
+        bindings = default_bindings_for_device("gamepad", console="SFC")
+        overrides = to_retroarch_overrides(bindings, "gamepad", console="SFC")
+        self.assertEqual(overrides["input_toggle_fullscreen_btn"], '"15"')
+
+    def test_default_does_not_collide_with_another_binding(self):
+        values = list(DEFAULT_KEYBOARD_BINDINGS.values())
+        self.assertEqual(values.count("f"), 1)
+        gamepad = list(DEFAULT_GAMEPAD_BINDINGS.values())
+        self.assertEqual(gamepad.count("15"), 1)
+
+    def test_stays_unnumbered_on_extra_ports(self):
+        # One global hotkey set: writing it from port 2 would clobber port 1.
+        bindings = default_bindings_for_device("gamepad", console="SFC")
+        overrides = to_retroarch_overrides(bindings, "gamepad", console="SFC", player=2)
+        self.assertNotIn("input_toggle_fullscreen_btn", overrides)
+
+    def test_is_offered_for_every_console(self):
+        for console in ("FC", "SFC", "GBA", "PS", "MD"):
+            self.assertIn("fullscreen_toggle", get_actions_for_console(console), console)
