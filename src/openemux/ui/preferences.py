@@ -13,7 +13,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Gdk, GLib
+from gi.repository import Adw, Gtk, Gdk, GLib, Pango
 
 from openemux.core.config import (
     COVER_ART_TYPES,
@@ -151,6 +151,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._cover_source_row.set_selected(
             self._cover_source_ids.index(normalize_cover_source(settings.get("cover_source")))
         )
+        # Without a wrapping factory the longest option is ellipsized to fit the
+        # row width, which hides which sources are actually in play.
+        self._apply_wrapping_label_factory(self._cover_source_row)
         self._cover_source_row.connect("notify::selected", self._on_cover_source_changed)
         group.add(self._cover_source_row)
 
@@ -287,6 +290,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=f"{console_id} — {status['display_name']}",
                 subtitle=f"{present}/{total}",
             )
+            # The row names a console, so show its icon like everywhere else.
+            expander.add_prefix(self.win._build_console_icon(console_id))
             open_btn = Gtk.Button(icon_name="folder-open-symbolic")
             open_btn.add_css_class("flat")
             open_btn.set_valign(Gtk.Align.CENTER)
@@ -316,6 +321,32 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         if show_toast:
             self._toast(self.t("bios.reloaded"))
+
+    def _apply_wrapping_label_factory(self, combo_row):
+        """Let a ComboRow's options wrap instead of being cut off.
+
+        Adwaita ellipsizes the selected item to the row width, so a long option
+        ("libretro thumbnails, then ScreenScraper") reads as truncated text.
+        """
+
+        def _setup(_factory, list_item):
+            label = Gtk.Label()
+            label.set_wrap(True)
+            label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            label.set_max_width_chars(28)
+            label.set_halign(Gtk.Align.START)
+            label.set_xalign(0)
+            list_item.set_child(label)
+
+        def _bind(_factory, list_item):
+            item = list_item.get_item()
+            list_item.get_child().set_text(item.get_string() if item else "")
+
+        for setter in (combo_row.set_factory, combo_row.set_list_factory):
+            factory = Gtk.SignalListItemFactory()
+            factory.connect("setup", _setup)
+            factory.connect("bind", _bind)
+            setter(factory)
 
     def _apply_console_icon_factory(self, combo_row):
         """Render a console ComboRow as "<icon> ID — Name", like the sidebar.
