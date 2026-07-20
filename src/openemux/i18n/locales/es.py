@@ -60,4 +60,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "Mostrar la barra de consejos en la parte inferior",
     "input.action.fullscreen_toggle": "Alternar pantalla completa",
     "tips.fullscreen": "Mantén {hotkey} y pulsa {fullscreen_key} para pantalla completa",
+    "context.reveal": "Mostrar en el gestor de archivos",
+    "context.reveal.missing": "“{name}” ya no está en el disco",
+    "context.open_folder": "Abrir carpeta",
+    "context.rescan.console": "Reescanear esta consola",
+    "context.rescan.all": "Reescanear biblioteca",
 }

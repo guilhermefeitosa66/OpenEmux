@@ -264,4 +264,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "Display the hint bar at the bottom of the window",
     "input.action.fullscreen_toggle": "Toggle fullscreen",
     "tips.fullscreen": "Hold {hotkey} and press {fullscreen_key} to toggle fullscreen",
+    "context.reveal": "Show in file manager",
+    "context.reveal.missing": "“{name}” is no longer on disk",
+    "context.open_folder": "Open folder",
+    "context.rescan.console": "Rescan this console",
+    "context.rescan.all": "Rescan library",
 }

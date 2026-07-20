@@ -264,4 +264,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "Mostrar a barra de dicas na parte inferior da janela",
     "input.action.fullscreen_toggle": "Alternar tela cheia",
     "tips.fullscreen": "Segure {hotkey} e pressione {fullscreen_key} para tela cheia",
+    "context.reveal": "Mostrar no gerenciador de arquivos",
+    "context.reveal.missing": "“{name}” não está mais no disco",
+    "context.open_folder": "Abrir pasta",
+    "context.rescan.console": "Reescanear este console",
+    "context.rescan.all": "Reescanear biblioteca",
 }

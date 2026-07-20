@@ -793,7 +793,91 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         row.set_child(box)
         row.id = console_id
+        self._install_sidebar_context_menu(row, console_id)
         self.console_list.append(row)
+
+    def _install_sidebar_context_menu(self, row, console_id):
+        gesture = Gtk.GestureClick()
+        gesture.set_button(Gdk.BUTTON_SECONDARY)
+        gesture.connect(
+            "pressed",
+            lambda _g, _n, x, y, cid=console_id, r=row: self._show_sidebar_menu(r, cid, x, y),
+        )
+        row.add_controller(gesture)
+
+    def _show_sidebar_menu(self, row, console_id, x, y):
+        """Right-click actions for a sidebar entry.
+
+        The first three mirror the header-bar buttons; "open folder" is the one
+        thing that only makes sense per console.
+        """
+        self._sidebar_menu_console = console_id
+        self._ensure_sidebar_action_group()
+
+        is_view = console_id in (ALL_CONSOLES_ID, FAVORITES_ID)
+        menu = Gio.Menu()
+        # Not the header button's wording: there the action is "reload what is
+        # on screen", here it is "rescan this console's folder".
+        menu.append(
+            self.t("context.rescan.all") if is_view else self.t("context.rescan.console"),
+            "sidebar.refresh",
+        )
+        menu.append(self.t("header.import"), "sidebar.import")
+        menu.append(self.t("header.sync_covers"), "sidebar.sync-covers")
+        # Favorites and All are views, not folders on disk.
+        if console_id not in (ALL_CONSOLES_ID, FAVORITES_ID):
+            folder_section = Gio.Menu()
+            folder_section.append(self.t("context.open_folder"), "sidebar.open-folder")
+            menu.append_section(None, folder_section)
+
+        popover = Gtk.PopoverMenu.new_from_model(menu)
+        popover.set_parent(row)
+        popover.set_has_arrow(False)
+        popover.set_halign(Gtk.Align.START)
+        popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
+        popover.popup()
+
+    def _ensure_sidebar_action_group(self):
+        if getattr(self, "_sidebar_action_group", None) is not None:
+            return
+        group = Gio.SimpleActionGroup()
+        for name, handler in (
+            ("refresh", self._act_sidebar_refresh),
+            ("import", self._act_sidebar_import),
+            ("sync-covers", self._act_sidebar_sync_covers),
+            ("open-folder", self._act_sidebar_open_folder),
+        ):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", handler)
+            group.add_action(action)
+        self.insert_action_group("sidebar", group)
+        self._sidebar_action_group = group
+
+    def _act_sidebar_refresh(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: refresh console=%s", console)
+        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
+            self._rescan_all_consoles(show_toast=True)
+        else:
+            self._rescan_single_console(console, show_toast=True)
+
+    def _act_sidebar_import(self, _action, _param):
+        logger.info("sidebar context action: import console=%s", self._sidebar_menu_console)
+        self._on_import_clicked(None)
+
+    def _act_sidebar_sync_covers(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: sync_covers console=%s", console)
+        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
+            self._start_cover_sync(scope="all", selected_console=None)
+        else:
+            self._start_cover_sync(scope="console", selected_console=console)
+
+    def _act_sidebar_open_folder(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: open_folder console=%s", console)
+        self._open_path_in_file_manager(self.roms_path / console)
 
     def _asset_path(self, category, filename):
         return Path(__file__).parent / "assets" / "icons" / category / filename
@@ -986,6 +1070,41 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         bios_dir.mkdir(parents=True, exist_ok=True)
         self._open_path_in_file_manager(bios_dir)
 
+    def _reveal_rom_in_files(self, rom):
+        self._reveal_in_file_manager(rom.get("path", ""))
+
+    def _reveal_in_file_manager(self, path):
+        """Open the file manager with ``path`` selected, not just its folder.
+
+        Uses the freedesktop FileManager1 interface, which Nautilus, Nemo,
+        Dolphin and Thunar all implement. If no such service is on the bus we
+        fall back to opening the containing folder -- worse, but not nothing.
+        """
+        path = Path(path)
+        if not path.exists():
+            self._toast(self.t("context.reveal.missing", name=path.name), timeout=4)
+            return
+
+        try:
+            connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            connection.call_sync(
+                "org.freedesktop.FileManager1",
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1",
+                "ShowItems",
+                GLib.Variant("(ass)", ([path.as_uri()], "")),
+                None,
+                Gio.DBusCallFlags.NONE,
+                5000,
+                None,
+            )
+            logger.info("reveal in file manager: path=%s", path)
+            return
+        except GLib.Error as exc:
+            logger.info("FileManager1 unavailable (%s); opening parent folder", exc)
+
+        self._open_path_in_file_manager(path.parent)
+
     def _open_path_in_file_manager(self, path):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -1093,6 +1212,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             roms,
             self.on_launch_game,
             self._toggle_favorite_from_ui,
+            self._reveal_rom_in_files,
             self._choose_cover_for_rom,
             self._remove_cover_for_rom,
             self._is_favorite_rom,

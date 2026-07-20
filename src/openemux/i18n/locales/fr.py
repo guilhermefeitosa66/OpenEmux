@@ -60,4 +60,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "Afficher la barre d'astuces en bas de la fenêtre",
     "input.action.fullscreen_toggle": "Basculer en plein écran",
     "tips.fullscreen": "Maintiens {hotkey} et appuie sur {fullscreen_key} pour le plein écran",
+    "context.reveal": "Afficher dans le gestionnaire de fichiers",
+    "context.reveal.missing": "« {name} » n'est plus sur le disque",
+    "context.open_folder": "Ouvrir le dossier",
+    "context.rescan.console": "Réanalyser cette console",
+    "context.rescan.all": "Réanalyser la bibliothèque",
 }
