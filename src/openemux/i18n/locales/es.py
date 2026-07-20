@@ -17,4 +17,14 @@ TRANSLATIONS = {
     "import.nothing_new": "No hay ROMs nuevas para importar",
     "import.drop_hint": "Suelta los archivos aquí para importarlos",
     "toast.sync_no_consoles": "No hay consolas indexadas para sincronizar carátulas",
+
+    # Gamepad capture
+    "input.capture.waiting_gamepad": "Pulsa un botón...",
+    "input.capture.waiting_for_gamepad": "Pulsa un botón del mando para {action}",
+    "input.capture.cancel_hint": "Pulsa Esc para cancelar",
+    "input.capture.no_gamepad": "No se detectó ningún mando. Conecta un mando e inténtalo de nuevo.",
+    "input.capture.permission_denied": "No se pudo leer el mando. Puede que tu usuario deba estar en el grupo \'input\'.",
+    "input.binding.button": "Botón {index}",
+    "input.binding.axis": "Eje {axis}",
+    "input.binding.hat": "Cruceta {direction}",
 }

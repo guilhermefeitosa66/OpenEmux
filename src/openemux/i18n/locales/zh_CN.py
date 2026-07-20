@@ -17,4 +17,14 @@ TRANSLATIONS = {
     "import.nothing_new": "没有新的 ROM 可导入",
     "import.drop_hint": "将文件拖放到此处以导入",
     "toast.sync_no_consoles": "没有已索引的主机可同步封面",
+
+    # Gamepad capture
+    "input.capture.waiting_gamepad": "请按下按键...",
+    "input.capture.waiting_for_gamepad": "请在手柄上按下要绑定到 {action} 的按键",
+    "input.capture.cancel_hint": "按 Esc 取消",
+    "input.capture.no_gamepad": "未检测到手柄。请连接手柄后重试。",
+    "input.capture.permission_denied": "无法读取手柄。你的用户可能需要加入 \'input\' 用户组。",
+    "input.binding.button": "按键 {index}",
+    "input.binding.axis": "轴 {axis}",
+    "input.binding.hat": "方向键 {direction}",
 }

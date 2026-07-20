@@ -15,6 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib
 
+from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token
 from openemux.core.input_actions import ACTION_ORDER, get_actions_for_console
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
@@ -44,11 +45,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._capture_active_action = None
         self._capture_sequence_mode = False
         self._capture_sequence_index = -1
+        self._gamepad_reader = None
 
         self._key_controller = Gtk.EventControllerKey()
         self._key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         self._key_controller.connect("key-pressed", self._on_key_pressed)
         self.add_controller(self._key_controller)
+
+        # Never leave a reader thread behind when the dialog goes away.
+        self.connect("closed", lambda _d: self._stop_gamepad_reader())
 
         self.add(self._build_library_page())
         self.add(self._build_bios_page())
@@ -267,7 +272,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         return self.t(f"input.action.{action}")
 
     def _binding_display(self, value):
-        return value if value else self.t("input.binding.empty")
+        if not value:
+            return self.t("input.binding.empty")
+        if self._current_device() == "keyboard":
+            return value
+        # Gamepad bindings are stored as RetroArch tokens ("3", "+2", "h0up");
+        # show something a human can recognise while keeping the token.
+        kind, detail = describe_token(value)
+        if kind == "button":
+            return self.t("input.binding.button", index=detail)
+        if kind == "axis":
+            return self.t("input.binding.axis", axis=detail)
+        if kind == "hat":
+            arrows = {"up": "↑", "down": "↓", "left": "←", "right": "→"}
+            return self.t("input.binding.hat", direction=arrows.get(detail, detail))
+        return value
 
     def _refresh_bindings(self):
         for row in list(self._input_rows.values()):
@@ -291,7 +310,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._bindings_buffer = {
             action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
         }
-        self._map_all_btn.set_sensitive(device_id == "keyboard")
+        self._map_all_btn.set_sensitive(True)
         self._bindings_group.set_description(None)
 
         for action in visible_actions:
@@ -314,23 +333,68 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 row.remove_css_class("input-mapping-current")
 
     def _on_binding_clicked(self, _button, action):
-        if self._current_device() != "keyboard":
-            self._toast(self.t("input.capture.keyboard_only"))
-            return
         self._start_capture(action, sequence_mode=False)
 
     def _start_capture(self, action, sequence_mode):
         if action not in self._input_buttons:
             return
+        self._stop_gamepad_reader()
         self._capture_active_action = action
         self._capture_sequence_mode = sequence_mode
-        self._input_buttons[action].set_label(self.t("input.capture.waiting"))
         self._set_active_row(action)
-        self._bindings_group.set_description(
-            self.t("input.capture.waiting_for", action=self._input_action_label(action))
+
+        is_gamepad = self._current_device() != "keyboard"
+        waiting_key = "input.capture.waiting_gamepad" if is_gamepad else "input.capture.waiting"
+        prompt_key = (
+            "input.capture.waiting_for_gamepad" if is_gamepad else "input.capture.waiting_for"
         )
+        self._input_buttons[action].set_label(self.t(waiting_key))
+        prompt = self.t(prompt_key, action=self._input_action_label(action))
+        if is_gamepad:
+            prompt = f"{prompt} — {self.t('input.capture.cancel_hint')}"
+        self._bindings_group.set_description(prompt)
+
+        if is_gamepad:
+            self._start_gamepad_reader()
+
+    # -- gamepad reader plumbing ------------------------------------------
+    def _start_gamepad_reader(self):
+        self._gamepad_reader = GamepadCaptureReader(
+            on_token=lambda token: GLib.idle_add(self._on_gamepad_token, token),
+            on_error=lambda reason: GLib.idle_add(self._on_gamepad_error, reason),
+        )
+        self._gamepad_reader.start()
+
+    def _stop_gamepad_reader(self):
+        reader = self._gamepad_reader
+        self._gamepad_reader = None
+        if reader is not None:
+            reader.stop()
+
+    def _on_gamepad_token(self, token):
+        # The reader runs on its own thread; capture may have been cancelled
+        # between the press and this idle callback.
+        if not self._capture_active_action or self._current_device() == "keyboard":
+            return False
+        self._gamepad_reader = None
+        self._commit_capture(token)
+        return False
+
+    def _on_gamepad_error(self, reason):
+        if not self._capture_active_action:
+            return False
+        self._gamepad_reader = None
+        self._cancel_capture()
+        key = (
+            "input.capture.permission_denied"
+            if reason == "permission_denied"
+            else "input.capture.no_gamepad"
+        )
+        self._toast(self.t(key), timeout=6)
+        return False
 
     def _cancel_capture(self, show_toast=False):
+        self._stop_gamepad_reader()
         if self._capture_active_action in self._input_buttons:
             action = self._capture_active_action
             self._input_buttons[action].set_label(
@@ -347,9 +411,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._toast(self.t("input.capture.cancelled"))
 
     def _start_map_all(self):
-        if self._current_device() != "keyboard":
-            self._toast(self.t("input.capture.keyboard_only"))
-            return
         if not self._capture_sequence_actions:
             return
         self._cancel_capture()
@@ -388,13 +449,33 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return special[key_name]
         return key_name.lower()
 
+    def _commit_capture(self, value):
+        """Store a captured binding and advance the sequence, if any.
+
+        Shared by keyboard and gamepad capture.
+        """
+        action = self._capture_active_action
+        if not action:
+            return
+        self._set_binding(action, value)
+        if not self._capture_sequence_mode:
+            self._cancel_capture()
+            return
+        self._capture_sequence_index += 1
+        if self._capture_sequence_index >= len(self._capture_sequence_actions):
+            self._cancel_capture()
+            self._toast(self.t("input.capture.completed"))
+            return
+        next_action = self._capture_sequence_actions[self._capture_sequence_index]
+        self._start_capture(next_action, sequence_mode=True)
+
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
         if not self._capture_active_action:
             return False
-        if self._current_device() != "keyboard":
-            return False
         key_name = self._normalize_key(keyval)
         action = self._capture_active_action
+
+        # Escape always aborts, for both device types.
         if key_name == "escape":
             if self._capture_sequence_mode:
                 self._cancel_capture(show_toast=True)
@@ -402,19 +483,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 self._set_binding(action, "")
                 self._cancel_capture()
             return True
+
+        # While capturing a gamepad binding, swallow other keys so a stray
+        # keystroke cannot be stored as a controller token.
+        if self._current_device() != "keyboard":
+            return True
+
         if not key_name:
             return True
-        self._set_binding(action, key_name)
-        if not self._capture_sequence_mode:
-            self._cancel_capture()
-            return True
-        self._capture_sequence_index += 1
-        if self._capture_sequence_index >= len(self._capture_sequence_actions):
-            self._cancel_capture()
-            self._toast(self.t("input.capture.completed"))
-            return True
-        next_action = self._capture_sequence_actions[self._capture_sequence_index]
-        self._start_capture(next_action, sequence_mode=True)
+        self._commit_capture(key_name)
         return True
 
     def _save_input(self):
