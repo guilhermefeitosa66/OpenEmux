@@ -1,4 +1,5 @@
 import unittest
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -134,3 +135,70 @@ class PlaylistManagerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ZippedRomPlaylistTests(unittest.TestCase):
+    """Regression: a zipped ROM was indexed but dropped when the playlist was read.
+
+    scan_and_rebuild_playlist wrote the archive path correctly, then load_playlist
+    re-filtered every line by the console's extensions -- and ".zip" is not one of
+    them -- so the game never reached the library. See issue reported after 1.2.0.
+    """
+
+    def _build(self, tmp_dir):
+        base = Path(tmp_dir)
+        roms_dir = base / "roms"
+        playlists_dir = base / "playlists"
+        playlists_dir.mkdir(parents=True, exist_ok=True)
+        manager = PlaylistManager(_DummyConfig(playlists_dir, roms_dir), RomScanner(roms_dir))
+        return roms_dir, manager
+
+    def test_zipped_rom_is_listed_with_its_inner_name(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(roms_dir / "SFC" / "Aladdin.zip", "w") as archive:
+                archive.writestr("Aladdin (USA).sfc", b"rom-data")
+
+            manager.scan_and_rebuild_playlist("SFC")
+            entries = manager.load_playlist("SFC")
+
+            self.assertEqual(len(entries), 1)
+            # Inner name, not the archive stem -- this is what cover lookups match.
+            self.assertEqual(entries[0]["name"], "Aladdin (USA)")
+            self.assertTrue(entries[0]["path"].endswith("Aladdin.zip"))
+
+    def test_zip_without_a_matching_rom_is_not_listed(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(roms_dir / "SFC" / "Docs.zip", "w") as archive:
+                archive.writestr("readme.txt", b"nothing playable here")
+
+            manager.scan_and_rebuild_playlist("SFC")
+            self.assertEqual(manager.load_playlist("SFC"), [])
+
+    def test_zipped_rom_can_be_favorited(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+            archive_path = roms_dir / "SFC" / "Aladdin.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("Aladdin (USA).sfc", b"rom-data")
+
+            manager.toggle_favorite({"path": str(archive_path)})
+            favorites = manager.load_favorites_playlist()
+
+            self.assertEqual([entry["name"] for entry in favorites], ["Aladdin (USA)"])
+
+    def test_stale_archive_for_a_fullpath_core_is_not_listed(self):
+        # PS cores need a real file; the importer extracts these, so an archive
+        # left in the folder by hand is not playable and must not be offered.
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "PS").mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(roms_dir / "PS" / "Disc.zip", "w") as archive:
+                archive.writestr("Disc.cue", b'FILE "Disc.bin" BINARY\n')
+
+            manager.scan_and_rebuild_playlist("PS")
+            self.assertEqual(manager.load_playlist("PS"), [])

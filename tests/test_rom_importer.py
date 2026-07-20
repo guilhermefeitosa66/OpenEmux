@@ -171,3 +171,47 @@ class ImportRomsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchiveExtractionTests(unittest.TestCase):
+    """Cores flagged needs_fullpath cannot read a ROM out of a zip, so importing
+    an archive for one of those systems must unpack it rather than copy it."""
+
+    def test_zip_is_kept_intact_for_memory_loading_cores(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            src = base / "Aladdin.zip"
+            with zipfile.ZipFile(src, "w") as archive:
+                archive.writestr("Aladdin (USA).sfc", b"rom-data")
+
+            result = import_roms([str(src)], base / "roms")
+
+            self.assertEqual([Path(p).name for p in result["imported"]], ["Aladdin.zip"])
+            self.assertTrue((base / "roms" / "SFC" / "Aladdin.zip").exists())
+
+    def test_zip_is_extracted_for_fullpath_cores(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            src = base / "Disc.zip"
+            with zipfile.ZipFile(src, "w") as archive:
+                archive.writestr("Disc.cue", b'FILE "Disc.bin" BINARY\n')
+                archive.writestr("Disc.bin", b"track-data")
+
+            result = import_roms([str(src)], base / "roms", console_overrides={".zip": "PS"})
+
+            target = base / "roms" / "PS"
+            self.assertFalse((target / "Disc.zip").exists())
+            self.assertTrue((target / "Disc.cue").exists())
+            self.assertTrue((target / "Disc.bin").exists())
+            self.assertEqual(len(result["imported"]), 2)
+
+    def test_zip_with_nothing_playable_is_reported_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            src = base / "Docs.zip"
+            with zipfile.ZipFile(src, "w") as archive:
+                archive.writestr("readme.txt", b"x")
+
+            result = import_roms([str(src)], base / "roms")
+            self.assertEqual(result["imported"], [])
+            self.assertEqual([Path(p).name for p in result["unknown"]], ["Docs.zip"])

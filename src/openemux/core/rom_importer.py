@@ -11,11 +11,15 @@ import zipfile
 from pathlib import Path
 from threading import Thread
 
+from openemux.core.archives import (
+    ARCHIVE_EXTENSIONS,
+    extract_archive,
+    is_archive,
+    loads_archives_natively,
+)
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions
 
 logger = logging.getLogger(__name__)
-
-ARCHIVE_EXTENSIONS = (".zip",)
 
 # Several extensions are shared by more than one console (".bin" alone is used by
 # a dozen systems). detect_console() returns every candidate, but the head of the
@@ -143,7 +147,10 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
     files = _expand_paths(paths)
     total = len(files)
 
-    result = {"imported": [], "skipped": [], "unknown": [], "errors": []}
+    # "extracted" lists the archives that had to be unpacked because the target
+    # console's core cannot read a ROM out of a zip; the UI surfaces this so the
+    # behavior difference between consoles is visible rather than surprising.
+    result = {"imported": [], "skipped": [], "unknown": [], "errors": [], "extracted": []}
 
     for index, source in enumerate(files, start=1):
         suffix = source.suffix.lower()
@@ -161,6 +168,27 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
         try:
             target_dir = roms_dir / console
             target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Cores that need a real file on disk cannot read a ROM out of an
+            # archive, so unpack rather than copying the container across.
+            if is_archive(source) and not loads_archives_natively(console):
+                extracted = extract_archive(
+                    source, target_dir, extensions=get_supported_extensions(console)
+                )
+                if not extracted:
+                    logger.info("rom_import: nothing extracted from %s", source)
+                    result["unknown"].append(str(source))
+                    _emit(on_progress, index, total, source, console, "unknown")
+                    continue
+                if move:
+                    source.unlink(missing_ok=True)
+                for path in extracted:
+                    result["imported"].append(str(path))
+                result["extracted"].append(str(source))
+                logger.info("rom_import: extracted %s -> %s (%d files)", source, target_dir, len(extracted))
+                _emit(on_progress, index, total, source, console, "imported")
+                continue
+
             dest = target_dir / source.name
 
             if dest.exists() and dest.resolve() == source.resolve():
@@ -188,8 +216,9 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
             _emit(on_progress, index, total, source, console, "error")
 
     logger.info(
-        "rom_import finished: imported=%d skipped=%d unknown=%d errors=%d",
+        "rom_import finished: imported=%d extracted=%d skipped=%d unknown=%d errors=%d",
         len(result["imported"]),
+        len(result["extracted"]),
         len(result["skipped"]),
         len(result["unknown"]),
         len(result["errors"]),

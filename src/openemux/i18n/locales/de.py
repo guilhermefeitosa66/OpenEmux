@@ -27,4 +27,5 @@ TRANSLATIONS = {
     "input.binding.button": "Taste {index}",
     "input.binding.axis": "Achse {axis}",
     "input.binding.hat": "Steuerkreuz {direction}",
+    "import.extracted": "{count} Archiv(e) entpackt: der Core dieser Konsole liest keine ROMs aus einer .zip",
 }

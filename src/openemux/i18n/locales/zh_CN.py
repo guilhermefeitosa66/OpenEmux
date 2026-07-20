@@ -27,4 +27,5 @@ TRANSLATIONS = {
     "input.binding.button": "按键 {index}",
     "input.binding.axis": "轴 {axis}",
     "input.binding.hat": "方向键 {direction}",
+    "import.extracted": "已解压 {count} 个压缩包：此主机的核心无法直接读取 .zip 中的 ROM",
 }

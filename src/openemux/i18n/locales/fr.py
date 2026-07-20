@@ -27,4 +27,5 @@ TRANSLATIONS = {
     "input.binding.button": "Bouton {index}",
     "input.binding.axis": "Axe {axis}",
     "input.binding.hat": "Croix directionnelle {direction}",
+    "import.extracted": "{count} archive(s) décompressée(s) : le core de cette console ne lit pas les ROM depuis un .zip",
 }
