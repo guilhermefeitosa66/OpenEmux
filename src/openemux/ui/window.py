@@ -1341,13 +1341,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         skipped = len(summary["skipped"])
         unknown = len(summary["unknown"])
         errors = len(summary["errors"])
+        extracted = len(summary.get("extracted", []))
         logger.info(
-            "rom import done: imported=%d skipped=%d unknown=%d errors=%d",
-            imported, skipped, unknown, errors,
+            "rom import done: imported=%d extracted=%d skipped=%d unknown=%d errors=%d",
+            imported, extracted, skipped, unknown, errors,
         )
 
         if imported:
-            self._toast(self.t("import.done", imported=imported, skipped=skipped), timeout=5)
+            message = self.t("import.done", imported=imported, skipped=skipped)
+            if extracted:
+                # Say so explicitly: the user chose a .zip and got loose files.
+                message = f"{message} — {self.t('import.extracted', count=extracted)}"
+            self._toast(message, timeout=6 if extracted else 5)
             # New files on disk: rebuild the playlists so they show up.
             self._rescan_all_consoles(show_toast=False)
         elif unknown or errors:

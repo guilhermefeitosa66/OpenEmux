@@ -27,4 +27,5 @@ TRANSLATIONS = {
     "input.binding.button": "ボタン {index}",
     "input.binding.axis": "軸 {axis}",
     "input.binding.hat": "十字キー {direction}",
+    "import.extracted": "{count} 個のアーカイブを展開しました: このコンソールのコアは .zip 内の ROM を読み込めません",
 }

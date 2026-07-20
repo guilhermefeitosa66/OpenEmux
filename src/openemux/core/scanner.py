@@ -1,8 +1,12 @@
 import logging
 import re
-import zipfile
 from pathlib import Path
 
+from openemux.core.archives import (
+    ARCHIVE_EXTENSIONS,
+    archive_rom_name,
+    loads_archives_natively,
+)
 from openemux.core.hasher import compute_rom_id
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
@@ -10,20 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 _CUE_FILE_RE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|([^\s]+))', re.IGNORECASE)
-
-# Archive containers we can inspect with the standard library. ".7z" is
-# deliberately absent: reading it would require a third-party dependency
-# (py7zr), which the project does not vendor.
-ARCHIVE_EXTENSIONS = (".zip",)
-
-# Disc-based systems are excluded from archive scanning. A zip holding a
-# .cue + .bin set (or a raw .iso/.chd) is not directly loadable by the cores
-# we ship for these systems, so surfacing the archive as a ROM would only
-# produce launch failures.
-ARCHIVE_UNSUPPORTED_SYSTEMS = frozenset({"MCD", "SATURN", "PS", "PSP", "PCECD", "GC"})
-
-# Entries inside an archive that are never the actual ROM.
-_ARCHIVE_IGNORED_PREFIXES = ("__MACOSX/", ".")
 
 
 class RomScanner:
@@ -48,7 +38,7 @@ class RomScanner:
         extensions = get_supported_extensions(system_id)
         cue_referenced_bins = self._cue_referenced_bins(console_path)
 
-        allow_archives = system_id not in ARCHIVE_UNSUPPORTED_SYSTEMS
+        allow_archives = loads_archives_natively(system_id)
 
         for file in console_path.rglob("*"):
             if not file.is_file():
@@ -60,12 +50,12 @@ class RomScanner:
             if suffix in ARCHIVE_EXTENSIONS and suffix not in extensions:
                 if not allow_archives:
                     logger.info(
-                        "scan_roms archive skipped (disc-based system): console=%s path=%s",
+                        "scan_roms archive skipped (core needs a real file): console=%s path=%s",
                         system_id,
                         file,
                     )
                     continue
-                rom_name = self._archive_rom_name(file, extensions)
+                rom_name = archive_rom_name(file, extensions)
                 if rom_name is None:
                     continue
                 rom_id = None
@@ -104,44 +94,6 @@ class RomScanner:
         logger.info("scan_roms finished: console=%s total=%d", system_id, len(sorted_roms))
         return sorted_roms
 
-    def _archive_rom_name(self, archive_path, extensions):
-        """Return the display name for an archive holding a ROM, or None.
-
-        The archive itself stays the launch target (RetroArch loads zipped
-        content natively for most cores). When the archive holds exactly one
-        matching entry we use that entry's stem so cover art and playlist
-        lookups keep matching the real game title; otherwise we fall back to
-        the archive's own stem.
-        """
-        try:
-            with zipfile.ZipFile(archive_path) as archive:
-                names = archive.namelist()
-        except Exception as exc:
-            logger.warning("scan_roms unreadable archive: path=%s error=%s", archive_path, exc)
-            return None
-
-        matches = []
-        for name in names:
-            if name.endswith("/"):
-                continue
-            entry = Path(name)
-            if entry.name.startswith(_ARCHIVE_IGNORED_PREFIXES) or name.startswith(_ARCHIVE_IGNORED_PREFIXES):
-                continue
-            if entry.suffix.lower() in extensions:
-                matches.append(entry)
-
-        if not matches:
-            logger.info("scan_roms archive has no matching rom: path=%s", archive_path)
-            return None
-        if len(matches) == 1:
-            return matches[0].stem
-
-        logger.info(
-            "scan_roms archive holds %d roms, using archive name: path=%s",
-            len(matches),
-            archive_path,
-        )
-        return archive_path.stem
 
     def _cue_referenced_bins(self, console_path):
         referenced = set()

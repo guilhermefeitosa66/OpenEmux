@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 
+from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
 from openemux.core.hasher import compute_rom_id
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
@@ -46,9 +47,10 @@ class PlaylistManager:
                 path = Path(path_str)
                 if not path.exists():
                     continue
-                if path.suffix.lower() not in extensions:
+                display_name = self._playlist_entry_name(path, system_id, extensions)
+                if display_name is None:
                     continue
-                entries.append(self._rom_entry(path, system_id))
+                entries.append(self._rom_entry(path, system_id, name=display_name))
 
         sorted_entries = sorted(entries, key=lambda x: x["name"])
         logger.info("playlist load finished: console=%s total=%d", system_id, len(sorted_entries))
@@ -73,9 +75,12 @@ class PlaylistManager:
                 console = self._console_from_rom_path(path)
                 if not console:
                     continue
-                if path.suffix.lower() not in get_supported_extensions(console):
+                display_name = self._playlist_entry_name(
+                    path, console, get_supported_extensions(console)
+                )
+                if display_name is None:
                     continue
-                entries.append(self._rom_entry(path, console))
+                entries.append(self._rom_entry(path, console, name=display_name))
 
         return sorted(entries, key=lambda x: x["name"].lower())
 
@@ -162,7 +167,23 @@ class PlaylistManager:
                 )
         return summary
 
-    def _rom_entry(self, path, console):
+    def _playlist_entry_name(self, path, console, extensions):
+        """Display name for a playlist line, or None when it is not a ROM.
+
+        Archives are resolved through their inner entry so a zipped ROM shows
+        the real game title -- which is also what cover lookups match on.
+        """
+        if is_archive(path):
+            if not loads_archives_natively(console):
+                # The core needs a real file; the importer extracts these, so a
+                # leftover archive here is not playable.
+                return None
+            return archive_rom_name(path, extensions)
+        if path.suffix.lower() not in extensions:
+            return None
+        return path.stem
+
+    def _rom_entry(self, path, console, name=None):
         rom_id = None
         try:
             rom_id = compute_rom_id(str(path))
@@ -170,7 +191,7 @@ class PlaylistManager:
             rom_id = None
 
         return {
-            "name": path.stem,
+            "name": name or path.stem,
             "path": str(path),
             "console": console,
             "rom_id": rom_id,

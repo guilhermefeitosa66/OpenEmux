@@ -235,4 +235,5 @@ TRANSLATIONS = {
     "import.nothing_new": "Nenhuma ROM nova para importar",
     "import.drop_hint": "Solte os arquivos aqui para importar",
     "toast.sync_no_consoles": "Nenhum console indexado para sincronizar capas",
+    "import.extracted": "{count} arquivo(s) descompactado(s): o core deste console não lê ROMs de dentro do .zip",
 }
