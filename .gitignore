@@ -50,3 +50,6 @@ vendors/nestopia/nestopia
 vendors/nestopia/build/
 vendors/mgba/build/
 vendors/snes9x/gtk/build/
+
+# Parallel development worktrees
+.worktree/
