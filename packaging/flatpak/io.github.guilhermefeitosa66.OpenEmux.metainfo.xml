@@ -82,6 +82,17 @@
   </keywords>
 
   <releases>
+    <release version="1.3.1" date="2026-07-20">
+      <description>
+        <p>Context menu fixes and discoverability.</p>
+        <ul>
+          <li>The sidebar context menu stays open instead of closing as soon as the mouse button is released</li>
+          <li>Context menu entries now show an icon</li>
+          <li>A three-dot button on ROM covers and sidebar consoles opens the context menu with a plain click</li>
+          <li>The favorite star moved to the top-left corner of the cover</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-07-20">
       <description>
         <p>ROM import, archive support and controller mapping.</p>
