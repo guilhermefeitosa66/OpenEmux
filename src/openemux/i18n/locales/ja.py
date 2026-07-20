@@ -11,7 +11,7 @@ TRANSLATIONS = {
     "import.unknown_console": "どのコンソールですか？",
     "import.choose_console.body": "拡張子「{extension}」は複数のコンソールで使われています。このバッチの対象コンソールを選んでください。",
     "import.progress.starting": "インポートを開始しています...",
-    "import.progress": "ROM をインポート中 ({current}/{total})",
+    "import.progress": "ROM をインポート中",
     "import.done": "{imported} 件の ROM をインポート、{skipped} 件をスキップ",
     "import.failed": "インポートなし: 認識できないファイルが {unknown} 件",
     "import.nothing_new": "インポートする新しい ROM はありません",

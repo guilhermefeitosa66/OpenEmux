@@ -11,7 +11,7 @@ TRANSLATIONS = {
     "import.unknown_console": "哪个主机？",
     "import.choose_console.body": "扩展名“{extension}”被多个主机使用。请为这批文件选择目标主机。",
     "import.progress.starting": "正在开始导入...",
-    "import.progress": "正在导入 ROM ({current}/{total})",
+    "import.progress": "正在导入 ROM",
     "import.done": "已导入 {imported} 个 ROM，跳过 {skipped} 个",
     "import.failed": "未导入任何文件：{unknown} 个无法识别的文件",
     "import.nothing_new": "没有新的 ROM 可导入",

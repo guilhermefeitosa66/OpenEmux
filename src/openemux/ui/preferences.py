@@ -317,6 +317,38 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if show_toast:
             self._toast(self.t("bios.reloaded"))
 
+    def _apply_console_icon_factory(self, combo_row):
+        """Render a console ComboRow as "<icon> ID — Name", like the sidebar.
+
+        The pre-libadwaita UI showed console icons in these selectors and the
+        refactor dropped them; this restores that without duplicating the icon
+        lookup, which stays owned by the window.
+        """
+
+        def _setup(_factory, list_item):
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            box.set_margin_top(4)
+            box.set_margin_bottom(4)
+            list_item.set_child(box)
+
+        def _bind(_factory, list_item):
+            box = list_item.get_child()
+            while child := box.get_first_child():
+                box.remove(child)
+            item = list_item.get_item()
+            console_id = item.get_string() if item else ""
+            box.append(self.win._build_console_icon(console_id))
+            label = Gtk.Label(label=f"{console_id} — {get_system_display_name(console_id)}")
+            label.set_halign(Gtk.Align.START)
+            label.set_xalign(0)
+            box.append(label)
+
+        for setter in (combo_row.set_factory, combo_row.set_list_factory):
+            factory = Gtk.SignalListItemFactory()
+            factory.connect("setup", _setup)
+            factory.connect("bind", _bind)
+            setter(factory)
+
     # ----- Input page -----------------------------------------------------
     def _build_input_page(self):
         page = Adw.PreferencesPage(
@@ -326,11 +358,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         controller_group = Adw.PreferencesGroup(title=self.t("prefs.group.controller"))
         self._console_ids = list(SYSTEM_IDS)
         self._console_combo = Adw.ComboRow(title=self.t("input.console"))
-        self._console_combo.set_model(
-            Gtk.StringList.new(
-                [f"{cid} — {get_system_display_name(cid)}" for cid in self._console_ids]
-            )
-        )
+        # Model holds bare console ids so the factory can resolve each icon; the
+        # factory renders "<icon> ID — Name".
+        self._console_combo.set_model(Gtk.StringList.new(self._console_ids))
+        self._apply_console_icon_factory(self._console_combo)
         default_console = (
             self.win.current_console
             if self.win.current_console in self._console_ids
@@ -700,6 +731,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             row = Adw.ComboRow(
                 title=f"{console_id} — {get_system_display_name(console_id)}"
             )
+            # The row names a console, so show its icon here too.
+            row.add_prefix(self.win._build_console_icon(console_id))
             row.set_model(Gtk.StringList.new(labels))
             row.set_selected(ids.index(selected) if selected in ids else 0)
             row._shader_ids = ids
