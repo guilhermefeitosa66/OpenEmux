@@ -17,4 +17,14 @@ TRANSLATIONS = {
     "import.nothing_new": "Keine neuen ROMs zum Importieren",
     "import.drop_hint": "Dateien hier ablegen, um sie zu importieren",
     "toast.sync_no_consoles": "Keine indizierten Konsolen für die Cover-Synchronisierung",
+
+    # Gamepad capture
+    "input.capture.waiting_gamepad": "Taste drücken...",
+    "input.capture.waiting_for_gamepad": "Drücke eine Taste am Controller für {action}",
+    "input.capture.cancel_hint": "Esc drücken zum Abbrechen",
+    "input.capture.no_gamepad": "Kein Controller erkannt. Schließe einen Controller an und versuche es erneut.",
+    "input.capture.permission_denied": "Controller konnte nicht gelesen werden. Dein Benutzer muss möglicherweise in der Gruppe \'input\' sein.",
+    "input.binding.button": "Taste {index}",
+    "input.binding.axis": "Achse {axis}",
+    "input.binding.hat": "Steuerkreuz {direction}",
 }

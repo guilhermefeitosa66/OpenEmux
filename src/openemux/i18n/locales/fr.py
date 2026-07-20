@@ -17,4 +17,14 @@ TRANSLATIONS = {
     "import.nothing_new": "Aucune nouvelle ROM à importer",
     "import.drop_hint": "Déposez les fichiers ici pour les importer",
     "toast.sync_no_consoles": "Aucune console indexée pour synchroniser les jaquettes",
+
+    # Gamepad capture
+    "input.capture.waiting_gamepad": "Appuyez sur un bouton...",
+    "input.capture.waiting_for_gamepad": "Appuyez sur un bouton de la manette pour {action}",
+    "input.capture.cancel_hint": "Appuyez sur Échap pour annuler",
+    "input.capture.no_gamepad": "Aucune manette détectée. Branchez une manette et réessayez.",
+    "input.capture.permission_denied": "Impossible de lire la manette. Votre utilisateur doit peut-être appartenir au groupe \'input\'.",
+    "input.binding.button": "Bouton {index}",
+    "input.binding.axis": "Axe {axis}",
+    "input.binding.hat": "Croix directionnelle {direction}",
 }

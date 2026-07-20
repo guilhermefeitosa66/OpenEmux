@@ -17,4 +17,14 @@ TRANSLATIONS = {
     "import.nothing_new": "インポートする新しい ROM はありません",
     "import.drop_hint": "ここにファイルをドロップしてインポート",
     "toast.sync_no_consoles": "カバーを同期できるインデックス済みコンソールがありません",
+
+    # Gamepad capture
+    "input.capture.waiting_gamepad": "ボタンを押してください...",
+    "input.capture.waiting_for_gamepad": "{action} に割り当てるボタンをコントローラーで押してください",
+    "input.capture.cancel_hint": "Esc キーでキャンセル",
+    "input.capture.no_gamepad": "コントローラーが検出されません。コントローラーを接続して再試行してください。",
+    "input.capture.permission_denied": "コントローラーを読み取れません。ユーザーを \'input\' グループに追加する必要があるかもしれません。",
+    "input.binding.button": "ボタン {index}",
+    "input.binding.axis": "軸 {axis}",
+    "input.binding.hat": "十字キー {direction}",
 }
