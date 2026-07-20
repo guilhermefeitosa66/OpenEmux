@@ -1,7 +1,7 @@
 import os
 import subprocess
 import logging
-from threading import Thread
+from threading import Event, Thread
 from pathlib import Path
 
 import gi
@@ -307,6 +307,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Progress banner replaces the former custom status bar (HIG feedback).
         self.banner = Adw.Banner()
         self.banner.set_revealed(False)
+        self._banner_cancel_task_id = None
+        self.banner.connect("button-clicked", self._on_banner_button_clicked)
         toolbar.add_top_bar(self.banner)
 
         # Kept separate from the progress banner: that one is driven by the task
@@ -569,7 +571,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         dropdown.set_selected(ids.index(console_id))
 
-    def _begin_task(self, kind, label, total=0):
+    def _begin_task(self, kind, label, total=0, on_cancel=None):
+        """Register a background task. ``on_cancel`` makes it interruptible.
+
+        A cancellable task gets a Cancel button on the progress banner; the
+        callback is expected to signal the worker, not to block waiting for it.
+        """
         self._task_seq += 1
         task_id = f"{kind}-{self._task_seq}"
         self._tasks[task_id] = {
@@ -579,9 +586,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             "current": 0,
             "total": int(total or 0),
             "pending": True,
+            "on_cancel": on_cancel,
+            "cancelling": False,
         }
         self._refresh_banner()
         return task_id
+
+    def _on_banner_button_clicked(self, _banner):
+        if self._banner_cancel_task_id:
+            self._cancel_task(self._banner_cancel_task_id)
+
+    def _cancel_task(self, task_id):
+        task = self._tasks.get(task_id)
+        if not task or task.get("cancelling") or not task.get("on_cancel"):
+            return
+        # Mark first: the worker stops at its next checkpoint, so the banner has
+        # to show "stopping" rather than pretending it is already done.
+        task["cancelling"] = True
+        logger.info("task cancel requested: id=%s kind=%s", task_id, task["kind"])
+        self._refresh_banner()
+        task["on_cancel"]()
 
     def _update_task(self, task_id, current=None, total=None, label=None):
         task = self._tasks.get(task_id)
@@ -612,11 +636,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         label = task["label"]
         total = int(task.get("total") or 0)
         current = int(task.get("current") or 0)
-        if total > 0:
-            label = f"{label} ({current}/{total})"
-        if pending:
-            label = f"{label} (+{pending})"
+        if task.get("cancelling"):
+            label = self.t("banner.stopping")
+        else:
+            if total > 0:
+                label = f"{label} ({current}/{total})"
+            if pending:
+                label = f"{label} (+{pending})"
         self.banner.set_title(label)
+
+        # Offer Cancel only while the task is actually interruptible.
+        if task.get("on_cancel") and not task.get("cancelling"):
+            self.banner.set_button_label(self.t("banner.cancel"))
+            self._banner_cancel_task_id = task["id"]
+        else:
+            self.banner.set_button_label(None)
+            self._banner_cancel_task_id = None
         self.banner.set_revealed(True)
 
     def _build_sidebar(self):
@@ -1522,7 +1557,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 library[console] = self.playlist_manager.load_playlist(console)
 
         self._cover_sync_running = True
-        task_id = self._begin_task("covers", self.t("status.covers.starting"))
+        # Cooperative cancel: the worker polls this between ROMs and between
+        # candidate URLs, so stopping takes at most one HTTP request.
+        cancel_event = Event()
+        self._cover_sync_cancel = cancel_event
+        task_id = self._begin_task(
+            "covers",
+            self.t("status.covers.starting"),
+            on_cancel=cancel_event.set,
+        )
         toast = Adw.Toast(title=self.t("toast.sync_started"))
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
@@ -1548,14 +1591,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_done=_on_done,
             sync_settings=self.config_manager.get_cover_sync_settings(),
             on_progress=_on_progress,
+            should_cancel=cancel_event.is_set,
         )
 
     def _on_cover_sync_done_ui(self, task_id, summary):
         self._cover_sync_running = False
+        self._cover_sync_cancel = None
         self._finish_task(task_id)
+        # Covers already downloaded are kept -- each is an independent file, so
+        # a stopped run leaves useful work rather than a half-written state.
+        done_key = "toast.sync_cancelled" if summary.get("cancelled") else "toast.sync_done"
         toast = Adw.Toast(
             title=self.t(
-                "toast.sync_done",
+                done_key,
                 downloaded=summary["downloaded"],
                 skipped=summary["skipped"],
                 errors=summary["errors"],

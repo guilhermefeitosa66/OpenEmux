@@ -251,8 +251,24 @@ def _download_cover(url, dest):
         return False
 
 
-def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_settings=None, on_progress=None):
+def _sync_covers(
+    library_by_console,
+    covers_dir,
+    scope,
+    selected_console,
+    sync_settings=None,
+    on_progress=None,
+    should_cancel=None,
+):
+    """Sync covers, optionally stopping early.
+
+    ``should_cancel`` is polled between ROMs and between candidate URLs, so a
+    cancel takes effect within one HTTP request rather than at the end of the
+    run. Whatever was already downloaded stays on disk -- covers are
+    independent files, so a partial run is useful rather than corrupt.
+    """
     sync_settings = sync_settings or {}
+    cancelled = False
     roms_dir_path = Path(covers_dir)
     consoles = (
         [selected_console]
@@ -269,7 +285,13 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
 
     for console in consoles:
         roms = library_by_console.get(console, [])
+        if cancelled:
+            break
         for rom in roms:
+            if should_cancel and should_cancel():
+                logger.info("cover_sync cancelled: console=%s processed=%d", console, total)
+                cancelled = True
+                break
             total += 1
             name = rom["name"]
 
@@ -295,6 +317,10 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
             found = False
             for url in urls:
+                if should_cancel and should_cancel():
+                    logger.info("cover_sync cancelled mid-candidate: console=%s rom=%s", console, name)
+                    cancelled = True
+                    break
                 if _download_cover(url, target):
                     downloaded += 1
                     found = True
@@ -306,6 +332,9 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
                     )
                     break
 
+            if cancelled:
+                total -= 1  # this ROM was not actually processed
+                break
             if not found:
                 logger.info("cover_sync missed: console=%s rom=%s tried=%d", console, name, len(urls))
                 errors += 1
@@ -325,13 +354,15 @@ def _sync_covers(library_by_console, covers_dir, scope, selected_console, sync_s
     summary = {
         "scope": scope,
         "selected_console": selected_console,
+        "cancelled": cancelled,
         "total": total,
         "downloaded": downloaded,
         "skipped": skipped,
         "errors": errors,
     }
     logger.info(
-        "cover_sync finished: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d",
+        "cover_sync %s: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d",
+        "cancelled" if cancelled else "finished",
         scope,
         selected_console,
         total,
@@ -350,6 +381,7 @@ def sync_covers_async(
     on_done,
     sync_settings=None,
     on_progress=None,
+    should_cancel=None,
 ):
     def _worker():
         summary = _sync_covers(
@@ -359,6 +391,7 @@ def sync_covers_async(
             selected_console=selected_console,
             sync_settings=sync_settings,
             on_progress=on_progress,
+            should_cancel=should_cancel,
         )
         if on_done:
             on_done(summary)

@@ -52,4 +52,7 @@ TRANSLATIONS = {
     "input.port.enable": "启用此端口",
     "input.port.enable.subtitle": "启动游戏时将此映射发送给 RetroArch",
     "input.capture.port_unavailable": "请至少连接 {port} 个手柄才能设置端口 {port}",
+    "banner.cancel": "取消",
+    "banner.stopping": "正在停止...",
+    "toast.sync_cancelled": "封面同步已停止 — 已下载 {downloaded} 个，跳过 {skipped} 个",
 }

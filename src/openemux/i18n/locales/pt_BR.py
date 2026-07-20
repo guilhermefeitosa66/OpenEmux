@@ -256,4 +256,7 @@ TRANSLATIONS = {
     "tips.sync_covers": "Sincronize capas no botão de fotos da barra superior",
     "tips.shaders": "Preferências → Vídeo define um shader por console",
     "tips.search": "Pressione Ctrl+F para buscar em toda a biblioteca",
+    "banner.cancel": "Cancelar",
+    "banner.stopping": "Parando...",
+    "toast.sync_cancelled": "Sync de capas interrompido — {downloaded} baixadas, {skipped} ignoradas",
 }

@@ -52,4 +52,7 @@ TRANSLATIONS = {
     "input.port.enable": "このポートを有効にする",
     "input.port.enable.subtitle": "ゲーム開始時にこの割り当てを RetroArch に送信します",
     "input.capture.port_unavailable": "ポート{port}を設定するには、コントローラーを{port}台以上接続してください",
+    "banner.cancel": "キャンセル",
+    "banner.stopping": "停止中...",
+    "toast.sync_cancelled": "カバー同期を停止しました — {downloaded} 件取得、{skipped} 件スキップ",
 }

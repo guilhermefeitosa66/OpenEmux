@@ -52,4 +52,7 @@ TRANSLATIONS = {
     "input.port.enable": "Activer ce port",
     "input.port.enable.subtitle": "Envoyer cette configuration à RetroArch au lancement d'un jeu",
     "input.capture.port_unavailable": "Connectez au moins {port} manettes pour configurer le port {port}",
+    "banner.cancel": "Annuler",
+    "banner.stopping": "Arrêt...",
+    "toast.sync_cancelled": "Sync des jaquettes arrêtée — {downloaded} téléchargées, {skipped} ignorées",
 }
