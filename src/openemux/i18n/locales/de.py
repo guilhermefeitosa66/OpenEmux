@@ -60,4 +60,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "Die Tippleiste am unteren Fensterrand anzeigen",
     "input.action.fullscreen_toggle": "Vollbild umschalten",
     "tips.fullscreen": "Halte {hotkey} und drücke {fullscreen_key} für Vollbild",
+    "context.reveal": "Im Dateimanager anzeigen",
+    "context.reveal.missing": "„{name}“ liegt nicht mehr auf der Festplatte",
+    "context.open_folder": "Ordner öffnen",
+    "context.rescan.console": "Diese Konsole neu einlesen",
+    "context.rescan.all": "Bibliothek neu einlesen",
 }

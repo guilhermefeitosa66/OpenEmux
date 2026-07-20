@@ -60,4 +60,9 @@ TRANSLATIONS = {
     "settings.system.tips.subtitle": "ウィンドウ下部のヒントバーを表示します",
     "input.action.fullscreen_toggle": "フルスクリーン切り替え",
     "tips.fullscreen": "{hotkey} を押しながら {fullscreen_key} でフルスクリーン切り替え",
+    "context.reveal": "ファイルマネージャーで表示",
+    "context.reveal.missing": "「{name}」はディスク上にありません",
+    "context.open_folder": "フォルダーを開く",
+    "context.rescan.console": "このコンソールを再スキャン",
+    "context.rescan.all": "ライブラリを再スキャン",
 }

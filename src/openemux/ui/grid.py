@@ -100,6 +100,7 @@ class RomItem(Gtk.Box):
         rom,
         on_launch_callback,
         on_toggle_favorite,
+        on_reveal_in_files,
         on_choose_cover,
         on_remove_cover,
         is_favorite,
@@ -115,6 +116,7 @@ class RomItem(Gtk.Box):
         self.rom = rom
         self.on_launch_callback = on_launch_callback
         self.on_toggle_favorite = on_toggle_favorite
+        self.on_reveal_in_files = on_reveal_in_files
         self.on_choose_cover = on_choose_cover
         self.on_remove_cover = on_remove_cover
         self.is_favorite = is_favorite
@@ -403,6 +405,7 @@ class RomItem(Gtk.Box):
         group = Gio.SimpleActionGroup()
         for name, handler in (
             ("toggle-favorite", self._act_toggle_favorite),
+            ("reveal-in-files", self._act_reveal_in_files),
             ("choose-cover", self._act_choose_cover),
             ("remove-cover", self._act_remove_cover),
             ("choose-label", self._act_choose_label),
@@ -437,6 +440,10 @@ class RomItem(Gtk.Box):
             menu.append(self.t("context.label.choose"), "rom.choose-label")
             if self.has_local_cover(self.rom, LABEL_ART):
                 menu.append(self.t("context.label.remove"), "rom.remove-label")
+        # Own section: this acts on the file on disk, not on the library entry.
+        file_section = Gio.Menu()
+        file_section.append(self.t("context.reveal"), "rom.reveal-in-files")
+        menu.append_section(None, file_section)
 
         popover = Gtk.PopoverMenu.new_from_model(menu)
         popover.set_parent(self)
@@ -457,6 +464,10 @@ class RomItem(Gtk.Box):
         logger.info("rom context action: toggle_favorite rom=%s", self.rom.get("name"))
         is_favorite_now = self.on_toggle_favorite(self.rom)
         self.favorite_badge.set_visible(bool(is_favorite_now))
+
+    def _act_reveal_in_files(self, _action, _param):
+        logger.info("rom context action: reveal_in_files rom=%s", self.rom.get("name"))
+        self.on_reveal_in_files(self.rom)
 
     def _act_choose_cover(self, _action, _param):
         logger.info("rom context action: choose_cover rom=%s", self.rom.get("name"))
@@ -485,6 +496,7 @@ class RomGrid(Gtk.FlowBox):
         roms,
         on_launch_callback,
         on_toggle_favorite,
+        on_reveal_in_files,
         on_choose_cover,
         on_remove_cover,
         is_favorite,
@@ -534,6 +546,7 @@ class RomGrid(Gtk.FlowBox):
                 rom,
                 self.on_launch_callback,
                 on_toggle_favorite,
+                on_reveal_in_files,
                 on_choose_cover,
                 on_remove_cover,
                 is_favorite,
