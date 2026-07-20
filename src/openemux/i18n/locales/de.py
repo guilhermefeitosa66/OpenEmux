@@ -28,4 +28,8 @@ TRANSLATIONS = {
     "input.binding.axis": "Achse {axis}",
     "input.binding.hat": "Steuerkreuz {direction}",
     "import.extracted": "{count} Archiv(e) entpackt: der Core dieser Konsole liest keine ROMs aus einer .zip",
+    "import.console.heading": "Welche Konsole?",
+    "import.console.body": "Wähle, wo diese ROMs abgelegt werden sollen. Die automatische Erkennung nutzt die Dateiendung.",
+    "import.console.auto": "Automatisch erkennen",
+    "import.console.confirm": "Importieren",
 }

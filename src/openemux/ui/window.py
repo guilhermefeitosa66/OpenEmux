@@ -454,11 +454,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dropdown._all_label_key = all_label_key
 
         factory = Gtk.SignalListItemFactory()
+        factory._all_label_key = all_label_key
         factory.connect("setup", self._on_console_dropdown_setup)
         factory.connect("bind", self._on_console_dropdown_bind)
         dropdown.set_factory(factory)
 
         list_factory = Gtk.SignalListItemFactory()
+        list_factory._all_label_key = all_label_key
         list_factory.connect("setup", self._on_console_dropdown_setup)
         list_factory.connect("bind", self._on_console_dropdown_bind)
         dropdown.set_list_factory(list_factory)
@@ -486,7 +488,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         row.append(icon)
 
         if console_id == ALL_CONSOLES_ID:
-            label_text = self.t("sidebar.all")
+            # The factory carries the caller's label override, so the import
+            # picker can render this entry as "detect automatically".
+            label_text = self.t(getattr(_factory, "_all_label_key", None) or "sidebar.all")
         else:
             label_text = f"{console_id} - {get_system_display_name(console_id)}"
 
@@ -1275,6 +1279,55 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("import.running"))
             return
 
+        # In "All" or "Favorites" there is no console context to import into, so
+        # ask outright instead of silently guessing from the file extension.
+        if self.current_console in (None, ALL_CONSOLES_ID, FAVORITES_ID):
+            self._ask_target_console(paths)
+            return
+
+        self._continue_import(paths, forced_console=None)
+
+    def _ask_target_console(self, paths):
+        """Ask which console to import into, defaulting to auto-detection."""
+        dropdown = self._build_console_dropdown(
+            SYSTEM_IDS,
+            default_id=ALL_CONSOLES_ID,
+            include_all=True,
+            all_label_key="import.console.auto",
+        )
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.append(dropdown)
+
+        dialog = Adw.AlertDialog(
+            heading=self.t("import.console.heading"),
+            body=self.t("import.console.body"),
+        )
+        dialog.set_extra_child(box)
+        dialog.add_response("cancel", self.t("dialog.cancel"))
+        dialog.add_response("import", self.t("import.console.confirm"))
+        dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("import")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response != "import":
+                return
+            chosen = self._get_console_dropdown_active_id(dropdown)
+            # The "detect automatically" entry reuses the ALL sentinel id.
+            forced = None if chosen == ALL_CONSOLES_ID else chosen
+            self._continue_import(paths, forced_console=forced)
+
+        dialog.connect("response", _on_response)
+        dialog.present(self)
+
+    def _continue_import(self, paths, forced_console):
+        """Run the import, forcing a console or falling back to detection."""
+        if forced_console:
+            # One console for the whole batch: no per-extension question needed.
+            self._run_import(paths, {}, forced_console=forced_console)
+            return
+
         ambiguous = collect_ambiguous_extensions(paths)
         self._resolve_ambiguous_then_import(paths, list(ambiguous.items()), {})
 
@@ -1305,7 +1358,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.connect("response", _on_response)
         dialog.present(self)
 
-    def _run_import(self, paths, overrides):
+    def _run_import(self, paths, overrides, forced_console=None):
         self._import_running = True
         task_id = self._begin_task("import", self.t("import.progress.starting"))
 
@@ -1331,6 +1384,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_done=_on_done,
             on_progress=_on_progress,
             console_overrides=overrides,
+            forced_console=forced_console,
         )
 
     def _on_import_done_ui(self, task_id, summary):

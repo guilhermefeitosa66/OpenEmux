@@ -133,11 +133,13 @@ def _unique_destination(dest):
         counter += 1
 
 
-def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides=None):
+def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides=None, forced_console=None):
     """Copy (or move) ROM files into ``<roms_dir>/<CONSOLE>/``.
 
     ``console_overrides`` maps a lowercase extension to a console id, letting the
     UI resolve an ambiguous extension once and apply it to the whole batch.
+    ``forced_console`` overrides detection entirely and sends every file to that
+    console -- the UI uses it when the user picked a target explicitly.
 
     Returns ``{"imported": [...], "skipped": [...], "unknown": [...], "errors": [...]}``.
     """
@@ -154,7 +156,7 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
 
     for index, source in enumerate(files, start=1):
         suffix = source.suffix.lower()
-        console = overrides.get(suffix)
+        console = forced_console or overrides.get(suffix)
         if not console:
             candidates = detect_console(source)
             console = candidates[0] if candidates else None
@@ -254,7 +256,7 @@ def collect_ambiguous_extensions(paths):
     return ambiguous
 
 
-def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False, console_overrides=None):
+def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False, console_overrides=None, forced_console=None):
     """Run :func:`import_roms` on a background thread (see ``sync_covers_async``)."""
 
     def _worker():
@@ -264,6 +266,7 @@ def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False, co
             on_progress=on_progress,
             move=move,
             console_overrides=console_overrides,
+            forced_console=forced_console,
         )
         if on_done:
             on_done(summary)

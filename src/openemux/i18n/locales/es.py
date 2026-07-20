@@ -28,4 +28,8 @@ TRANSLATIONS = {
     "input.binding.axis": "Eje {axis}",
     "input.binding.hat": "Cruceta {direction}",
     "import.extracted": "{count} archivo(s) descomprimido(s): el core de esta consola no lee ROMs desde un .zip",
+    "import.console.heading": "¿Qué consola?",
+    "import.console.body": "Elige dónde guardar estas ROMs. La detección automática usa la extensión de cada archivo.",
+    "import.console.auto": "Detectar automáticamente",
+    "import.console.confirm": "Importar",
 }

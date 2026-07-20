@@ -28,4 +28,8 @@ TRANSLATIONS = {
     "input.binding.axis": "軸 {axis}",
     "input.binding.hat": "十字キー {direction}",
     "import.extracted": "{count} 個のアーカイブを展開しました: このコンソールのコアは .zip 内の ROM を読み込めません",
+    "import.console.heading": "どのコンソール?",
+    "import.console.body": "これらの ROM の保存先を選んでください。自動検出は各ファイルの拡張子を使います。",
+    "import.console.auto": "自動検出",
+    "import.console.confirm": "インポート",
 }
