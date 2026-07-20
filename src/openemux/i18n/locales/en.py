@@ -236,4 +236,8 @@ TRANSLATIONS = {
     "import.drop_hint": "Drop the files here to import them",
     "toast.sync_no_consoles": "No indexed consoles to sync covers",
     "import.extracted": "{count} archive(s) unpacked: this console's core cannot read ROMs from a .zip",
+    "import.console.heading": "Which console?",
+    "import.console.body": "Choose where these ROMs should be filed. Automatic detection uses each file's extension.",
+    "import.console.auto": "Detect automatically",
+    "import.console.confirm": "Import",
 }

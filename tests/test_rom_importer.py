@@ -215,3 +215,33 @@ class ArchiveExtractionTests(unittest.TestCase):
             result = import_roms([str(src)], base / "roms")
             self.assertEqual(result["imported"], [])
             self.assertEqual([Path(p).name for p in result["unknown"]], ["Docs.zip"])
+
+
+class ForcedConsoleTests(unittest.TestCase):
+    """The UI offers an explicit console picker when there is no console context
+    (the All / Favorites views), and that choice must win over detection."""
+
+    def test_forced_console_overrides_extension_detection(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            src = base / "hack.sfc"
+            src.write_bytes(b"rom-data")
+
+            result = import_roms([str(src)], base / "roms", forced_console="FC")
+
+            self.assertTrue((base / "roms" / "FC" / "hack.sfc").exists())
+            self.assertFalse((base / "roms" / "SFC").exists())
+            self.assertEqual(len(result["imported"]), 1)
+
+    def test_forced_console_still_extracts_for_fullpath_cores(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            src = base / "Disc.zip"
+            with zipfile.ZipFile(src, "w") as archive:
+                archive.writestr("Disc.cue", b'FILE "Disc.bin" BINARY\n')
+                archive.writestr("Disc.bin", b"track")
+
+            import_roms([str(src)], base / "roms", forced_console="SATURN")
+
+            self.assertTrue((base / "roms" / "SATURN" / "Disc.cue").exists())
+            self.assertFalse((base / "roms" / "SATURN" / "Disc.zip").exists())
