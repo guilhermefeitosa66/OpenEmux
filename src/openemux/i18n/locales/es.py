@@ -52,4 +52,7 @@ TRANSLATIONS = {
     "input.port.enable": "Activar este puerto",
     "input.port.enable.subtitle": "Enviar esta asignación a RetroArch al iniciar un juego",
     "input.capture.port_unavailable": "Conecta al menos {port} mandos para asignar el puerto {port}",
+    "banner.cancel": "Cancelar",
+    "banner.stopping": "Deteniendo...",
+    "toast.sync_cancelled": "Sincronización detenida — {downloaded} descargadas, {skipped} omitidas",
 }

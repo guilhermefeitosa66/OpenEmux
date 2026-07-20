@@ -52,4 +52,7 @@ TRANSLATIONS = {
     "input.port.enable": "Diesen Port aktivieren",
     "input.port.enable.subtitle": "Diese Belegung beim Spielstart an RetroArch senden",
     "input.capture.port_unavailable": "Schließe mindestens {port} Controller an, um Port {port} zu belegen",
+    "banner.cancel": "Abbrechen",
+    "banner.stopping": "Wird gestoppt...",
+    "toast.sync_cancelled": "Cover-Sync gestoppt — {downloaded} geladen, {skipped} übersprungen",
 }

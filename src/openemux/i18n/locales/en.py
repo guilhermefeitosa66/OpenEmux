@@ -256,4 +256,7 @@ TRANSLATIONS = {
     "tips.sync_covers": "Sync missing cover art with the photos button up top",
     "tips.shaders": "Preferences → Video sets a different shader per console",
     "tips.search": "Press Ctrl+F to search your whole library",
+    "banner.cancel": "Cancel",
+    "banner.stopping": "Stopping...",
+    "toast.sync_cancelled": "Cover sync stopped — {downloaded} downloaded, {skipped} skipped",
 }
