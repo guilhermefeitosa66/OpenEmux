@@ -54,5 +54,6 @@ vendors/snes9x/gtk/build/
 # Parallel development worktrees
 .worktree/
 
-# Social announcement drafts (local only)
+# Local-only release drafts (announcement posts, PT release notes)
 release/*post*.txt
+release/NOTAS_DE_RELEASE_*.md
