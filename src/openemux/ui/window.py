@@ -99,6 +99,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._import_running = False
         self._task_seq = 0
         self._tasks = {}
+        # console_id -> Gdk.Texture (or None when the console ships no asset)
+        self._console_texture_cache = {}
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
@@ -597,13 +599,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return self.t("sidebar.favorites")
         return f"{console_id} - {get_system_display_name(console_id)}"
 
-    def _build_console_icon(self, console_id):
-        if console_id == ALL_CONSOLES_ID:
-            return Gtk.Image.new_from_icon_name("view-grid-symbolic")
-        if console_id == FAVORITES_ID:
-            icon = Gtk.Image.new_from_icon_name("starred-symbolic")
-            icon.add_css_class("favorites-sidebar-icon")
-            return icon
+    def _console_icon_texture(self, console_id):
+        """Load (once) the console's PNG as a texture, or None if it has no asset.
+
+        Dropdown list factories rebuild their rows on every scroll frame, so the
+        decode has to happen once per console and not once per bind -- reading
+        and decoding the PNG inline made those lists stutter badly.
+        """
+        cache = self._console_texture_cache
+        if console_id in cache:
+            return cache[console_id]
+
         candidates = []
         preferred = CONSOLE_ICON_FILES.get(console_id)
         if preferred:
@@ -611,14 +617,37 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if preferred.endswith("@2x.png"):
                 candidates.append(preferred.replace("@2x.png", ".png"))
 
+        texture = None
         for icon_filename in candidates:
             icon_path = self._asset_path("systems", icon_filename)
             if not icon_path.exists():
                 continue
-            img = Gtk.Image.new_from_file(str(icon_path))
-            img.set_size_request(22, 22)
-            return img
-        return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
+            try:
+                texture = Gdk.Texture.new_from_filename(str(icon_path))
+            except GLib.Error as exc:
+                logger.info("console icon failed to load: %s (%s)", icon_path, exc)
+                continue
+            break
+
+        # Cache misses too, so a console without an asset does not re-stat on
+        # every bind either.
+        cache[console_id] = texture
+        return texture
+
+    def _build_console_icon(self, console_id):
+        if console_id == ALL_CONSOLES_ID:
+            return Gtk.Image.new_from_icon_name("view-grid-symbolic")
+        if console_id == FAVORITES_ID:
+            icon = Gtk.Image.new_from_icon_name("starred-symbolic")
+            icon.add_css_class("favorites-sidebar-icon")
+            return icon
+
+        texture = self._console_icon_texture(console_id)
+        if texture is None:
+            return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
+        img = Gtk.Image.new_from_paintable(texture)
+        img.set_size_request(22, 22)
+        return img
 
     def _rebuild_console_sidebar(self, consoles):
         while child := self.console_list.get_first_child():
