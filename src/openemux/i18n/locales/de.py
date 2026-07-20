@@ -58,4 +58,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "Oberfläche",
     "settings.system.tips.title": "Tipps anzeigen",
     "settings.system.tips.subtitle": "Die Tippleiste am unteren Fensterrand anzeigen",
+    "input.action.fullscreen_toggle": "Vollbild umschalten",
+    "tips.fullscreen": "Halte {hotkey} und drücke {fullscreen_key} für Vollbild",
 }

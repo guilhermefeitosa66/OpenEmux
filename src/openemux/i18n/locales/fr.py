@@ -58,4 +58,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "Interface",
     "settings.system.tips.title": "Afficher les astuces",
     "settings.system.tips.subtitle": "Afficher la barre d'astuces en bas de la fenêtre",
+    "input.action.fullscreen_toggle": "Basculer en plein écran",
+    "tips.fullscreen": "Maintiens {hotkey} et appuie sur {fullscreen_key} pour le plein écran",
 }

@@ -262,4 +262,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "Interface",
     "settings.system.tips.title": "Show tips",
     "settings.system.tips.subtitle": "Display the hint bar at the bottom of the window",
+    "input.action.fullscreen_toggle": "Toggle fullscreen",
+    "tips.fullscreen": "Hold {hotkey} and press {fullscreen_key} to toggle fullscreen",
 }

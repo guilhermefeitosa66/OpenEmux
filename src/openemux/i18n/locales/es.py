@@ -58,4 +58,6 @@ TRANSLATIONS = {
     "prefs.group.interface": "Interfaz",
     "settings.system.tips.title": "Mostrar consejos",
     "settings.system.tips.subtitle": "Mostrar la barra de consejos en la parte inferior",
+    "input.action.fullscreen_toggle": "Alternar pantalla completa",
+    "tips.fullscreen": "Mantén {hotkey} y pulsa {fullscreen_key} para pantalla completa",
 }

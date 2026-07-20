@@ -23,6 +23,7 @@ TIP_KEYS = [
     "tips.save_state",
     "tips.load_state",
     "tips.fast_forward",
+    "tips.fullscreen",
     "tips.menu_toggle",
     "tips.drag_drop",
     "tips.sync_covers",
@@ -66,6 +67,7 @@ def tip_key_labels(bindings=None):
         "load_key": format_key_label(bindings.get("load_state")),
         "fast_forward_key": format_key_label(bindings.get("fast_forward_toggle")),
         "menu_key": format_key_label(bindings.get("menu_toggle")),
+        "fullscreen_key": format_key_label(bindings.get("fullscreen_toggle")),
     }
 
 

@@ -23,6 +23,7 @@ ACTION_ORDER = [
     "save_state",
     "load_state",
     "fast_forward_toggle",
+    "fullscreen_toggle",
 ]
 
 FALLBACK_KEYS = ["g", "h", "j", "k", "l", "v", "b", "n", "m", "r", "t", "u", "i", "o", "p"]
@@ -32,6 +33,7 @@ GLOBAL_HOTKEY_ACTIONS = [
     "save_state",
     "load_state",
     "fast_forward_toggle",
+    "fullscreen_toggle",
 ]
 GAMEPLAY_ACTIONS_2BTN = ["up", "down", "left", "right", "a", "b", "start", "select"]
 GAMEPLAY_ACTIONS_2BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "l1", "r1", "start", "select"]
@@ -112,6 +114,7 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "save_state": "f2",
     "load_state": "f4",
     "fast_forward_toggle": "f6",
+    "fullscreen_toggle": "f",
 }
 
 DEFAULT_GAMEPAD_BINDINGS = {
@@ -136,6 +139,7 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "save_state": "11",
     "load_state": "12",
     "fast_forward_toggle": "13",
+    "fullscreen_toggle": "15",
 }
 
 #: Highest RetroArch port OpenEmux exposes in the UI.
@@ -170,6 +174,7 @@ RETROARCH_GLOBAL_HOTKEY_KEYS = {
     "save_state": "input_save_state",
     "load_state": "input_load_state",
     "fast_forward_toggle": "input_toggle_fast_forward",
+    "fullscreen_toggle": "input_toggle_fullscreen",
 }
 
 #: Kept for backwards compatibility: the player-1 view of the key table.
