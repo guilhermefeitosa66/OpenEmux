@@ -32,4 +32,14 @@ TRANSLATIONS = {
     "import.console.body": "选择这些 ROM 的存放位置。自动检测会使用每个文件的扩展名。",
     "import.console.auto": "自动检测",
     "import.console.confirm": "导入",
+
+    # Status bar tips (keys live in openemux.core.tips.TIP_KEYS)
+    "tips.save_state": "按住 {hotkey} 再按 {save_key} 即可保存即时存档",
+    "tips.load_state": "按住 {hotkey} 再按 {load_key} 即可读取即时存档",
+    "tips.fast_forward": "按住 {hotkey} 再按 {fast_forward_key} 切换快进",
+    "tips.menu_toggle": "按住 {hotkey} 再按 {menu_key} 打开 RetroArch 菜单",
+    "tips.drag_drop": "把 ROM 拖放到窗口任意位置即可导入",
+    "tips.sync_covers": "点击顶部的照片按钮可同步封面图",
+    "tips.shaders": "首选项 → 视频可为每台主机单独设置着色器",
+    "tips.search": "按 Ctrl+F 搜索整个游戏库",
 }

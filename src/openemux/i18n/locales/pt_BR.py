@@ -240,4 +240,14 @@ TRANSLATIONS = {
     "import.console.body": "Escolha onde estas ROMs devem ser guardadas. A detecção automática usa a extensão de cada arquivo.",
     "import.console.auto": "Detectar automaticamente",
     "import.console.confirm": "Importar",
+
+    # Status bar tips (keys live in openemux.core.tips.TIP_KEYS)
+    "tips.save_state": "Segure {hotkey} e pressione {save_key} para salvar o estado",
+    "tips.load_state": "Segure {hotkey} e pressione {load_key} para carregar o estado",
+    "tips.fast_forward": "Segure {hotkey} e pressione {fast_forward_key} para avanço rápido",
+    "tips.menu_toggle": "Segure {hotkey} e pressione {menu_key} para o menu do RetroArch",
+    "tips.drag_drop": "Arraste ROMs para qualquer ponto da janela para importar",
+    "tips.sync_covers": "Sincronize capas no botão de fotos da barra superior",
+    "tips.shaders": "Preferências → Vídeo define um shader por console",
+    "tips.search": "Pressione Ctrl+F para buscar em toda a biblioteca",
 }

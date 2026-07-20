@@ -8,7 +8,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject
+from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 
 from openemux.core.bios_manager import get_console_bios_dir
 from openemux.core.cover_sync import sync_covers_async
@@ -31,6 +31,7 @@ from openemux.core.scraper import (
 )
 from openemux.core.scanner import RomScanner
 from openemux.core.shaders import ShaderCatalog
+from openemux.core.tips import TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
@@ -322,10 +323,60 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
         self._install_drop_target(self.content_stack)
 
+        toolbar.add_bottom_bar(self._build_tip_bar())
+
         page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
         page.set_tag("content")
         self.content_page = page
         return page
+
+    def _build_tip_bar(self):
+        """A quiet single-line hint bar at the bottom of the content pane.
+
+        Deliberately not an Adw.Banner: banners are for things that need acting
+        on, and the progress/update banners already own the top of the pane.
+        """
+        self.tip_label = Gtk.Label()
+        self.tip_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.tip_label.set_single_line_mode(True)
+        self.tip_label.set_hexpand(True)
+        self.tip_label.add_css_class("caption")
+        self.tip_label.add_css_class("dim-label")
+
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        bar.add_css_class("tip-bar")
+        bar.append(self.tip_label)
+
+        self._current_tip_key = None
+        self._tip_timeout_id = 0
+        self._rotate_tip()
+        self._tip_timeout_id = GLib.timeout_add_seconds(15, self._on_tip_timeout)
+        self.connect("close-request", self._on_close_stop_tips)
+        return bar
+
+    def _render_tip(self):
+        """Re-render the current tip (used on language change too)."""
+        label = getattr(self, "tip_label", None)
+        if label is None:
+            return
+        label.set_text(render_tip(self.t, self._current_tip_key))
+
+    def _rotate_tip(self):
+        self._current_tip_key = pick_next_tip(TIP_KEYS, self._current_tip_key)
+        self._render_tip()
+
+    def _on_tip_timeout(self):
+        self._rotate_tip()
+        return GLib.SOURCE_CONTINUE
+
+    def _stop_tip_rotation(self):
+        if getattr(self, "_tip_timeout_id", 0):
+            GLib.source_remove(self._tip_timeout_id)
+            self._tip_timeout_id = 0
+
+    def _on_close_stop_tips(self, *_args):
+        self._stop_tip_rotation()
+        return False
 
     def _build_primary_menu(self):
         menu = Gio.Menu()
@@ -413,6 +464,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.import_btn.set_tooltip_text(self.t("header.import"))
         self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
         self.sidebar_title.set_title(self.t("sidebar.header"))
+        self._render_tip()
         self.refresh_library(preferred_view=visible)
         self._toast(self.t("toast.language.updated", language=language_name))
 

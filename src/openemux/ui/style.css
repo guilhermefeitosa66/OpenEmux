@@ -75,6 +75,16 @@
     border-radius: 8px;
 }
 
+/* ===== Status Bar Tips =====
+   Colors come from Adwaita named colors so light/dark both follow the theme;
+   the label itself carries .caption/.dim-label for size and muting. */
+.tip-bar {
+    padding: 4px 12px;
+    min-height: 24px;
+    border-top: 1px solid @headerbar_shade_color;
+    background-color: @headerbar_bg_color;
+}
+
 /* ===== ROM Drag & Drop ===== */
 .rom-drop-active {
     background-color: alpha(@accent_bg_color, 0.12);

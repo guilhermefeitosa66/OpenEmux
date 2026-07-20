@@ -32,4 +32,14 @@ TRANSLATIONS = {
     "import.console.body": "これらの ROM の保存先を選んでください。自動検出は各ファイルの拡張子を使います。",
     "import.console.auto": "自動検出",
     "import.console.confirm": "インポート",
+
+    # Status bar tips (keys live in openemux.core.tips.TIP_KEYS)
+    "tips.save_state": "{hotkey}を押しながら{save_key}でステートセーブ",
+    "tips.load_state": "{hotkey}を押しながら{load_key}でステートロード",
+    "tips.fast_forward": "{hotkey}を押しながら{fast_forward_key}で早送りを切り替え",
+    "tips.menu_toggle": "{hotkey}を押しながら{menu_key}でRetroArchメニュー",
+    "tips.drag_drop": "ROMをウィンドウにドロップするとインポートできます",
+    "tips.sync_covers": "上部の写真ボタンでカバーアートを同期できます",
+    "tips.shaders": "設定 → ビデオでコンソールごとにシェーダーを選べます",
+    "tips.search": "Ctrl+Fでライブラリ全体を検索できます",
 }
