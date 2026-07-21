@@ -100,6 +100,31 @@ def cartridge_frame_svg(console):
     return candidate if cartridge_render.load_frame(candidate) else None
 
 
+class CartridgePicture(Gtk.Picture):
+    """A Picture that measures as the card, not as the image it holds.
+
+    Gtk.Picture reports its paintable's pixel size as the natural size, and
+    set_size_request only raises the minimum, so the HiDPI composite (rendered
+    at CARTRIDGE_RENDER_SCALE) would blow the card up by that factor. The card
+    size comes from the frame proportions, so it is reported here directly and
+    GTK still draws from the full-resolution texture.
+    """
+
+    __gtype_name__ = "OpenEmuxCartridgePicture"
+
+    def __init__(self, width, height):
+        super().__init__()
+        self._card_size = (width, height)
+
+    def do_measure(self, orientation, for_size):
+        size = (
+            self._card_size[0]
+            if orientation == Gtk.Orientation.HORIZONTAL
+            else self._card_size[1]
+        )
+        return size, size, -1, -1
+
+
 def _cartridge_texture(path):
     key = str(path)
     texture = _CARTRIDGE_TEXTURES.get(key)
@@ -182,7 +207,11 @@ class RomItem(Gtk.Box):
         self.cover_overlay.set_size_request(self.cover_width, self.cover_height)
 
         # Cover image (placeholder initially)
-        self.cover_image = Gtk.Picture()
+        self.cover_image = (
+            CartridgePicture(*self._cover_target_size())
+            if cartridge_frame_path
+            else Gtk.Picture()
+        )
         self.cover_image.set_size_request(*self._cover_target_size())
         self.cover_image.set_content_fit(
             Gtk.ContentFit.CONTAIN
