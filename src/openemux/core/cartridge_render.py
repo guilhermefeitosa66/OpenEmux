@@ -18,6 +18,8 @@ so this stays in core/ and is testable without a display.
 
 import hashlib
 import logging
+import os
+import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -138,6 +140,14 @@ class CartridgeFrame:
         parent.remove(clip)
         self._frame = _handle_from_bytes(ET.tostring(root, encoding="utf-8"))
 
+        # librsvg handles are not thread-safe: rendering the same handle from
+        # two grid worker threads aborts the process with a Rust BorrowMutError
+        # panic, so every use of them is serialised here.
+        self._lock = threading.Lock()
+        # Label geometry and stencil per output size, computed once instead of
+        # once per ROM (they only depend on the frame and the size).
+        self._label_cache = {}
+
         ok, width, height = self._full.get_intrinsic_size_in_pixels()
         if not ok or width <= 0 or height <= 0:
             raise CartridgeFrameError(f"{self.path.name} has no intrinsic size")
@@ -177,13 +187,20 @@ class CartridgeFrame:
         viewport.height = height
         return viewport
 
-    def _label_mask(self, viewport, out_w, out_h) -> cairo.ImageSurface:
-        """The label object rendered alone: its alpha *is* the clip shape."""
+    def _label(self, out_w, out_h):
+        """Label box plus the stencil whose alpha *is* the clip shape."""
+        cached = self._label_cache.get((out_w, out_h))
+        if cached is not None:
+            return cached
         mask = cairo.ImageSurface(cairo.FORMAT_ARGB32, out_w, out_h)
         cr = cairo.Context(mask)
-        self._full.render_layer(cr, f"#{self.clip_id}", viewport)
+        self._full.render_layer(cr, f"#{self.clip_id}", self._viewport(out_w, out_h))
         mask.flush()
-        return mask
+        entry = (self._label_bbox(out_w, out_h), mask)
+        # A grid shows one size at a time; keeping only the latest avoids
+        # holding a full-size surface per size ever rendered.
+        self._label_cache = {(out_w, out_h): entry}
+        return entry
 
     def render(self, cover_path=None, width=200, scale=1) -> cairo.ImageSurface:
         """Compose `cover_path` into the frame and return the finished surface.
@@ -192,28 +209,27 @@ class CartridgeFrame:
         shelf of un-scraped ROMs looking like cartridges instead of icons.
         """
         out_w, out_h = self.size_for_width(int(round(width * scale)))
-        viewport = self._viewport(out_w, out_h)
-
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, out_w, out_h)
         cr = cairo.Context(surface)
 
-        # The label shape is filled with a blank-sticker tone first: it is what
-        # a cover-less cartridge shows, and it backs any anti-aliased edge so
-        # the window never lets the page background through.
-        mask = self._label_mask(viewport, out_w, out_h)
-        cr.set_source_rgb(*BLANK_LABEL_RGB)
-        cr.mask_surface(mask, 0, 0)
+        with self._lock:
+            (bx, by, bw, bh), mask = self._label(out_w, out_h)
 
-        if cover_path:
-            bx, by, bw, bh = self._label_bbox(out_w, out_h)
-            cover = self._scaled_cover(cover_path, bw, bh)
-            if cover is not None:
-                cover_surface, dx, dy = cover
-                cr.set_source_surface(cover_surface, bx + dx, by + dy)
-                cr.get_source().set_filter(cairo.FILTER_GOOD)
-                cr.mask_surface(mask, 0, 0)
+            # The label shape is filled with a blank-sticker tone first: it is
+            # what a cover-less cartridge shows, and it backs any anti-aliased
+            # edge so the window never lets the page background through.
+            cr.set_source_rgb(*BLANK_LABEL_RGB)
+            cr.mask_surface(mask, 0, 0)
 
-        self._frame.render_document(cr, viewport)
+            if cover_path:
+                cover = self._scaled_cover(cover_path, bw, bh)
+                if cover is not None:
+                    cover_surface, dx, dy = cover
+                    cr.set_source_surface(cover_surface, bx + dx, by + dy)
+                    cr.get_source().set_filter(cairo.FILTER_GOOD)
+                    cr.mask_surface(mask, 0, 0)
+
+            self._frame.render_document(cr, self._viewport(out_w, out_h))
         surface.flush()
         return surface
 
@@ -241,26 +257,32 @@ class CartridgeFrame:
 # ---------------------------------------------------------------------------
 
 _FRAMES = {}
+_FRAMES_LOCK = threading.Lock()
 
 
 def load_frame(frame_path) -> CartridgeFrame | None:
-    """Parse a frame once and keep it; returns None when it cannot be used."""
+    """Parse a frame once and keep it; returns None when it cannot be used.
+
+    Grid cards are filled from several worker threads, so the parse is done
+    under a lock: one frame, one set of Rsvg handles, shared by every card.
+    """
     path = Path(frame_path)
     try:
         key = (str(path), path.stat().st_mtime_ns)
     except OSError:
         return None
-    cached = _FRAMES.get(str(path))
-    if cached is not None and cached[0] == key:
-        return cached[1]
-    try:
-        frame = CartridgeFrame(path)
-    except (CartridgeFrameError, GLib.Error, ET.ParseError) as exc:
-        logger.warning("cartridge: unusable frame %s: %s", path, exc)
-        _FRAMES[str(path)] = (key, None)
-        return None
-    _FRAMES[str(path)] = (key, frame)
-    return frame
+    with _FRAMES_LOCK:
+        cached = _FRAMES.get(str(path))
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        try:
+            frame = CartridgeFrame(path)
+        except (CartridgeFrameError, GLib.Error, ET.ParseError) as exc:
+            logger.warning("cartridge: unusable frame %s: %s", path, exc)
+            _FRAMES[str(path)] = (key, None)
+            return None
+        _FRAMES[str(path)] = (key, frame)
+        return frame
 
 
 def _cache_key(cover_path, frame_path, width, scale) -> str:
@@ -318,7 +340,10 @@ def render_cartridge(
     try:
         surface = frame.render(cover_path, width=width, scale=scale)
         directory.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_suffix(".png.tmp")
+        # Cards render in parallel and two of them can target the same file
+        # (every cover-less ROM shares the blank composite), so the temporary
+        # name is per-thread: a shared one gets renamed away under the others.
+        tmp = target.with_name(f"{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         surface.write_to_png(str(tmp))
         tmp.replace(target)
     except (CartridgeFrameError, GLib.Error, OSError, cairo.Error) as exc:

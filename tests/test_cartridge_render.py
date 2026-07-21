@@ -130,6 +130,31 @@ class CartridgeCacheTests(unittest.TestCase):
             self.assertIsNotNone(out)
             self.assertTrue(out.exists())
 
+    def test_parallel_renders_do_not_collide(self):
+        """The grid fills cards from several threads at once.
+
+        Two failures used to show up here: sharing one Rsvg handle across
+        threads aborts the process with a Rust BorrowMutError panic, and every
+        cover-less ROM raced on the same temporary file.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            cover = _write_cover(base / "c.png")
+            cache = base / "cache"
+            cartridge_render._FRAMES.clear()
+
+            def render(index):
+                path = str(cover) if index % 2 else None
+                return render_cartridge(path, FRAME, "GB", f"Game {index}", 120, cache_dir=cache)
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(render, range(24)))
+
+            self.assertTrue(all(r is not None and r.exists() for r in results))
+            self.assertFalse(list(cache.glob("**/*.tmp")))
+
     def test_unusable_frame_degrades_to_none(self):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
