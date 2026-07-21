@@ -13,15 +13,19 @@
     transform: translateY(-3px);
 }
 
-/* Keyboard/gamepad focus ring around the card. :focus-within covers both the
-   FlowBoxChild itself and any button inside the card holding focus. */
-flowboxchild:focus-within {
-    outline: 2px solid @accent_bg_color;
-    outline-offset: 2px;
-    border-radius: 12px;
+/* Keyboard/gamepad focus ring. Drawn on the card, never on the FlowBoxChild:
+   the wrapper can be wider than the card, so a ring on it would float far off
+   the artwork. GTK's own focus ring on the wrapper is suppressed for the same
+   reason. */
+flowboxchild:focus,
+flowboxchild:focus-within,
+flowboxchild:focus-visible {
+    outline: none;
 }
 
 flowboxchild:focus-within .rom-card {
+    outline: 2px solid @accent_bg_color;
+    outline-offset: -2px;
     background-color: alpha(@accent_bg_color, 0.12);
 }
 
@@ -110,9 +114,12 @@ flowboxchild:focus-within .rom-card {
 /* ===== Status Bar Tips =====
    Colors come from Adwaita named colors so light/dark both follow the theme;
    the label itself carries .caption/.dim-label for size and muting. */
+/* min-height covers the keycap hints too, so showing or hiding them never
+   changes the bar's height (a resize there reflows the grid, and the reflow
+   used to feed back into the hint logic as flicker). */
 .tip-bar {
     padding: 4px 12px;
-    min-height: 24px;
+    min-height: 30px;
     border-top: 1px solid @headerbar_shade_color;
     background-color: @headerbar_bg_color;
 }

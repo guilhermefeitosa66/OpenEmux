@@ -132,6 +132,10 @@ class NavigationController:
         self.gamepad_connected = False
         self._source = SOURCE_MOUSE
         self._hint_state = None
+        # Gtk.Popover.popup() animates, so focus has not reached the menu by the
+        # time the next button press arrives. Tracking the popover we opened
+        # keeps the routing correct in that window.
+        self._tracked_popover = None
 
         # Keyboard/mouse watchers only feed the hint bar; GTK handles the keys.
         key_watch = Gtk.EventControllerKey()
@@ -139,9 +143,15 @@ class NavigationController:
         key_watch.connect("key-pressed", self._on_key_watch)
         window.add_controller(key_watch)
 
-        motion_watch = Gtk.EventControllerMotion()
-        motion_watch.connect("motion", self._on_motion_watch)
-        window.add_controller(motion_watch)
+        # A *click*, not pointer motion: moving the focus scrolls the grid under
+        # a stationary pointer, and the motion events that produces used to flip
+        # the source back to mouse, hiding the hints and resizing the bar — which
+        # reflowed the grid and fed the loop again. Clicks are intentional.
+        click_watch = Gtk.GestureClick()
+        click_watch.set_button(0)
+        click_watch.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click_watch.connect("pressed", self._on_click_watch)
+        window.add_controller(click_watch)
 
         # Context changes without input (page loads, dialogs opening) refresh
         # the hints lazily on the next focus change.
@@ -154,7 +164,7 @@ class NavigationController:
             self._set_source(SOURCE_KEYBOARD)
         return False  # never consume: GTK keynav does the actual work
 
-    def _on_motion_watch(self, _controller, _x, _y):
+    def _on_click_watch(self, _gesture, _n_press, _x, _y):
         self._set_source(SOURCE_MOUSE)
 
     def _set_source(self, source):
@@ -199,13 +209,24 @@ class NavigationController:
             node = node.get_parent()
         return None
 
+    def _active_popover(self):
+        """The popover the user is in, whether or not focus has landed yet."""
+        scope = self._scope_for(self._focus_widget())
+        if isinstance(scope, Gtk.Popover):
+            return scope
+        tracked = self._tracked_popover
+        if tracked is not None and tracked.get_mapped():
+            return tracked
+        self._tracked_popover = None
+        return None
+
     def current_context(self):
         focus = self._focus_widget()
         scope = self._scope_for(focus)
-        if isinstance(scope, Gtk.Popover):
-            return CTX_POPOVER
         if isinstance(scope, Adw.Dialog):
             return CTX_DIALOG
+        if self._active_popover() is not None:
+            return CTX_POPOVER
         node = focus
         while node is not None and node is not self.window:
             if node is getattr(self.window, "console_list", None):
@@ -237,8 +258,10 @@ class NavigationController:
 
     def _cmd_move(self, direction):
         focus = self._focus_widget()
-        scope = self._scope_for(focus) or self.window
-        if focus is None:
+        # Scope the move to the open menu/dialog so it cannot escape into the
+        # window behind it.
+        scope = self._active_popover() or self._scope_for(focus) or self.window
+        if focus is None and scope is self.window:
             self._cmd_focus_grid()
             return
         scope.child_focus(_GTK_DIRECTIONS[direction])
@@ -250,13 +273,21 @@ class NavigationController:
 
     def _cmd_activate(self):
         focus = self._focus_widget()
-        if focus is not None:
-            focus.activate()
+        if focus is None:
+            return
+        if focus.activate():
+            return
+        # The focused widget may not be activatable (a plain box inside a card)
+        # while the game it belongs to is: launch that instead of doing nothing.
+        item = self.window._focused_rom_item()
+        if item is not None and item.on_launch_callback:
+            item.on_launch_callback(item.rom)
 
     def _cmd_close_popover(self):
-        scope = self._scope_for(self._focus_widget())
-        if isinstance(scope, Gtk.Popover):
-            scope.popdown()
+        popover = self._active_popover()
+        if popover is not None:
+            popover.popdown()
+            self._tracked_popover = None
 
     def _cmd_close_dialog(self):
         scope = self._scope_for(self._focus_widget())
@@ -281,8 +312,16 @@ class NavigationController:
 
     def _cmd_context_menu(self):
         item = self.window._focused_rom_item()
-        if item is not None:
-            item._show_context_menu()
+        if item is None:
+            return
+        item._show_context_menu()
+        popover = item._context_popover
+        self._tracked_popover = popover
+        if popover is not None:
+            # Put focus on the first entry right away: without it the menu opens
+            # with nothing highlighted and the first D-pad press is spent just
+            # entering the list.
+            popover.child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _cmd_favorite(self):
         item = self.window._focused_rom_item()

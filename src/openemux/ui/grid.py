@@ -160,9 +160,15 @@ class RomItem(Gtk.Box):
         self.supports_label = cartridge_frame_svg(rom["console"]) is not None
         self.add_css_class("rom-card")
         text_height = 44 + (18 if mixed_consoles else 0)
-        self.set_size_request(self.cover_width, self.cover_height + text_height)
-        self.set_halign(Gtk.Align.START)
-        self.set_valign(Gtk.Align.START)
+        # Fixed card size. The grid also pins each FlowBoxChild to this size, so
+        # a page with a single row cannot stretch the cell (and with it the
+        # focus ring) over the whole viewport.
+        self.card_size = (self.cover_width, self.cover_height + text_height)
+        self.set_size_request(*self.card_size)
+        # Centred rather than START-aligned: the card fills its cell exactly, so
+        # its contents sit centred inside the focus/selection ring.
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.CENTER)
         self.set_hexpand(False)
         self.set_vexpand(False)
 
@@ -178,13 +184,6 @@ class RomItem(Gtk.Box):
         motion.connect("enter", self._on_hover_enter)
         motion.connect("leave", self._on_hover_leave)
         self.add_controller(motion)
-
-        # Keyboard/gamepad focus mirrors the hover affordances, so a card
-        # reached without the mouse still shows the play overlay and buttons.
-        focus = Gtk.EventControllerFocus()
-        focus.connect("enter", self._on_focus_enter)
-        focus.connect("leave", self._on_focus_leave)
-        self.add_controller(focus)
 
         # Cover art overlay (image + play button on hover)
         self.cover_overlay = Gtk.Overlay()
@@ -465,16 +464,24 @@ class RomItem(Gtk.Box):
         self.favorite_button.set_visible(self._is_favorite_now)
         self.remove_css_class("rom-card-hover")
 
-    def _on_focus_enter(self, _controller):
-        self.play_overlay.set_visible(True)
-        parent = self.get_parent()
-        grid = parent.get_parent() if parent is not None else None
-        if isinstance(grid, RomGrid):
-            grid._note_focused(parent)
+    def set_focus_visual(self, focused):
+        """Mirror the hover affordances for keyboard/gamepad focus.
 
-    def _on_focus_leave(self, _controller):
-        if not self.has_css_class("rom-card-hover"):
-            self.play_overlay.set_visible(False)
+        Driven by the grid: focus lands on the FlowBoxChild wrapper, which is
+        this card's *parent*, so a focus controller on the card itself would
+        never see it.
+        """
+        if focused:
+            self.play_overlay.set_visible(True)
+            self.menu_button.set_visible(True)
+            self.favorite_button.set_visible(True)
+            return
+        if self.has_css_class("rom-card-hover"):
+            return  # the pointer is still on the card; leave hover in charge
+        self.play_overlay.set_visible(False)
+        if self._context_popover is None:
+            self.menu_button.set_visible(False)
+        self.favorite_button.set_visible(self._is_favorite_now)
 
     def _on_menu_button_clicked(self, button):
         # Anchor the menu under the button. Coordinates are relative to the
@@ -657,6 +664,8 @@ class RomGrid(Gtk.FlowBox):
         self.ui_settings = ui_settings or {}
         self.on_selection_changed = on_selection_changed
         self._items = []
+        # Focus memory: coming back from the sidebar restores this card.
+        self._last_focused_child = None
         # Rubber band state: the rectangle being dragged, and the selection it
         # started from so a ctrl-drag can extend instead of replace.
         self._band = None
@@ -711,12 +720,8 @@ class RomGrid(Gtk.FlowBox):
             )
             self._items.append(item)
             self.append(item)
-            # The FlowBoxChild wrapper is the keyboard/gamepad focus target;
-            # Enter (or gamepad A) then activates it -> child-activated.
-            item.get_parent().set_focusable(True)
+            self._prepare_child(item)
 
-        # Focus memory: coming back from the sidebar restores this card.
-        self._last_focused_child = None
         self.connect("child-activated", self._on_child_activated)
 
         # Menu key / Shift+F10 opens the focused card's context menu, the
@@ -737,6 +742,37 @@ class RomGrid(Gtk.FlowBox):
 
     # -- keyboard / gamepad focus -----------------------------------------
 
+    def _prepare_child(self, item):
+        """Set up the FlowBoxChild wrapping ``item`` as the focus target.
+
+        The wrapper is what GTK focuses and activates, so it carries the
+        focusable flag and the focus controller. It is also pinned to the
+        card's size: a FlowBoxChild defaults to FILL in both directions, and on
+        a page with a single row it would otherwise absorb the whole viewport
+        height -- dragging the focus ring out with it.
+        """
+        child = item.get_parent()
+        if child is None:
+            return
+        child.set_focusable(True)
+        child.set_size_request(*item.card_size)
+        child.set_halign(Gtk.Align.CENTER)
+        child.set_valign(Gtk.Align.CENTER)
+        child.set_hexpand(False)
+        child.set_vexpand(False)
+
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", self._on_child_focus_enter, child, item)
+        focus.connect("leave", self._on_child_focus_leave, item)
+        child.add_controller(focus)
+
+    def _on_child_focus_enter(self, _controller, child, item):
+        self._last_focused_child = child
+        item.set_focus_visual(True)
+
+    def _on_child_focus_leave(self, _controller, item):
+        item.set_focus_visual(False)
+
     def _on_child_activated(self, _box, child):
         item = child.get_child()
         if isinstance(item, RomItem) and self.on_launch_callback:
@@ -755,16 +791,22 @@ class RomGrid(Gtk.FlowBox):
         item._show_context_menu()
         return True
 
-    def _note_focused(self, child):
-        self._last_focused_child = child
-
     @staticmethod
     def item_for_widget(widget):
-        """The RomItem holding ``widget`` (or ``widget`` itself), else None."""
+        """The RomItem for ``widget``, whether it is inside one or wraps one.
+
+        Keyboard/gamepad focus sits on the FlowBoxChild, whose RomItem is its
+        *child*; a pointer press lands on a widget *inside* the RomItem. Both
+        have to resolve, so the walk checks downwards at the wrapper and
+        upwards everywhere else.
+        """
         node = widget
         while node is not None:
             if isinstance(node, RomItem):
                 return node
+            if isinstance(node, Gtk.FlowBoxChild):
+                child = node.get_child()
+                return child if isinstance(child, RomItem) else None
             node = node.get_parent()
         return None
 

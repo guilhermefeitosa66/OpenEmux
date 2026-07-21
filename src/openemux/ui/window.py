@@ -46,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 ALL_CONSOLES_ID = "__all__"
 FAVORITES_ID = "__favorites__"
+#: Slots reserved in the bottom bar for input hints (see set_hints).
+MAX_INPUT_HINTS = 6
 CONSOLE_ICON_FILES = {
     "A2600": "atari_2600__atari2600_library@2x.png",
     "A5200": "atari_5200__atari5200_library@2x.png",
@@ -417,7 +419,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tip_label = Gtk.Label()
         self.tip_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.tip_label.set_single_line_mode(True)
-        self.tip_label.set_hexpand(True)
         # Without this the label centres itself across the whole bar and reads as
         # detached from the bulb sitting at the far left.
         self.tip_label.set_xalign(0)
@@ -432,18 +433,45 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         bulb.add_css_class("tip-bar-icon")
         self._tip_bulb = bulb
 
+        tip_side = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        tip_side.append(bulb)
+        tip_side.append(self.tip_label)
+        self._tip_side = tip_side
+
         # Input hints (gamepad glyphs or key names) on the right; filled by the
         # NavigationController through set_hints().
+        #
+        # The slots are built once and only ever have their text swapped.
+        # Appending/removing them per update left the box measuring 0 even with
+        # visible children, so it was allocated no width and the keycaps spilled
+        # off the right edge of the window.
         self.hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.hint_box.set_halign(Gtk.Align.END)
+        self._hint_slots = []
+        for _ in range(MAX_INPUT_HINTS):
+            key = Gtk.Label()
+            key.add_css_class("caption")
+            key.add_css_class("hint-key")
+            text = Gtk.Label()
+            text.add_css_class("caption")
+            text.add_css_class("dim-label")
+            slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            slot.append(key)
+            slot.append(text)
+            slot.set_visible(False)
+            self.hint_box.append(slot)
+            self._hint_slots.append((slot, key, text))
 
-        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        # A CenterBox, not a plain Box: the end widget is guaranteed its natural
+        # width and the tip ellipsizes into what is left. In a Box the tip's
+        # hexpand won the negotiation and pushed the hints off the right edge.
+        bar = Gtk.CenterBox()
         bar.add_css_class("tip-bar")
-        bar.append(bulb)
-        bar.append(self.tip_label)
-        bar.append(self.hint_box)
+        bar.set_start_widget(tip_side)
+        bar.set_end_widget(self.hint_box)
 
         self.tip_bar = bar
+        self._has_hints = False
         self._current_tip_key = None
         self._tip_timeout_id = 0
         self._rotate_tip()
@@ -463,8 +491,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Only the tip half goes away: the bar itself stays whenever input
         # hints are being shown on its right side.
         self._tips_enabled = bool(enabled)
-        self._tip_bulb.set_visible(self._tips_enabled)
-        self.tip_label.set_visible(self._tips_enabled)
+        self._tip_side.set_visible(self._tips_enabled)
         self._update_tip_bar_visibility()
         if enabled:
             if not getattr(self, "_tip_timeout_id", 0):
@@ -474,25 +501,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._stop_tip_rotation()
 
     def _update_tip_bar_visibility(self):
-        has_hints = self.hint_box.get_first_child() is not None
-        self.tip_bar.set_visible(getattr(self, "_tips_enabled", True) or has_hints)
+        self.tip_bar.set_visible(getattr(self, "_tips_enabled", True) or self._has_hints)
 
     def set_hints(self, pairs):
         """Fill the right side of the bottom bar with (glyph, label) hints."""
-        while child := self.hint_box.get_first_child():
-            self.hint_box.remove(child)
-        for glyph, label in pairs:
-            entry = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            key = Gtk.Label(label=glyph)
-            key.add_css_class("caption")
-            key.add_css_class("hint-key")
-            text = Gtk.Label(label=label)
-            text.add_css_class("caption")
-            text.add_css_class("dim-label")
-            entry.append(key)
-            entry.append(text)
-            self.hint_box.append(entry)
-        self.hint_box.set_visible(bool(pairs))
+        pairs = list(pairs)[:MAX_INPUT_HINTS]
+        for index, (slot, key, text) in enumerate(self._hint_slots):
+            if index < len(pairs):
+                glyph, label = pairs[index]
+                key.set_label(glyph)
+                text.set_label(label)
+                slot.set_visible(True)
+            else:
+                slot.set_visible(False)
+        self._has_hints = bool(pairs)
+        self.hint_box.set_visible(self._has_hints)
         self._update_tip_bar_visibility()
 
     def _render_tip(self):
