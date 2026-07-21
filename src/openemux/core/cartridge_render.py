@@ -307,6 +307,28 @@ def _drop_stale(directory: Path, stem: str, keep: Path):
             continue
 
 
+def drop_cached(console, rom_name, cache_dir=None):
+    """Delete a ROM's composites, for when the ROM is renamed or removed.
+
+    Not needed for correctness -- the cache key covers content changes -- but a
+    deleted or renamed ROM would otherwise leave its composite behind forever.
+    """
+    directory = Path(cache_dir or DEFAULT_CACHE_DIR) / console
+    if not directory.is_dir():
+        return 0
+    dropped = 0
+    prefix = f"{rom_name}."
+    for entry in directory.iterdir():
+        if entry.suffix != ".png" or not entry.name.startswith(prefix):
+            continue
+        try:
+            entry.unlink()
+            dropped += 1
+        except OSError:
+            continue
+    return dropped
+
+
 def render_cartridge(
     cover_path,
     frame_path,

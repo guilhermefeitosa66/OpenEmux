@@ -1,3 +1,4 @@
+import copy
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,11 @@ DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
 DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
 MIGRATION_VERSION = 2
+
+# Bumped when a UI default changes in a way that should reach configs written
+# before it. Only the switch to the new default is forced, once: whatever the
+# user picks in Preferences afterwards sticks.
+UI_SETTINGS_VERSION = 1
 
 # Cover art source selection. "libretro" is the historical (and default)
 # behavior: libretro thumbnails only, no credentials required. The
@@ -84,7 +90,10 @@ DEFAULT_CONFIG = {
         "profiles": {system_id: {} for system_id in SYSTEM_IDS}
     },
     "ui": {
-        "render_cartridge_overlay": False,
+        # "version" is deliberately absent here: _merge_defaults would stamp it
+        # on every config it touches and the one-time switch below would never
+        # see an older one. The migration owns that key.
+        "render_cartridge_overlay": True,
         "show_tips": True,
     },
     "updates": {
@@ -137,7 +146,11 @@ DEFAULT_CONFIG = {
 
 
 def _merge_defaults(defaults, data):
-    merged = dict(defaults)
+    # Deep copy, not dict(): a shallow copy hands out the very dicts and lists
+    # inside DEFAULT_CONFIG, so writing to the loaded config (a migration
+    # stamping a version, a setter) would edit the defaults for the whole
+    # process and leak into every config built afterwards.
+    merged = copy.deepcopy(defaults)
     for key, value in (data or {}).items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = _merge_defaults(merged[key], value)
@@ -240,7 +253,12 @@ class ConfigManager:
         config["controls"] = controls
 
         ui = config.get("ui", {})
-        ui.setdefault("render_cartridge_overlay", False)
+        if int(ui.get("version", 0) or 0) < UI_SETTINGS_VERSION:
+            # The cartridge look shipped off while it was beta and is the
+            # default now, so a config written before that switches over once.
+            ui["render_cartridge_overlay"] = True
+            ui["version"] = UI_SETTINGS_VERSION
+        ui.setdefault("render_cartridge_overlay", True)
         ui.setdefault("show_tips", True)
         config["ui"] = ui
 
@@ -371,7 +389,7 @@ class ConfigManager:
     def get_ui_settings(self):
         ui = self.config.get("ui", {})
         return {
-            "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", False)),
+            "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", True)),
             "show_tips": bool(ui.get("show_tips", True)),
         }
 
