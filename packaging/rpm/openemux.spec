@@ -63,6 +63,16 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.0-1
+- Navigate the whole library with a gamepad (RetroArch button convention)
+- Full keyboard navigation plus shortcuts for play, rename, delete, favorite,
+  rescan, import and cover sync
+- Show what each control does in the bottom bar, per input device
+- Lay the game grid out like an icon view, with fixed card sizes per console
+- Fix the launcher picking a python3 without PyGObject (pyenv/conda/asdf)
+- Stop a source run's desktop entry from shadowing the packaged one
+- Drop Flatpak packaging
+
 * Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.4.0-1
 - Render every game inside its console cartridge, from vector artwork, on by default
 - Turn the favorite star on a cover into a button
