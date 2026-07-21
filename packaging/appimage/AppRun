@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-
-APPDIR="${APPDIR:-$(cd -- "$(dirname -- "$0")" && pwd)}"
-export OPENEMUX_PROJECT_ROOT="$APPDIR/usr/lib/openemux"
-export PYTHONPATH="$OPENEMUX_PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
-
-exec "$APPDIR/usr/bin/openemux" "$@"
