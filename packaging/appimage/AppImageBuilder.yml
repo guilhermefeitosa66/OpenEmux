@@ -58,6 +58,8 @@ AppDir:
       - adwaita-icon-theme
       # SVG pixbuf loader needed to rasterize the (SVG) symbolic icons.
       - librsvg2-2
+      # Rsvg bindings: the cartridge frames are SVGs composited at runtime.
+      - gir1.2-rsvg-2.0
       - librsvg2-common
 
 AppImage:
