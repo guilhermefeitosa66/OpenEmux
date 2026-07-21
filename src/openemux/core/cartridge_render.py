@@ -123,7 +123,8 @@ class CartridgeFrame:
         data = self.path.read_bytes()
 
         _register_namespaces()
-        root = ET.fromstring(data)
+        # frames are SVG assets shipped with the app, not user input
+        root = ET.fromstring(data)  # nosec B314
         parent, clip = _find_clip_element(root)
         if clip is None:
             raise CartridgeFrameError(
@@ -293,7 +294,9 @@ def _cache_key(cover_path, frame_path, width, scale) -> str:
             continue
         stat = Path(path).stat()
         parts.append(f"{path}:{stat.st_mtime_ns}:{stat.st_size}")
-    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:12]
+    # Cache-file naming only: a fast digest of paths/mtimes, never a security check.
+    digest = hashlib.sha1("|".join(parts).encode("utf-8"), usedforsecurity=False)
+    return digest.hexdigest()[:12]
 
 
 def _drop_stale(directory: Path, stem: str, keep: Path):
