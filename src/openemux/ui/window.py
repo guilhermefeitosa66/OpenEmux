@@ -661,7 +661,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 ("F5", "shortcuts.rescan"),
                 ("<Ctrl>o", "shortcuts.import"),
                 ("<Ctrl><Shift>s", "shortcuts.sync_covers"),
+                ("Tab", "shortcuts.focus_pane"),
                 ("F6", "shortcuts.focus_pane"),
+                ("Right", "shortcuts.enter_grid"),
+                ("BackSpace", "shortcuts.back_to_sidebar"),
             )),
             ("shortcuts.group.rom", (
                 ("Return", "shortcuts.open_rom"),

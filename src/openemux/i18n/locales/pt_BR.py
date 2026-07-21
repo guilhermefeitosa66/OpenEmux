@@ -61,6 +61,8 @@ TRANSLATIONS = {
     "shortcuts.import": "Importar ROMs",
     "shortcuts.sync_covers": "Sincronizar capas",
     "shortcuts.focus_pane": "Alternar entre barra lateral e grade",
+    "shortcuts.enter_grid": "Ir da lista de consoles para os jogos",
+    "shortcuts.back_to_sidebar": "Voltar para a lista de consoles",
     "shortcuts.open_rom": "Jogar o jogo em foco",
     "shortcuts.context_menu": "Abrir o menu de contexto do jogo",
     "shortcuts.favorite": "Alternar favorito",

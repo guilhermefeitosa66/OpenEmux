@@ -61,6 +61,8 @@ TRANSLATIONS = {
     "shortcuts.import": "Import ROMs",
     "shortcuts.sync_covers": "Sync cover art",
     "shortcuts.focus_pane": "Switch between sidebar and game grid",
+    "shortcuts.enter_grid": "Go from the console list to the games",
+    "shortcuts.back_to_sidebar": "Go back to the console list",
     "shortcuts.open_rom": "Play the focused game",
     "shortcuts.context_menu": "Open the game's context menu",
     "shortcuts.favorite": "Toggle favorite",

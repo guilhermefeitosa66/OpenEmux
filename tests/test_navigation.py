@@ -1,11 +1,17 @@
 import unittest
 
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk
+
 from openemux.ui.navigation import (
     CTX_DIALOG,
     CTX_GRID,
     CTX_OTHER,
     CTX_POPOVER,
     CTX_SIDEBAR,
+    pane_key_command,
     resolve,
 )
 
@@ -62,6 +68,45 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(resolve(CTX_OTHER, "back"), ("focus-sidebar",))
         self.assertEqual(resolve(CTX_OTHER, "context"), ("noop",))
         self.assertEqual(resolve(CTX_OTHER, "favorite"), ("noop",))
+
+
+class PaneKeyTests(unittest.TestCase):
+    """Keys that cross between the console list and the game grid."""
+
+    def test_right_from_the_sidebar_enters_the_games(self):
+        """Not the header bar: GTK's own keynav would land on those buttons."""
+        self.assertEqual(pane_key_command(CTX_SIDEBAR, Gdk.KEY_Right), "focus-grid")
+        self.assertEqual(pane_key_command(CTX_SIDEBAR, Gdk.KEY_KP_Right), "focus-grid")
+
+    def test_tab_toggles_between_the_two_panes(self):
+        self.assertEqual(pane_key_command(CTX_SIDEBAR, Gdk.KEY_Tab), "focus-grid")
+        self.assertEqual(pane_key_command(CTX_GRID, Gdk.KEY_Tab), "focus-sidebar")
+
+    def test_backspace_returns_to_the_console_list(self):
+        self.assertEqual(pane_key_command(CTX_GRID, Gdk.KEY_BackSpace), "focus-sidebar")
+
+    def test_shift_tab_is_left_as_the_way_out_to_the_rest_of_the_window(self):
+        """Otherwise the header bar and menu stop being keyboard-reachable."""
+        self.assertIsNone(pane_key_command(CTX_SIDEBAR, Gdk.KEY_Tab, shift=True))
+        self.assertIsNone(pane_key_command(CTX_GRID, Gdk.KEY_Tab, shift=True))
+
+    def test_arrows_that_move_within_a_pane_are_left_to_gtk(self):
+        for keyval in (Gdk.KEY_Up, Gdk.KEY_Down):
+            for context in (CTX_SIDEBAR, CTX_GRID):
+                with self.subTest(context=context, keyval=keyval):
+                    self.assertIsNone(pane_key_command(context, keyval))
+        # Left inside the grid still moves card to card.
+        self.assertIsNone(pane_key_command(CTX_GRID, Gdk.KEY_Left))
+
+    def test_backspace_in_the_sidebar_is_not_claimed(self):
+        self.assertIsNone(pane_key_command(CTX_SIDEBAR, Gdk.KEY_BackSpace))
+
+    def test_nothing_is_claimed_outside_the_two_panes(self):
+        """Dialogs, menus and the search field keep every key."""
+        for context in (CTX_DIALOG, CTX_POPOVER, CTX_OTHER):
+            for keyval in (Gdk.KEY_Right, Gdk.KEY_Tab, Gdk.KEY_BackSpace):
+                with self.subTest(context=context, keyval=keyval):
+                    self.assertIsNone(pane_key_command(context, keyval))
 
 
 if __name__ == "__main__":

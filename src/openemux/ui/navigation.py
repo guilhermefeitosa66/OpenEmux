@@ -124,6 +124,32 @@ def resolve(context, action):
     return ("noop",)
 
 
+def pane_key_command(context, keyval, shift=False):
+    """Which pane a key crosses to, or None to leave the key to GTK.
+
+    Only the crossings are claimed. Everything else -- including the arrows
+    that move within a pane -- stays with GTK's keynav.
+
+    Right out of the sidebar has to be claimed because GTK would otherwise walk
+    into the header-bar buttons rather than into the games.
+    """
+    # Shift+Tab is deliberately not claimed: it stays the way out to the rest
+    # of the window, so the header bar and menu remain keyboard-reachable.
+    forward_tab = keyval in (Gdk.KEY_Tab, Gdk.KEY_KP_Tab) and not shift
+
+    if context == CTX_SIDEBAR:
+        if keyval in (Gdk.KEY_Right, Gdk.KEY_KP_Right) or forward_tab:
+            return "focus-grid"
+        return None
+
+    if context == CTX_GRID:
+        if keyval == Gdk.KEY_BackSpace or forward_tab:
+            return "focus-sidebar"
+        return None
+
+    return None
+
+
 class NavigationController:
     """Executes navigation commands and owns the bottom-bar hint state."""
 
@@ -137,7 +163,9 @@ class NavigationController:
         # keeps the routing correct in that window.
         self._tracked_popover = None
 
-        # Keyboard/mouse watchers only feed the hint bar; GTK handles the keys.
+        # Capture phase: the pane keys have to be claimed before GTK's own
+        # keynav sees them, otherwise Right out of the sidebar lands on the
+        # header-bar buttons instead of the game grid.
         key_watch = Gtk.EventControllerKey()
         key_watch.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         key_watch.connect("key-pressed", self._on_key_watch)
@@ -159,10 +187,33 @@ class NavigationController:
 
     # ----- input-source tracking ------------------------------------------
 
-    def _on_key_watch(self, _controller, keyval, _keycode, _state):
+    def _on_key_watch(self, _controller, keyval, _keycode, state):
         if keyval in _KEYNAV_KEYVALS:
             self._set_source(SOURCE_KEYBOARD)
-        return False  # never consume: GTK keynav does the actual work
+        return self.handle_pane_key(keyval, state)
+
+    def handle_pane_key(self, keyval, state):
+        """Move between the sidebar and the grid. True when the key is claimed.
+
+        Only these crossings are intercepted; everything else is left to GTK's
+        keynav, which still moves within a pane. Right out of the sidebar would
+        otherwise walk into the header-bar buttons rather than the games.
+        """
+        if self._active_popover() is not None:
+            return False
+        focus = self._focus_widget()
+        # Never steal keys from a text field: Backspace and Tab belong to it.
+        if isinstance(focus, (Gtk.Editable, Gtk.Text)):
+            return False
+
+        command = pane_key_command(
+            self.current_context(), keyval, bool(state & Gdk.ModifierType.SHIFT_MASK)
+        )
+        if command is None:
+            return False
+        getattr(self, "_cmd_" + command.replace("-", "_"))()
+        self.refresh_hints()
+        return True
 
     def _on_click_watch(self, _gesture, _n_press, _x, _y):
         self._set_source(SOURCE_MOUSE)
@@ -412,9 +463,9 @@ class NavigationController:
                 hints = [("Enter", t("hints.confirm")), ("Esc", t("hints.close"))]
             elif context == CTX_SIDEBAR:
                 hints = [
-                    ("Enter", t("hints.enter_pane")),
                     ("↕", t("hints.navigate")),
-                    ("F6", t("hints.switch_pane")),
+                    ("→", t("hints.enter_pane")),
+                    ("Tab", t("hints.switch_pane")),
                 ]
             else:
                 hints = [
@@ -422,6 +473,6 @@ class NavigationController:
                     ("Esc", t("hints.back")),
                     ("Menu", t("hints.options")),
                     ("Ctrl+D", t("hints.favorite")),
-                    ("F6", t("hints.switch_pane")),
+                    ("Tab", t("hints.switch_pane")),
                 ]
         window.set_hints(hints)
