@@ -82,6 +82,18 @@
   </keywords>
 
   <releases>
+    <release version="1.4.0" date="2026-07-21">
+      <description>
+        <p>Cartridge artwork, and managing ROMs from the library.</p>
+        <ul>
+          <li>Every game is shown inside its console's cartridge, composed from vector artwork and cached; nine consoles are covered and the look is on by default</li>
+          <li>The favorite star on a cover is a button now, so favoriting is one click</li>
+          <li>Rename a ROM from its context menu: the file, its artwork and the playlists all follow</li>
+          <li>Delete a ROM from its context menu; the file goes to the system trash, where it can be restored</li>
+          <li>Select several ROMs by dragging across the library, then delete them or sync covers for just those</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.1" date="2026-07-20">
       <description>
         <p>Context menu fixes and discoverability.</p>

@@ -62,6 +62,13 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.4.0-1
+- Render every game inside its console cartridge, from vector artwork, on by default
+- Turn the favorite star on a cover into a button
+- Rename a ROM from the context menu, carrying artwork and playlists along
+- Delete a ROM from the context menu, moving the file to the system trash
+- Select several ROMs by dragging, then delete them or sync only their covers
+
 * Mon Jul 20 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.3.1-1
 - Keep the sidebar context menu open instead of closing it on button release
 - Show icons next to context menu entries
