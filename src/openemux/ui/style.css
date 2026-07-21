@@ -13,6 +13,16 @@
     transform: translateY(-3px);
 }
 
+/* The theme pads every flowboxchild, which would inset the card inside its own
+   cell (measured: 3px on each side) and break the even lattice the grid lays
+   out. The card carries its own padding, so the wrapper needs none. */
+.rom-grid flowboxchild {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+}
+
 /* Keyboard/gamepad focus ring. Drawn on the card, never on the FlowBoxChild:
    the wrapper can be wider than the card, so a ring on it would float far off
    the artwork. GTK's own focus ring on the wrapper is suppressed for the same
