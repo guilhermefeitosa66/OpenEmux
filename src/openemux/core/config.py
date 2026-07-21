@@ -7,7 +7,7 @@ import yaml
 
 from openemux.i18n import normalize_locale
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import get_real_home
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.update_checker import (
@@ -16,9 +16,7 @@ from openemux.core.update_checker import (
     DEFAULT_TIMEOUT as DEFAULT_UPDATE_TIMEOUT,
 )
 
-# Private app data stays under the (sandbox-private, real-path) HOME; the ROM
-# library lives under the user's real home so a Flatpak build reaches the same
-# ~/games/roms as the native app via --filesystem=home.
+# Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
 DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
 DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
@@ -72,9 +70,7 @@ DEFAULT_CONFIG = {
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 "mode": "buildbot_all_cores",
-                # In Flatpak, core management is delegated to the RetroArch
-                # Flatpak's own updater; OpenEmux must not download cores.
-                "enabled": not is_running_in_flatpak(),
+                "enabled": True,
                 "core_dir": None,
                 "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
@@ -98,8 +94,6 @@ DEFAULT_CONFIG = {
         "gamepad_navigation": True,
     },
     "updates": {
-        # Packaged builds that ship through a store (Flathub) can turn the
-        # startup check off, since the store handles updates.
         "check_on_startup": True,
         "api_url": DEFAULT_UPDATE_API_URL,
         "download_url": DEFAULT_UPDATE_DOWNLOAD_URL,

@@ -9,7 +9,6 @@ import shutil
 from openemux.core.paths import (
     get_project_root,
     is_running_in_appimage,
-    is_running_in_flatpak,
     migrate_legacy_config_dir,
 )
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
@@ -29,7 +28,7 @@ def _ensure_gtk_typelibs():
     Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
     remains the recommended system-wide setup.
     """
-    if is_running_in_appimage() or is_running_in_flatpak():
+    if is_running_in_appimage():
         return
 
     system_dirs = [
@@ -97,14 +96,14 @@ from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
+from openemux.core.paths import get_project_root, is_running_in_appimage
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
 
 def _ensure_desktop_integration():
-    # In AppImage/Flatpak the desktop file + icon are installed by the package.
-    if is_running_in_appimage() or is_running_in_flatpak():
+    # In the AppImage the desktop file + icon are installed by the package.
+    if is_running_in_appimage():
         return
 
     project_root = get_project_root()
