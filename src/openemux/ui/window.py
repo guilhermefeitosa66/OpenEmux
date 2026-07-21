@@ -1427,6 +1427,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.connect("response", _on_response)
         dialog.present(self)
 
+        def _focus_entry():
+            # After present(), and through the dialog: AdwAlertDialog picks its
+            # own focus while mapping (the default response), so a plain
+            # grab_focus here loses the race. Selecting the name means typing
+            # replaces it and Enter confirms, so renaming never needs the mouse.
+            dialog.set_focus(entry)
+            entry.select_region(0, -1)
+            return False
+
+        GLib.idle_add(_focus_entry)
+
     def _apply_rename(self, rom, new_name):
         try:
             renamed = rename_rom(Path(self.roms_path), rom, new_name)
