@@ -13,6 +13,18 @@
     transform: translateY(-3px);
 }
 
+/* Keyboard/gamepad focus ring around the card. :focus-within covers both the
+   FlowBoxChild itself and any button inside the card holding focus. */
+flowboxchild:focus-within {
+    outline: 2px solid @accent_bg_color;
+    outline-offset: 2px;
+    border-radius: 12px;
+}
+
+flowboxchild:focus-within .rom-card {
+    background-color: alpha(@accent_bg_color, 0.12);
+}
+
 .rom-cover {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
@@ -103,6 +115,15 @@
     min-height: 24px;
     border-top: 1px solid @headerbar_shade_color;
     background-color: @headerbar_bg_color;
+}
+
+/* Keycap-styled glyphs for the input hints on the right of the tip bar. */
+.hint-key {
+    background-color: alpha(@window_fg_color, 0.08);
+    border: 1px solid alpha(@window_fg_color, 0.18);
+    border-radius: 5px;
+    padding: 0 6px;
+    font-weight: bold;
 }
 
 /* ===== ROM Drag & Drop ===== */

@@ -179,6 +179,13 @@ class RomItem(Gtk.Box):
         motion.connect("leave", self._on_hover_leave)
         self.add_controller(motion)
 
+        # Keyboard/gamepad focus mirrors the hover affordances, so a card
+        # reached without the mouse still shows the play overlay and buttons.
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", self._on_focus_enter)
+        focus.connect("leave", self._on_focus_leave)
+        self.add_controller(focus)
+
         # Cover art overlay (image + play button on hover)
         self.cover_overlay = Gtk.Overlay()
         self.cover_overlay.set_size_request(self.cover_width, self.cover_height)
@@ -458,6 +465,17 @@ class RomItem(Gtk.Box):
         self.favorite_button.set_visible(self._is_favorite_now)
         self.remove_css_class("rom-card-hover")
 
+    def _on_focus_enter(self, _controller):
+        self.play_overlay.set_visible(True)
+        parent = self.get_parent()
+        grid = parent.get_parent() if parent is not None else None
+        if isinstance(grid, RomGrid):
+            grid._note_focused(parent)
+
+    def _on_focus_leave(self, _controller):
+        if not self.has_css_class("rom-card-hover"):
+            self.play_overlay.set_visible(False)
+
     def _on_menu_button_clicked(self, button):
         # Anchor the menu under the button. Coordinates are relative to the
         # card, which is what the popover is parented to.
@@ -693,6 +711,19 @@ class RomGrid(Gtk.FlowBox):
             )
             self._items.append(item)
             self.append(item)
+            # The FlowBoxChild wrapper is the keyboard/gamepad focus target;
+            # Enter (or gamepad A) then activates it -> child-activated.
+            item.get_parent().set_focusable(True)
+
+        # Focus memory: coming back from the sidebar restores this card.
+        self._last_focused_child = None
+        self.connect("child-activated", self._on_child_activated)
+
+        # Menu key / Shift+F10 opens the focused card's context menu, the
+        # keyboard counterpart of the right click.
+        key = Gtk.EventControllerKey()
+        key.connect("key-pressed", self._on_grid_key_pressed)
+        self.add_controller(key)
 
         # Dragging across the empty area selects whatever it sweeps over. The
         # gesture sits on the grid, so it only ever starts on the background --
@@ -703,6 +734,62 @@ class RomGrid(Gtk.FlowBox):
         drag.connect("drag-update", self._on_band_update)
         drag.connect("drag-end", self._on_band_end)
         self.add_controller(drag)
+
+    # -- keyboard / gamepad focus -----------------------------------------
+
+    def _on_child_activated(self, _box, child):
+        item = child.get_child()
+        if isinstance(item, RomItem) and self.on_launch_callback:
+            self.on_launch_callback(item.rom)
+
+    def _on_grid_key_pressed(self, _controller, keyval, _keycode, state):
+        is_menu_key = keyval == Gdk.KEY_Menu or (
+            keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK
+        )
+        if not is_menu_key:
+            return False
+        root = self.get_root()
+        item = self.item_for_widget(root.get_focus()) if root else None
+        if item is None:
+            return False
+        item._show_context_menu()
+        return True
+
+    def _note_focused(self, child):
+        self._last_focused_child = child
+
+    @staticmethod
+    def item_for_widget(widget):
+        """The RomItem holding ``widget`` (or ``widget`` itself), else None."""
+        node = widget
+        while node is not None:
+            if isinstance(node, RomItem):
+                return node
+            node = node.get_parent()
+        return None
+
+    def _first_visible_child(self):
+        child = self.get_first_child()
+        while child is not None:
+            if child.get_visible():
+                return child
+            child = child.get_next_sibling()
+        return None
+
+    def focus_first_card(self):
+        child = self._first_visible_child()
+        if child is not None:
+            child.grab_focus()
+            return True
+        return False
+
+    def focus_restore(self):
+        """Focus the last card the user was on, else the first one."""
+        child = self._last_focused_child
+        if child is not None and child.get_visible() and child.get_parent() is self:
+            child.grab_focus()
+            return True
+        return self.focus_first_card()
 
     # -- selection ---------------------------------------------------------
 
