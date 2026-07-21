@@ -65,6 +65,26 @@
     padding: 4px;
 }
 
+/* The star is a button on the card; on a favourite it stays lit, otherwise it
+   is the same muted white as the menu button on the opposite corner. */
+.rom-menu-button.favorite-badge {
+    color: white;
+    background-color: alpha(black, 0.55);
+}
+
+.rom-menu-button.favorite-badge.favorite-on,
+.rom-menu-button.favorite-badge:hover {
+    color: #f6c90e;
+}
+
+/* Rubber-band selection: the band itself is drawn by the grid, this marks the
+   cards it caught. */
+.rom-card-selected {
+    background-color: alpha(@accent_bg_color, 0.30);
+    outline: 2px solid @accent_bg_color;
+    outline-offset: -2px;
+}
+
 .favorites-sidebar-icon {
     color: #f6c90e;
 }

@@ -88,6 +88,47 @@ def archive_rom_name(archive_path, extensions):
     return Path(archive_path).stem
 
 
+def rename_archive_rom_entry(archive_path, new_stem, extensions):
+    """Rename the single ROM entry inside an archive, keeping its extension.
+
+    An archive's display name comes from the entry it holds (see
+    :func:`archive_rom_name`), so renaming the container alone would leave the
+    library showing the old title. Zip entries cannot be renamed in place, so
+    the archive is rewritten next to itself and swapped in only once it is
+    complete -- an interrupted rename leaves the original untouched.
+    """
+    archive_path = Path(archive_path)
+    matches = archive_entries(archive_path, extensions)
+    if len(matches) != 1:
+        return False
+
+    target_name = matches[0].name
+    renamed = f"{new_stem}{matches[0].suffix}"
+    if renamed == target_name:
+        return False
+
+    tmp_path = archive_path.with_name(f"{archive_path.name}.renaming")
+    try:
+        with zipfile.ZipFile(archive_path) as source:
+            with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as dest:
+                for info in source.infolist():
+                    if info.is_dir():
+                        continue
+                    data = source.read(info)
+                    name = renamed if info.filename == str(matches[0]) else info.filename
+                    entry = zipfile.ZipInfo(name, date_time=info.date_time)
+                    entry.compress_type = info.compress_type
+                    entry.external_attr = info.external_attr
+                    dest.writestr(entry, data)
+        tmp_path.replace(archive_path)
+    except Exception as exc:
+        logger.warning("archives rename failed: path=%s error=%s", archive_path, exc)
+        tmp_path.unlink(missing_ok=True)
+        raise
+    logger.info("archives renamed entry: archive=%s %s -> %s", archive_path, target_name, renamed)
+    return True
+
+
 def _safe_target(dest_dir, member_name):
     """Resolve an archive member under ``dest_dir``, or None if it escapes.
 

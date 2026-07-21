@@ -61,6 +61,26 @@ def save_local_art(
     return target
 
 
+def rename_local_art(roms_dir: Path, console: str, old_name: str, new_name: str) -> int:
+    """Carry a ROM's artwork over to its new name, for every art kind.
+
+    Artwork is keyed on the display name, so a renamed ROM would otherwise
+    stop finding its own cover.
+    """
+    renamed = 0
+    for kind in (COVER_ART, LABEL_ART):
+        for candidate in get_art_path_candidates(roms_dir, console, old_name, kind):
+            if not candidate.exists():
+                continue
+            target = candidate.with_name(f"{new_name}{candidate.suffix}")
+            try:
+                candidate.replace(target)
+                renamed += 1
+            except OSError:
+                continue
+    return renamed
+
+
 def get_cover_path_candidates(roms_dir: Path, console: str, rom_name: str) -> list[Path]:
     return get_art_path_candidates(roms_dir, console, rom_name, COVER_ART)
 

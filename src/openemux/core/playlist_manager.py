@@ -121,6 +121,51 @@ class PlaylistManager:
                     f.write(f"{path}\n")
         return removed
 
+    def forget_rom(self, console, rom_path):
+        """Drop a ROM from the console playlist and from the favorites.
+
+        Called after the file itself is gone: a rescan would do the same, but
+        it walks the whole tree, and the grid has to refresh right away.
+        """
+        return self._rewrite_indexes(console, rom_path, None)
+
+    def repath_rom(self, console, old_path, new_path):
+        """Point the indexes at a ROM's new path after a rename."""
+        return self._rewrite_indexes(console, old_path, new_path)
+
+    def _rewrite_indexes(self, console, old_path, new_path):
+        old_line = str(Path(old_path))
+        new_line = str(Path(new_path)) if new_path else None
+        changed = 0
+        for playlist_path in (
+            self.get_playlist_path(console),
+            self.get_favorites_playlist_path(),
+        ):
+            if not playlist_path.exists():
+                continue
+            with open(playlist_path, "r", encoding="utf-8") as f:
+                lines = [line.strip() for line in f if line.strip()]
+            if old_line not in lines:
+                continue
+            updated = []
+            for line in lines:
+                if line != old_line:
+                    updated.append(line)
+                elif new_line:
+                    updated.append(new_line)
+            with open(playlist_path, "w", encoding="utf-8") as f:
+                for line in updated:
+                    f.write(f"{line}\n")
+            changed += 1
+        logger.info(
+            "playlist reindex: console=%s old=%s new=%s files=%d",
+            console,
+            old_line,
+            new_line,
+            changed,
+        )
+        return changed
+
     def scan_and_rebuild_playlist(self, console):
         system_id = resolve_system_id(console)
         logger.info("playlist rebuild started: console=%s", system_id)

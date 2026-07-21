@@ -202,3 +202,38 @@ class ZippedRomPlaylistTests(unittest.TestCase):
 
             manager.scan_and_rebuild_playlist("PS")
             self.assertEqual(manager.load_playlist("PS"), [])
+
+    def test_forget_rom_drops_it_from_playlist_and_favorites(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "GB").mkdir(parents=True, exist_ok=True)
+            kept = roms_dir / "GB" / "Kirby.gb"
+            gone = roms_dir / "GB" / "Pokemon.gb"
+            for path in (kept, gone):
+                path.write_bytes(b"rom")
+            manager.scan_and_rebuild_playlist("GB")
+            manager.toggle_favorite({"path": str(gone), "console": "GB", "name": "Pokemon"})
+
+            gone.unlink()
+            manager.forget_rom("GB", gone)
+
+            self.assertEqual([rom["name"] for rom in manager.load_playlist("GB")], ["Kirby"])
+            self.assertEqual(manager.list_favorite_paths(), set())
+
+    def test_repath_rom_follows_a_rename_in_playlist_and_favorites(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir, manager = self._build(tmp_dir)
+            (roms_dir / "GB").mkdir(parents=True, exist_ok=True)
+            old = roms_dir / "GB" / "Kirby.gb"
+            old.write_bytes(b"rom")
+            manager.scan_and_rebuild_playlist("GB")
+            manager.toggle_favorite({"path": str(old), "console": "GB", "name": "Kirby"})
+
+            new = roms_dir / "GB" / "Kirby's Dream Land 2.gb"
+            old.rename(new)
+            manager.repath_rom("GB", old, new)
+
+            self.assertEqual(
+                [rom["name"] for rom in manager.load_playlist("GB")], ["Kirby's Dream Land 2"]
+            )
+            self.assertEqual(manager.list_favorite_paths(), {str(new)})

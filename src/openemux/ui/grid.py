@@ -1,7 +1,7 @@
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango, Gio
+from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
 from pathlib import Path
 import logging
 
@@ -120,6 +120,9 @@ class RomItem(Gtk.Box):
         cover_size,
         cartridge_frame_path=None,
         mixed_consoles=False,
+        on_rename_rom=None,
+        on_delete_rom=None,
+        on_toggle_selection=None,
     ):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.rom = rom
@@ -128,6 +131,12 @@ class RomItem(Gtk.Box):
         self.on_reveal_in_files = on_reveal_in_files
         self.on_choose_cover = on_choose_cover
         self.on_remove_cover = on_remove_cover
+        self.on_rename_rom = on_rename_rom
+        self.on_delete_rom = on_delete_rom
+        # Selection lives in the grid (it spans cards); the card only reports
+        # the ctrl-click that toggles it.
+        self.on_toggle_selection = on_toggle_selection
+        self.selected = False
         self.is_favorite = is_favorite
         self.has_local_cover = has_local_cover
         self.t = t
@@ -215,14 +224,21 @@ class RomItem(Gtk.Box):
         self.play_overlay.append(play_center)
 
         self.cover_overlay.add_overlay(self.play_overlay)
-        self.favorite_badge = Gtk.Image.new_from_icon_name("starred-symbolic")
-        self.favorite_badge.add_css_class("favorite-badge")
-        self.favorite_badge.set_halign(Gtk.Align.START)
-        self.favorite_badge.set_valign(Gtk.Align.START)
-        self.favorite_badge.set_margin_top(6)
-        self.favorite_badge.set_margin_start(6)
-        self.favorite_badge.set_visible(bool(self.is_favorite(self.rom)))
-        self.cover_overlay.add_overlay(self.favorite_badge)
+
+        # Favouriting is one click away, on the card itself. The star stays
+        # visible on a favourite (it is the badge that marks it) and otherwise
+        # appears on hover, like the menu button on the other corner.
+        self.favorite_button = Gtk.Button.new_from_icon_name("starred-symbolic")
+        self.favorite_button.add_css_class("rom-menu-button")
+        self.favorite_button.add_css_class("circular")
+        self.favorite_button.add_css_class("favorite-badge")
+        self.favorite_button.set_halign(Gtk.Align.START)
+        self.favorite_button.set_valign(Gtk.Align.START)
+        self.favorite_button.set_margin_top(6)
+        self.favorite_button.set_margin_start(6)
+        self.favorite_button.connect("clicked", self._on_favorite_button_clicked)
+        self._sync_favorite_button(self.is_favorite(self.rom))
+        self.cover_overlay.add_overlay(self.favorite_button)
 
         # Right-click is not obvious to everyone, so the same menu is one click
         # away from a button that appears on hover.
@@ -400,9 +416,37 @@ class RomItem(Gtk.Box):
             return
         self.cover_overlay.set_child(widget)
 
+    def _sync_favorite_button(self, is_favorite):
+        self._is_favorite_now = bool(is_favorite)
+        self.favorite_button.set_icon_name(
+            "starred-symbolic" if is_favorite else "non-starred-symbolic"
+        )
+        self.favorite_button.set_tooltip_text(
+            self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
+        )
+        if is_favorite:
+            self.favorite_button.add_css_class("favorite-on")
+        else:
+            self.favorite_button.remove_css_class("favorite-on")
+        # A favourite says so even when the pointer is elsewhere.
+        self.favorite_button.set_visible(
+            self._is_favorite_now or self.has_css_class("rom-card-hover")
+        )
+
+    def _on_favorite_button_clicked(self, _button):
+        self._act_toggle_favorite(None, None)
+
+    def set_selected(self, selected):
+        self.selected = bool(selected)
+        if self.selected:
+            self.add_css_class("rom-card-selected")
+        else:
+            self.remove_css_class("rom-card-selected")
+
     def _on_hover_enter(self, controller, x, y):
         self.play_overlay.set_visible(True)
         self.menu_button.set_visible(True)
+        self.favorite_button.set_visible(True)
         self.add_css_class("rom-card-hover")
 
     def _on_hover_leave(self, controller):
@@ -411,6 +455,7 @@ class RomItem(Gtk.Box):
         # vanishes from under the pointer the moment the popover takes over.
         if self._context_popover is None:
             self.menu_button.set_visible(False)
+        self.favorite_button.set_visible(self._is_favorite_now)
         self.remove_css_class("rom-card-hover")
 
     def _on_menu_button_clicked(self, button):
@@ -440,7 +485,15 @@ class RomItem(Gtk.Box):
         if button == Gdk.BUTTON_SECONDARY:
             self._show_context_menu(x, y)
             return
-        if button == Gdk.BUTTON_PRIMARY and self.on_launch_callback:
+        if button != Gdk.BUTTON_PRIMARY:
+            return
+        # Ctrl-click builds a selection card by card; the rubber band on the
+        # empty area is the other way in.
+        state = gesture.get_current_event_state()
+        if state & Gdk.ModifierType.CONTROL_MASK and self.on_toggle_selection:
+            self.on_toggle_selection(self)
+            return
+        if self.on_launch_callback:
             self.on_launch_callback(self.rom)
 
     def _ensure_action_group(self):
@@ -454,6 +507,8 @@ class RomItem(Gtk.Box):
             ("remove-cover", self._act_remove_cover),
             ("choose-label", self._act_choose_label),
             ("remove-label", self._act_remove_label),
+            ("rename", self._act_rename),
+            ("delete", self._act_delete),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -494,9 +549,13 @@ class RomItem(Gtk.Box):
                 entries.append(
                     (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
                 )
-        # Own section: this acts on the file on disk, not on the library entry.
+        # Own section: these act on the file on disk, not on the library entry.
         entries.append(SEPARATOR)
         entries.append((self.t("context.reveal"), "rom.reveal-in-files", "folder-open-symbolic"))
+        if self.on_rename_rom:
+            entries.append((self.t("context.rename"), "rom.rename", "document-edit-symbolic"))
+        if self.on_delete_rom:
+            entries.append((self.t("context.delete"), "rom.delete", "user-trash-symbolic"))
 
         popover = build_context_popover(entries)
         popover.set_parent(self)
@@ -516,8 +575,17 @@ class RomItem(Gtk.Box):
 
     def _act_toggle_favorite(self, _action, _param):
         logger.info("rom context action: toggle_favorite rom=%s", self.rom.get("name"))
-        is_favorite_now = self.on_toggle_favorite(self.rom)
-        self.favorite_badge.set_visible(bool(is_favorite_now))
+        self._sync_favorite_button(self.on_toggle_favorite(self.rom))
+
+    def _act_rename(self, _action, _param):
+        logger.info("rom context action: rename rom=%s", self.rom.get("name"))
+        if self.on_rename_rom:
+            self.on_rename_rom(self.rom)
+
+    def _act_delete(self, _action, _param):
+        logger.info("rom context action: delete rom=%s", self.rom.get("name"))
+        if self.on_delete_rom:
+            self.on_delete_rom([self.rom])
 
     def _act_reveal_in_files(self, _action, _param):
         logger.info("rom context action: reveal_in_files rom=%s", self.rom.get("name"))
@@ -559,6 +627,9 @@ class RomGrid(Gtk.FlowBox):
         roms_dir,
         ui_settings=None,
         mixed_consoles=False,
+        on_rename_rom=None,
+        on_delete_rom=None,
+        on_selection_changed=None,
     ):
         super().__init__()
         self.console = console
@@ -566,7 +637,18 @@ class RomGrid(Gtk.FlowBox):
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
-        self.set_valign(Gtk.Align.START)
+        self.on_selection_changed = on_selection_changed
+        self._items = []
+        # Rubber band state: the rectangle being dragged, and the selection it
+        # started from so a ctrl-drag can extend instead of replace.
+        self._band = None
+        self._band_origin = None
+        self._band_base = ()
+        # Fill the viewport instead of hugging the rows: the empty area below
+        # the last card is where a rubber-band selection naturally starts, and
+        # it only reaches the grid if the grid actually owns it.
+        self.set_valign(Gtk.Align.FILL)
+        self.set_vexpand(True)
         self.set_row_spacing(24)
         self.set_column_spacing(24)
         self.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -605,5 +687,126 @@ class RomGrid(Gtk.FlowBox):
                 cover_size,
                 cartridge_frame_path=cartridge_frame_path,
                 mixed_consoles=mixed_consoles,
+                on_rename_rom=on_rename_rom,
+                on_delete_rom=on_delete_rom,
+                on_toggle_selection=self._toggle_item_selection,
             )
+            self._items.append(item)
             self.append(item)
+
+        # Dragging across the empty area selects whatever it sweeps over. The
+        # gesture sits on the grid, so it only ever starts on the background --
+        # a press that lands on a card is left to the card.
+        drag = Gtk.GestureDrag()
+        drag.set_button(Gdk.BUTTON_PRIMARY)
+        drag.connect("drag-begin", self._on_band_begin)
+        drag.connect("drag-update", self._on_band_update)
+        drag.connect("drag-end", self._on_band_end)
+        self.add_controller(drag)
+
+    # -- selection ---------------------------------------------------------
+
+    def selected_roms(self):
+        return [item.rom for item in self._items if item.selected]
+
+    def clear_selection(self):
+        self._apply_selection(())
+
+    def _apply_selection(self, items):
+        chosen = set(items)
+        changed = False
+        for item in self._items:
+            wanted = item in chosen
+            if item.selected != wanted:
+                item.set_selected(wanted)
+                changed = True
+        if changed and self.on_selection_changed:
+            self.on_selection_changed(self.selected_roms())
+
+    def _toggle_item_selection(self, item):
+        current = [entry for entry in self._items if entry.selected]
+        if item in current:
+            current.remove(item)
+        else:
+            current.append(item)
+        self._apply_selection(current)
+
+    def _is_background(self, x, y):
+        """True when (x, y) is empty grid, not a card."""
+        target = self.pick(x, y, Gtk.PickFlags.DEFAULT)
+        while target is not None and target is not self:
+            if isinstance(target, RomItem):
+                return False
+            target = target.get_parent()
+        return True
+
+    def _on_band_begin(self, gesture, start_x, start_y):
+        if not self._is_background(start_x, start_y):
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
+            return
+        state = gesture.get_current_event_state()
+        # Ctrl keeps what was already picked, so a band can be added to it.
+        self._band_base = tuple(item for item in self._items if item.selected) if (
+            state & Gdk.ModifierType.CONTROL_MASK
+        ) else ()
+        self._band_origin = (start_x, start_y)
+        self._band = None
+        if not self._band_base:
+            self._apply_selection(())
+
+    def _on_band_update(self, gesture, offset_x, offset_y):
+        if self._band_origin is None:
+            return
+        start_x, start_y = self._band_origin
+        self._band = (
+            min(start_x, start_x + offset_x),
+            min(start_y, start_y + offset_y),
+            abs(offset_x),
+            abs(offset_y),
+        )
+        self._apply_selection(list(self._band_base) + self._items_in_band())
+        self.queue_draw()
+
+    def _on_band_end(self, gesture, offset_x, offset_y):
+        self._band = None
+        self._band_origin = None
+        self._band_base = ()
+        self.queue_draw()
+
+    def _items_in_band(self):
+        if self._band is None:
+            return []
+        bx, by, bw, bh = self._band
+        hits = []
+        for item in self._items:
+            ok, bounds = item.compute_bounds(self)
+            if not ok:
+                continue
+            if (
+                bounds.get_x() < bx + bw
+                and bx < bounds.get_x() + bounds.get_width()
+                and bounds.get_y() < by + bh
+                and by < bounds.get_y() + bounds.get_height()
+            ):
+                hits.append(item)
+        return hits
+
+    def do_snapshot(self, snapshot):
+        Gtk.FlowBox.do_snapshot(self, snapshot)
+        if self._band is None:
+            return
+        x, y, width, height = self._band
+        if width < 1 or height < 1:
+            return
+        fill = Gdk.RGBA()
+        fill.parse("rgba(53, 132, 228, 0.18)")
+        edge = Gdk.RGBA()
+        edge.parse("rgba(53, 132, 228, 0.75)")
+        snapshot.append_color(fill, Graphene.Rect().init(x, y, width, height))
+        for rect in (
+            (x, y, width, 1),
+            (x, y + height - 1, width, 1),
+            (x, y, 1, height),
+            (x + width - 1, y, 1, height),
+        ):
+            snapshot.append_color(edge, Graphene.Rect().init(*rect))
