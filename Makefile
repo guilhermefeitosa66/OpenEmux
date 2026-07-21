@@ -5,7 +5,7 @@ PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
 .PHONY: all setup venv run test clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: appimage appimage-docker appimage-clean deb rpm packages packages-clean
+.PHONY: appimage appimage-clean deb rpm packages packages-clean
 
 all: setup
 
@@ -52,29 +52,30 @@ check-retroarch:
 		exit 1; \
 	fi
 
-# --- Packaging (all builds run in Docker; the AppImage build also requires an
-#     x86_64 host). Artifacts land in dist/. See docs/DEVELOPMENT.md. ---
+# --- Packaging ---
+#
+# Every target builds inside the container defined by
+# packaging/docker/<target>.Dockerfile, so the host only needs Docker, and each
+# build install-tests its own artifact. Results land in dist/.
+# The AppImage additionally requires an x86_64 host. See docs/DEVELOPMENT.md.
 
 # Universal AppImage (Ubuntu 24.04 build container)
 appimage:
-	./packaging/appimage/build_appimage.sh
-
-appimage-docker:
-	./packaging/appimage/build_in_docker.sh
+	./packaging/build.sh appimage
 
 # Debian/Ubuntu .deb — built and install-tested in an Ubuntu 24.04 container
 deb:
-	./packaging/deb/build_deb.sh
+	./packaging/build.sh deb
 
 # Fedora .rpm — built and install-tested in a Fedora container
 rpm:
-	./packaging/rpm/build_rpm.sh
+	./packaging/build.sh rpm
 
 # Build all three release artifacts into dist/
 packages: appimage deb rpm
 
 appimage-clean:
-	rm -rf AppDir appimage-builder-cache dist/*.AppImage dist/*.zsync
+	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Remove every packaged artifact
 packages-clean: appimage-clean

@@ -45,7 +45,8 @@ DESTDIR=%{buildroot} ROOT_DIR=%{repo_root} sh %{repo_root}/packaging/common/stag
 /opt/openemux
 /usr/bin/openemux
 /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
-/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
+/usr/share/icons/hicolor/*/apps/io.github.guilhermefeitosa66.OpenEmux.png
+/usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 %license /usr/share/doc/openemux/copyright
 
 %post

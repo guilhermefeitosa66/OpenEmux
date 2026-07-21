@@ -41,10 +41,6 @@ AppDir/
 appimage-builder-cache/
 appimage-build/
 
-# Flatpak build artifacts
-.flatpak-build-dir/
-.flatpak-builder/
-
 # Vendor build artifacts (compiled binaries — use 'make build-emulators' to rebuild)
 vendors/nestopia/nestopia
 vendors/nestopia/build/

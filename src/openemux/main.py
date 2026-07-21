@@ -9,7 +9,6 @@ import shutil
 from openemux.core.paths import (
     get_project_root,
     is_running_in_appimage,
-    is_running_in_flatpak,
     migrate_legacy_config_dir,
 )
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
@@ -29,7 +28,7 @@ def _ensure_gtk_typelibs():
     Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
     remains the recommended system-wide setup.
     """
-    if is_running_in_appimage() or is_running_in_flatpak():
+    if is_running_in_appimage():
         return
 
     system_dirs = [
@@ -97,17 +96,56 @@ from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
+from openemux.core.paths import get_project_root, is_running_in_appimage
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
+#: Prefixes the .deb/.rpm install into. A project root under one of these means
+#: the app is running from a package rather than from a source checkout.
+SYSTEM_INSTALL_PREFIXES = ("/opt/", "/usr/")
+
+
+def _is_packaged_install(project_root):
+    root = f"{Path(project_root).resolve()}/"
+    return root.startswith(SYSTEM_INSTALL_PREFIXES)
+
+
+def _remove_generated_desktop_entry():
+    """Drop a user-level entry a previous source run wrote, if it is still ours.
+
+    ``~/.local/share/applications`` takes precedence over
+    ``/usr/share/applications``, so an entry left behind by running from a
+    checkout shadows the one a .deb/.rpm installs -- the menu then points at
+    the developer tree (or at nothing, once that tree moves) instead of the
+    installed app. Only a file that still matches what we generate is removed,
+    so a hand-written entry is never touched.
+    """
+    desktop_target = Path.home() / ".local" / "share" / "applications" / f"{APP_ID}.desktop"
+    try:
+        if not desktop_target.exists():
+            return
+        content = desktop_target.read_text(encoding="utf-8")
+        if "Name=OpenEmux" in content and "main.py" in content:
+            desktop_target.unlink()
+            logging.getLogger(__name__).info(
+                "removed stale user desktop entry %s (packaged install owns it now)",
+                desktop_target,
+            )
+    except OSError:
+        pass
+
 
 def _ensure_desktop_integration():
-    # In AppImage/Flatpak the desktop file + icon are installed by the package.
-    if is_running_in_appimage() or is_running_in_flatpak():
+    project_root = get_project_root()
+
+    # A packaged install ships its own desktop file and icon. Writing a
+    # user-level copy would shadow the package's entry with one pointing at
+    # this interpreter, which is exactly how an installed app ends up
+    # unreachable from the menu.
+    if is_running_in_appimage() or _is_packaged_install(project_root):
+        _remove_generated_desktop_entry()
         return
 
-    project_root = get_project_root()
     logo_path = project_root / "src" / "openemux" / "ui" / "assets" / "images" / "logo.png"
     if not logo_path.exists():
         return

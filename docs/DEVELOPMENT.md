@@ -37,11 +37,12 @@ src/openemux/
   i18n/     translations (tr(key, locale) + locales/*.py)
 tests/      unittest suite, one test_<module>.py per core module
 packaging/
-  appimage/ AppImage recipe + build scripts
-  deb/      .deb build/test script
-  rpm/      .rpm spec + build/test script
-  common/   shared install layout (stage_tree.sh) + native launcher
-  flatpak/  Flatpak manifest + AppStream metainfo (built on Flathub, not here)
+  build.sh  entry point: `packaging/build.sh {appimage|deb|rpm}`
+  docker/   one Dockerfile per target — the build toolchains
+  appimage/ AppImage recipe + in-container build script + bundle entry point
+  deb/      in-container .deb build/test script
+  rpm/      .rpm spec + in-container build/test script
+  common/   shared across .deb/.rpm: install layout, launcher, desktop entry
 docs/       this guide + the GitHub Pages website (index.html)
 ```
 
@@ -138,10 +139,15 @@ The `.deb` and `.rpm` share one install layout, assembled by
   RetroArch AppImage. The launcher sets `OPENEMUX_PROJECT_ROOT` to this path.
 - **`/usr/bin/openemux`** — launcher
   ([`openemux-launcher.sh`](../packaging/common/openemux-launcher.sh)) that
-  exports `OPENEMUX_PROJECT_ROOT` + `PYTHONPATH` and runs `python3 -m
-  openemux.main`.
-- **`/usr/share/applications/…desktop`** and the hicolor **icon** — desktop
-  integration.
+  exports `OPENEMUX_PROJECT_ROOT` + `PYTHONPATH` and runs `openemux.main`.
+  It picks the first interpreter that can actually `import gi`, starting at
+  `/usr/bin/python3` — deliberately *not* `python3` from `PATH`, which a
+  version manager (pyenv, conda, asdf) shadows with an interpreter that has no
+  PyGObject.
+- **`/usr/share/applications/…desktop`** (from
+  [`packaging/common/openemux.desktop`](../packaging/common/openemux.desktop)),
+  the hicolor **icons** in several sizes and a `/usr/share/pixmaps` fallback —
+  desktop integration.
 
 GTK4, libadwaita, PyGObject, pycairo and PyYAML come from **distro system
 packages** (declared as package dependencies) — nothing is bundled except
@@ -154,13 +160,9 @@ copy that must be kept in sync).
 ## Cutting a release
 
 1. Bump `src/openemux/__init__.py` and the `version:` in
-   `packaging/appimage/AppImageBuilder.yml`; add a `<release>` entry to
-   `packaging/flatpak/…metainfo.xml`.
+   `packaging/appimage/AppImageBuilder.yml`.
 2. `make packages` and confirm all three green (build **and** install-test).
 3. Commit, tag `vX.Y.Z`, push `main` and the tag.
 4. `gh release create vX.Y.Z --target main` with the three `dist/` artifacts.
    The README/website download links point at `releases/latest`, so they need no
    per-version edits — only update them when adding a new *format*.
-
-> The in-repo Flatpak manifest pin is **not** bumped as part of this flow; the
-> Flathub build re-pins it in its own PR.

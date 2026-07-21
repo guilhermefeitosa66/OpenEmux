@@ -1,3 +1,15 @@
+/*
+ * ELF entry point for the AppImage.
+ *
+ * appimage-builder's AppRun2 refuses to deploy unless app_info.exec is a real
+ * ELF executable ("Main executable is not an elf executable"), so the bundle
+ * cannot point straight at a shell script. This static binary exists only to
+ * be that ELF: it resolves $APPDIR and hands over to openemux-run, the shell
+ * script that sets up the bundle's environment (typelibs, gdk-pixbuf loaders,
+ * icon theme) and starts Python.
+ *
+ * Built by the recipe with: gcc -static openemux-launcher.c -O2 -s
+ */
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,50 +23,22 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    char project_root[PATH_MAX];
-    char python_bin[PATH_MAX];
-    char main_py[PATH_MAX];
-    char pythonpath[PATH_MAX * 2];
+    char runner[PATH_MAX];
+    snprintf(runner, sizeof(runner), "%s/usr/bin/openemux-run", appdir);
 
-    snprintf(project_root, sizeof(project_root), "%s/usr/lib/openemux", appdir);
-    snprintf(python_bin, sizeof(python_bin), "%s/usr/bin/python3", appdir);
-    snprintf(main_py, sizeof(main_py), "%s/src/openemux/main.py", project_root);
-
-    const char *existing_pythonpath = getenv("PYTHONPATH");
-    if (existing_pythonpath && existing_pythonpath[0] != '\0') {
-        snprintf(
-            pythonpath,
-            sizeof(pythonpath),
-            "%s/src:%s",
-            project_root,
-            existing_pythonpath
-        );
-    } else {
-        snprintf(pythonpath, sizeof(pythonpath), "%s/src", project_root);
-    }
-
-    setenv("OPENEMUX_PROJECT_ROOT", project_root, 1);
-    setenv("PYTHONPATH", pythonpath, 1);
-
-    if (chdir(appdir) != 0) {
-        perror("openemux-launcher: chdir");
-        return 1;
-    }
-
-    char **child_argv = calloc((size_t)argc + 2, sizeof(char *));
+    char **child_argv = calloc((size_t)argc + 1, sizeof(char *));
     if (!child_argv) {
         fprintf(stderr, "openemux-launcher: out of memory\n");
         return 1;
     }
 
-    child_argv[0] = python_bin;
-    child_argv[1] = main_py;
+    child_argv[0] = runner;
     for (int i = 1; i < argc; i++) {
-        child_argv[i + 1] = argv[i];
+        child_argv[i] = argv[i];
     }
-    child_argv[argc + 1] = NULL;
+    child_argv[argc] = NULL;
 
-    execv(python_bin, child_argv);
+    execv(runner, child_argv);
     perror("openemux-launcher: execv");
     free(child_argv);
     return 1;

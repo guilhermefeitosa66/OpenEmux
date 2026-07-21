@@ -15,12 +15,15 @@ script:
   - cp README.md LICENSE AppDir/usr/lib/openemux/
   - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/openemux-pydeps.lock
   - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/openemux-pydeps.lock
+  # appimage-builder requires app_info.exec to be an ELF, so a tiny static
+  # binary is the entry point and immediately hands over to openemux-run, which
+  # sets up GI_TYPELIB_PATH / gdk-pixbuf / XDG_DATA_DIRS. (AppDir/AppRun is
+  # generated and overwritten by appimage-builder, so it cannot host any of it.)
   - gcc -static packaging/appimage/openemux-launcher.c -O2 -s -o AppDir/usr/bin/openemux-launcher
-  - install -Dm755 packaging/appimage/AppRun AppDir/AppRun
-  - install -Dm755 packaging/appimage/openemux-wrapper AppDir/usr/bin/openemux
+  - install -Dm755 packaging/appimage/openemux-run.sh AppDir/usr/bin/openemux-run
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
-  - install -Dm644 packaging/appimage/io.github.guilhermefeitosa66.OpenEmux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+  - install -Dm644 packaging/common/openemux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
   - install -Dm644 src/openemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 
 AppDir:
@@ -31,6 +34,15 @@ AppDir:
     icon: io.github.guilhermefeitosa66.OpenEmux
     version: "1.4.0"
     exec: usr/bin/openemux-launcher
+  runtime:
+    # Belt and braces alongside the launcher script: these are the paths the
+    # bundle must never inherit from the host.
+    env:
+      GI_TYPELIB_PATH: "$APPDIR/usr/lib/x86_64-linux-gnu/girepository-1.0"
+      GDK_PIXBUF_MODULEDIR: "$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+      GDK_PIXBUF_MODULE_FILE: "$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+      XDG_DATA_DIRS: "$APPDIR/usr/share:/usr/local/share:/usr/share"
+      OPENEMUX_PROJECT_ROOT: "$APPDIR/usr/lib/openemux"
   apt:
     arch: amd64
     sources:
@@ -61,6 +73,9 @@ AppDir:
       # Rsvg bindings: the cartridge frames are SVGs composited at runtime.
       - gir1.2-rsvg-2.0
       - librsvg2-common
+      # Cover art synced from libretro can be WebP, which is not one of
+      # gdk-pixbuf's built-in formats.
+      - webp-pixbuf-loader
 
 AppImage:
   arch: x86_64

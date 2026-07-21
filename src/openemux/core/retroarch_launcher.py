@@ -9,13 +9,13 @@ from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.input_actions import to_retroarch_overrides
 from openemux.core.input_profiles import EXTRA_PORT_DEVICE_IDS, player_for_device
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import get_real_home
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
 logger = logging.getLogger(__name__)
 
-# The RetroArch Flatpak we delegate to when OpenEmux itself runs as a Flatpak.
+# A RetroArch installed as a Flatpak keeps its cores here; still worth searching.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
@@ -58,18 +58,7 @@ class RetroArchLauncher:
         )
 
     def _launch_prefix(self):
-        """Return (argv_prefix, error).
-
-        Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
-        flatpak-spawn (both apps see the same absolute paths under the real
-        home, which RetroArch reads via its own ``--filesystem=host``).
-        Otherwise resolve a native/vendored RetroArch binary.
-        """
-        if is_running_in_flatpak():
-            if not shutil.which("flatpak-spawn"):
-                return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
-            return ["flatpak-spawn", "--host", "flatpak", "run", RETROARCH_FLATPAK_ID], None
-
+        """Return (argv_prefix, error) for a native/vendored RetroArch binary."""
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
             return None, (
@@ -118,8 +107,6 @@ class RetroArchLauncher:
                 return str(hint_path)
 
         candidates = DEFAULT_CORE_CANDIDATES.get(system_id, [])
-        # Use the real home so a Flatpak build resolves the RetroArch Flatpak's
-        # cores dir (get_real_home() == Path.home() outside Flatpak).
         real_home = get_real_home()
         home_dirs = [
             real_home / ".config" / "retroarch" / "cores",
@@ -189,12 +176,6 @@ class RetroArchLauncher:
         core_path = self._find_core_path(system_id)
         if not core_path:
             candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
-            if is_running_in_flatpak():
-                return None, (
-                    f"No RetroArch core found for {system_id}. Install the RetroArch "
-                    f"Flatpak and, in its Online Updater, download a core for {system_id} "
-                    f"(tried: {candidates})."
-                )
             return None, (
                 f"No RetroArch core found for {system_id}. "
                 f"Tried common core dirs and these core names: {candidates}. "

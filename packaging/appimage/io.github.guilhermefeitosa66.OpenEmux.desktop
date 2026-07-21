@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=OpenEmux
-Comment=Linux-native emulator frontend
-Exec=openemux
-Icon=io.github.guilhermefeitosa66.OpenEmux
-Terminal=false
-Categories=Game;Emulator;
-StartupWMClass=io.github.guilhermefeitosa66.OpenEmux
