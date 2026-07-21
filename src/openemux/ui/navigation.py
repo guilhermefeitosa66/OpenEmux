@@ -124,14 +124,26 @@ def resolve(context, action):
     return ("noop",)
 
 
+#: Arrow keys as navigation actions, so the keyboard reuses the gamepad routing.
+_ARROW_ACTIONS = {
+    Gdk.KEY_Up: "up", Gdk.KEY_KP_Up: "up",
+    Gdk.KEY_Down: "down", Gdk.KEY_KP_Down: "down",
+    Gdk.KEY_Left: "left", Gdk.KEY_KP_Left: "left",
+    Gdk.KEY_Right: "right", Gdk.KEY_KP_Right: "right",
+}
+
+
 def pane_key_command(context, keyval, shift=False):
-    """Which pane a key crosses to, or None to leave the key to GTK.
+    """Command for a key inside the library, or None to leave it to GTK.
 
-    Only the crossings are claimed. Everything else -- including the arrows
-    that move within a pane -- stays with GTK's keynav.
+    Two things are claimed here.
 
-    Right out of the sidebar has to be claimed because GTK would otherwise walk
-    into the header-bar buttons rather than into the games.
+    The pane crossings: Right out of the sidebar would otherwise walk into the
+    header-bar buttons rather than into the games.
+
+    And the arrows *inside the grid*: GtkFlowBox does not move focus on arrow
+    keys (GtkListBox does, which is why the sidebar needs no help), so they are
+    routed through the same table the gamepad uses.
     """
     # Shift+Tab is deliberately not claimed: it stays the way out to the rest
     # of the window, so the header bar and menu remain keyboard-reachable.
@@ -139,12 +151,17 @@ def pane_key_command(context, keyval, shift=False):
 
     if context == CTX_SIDEBAR:
         if keyval in (Gdk.KEY_Right, Gdk.KEY_KP_Right) or forward_tab:
-            return "focus-grid"
+            return ("focus-grid",)
+        # Up/Down are left alone: the list box moves *and* selects, which is
+        # what makes the page follow the highlighted console.
         return None
 
     if context == CTX_GRID:
         if keyval == Gdk.KEY_BackSpace or forward_tab:
-            return "focus-sidebar"
+            return ("focus-sidebar",)
+        action = _ARROW_ACTIONS.get(keyval)
+        if action is not None:
+            return resolve(CTX_GRID, action)
         return None
 
     return None
@@ -211,7 +228,7 @@ class NavigationController:
         )
         if command is None:
             return False
-        getattr(self, "_cmd_" + command.replace("-", "_"))()
+        self._execute(command)
         self.refresh_hints()
         return True
 
@@ -299,10 +316,13 @@ class NavigationController:
         context = self.current_context()
         command = resolve(context, action)
         logger.debug("nav dispatch: context=%s action=%s -> %s", context, action, command)
+        self._execute(command)
+        self.refresh_hints()
+
+    def _execute(self, command):
         handler = getattr(self, "_cmd_" + command[0].replace("-", "_"), None)
         if handler:
             handler(*command[1:])
-        self.refresh_hints()
 
     def _cmd_noop(self):
         pass

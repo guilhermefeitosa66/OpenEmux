@@ -268,6 +268,11 @@ class RomItem(Gtk.Box):
         # visible on a favourite (it is the badge that marks it) and otherwise
         # appears on hover, like the menu button on the other corner.
         self.favorite_button = Gtk.Button.new_from_icon_name("starred-symbolic")
+        # Pointer-only: a focusable button here would be a focus stop *inside*
+        # the card, so an arrow key would step through the badges instead of
+        # moving to the next game. Ctrl+D does the same thing from the keyboard.
+        self.favorite_button.set_focusable(False)
+        self.favorite_button.set_can_focus(False)
         self.favorite_button.add_css_class("rom-menu-button")
         self.favorite_button.add_css_class("circular")
         self.favorite_button.add_css_class("favorite-badge")
@@ -282,6 +287,10 @@ class RomItem(Gtk.Box):
         # Right-click is not obvious to everyone, so the same menu is one click
         # away from a button that appears on hover.
         self.menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
+        # Pointer-only, same as the star: the Menu key opens this menu from the
+        # keyboard without turning the button into a focus stop inside the card.
+        self.menu_button.set_focusable(False)
+        self.menu_button.set_can_focus(False)
         self.menu_button.add_css_class("rom-menu-button")
         self.menu_button.add_css_class("circular")
         self.menu_button.set_halign(Gtk.Align.END)
