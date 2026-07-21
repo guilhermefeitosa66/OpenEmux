@@ -36,8 +36,15 @@ fi
 
 export OPENEMUX_PROJECT_ROOT="$APPDIR/usr/lib/openemux"
 export PYTHONPATH="$OPENEMUX_PROJECT_ROOT/src:$APPDIR/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
-# The bundle carries its own interpreter; a pyenv/conda PYTHONHOME would send it
-# looking for its stdlib outside the AppImage.
-unset PYTHONHOME 2>/dev/null || true
+# PYTHONHOME is deliberately left alone: AppRun.env points it at $APPDIR/usr so
+# the bundled interpreter finds its own stdlib. Clearing it (which the native
+# launcher does, to shake off a pyenv environment) breaks the bundle instead.
+
+# The bundled interpreter's ELF interpreter path is *relative*
+# ("lib64/ld-linux-x86-64.so.2"), so it resolves against the working directory.
+# The recipe makes both candidate directories -- $APPDIR and runtime/compat,
+# where appimage-builder's exec hooks chdir -- carry a lib64 pointing at the
+# loader. This cd covers the case where the hooks are not loaded at all.
+cd "$APPDIR" || exit 1
 
 exec "$APPDIR/usr/bin/python3" "$OPENEMUX_PROJECT_ROOT/src/openemux/main.py" "$@"

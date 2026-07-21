@@ -18,6 +18,10 @@ RUN apt-get update \
       libgdk-pixbuf2.0-bin libglib2.0-bin gtk-update-icon-cache \
       librsvg2-common \
       binutils gcc libc6-dev \
+      # The build launches the finished bundle as a smoke test; GTK needs a
+      # display and the app needs its runtime deps present to get that far.
+      xvfb \
+      libgtk-4-1 libadwaita-1-0 gir1.2-gtk-4.0 gir1.2-adw-1 \
  && rm -rf /var/lib/apt/lists/*
 
 # Pinned: appimage-builder 1.1.0 needs packaging<22 to import.
