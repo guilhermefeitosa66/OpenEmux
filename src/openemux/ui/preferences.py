@@ -921,6 +921,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._tips_row.set_active(self.config.get_ui_settings()["show_tips"])
         self._tips_row.connect("notify::active", self._on_show_tips_changed)
         interface_group.add(self._tips_row)
+
+        self._gamepad_nav_row = Adw.SwitchRow(
+            title=self.t("settings.system.gamepad_nav.title"),
+            subtitle=self.t("settings.system.gamepad_nav.subtitle"),
+        )
+        self._gamepad_nav_row.set_active(self.config.get_ui_settings()["gamepad_navigation"])
+        self._gamepad_nav_row.connect("notify::active", self._on_gamepad_nav_changed)
+        interface_group.add(self._gamepad_nav_row)
         page.add(interface_group)
 
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
@@ -959,6 +967,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         enabled = row.get_active()
         self.config.set_show_tips(enabled)
         self.win._apply_tips_visibility(enabled)
+
+    def _on_gamepad_nav_changed(self, row, *_a):
+        self.win._apply_gamepad_navigation(row.get_active())
 
     def _on_language_changed(self, *_a):
         idx = self._language_combo.get_selected()

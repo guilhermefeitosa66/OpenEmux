@@ -36,8 +36,10 @@ from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
+from openemux.core.ui_gamepad import GamepadNavigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
+from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,25 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.add_breakpoint(breakpoint)
 
         self._install_actions()
+
+        # ----- Gamepad / keyboard UI navigation -----
+        self.navigation = NavigationController(self)
+        ui_settings = self.config_manager.get_ui_settings()
+        self._gamepad_nav_enabled = ui_settings.get("gamepad_navigation", True)
+        self.gamepad_navigator = GamepadNavigator(
+            on_action=lambda action: GLib.idle_add(self.navigation.on_gamepad_action, action),
+            on_connected=lambda name: GLib.idle_add(self.navigation.on_gamepad_connected, name),
+            on_disconnected=lambda: GLib.idle_add(self.navigation.on_gamepad_disconnected),
+            # A running game owns the pad; the preferences switch pauses the
+            # reader without tearing the thread down.
+            should_suspend=lambda: (
+                not self._gamepad_nav_enabled or self.runtime_manager.is_running()
+            ),
+        )
+        self.gamepad_navigator.start()
+        self.connect("close-request", self._on_close_stop_gamepad)
+
+        self._install_escape_handler()
 
         self._click_debug_controller = Gtk.GestureClick()
         self._click_debug_controller.set_button(0)
@@ -409,11 +430,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         bulb = Gtk.Label(label=TIP_ICON)
         bulb.add_css_class("caption")
         bulb.add_css_class("tip-bar-icon")
+        self._tip_bulb = bulb
+
+        # Input hints (gamepad glyphs or key names) on the right; filled by the
+        # NavigationController through set_hints().
+        self.hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.hint_box.set_halign(Gtk.Align.END)
 
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         bar.add_css_class("tip-bar")
         bar.append(bulb)
         bar.append(self.tip_label)
+        bar.append(self.hint_box)
 
         self.tip_bar = bar
         self._current_tip_key = None
@@ -432,13 +460,40 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         bar = getattr(self, "tip_bar", None)
         if bar is None:
             return
-        bar.set_visible(bool(enabled))
+        # Only the tip half goes away: the bar itself stays whenever input
+        # hints are being shown on its right side.
+        self._tips_enabled = bool(enabled)
+        self._tip_bulb.set_visible(self._tips_enabled)
+        self.tip_label.set_visible(self._tips_enabled)
+        self._update_tip_bar_visibility()
         if enabled:
             if not getattr(self, "_tip_timeout_id", 0):
                 self._rotate_tip()
                 self._tip_timeout_id = GLib.timeout_add_seconds(15, self._on_tip_timeout)
         else:
             self._stop_tip_rotation()
+
+    def _update_tip_bar_visibility(self):
+        has_hints = self.hint_box.get_first_child() is not None
+        self.tip_bar.set_visible(getattr(self, "_tips_enabled", True) or has_hints)
+
+    def set_hints(self, pairs):
+        """Fill the right side of the bottom bar with (glyph, label) hints."""
+        while child := self.hint_box.get_first_child():
+            self.hint_box.remove(child)
+        for glyph, label in pairs:
+            entry = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            key = Gtk.Label(label=glyph)
+            key.add_css_class("caption")
+            key.add_css_class("hint-key")
+            text = Gtk.Label(label=label)
+            text.add_css_class("caption")
+            text.add_css_class("dim-label")
+            entry.append(key)
+            entry.append(text)
+            self.hint_box.append(entry)
+        self.hint_box.set_visible(bool(pairs))
+        self._update_tip_bar_visibility()
 
     def _render_tip(self):
         """Re-render the current tip (used on language change too)."""
@@ -477,11 +532,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return button
 
     def _install_actions(self):
+        # Plain-key accels (Delete, F2, F5) are safe next to the search entry:
+        # a focused entry consumes the key press before window accels run.
         for name, handler, accels in (
             ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
+            ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
+            ("import", lambda *_: self._on_import_clicked(None), ["<Ctrl>o"]),
+            ("sync-covers", lambda *_: self._sync_covers_for_current_scope(), ["<Ctrl><Shift>s"]),
+            ("delete-rom", lambda *_: self._delete_selected_or_focused(), ["Delete"]),
+            ("rename-rom", lambda *_: self._rename_focused_rom(), ["F2"]),
+            ("toggle-favorite", lambda *_: self._favorite_focused_rom(), ["<Ctrl>d"]),
+            ("focus-pane", lambda *_: self.navigation.toggle_pane_focus(), ["F6"]),
+            ("stop-game", lambda *_: self._on_stop_game_clicked(None), ["<Ctrl>Escape"]),
+            ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -489,6 +555,54 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             app = self.get_application()
             if accels and app is not None:
                 app.set_accels_for_action(f"win.{name}", accels)
+
+    def _focused_rom_item(self):
+        return RomGrid.item_for_widget(self.get_focus())
+
+    def _delete_selected_or_focused(self):
+        if self._selected_roms:
+            self._confirm_delete_roms(self._selected_roms)
+            return
+        item = self._focused_rom_item()
+        if item is not None:
+            self._confirm_delete_roms([item.rom])
+
+    def _rename_focused_rom(self):
+        item = self._focused_rom_item()
+        if item is not None:
+            self._rename_rom_from_ui(item.rom)
+
+    def _favorite_focused_rom(self):
+        item = self._focused_rom_item()
+        if item is not None:
+            # Through the card so its star badge stays in sync.
+            item._act_toggle_favorite(None, None)
+
+    def _install_escape_handler(self):
+        """Escape clears the selection, else steps back from grid to sidebar.
+
+        Bubble phase on the window: dialogs, popovers and the search bar all
+        consume their own Escape first, so this only sees the leftovers.
+        """
+        controller = Gtk.EventControllerKey()
+        controller.connect("key-pressed", self._on_window_escape)
+        self.add_controller(controller)
+
+    def _on_window_escape(self, _controller, keyval, _keycode, _state):
+        if keyval != Gdk.KEY_Escape:
+            return False
+        if self._selected_roms:
+            self._clear_selection()
+            return True
+        return self.navigation.escape_to_sidebar()
+
+    def _on_close_stop_gamepad(self, *_args):
+        self.gamepad_navigator.stop()
+        return False
+
+    def _apply_gamepad_navigation(self, enabled):
+        self.config_manager.set_gamepad_navigation(enabled)
+        self._gamepad_nav_enabled = bool(enabled)
 
     def _toggle_search(self):
         if not self.search_button.get_sensitive():
@@ -511,16 +625,37 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         about.present(self)
 
     def _show_shortcuts(self):
+        # Gamepad controls are deliberately absent: the hint bar at the bottom
+        # documents them live, in context.
+        groups = (
+            ("shortcuts.group.general", (
+                ("<Ctrl>f", "shortcuts.search"),
+                ("<Ctrl>comma", "shortcuts.preferences"),
+                ("<Ctrl>Escape", "shortcuts.stop"),
+                ("<Ctrl>q", "shortcuts.quit"),
+            )),
+            ("shortcuts.group.library", (
+                ("F5", "shortcuts.rescan"),
+                ("<Ctrl>o", "shortcuts.import"),
+                ("<Ctrl><Shift>s", "shortcuts.sync_covers"),
+                ("F6", "shortcuts.focus_pane"),
+            )),
+            ("shortcuts.group.rom", (
+                ("Return", "shortcuts.open_rom"),
+                ("Menu", "shortcuts.context_menu"),
+                ("<Ctrl>d", "shortcuts.favorite"),
+                ("F2", "shortcuts.rename"),
+                ("Delete", "shortcuts.delete"),
+            )),
+        )
         section = Gtk.ShortcutsSection(section_name="general", visible=True)
-        group = Gtk.ShortcutsGroup(title=self.t("shortcuts.group.general"))
-        for accel, key in (
-            ("<Ctrl>f", "shortcuts.search"),
-            ("<Ctrl>comma", "shortcuts.preferences"),
-        ):
-            group.add_shortcut(
-                Gtk.ShortcutsShortcut(accelerator=accel, title=self.t(key))
-            )
-        section.add_group(group)
+        for group_key, entries in groups:
+            group = Gtk.ShortcutsGroup(title=self.t(group_key))
+            for accel, key in entries:
+                group.add_shortcut(
+                    Gtk.ShortcutsShortcut(accelerator=accel, title=self.t(key))
+                )
+            section.add_group(group)
         window = Gtk.ShortcutsWindow(modal=True, transient_for=self)
         window.add_section(section)
         window.present()

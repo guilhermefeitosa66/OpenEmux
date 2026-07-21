@@ -95,6 +95,7 @@ DEFAULT_CONFIG = {
         # see an older one. The migration owns that key.
         "render_cartridge_overlay": True,
         "show_tips": True,
+        "gamepad_navigation": True,
     },
     "updates": {
         # Packaged builds that ship through a store (Flathub) can turn the
@@ -260,6 +261,7 @@ class ConfigManager:
             ui["version"] = UI_SETTINGS_VERSION
         ui.setdefault("render_cartridge_overlay", True)
         ui.setdefault("show_tips", True)
+        ui.setdefault("gamepad_navigation", True)
         config["ui"] = ui
 
         updates = config.get("updates", {})
@@ -391,6 +393,7 @@ class ConfigManager:
         return {
             "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", True)),
             "show_tips": bool(ui.get("show_tips", True)),
+            "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
         }
 
     def get_update_settings(self):
@@ -414,6 +417,11 @@ class ConfigManager:
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_tips"] = bool(enabled)
+        self.save_config()
+
+    def set_gamepad_navigation(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["gamepad_navigation"] = bool(enabled)
         self.save_config()
 
     def get_runtime_mode(self):
