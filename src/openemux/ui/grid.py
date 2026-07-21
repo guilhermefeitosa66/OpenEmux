@@ -22,6 +22,10 @@ CARTRIDGE_RENDER_SCALE = 2
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
 
+#: Gap between cards, and the grid's padding inside the viewport.
+GRID_SPACING = 24
+GRID_MARGIN = 28
+
 # Box art proportions (width / height) per console, so a card matches the shape
 # of the artwork it holds instead of forcing every console into a square.
 # Measured as the median of libretro Named_Boxarts samples per system (~30
@@ -67,6 +71,36 @@ def cover_size_for_console(console):
     aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
     height = int(round(FIXED_ITEM_WIDTH / aspect)) if aspect > 0 else FIXED_ITEM_WIDTH
     return FIXED_ITEM_WIDTH, max(1, height)
+
+
+def card_size_for(cover_size, mixed_consoles=False):
+    """Full card size for a cover: the artwork plus the caption below it.
+
+    The grid needs this to lay out its columns and the card needs it to pin its
+    own size, so it is computed in one place. Pages that mix consoles carry a
+    second caption line for the console name.
+    """
+    caption_height = 44 + (18 if mixed_consoles else 0)
+    return cover_size[0], cover_size[1] + caption_height
+
+
+def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
+    """How many cards fit on a line, and the width left over after them.
+
+    ``available`` is the viewport width minus the grid's margins. The leftover
+    is what the caller hands to the end margin so GtkFlowBox has nothing to
+    justify with -- see RomGrid._retune_columns.
+
+    A page with fewer cards than fit on a line is sized for the cards it
+    actually has, otherwise those few get spread across the full width.
+    """
+    if available < card_width:
+        columns = 1
+    else:
+        columns = max(1, (available + spacing) // (card_width + spacing))
+    filled = max(1, min(columns, item_count))
+    used = filled * card_width + (filled - 1) * spacing
+    return columns, max(0, available - used)
 
 
 def cartridge_frame_svg(console):
@@ -159,11 +193,10 @@ class RomItem(Gtk.Box):
         # to put it on, whether or not the cartridge look is switched on now.
         self.supports_label = cartridge_frame_svg(rom["console"]) is not None
         self.add_css_class("rom-card")
-        text_height = 44 + (18 if mixed_consoles else 0)
         # Fixed card size. The grid also pins each FlowBoxChild to this size, so
         # a page with a single row cannot stretch the cell (and with it the
         # focus ring) over the whole viewport.
-        self.card_size = (self.cover_width, self.cover_height + text_height)
+        self.card_size = card_size_for((self.cover_width, self.cover_height), mixed_consoles)
         self.set_size_request(*self.card_size)
         # Centred rather than START-aligned: the card fills its cell exactly, so
         # its contents sit centred inside the focus/selection ring.
@@ -671,25 +704,33 @@ class RomGrid(Gtk.FlowBox):
         self._band = None
         self._band_origin = None
         self._band_base = ()
-        # Fill the viewport instead of hugging the rows: the empty area below
-        # the last card is where a rubber-band selection naturally starts, and
-        # it only reaches the grid if the grid actually owns it.
-        self.set_valign(Gtk.Align.FILL)
+        # Columns are recomputed from the viewport width; see _retune_columns.
+        self._column_state = None
+        self._measured_card_width = None
+        self._hadjustment = None
+        # Rows pack to the top. Filling the viewport instead would hand the
+        # spare height to the flow box, which shares it out *between* the rows
+        # (measured: 259px steps for a 173px card) rather than leaving it at the
+        # bottom.
+        self.set_valign(Gtk.Align.START)
         self.set_vexpand(True)
-        self.set_row_spacing(24)
-        self.set_column_spacing(24)
+        self.set_row_spacing(GRID_SPACING)
+        self.set_column_spacing(GRID_SPACING)
         self.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.set_margin_top(28)
-        self.set_margin_bottom(28)
-        self.set_margin_start(28)
-        self.set_margin_end(28)
+        self.set_margin_top(GRID_MARGIN)
+        self.set_margin_bottom(GRID_MARGIN)
+        self.set_margin_start(GRID_MARGIN)
+        self.set_margin_end(GRID_MARGIN)
         self.set_homogeneous(False)
+        # Zeroes the theme's padding on the child wrappers, so a cell is exactly
+        # the card and the gaps are exactly GRID_SPACING.
+        self.add_css_class("rom-grid")
 
         cartridge_frame_path = None
-        # Without the cartridge frame the card follows the console's box art
-        # proportions instead of being squeezed into a cartridge silhouette.
-        # Pages mixing consoles have no single shape to follow, so they use a
-        # uniform square box and centre each cover inside it.
+        # One fixed card size for the whole page, so the grid lays out on an
+        # even lattice. Per console it follows that console's box-art
+        # proportions; pages mixing consoles have no single shape to follow, so
+        # they use a uniform square box and centre each cover inside it.
         cover_size = DEFAULT_ITEM_SIZE if mixed_consoles else cover_size_for_console(console)
         if not mixed_consoles and self.ui_settings.get("render_cartridge_overlay", False):
             # The card shape comes from the frame art itself: fixed width, and
@@ -698,6 +739,8 @@ class RomGrid(Gtk.FlowBox):
             if cartridge_frame_path:
                 frame = cartridge_render.load_frame(cartridge_frame_path)
                 cover_size = frame.size_for_width(FIXED_ITEM_WIDTH)
+
+        self._card_size = card_size_for(cover_size, mixed_consoles)
 
         for rom in roms:
             item = RomItem(
@@ -733,12 +776,89 @@ class RomGrid(Gtk.FlowBox):
         # Dragging across the empty area selects whatever it sweeps over. The
         # gesture sits on the grid, so it only ever starts on the background --
         # a press that lands on a card is left to the card.
+        self.connect("map", self._watch_viewport)
+
         drag = Gtk.GestureDrag()
         drag.set_button(Gdk.BUTTON_PRIMARY)
         drag.connect("drag-begin", self._on_band_begin)
         drag.connect("drag-update", self._on_band_update)
         drag.connect("drag-end", self._on_band_end)
         self.add_controller(drag)
+
+    # -- layout ------------------------------------------------------------
+
+    def do_size_allocate(self, width, height, baseline):
+        self._retune_columns()
+        Gtk.FlowBox.do_size_allocate(self, width, height, baseline)
+
+    def _watch_viewport(self, *_args):
+        """Recompute when the viewport resizes, not just when we do.
+
+        Our own allocation is pinned by the end margin, so the viewport can
+        change width -- a scrollbar appearing or going away is enough -- without
+        this widget being re-allocated, and the column maths would keep using a
+        stale width. The horizontal adjustment's page size *is* the viewport
+        width, and it notifies.
+        """
+        if self._hadjustment is not None:
+            return
+        scroller = self.get_ancestor(Gtk.ScrolledWindow)
+        if scroller is None:
+            return
+        self._hadjustment = scroller.get_hadjustment()
+        self._hadjustment.connect("notify::page-size", lambda *_a: self._retune_columns())
+
+    def _retune_columns(self):
+        """Pack the cards left-to-right with fixed gaps, like an icon view.
+
+        GtkFlowBox always justifies: whatever width is left over on a line is
+        shared out *between* the children, so cards drift apart as the window
+        widens (measured: 292px steps for a 216px card and a 24px gap). It has
+        no mode that packs to the start.
+
+        The fix is to leave it nothing to share. The number of columns that fit
+        is computed here, and the leftover is handed to the end margin, so the
+        flow box is allocated exactly ``columns`` cards plus their gaps.
+
+        The available width is read from the viewport, never from this widget's
+        own allocation: the end margin changes that allocation, so feeding it
+        back in would make the two oscillate.
+        """
+        columns, slack = columns_and_slack(
+            self._viewport_width() - 2 * GRID_MARGIN,
+            self._card_allocation_width(),
+            len(self._items),
+        )
+        if self._column_state == (columns, slack):
+            return
+        self._column_state = (columns, slack)
+        self.set_max_children_per_line(columns)
+        # Deferred: this runs from size-allocate, and changing a margin there
+        # re-enters allocation.
+        GLib.idle_add(self.set_margin_end, GRID_MARGIN + slack)
+
+    def _card_allocation_width(self):
+        """How wide a card really is, CSS padding included.
+
+        ``_card_size`` is the artwork plus caption; the theme then adds the
+        card's own padding on top, so laying columns out on the raw value packs
+        them tighter than they fit and the flow box wraps a column early.
+        """
+        if self._measured_card_width is None:
+            if not self._items:
+                return self._card_size[0]
+            child = self._items[0].get_parent() or self._items[0]
+            self._measured_card_width = max(
+                self._card_size[0], child.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+            )
+        return self._measured_card_width
+
+    def _viewport_width(self):
+        parent = self.get_parent()
+        width = parent.get_width() if parent is not None else 0
+        # Before the first allocation fall back to our own width, so the very
+        # first layout is not built on a zero.
+        return width or self.get_width()
 
     # -- keyboard / gamepad focus -----------------------------------------
 
