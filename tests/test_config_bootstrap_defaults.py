@@ -46,6 +46,24 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             manager.set_locale("invalid-locale")
             self.assertEqual(manager.get_locale(), "en")
 
+    def test_cartridge_frame_is_on_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertTrue(manager.get_ui_settings()["render_cartridge_overlay"])
+
+    def test_config_written_before_the_new_default_switches_over_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            cfg_path.write_text("ui:\n  render_cartridge_overlay: false\n", encoding="utf-8")
+
+            manager = ConfigManager(config_file=cfg_path)
+            self.assertTrue(manager.get_ui_settings()["render_cartridge_overlay"])
+
+            # Turning it back off has to stick: the flip happens only once.
+            manager.set_render_cartridge_overlay(False)
+            reopened = ConfigManager(config_file=cfg_path)
+            self.assertFalse(reopened.get_ui_settings()["render_cartridge_overlay"])
+
 
 if __name__ == "__main__":
     unittest.main()

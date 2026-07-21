@@ -19,6 +19,7 @@ from openemux.core.rom_importer import (
     collect_ambiguous_extensions,
     import_roms_async,
 )
+from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
 from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
 from openemux.core.scraper import (
@@ -326,12 +327,65 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
         self._install_drop_target(self.content_stack)
 
+        toolbar.add_bottom_bar(self._build_selection_bar())
         toolbar.add_bottom_bar(self._build_tip_bar())
 
         page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
         page.set_tag("content")
         self.content_page = page
         return page
+
+    def _build_selection_bar(self):
+        """Actions for a multi-ROM selection, revealed only while one exists.
+
+        Lives below the content next to the tip bar rather than in the header:
+        it belongs to what is selected on the page, not to the window.
+        """
+        self._selected_roms = []
+
+        self.selection_label = Gtk.Label()
+        self.selection_label.add_css_class("heading")
+        self.selection_label.set_hexpand(True)
+        self.selection_label.set_xalign(0)
+
+        sync_button = Gtk.Button(label=self.t("selection.sync_covers"))
+        sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
+
+        delete_button = Gtk.Button(label=self.t("selection.delete"))
+        delete_button.add_css_class("destructive-action")
+        delete_button.connect("clicked", lambda _b: self._confirm_delete_roms(self._selected_roms))
+
+        clear_button = Gtk.Button.new_from_icon_name("window-close-symbolic")
+        clear_button.add_css_class("flat")
+        clear_button.set_tooltip_text(self.t("selection.clear"))
+        clear_button.connect("clicked", lambda _b: self._clear_selection())
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.add_css_class("toolbar")
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        for child in (self.selection_label, sync_button, delete_button, clear_button):
+            box.append(child)
+
+        self.selection_bar = Gtk.Revealer()
+        self.selection_bar.set_child(box)
+        self.selection_bar.set_reveal_child(False)
+        return self.selection_bar
+
+    def _on_selection_changed(self, roms):
+        self._selected_roms = list(roms)
+        count = len(self._selected_roms)
+        if count:
+            self.selection_label.set_label(self.t("selection.count", count=count))
+        self.selection_bar.set_reveal_child(bool(count))
+
+    def _clear_selection(self):
+        grid = self._grids.get(self.current_console)
+        if grid:
+            grid.clear_selection()
+        self._on_selection_changed([])
 
     def _build_tip_bar(self):
         """A quiet single-line hint bar at the bottom of the content pane.
@@ -1036,6 +1090,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_console_selected(self, _listbox, row):
         if not row:
             return
+        # A selection belongs to the page it was made on, so leaving drops it.
+        self._clear_selection()
         self.current_console = row.id
         logger.info("ui sidebar select: console_id=%s", self.current_console)
         self._set_search_enabled(True)
@@ -1263,8 +1319,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.roms_path,
             ui_settings=self.config_manager.get_ui_settings(),
             mixed_consoles=console in (ALL_CONSOLES_ID, FAVORITES_ID),
+            on_rename_rom=self._rename_rom_from_ui,
+            on_delete_rom=self._confirm_delete_roms,
+            on_selection_changed=self._on_selection_changed,
         )
         self._grids[console] = grid
+        # The page was rebuilt, so whatever was selected on it is gone.
+        self._on_selection_changed([])
         scroll.set_child(grid)
         if console == self.current_console:
             self._update_window_title(console)
@@ -1341,6 +1402,100 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(toast)
             if callable(on_done):
                 on_done()
+
+    def _rename_rom_from_ui(self, rom):
+        entry = Gtk.Entry()
+        entry.set_text(rom["name"])
+        entry.set_activates_default(True)
+
+        dialog = Adw.AlertDialog(
+            heading=self.t("dialog.rename.heading"),
+            body=self.t("dialog.rename.body"),
+        )
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", self.t("dialog.cancel"))
+        dialog.add_response("rename", self.t("dialog.rename.confirm"))
+        dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("rename")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response != "rename":
+                return
+            self._apply_rename(rom, entry.get_text())
+
+        dialog.connect("response", _on_response)
+        dialog.present(self)
+
+    def _apply_rename(self, rom, new_name):
+        try:
+            renamed = rename_rom(Path(self.roms_path), rom, new_name)
+        except RomActionError as exc:
+            self._toast(self.t("toast.rom.rename_failed", error=str(exc)), timeout=6)
+            return
+        self.playlist_manager.repath_rom(rom["console"], rom["path"], renamed["path"])
+        self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
+        self._reload_current_page()
+
+    def _confirm_delete_roms(self, roms):
+        roms = [rom for rom in roms or [] if rom]
+        if not roms:
+            return
+        heading = (
+            self.t("dialog.delete.heading", name=roms[0]["name"])
+            if len(roms) == 1
+            else self.t("dialog.delete.heading.many", count=len(roms))
+        )
+        dialog = Adw.AlertDialog(heading=heading, body=self.t("dialog.delete.body"))
+        dialog.add_response("cancel", self.t("dialog.cancel"))
+        dialog.add_response("delete", self.t("dialog.delete.confirm"))
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response == "delete":
+                self._delete_roms(roms)
+
+        dialog.connect("response", _on_response)
+        dialog.present(self)
+
+    def _delete_roms(self, roms):
+        deleted = 0
+        for rom in roms:
+            try:
+                delete_rom(Path(self.roms_path), rom)
+            except RomActionError as exc:
+                logger.warning("rom delete failed: rom=%s error=%s", rom.get("name"), exc)
+                self._toast(self.t("toast.rom.delete_failed", name=rom["name"]), timeout=6)
+                continue
+            self.playlist_manager.forget_rom(rom["console"], rom["path"])
+            deleted += 1
+
+        if deleted:
+            self._toast(self.t("toast.rom.deleted", count=deleted))
+        self._on_selection_changed([])
+        self._reload_current_page()
+
+    def _sync_covers_for_selection(self):
+        selected = list(self._selected_roms)
+        if not selected:
+            return
+        by_console = {}
+        for rom in selected:
+            by_console.setdefault(rom["console"], []).append(rom)
+        self._clear_selection()
+        self._start_cover_sync(scope="selection", selected_console=None, library=by_console)
+
+    def _reload_current_page(self):
+        """Re-read the page the user is looking at after the library changed."""
+        console = self.current_console
+        if console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        else:
+            self._ensure_console_loaded(console)
 
     def _scan_current_console(self):
         self._show_scan_roms_dialog()
@@ -1733,19 +1888,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         else:
             self._start_cover_sync(scope="all", selected_console=None)
 
-    def _start_cover_sync(self, scope, selected_console):
+    def _start_cover_sync(self, scope, selected_console, library=None):
         if self._cover_sync_running:
             toast = Adw.Toast(title=self.t("toast.sync_running"))
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             return
 
-        library = {}
-        if scope == "console" and selected_console in self.visible_consoles:
-            library[selected_console] = self.playlist_manager.load_playlist(selected_console)
-        else:
-            for console in self.visible_consoles:
-                library[console] = self.playlist_manager.load_playlist(console)
+        # A caller can hand in the exact ROMs to cover (a selection); otherwise
+        # the scope decides how much of the library is read.
+        if library is None:
+            library = {}
+            if scope == "console" and selected_console in self.visible_consoles:
+                library[selected_console] = self.playlist_manager.load_playlist(selected_console)
+            else:
+                for console in self.visible_consoles:
+                    library[console] = self.playlist_manager.load_playlist(console)
 
         self._cover_sync_running = True
         # Cooperative cancel: the worker polls this between ROMs and between
