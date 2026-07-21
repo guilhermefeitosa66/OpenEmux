@@ -63,6 +63,9 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.1-1
+- Fix the AppImage failing to start with "usr/bin/python3: not found"
+
 * Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.0-1
 - Navigate the whole library with a gamepad (RetroArch button convention)
 - Full keyboard navigation plus shortcuts for play, rename, delete, favorite,

@@ -4,6 +4,10 @@
 # `packaging/build.sh appimage` (or `make appimage`), not directly on the host.
 set -euo pipefail
 
+# Hand the artifacts back even when a check fails, so a failed run does not
+# leave root-owned files in dist/.
+trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appimage-builder-cache 2>/dev/null || true' EXIT
+
 RECIPE=packaging/appimage/AppImageBuilder.yml
 APPDIR_LIB="$PWD/AppDir/usr/lib/x86_64-linux-gnu"
 
@@ -55,5 +59,29 @@ for artifact in *.AppImage *.zsync; do
   mv "$artifact" dist/
 done
 
+# Actually start the thing. Everything above only inspects the AppDir, and a
+# bundle can assemble perfectly and still fail to exec its own interpreter --
+# which is exactly how a release shipped that died with
+# "usr/bin/python3: not found" on every machine.
+BUNDLE="$(ls -1 dist/*.AppImage | head -1)"
+echo "==> launch test: $BUNDLE"
+LAUNCH_LOG="$(mktemp)"
+# No FUSE in the build container, so run from an extraction; xvfb gives GTK a
+# display to open the window on.
+APPIMAGE_EXTRACT_AND_RUN=1 timeout 60 xvfb-run -a "$BUNDLE" > "$LAUNCH_LOG" 2>&1 || true
+
+if grep -qE "not found|No module named|ModuleNotFoundError|Traceback" "$LAUNCH_LOG"; then
+  echo "ERROR: the bundle failed to start." >&2
+  sed -n '1,40p' "$LAUNCH_LOG" >&2
+  exit 1
+fi
+# The app logs this once GTK is up and the window is being built; reaching it
+# proves the interpreter, the typelibs and the UI import chain all resolved.
+if ! grep -q "startup context" "$LAUNCH_LOG"; then
+  echo "ERROR: the bundle started but never reached the UI." >&2
+  sed -n '1,40p' "$LAUNCH_LOG" >&2
+  exit 1
+fi
+echo "launch test OK: $(grep -m1 'startup context' "$LAUNCH_LOG")"
+
 echo "==> ALL APPIMAGE CHECKS PASSED"
-chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appimage-builder-cache 2>/dev/null || true
