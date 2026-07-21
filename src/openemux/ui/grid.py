@@ -5,11 +5,18 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Pango, Gio
 from pathlib import Path
 import logging
 
+from openemux.core import cartridge_render
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
 
 logger = logging.getLogger(__name__)
+
+CARTRIDGE_ASSETS_DIR = Path(__file__).parent / "assets" / "images" / "cartridges"
+
+# The composite is rendered above the logical card size so it stays sharp on
+# HiDPI displays; GTK scales the texture down when it is not needed.
+CARTRIDGE_RENDER_SCALE = 2
 
 
 DEFAULT_ITEM_SIZE = (200, 200)
@@ -85,6 +92,14 @@ def cover_size_for_console(console):
     return FIXED_ITEM_WIDTH, max(1, height)
 
 
+def cartridge_frame_svg(console):
+    """The pre-render frame for a console, when one was authored as SVG."""
+    candidate = CARTRIDGE_ASSETS_DIR / f"{console}.svg"
+    if not candidate.exists() or not cartridge_render.rsvg_available():
+        return None
+    return candidate if cartridge_render.load_frame(candidate) else None
+
+
 def _cartridge_texture(path):
     key = str(path)
     texture = _CARTRIDGE_TEXTURES.get(key)
@@ -112,6 +127,7 @@ class RomItem(Gtk.Box):
         cover_size,
         cartridge_overlay_path=None,
         cover_frame=None,
+        cartridge_frame_path=None,
         mixed_consoles=False,
     ):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -127,14 +143,19 @@ class RomItem(Gtk.Box):
         self.roms_dir = roms_dir
         self.cover_width, self.cover_height = cover_size
         self.cover_frame = cover_frame
+        # When set, the card shows a single pre-rendered image (cover already
+        # composited into the cartridge) instead of stacking widgets at
+        # runtime, so no overlay or Fixed is built at all.
+        self.cartridge_frame_path = cartridge_frame_path
         # Pages that mix consoles cannot size the card to one box art shape, so
         # the cover is centred at its own proportions over a uniform backdrop.
         self.mixed_consoles = mixed_consoles
         self._backdrop = None
         # Inside a cartridge frame the label sticker is what belongs there, so
         # prefer it and fall back to the box art when none was configured.
-        self._art_kinds = (LABEL_ART, COVER_ART) if cover_frame else (COVER_ART,)
-        self.supports_label = rom["console"] in CARTRIDGE_COVER_FRAMES
+        in_cartridge = bool(cover_frame or cartridge_frame_path)
+        self._art_kinds = (LABEL_ART, COVER_ART) if in_cartridge else (COVER_ART,)
+        self.supports_label = in_cartridge or rom["console"] in CARTRIDGE_COVER_FRAMES
         self.add_css_class("rom-card")
         text_height = 44 + (18 if mixed_consoles else 0)
         self.set_size_request(self.cover_width, self.cover_height + text_height)
@@ -164,7 +185,9 @@ class RomItem(Gtk.Box):
         self.cover_image = Gtk.Picture()
         self.cover_image.set_size_request(*self._cover_target_size())
         self.cover_image.set_content_fit(
-            Gtk.ContentFit.CONTAIN if mixed_consoles else Gtk.ContentFit.COVER
+            Gtk.ContentFit.CONTAIN
+            if (mixed_consoles or cartridge_frame_path)
+            else Gtk.ContentFit.COVER
         )
         self.cover_image.set_can_shrink(True)
         self.cover_image.add_css_class("rom-cover")
@@ -300,6 +323,22 @@ class RomItem(Gtk.Box):
 
     def _on_cover_fetched(self, rom, cover_path):
         """Called from background thread when cover art is ready."""
+        if self.cartridge_frame_path:
+            # Still on the worker thread: compose the cover into the cartridge
+            # (cached on disk, so this only costs anything the first time). A
+            # ROM with no cover renders as a blank cartridge instead of the
+            # generic icon, keeping the shelf consistent.
+            composite = cartridge_render.render_cartridge(
+                cover_path,
+                self.cartridge_frame_path,
+                rom["console"],
+                rom["name"],
+                width=self.cover_width,
+                scale=CARTRIDGE_RENDER_SCALE,
+            )
+            if composite:
+                GLib.idle_add(self._load_cover_image, str(composite))
+                return
         if cover_path:
             # Schedule UI update on the main thread
             GLib.idle_add(self._load_cover_image, cover_path)
@@ -314,6 +353,15 @@ class RomItem(Gtk.Box):
     def _load_cover_image(self, cover_path):
         """Load cover image into the widget (must run on main thread)."""
         try:
+            if self.cartridge_frame_path:
+                # The composite is already the card's shape, and handing GTK
+                # the full-resolution texture keeps it sharp on HiDPI.
+                self.cover_image.set_paintable(Gdk.Texture.new_from_filename(cover_path))
+                self.cover_image.set_visible(True)
+                if hasattr(self, "_placeholder_widget"):
+                    self._set_cover_widget(self.cover_image)
+                    del self._placeholder_widget
+                return False
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                 cover_path,
                 self._cover_target_size()[0],
@@ -566,14 +614,21 @@ class RomGrid(Gtk.FlowBox):
         self.set_homogeneous(False)
 
         cartridge_overlay_path = None
+        cartridge_frame_path = None
         # Without the cartridge frame the card follows the console's box art
         # proportions instead of being squeezed into a cartridge silhouette.
         # Pages mixing consoles have no single shape to follow, so they use a
         # uniform square box and centre each cover inside it.
         cover_size = DEFAULT_ITEM_SIZE if mixed_consoles else cover_size_for_console(console)
         if not mixed_consoles and self.ui_settings.get("render_cartridge_overlay", False):
-            candidate = Path(__file__).parent / "assets" / "images" / "cartridges" / f"{console}.png"
-            if candidate.exists():
+            # Consoles with an SVG frame are pre-rendered: the card is a single
+            # flat picture and its shape comes from the art, not from a table.
+            cartridge_frame_path = cartridge_frame_svg(console)
+            if cartridge_frame_path:
+                frame = cartridge_render.load_frame(cartridge_frame_path)
+                cover_size = frame.size_for_width(FIXED_ITEM_WIDTH)
+            candidate = CARTRIDGE_ASSETS_DIR / f"{console}.png"
+            if candidate.exists() and not cartridge_frame_path:
                 cartridge_overlay_path = candidate
                 cover_size = CARTRIDGE_ITEM_SIZES.get(console, DEFAULT_ITEM_SIZE)
                 size_info = GdkPixbuf.Pixbuf.get_file_info(str(candidate))
@@ -599,6 +654,7 @@ class RomGrid(Gtk.FlowBox):
                 cover_size,
                 cartridge_overlay_path=cartridge_overlay_path,
                 cover_frame=cover_frame,
+                cartridge_frame_path=cartridge_frame_path,
                 mixed_consoles=mixed_consoles,
             )
             self.append(item)

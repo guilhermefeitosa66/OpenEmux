@@ -18,7 +18,7 @@ bootstrap: install-sys-deps venv setup
 install-sys-deps:
 	sudo apt update
 	sudo apt install -y libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev \
-		libgtk-4-dev libadwaita-1-dev gir1.2-gtk-4.0 gir1.2-adw-1
+		libgtk-4-dev libadwaita-1-dev gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-rsvg-2.0
 	@echo "Install RetroArch/libretro cores from your distro OR use vendors/RetroArch-Linux-x86_64.AppImage."
 
 # Environment setup
