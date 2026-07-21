@@ -1,9 +1,14 @@
 [Desktop Entry]
 Type=Application
+Version=1.0
 Name=OpenEmux
-Comment=Linux-native emulator frontend
+GenericName=Emulator Frontend
+Comment=Linux-native emulator frontend for RetroArch
 Exec=openemux
+TryExec=openemux
 Icon=io.github.guilhermefeitosa66.OpenEmux
 Terminal=false
 Categories=Game;Emulator;
+Keywords=emulator;retro;games;retroarch;roms;console;
+StartupNotify=true
 StartupWMClass=io.github.guilhermefeitosa66.OpenEmux
