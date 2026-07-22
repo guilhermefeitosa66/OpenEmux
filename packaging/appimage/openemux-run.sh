@@ -47,4 +47,10 @@ export PYTHONPATH="$OPENEMUX_PROJECT_ROOT/src:$APPDIR/usr/lib/python3/dist-packa
 # loader. This cd covers the case where the hooks are not loaded at all.
 cd "$APPDIR" || exit 1
 
+# OPENEMUX_SELFTEST=1 runs the bundle self-check through this very entry point,
+# so it sees exactly the environment the app sees. Set only by the build.
+if [ -n "${OPENEMUX_SELFTEST:-}" ]; then
+    exec "$APPDIR/usr/bin/python3" "$APPDIR/usr/lib/openemux/selftest.py" "$@"
+fi
+
 exec "$APPDIR/usr/bin/python3" "$OPENEMUX_PROJECT_ROOT/src/openemux/main.py" "$@"

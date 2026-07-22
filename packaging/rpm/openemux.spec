@@ -63,6 +63,10 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.2-1
+- Fix cartridge frames and cover art not rendering in the AppImage
+- Degrade to the plain cover when a cartridge cannot be composited
+
 * Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.1-1
 - Fix the AppImage failing to start with "usr/bin/python3: not found"
 

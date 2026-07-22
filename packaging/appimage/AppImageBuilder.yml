@@ -27,6 +27,7 @@ script:
   # generated and overwritten by appimage-builder, so it cannot host any of it.)
   - gcc -static packaging/appimage/openemux-launcher.c -O2 -s -o AppDir/usr/bin/openemux-launcher
   - install -Dm755 packaging/appimage/openemux-run.sh AppDir/usr/bin/openemux-run
+  - install -Dm644 packaging/appimage/selftest.py AppDir/usr/lib/openemux/selftest.py
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
   - install -Dm644 packaging/common/openemux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
@@ -38,7 +39,7 @@ AppDir:
     id: io.github.guilhermefeitosa66.OpenEmux
     name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
-    version: "1.5.1"
+    version: "1.5.2"
     exec: usr/bin/openemux-launcher
   runtime:
     # Belt and braces alongside the launcher script: these are the paths the
@@ -60,6 +61,12 @@ AppDir:
       - python3
       - python3-gi
       - python3-cairo
+      # The GI <-> cairo bridge (gi._gi_cairo). Without it, handing a
+      # cairo.Context to a GI method raises
+      # KeyError: 'could not find foreign type Context', which is exactly how
+      # the cartridge frames stopped rendering in the bundle while working from
+      # source (where the distro package is installed).
+      - python3-gi-cairo
       - libgtk-4-1
       - libadwaita-1-0
       - gir1.2-gtk-4.0
