@@ -371,8 +371,17 @@ def render_cartridge(
         tmp = target.with_name(f"{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         surface.write_to_png(str(tmp))
         tmp.replace(target)
-    except (CartridgeFrameError, GLib.Error, OSError, cairo.Error) as exc:
-        logger.warning("cartridge: render failed for %s/%s: %s", console, rom_name, exc)
+    except Exception as exc:
+        # Deliberately broad. This runs on the cover-fetch worker thread, and
+        # the caller treats None as "no cartridge, fall back to the plain
+        # cover". An escaping exception kills that callback instead, so the
+        # card is left showing its placeholder -- no cartridge *and* no cover.
+        # That is how a missing gi-cairo bridge (KeyError: could not find
+        # foreign type Context) emptied the whole grid rather than degrading it.
+        logger.warning(
+            "cartridge: render failed for %s/%s: %s: %s",
+            console, rom_name, type(exc).__name__, exc,
+        )
         return None
 
     _drop_stale(directory, stem, target)

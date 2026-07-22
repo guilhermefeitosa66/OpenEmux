@@ -84,4 +84,19 @@ if ! grep -q "startup context" "$LAUNCH_LOG"; then
 fi
 echo "launch test OK: $(grep -m1 'startup context' "$LAUNCH_LOG")"
 
+# Starting is not the same as working: the loaders, the Rsvg bindings and the
+# GI<->cairo bridge are separate packages, and a missing one only shows up as
+# blank cards. The self-check exercises each for real, inside the bundle.
+echo "==> bundle self-check"
+SELFTEST_LOG="$(mktemp)"
+APPIMAGE_EXTRACT_AND_RUN=1 OPENEMUX_SELFTEST=1 \
+  timeout 60 xvfb-run -a "$BUNDLE" > "$SELFTEST_LOG" 2>&1 || true
+
+if ! grep -q "all bundle self-checks passed" "$SELFTEST_LOG"; then
+  echo "ERROR: the bundle self-check did not pass." >&2
+  sed -n '1,40p' "$SELFTEST_LOG" >&2
+  exit 1
+fi
+sed -n '/self-check inside/,$p' "$SELFTEST_LOG"
+
 echo "==> ALL APPIMAGE CHECKS PASSED"
