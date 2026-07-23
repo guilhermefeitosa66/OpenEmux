@@ -17,10 +17,61 @@ class RomContextMenuServices:
     def build_submenus(self, rom):
         """Return the extra entries to splice into ``rom``'s context menu."""
         entries = []
+        core = self._core_submenu(rom)
+        if core is not None:
+            entries.append(core)
         shader = self._shader_submenu(rom)
         if shader is not None:
             entries.append(shader)
         return entries
+
+    def _core_submenu(self, rom):
+        console = rom.get("console")
+        path = rom.get("path")
+        if not console or not path:
+            return None
+
+        config = self.win.config_manager
+        catalog = self.win.core_catalog
+        t = self.win.t
+
+        cores = catalog.cores_for_console(console)
+        if not cores:
+            # Nothing installed for this system -- no choice to offer.
+            return None
+
+        override = config.get_rom_core_override(path)
+        auto_label = self._auto_core_label(console)
+
+        entries = [
+            (
+                t("context.core.automatic", core=auto_label),
+                (lambda r=rom: self.win.set_rom_core(r, None)),
+                "emblem-ok-symbolic" if not override else None,
+            ),
+            SEPARATOR,
+        ]
+        for core in cores:
+            checked = override == core.filename
+            entries.append(
+                (
+                    core.display_name,
+                    (lambda r=rom, f=core.filename: self.win.set_rom_core(r, f)),
+                    "emblem-ok-symbolic" if checked else None,
+                )
+            )
+        return Submenu(t("context.core"), entries, "application-x-executable-symbolic")
+
+    def _auto_core_label(self, console):
+        """What the console/automatic level would run, for the Automatic row."""
+        config = self.win.config_manager
+        catalog = self.win.core_catalog
+        console_override = config.get_console_core_override(console)
+        if console_override:
+            return catalog.display_name_for(console_override)
+        for core in catalog.cores_for_console(console):
+            return core.display_name
+        return self.win.t("context.core.none")
 
     def _shader_submenu(self, rom):
         console = rom.get("console")

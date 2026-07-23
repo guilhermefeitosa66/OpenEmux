@@ -7,7 +7,7 @@ from openemux.core.retroarch_launcher import RetroArchLauncher
 
 
 class _DummyConfig:
-    def __init__(self, base_dir, binary_path, core_path, shader_by_console=None):
+    def __init__(self, base_dir, binary_path, core_path, shader_by_console=None, core_hints=None):
         self.base_dir = Path(base_dir)
         self.binary_path = str(binary_path)
         self.core_path = str(core_path)
@@ -15,12 +15,19 @@ class _DummyConfig:
         self.runtime_dir = self.base_dir / "runtime"
         self.shader_by_console = shader_by_console or {}
         self.input_profile = None
+        # When set, overrides the default hint of [core_path]; [] falls through
+        # to the automatic candidate list.
+        self.core_hints = core_hints
+        self.rom_core = None
 
     def get_retroarch_binary(self):
         return self.binary_path
 
     def get_retroarch_core_hints(self, _console):
-        return [self.core_path]
+        return self.core_hints if self.core_hints is not None else [self.core_path]
+
+    def get_rom_core_override(self, _rom_path):
+        return self.rom_core
 
     def get_retroarch_extra_flags(self):
         return []
@@ -63,6 +70,29 @@ class RetroArchLauncherTests(unittest.TestCase):
             resolved = launcher._resolve_retroarch_binary()
 
         self.assertEqual(resolved, str(binary))
+
+    def test_per_rom_core_override_wins_and_stale_falls_back(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cores_dir = base / "cores"
+            cores_dir.mkdir()
+            (cores_dir / "snes9x_libretro.so").write_text("", encoding="utf-8")
+            (cores_dir / "bsnes_libretro.so").write_text("", encoding="utf-8")
+
+            cfg = _DummyConfig(base, base / "retroarch", base / "unused.so", core_hints=[])
+            launcher = RetroArchLauncher(base, cfg)
+            # Resolve bare filenames against our temp core dir, not the system.
+            launcher._core_search_dirs = lambda: [str(cores_dir)]
+
+            # A per-ROM override wins over the automatic candidate list.
+            cfg.rom_core = "bsnes_libretro.so"
+            resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
+            self.assertTrue(resolved.endswith("bsnes_libretro.so"))
+
+            # A stale override (core uninstalled) falls back to the candidate.
+            cfg.rom_core = "does_not_exist_libretro.so"
+            resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
+            self.assertTrue(resolved.endswith("snes9x_libretro.so"))
 
     def test_launch_blocks_when_required_bios_missing(self):
         with TemporaryDirectory() as tmp_dir:

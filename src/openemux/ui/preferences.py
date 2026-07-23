@@ -79,6 +79,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.add(self._build_bios_page())
         self.add(self._build_input_page())
         self.add(self._build_video_page())
+        self.add(self._build_cores_page())
         self.add(self._build_system_page())
 
     # ----- shared helpers -------------------------------------------------
@@ -933,6 +934,56 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         index = self._sort_combo.get_selected()
         if 0 <= index < len(self._sort_orders):
             self.win._apply_sort_order(self._sort_orders[index])
+
+    # ----- Cores page -----------------------------------------------------
+    def _build_cores_page(self):
+        page = Adw.PreferencesPage(
+            title=self.t("prefs.page.cores"), icon_name="application-x-executable-symbolic"
+        )
+        group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.cores"),
+            description=self.t("prefs.group.cores.description"),
+        )
+        page.add(group)
+
+        for console_id in SYSTEM_IDS:
+            cores = self.win.core_catalog.cores_for_console(console_id)
+            title = f"{console_id} — {get_system_display_name(console_id)}"
+            if not cores:
+                # Nothing installed: say so rather than offer an empty picker.
+                row = Adw.ActionRow(title=title, subtitle=self.t("settings.cores.none"))
+                row.add_prefix(self.win._build_console_icon(console_id))
+                row.set_sensitive(False)
+                group.add(row)
+                continue
+
+            auto_label = cores[0].display_name
+            filenames = [None] + [core.filename for core in cores]
+            labels = [self.t("settings.cores.automatic", core=auto_label)]
+            labels += [core.display_name for core in cores]
+
+            row = Adw.ComboRow(
+                title=title,
+                subtitle=self.t("settings.cores.auto_resolves", core=auto_label),
+            )
+            row.add_prefix(self.win._build_console_icon(console_id))
+            row.set_model(Gtk.StringList.new(labels))
+            override = self.config.get_console_core_override(console_id)
+            row.set_selected(filenames.index(override) if override in filenames else 0)
+            row._core_filenames = filenames
+            row.connect("notify::selected", self._on_core_changed, console_id)
+            group.add(row)
+        return page
+
+    def _on_core_changed(self, row, _param, console_id):
+        filenames = getattr(row, "_core_filenames", [])
+        idx = row.get_selected()
+        if not (0 <= idx < len(filenames)):
+            return
+        chosen = filenames[idx]
+        self.config.set_console_core_override(console_id, chosen)
+        if chosen:
+            self.win._warn_missing_bios_for_core(console_id, chosen)
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):

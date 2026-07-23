@@ -10,7 +10,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 
-from openemux.core.bios_manager import get_console_bios_dir
+from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
+from openemux.core.cores import CoreCatalog
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
@@ -135,6 +136,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
+        self.core_catalog = CoreCatalog(project_root=self.project_root)
         self._rom_context_services = RomContextMenuServices(self)
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -1716,6 +1718,24 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if console == self.current_console:
             self._update_window_title(console)
 
+    def set_rom_core(self, rom, core_filename):
+        """Persist a per-ROM core override (``core_filename=None`` clears it)."""
+        self.config_manager.set_rom_core(rom["path"], core_filename)
+        if core_filename is None:
+            self._toast(self.t("toast.core.rom_auto", name=rom["name"]))
+            return
+        label = self.core_catalog.display_name_for(core_filename)
+        self._toast(self.t("toast.core.rom_set", name=rom["name"], core=label))
+        self._warn_missing_bios_for_core(rom["console"], core_filename)
+
+    def _warn_missing_bios_for_core(self, console, core_filename):
+        missing = find_missing_required_for_core(self.config_manager, console, core_filename)
+        if missing:
+            self._toast(
+                self.t("toast.core.bios_warning", core=core_filename, bios=", ".join(missing)),
+                timeout=6,
+            )
+
     def set_rom_shader(self, rom, shader_id):
         """Persist a per-ROM shader override (``shader_id=None`` clears it)."""
         self.config_manager.set_rom_shader(rom["path"], rom["console"], shader_id)
@@ -1842,6 +1862,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.playlist_manager.repath_rom(rom["console"], rom["path"], renamed["path"])
         self.play_history.repath(rom["path"], renamed["path"])
         self.config_manager.repath_rom_shader(rom["path"], renamed["path"])
+        self.config_manager.repath_rom_core(rom["path"], renamed["path"])
         self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
         self._reload_current_page()
 
@@ -1880,6 +1901,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.playlist_manager.forget_rom(rom["console"], rom["path"])
             self.play_history.forget(rom["path"])
             self.config_manager.forget_rom_shader(rom["path"])
+            self.config_manager.forget_rom_core(rom["path"])
             deleted += 1
 
         if deleted:
