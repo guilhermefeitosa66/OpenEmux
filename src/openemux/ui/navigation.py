@@ -62,6 +62,7 @@ def resolve(context, action):
       ("focus-sidebar",)         move focus to the console list
       ("focus-grid",)            move focus into the game grid
       ("context-menu",)          open the focused card's context menu
+      ("open-menu",)             open the window's primary (hamburger) menu
       ("favorite",)              toggle favourite on the focused card
       ("console-delta", n)       select previous/next console (wraps)
       ("close-search",)          leave search mode if it is open
@@ -78,7 +79,9 @@ def resolve(context, action):
             return ("move", action)
         if action == "confirm":
             return ("activate",)
-        if action in ("back", "context"):
+        # A menu button toggles the menu it opened, rather than stacking a
+        # second one on top of it.
+        if action in ("back", "context", "menu"):
             return ("close-popover",)
         return ("noop",)
 
@@ -90,6 +93,11 @@ def resolve(context, action):
         if action == "back":
             return ("close-dialog",)
         return ("noop",)
+
+    # Main window: the primary menu is reachable from anywhere, which is what
+    # makes Preferences, Shortcuts and About available without a mouse.
+    if action == "menu":
+        return ("open-menu",)
 
     # Main window: console switching works from anywhere.
     if action == "prev_console":
@@ -191,6 +199,15 @@ class NavigationController:
         # time the next button press arrives. Tracking the popover we opened
         # keeps the routing correct in that window.
         self._tracked_popover = None
+        # The last widget focused in the window proper (not inside a dialog or
+        # a menu). Closing a transient scope can leave the window with no focus
+        # at all, which strands a controller-only user: this is what goes back.
+        self._focus_before_scope = None
+        # Where to go back to when a menu *we* opened closes. Opening a menu
+        # moves focus onto its button first, so by the time it closes
+        # _focus_before_scope says "the menu button" -- which is not where the
+        # user was.
+        self._restore_target = None
 
         # Capture phase: the pane keys have to be claimed before GTK's own
         # keynav sees them, otherwise Right out of the sidebar lands on the
@@ -212,7 +229,58 @@ class NavigationController:
 
         # Context changes without input (page loads, dialogs opening) refresh
         # the hints lazily on the next focus change.
-        window.connect("notify::focus-widget", lambda *_a: self.refresh_hints())
+        window.connect("notify::focus-widget", self._on_focus_changed)
+
+    # ----- focus bookkeeping ----------------------------------------------
+
+    def _on_focus_changed(self, *_args):
+        focus = self._focus_widget()
+        if focus is not None:
+            # Remember only the window proper: restoring focus *into* a dialog
+            # that has since closed would be worse than leaving it nowhere.
+            if self._scope_for(focus) is None:
+                self._focus_before_scope = focus
+        else:
+            self.restore_focus()
+        self.refresh_hints()
+
+    def _is_restorable(self, widget):
+        """True when ``widget`` is still a live, visible part of this window."""
+        if widget is None:
+            return False
+        return (
+            widget.get_root() is self.window
+            and widget.get_mapped()
+            and widget.get_sensitive()
+        )
+
+    def _remember_restore_target(self):
+        """Snapshot where the user is, before opening a menu moves them."""
+        focus = self._focus_widget()
+        self._restore_target = focus if self._scope_for(focus) is None else None
+
+    def restore_focus(self):
+        """Put focus back where it was before a dialog or menu took over.
+
+        A closing Adw.Dialog does not always hand focus back, and a window with
+        nothing focused is a dead end on a controller: every direction resolves
+        against a context of "nowhere". Falls back to the grid, which is where
+        the user was looking anyway.
+        """
+        target = self._restore_target or self._focus_before_scope
+        self._restore_target = None
+        if self._is_restorable(target):
+            target.grab_focus()
+            return True
+        self._focus_before_scope = None
+        self._cmd_focus_grid()
+        return self._focus_widget() is not None
+
+    def _restore_focus_idle(self):
+        # GLib repeats a callback that returns True, and restore_focus reports
+        # whether it succeeded, so the two must not be wired together directly.
+        self.restore_focus()
+        return False
 
     # ----- input-source tracking ------------------------------------------
 
@@ -250,7 +318,21 @@ class NavigationController:
     def _set_source(self, source):
         if self._source != source:
             self._source = source
+            self._sync_focus_visibility()
             self.refresh_hints()
+
+    def _sync_focus_visibility(self):
+        """Force focus rings on while steering with a pad.
+
+        GTK only draws focus after it decides the interaction was a keyboard
+        one; focus moved programmatically from the reader thread does not
+        always qualify, and a controller user with no visible focus has no idea
+        where they are. The class turns :focus into a visible ring in CSS.
+        """
+        if self._source == SOURCE_MOUSE:
+            self.window.remove_css_class("keynav-active")
+        else:
+            self.window.add_css_class("keynav-active")
 
     # ----- gamepad plumbing (called via GLib.idle_add from the reader) ----
 
@@ -376,11 +458,14 @@ class NavigationController:
         if popover is not None:
             popover.popdown()
             self._tracked_popover = None
+            # Deferred: the popdown animation still owns the focus right now.
+            GLib.idle_add(self._restore_focus_idle)
 
     def _cmd_close_dialog(self):
         scope = self._scope_for(self._focus_widget())
         if isinstance(scope, Adw.Dialog):
             scope.close()
+            GLib.idle_add(self._restore_focus_idle)
 
     def _cmd_focus_sidebar(self):
         window = self.window
@@ -398,10 +483,24 @@ class NavigationController:
         if grid is not None:
             grid.focus_restore()
 
+    def _cmd_open_menu(self):
+        button = getattr(self.window, "primary_menu_button", None)
+        if button is None:
+            return
+        self._remember_restore_target()
+        button.popup()
+        popover = button.get_popover()
+        self._tracked_popover = popover
+        if popover is not None:
+            # Land on the first entry: without it the menu opens with nothing
+            # highlighted and the first D-pad press is spent entering the list.
+            popover.child_focus(Gtk.DirectionType.TAB_FORWARD)
+
     def _cmd_context_menu(self):
         item = self.window._focused_rom_item()
         if item is None:
             return
+        self._remember_restore_target()
         item._show_context_menu()
         popover = item._context_popover
         self._tracked_popover = popover
@@ -492,6 +591,7 @@ class NavigationController:
                     ("Ⓐ", t("hints.enter_pane")),
                     ("↕", t("hints.navigate")),
                     ("L1/R1", t("hints.console_switch")),
+                    ("☰", t("hints.menu")),
                 ]
             else:
                 hints = [
@@ -500,6 +600,7 @@ class NavigationController:
                     ("Ⓧ", t("hints.options")),
                     ("Ⓨ", t("hints.favorite")),
                     ("L1/R1", t("hints.console_switch")),
+                    ("☰", t("hints.menu")),
                 ]
         else:  # keyboard
             if context in (CTX_DIALOG, CTX_POPOVER):

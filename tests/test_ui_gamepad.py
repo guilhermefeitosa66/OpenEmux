@@ -45,6 +45,22 @@ class ActionMapTests(unittest.TestCase):
         ):
             self.assertEqual(action_for_token(token), action)
 
+    def test_the_right_stick_steers_like_the_left_one(self):
+        for token, action in (
+            ("-4", "up"), ("+4", "down"), ("-3", "left"), ("+3", "right"),
+        ):
+            with self.subTest(token=token):
+                self.assertEqual(action_for_token(token), action)
+
+    def test_the_triggers_are_not_directions(self):
+        """Axes 2 and 5 are L2/R2; a resting trigger would read as held."""
+        for token in ("+2", "-2", "+5", "-5"):
+            with self.subTest(token=token):
+                self.assertIsNone(action_for_token(token))
+
+    def test_select_opens_the_window_menu(self):
+        self.assertEqual(action_for_token("6"), "menu")
+
     def test_unknown_token_is_none(self):
         self.assertIsNone(action_for_token("9"))
         self.assertIsNone(action_for_token(""))
@@ -52,7 +68,7 @@ class ActionMapTests(unittest.TestCase):
 
     def test_only_directions_repeat(self):
         self.assertEqual(REPEATABLE_ACTIONS, {"up", "down", "left", "right"})
-        for token in ("0", "1", "2", "3", "4", "5", "7"):
+        for token in ("0", "1", "2", "3", "4", "5", "6", "7"):
             self.assertNotIn(NAV_TOKEN_ACTIONS[token], REPEATABLE_ACTIONS)
 
 

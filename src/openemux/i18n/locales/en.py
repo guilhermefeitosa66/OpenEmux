@@ -82,6 +82,7 @@ TRANSLATIONS = {
     "hints.close": "Close",
     "hints.enter_pane": "Enter list",
     "hints.switch_pane": "Switch pane",
+    "hints.menu": "Menu",
     "settings.system.gamepad_nav.title": "Control the interface with a gamepad",
     "settings.system.gamepad_nav.subtitle": "Navigate the library with a connected controller (A confirms, B goes back)",
     "toast.gamepad.connected": "Controller connected: {name}",
