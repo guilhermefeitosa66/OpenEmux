@@ -177,6 +177,40 @@ def normalize_view_mode(value):
     return DEFAULT_VIEW_MODE
 
 
+#: The display settings that can be set globally and overridden per scope.
+DISPLAY_KEYS = ("view_mode", "sort_order", "zoom")
+
+
+def normalize_display_value(key, value):
+    """Normalise one display setting by its key."""
+    if key == "view_mode":
+        return normalize_view_mode(value)
+    if key == "sort_order":
+        return normalize_sort_order(value)
+    if key == "zoom":
+        return normalize_zoom(value)
+    return value
+
+
+def resolve_display_settings(global_settings, overrides, scope):
+    """Merge a scope's overrides onto the global display defaults.
+
+    ``overrides`` maps a scope (a console id, ``__all__`` or ``__favorites__``)
+    to a partial dict holding only the keys it overrides. A scope with no entry
+    -- or an entry missing a key -- follows the global default for it, so the
+    library stays consistent unless the user deliberately diverges a page.
+    """
+    resolved = {
+        key: normalize_display_value(key, (global_settings or {}).get(key))
+        for key in DISPLAY_KEYS
+    }
+    scope_override = (overrides or {}).get(scope) or {}
+    for key in DISPLAY_KEYS:
+        if scope_override.get(key) is not None:
+            resolved[key] = normalize_display_value(key, scope_override[key])
+    return resolved
+
+
 def view_mode_from_legacy(render_cartridge_overlay):
     """The mode a pre-view-mode config was expressing with its one switch."""
     return VIEW_MODE_CARTRIDGE if render_cartridge_overlay else VIEW_MODE_COVER
