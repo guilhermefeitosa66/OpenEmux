@@ -7,7 +7,9 @@ import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.library_view import (
+    DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
+    normalize_sort_order,
     normalize_view_mode,
     normalize_zoom,
     renders_cartridge,
@@ -278,6 +280,7 @@ class ConfigManager:
         # Kept in step so anything still reading the old key sees the truth.
         ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
         ui["zoom"] = normalize_zoom(ui.get("zoom", DEFAULT_ZOOM))
+        ui["sort_order"] = normalize_sort_order(ui.get("sort_order", DEFAULT_SORT_ORDER))
         config["ui"] = ui
 
         updates = config.get("updates", {})
@@ -427,6 +430,7 @@ class ConfigManager:
         return {
             "view_mode": view_mode,
             "zoom": normalize_zoom(ui.get("zoom", DEFAULT_ZOOM)),
+            "sort_order": normalize_sort_order(ui.get("sort_order", DEFAULT_SORT_ORDER)),
             # Derived, not stored twice: the view mode is the source of truth.
             "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
@@ -461,6 +465,14 @@ class ConfigManager:
     def set_zoom(self, zoom):
         ui = self.config.setdefault("ui", {})
         ui["zoom"] = normalize_zoom(zoom)
+        self.save_config()
+
+    def get_sort_order(self):
+        return normalize_sort_order(self.config.get("ui", {}).get("sort_order"))
+
+    def set_sort_order(self, order):
+        ui = self.config.setdefault("ui", {})
+        ui["sort_order"] = normalize_sort_order(order)
         self.save_config()
 
     def set_render_cartridge_overlay(self, enabled):

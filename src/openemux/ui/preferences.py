@@ -24,7 +24,7 @@ from openemux.core.config import (
     normalize_cover_source,
 )
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
-from openemux.core.library_view import VIEW_MODES
+from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -844,6 +844,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._view_mode_combo.connect("notify::selected", self._on_view_mode_changed)
         appearance.add(self._view_mode_combo)
 
+        self._sort_orders = list(SORT_ORDERS)
+        self._sort_combo = Adw.ComboRow(
+            title=self.t("settings.ui.sort_order.title"),
+            subtitle=self.t("settings.ui.sort_order.subtitle"),
+        )
+        self._sort_combo.set_model(
+            Gtk.StringList.new([self.t(f"sort_order.{order}") for order in self._sort_orders])
+        )
+        current_order = self.config.get_ui_settings()["sort_order"]
+        self._sort_combo.set_selected(
+            self._sort_orders.index(current_order) if current_order in self._sort_orders else 0
+        )
+        self._sort_combo.connect("notify::selected", self._on_sort_order_changed)
+        appearance.add(self._sort_combo)
+
         self._show_all_switch = Adw.SwitchRow(title=self.t("settings.shaders.show_all"))
         self._show_all_switch.set_active(
             self.config.get_shader_settings().get("show_all_shaders", False)
@@ -913,6 +928,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         index = self._view_mode_combo.get_selected()
         if 0 <= index < len(self._view_modes):
             self.win._apply_view_mode(self._view_modes[index])
+
+    def _on_sort_order_changed(self, *_a):
+        index = self._sort_combo.get_selected()
+        if 0 <= index < len(self._sort_orders):
+            self.win._apply_sort_order(self._sort_orders[index])
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):

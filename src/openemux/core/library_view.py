@@ -45,6 +45,91 @@ DEFAULT_ZOOM = 1.0
 MIN_SCALED_SPACING = 8
 
 
+#: Sort orders the library offers, in menu order.
+SORT_NAME_ASC = "name_asc"
+SORT_NAME_DESC = "name_desc"
+SORT_RECENTLY_PLAYED = "recently_played"
+SORT_RECENTLY_ADDED = "recently_added"
+SORT_FILE_SIZE = "file_size"
+SORT_PLATFORM = "platform"
+
+SORT_ORDERS = (
+    SORT_NAME_ASC,
+    SORT_NAME_DESC,
+    SORT_RECENTLY_PLAYED,
+    SORT_RECENTLY_ADDED,
+    SORT_FILE_SIZE,
+    SORT_PLATFORM,
+)
+
+#: A-Z is what the library has always shown.
+DEFAULT_SORT_ORDER = SORT_NAME_ASC
+
+#: Orders that need something the ROM entry does not carry. The UI uses this to
+#: know when it has to hand sort_roms() a stat/history lookup.
+SORT_ORDERS_NEEDING_FILE_STAT = (SORT_RECENTLY_ADDED, SORT_FILE_SIZE)
+SORT_ORDERS_NEEDING_HISTORY = (SORT_RECENTLY_PLAYED,)
+
+
+def normalize_sort_order(value):
+    """Coerce a stored/typed value to one of ``SORT_ORDERS``."""
+    candidate = (value or "").strip().lower()
+    if candidate in SORT_ORDERS:
+        return candidate
+    return DEFAULT_SORT_ORDER
+
+
+def _title(rom):
+    return (rom.get("name") or "").casefold()
+
+
+def sort_roms(roms, order, file_stat=None, last_played=None):
+    """Order a page's ROM entries.
+
+    ``file_stat(path)`` returns ``(size_bytes, added_epoch)`` and
+    ``last_played(path)`` returns epoch seconds; both are injected so this stays
+    pure and testable, and so the caller decides whether hitting the filesystem
+    is worth it for the order in use. A missing lookup sorts as 0, which puts
+    unknown entries last in the descending orders where they belong.
+
+    Every order falls back to the title, so games that tie (same size, never
+    played, same platform) still come out in a stable, readable sequence rather
+    than in whatever order the playlist happened to be read in.
+    """
+    order = normalize_sort_order(order)
+    entries = list(roms)
+
+    if order == SORT_NAME_DESC:
+        return sorted(entries, key=_title, reverse=True)
+
+    if order == SORT_PLATFORM:
+        return sorted(entries, key=lambda rom: ((rom.get("console") or ""), _title(rom)))
+
+    if order == SORT_RECENTLY_PLAYED:
+        played = last_played or (lambda _path: 0.0)
+        return sorted(
+            entries,
+            key=lambda rom: (-played(rom.get("path", "")), _title(rom)),
+        )
+
+    if order in SORT_ORDERS_NEEDING_FILE_STAT:
+        stat = file_stat or (lambda _path: (0, 0.0))
+        index = 0 if order == SORT_FILE_SIZE else 1
+        return sorted(
+            entries,
+            key=lambda rom: (-_stat_value(stat, rom.get("path", ""), index), _title(rom)),
+        )
+
+    return sorted(entries, key=_title)
+
+
+def _stat_value(stat, path, index):
+    try:
+        return stat(path)[index] or 0
+    except (OSError, TypeError, IndexError):
+        return 0
+
+
 def normalize_zoom(value):
     """Snap a stored/typed zoom to the nearest level we actually render."""
     try:
@@ -105,6 +190,16 @@ def renders_cartridge(view_mode):
 def is_grid_view(view_mode):
     """True when the mode lays cards out on a grid (as opposed to rows)."""
     return normalize_view_mode(view_mode) in GRID_VIEW_MODES
+
+
+def list_thumb_column_width(zoom=DEFAULT_ZOOM):
+    """Width of the thumbnail column in a list.
+
+    Every row reserves the same width, whatever shape its box art is, so the
+    titles line up. A Gtk.Picture asked to fit a fixed height reports the width
+    that aspect implies, which would otherwise give each console its own indent.
+    """
+    return scale_length(LIST_ROW_MAX_THUMB_WIDTH, zoom)
 
 
 def list_thumb_size(cover_size, zoom=DEFAULT_ZOOM):
