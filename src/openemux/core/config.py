@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from openemux.i18n import normalize_locale
+from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home
 from openemux.core.shaders import ShaderConfigStore
@@ -58,6 +58,11 @@ def normalize_cover_art_type(value):
     return value if value in COVER_ART_TYPES else DEFAULT_COVER_ART_TYPE
 
 DEFAULT_CONFIG = {
+    # Placeholder only: until the user picks a language from the menu, the
+    # locale is resolved from the desktop's on every load (see
+    # _migrate_runtime_config). "locale_selected_by_user" is deliberately
+    # absent, like "ui.version": _merge_defaults would stamp it on every config
+    # it touches and the migration could no longer tell an older one apart.
     "locale": "en",
     "roms_path": str(DEFAULT_ROMS_PATH),
     "consoles": list(SYSTEM_IDS),
@@ -265,7 +270,21 @@ class ConfigManager:
         updates.setdefault("timeout_seconds", DEFAULT_UPDATE_TIMEOUT)
         config["updates"] = updates
 
-        config["locale"] = normalize_locale(config.get("locale", "en"))
+        # Language precedence: the user's own choice, then the desktop's
+        # locale, then English.
+        chosen = config.get("locale_selected_by_user")
+        if chosen is None:
+            # Config written before the flag existed. A non-English locale in
+            # there can only have come from the language menu, so it counts as
+            # a choice; one still sitting on the old "en" default never had a
+            # choice made and starts following the desktop.
+            chosen = normalize_locale(config.get("locale", "en")) != "en"
+        config["locale_selected_by_user"] = bool(chosen)
+        config["locale"] = (
+            normalize_locale(config.get("locale", "en"))
+            if chosen
+            else detect_system_locale()
+        )
         config["consoles"] = [system_id for system_id in config.get("consoles", SYSTEM_IDS) if resolve_system_id(system_id) in SYSTEM_IDS]
         if not config["consoles"]:
             config["consoles"] = list(SYSTEM_IDS)
@@ -340,6 +359,9 @@ class ConfigManager:
 
     def set_locale(self, locale):
         self.config["locale"] = normalize_locale(locale)
+        # An explicit pick from the language menu outranks the desktop locale
+        # from here on, including on the next launch.
+        self.config["locale_selected_by_user"] = True
         self.save_config()
 
     def get_console_dir(self, system_id):
