@@ -54,6 +54,7 @@ from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
+from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
 
@@ -134,6 +135,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
+        self._rom_context_services = RomContextMenuServices(self)
 
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -1705,6 +1707,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_rename_rom=self._rename_rom_from_ui,
             on_delete_rom=self._confirm_delete_roms,
             on_selection_changed=self._on_selection_changed,
+            context_services=self._rom_context_services,
         )
         self._grids[console] = grid
         # The page was rebuilt, so whatever was selected on it is gone.
@@ -1712,6 +1715,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         scroll.set_child(grid)
         if console == self.current_console:
             self._update_window_title(console)
+
+    def set_rom_shader(self, rom, shader_id):
+        """Persist a per-ROM shader override (``shader_id=None`` clears it)."""
+        self.config_manager.set_rom_shader(rom["path"], rom["console"], shader_id)
+        if shader_id is None:
+            label = self.t("context.shader.use_console_short")
+        else:
+            label = self.shader_catalog.label_for_shader(shader_id)
+        self._toast(self.t("toast.shader.rom_set", name=rom["name"], shader=label))
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
@@ -1829,6 +1841,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.playlist_manager.repath_rom(rom["console"], rom["path"], renamed["path"])
         self.play_history.repath(rom["path"], renamed["path"])
+        self.config_manager.repath_rom_shader(rom["path"], renamed["path"])
         self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
         self._reload_current_page()
 
@@ -1866,6 +1879,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 continue
             self.playlist_manager.forget_rom(rom["console"], rom["path"])
             self.play_history.forget(rom["path"])
+            self.config_manager.forget_rom_shader(rom["path"])
             deleted += 1
 
         if deleted:

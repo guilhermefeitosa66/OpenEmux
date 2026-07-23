@@ -192,7 +192,10 @@ class RetroArchLauncher:
             )
 
         shader_id = "disabled"
-        if hasattr(self.config_manager, "get_shader_for_console"):
+        if hasattr(self.config_manager, "get_shader_for_rom"):
+            # Per-ROM override wins, falling back to the console setting.
+            shader_id = normalize_shader_id(self.config_manager.get_shader_for_rom(rom_path, system_id))
+        elif hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
         shader_path = self.shader_catalog.resolve_shader_path(shader_id)
 

@@ -575,6 +575,21 @@ class ConfigManager:
     def set_shader_for_console(self, console, shader_id):
         return self.shaders.set_console_shader(console, shader_id)
 
+    def get_shader_for_rom(self, rom_path, console):
+        return self.shaders.get_effective_shader(rom_path, console)
+
+    def get_rom_shader_override(self, rom_path):
+        return self.shaders.get_rom_shader(rom_path)
+
+    def set_rom_shader(self, rom_path, console, shader_id):
+        return self.shaders.set_rom_shader(rom_path, console, shader_id)
+
+    def repath_rom_shader(self, old_path, new_path):
+        return self.shaders.repath_rom(old_path, new_path)
+
+    def forget_rom_shader(self, rom_path):
+        return self.shaders.forget_rom(rom_path)
+
     def set_show_all_shaders(self, enabled):
         return self.shaders.set_show_all_shaders(enabled)
 
