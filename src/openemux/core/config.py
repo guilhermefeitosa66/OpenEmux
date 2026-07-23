@@ -9,10 +9,13 @@ from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
+    DISPLAY_KEYS,
+    normalize_display_value,
     normalize_sort_order,
     normalize_view_mode,
     normalize_zoom,
     renders_cartridge,
+    resolve_display_settings,
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
@@ -480,6 +483,55 @@ class ConfigManager:
     def set_render_cartridge_overlay(self, enabled):
         """Legacy entry point: the cartridge frame is a view mode now."""
         self.set_view_mode(view_mode_from_legacy(bool(enabled)))
+
+    # ----- per-scope layout overrides -------------------------------------
+    def get_scope_overrides(self):
+        """Clean map of scope -> partial {view_mode?, sort_order?, zoom?}."""
+        raw = self.config.get("ui", {}).get("scope_overrides", {}) or {}
+        cleaned = {}
+        for scope, override in raw.items():
+            if not isinstance(override, dict):
+                continue
+            entry = {}
+            for key in DISPLAY_KEYS:
+                if override.get(key) is not None:
+                    entry[key] = normalize_display_value(key, override[key])
+            if entry:
+                cleaned[str(scope)] = entry
+        return cleaned
+
+    def get_display_settings(self, scope):
+        """Resolved view_mode/sort_order/zoom for a scope, global as the base."""
+        resolved = resolve_display_settings(
+            self.get_ui_settings(), self.get_scope_overrides(), scope
+        )
+        resolved["render_cartridge_overlay"] = renders_cartridge(resolved["view_mode"])
+        return resolved
+
+    def has_scope_override(self, scope):
+        return scope in self.get_scope_overrides()
+
+    def set_scope_display(self, scope, key, value):
+        """Override one display key for a scope (used once it diverges)."""
+        if key not in DISPLAY_KEYS:
+            return
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        entry = overrides.setdefault(str(scope), {})
+        entry[key] = normalize_display_value(key, value)
+        self.save_config()
+
+    def enable_scope_override(self, scope):
+        """Start a scope's own layout, seeded from the current global values."""
+        base = self.get_ui_settings()
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        overrides[str(scope)] = {key: base[key] for key in DISPLAY_KEYS}
+        self.save_config()
+
+    def clear_scope_override(self, scope):
+        """Drop a scope's override so it follows the global layout again."""
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        if overrides.pop(str(scope), None) is not None:
+            self.save_config()
 
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})

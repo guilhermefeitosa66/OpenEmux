@@ -54,7 +54,7 @@ from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
 from openemux.ui.grid import RomGrid
-from openemux.ui.context_menu import SEPARATOR, build_context_popover
+from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
@@ -406,9 +406,31 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for something people flip while looking at their library. The zoom
         controls live in the same menu, as they do in GNOME Files.
         """
+        self.view_mode_button = Gtk.MenuButton()
+        self.view_mode_button.set_tooltip_text(self.t("header.view_mode"))
+        self._populate_view_mode_menu()
+        return self.view_mode_button
+
+    def _populate_view_mode_menu(self):
+        """(Re)build the layout menu so it acts on the page in view.
+
+        The menu is scope-aware: its heading names the scope being edited and
+        the "Use the global layout" item reflects whether this page follows the
+        global default or carries its own layout. It is rebuilt when the scope
+        changes so both stay honest.
+        """
+        scope_label = self._console_sidebar_label(self._current_scope())
         menu = Gio.Menu()
+
+        # The scope banner, and the toggle between global and this page's own.
+        scope_section = Gio.Menu()
+        scope_section.append(self.t("layout.follow_global"), "win.layout-follow-global")
+        menu.append_section(self.t("layout.scope_header", scope=scope_label), scope_section)
+
+        mode_section = Gio.Menu()
         for mode in VIEW_MODES:
-            menu.append(self.t(f"view_mode.{mode}"), f"win.view-mode::{mode}")
+            mode_section.append(self.t(f"view_mode.{mode}"), f"win.view-mode::{mode}")
+        menu.append_section(None, mode_section)
 
         # Sorting sits behind a submenu: six orders as a flat list would bury
         # the three view modes above them.
@@ -428,16 +450,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         zoom_section.append_item(zoom_item)
         menu.append_section(None, zoom_section)
 
-        self.view_mode_button = Gtk.MenuButton()
         self.view_mode_button.set_menu_model(menu)
-        self.view_mode_button.set_tooltip_text(self.t("header.view_mode"))
         self.view_mode_button.set_icon_name(
             self.VIEW_MODE_ICONS.get(self._view_mode, "view-grid-symbolic")
         )
+        # Re-setting the model rebuilds the popover, so the zoom stepper has to
+        # be registered against the fresh one every time.
         popover = self.view_mode_button.get_popover()
         if popover is not None:
             popover.add_child(self._build_zoom_controls(), "zoom")
-        return self.view_mode_button
 
     def _build_zoom_controls(self):
         """A -/+ stepper with the current percentage between the buttons."""
@@ -481,10 +502,71 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if zoom == self._zoom:
             return
         self._zoom = zoom
-        self.config_manager.set_zoom(zoom)
+        self._write_scope_display("zoom", zoom)
         self._sync_zoom_controls()
         self._reload_current_page()
         self._toast(self.t("toast.zoom", percent=zoom_percent(zoom)), timeout=1)
+
+    def _current_scope(self):
+        """The page whose layout the controls edit: a console, All or Favorites."""
+        return self.current_console or ALL_CONSOLES_ID
+
+    def _write_scope_display(self, key, value):
+        """Persist a layout change against the right level.
+
+        A page that carries its own layout keeps the change to itself; a page
+        following the global default edits the global default -- which is how
+        the global can be changed from any page, and why no control here is
+        ever a silent no-op.
+        """
+        scope = self._current_scope()
+        if self.config_manager.has_scope_override(scope):
+            self.config_manager.set_scope_display(scope, key, value)
+        else:
+            setter = {
+                "view_mode": self.config_manager.set_view_mode,
+                "sort_order": self.config_manager.set_sort_order,
+                "zoom": self.config_manager.set_zoom,
+            }[key]
+            setter(value)
+
+    def _refresh_scope_settings(self):
+        """Re-read the layout for the current scope and sync every control."""
+        settings = self.config_manager.get_display_settings(self._current_scope())
+        self._view_mode = settings["view_mode"]
+        self._zoom = settings["zoom"]
+        self._sort_order = settings["sort_order"]
+
+        view_action = self.lookup_action("view-mode")
+        if view_action is not None and view_action.get_state().get_string() != self._view_mode:
+            view_action.set_state(GLib.Variant("s", self._view_mode))
+        sort_action = self.lookup_action("sort-order")
+        if sort_action is not None and sort_action.get_state().get_string() != self._sort_order:
+            sort_action.set_state(GLib.Variant("s", self._sort_order))
+        follow_action = self.lookup_action("layout-follow-global")
+        if follow_action is not None:
+            follows = not self.config_manager.has_scope_override(self._current_scope())
+            if follow_action.get_state().get_boolean() != follows:
+                follow_action.set_state(GLib.Variant("b", follows))
+
+        if hasattr(self, "view_mode_button"):
+            self._populate_view_mode_menu()
+        self._sync_zoom_controls()
+
+    def _on_layout_follow_global_action(self, action, _param):
+        follow = not action.get_state().get_boolean()
+        action.set_state(GLib.Variant("b", follow))
+        scope = self._current_scope()
+        if follow:
+            self.config_manager.clear_scope_override(scope)
+        else:
+            # Seed the page's own layout from what it shows now, so unchecking
+            # changes nothing until the user actually picks something different.
+            self.config_manager.enable_scope_override(scope)
+        self._refresh_scope_settings()
+        self._reload_current_page()
+        key = "toast.layout.global" if follow else "toast.layout.scoped"
+        self._toast(self.t(key, scope=self._console_sidebar_label(scope)), timeout=2)
 
     def _on_view_mode_action(self, action, value):
         mode = normalize_view_mode(value.get_string())
@@ -497,7 +579,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if mode == self._view_mode:
             return
         self._view_mode = mode
-        self.config_manager.set_view_mode(mode)
+        self._write_scope_display("view_mode", mode)
         if hasattr(self, "view_mode_button"):
             self.view_mode_button.set_icon_name(
                 self.VIEW_MODE_ICONS.get(mode, "view-grid-symbolic")
@@ -517,21 +599,25 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if order == self._sort_order:
             return
         self._sort_order = order
-        self.config_manager.set_sort_order(order)
+        self._write_scope_display("sort_order", order)
         self._reload_current_page()
         self._toast(self.t("toast.sorted", order=self.t(f"sort_order.{order}")), timeout=2)
 
-    def _sorted_roms(self, roms):
+    def _sorted_roms(self, roms, order=None):
         """Apply the chosen order, reading the disk only when it is needed.
+
+        ``order`` defaults to the current scope's; a page rendered for another
+        scope (Favorites refreshed while a console is on screen) passes its own.
 
         Stat-ing a whole library costs real time on a slow disk, so the lookups
         are wired up only for the orders that actually use them.
         """
-        needs_stat = self._sort_order in SORT_ORDERS_NEEDING_FILE_STAT
-        needs_history = self._sort_order in SORT_ORDERS_NEEDING_HISTORY
+        order = order or self._sort_order
+        needs_stat = order in SORT_ORDERS_NEEDING_FILE_STAT
+        needs_history = order in SORT_ORDERS_NEEDING_HISTORY
         return sort_roms(
             roms,
-            self._sort_order,
+            order,
             file_stat=self._rom_file_stat if needs_stat else None,
             last_played=self.play_history.last_played if needs_history else None,
         )
@@ -794,6 +880,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         sort_order_action.connect("activate", self._on_sort_order_action)
         self.add_action(sort_order_action)
+
+        # Whether the page in view follows the global layout or has its own.
+        follow_global_action = Gio.SimpleAction.new_stateful(
+            "layout-follow-global",
+            None,
+            GLib.Variant("b", not self.config_manager.has_scope_override(self._current_scope())),
+        )
+        follow_global_action.connect("activate", self._on_layout_follow_global_action)
+        self.add_action(follow_global_action)
 
     def _focused_rom_item(self):
         return RomGrid.item_for_widget(self.get_focus())
@@ -1301,6 +1396,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             (self.t("header.import"), "sidebar.import", "document-open-symbolic"),
             (self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
             SEPARATOR,
+            self._layout_submenu_for_console(console_id),
+            SEPARATOR,
             (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic"),
         ])
         popover.set_parent(row)
@@ -1308,6 +1405,47 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._sidebar_menu_row = row
         popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
         popover.popup()
+
+    def _layout_submenu_for_console(self, console):
+        """The Layout ▸ shortcut on a sidebar console, mirroring the header menu.
+
+        The fastest route when setting several consoles in a row: it acts on the
+        console clicked, whatever page is on screen.
+        """
+        follows = not self.config_manager.has_scope_override(console)
+        resolved = self.config_manager.get_display_settings(console)
+        entries = [
+            (
+                self.t("layout.use_global"),
+                (lambda c=console: self._sidebar_use_global_layout(c)),
+                "emblem-ok-symbolic" if follows else None,
+            ),
+            SEPARATOR,
+        ]
+        for mode in VIEW_MODES:
+            entries.append(
+                (
+                    self.t(f"view_mode.{mode}"),
+                    (lambda c=console, m=mode: self._sidebar_set_view_mode(c, m)),
+                    "emblem-ok-symbolic" if resolved["view_mode"] == mode else None,
+                )
+            )
+        return Submenu(self.t("layout.menu"), entries, "view-grid-symbolic")
+
+    def _sidebar_set_view_mode(self, console, mode):
+        self.config_manager.set_scope_display(console, "view_mode", normalize_view_mode(mode))
+        self._after_scope_layout_changed(console)
+
+    def _sidebar_use_global_layout(self, console):
+        self.config_manager.clear_scope_override(console)
+        self._after_scope_layout_changed(console)
+
+    def _after_scope_layout_changed(self, console):
+        # Re-render that console's page so the change shows even if it is not the
+        # page on screen, and re-sync the header controls when it is.
+        self._ensure_console_loaded(console)
+        if console == self.current_console:
+            self._refresh_scope_settings()
 
     def _on_sidebar_popover_closed(self, popover, row):
         if getattr(self, "_sidebar_menu_row", None) is row:
@@ -1479,6 +1617,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._clear_selection()
         self.current_console = row.id
         logger.info("ui sidebar select: console_id=%s", self.current_console)
+        # The layout controls follow the page you are on, so re-sync them to
+        # this scope before its page is (re)rendered.
+        self._refresh_scope_settings()
         self._set_search_enabled(True)
         if self.current_console == ALL_CONSOLES_ID:
             self._ensure_all_loaded()
@@ -1666,7 +1807,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _render_console_page(self, console, roms):
         scroll = self._console_pages[console]
-        roms = self._sorted_roms(roms)
+        # Each page follows its own scope's layout, not the one on screen now.
+        display_settings = self.config_manager.get_display_settings(console)
+        roms = self._sorted_roms(roms, order=display_settings["sort_order"])
         if not roms:
             if console == FAVORITES_ID:
                 status = Adw.StatusPage(
@@ -1704,7 +1847,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._has_local_cover,
             self.t,
             self.roms_path,
-            ui_settings=self.config_manager.get_ui_settings(),
+            ui_settings=display_settings,
             mixed_consoles=console in (ALL_CONSOLES_ID, FAVORITES_ID),
             on_rename_rom=self._rename_rom_from_ui,
             on_delete_rom=self._confirm_delete_roms,

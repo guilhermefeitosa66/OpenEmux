@@ -21,6 +21,7 @@ from openemux.core.library_view import (
     can_zoom,
     is_grid_view,
     normalize_sort_order,
+    resolve_display_settings,
     sort_roms,
     list_thumb_column_width,
     list_thumb_size,
@@ -62,6 +63,37 @@ class ViewModeTests(unittest.TestCase):
     def test_the_old_switch_maps_onto_the_two_grid_modes(self):
         self.assertEqual(view_mode_from_legacy(True), VIEW_MODE_CARTRIDGE)
         self.assertEqual(view_mode_from_legacy(False), VIEW_MODE_COVER)
+
+
+class ResolveDisplaySettingsTests(unittest.TestCase):
+    GLOBAL = {"view_mode": "cartridge", "sort_order": "name_asc", "zoom": 1.0}
+
+    def test_scope_without_override_follows_global(self):
+        resolved = resolve_display_settings(self.GLOBAL, {}, "SFC")
+        self.assertEqual(resolved["view_mode"], "cartridge")
+        self.assertEqual(resolved["sort_order"], "name_asc")
+        self.assertEqual(resolved["zoom"], 1.0)
+
+    def test_partial_override_only_replaces_its_key(self):
+        overrides = {"MD": {"view_mode": "cover"}}
+        resolved = resolve_display_settings(self.GLOBAL, overrides, "MD")
+        self.assertEqual(resolved["view_mode"], "cover")
+        # The keys it did not override still come from global.
+        self.assertEqual(resolved["sort_order"], "name_asc")
+        self.assertEqual(resolved["zoom"], 1.0)
+
+    def test_full_override(self):
+        overrides = {"__favorites__": {"view_mode": "list", "sort_order": "name_desc", "zoom": 1.5}}
+        resolved = resolve_display_settings(self.GLOBAL, overrides, "__favorites__")
+        self.assertEqual(resolved["view_mode"], "list")
+        self.assertEqual(resolved["sort_order"], "name_desc")
+        self.assertEqual(resolved["zoom"], 1.5)
+
+    def test_values_are_normalized(self):
+        overrides = {"FC": {"view_mode": "BOGUS", "zoom": 999}}
+        resolved = resolve_display_settings(self.GLOBAL, overrides, "FC")
+        self.assertEqual(resolved["view_mode"], DEFAULT_VIEW_MODE)
+        self.assertIn(resolved["zoom"], ZOOM_LEVELS)
 
 
 class ListThumbTests(unittest.TestCase):
