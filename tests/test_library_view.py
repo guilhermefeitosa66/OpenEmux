@@ -2,17 +2,26 @@ import unittest
 
 from openemux.core.library_view import (
     DEFAULT_VIEW_MODE,
+    DEFAULT_ZOOM,
+    MIN_SCALED_SPACING,
+    ZOOM_LEVELS,
     LIST_ROW_MAX_THUMB_WIDTH,
     LIST_ROW_THUMB_HEIGHT,
     VIEW_MODE_CARTRIDGE,
     VIEW_MODE_COVER,
     VIEW_MODE_LIST,
     VIEW_MODES,
+    can_zoom,
     is_grid_view,
     list_thumb_size,
     normalize_view_mode,
+    normalize_zoom,
     renders_cartridge,
+    scale_length,
+    scale_spacing,
     view_mode_from_legacy,
+    zoom_percent,
+    zoom_step,
 )
 
 
@@ -68,6 +77,70 @@ class ListThumbTests(unittest.TestCase):
         self.assertEqual(
             list_thumb_size((0, 0)), (LIST_ROW_MAX_THUMB_WIDTH, LIST_ROW_THUMB_HEIGHT)
         )
+
+
+class ZoomTests(unittest.TestCase):
+    def test_known_levels_pass_through(self):
+        for level in ZOOM_LEVELS:
+            with self.subTest(level=level):
+                self.assertEqual(normalize_zoom(level), level)
+
+    def test_an_arbitrary_value_snaps_to_the_nearest_level(self):
+        self.assertEqual(normalize_zoom(1.1), 1.0)
+        self.assertEqual(normalize_zoom(1.4), 1.5)
+        self.assertEqual(normalize_zoom(9.0), 2.0)
+        self.assertEqual(normalize_zoom(0.1), 0.5)
+
+    def test_junk_and_nonsense_fall_back_to_100_percent(self):
+        for value in (None, "", "big", 0, -2):
+            with self.subTest(value=value):
+                self.assertEqual(normalize_zoom(value), DEFAULT_ZOOM)
+
+    def test_a_stored_string_is_still_a_zoom(self):
+        self.assertEqual(normalize_zoom("1.5"), 1.5)
+
+    def test_stepping_walks_the_levels(self):
+        self.assertEqual(zoom_step(1.0, 1), 1.25)
+        self.assertEqual(zoom_step(1.0, -1), 0.75)
+
+    def test_stepping_stops_at_the_ends_instead_of_wrapping(self):
+        self.assertEqual(zoom_step(ZOOM_LEVELS[-1], 1), ZOOM_LEVELS[-1])
+        self.assertEqual(zoom_step(ZOOM_LEVELS[0], -1), ZOOM_LEVELS[0])
+
+    def test_can_zoom_reports_the_ends_so_the_buttons_can_dim(self):
+        self.assertFalse(can_zoom(ZOOM_LEVELS[0], -1))
+        self.assertTrue(can_zoom(ZOOM_LEVELS[0], 1))
+        self.assertFalse(can_zoom(ZOOM_LEVELS[-1], 1))
+        self.assertTrue(can_zoom(ZOOM_LEVELS[-1], -1))
+
+    def test_percentage_label(self):
+        self.assertEqual(zoom_percent(1.0), 100)
+        self.assertEqual(zoom_percent(0.75), 75)
+        self.assertEqual(zoom_percent(2.0), 200)
+
+
+class ScalingTests(unittest.TestCase):
+    def test_lengths_scale_with_the_zoom(self):
+        self.assertEqual(scale_length(200, 1.0), 200)
+        self.assertEqual(scale_length(200, 0.5), 100)
+        self.assertEqual(scale_length(200, 2.0), 400)
+
+    def test_a_length_never_collapses_to_zero(self):
+        self.assertEqual(scale_length(1, 0.5), 1)
+
+    def test_gaps_shrink_with_the_cards_but_keep_them_apart(self):
+        self.assertEqual(scale_spacing(24, 1.0), 24)
+        self.assertEqual(scale_spacing(24, 2.0), 48)
+        self.assertEqual(scale_spacing(4, 0.5), MIN_SCALED_SPACING)
+
+    def test_list_thumbnails_follow_the_zoom(self):
+        _w, height = list_thumb_size((200, 200), 1.0)
+        _w2, doubled = list_thumb_size((200, 200), 2.0)
+        self.assertEqual(doubled, height * 2)
+
+    def test_the_width_cap_scales_too_so_the_row_stays_proportional(self):
+        width, _h = list_thumb_size((200, 100), 2.0)
+        self.assertEqual(width, LIST_ROW_MAX_THUMB_WIDTH * 2)
 
 
 if __name__ == "__main__":

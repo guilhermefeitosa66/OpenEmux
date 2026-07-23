@@ -7,7 +7,9 @@ import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.library_view import (
+    DEFAULT_ZOOM,
     normalize_view_mode,
+    normalize_zoom,
     renders_cartridge,
     view_mode_from_legacy,
 )
@@ -275,6 +277,7 @@ class ConfigManager:
         ui["view_mode"] = normalize_view_mode(ui["view_mode"])
         # Kept in step so anything still reading the old key sees the truth.
         ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
+        ui["zoom"] = normalize_zoom(ui.get("zoom", DEFAULT_ZOOM))
         config["ui"] = ui
 
         updates = config.get("updates", {})
@@ -423,6 +426,7 @@ class ConfigManager:
         view_mode = normalize_view_mode(ui.get("view_mode"))
         return {
             "view_mode": view_mode,
+            "zoom": normalize_zoom(ui.get("zoom", DEFAULT_ZOOM)),
             # Derived, not stored twice: the view mode is the source of truth.
             "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
@@ -449,6 +453,14 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["view_mode"] = normalize_view_mode(view_mode)
         ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
+        self.save_config()
+
+    def get_zoom(self):
+        return normalize_zoom(self.config.get("ui", {}).get("zoom", DEFAULT_ZOOM))
+
+    def set_zoom(self, zoom):
+        ui = self.config.setdefault("ui", {})
+        ui["zoom"] = normalize_zoom(zoom)
         self.save_config()
 
     def set_render_cartridge_overlay(self, enabled):

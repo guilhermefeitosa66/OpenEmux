@@ -210,3 +210,10 @@ flowboxchild:focus-within .rom-card {
 .sidebar-menu-button:hover {
     opacity: 1;
 }
+
+/* The -/+ stepper inside the view-mode menu. Menu items carry their own
+   padding; this row is a widget, so it brings its own. */
+.zoom-controls {
+    padding: 4px 8px;
+    min-width: 180px;
+}

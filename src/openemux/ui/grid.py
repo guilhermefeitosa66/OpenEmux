@@ -7,11 +7,15 @@ import logging
 
 from openemux.core import cartridge_render
 from openemux.core.library_view import (
+    DEFAULT_ZOOM,
     LIST_ROW_MIN_WIDTH,
     is_grid_view,
     list_thumb_size,
     normalize_view_mode,
+    normalize_zoom,
     renders_cartridge,
+    scale_length,
+    scale_spacing,
 )
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
@@ -78,11 +82,17 @@ CONSOLE_COVER_ASPECTS = {
 }
 
 
-def cover_size_for_console(console):
+def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
     """Card size for a console when no cartridge frame is drawn."""
+    width = scale_length(FIXED_ITEM_WIDTH, zoom)
     aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
-    height = int(round(FIXED_ITEM_WIDTH / aspect)) if aspect > 0 else FIXED_ITEM_WIDTH
-    return FIXED_ITEM_WIDTH, max(1, height)
+    height = int(round(width / aspect)) if aspect > 0 else width
+    return width, max(1, height)
+
+
+def default_item_size(zoom=DEFAULT_ZOOM):
+    """The uniform square box pages that mix consoles lay their covers in."""
+    return scale_length(DEFAULT_ITEM_SIZE[0], zoom), scale_length(DEFAULT_ITEM_SIZE[1], zoom)
 
 
 def card_size_for(cover_size, mixed_consoles=False, compact=False):
@@ -176,6 +186,7 @@ class RomItem(Gtk.Box):
         on_delete_rom=None,
         on_toggle_selection=None,
         compact=False,
+        zoom=DEFAULT_ZOOM,
     ):
         super().__init__(
             orientation=(
@@ -203,6 +214,7 @@ class RomItem(Gtk.Box):
         # title beside it, and the badges at the far end instead of stacked on
         # the artwork, where they would swallow a 64px thumbnail.
         self.compact = compact
+        self.zoom = normalize_zoom(zoom)
         self.cover_width, self.cover_height = cover_size
         # When set, the card shows a single pre-rendered image: the cover is
         # already composited into the cartridge, so there is no overlay to
@@ -283,7 +295,7 @@ class RomItem(Gtk.Box):
         self.play_overlay.set_visible(False)
 
         play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        play_icon.set_pixel_size(40)
+        play_icon.set_pixel_size(scale_length(40, self.zoom))
         play_icon.set_halign(Gtk.Align.CENTER)
         play_icon.set_valign(Gtk.Align.CENTER)
         play_icon.add_css_class("play-icon")
@@ -342,9 +354,12 @@ class RomItem(Gtk.Box):
         self.append(self.cover_overlay)
 
         full_name = rom["name"]
-        # A row has the whole width to run the title along, so it is only
-        # ellipsized when it truly does not fit; a card gets the short form.
-        display_name = full_name if compact else self._truncate_name(full_name)
+        # A card only has its own width for the title, so the caption is cut to
+        # what fits -- which is a function of the zoom, or a zoomed-out card
+        # would be stretched wider by its own label. A row has the whole
+        # viewport to run the title along and is ellipsized instead.
+        preview_limit = max(8, int(round(self.NAME_PREVIEW_LIMIT * self.zoom)))
+        display_name = full_name if compact else self._truncate_name(full_name, preview_limit)
         self.set_tooltip_text(full_name)
 
         # ROM name, plus the console it belongs to when the page mixes consoles
@@ -359,7 +374,7 @@ class RomItem(Gtk.Box):
         if compact:
             self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
         else:
-            self.name_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+            self.name_label.set_max_width_chars(preview_limit + 3)
             self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
         self.name_label.set_tooltip_text(full_name)
         self.name_label.add_css_class("rom-title")
@@ -371,7 +386,7 @@ class RomItem(Gtk.Box):
             self.console_label.set_halign(label_align)
             self.console_label.set_xalign(0.0 if compact else 0.5)
             if not compact:
-                self.console_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+                self.console_label.set_max_width_chars(preview_limit + 3)
             self.console_label.set_ellipsize(Pango.EllipsizeMode.END)
             self.console_label.add_css_class("caption")
             self.console_label.add_css_class("dim-label")
@@ -395,10 +410,11 @@ class RomItem(Gtk.Box):
         self._context_popover = None
 
     @classmethod
-    def _truncate_name(cls, name):
-        if len(name) <= cls.NAME_PREVIEW_LIMIT:
+    def _truncate_name(cls, name, limit=None):
+        limit = cls.NAME_PREVIEW_LIMIT if limit is None else limit
+        if len(name) <= limit:
             return name
-        return f"{name[:cls.NAME_PREVIEW_LIMIT]}..."
+        return f"{name[:limit]}..."
 
     def _set_placeholder(self):
         """Show a styled placeholder with console-specific icon."""
@@ -413,7 +429,7 @@ class RomItem(Gtk.Box):
         placeholder.add_css_class("rom-cover-placeholder")
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(48)
+        icon.set_pixel_size(scale_length(48, self.zoom))
         icon.set_halign(Gtk.Align.CENTER)
         icon.set_valign(Gtk.Align.CENTER)
         icon.add_css_class("placeholder-icon")
@@ -789,18 +805,25 @@ class RomGrid(Gtk.FlowBox):
 
         self.view_mode = normalize_view_mode(self.ui_settings.get("view_mode"))
         self.compact = not is_grid_view(self.view_mode)
+        # Zoom scales the artwork and, with it, the gaps: bigger cards further
+        # apart, smaller cards packed tighter -- the grid density the user is
+        # really asking for when they zoom out.
+        self.zoom = normalize_zoom(self.ui_settings.get("zoom", DEFAULT_ZOOM))
+        self._spacing = scale_spacing(
+            LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
+        )
 
         if self.compact:
             # One row per line, filling the width. The column maths below is
             # for cards; a row has no columns to fit.
-            self.set_row_spacing(LIST_ROW_SPACING)
+            self.set_row_spacing(self._spacing)
             self.set_column_spacing(0)
             self.set_min_children_per_line(1)
             self.set_max_children_per_line(1)
             margin = LIST_MARGIN
         else:
-            self.set_row_spacing(GRID_SPACING)
-            self.set_column_spacing(GRID_SPACING)
+            self.set_row_spacing(self._spacing)
+            self.set_column_spacing(self._spacing)
             margin = GRID_MARGIN
         self.set_margin_top(margin)
         self.set_margin_bottom(margin)
@@ -812,19 +835,23 @@ class RomGrid(Gtk.FlowBox):
         # even lattice. Per console it follows that console's box-art
         # proportions; pages mixing consoles have no single shape to follow, so
         # they use a uniform square box and centre each cover inside it.
-        cover_size = DEFAULT_ITEM_SIZE if mixed_consoles else cover_size_for_console(console)
+        cover_size = (
+            default_item_size(self.zoom)
+            if mixed_consoles
+            else cover_size_for_console(console, self.zoom)
+        )
         if not mixed_consoles and not self.compact and renders_cartridge(self.view_mode):
             # The card shape comes from the frame art itself: fixed width, and
             # the height that keeps the cartridge's own proportions.
             cartridge_frame_path = cartridge_frame_svg(console)
             if cartridge_frame_path:
                 frame = cartridge_render.load_frame(cartridge_frame_path)
-                cover_size = frame.size_for_width(FIXED_ITEM_WIDTH)
+                cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
 
         if self.compact:
             # Rows show the box art itself, never a cartridge: a frame drawn at
             # thumbnail size is an unreadable smudge.
-            cover_size = list_thumb_size(cover_size)
+            cover_size = list_thumb_size(cover_size, self.zoom)
 
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
 
@@ -847,6 +874,7 @@ class RomGrid(Gtk.FlowBox):
                 on_delete_rom=on_delete_rom,
                 on_toggle_selection=self._toggle_item_selection,
                 compact=self.compact,
+                zoom=self.zoom,
             )
             self._items.append(item)
             self.append(item)
@@ -919,6 +947,7 @@ class RomGrid(Gtk.FlowBox):
             self._viewport_width() - 2 * GRID_MARGIN,
             self._card_allocation_width(),
             len(self._items),
+            spacing=self._spacing,
         )
         if self._column_state == (columns, slack):
             return
