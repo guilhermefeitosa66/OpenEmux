@@ -56,33 +56,42 @@ class PlaylistManager:
         logger.info("playlist load finished: console=%s total=%d", system_id, len(sorted_entries))
         return sorted_entries
 
+    def entries_for_paths(self, paths):
+        """Resolve a flat list of ROM paths into mixed-console rom entries.
+
+        Shared by the favorites list and by collections: each is a bag of paths
+        spanning consoles, so the console is derived from the path and missing
+        or non-ROM files are skipped, exactly as the favorites list has always
+        done.
+        """
+        entries = []
+        seen = set()
+        for path_str in paths:
+            path_str = str(path_str).strip()
+            if not path_str or path_str in seen:
+                continue
+            seen.add(path_str)
+            path = Path(path_str)
+            if not path.exists() or not path.is_file():
+                continue
+            console = self._console_from_rom_path(path)
+            if not console:
+                continue
+            display_name = self._playlist_entry_name(
+                path, console, get_supported_extensions(console)
+            )
+            if display_name is None:
+                continue
+            entries.append(self._rom_entry(path, console, name=display_name))
+        return sorted(entries, key=lambda x: x["name"].lower())
+
     def load_favorites_playlist(self):
         playlist_path = self.get_favorites_playlist_path()
         if not playlist_path.exists():
             return []
-
-        entries = []
-        seen = set()
         with open(playlist_path, "r", encoding="utf-8") as f:
-            for line in f:
-                path_str = line.strip()
-                if not path_str or path_str in seen:
-                    continue
-                seen.add(path_str)
-                path = Path(path_str)
-                if not path.exists() or not path.is_file():
-                    continue
-                console = self._console_from_rom_path(path)
-                if not console:
-                    continue
-                display_name = self._playlist_entry_name(
-                    path, console, get_supported_extensions(console)
-                )
-                if display_name is None:
-                    continue
-                entries.append(self._rom_entry(path, console, name=display_name))
-
-        return sorted(entries, key=lambda x: x["name"].lower())
+            lines = [line.strip() for line in f]
+        return self.entries_for_paths(lines)
 
     def list_favorite_paths(self):
         return {entry["path"] for entry in self.load_favorites_playlist()}
