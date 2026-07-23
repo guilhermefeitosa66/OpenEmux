@@ -63,6 +63,12 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Wed Jul 23 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.7.0-1
+- Choose the shader per ROM from the context menu, over the per-console setting
+- Choose the libretro core per console (Preferences) and per ROM (context menu)
+- Configure the library layout (view mode, sort, zoom) per console and per view
+- Group games into custom collections in the sidebar, spanning consoles
+
 * Thu Jul 23 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.6.0-1
 - Add a View Mode selector: cover grid, cartridge grid and a compact list
 - Add zoom controls for thumbnails (50%-200%), with Ctrl+plus/minus/0
