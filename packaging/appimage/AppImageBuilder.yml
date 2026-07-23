@@ -39,7 +39,7 @@ AppDir:
     id: io.github.guilhermefeitosa66.OpenEmux
     name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
-    version: "1.6.0"
+    version: "1.7.0"
     exec: usr/bin/openemux-launcher
   runtime:
     # Belt and braces alongside the launcher script: these are the paths the
