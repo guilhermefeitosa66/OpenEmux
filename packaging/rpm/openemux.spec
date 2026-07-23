@@ -63,6 +63,16 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Thu Jul 23 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.6.0-1
+- Add a View Mode selector: cover grid, cartridge grid and a compact list
+- Add zoom controls for thumbnails (50%-200%), with Ctrl+plus/minus/0
+- Sort the library by name, recently played, recently added, size or platform
+- Track play history per ROM to support the recently-played order
+- Follow the desktop language on first launch instead of defaulting to English
+- Open the primary menu from the gamepad and restore focus after dialogs close
+- Steer with the right analog stick as well as the left one
+- Fix gamepad remapping capturing UI navigation instead of the binding
+
 * Tue Jul 21 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.5.2-1
 - Fix cartridge frames and cover art not rendering in the AppImage
 - Degrade to the plain cover when a cartridge cannot be composited
