@@ -738,6 +738,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button.set_menu_model(menu)
         button.set_tooltip_text(self.t("menu.primary"))
         button.set_primary(True)
+        # Held for the gamepad's Select button, which opens this menu from
+        # wherever the focus happens to be.
+        self.primary_menu_button = button
         return button
 
     def _install_actions(self):

@@ -217,3 +217,16 @@ flowboxchild:focus-within .rom-card {
     padding: 4px 8px;
     min-width: 180px;
 }
+
+/* Focus rings while navigating with a keyboard or a controller. GTK draws its
+   own only once it classes the interaction as keyboard-driven, and focus moved
+   programmatically (which is what the gamepad does) does not always qualify --
+   leaving a controller user with no idea where they are. The window carries
+   .keynav-active for as long as that is the input source. */
+.keynav-active row:focus,
+.keynav-active listview > row:focus,
+.keynav-active button:focus,
+.keynav-active .navigation-sidebar > row:focus {
+    outline: 2px solid @accent_bg_color;
+    outline-offset: -2px;
+}

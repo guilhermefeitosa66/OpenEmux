@@ -71,6 +71,25 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(resolve(CTX_OTHER, "favorite"), ("noop",))
 
 
+class PrimaryMenuTests(unittest.TestCase):
+    """Select opens the window menu, so no workflow needs a mouse."""
+
+    def test_the_menu_opens_from_anywhere_in_the_window(self):
+        for context in (CTX_GRID, CTX_SIDEBAR, CTX_OTHER):
+            with self.subTest(context=context):
+                self.assertEqual(resolve(context, "menu"), ("open-menu",))
+
+    def test_the_same_button_closes_the_menu_it_opened(self):
+        """Pressing it twice must not stack a second menu on the first."""
+        self.assertEqual(resolve(CTX_POPOVER, "menu"), ("close-popover",))
+
+    def test_a_modal_dialog_keeps_the_menu_out(self):
+        self.assertEqual(resolve(CTX_DIALOG, "menu"), ("noop",))
+
+    def test_the_menu_is_inert_while_a_binding_is_captured(self):
+        self.assertEqual(resolve(CTX_INPUT_CAPTURE, "menu"), ("noop",))
+
+
 class InputCaptureTests(unittest.TestCase):
     """Remapping owns the pad: nothing it presses may steer the interface."""
 

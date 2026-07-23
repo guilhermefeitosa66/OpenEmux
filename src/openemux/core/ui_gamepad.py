@@ -40,16 +40,26 @@ NAV_TOKEN_ACTIONS = {
     "h0down": "down",
     "h0left": "left",
     "h0right": "right",
+    # Left stick (axes 0/1) and right stick (axes 3/4) both steer. Axes 2 and 5
+    # are deliberately absent: those are the analog triggers on an Xbox-style
+    # pad (DEFAULT_GAMEPAD_BINDINGS ships l2="+2"/r2="+5"), and a resting
+    # trigger would otherwise read as a held direction.
     "-1": "up",
     "+1": "down",
     "-0": "left",
     "+0": "right",
+    "-4": "up",
+    "+4": "down",
+    "-3": "left",
+    "+3": "right",
     "0": "confirm",   # A (BTN_SOUTH)
     "1": "back",      # B (BTN_EAST)
     "2": "context",   # X (BTN_NORTH/WEST depending on pad; udev index 2)
     "3": "favorite",  # Y
     "4": "prev_console",  # L1
     "5": "next_console",  # R1
+    "6": "menu",      # Select/Back/View: the primary menu, so Preferences,
+                      # Shortcuts and About are reachable without a mouse
     "7": "confirm",   # Start
 }
 

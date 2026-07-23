@@ -82,6 +82,7 @@ TRANSLATIONS = {
     "hints.close": "Fechar",
     "hints.enter_pane": "Entrar na lista",
     "hints.switch_pane": "Alternar painel",
+    "hints.menu": "Menu",
     "settings.system.gamepad_nav.title": "Controlar a interface com o gamepad",
     "settings.system.gamepad_nav.subtitle": "Navegue pela biblioteca com um controle conectado (A confirma, B volta)",
     "toast.gamepad.connected": "Controle conectado: {name}",
