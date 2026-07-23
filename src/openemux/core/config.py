@@ -17,6 +17,7 @@ from openemux.core.library_view import (
 )
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home
+from openemux.core.cores import CoreConfigStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.update_checker import (
@@ -173,6 +174,7 @@ class ConfigManager:
         self.config_file = config_file
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.shaders = ShaderConfigStore()
+        self.cores = CoreConfigStore()
         self.config = self.load_config()
 
     def load_config(self):
@@ -535,6 +537,32 @@ class ConfigManager:
     def get_retroarch_core_hints(self, console):
         canonical = resolve_system_id(console)
         return self.config.get("runtime", {}).get("retroarch", {}).get("cores", {}).get(canonical, [])
+
+    def get_console_core_override(self, console):
+        """The per-console core the user pinned, or ``None`` for Automatic."""
+        hints = self.get_retroarch_core_hints(console)
+        return hints[0] if hints else None
+
+    def set_console_core_override(self, console, core_filename):
+        """Pin a console's core (a bare filename), or clear it with ``None``."""
+        canonical = resolve_system_id(console)
+        if canonical not in SYSTEM_IDS:
+            return
+        cores = self.config.setdefault("runtime", {}).setdefault("retroarch", {}).setdefault("cores", {})
+        cores[canonical] = [core_filename] if core_filename else []
+        self.save_config()
+
+    def get_rom_core_override(self, rom_path):
+        return self.cores.get_rom_core(rom_path)
+
+    def set_rom_core(self, rom_path, core_filename):
+        return self.cores.set_rom_core(rom_path, core_filename)
+
+    def repath_rom_core(self, old_path, new_path):
+        return self.cores.repath_rom(old_path, new_path)
+
+    def forget_rom_core(self, rom_path):
+        return self.cores.forget_rom(rom_path)
 
     def get_retroarch_updater_settings(self):
         updater = self.config.get("runtime", {}).get("retroarch", {}).get("updater", {})
