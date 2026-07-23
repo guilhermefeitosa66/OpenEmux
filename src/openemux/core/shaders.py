@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 import yaml
@@ -51,6 +52,9 @@ DEFAULT_SHADER_CONFIG = {
     "version": 1,
     "show_all_shaders": False,
     "console_overrides": {},
+    # Per-ROM overrides keyed by absolute ROM path. They win over the console
+    # setting; "use the console setting" is the absence of an entry here.
+    "rom_overrides": {},
 }
 
 
@@ -81,15 +85,18 @@ class ShaderConfigStore:
         self.config_file = Path(config_file).expanduser()
 
     def load(self):
+        # Deep copies: the nested override dicts must never be aliases of the
+        # module-level default, or mutating a loaded config would rewrite the
+        # default for every store in the process.
         if not self.config_file.exists():
-            return dict(DEFAULT_SHADER_CONFIG)
+            return copy.deepcopy(DEFAULT_SHADER_CONFIG)
 
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
         except Exception:
-            return dict(DEFAULT_SHADER_CONFIG)
+            return copy.deepcopy(DEFAULT_SHADER_CONFIG)
 
-        data = dict(DEFAULT_SHADER_CONFIG)
+        data = copy.deepcopy(DEFAULT_SHADER_CONFIG)
         data["version"] = int(raw.get("version", 1))
         data["show_all_shaders"] = bool(raw.get("show_all_shaders", False))
         overrides = {}
@@ -99,6 +106,13 @@ class ShaderConfigStore:
                 continue
             overrides[canonical] = normalize_shader_id(value)
         data["console_overrides"] = overrides
+
+        rom_overrides = {}
+        for key, value in (raw.get("rom_overrides") or {}).items():
+            if not key:
+                continue
+            rom_overrides[str(key)] = normalize_shader_id(value)
+        data["rom_overrides"] = rom_overrides
         return data
 
     def save(self, settings):
@@ -116,6 +130,13 @@ class ShaderConfigStore:
                 continue
             overrides[console] = value
         payload["console_overrides"] = overrides
+
+        rom_overrides = {}
+        for key, raw_value in ((settings or {}).get("rom_overrides") or {}).items():
+            if not key or not raw_value:
+                continue
+            rom_overrides[str(key)] = normalize_shader_id(raw_value)
+        payload["rom_overrides"] = rom_overrides
 
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
@@ -158,6 +179,55 @@ class ShaderConfigStore:
         data = self.load()
         data["console_overrides"] = {}
         return self.save(data)
+
+    # -- per-ROM overrides -------------------------------------------------
+    def get_rom_shader(self, rom_path):
+        """The ROM's own shader override, or ``None`` to follow the console."""
+        override = self.load().get("rom_overrides", {}).get(str(rom_path))
+        return normalize_shader_id(override) if override else None
+
+    def get_effective_shader(self, rom_path, console_id):
+        """The shader that will actually run: per-ROM first, then per-console."""
+        override = self.get_rom_shader(rom_path)
+        if override:
+            return override
+        return self.get_console_shader(console_id)
+
+    def set_rom_shader(self, rom_path, console_id, shader_id):
+        """Set (or with ``shader_id=None`` clear) a ROM's shader override.
+
+        Passing the console's effective shader clears the override too, so the
+        file does not carry an entry that merely repeats the console setting.
+        """
+        data = self.load()
+        overrides = data.setdefault("rom_overrides", {})
+        key = str(rom_path)
+        if shader_id is None:
+            overrides.pop(key, None)
+            return self.save(data)
+        value = normalize_shader_id(shader_id)
+        if value == self.get_console_shader(console_id):
+            overrides.pop(key, None)
+        else:
+            overrides[key] = value
+        return self.save(data)
+
+    def repath_rom(self, old_path, new_path):
+        """Follow a renamed ROM so its override is not orphaned."""
+        data = self.load()
+        overrides = data.get("rom_overrides", {})
+        entry = overrides.pop(str(old_path), None)
+        if entry is None:
+            return
+        overrides[str(new_path)] = entry
+        self.save(data)
+
+    def forget_rom(self, rom_path):
+        """Drop a deleted ROM's override so the file does not accumulate dead entries."""
+        data = self.load()
+        overrides = data.get("rom_overrides", {})
+        if overrides.pop(str(rom_path), None) is not None:
+            self.save(data)
 
 
 class ShaderCatalog:
