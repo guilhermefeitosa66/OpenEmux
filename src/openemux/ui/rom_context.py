@@ -17,6 +17,10 @@ class RomContextMenuServices:
     def build_submenus(self, rom):
         """Return the extra entries to splice into ``rom``'s context menu."""
         entries = []
+        entries.append(self._add_to_collection_submenu(rom))
+        remove = self._remove_from_collection_entry(rom)
+        if remove is not None:
+            entries.append(remove)
         core = self._core_submenu(rom)
         if core is not None:
             entries.append(core)
@@ -24,6 +28,41 @@ class RomContextMenuServices:
         if shader is not None:
             entries.append(shader)
         return entries
+
+    def _add_to_collection_submenu(self, rom):
+        cm = self.win.collection_manager
+        t = self.win.t
+        collections = cm.list_collections()
+        entries = []
+        for collection in collections:
+            in_it = cm.contains(collection["slug"], rom.get("path", ""))
+            entries.append(
+                (
+                    collection["name"],
+                    (lambda r=rom, s=collection["slug"]: self.win.toggle_rom_in_collection(r, s)),
+                    "emblem-ok-symbolic" if in_it else None,
+                )
+            )
+        if collections:
+            entries.append(SEPARATOR)
+        # Creating a collection and adding the game in one step -- the common
+        # case when the first game of a new grouping shows up.
+        entries.append(
+            (t("collections.new"), (lambda r=rom: self.win.create_collection_and_add(r)), "list-add-symbolic")
+        )
+        return Submenu(t("context.add_to_collection"), entries, "list-add-symbolic")
+
+    def _remove_from_collection_entry(self, rom):
+        # Only while viewing a collection: removing here never touches the file.
+        from openemux.ui.window import is_collection_scope
+
+        if not is_collection_scope(self.win.current_console):
+            return None
+        return (
+            self.win.t("context.remove_from_collection"),
+            (lambda r=rom: self.win.remove_rom_from_current_collection(r)),
+            "list-remove-symbolic",
+        )
 
     def _core_submenu(self, rom):
         console = rom.get("console")
