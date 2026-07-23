@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 
 from openemux.core.bios_manager import get_console_bios_dir
+from openemux.core.library_view import VIEW_MODES, normalize_view_mode
 from openemux.core.cover_sync import sync_covers_async
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
@@ -100,6 +101,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.scanner = RomScanner(self.roms_path)
         self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
         self.current_console = None
+        # Read before the header is built: the view-mode button shows it.
+        self._view_mode = self.config_manager.get_ui_settings()["view_mode"]
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
@@ -292,6 +295,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         header.pack_end(self.search_button)
 
+        header.pack_end(self._build_view_mode_button())
+
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
@@ -362,6 +367,63 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         page.set_tag("content")
         self.content_page = page
         return page
+
+    #: Toolbar icon per view mode. The two grid modes share one: the popover's
+    #: radio marks which of them is on, and swapping the button's icon between
+    #: two near-identical grids reads as noise.
+    VIEW_MODE_ICONS = {
+        "cover": "view-grid-symbolic",
+        "cartridge": "view-grid-symbolic",
+        "list": "view-list-symbolic",
+    }
+
+    def _build_view_mode_button(self):
+        """The layout switcher, in the header where the user browses.
+
+        It used to be a switch buried in Preferences, which is the wrong place
+        for something people flip while looking at their library.
+        """
+        menu = Gio.Menu()
+        for mode in VIEW_MODES:
+            menu.append(self.t(f"view_mode.{mode}"), f"win.view-mode::{mode}")
+
+        self.view_mode_button = Gtk.MenuButton()
+        self.view_mode_button.set_menu_model(menu)
+        self.view_mode_button.set_tooltip_text(self.t("header.view_mode"))
+        self.view_mode_button.set_icon_name(
+            self.VIEW_MODE_ICONS.get(self._view_mode, "view-grid-symbolic")
+        )
+        return self.view_mode_button
+
+    def _on_view_mode_action(self, action, value):
+        mode = normalize_view_mode(value.get_string())
+        action.set_state(GLib.Variant("s", mode))
+        self._apply_view_mode(mode)
+
+    def _apply_view_mode(self, mode):
+        """Switch the library layout and re-render the page being looked at."""
+        mode = normalize_view_mode(mode)
+        if mode == self._view_mode:
+            return
+        self._view_mode = mode
+        self.config_manager.set_view_mode(mode)
+        if hasattr(self, "view_mode_button"):
+            self.view_mode_button.set_icon_name(
+                self.VIEW_MODE_ICONS.get(mode, "view-grid-symbolic")
+            )
+        action = self.lookup_action("view-mode")
+        if action is not None and action.get_state().get_string() != mode:
+            action.set_state(GLib.Variant("s", mode))
+        self._reload_current_page()
+
+    def _reload_current_page(self):
+        """Rebuild the visible page from its playlist, keeping the selection."""
+        if self.current_console == ALL_CONSOLES_ID:
+            self._ensure_all_loaded()
+        elif self.current_console == FAVORITES_ID:
+            self._ensure_favorites_loaded()
+        elif self.current_console in getattr(self, "_console_pages", {}):
+            self._ensure_console_loaded(self.current_console)
 
     def _build_selection_bar(self):
         """Actions for a multi-ROM selection, revealed only while one exists.
@@ -584,6 +646,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if accels and app is not None:
                 app.set_accels_for_action(f"win.{name}", accels)
 
+        # Stateful, so the header menu draws the current layout as the selected
+        # radio entry instead of three identical rows.
+        view_mode_action = Gio.SimpleAction.new_stateful(
+            "view-mode",
+            GLib.VariantType.new("s"),
+            GLib.Variant("s", self._view_mode),
+        )
+        view_mode_action.connect("activate", self._on_view_mode_action)
+        self.add_action(view_mode_action)
+
     def _focused_rom_item(self):
         return RomGrid.item_for_widget(self.get_focus())
 
@@ -709,15 +781,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast = Adw.Toast(title=text)
         toast.set_timeout(timeout)
         self.toast_overlay.add_toast(toast)
-
-    def _apply_render_cartridge(self, active):
-        self.config_manager.set_render_cartridge_overlay(active)
-        if self.current_console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
-        elif self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-        elif self.current_console in getattr(self, "_console_pages", {}):
-            self._ensure_console_loaded(self.current_console)
 
     def _apply_language_change(self, locale):
         self.config_manager.set_locale(locale)

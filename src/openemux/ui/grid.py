@@ -6,6 +6,13 @@ from pathlib import Path
 import logging
 
 from openemux.core import cartridge_render
+from openemux.core.library_view import (
+    LIST_ROW_MIN_WIDTH,
+    is_grid_view,
+    list_thumb_size,
+    normalize_view_mode,
+    renders_cartridge,
+)
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
@@ -25,6 +32,11 @@ FIXED_ITEM_WIDTH = 200
 #: Gap between cards, and the grid's padding inside the viewport.
 GRID_SPACING = 24
 GRID_MARGIN = 28
+
+#: The same, for the compact list: rows sit close together and closer to the
+#: edges, like a file manager's list view.
+LIST_ROW_SPACING = 4
+LIST_MARGIN = 12
 
 # Box art proportions (width / height) per console, so a card matches the shape
 # of the artwork it holds instead of forcing every console into a square.
@@ -73,13 +85,19 @@ def cover_size_for_console(console):
     return FIXED_ITEM_WIDTH, max(1, height)
 
 
-def card_size_for(cover_size, mixed_consoles=False):
+def card_size_for(cover_size, mixed_consoles=False, compact=False):
     """Full card size for a cover: the artwork plus the caption below it.
 
     The grid needs this to lay out its columns and the card needs it to pin its
     own size, so it is computed in one place. Pages that mix consoles carry a
     second caption line for the console name.
+
+    A compact row puts the caption *beside* the thumbnail instead, so its
+    height is the thumbnail's and its width is only a minimum -- the row
+    stretches to the viewport.
     """
+    if compact:
+        return LIST_ROW_MIN_WIDTH, cover_size[1]
     caption_height = 44 + (18 if mixed_consoles else 0)
     return cover_size[0], cover_size[1] + caption_height
 
@@ -157,8 +175,14 @@ class RomItem(Gtk.Box):
         on_rename_rom=None,
         on_delete_rom=None,
         on_toggle_selection=None,
+        compact=False,
     ):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        super().__init__(
+            orientation=(
+                Gtk.Orientation.HORIZONTAL if compact else Gtk.Orientation.VERTICAL
+            ),
+            spacing=(12 if compact else 8),
+        )
         self.rom = rom
         self.on_launch_callback = on_launch_callback
         self.on_toggle_favorite = on_toggle_favorite
@@ -175,6 +199,10 @@ class RomItem(Gtk.Box):
         self.has_local_cover = has_local_cover
         self.t = t
         self.roms_dir = roms_dir
+        # A compact row is the same card laid out sideways: a thumbnail, the
+        # title beside it, and the badges at the far end instead of stacked on
+        # the artwork, where they would swallow a 64px thumbnail.
+        self.compact = compact
         self.cover_width, self.cover_height = cover_size
         # When set, the card shows a single pre-rendered image: the cover is
         # already composited into the cartridge, so there is no overlay to
@@ -193,16 +221,21 @@ class RomItem(Gtk.Box):
         # to put it on, whether or not the cartridge look is switched on now.
         self.supports_label = cartridge_frame_svg(rom["console"]) is not None
         self.add_css_class("rom-card")
+        if compact:
+            self.add_css_class("rom-row")
         # Fixed card size. The grid also pins each FlowBoxChild to this size, so
         # a page with a single row cannot stretch the cell (and with it the
         # focus ring) over the whole viewport.
-        self.card_size = card_size_for((self.cover_width, self.cover_height), mixed_consoles)
+        self.card_size = card_size_for(
+            (self.cover_width, self.cover_height), mixed_consoles, compact=compact
+        )
         self.set_size_request(*self.card_size)
         # Centred rather than START-aligned: the card fills its cell exactly, so
-        # its contents sit centred inside the focus/selection ring.
-        self.set_halign(Gtk.Align.CENTER)
+        # its contents sit centred inside the focus/selection ring. A row is the
+        # exception: it spans the viewport, so it fills horizontally.
+        self.set_halign(Gtk.Align.FILL if compact else Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)
-        self.set_hexpand(False)
+        self.set_hexpand(bool(compact))
         self.set_vexpand(False)
 
         # Click gesture
@@ -231,7 +264,7 @@ class RomItem(Gtk.Box):
         self.cover_image.set_size_request(*self._cover_target_size())
         self.cover_image.set_content_fit(
             Gtk.ContentFit.CONTAIN
-            if (mixed_consoles or cartridge_frame_path)
+            if (mixed_consoles or cartridge_frame_path or compact)
             else Gtk.ContentFit.COVER
         )
         self.cover_image.set_can_shrink(True)
@@ -277,12 +310,14 @@ class RomItem(Gtk.Box):
         self.favorite_button.add_css_class("circular")
         self.favorite_button.add_css_class("favorite-badge")
         self.favorite_button.set_halign(Gtk.Align.START)
-        self.favorite_button.set_valign(Gtk.Align.START)
-        self.favorite_button.set_margin_top(6)
-        self.favorite_button.set_margin_start(6)
+        self.favorite_button.set_valign(Gtk.Align.CENTER if compact else Gtk.Align.START)
+        if not compact:
+            self.favorite_button.set_margin_top(6)
+            self.favorite_button.set_margin_start(6)
         self.favorite_button.connect("clicked", self._on_favorite_button_clicked)
         self._sync_favorite_button(self.is_favorite(self.rom))
-        self.cover_overlay.add_overlay(self.favorite_button)
+        if not compact:
+            self.cover_overlay.add_overlay(self.favorite_button)
 
         # Right-click is not obvious to everyone, so the same menu is one click
         # away from a button that appears on hover.
@@ -294,35 +329,49 @@ class RomItem(Gtk.Box):
         self.menu_button.add_css_class("rom-menu-button")
         self.menu_button.add_css_class("circular")
         self.menu_button.set_halign(Gtk.Align.END)
-        self.menu_button.set_valign(Gtk.Align.START)
-        self.menu_button.set_margin_top(6)
-        self.menu_button.set_margin_end(6)
+        self.menu_button.set_valign(Gtk.Align.CENTER if compact else Gtk.Align.START)
+        if not compact:
+            self.menu_button.set_margin_top(6)
+            self.menu_button.set_margin_end(6)
         self.menu_button.set_tooltip_text(self.t("context.more_options"))
         self.menu_button.set_visible(False)
         self.menu_button.connect("clicked", self._on_menu_button_clicked)
-        self.cover_overlay.add_overlay(self.menu_button)
+        if not compact:
+            self.cover_overlay.add_overlay(self.menu_button)
 
         self.append(self.cover_overlay)
 
         full_name = rom["name"]
-        display_name = self._truncate_name(full_name)
+        # A row has the whole width to run the title along, so it is only
+        # ellipsized when it truly does not fit; a card gets the short form.
+        display_name = full_name if compact else self._truncate_name(full_name)
         self.set_tooltip_text(full_name)
 
-        # ROM name, plus the console it belongs to when the page mixes consoles.
+        # ROM name, plus the console it belongs to when the page mixes consoles
+        # -- always in a row, where it reads as the platform column.
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_valign(Gtk.Align.CENTER)
+        text_box.set_hexpand(bool(compact))
+        label_align = Gtk.Align.START if compact else Gtk.Align.CENTER
         self.name_label = Gtk.Label(label=display_name)
-        self.name_label.set_halign(Gtk.Align.CENTER)
-        self.name_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
-        self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
+        self.name_label.set_halign(label_align)
+        self.name_label.set_xalign(0.0 if compact else 0.5)
+        if compact:
+            self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        else:
+            self.name_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+            self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
         self.name_label.set_tooltip_text(full_name)
         self.name_label.add_css_class("rom-title")
         text_box.append(self.name_label)
 
         self.console_label = None
-        if mixed_consoles:
+        if mixed_consoles or compact:
             self.console_label = Gtk.Label(label=get_system_display_name(rom["console"]))
-            self.console_label.set_halign(Gtk.Align.CENTER)
-            self.console_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
+            self.console_label.set_halign(label_align)
+            self.console_label.set_xalign(0.0 if compact else 0.5)
+            if not compact:
+                self.console_label.set_max_width_chars(self.NAME_PREVIEW_LIMIT + 3)
             self.console_label.set_ellipsize(Pango.EllipsizeMode.END)
             self.console_label.add_css_class("caption")
             self.console_label.add_css_class("dim-label")
@@ -330,6 +379,15 @@ class RomItem(Gtk.Box):
             text_box.append(self.console_label)
 
         self.append(text_box)
+
+        if compact:
+            # Badges at the end of the row: the star stays put (it marks a
+            # favourite) and the menu button appears on hover, as on a card.
+            badges = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            badges.set_valign(Gtk.Align.CENTER)
+            badges.append(self.favorite_button)
+            badges.append(self.menu_button)
+            self.append(badges)
 
         # Trigger async cover art fetch
         fetch_cover(rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
@@ -419,7 +477,7 @@ class RomItem(Gtk.Box):
                 self._cover_target_size()[1],
                 True,
             )
-            if self.mixed_consoles:
+            if self.mixed_consoles or self.compact:
                 # Shrink the widget to the scaled art so the rounded corners and
                 # shadow hug the cover, not the empty area around it.
                 self.cover_image.set_size_request(pixbuf.get_width(), pixbuf.get_height())
@@ -723,17 +781,31 @@ class RomGrid(Gtk.FlowBox):
         # bottom.
         self.set_valign(Gtk.Align.START)
         self.set_vexpand(True)
-        self.set_row_spacing(GRID_SPACING)
-        self.set_column_spacing(GRID_SPACING)
         self.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.set_margin_top(GRID_MARGIN)
-        self.set_margin_bottom(GRID_MARGIN)
-        self.set_margin_start(GRID_MARGIN)
-        self.set_margin_end(GRID_MARGIN)
         self.set_homogeneous(False)
         # Zeroes the theme's padding on the child wrappers, so a cell is exactly
         # the card and the gaps are exactly GRID_SPACING.
         self.add_css_class("rom-grid")
+
+        self.view_mode = normalize_view_mode(self.ui_settings.get("view_mode"))
+        self.compact = not is_grid_view(self.view_mode)
+
+        if self.compact:
+            # One row per line, filling the width. The column maths below is
+            # for cards; a row has no columns to fit.
+            self.set_row_spacing(LIST_ROW_SPACING)
+            self.set_column_spacing(0)
+            self.set_min_children_per_line(1)
+            self.set_max_children_per_line(1)
+            margin = LIST_MARGIN
+        else:
+            self.set_row_spacing(GRID_SPACING)
+            self.set_column_spacing(GRID_SPACING)
+            margin = GRID_MARGIN
+        self.set_margin_top(margin)
+        self.set_margin_bottom(margin)
+        self.set_margin_start(margin)
+        self.set_margin_end(margin)
 
         cartridge_frame_path = None
         # One fixed card size for the whole page, so the grid lays out on an
@@ -741,7 +813,7 @@ class RomGrid(Gtk.FlowBox):
         # proportions; pages mixing consoles have no single shape to follow, so
         # they use a uniform square box and centre each cover inside it.
         cover_size = DEFAULT_ITEM_SIZE if mixed_consoles else cover_size_for_console(console)
-        if not mixed_consoles and self.ui_settings.get("render_cartridge_overlay", False):
+        if not mixed_consoles and not self.compact and renders_cartridge(self.view_mode):
             # The card shape comes from the frame art itself: fixed width, and
             # the height that keeps the cartridge's own proportions.
             cartridge_frame_path = cartridge_frame_svg(console)
@@ -749,7 +821,12 @@ class RomGrid(Gtk.FlowBox):
                 frame = cartridge_render.load_frame(cartridge_frame_path)
                 cover_size = frame.size_for_width(FIXED_ITEM_WIDTH)
 
-        self._card_size = card_size_for(cover_size, mixed_consoles)
+        if self.compact:
+            # Rows show the box art itself, never a cartridge: a frame drawn at
+            # thumbnail size is an unreadable smudge.
+            cover_size = list_thumb_size(cover_size)
+
+        self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
 
         for rom in roms:
             item = RomItem(
@@ -769,6 +846,7 @@ class RomGrid(Gtk.FlowBox):
                 on_rename_rom=on_rename_rom,
                 on_delete_rom=on_delete_rom,
                 on_toggle_selection=self._toggle_item_selection,
+                compact=self.compact,
             )
             self._items.append(item)
             self.append(item)
@@ -833,6 +911,10 @@ class RomGrid(Gtk.FlowBox):
         own allocation: the end margin changes that allocation, so feeding it
         back in would make the two oscillate.
         """
+        if self.compact:
+            # One row per line, and the row itself absorbs the width: there is
+            # no slack to hand to the margin.
+            return
         columns, slack = columns_and_slack(
             self._viewport_width() - 2 * GRID_MARGIN,
             self._card_allocation_width(),
@@ -885,9 +967,11 @@ class RomGrid(Gtk.FlowBox):
             return
         child.set_focusable(True)
         child.set_size_request(*item.card_size)
-        child.set_halign(Gtk.Align.CENTER)
+        # A row spans the viewport, so it fills; a card is pinned to its own
+        # size and centred in its cell.
+        child.set_halign(Gtk.Align.FILL if self.compact else Gtk.Align.CENTER)
         child.set_valign(Gtk.Align.CENTER)
-        child.set_hexpand(False)
+        child.set_hexpand(bool(self.compact))
         child.set_vexpand(False)
 
         focus = Gtk.EventControllerFocus()
