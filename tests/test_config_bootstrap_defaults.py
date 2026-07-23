@@ -51,6 +51,38 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
             self.assertTrue(manager.get_ui_settings()["render_cartridge_overlay"])
 
+    def test_view_mode_defaults_to_the_cartridge_shelf(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertEqual(manager.get_view_mode(), "cartridge")
+
+    def test_view_mode_round_trips_and_keeps_the_legacy_key_in_step(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+
+            manager.set_view_mode("list")
+            settings = manager.get_ui_settings()
+            self.assertEqual(settings["view_mode"], "list")
+            self.assertFalse(settings["render_cartridge_overlay"])
+
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "list")
+
+    def test_an_unknown_view_mode_falls_back_instead_of_breaking_the_library(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            cfg_path.write_text("ui:\n  view_mode: mosaic\n", encoding="utf-8")
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "cartridge")
+
+    def test_a_config_from_before_view_modes_carries_its_choice_over(self):
+        """The cartridge switch was the only layout control there was."""
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            cfg_path.write_text(
+                "ui:\n  version: 1\n  render_cartridge_overlay: false\n", encoding="utf-8"
+            )
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "cover")
+
     def test_config_written_before_the_new_default_switches_over_once(self):
         with TemporaryDirectory() as tmp_dir:
             cfg_path = Path(tmp_dir) / "config.yaml"

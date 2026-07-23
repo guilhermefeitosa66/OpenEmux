@@ -24,6 +24,7 @@ from openemux.core.config import (
     normalize_cover_source,
 )
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
+from openemux.core.library_view import VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -826,15 +827,22 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
 
         appearance = Adw.PreferencesGroup(title=self.t("prefs.group.appearance"))
-        self._cartridge_switch = Adw.SwitchRow(
-            title=self.t("settings.ui.render_cartridge.title"),
-            subtitle=self.t("settings.ui.render_cartridge.subtitle"),
+        # The cartridge frame is one of the view modes now, so this row mirrors
+        # the header's switcher rather than owning a switch of its own.
+        self._view_modes = list(VIEW_MODES)
+        self._view_mode_combo = Adw.ComboRow(
+            title=self.t("settings.ui.view_mode.title"),
+            subtitle=self.t("settings.ui.view_mode.subtitle"),
         )
-        self._cartridge_switch.set_active(
-            self.config.get_ui_settings().get("render_cartridge_overlay", False)
+        self._view_mode_combo.set_model(
+            Gtk.StringList.new([self.t(f"view_mode.{mode}") for mode in self._view_modes])
         )
-        self._cartridge_switch.connect("notify::active", self._on_cartridge_toggled)
-        appearance.add(self._cartridge_switch)
+        current_mode = self.config.get_ui_settings()["view_mode"]
+        self._view_mode_combo.set_selected(
+            self._view_modes.index(current_mode) if current_mode in self._view_modes else 0
+        )
+        self._view_mode_combo.connect("notify::selected", self._on_view_mode_changed)
+        appearance.add(self._view_mode_combo)
 
         self._show_all_switch = Adw.SwitchRow(title=self.t("settings.shaders.show_all"))
         self._show_all_switch.set_active(
@@ -901,8 +909,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._rebuild_shader_rows()
         self._toast(self.t("toast.shaders.defaults_restored"))
 
-    def _on_cartridge_toggled(self, switch, _param):
-        self.win._apply_render_cartridge(switch.get_active())
+    def _on_view_mode_changed(self, *_a):
+        index = self._view_mode_combo.get_selected()
+        if 0 <= index < len(self._view_modes):
+            self.win._apply_view_mode(self._view_modes[index])
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):

@@ -6,6 +6,11 @@ from pathlib import Path
 import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
+from openemux.core.library_view import (
+    normalize_view_mode,
+    renders_cartridge,
+    view_mode_from_legacy,
+)
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home
 from openemux.core.shaders import ShaderConfigStore
@@ -261,6 +266,15 @@ class ConfigManager:
         ui.setdefault("render_cartridge_overlay", True)
         ui.setdefault("show_tips", True)
         ui.setdefault("gamepad_navigation", True)
+        # The view mode supersedes the cartridge switch, which could only say
+        # "cartridge or plain cover". A config written before it carries its
+        # choice over. Like "version", the key is absent from DEFAULT_CONFIG so
+        # _merge_defaults cannot stamp it and hide the older config.
+        if "view_mode" not in ui:
+            ui["view_mode"] = view_mode_from_legacy(ui["render_cartridge_overlay"])
+        ui["view_mode"] = normalize_view_mode(ui["view_mode"])
+        # Kept in step so anything still reading the old key sees the truth.
+        ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
         config["ui"] = ui
 
         updates = config.get("updates", {})
@@ -406,8 +420,11 @@ class ConfigManager:
 
     def get_ui_settings(self):
         ui = self.config.get("ui", {})
+        view_mode = normalize_view_mode(ui.get("view_mode"))
         return {
-            "render_cartridge_overlay": bool(ui.get("render_cartridge_overlay", True)),
+            "view_mode": view_mode,
+            # Derived, not stored twice: the view mode is the source of truth.
+            "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
         }
@@ -425,10 +442,18 @@ class ConfigManager:
             "timeout_seconds": timeout,
         }
 
-    def set_render_cartridge_overlay(self, enabled):
+    def get_view_mode(self):
+        return normalize_view_mode(self.config.get("ui", {}).get("view_mode"))
+
+    def set_view_mode(self, view_mode):
         ui = self.config.setdefault("ui", {})
-        ui["render_cartridge_overlay"] = bool(enabled)
+        ui["view_mode"] = normalize_view_mode(view_mode)
+        ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
         self.save_config()
+
+    def set_render_cartridge_overlay(self, enabled):
+        """Legacy entry point: the cartridge frame is a view mode now."""
+        self.set_view_mode(view_mode_from_legacy(bool(enabled)))
 
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
