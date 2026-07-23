@@ -10,6 +10,7 @@ from openemux.core.library_view import (
     DEFAULT_ZOOM,
     LIST_ROW_MIN_WIDTH,
     is_grid_view,
+    list_thumb_column_width,
     list_thumb_size,
     normalize_view_mode,
     normalize_zoom,
@@ -139,27 +140,33 @@ def cartridge_frame_svg(console):
     return candidate if cartridge_render.load_frame(candidate) else None
 
 
-class CartridgePicture(Gtk.Picture):
-    """A Picture that measures as the card, not as the image it holds.
+class FixedSizePicture(Gtk.Picture):
+    """A Picture that measures as the slot it sits in, not as its image.
 
     Gtk.Picture reports its paintable's pixel size as the natural size, and
-    set_size_request only raises the minimum, so the HiDPI composite (rendered
-    at CARTRIDGE_RENDER_SCALE) would blow the card up by that factor. The card
-    size comes from the frame proportions, so it is reported here directly and
-    GTK still draws from the full-resolution texture.
+    set_size_request only raises the minimum. Two places need the slot to win
+    instead:
+
+    * the cartridge composite is rendered at CARTRIDGE_RENDER_SCALE for HiDPI,
+      and would blow the card up by that factor;
+    * a list thumbnail asked to fit a fixed height reports the width its aspect
+      implies, so each console would indent its titles differently.
+
+    Reporting the slot directly fixes both, and GTK still draws from the
+    full-resolution image.
     """
 
-    __gtype_name__ = "OpenEmuxCartridgePicture"
+    __gtype_name__ = "OpenEmuxFixedSizePicture"
 
     def __init__(self, width, height):
         super().__init__()
-        self._card_size = (width, height)
+        self._slot_size = (width, height)
 
     def do_measure(self, orientation, for_size):
         size = (
-            self._card_size[0]
+            self._slot_size[0]
             if orientation == Gtk.Orientation.HORIZONTAL
-            else self._card_size[1]
+            else self._slot_size[1]
         )
         return size, size, -1, -1
 
@@ -266,11 +273,21 @@ class RomItem(Gtk.Box):
         # Cover art overlay (image + play button on hover)
         self.cover_overlay = Gtk.Overlay()
         self.cover_overlay.set_size_request(self.cover_width, self.cover_height)
+        if compact:
+            # Pin the thumbnail column: GTK propagates a child's hexpand up, so
+            # without this the artwork column absorbs the row's spare width.
+            # The width is the column's, not this cover's, so every title in the
+            # list starts at the same indent.
+            self.cover_overlay.set_size_request(
+                list_thumb_column_width(self.zoom), self.cover_height
+            )
+            self.cover_overlay.set_hexpand(False)
+            self.cover_overlay.set_halign(Gtk.Align.START)
 
         # Cover image (placeholder initially)
         self.cover_image = (
-            CartridgePicture(*self._cover_target_size())
-            if cartridge_frame_path
+            FixedSizePicture(*self._cover_target_size())
+            if (cartridge_frame_path or compact)
             else Gtk.Picture()
         )
         self.cover_image.set_size_request(*self._cover_target_size())
@@ -493,9 +510,11 @@ class RomItem(Gtk.Box):
                 self._cover_target_size()[1],
                 True,
             )
-            if self.mixed_consoles or self.compact:
+            if self.mixed_consoles and not self.compact:
                 # Shrink the widget to the scaled art so the rounded corners and
-                # shadow hug the cover, not the empty area around it.
+                # shadow hug the cover, not the empty area around it. Not in a
+                # row: there the thumbnail box is a column shared with every
+                # other row, and resizing it per cover would stagger the titles.
                 self.cover_image.set_size_request(pixbuf.get_width(), pixbuf.get_height())
             self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
@@ -508,10 +527,18 @@ class RomItem(Gtk.Box):
         return False  # Don't repeat idle callback
 
     def _cover_target_size(self):
+        if self.compact:
+            # The shared column, so a wide cover can use all of it and a narrow
+            # one is centred in it rather than shrinking the slot.
+            return list_thumb_column_width(self.zoom), self.cover_height
         return self.cover_width, self.cover_height
 
     def _setup_cover_host(self):
-        if self.mixed_consoles:
+        # A row never gets the backdrop: it exists to fill a uniform *card* box
+        # on pages that mix consoles, and inside a horizontal row its expanding
+        # child makes the whole thumbnail column stretch, shoving every title to
+        # a different indent.
+        if self.mixed_consoles and not self.compact:
             # Uniform box: the cover keeps its own shape and the leftover area
             # is filled by a subtle backdrop instead of cropping the art.
             self._backdrop = Gtk.Box()

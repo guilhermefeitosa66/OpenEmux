@@ -13,13 +13,19 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 from openemux.core.bios_manager import get_console_bios_dir
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
+    SORT_ORDERS,
+    SORT_ORDERS_NEEDING_FILE_STAT,
+    SORT_ORDERS_NEEDING_HISTORY,
     VIEW_MODES,
     can_zoom,
+    normalize_sort_order,
     normalize_view_mode,
     normalize_zoom,
+    sort_roms,
     zoom_percent,
     zoom_step,
 )
+from openemux.core.play_history import PlayHistory
 from openemux.core.cover_sync import sync_covers_async
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
@@ -113,6 +119,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         _ui = self.config_manager.get_ui_settings()
         self._view_mode = _ui["view_mode"]
         self._zoom = _ui["zoom"]
+        self._sort_order = _ui["sort_order"]
+        self.play_history = PlayHistory()
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
@@ -398,6 +406,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for mode in VIEW_MODES:
             menu.append(self.t(f"view_mode.{mode}"), f"win.view-mode::{mode}")
 
+        # Sorting sits behind a submenu: six orders as a flat list would bury
+        # the three view modes above them.
+        sort_menu = Gio.Menu()
+        for order in SORT_ORDERS:
+            sort_menu.append(self.t(f"sort_order.{order}"), f"win.sort-order::{order}")
+        sort_section = Gio.Menu()
+        sort_section.append_submenu(self.t("header.sort_by"), sort_menu)
+        menu.append_section(None, sort_section)
+
         zoom_section = Gio.Menu()
         zoom_item = Gio.MenuItem.new(None, None)
         # A custom item: a menu model cannot express a -/+ stepper, and
@@ -486,14 +503,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             action.set_state(GLib.Variant("s", mode))
         self._reload_current_page()
 
-    def _reload_current_page(self):
-        """Rebuild the visible page from its playlist, keeping the selection."""
-        if self.current_console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
-        elif self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-        elif self.current_console in getattr(self, "_console_pages", {}):
-            self._ensure_console_loaded(self.current_console)
+    def _on_sort_order_action(self, action, value):
+        order = normalize_sort_order(value.get_string())
+        action.set_state(GLib.Variant("s", order))
+        self._apply_sort_order(order)
+
+    def _apply_sort_order(self, order):
+        order = normalize_sort_order(order)
+        if order == self._sort_order:
+            return
+        self._sort_order = order
+        self.config_manager.set_sort_order(order)
+        self._reload_current_page()
+        self._toast(self.t("toast.sorted", order=self.t(f"sort_order.{order}")), timeout=2)
+
+    def _sorted_roms(self, roms):
+        """Apply the chosen order, reading the disk only when it is needed.
+
+        Stat-ing a whole library costs real time on a slow disk, so the lookups
+        are wired up only for the orders that actually use them.
+        """
+        needs_stat = self._sort_order in SORT_ORDERS_NEEDING_FILE_STAT
+        needs_history = self._sort_order in SORT_ORDERS_NEEDING_HISTORY
+        return sort_roms(
+            roms,
+            self._sort_order,
+            file_stat=self._rom_file_stat if needs_stat else None,
+            last_played=self.play_history.last_played if needs_history else None,
+        )
+
+    @staticmethod
+    def _rom_file_stat(path):
+        """``(size, added)`` for a ROM. A file that is gone sorts as unknown."""
+        try:
+            info = os.stat(path)
+        except OSError:
+            return 0, 0.0
+        # st_ctime, not st_mtime: copying a ROM in preserves the original file's
+        # modification time, so "recently added" has to mean when *this* copy
+        # appeared, which is what the inode change time records.
+        return info.st_size, info.st_ctime
 
     def _build_selection_bar(self):
         """Actions for a multi-ROM selection, revealed only while one exists.
@@ -730,6 +779,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         view_mode_action.connect("activate", self._on_view_mode_action)
         self.add_action(view_mode_action)
+
+        sort_order_action = Gio.SimpleAction.new_stateful(
+            "sort-order",
+            GLib.VariantType.new("s"),
+            GLib.Variant("s", self._sort_order),
+        )
+        sort_order_action.connect("activate", self._on_sort_order_action)
+        self.add_action(sort_order_action)
 
     def _focused_rom_item(self):
         return RomGrid.item_for_widget(self.get_focus())
@@ -1595,12 +1652,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 roms = self.playlist_manager.load_playlist(console)
             all_roms.extend(roms)
 
-        all_roms.sort(key=lambda rom: (rom.get("console", ""), rom.get("name", "").lower()))
+        # Ordering is _render_console_page's job now: it applies whichever sort
+        # order the user picked, to every page alike.
         self._render_console_page(ALL_CONSOLES_ID, all_roms)
         self._console_loaded[ALL_CONSOLES_ID] = True
 
     def _render_console_page(self, console, roms):
         scroll = self._console_pages[console]
+        roms = self._sorted_roms(roms)
         if not roms:
             if console == FAVORITES_ID:
                 status = Adw.StatusPage(
@@ -1766,6 +1825,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("toast.rom.rename_failed", error=str(exc)), timeout=6)
             return
         self.playlist_manager.repath_rom(rom["console"], rom["path"], renamed["path"])
+        self.play_history.repath(rom["path"], renamed["path"])
         self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
         self._reload_current_page()
 
@@ -1802,6 +1862,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self._toast(self.t("toast.rom.delete_failed", name=rom["name"]), timeout=6)
                 continue
             self.playlist_manager.forget_rom(rom["console"], rom["path"])
+            self.play_history.forget(rom["path"])
             deleted += 1
 
         if deleted:
@@ -2314,6 +2375,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def on_launch_game(self, rom):
         success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        if success:
+            # Stamped here rather than on exit: a game that fails to close
+            # cleanly was still played, and this is the only point that knows
+            # which ROM was asked for.
+            self.play_history.record_launch(rom["path"])
         self._sync_runtime_controls()
         if not success and error_msg:
             toast = Adw.Toast(title=error_msg)

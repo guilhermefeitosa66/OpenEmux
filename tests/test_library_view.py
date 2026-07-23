@@ -11,8 +11,18 @@ from openemux.core.library_view import (
     VIEW_MODE_COVER,
     VIEW_MODE_LIST,
     VIEW_MODES,
+    DEFAULT_SORT_ORDER,
+    SORT_FILE_SIZE,
+    SORT_NAME_ASC,
+    SORT_NAME_DESC,
+    SORT_PLATFORM,
+    SORT_RECENTLY_ADDED,
+    SORT_RECENTLY_PLAYED,
     can_zoom,
     is_grid_view,
+    normalize_sort_order,
+    sort_roms,
+    list_thumb_column_width,
     list_thumb_size,
     normalize_view_mode,
     normalize_zoom,
@@ -73,10 +83,100 @@ class ListThumbTests(unittest.TestCase):
         width, _height = list_thumb_size((100, 200))
         self.assertEqual(width, 32)
 
+    def test_the_column_is_the_same_width_for_every_console(self):
+        """Otherwise each console's aspect gives its titles a different indent."""
+        self.assertEqual(list_thumb_column_width(1.0), LIST_ROW_MAX_THUMB_WIDTH)
+        self.assertEqual(list_thumb_column_width(2.0), LIST_ROW_MAX_THUMB_WIDTH * 2)
+
+    def test_no_thumbnail_is_wider_than_its_column(self):
+        for cover in ((200, 200), (200, 100), (100, 200), (280, 100)):
+            with self.subTest(cover=cover):
+                width, _h = list_thumb_size(cover, 1.5)
+                self.assertLessEqual(width, list_thumb_column_width(1.5))
+
     def test_a_degenerate_size_does_not_divide_by_zero(self):
         self.assertEqual(
             list_thumb_size((0, 0)), (LIST_ROW_MAX_THUMB_WIDTH, LIST_ROW_THUMB_HEIGHT)
         )
+
+
+def rom(name, console="SFC", path=None):
+    return {"name": name, "console": console, "path": path or f"/roms/{console}/{name}.rom"}
+
+
+class SortOrderTests(unittest.TestCase):
+    LIBRARY = [
+        rom("Zelda", "SFC"),
+        rom("chrono trigger", "SFC"),
+        rom("Astérix", "MD"),
+        rom("Mega Man", "FC"),
+    ]
+
+    def names(self, roms):
+        return [entry["name"] for entry in roms]
+
+    def test_unknown_orders_fall_back_to_a_z(self):
+        for value in ("", None, "by_vibes"):
+            with self.subTest(value=value):
+                self.assertEqual(normalize_sort_order(value), DEFAULT_SORT_ORDER)
+
+    def test_name_ascending_ignores_case(self):
+        """Otherwise every lowercase title lands in a block after the Z's."""
+        self.assertEqual(
+            self.names(sort_roms(self.LIBRARY, SORT_NAME_ASC)),
+            ["Astérix", "chrono trigger", "Mega Man", "Zelda"],
+        )
+
+    def test_name_descending_is_the_exact_reverse(self):
+        self.assertEqual(
+            self.names(sort_roms(self.LIBRARY, SORT_NAME_DESC)),
+            list(reversed(self.names(sort_roms(self.LIBRARY, SORT_NAME_ASC)))),
+        )
+
+    def test_platform_groups_consoles_and_sorts_inside_each(self):
+        self.assertEqual(
+            self.names(sort_roms(self.LIBRARY, SORT_PLATFORM)),
+            ["Mega Man", "Astérix", "chrono trigger", "Zelda"],
+        )
+
+    def test_file_size_is_largest_first(self):
+        sizes = {"/roms/SFC/Zelda.rom": 4_000_000, "/roms/SFC/chrono trigger.rom": 8_000_000}
+        ordered = sort_roms(
+            self.LIBRARY, SORT_FILE_SIZE, file_stat=lambda p: (sizes.get(p, 0), 0.0)
+        )
+        self.assertEqual(self.names(ordered)[:2], ["chrono trigger", "Zelda"])
+
+    def test_recently_added_is_newest_first(self):
+        added = {"/roms/MD/Astérix.rom": 500.0, "/roms/FC/Mega Man.rom": 900.0}
+        ordered = sort_roms(
+            self.LIBRARY, SORT_RECENTLY_ADDED, file_stat=lambda p: (0, added.get(p, 0.0))
+        )
+        self.assertEqual(self.names(ordered)[:2], ["Mega Man", "Astérix"])
+
+    def test_recently_played_is_newest_first(self):
+        played = {"/roms/SFC/Zelda.rom": 20.0, "/roms/FC/Mega Man.rom": 90.0}
+        ordered = sort_roms(
+            self.LIBRARY, SORT_RECENTLY_PLAYED, last_played=lambda p: played.get(p, 0.0)
+        )
+        self.assertEqual(self.names(ordered)[:2], ["Mega Man", "Zelda"])
+
+    def test_games_that_tie_fall_back_to_the_title(self):
+        """Never-played games are all 0, so they must not come out shuffled."""
+        ordered = sort_roms(self.LIBRARY, SORT_RECENTLY_PLAYED, last_played=lambda _p: 0.0)
+        self.assertEqual(self.names(ordered), self.names(sort_roms(self.LIBRARY, SORT_NAME_ASC)))
+
+    def test_a_missing_lookup_sorts_as_unknown_instead_of_raising(self):
+        """A page can outlive the files on it (deleted ROM, unplugged drive)."""
+        def exploding_stat(_path):
+            raise OSError("gone")
+
+        ordered = sort_roms(self.LIBRARY, SORT_FILE_SIZE, file_stat=exploding_stat)
+        self.assertEqual(len(ordered), len(self.LIBRARY))
+
+    def test_sorting_does_not_mutate_the_caller_s_list(self):
+        original = list(self.LIBRARY)
+        sort_roms(self.LIBRARY, SORT_NAME_DESC)
+        self.assertEqual(self.LIBRARY, original)
 
 
 class ZoomTests(unittest.TestCase):
