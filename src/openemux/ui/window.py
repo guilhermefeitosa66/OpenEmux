@@ -142,14 +142,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.navigation = NavigationController(self)
         ui_settings = self.config_manager.get_ui_settings()
         self._gamepad_nav_enabled = ui_settings.get("gamepad_navigation", True)
+        # True while the preferences dialog waits for a button/key to bind.
+        self.input_capture_active = False
         self.gamepad_navigator = GamepadNavigator(
             on_action=lambda action: GLib.idle_add(self.navigation.on_gamepad_action, action),
             on_connected=lambda name: GLib.idle_add(self.navigation.on_gamepad_connected, name),
             on_disconnected=lambda: GLib.idle_add(self.navigation.on_gamepad_disconnected),
-            # A running game owns the pad; the preferences switch pauses the
-            # reader without tearing the thread down.
+            # A running game owns the pad; so does the remapping dialog. The
+            # preferences switch pauses the reader without tearing the thread
+            # down.
             should_suspend=lambda: (
-                not self._gamepad_nav_enabled or self.runtime_manager.is_running()
+                not self._gamepad_nav_enabled
+                or self.input_capture_active
+                or self.runtime_manager.is_running()
             ),
         )
         self.gamepad_navigator.start()
@@ -622,6 +627,20 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_close_stop_gamepad(self, *_args):
         self.gamepad_navigator.stop()
         return False
+
+    def set_input_capture_active(self, active):
+        """Give the remapping dialog exclusive ownership of the controller.
+
+        While this is set the navigator thread suspends (so no held direction
+        keeps repeating) and every action that still reaches the main loop is
+        resolved as a no-op, which is what stops B from closing the dialog
+        instead of being stored as a binding.
+        """
+        active = bool(active)
+        if active == self.input_capture_active:
+            return
+        self.input_capture_active = active
+        self.navigation.refresh_hints()
 
     def _apply_gamepad_navigation(self, enabled):
         self.config_manager.set_gamepad_navigation(enabled)

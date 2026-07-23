@@ -21,6 +21,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib
 logger = logging.getLogger(__name__)
 
 # Focus contexts, from the innermost scope out.
+CTX_INPUT_CAPTURE = "input-capture"
 CTX_POPOVER = "popover"
 CTX_DIALOG = "dialog"
 CTX_GRID = "grid"
@@ -66,6 +67,12 @@ def resolve(context, action):
       ("close-search",)          leave search mode if it is open
       ("noop",)                  nothing sensible in this context
     """
+    # Remapping owns the pad exclusively: while the preferences dialog waits
+    # for a button, every action is inert. Otherwise B (the "back" token on an
+    # Xbox pad) would close the dialog instead of being stored as a binding.
+    if context == CTX_INPUT_CAPTURE:
+        return ("noop",)
+
     if context == CTX_POPOVER:
         if action in _DIRECTIONS:
             return ("move", action)
@@ -145,6 +152,11 @@ def pane_key_command(context, keyval, shift=False):
     keys (GtkListBox does, which is why the sidebar needs no help), so they are
     routed through the same table the gamepad uses.
     """
+    # While a binding is being captured the keys belong to the capture, not to
+    # pane navigation: Tab and the arrows are bindable like anything else.
+    if context == CTX_INPUT_CAPTURE:
+        return None
+
     # Shift+Tab is deliberately not claimed: it stays the way out to the rest
     # of the window, so the header bar and menu remain keyboard-reachable.
     forward_tab = keyval in (Gdk.KEY_Tab, Gdk.KEY_KP_Tab) and not shift
@@ -289,6 +301,11 @@ class NavigationController:
         return None
 
     def current_context(self):
+        # Checked first, and on the main thread: the navigator thread only
+        # notices the suspend flag on its next poll, so an action already in
+        # flight when the capture started still has to be dropped here.
+        if getattr(self.window, "input_capture_active", False):
+            return CTX_INPUT_CAPTURE
         focus = self._focus_widget()
         scope = self._scope_for(focus)
         if isinstance(scope, Adw.Dialog):
@@ -460,6 +477,12 @@ class NavigationController:
             return
         self._hint_state = state
         t = window.t
+
+        if context == CTX_INPUT_CAPTURE:
+            # No action is available while the dialog waits for a button; the
+            # dialog itself explains what to press and how to cancel.
+            window.set_hints([])
+            return
 
         if source == SOURCE_GAMEPAD:
             if context in (CTX_DIALOG, CTX_POPOVER):
