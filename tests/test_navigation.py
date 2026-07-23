@@ -8,6 +8,7 @@ from gi.repository import Gdk
 from openemux.ui.navigation import (
     CTX_DIALOG,
     CTX_GRID,
+    CTX_INPUT_CAPTURE,
     CTX_OTHER,
     CTX_POPOVER,
     CTX_SIDEBAR,
@@ -68,6 +69,30 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(resolve(CTX_OTHER, "back"), ("focus-sidebar",))
         self.assertEqual(resolve(CTX_OTHER, "context"), ("noop",))
         self.assertEqual(resolve(CTX_OTHER, "favorite"), ("noop",))
+
+
+class InputCaptureTests(unittest.TestCase):
+    """Remapping owns the pad: nothing it presses may steer the interface."""
+
+    def test_every_action_is_inert_while_a_binding_is_captured(self):
+        for action in (
+            "up", "down", "left", "right",
+            "confirm", "back", "context", "favorite",
+            "prev_console", "next_console",
+        ):
+            with self.subTest(action=action):
+                self.assertEqual(resolve(CTX_INPUT_CAPTURE, action), ("noop",))
+
+    def test_back_does_not_close_the_dialog(self):
+        """The regression: B on an Xbox pad closed preferences mid-capture."""
+        self.assertEqual(resolve(CTX_DIALOG, "back"), ("close-dialog",))
+        self.assertEqual(resolve(CTX_INPUT_CAPTURE, "back"), ("noop",))
+
+    def test_no_key_is_claimed_for_pane_navigation(self):
+        """Tab and the arrows are bindable too, so the capture keeps them."""
+        for keyval in (Gdk.KEY_Right, Gdk.KEY_Tab, Gdk.KEY_BackSpace, Gdk.KEY_Up):
+            with self.subTest(keyval=keyval):
+                self.assertIsNone(pane_key_command(CTX_INPUT_CAPTURE, keyval))
 
 
 class PaneKeyTests(unittest.TestCase):

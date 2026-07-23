@@ -70,8 +70,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._key_controller.connect("key-pressed", self._on_key_pressed)
         self.add_controller(self._key_controller)
 
-        # Never leave a reader thread behind when the dialog goes away.
-        self.connect("closed", lambda _d: self._stop_gamepad_reader())
+        # Never leave a reader thread behind -- nor the window stuck in
+        # exclusive-capture mode -- when the dialog goes away.
+        self.connect("closed", lambda _d: self._on_closed())
 
         self.add(self._build_library_page())
         self.add(self._build_bios_page())
@@ -80,6 +81,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.add(self._build_system_page())
 
     # ----- shared helpers -------------------------------------------------
+    def _on_closed(self):
+        self._stop_gamepad_reader()
+        self._set_exclusive_input(False)
+
     def _toast(self, text, timeout=3):
         toast = Adw.Toast(title=text)
         toast.set_timeout(timeout)
@@ -591,6 +596,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if action not in self._input_buttons:
             return
         self._stop_gamepad_reader()
+        # Take the controller away from UI navigation for the duration: the
+        # very buttons being mapped (B, A, the D-pad) are also the ones that
+        # drive the interface, and they would close this dialog mid-capture.
+        self._set_exclusive_input(True)
         self._capture_active_action = action
         self._capture_sequence_mode = sequence_mode
         self._set_active_row(action)
@@ -667,8 +676,19 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._toast(self.t(key), timeout=6)
         return False
 
+    def _set_exclusive_input(self, active):
+        """Toggle the window's exclusive-capture mode, if there is a window.
+
+        Guarded with getattr so the dialog keeps working against a stub window
+        in tests and against any caller that predates the flag.
+        """
+        setter = getattr(self.win, "set_input_capture_active", None)
+        if setter is not None:
+            setter(active)
+
     def _cancel_capture(self, show_toast=False):
         self._stop_gamepad_reader()
+        self._set_exclusive_input(False)
         if self._capture_active_action in self._input_buttons:
             action = self._capture_active_action
             self._input_buttons[action].set_label(
