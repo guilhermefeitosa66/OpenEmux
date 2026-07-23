@@ -194,6 +194,7 @@ class RomItem(Gtk.Box):
         on_toggle_selection=None,
         compact=False,
         zoom=DEFAULT_ZOOM,
+        context_services=None,
     ):
         super().__init__(
             orientation=(
@@ -209,6 +210,8 @@ class RomItem(Gtk.Box):
         self.on_remove_cover = on_remove_cover
         self.on_rename_rom = on_rename_rom
         self.on_delete_rom = on_delete_rom
+        # Builds the data-driven submenus (shader, and later core/collection).
+        self.context_services = context_services
         # Selection lives in the grid (it spans cards); the card only reports
         # the ctrl-click that toggles it.
         self.on_toggle_selection = on_toggle_selection
@@ -717,6 +720,13 @@ class RomItem(Gtk.Box):
                 entries.append(
                     (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
                 )
+        # Data-driven submenus (shader today; core/collection later). Their own
+        # section, between the cover rows and the file actions.
+        if self.context_services is not None:
+            extra = self.context_services.build_submenus(self.rom)
+            if extra:
+                entries.append(SEPARATOR)
+                entries.extend(extra)
         # Own section: these act on the file on disk, not on the library entry.
         entries.append(SEPARATOR)
         entries.append((self.t("context.reveal"), "rom.reveal-in-files", "folder-open-symbolic"))
@@ -798,9 +808,11 @@ class RomGrid(Gtk.FlowBox):
         on_rename_rom=None,
         on_delete_rom=None,
         on_selection_changed=None,
+        context_services=None,
     ):
         super().__init__()
         self.console = console
+        self.context_services = context_services
         self.mixed_consoles = mixed_consoles
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
@@ -902,6 +914,7 @@ class RomGrid(Gtk.FlowBox):
                 on_toggle_selection=self._toggle_item_selection,
                 compact=self.compact,
                 zoom=self.zoom,
+                context_services=self.context_services,
             )
             self._items.append(item)
             self.append(item)

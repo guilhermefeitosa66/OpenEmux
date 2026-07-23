@@ -9,14 +9,18 @@ from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
+    DISPLAY_KEYS,
+    normalize_display_value,
     normalize_sort_order,
     normalize_view_mode,
     normalize_zoom,
     renders_cartridge,
+    resolve_display_settings,
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home
+from openemux.core.cores import CoreConfigStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.update_checker import (
@@ -173,6 +177,7 @@ class ConfigManager:
         self.config_file = config_file
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.shaders = ShaderConfigStore()
+        self.cores = CoreConfigStore()
         self.config = self.load_config()
 
     def load_config(self):
@@ -479,6 +484,55 @@ class ConfigManager:
         """Legacy entry point: the cartridge frame is a view mode now."""
         self.set_view_mode(view_mode_from_legacy(bool(enabled)))
 
+    # ----- per-scope layout overrides -------------------------------------
+    def get_scope_overrides(self):
+        """Clean map of scope -> partial {view_mode?, sort_order?, zoom?}."""
+        raw = self.config.get("ui", {}).get("scope_overrides", {}) or {}
+        cleaned = {}
+        for scope, override in raw.items():
+            if not isinstance(override, dict):
+                continue
+            entry = {}
+            for key in DISPLAY_KEYS:
+                if override.get(key) is not None:
+                    entry[key] = normalize_display_value(key, override[key])
+            if entry:
+                cleaned[str(scope)] = entry
+        return cleaned
+
+    def get_display_settings(self, scope):
+        """Resolved view_mode/sort_order/zoom for a scope, global as the base."""
+        resolved = resolve_display_settings(
+            self.get_ui_settings(), self.get_scope_overrides(), scope
+        )
+        resolved["render_cartridge_overlay"] = renders_cartridge(resolved["view_mode"])
+        return resolved
+
+    def has_scope_override(self, scope):
+        return scope in self.get_scope_overrides()
+
+    def set_scope_display(self, scope, key, value):
+        """Override one display key for a scope (used once it diverges)."""
+        if key not in DISPLAY_KEYS:
+            return
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        entry = overrides.setdefault(str(scope), {})
+        entry[key] = normalize_display_value(key, value)
+        self.save_config()
+
+    def enable_scope_override(self, scope):
+        """Start a scope's own layout, seeded from the current global values."""
+        base = self.get_ui_settings()
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        overrides[str(scope)] = {key: base[key] for key in DISPLAY_KEYS}
+        self.save_config()
+
+    def clear_scope_override(self, scope):
+        """Drop a scope's override so it follows the global layout again."""
+        overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
+        if overrides.pop(str(scope), None) is not None:
+            self.save_config()
+
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_tips"] = bool(enabled)
@@ -536,6 +590,32 @@ class ConfigManager:
         canonical = resolve_system_id(console)
         return self.config.get("runtime", {}).get("retroarch", {}).get("cores", {}).get(canonical, [])
 
+    def get_console_core_override(self, console):
+        """The per-console core the user pinned, or ``None`` for Automatic."""
+        hints = self.get_retroarch_core_hints(console)
+        return hints[0] if hints else None
+
+    def set_console_core_override(self, console, core_filename):
+        """Pin a console's core (a bare filename), or clear it with ``None``."""
+        canonical = resolve_system_id(console)
+        if canonical not in SYSTEM_IDS:
+            return
+        cores = self.config.setdefault("runtime", {}).setdefault("retroarch", {}).setdefault("cores", {})
+        cores[canonical] = [core_filename] if core_filename else []
+        self.save_config()
+
+    def get_rom_core_override(self, rom_path):
+        return self.cores.get_rom_core(rom_path)
+
+    def set_rom_core(self, rom_path, core_filename):
+        return self.cores.set_rom_core(rom_path, core_filename)
+
+    def repath_rom_core(self, old_path, new_path):
+        return self.cores.repath_rom(old_path, new_path)
+
+    def forget_rom_core(self, rom_path):
+        return self.cores.forget_rom(rom_path)
+
     def get_retroarch_updater_settings(self):
         updater = self.config.get("runtime", {}).get("retroarch", {}).get("updater", {})
         return {
@@ -574,6 +654,21 @@ class ConfigManager:
 
     def set_shader_for_console(self, console, shader_id):
         return self.shaders.set_console_shader(console, shader_id)
+
+    def get_shader_for_rom(self, rom_path, console):
+        return self.shaders.get_effective_shader(rom_path, console)
+
+    def get_rom_shader_override(self, rom_path):
+        return self.shaders.get_rom_shader(rom_path)
+
+    def set_rom_shader(self, rom_path, console, shader_id):
+        return self.shaders.set_rom_shader(rom_path, console, shader_id)
+
+    def repath_rom_shader(self, old_path, new_path):
+        return self.shaders.repath_rom(old_path, new_path)
+
+    def forget_rom_shader(self, rom_path):
+        return self.shaders.forget_rom(rom_path)
 
     def set_show_all_shaders(self, enabled):
         return self.shaders.set_show_all_shaders(enabled)

@@ -7,6 +7,7 @@ import logging
 
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
+from openemux.core.cores import CoreCatalog
 from openemux.core.input_actions import to_retroarch_overrides
 from openemux.core.input_profiles import EXTRA_PORT_DEVICE_IDS, player_for_device
 from openemux.core.paths import get_real_home
@@ -56,6 +57,7 @@ class RetroArchLauncher:
             runtime_dir=self.config_manager.get_runtime_dir(),
             project_root=self.project_root,
         )
+        self.core_catalog = CoreCatalog(project_root=self.project_root)
 
     def _launch_prefix(self):
         """Return (argv_prefix, error) for a native/vendored RetroArch binary."""
@@ -96,33 +98,61 @@ class RetroArchLauncher:
 
         return None
 
-    def _find_core_path(self, console):
-        system_id = resolve_system_id(console)
-        for hint in self.config_manager.get_retroarch_core_hints(system_id):
-            hint_path = Path(hint).expanduser()
-            resolved_hint = hint_path if hint_path.is_absolute() else self.project_root / hint_path
-            if resolved_hint.exists():
-                return str(resolved_hint)
-            if hint_path.exists():
-                return str(hint_path)
-
-        candidates = DEFAULT_CORE_CANDIDATES.get(system_id, [])
+    def _core_search_dirs(self):
         real_home = get_real_home()
         home_dirs = [
             real_home / ".config" / "retroarch" / "cores",
             real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
             self.project_root / "vendors" / "retroarch-assets" / "cores",
         ]
-        search_dirs = [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
+        return [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
 
-        for core_dir in search_dirs:
-            base = Path(core_dir)
-            if not base.exists():
-                continue
-            for name in candidates:
-                candidate = base / name
-                if candidate.exists():
-                    return str(candidate)
+    def _resolve_core_name(self, core_filename):
+        """Find an installed core by its bare filename, or ``None``."""
+        if not core_filename:
+            return None
+        for core_dir in self._core_search_dirs():
+            candidate = Path(core_dir) / core_filename
+            if candidate.exists():
+                return str(candidate)
+        return None
+
+    def _resolve_core_hint(self, hint):
+        """A config hint is either a path (historical) or a bare core filename."""
+        if not hint:
+            return None
+        hint_path = Path(hint).expanduser()
+        if hint_path.is_absolute() or len(hint_path.parts) > 1:
+            resolved = hint_path if hint_path.is_absolute() else self.project_root / hint_path
+            if resolved.exists():
+                return str(resolved)
+            if hint_path.exists():
+                return str(hint_path)
+            return None
+        return self._resolve_core_name(hint)
+
+    def _find_core_path(self, console, rom_path=None):
+        system_id = resolve_system_id(console)
+
+        # 1. Per-ROM override. A stale override (its core uninstalled) must not
+        #    fail the launch: fall through to the console/automatic choice.
+        if rom_path and hasattr(self.config_manager, "get_rom_core_override"):
+            rom_core = self.config_manager.get_rom_core_override(rom_path)
+            resolved = self._resolve_core_name(rom_core)
+            if resolved:
+                return resolved
+
+        # 2. Per-console override (config hint: a path, or a bare filename).
+        for hint in self.config_manager.get_retroarch_core_hints(system_id):
+            resolved = self._resolve_core_hint(hint)
+            if resolved:
+                return resolved
+
+        # 3. Automatic: the curated candidate list, first installed wins.
+        for name in DEFAULT_CORE_CANDIDATES.get(system_id, []):
+            resolved = self._resolve_core_name(name)
+            if resolved:
+                return resolved
         return None
 
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False):
@@ -173,7 +203,7 @@ class RetroArchLauncher:
         if prefix_error:
             return None, prefix_error
 
-        core_path = self._find_core_path(system_id)
+        core_path = self._find_core_path(system_id, rom_path=rom_path)
         if not core_path:
             candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
             return None, (
@@ -192,7 +222,10 @@ class RetroArchLauncher:
             )
 
         shader_id = "disabled"
-        if hasattr(self.config_manager, "get_shader_for_console"):
+        if hasattr(self.config_manager, "get_shader_for_rom"):
+            # Per-ROM override wins, falling back to the console setting.
+            shader_id = normalize_shader_id(self.config_manager.get_shader_for_rom(rom_path, system_id))
+        elif hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
         shader_path = self.shader_catalog.resolve_shader_path(shader_id)
 
