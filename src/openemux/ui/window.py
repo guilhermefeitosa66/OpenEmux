@@ -11,7 +11,15 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 
 from openemux.core.bios_manager import get_console_bios_dir
-from openemux.core.library_view import VIEW_MODES, normalize_view_mode
+from openemux.core.library_view import (
+    DEFAULT_ZOOM,
+    VIEW_MODES,
+    can_zoom,
+    normalize_view_mode,
+    normalize_zoom,
+    zoom_percent,
+    zoom_step,
+)
 from openemux.core.cover_sync import sync_covers_async
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
@@ -101,8 +109,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.scanner = RomScanner(self.roms_path)
         self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
         self.current_console = None
-        # Read before the header is built: the view-mode button shows it.
-        self._view_mode = self.config_manager.get_ui_settings()["view_mode"]
+        # Read before the header is built: the view-mode button shows both.
+        _ui = self.config_manager.get_ui_settings()
+        self._view_mode = _ui["view_mode"]
+        self._zoom = _ui["zoom"]
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
@@ -381,11 +391,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         """The layout switcher, in the header where the user browses.
 
         It used to be a switch buried in Preferences, which is the wrong place
-        for something people flip while looking at their library.
+        for something people flip while looking at their library. The zoom
+        controls live in the same menu, as they do in GNOME Files.
         """
         menu = Gio.Menu()
         for mode in VIEW_MODES:
             menu.append(self.t(f"view_mode.{mode}"), f"win.view-mode::{mode}")
+
+        zoom_section = Gio.Menu()
+        zoom_item = Gio.MenuItem.new(None, None)
+        # A custom item: a menu model cannot express a -/+ stepper, and
+        # Gtk.PopoverMenu fills the slot with whatever widget is registered
+        # under this id.
+        zoom_item.set_attribute_value("custom", GLib.Variant("s", "zoom"))
+        zoom_section.append_item(zoom_item)
+        menu.append_section(None, zoom_section)
 
         self.view_mode_button = Gtk.MenuButton()
         self.view_mode_button.set_menu_model(menu)
@@ -393,7 +413,57 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.view_mode_button.set_icon_name(
             self.VIEW_MODE_ICONS.get(self._view_mode, "view-grid-symbolic")
         )
+        popover = self.view_mode_button.get_popover()
+        if popover is not None:
+            popover.add_child(self._build_zoom_controls(), "zoom")
         return self.view_mode_button
+
+    def _build_zoom_controls(self):
+        """A -/+ stepper with the current percentage between the buttons."""
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.add_css_class("zoom-controls")
+
+        self.zoom_out_button = Gtk.Button.new_from_icon_name("zoom-out-symbolic")
+        self.zoom_out_button.add_css_class("circular")
+        self.zoom_out_button.add_css_class("flat")
+        self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out"))
+        self.zoom_out_button.connect("clicked", lambda _b: self._step_zoom(-1))
+
+        self.zoom_label = Gtk.Label()
+        self.zoom_label.set_hexpand(True)
+        self.zoom_label.add_css_class("numeric")
+
+        self.zoom_in_button = Gtk.Button.new_from_icon_name("zoom-in-symbolic")
+        self.zoom_in_button.add_css_class("circular")
+        self.zoom_in_button.add_css_class("flat")
+        self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in"))
+        self.zoom_in_button.connect("clicked", lambda _b: self._step_zoom(1))
+
+        for child in (self.zoom_out_button, self.zoom_label, self.zoom_in_button):
+            box.append(child)
+        self._sync_zoom_controls()
+        return box
+
+    def _sync_zoom_controls(self):
+        if not hasattr(self, "zoom_label"):
+            return
+        self.zoom_label.set_label(f"{zoom_percent(self._zoom)}%")
+        self.zoom_out_button.set_sensitive(can_zoom(self._zoom, -1))
+        self.zoom_in_button.set_sensitive(can_zoom(self._zoom, 1))
+
+    def _step_zoom(self, delta):
+        self._apply_zoom(zoom_step(self._zoom, delta))
+
+    def _apply_zoom(self, zoom):
+        """Resize the artwork on every grid-based layout and remember it."""
+        zoom = normalize_zoom(zoom)
+        if zoom == self._zoom:
+            return
+        self._zoom = zoom
+        self.config_manager.set_zoom(zoom)
+        self._sync_zoom_controls()
+        self._reload_current_page()
+        self._toast(self.t("toast.zoom", percent=zoom_percent(zoom)), timeout=1)
 
     def _on_view_mode_action(self, action, value):
         mode = normalize_view_mode(value.get_string())
@@ -636,6 +706,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("rename-rom", lambda *_: self._rename_focused_rom(), ["F2"]),
             ("toggle-favorite", lambda *_: self._favorite_focused_rom(), ["<Ctrl>d"]),
             ("focus-pane", lambda *_: self.navigation.toggle_pane_focus(), ["F6"]),
+            # Both the main-row and keypad forms: on many layouts Ctrl+"+"
+            # arrives as Ctrl+= (no shift), which is why that one is listed too.
+            ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
+            ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
+            ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
             ("stop-game", lambda *_: self._on_stop_game_clicked(None), ["<Ctrl>Escape"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
@@ -756,6 +831,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 ("F6", "shortcuts.focus_pane"),
                 ("Right", "shortcuts.enter_grid"),
                 ("BackSpace", "shortcuts.back_to_sidebar"),
+                ("<Ctrl>plus", "shortcuts.zoom_in"),
+                ("<Ctrl>minus", "shortcuts.zoom_out"),
+                ("<Ctrl>0", "shortcuts.zoom_reset"),
             )),
             ("shortcuts.group.rom", (
                 ("Return", "shortcuts.open_rom"),

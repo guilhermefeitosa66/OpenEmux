@@ -68,6 +68,21 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
 
             self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "list")
 
+    def test_zoom_defaults_to_100_percent_and_round_trips(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+            self.assertEqual(manager.get_zoom(), 1.0)
+
+            manager.set_zoom(1.5)
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_zoom(), 1.5)
+
+    def test_a_junk_zoom_does_not_break_the_library(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            cfg_path.write_text("ui:\n  zoom: enormous\n", encoding="utf-8")
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_zoom(), 1.0)
+
     def test_an_unknown_view_mode_falls_back_instead_of_breaking_the_library(self):
         with TemporaryDirectory() as tmp_dir:
             cfg_path = Path(tmp_dir) / "config.yaml"

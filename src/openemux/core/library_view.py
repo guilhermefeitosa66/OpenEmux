@@ -32,6 +32,57 @@ LIST_ROW_MAX_THUMB_WIDTH = 96
 #: row expands past this to fill the viewport.
 LIST_ROW_MIN_WIDTH = 320
 
+#: Thumbnail scales the zoom control steps through, smallest first. Discrete
+#: rather than continuous: every step has to land on a size the covers still
+#: read at, and stepping is what a keyboard shortcut can do.
+ZOOM_LEVELS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+
+#: 100%: the size the library has always been drawn at.
+DEFAULT_ZOOM = 1.0
+
+#: Gaps shrink with the artwork, but never below this -- cards still need to
+#: read as separate cards at 50%.
+MIN_SCALED_SPACING = 8
+
+
+def normalize_zoom(value):
+    """Snap a stored/typed zoom to the nearest level we actually render."""
+    try:
+        candidate = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_ZOOM
+    if candidate <= 0:
+        return DEFAULT_ZOOM
+    return min(ZOOM_LEVELS, key=lambda level: (abs(level - candidate), level))
+
+
+def zoom_step(value, delta):
+    """The zoom ``delta`` steps away from ``value``, clamped to the ends."""
+    current = normalize_zoom(value)
+    index = ZOOM_LEVELS.index(current) + int(delta)
+    index = max(0, min(index, len(ZOOM_LEVELS) - 1))
+    return ZOOM_LEVELS[index]
+
+
+def can_zoom(value, delta):
+    """False when a step would fall off the end (used to dim the buttons)."""
+    return zoom_step(value, delta) != normalize_zoom(value)
+
+
+def zoom_percent(value):
+    """The zoom as a whole percentage, for the label between the buttons."""
+    return int(round(normalize_zoom(value) * 100))
+
+
+def scale_length(length, zoom):
+    """Scale one pixel length, never down to nothing."""
+    return max(1, int(round(length * normalize_zoom(zoom))))
+
+
+def scale_spacing(spacing, zoom):
+    """Scale a gap between items, keeping them visibly apart."""
+    return max(MIN_SCALED_SPACING, int(round(spacing * normalize_zoom(zoom))))
+
 
 def normalize_view_mode(value):
     """Coerce a stored/typed value to one of ``VIEW_MODES``."""
@@ -56,15 +107,18 @@ def is_grid_view(view_mode):
     return normalize_view_mode(view_mode) in GRID_VIEW_MODES
 
 
-def list_thumb_size(cover_size):
+def list_thumb_size(cover_size, zoom=DEFAULT_ZOOM):
     """Thumbnail size for a list row, keeping the cover's proportions.
 
     ``cover_size`` is the card-sized artwork the grid modes would use. The row
-    height is fixed, so the width follows from the aspect -- capped, so a very
-    wide box (SFC, N64) cannot push its title far right of everyone else's.
+    height is fixed (scaled by the zoom), so the width follows from the aspect
+    -- capped, so a very wide box (SFC, N64) cannot push its title far right of
+    everyone else's.
     """
+    row_height = scale_length(LIST_ROW_THUMB_HEIGHT, zoom)
+    max_width = scale_length(LIST_ROW_MAX_THUMB_WIDTH, zoom)
     width, height = cover_size
     if width <= 0 or height <= 0:
-        return LIST_ROW_MAX_THUMB_WIDTH, LIST_ROW_THUMB_HEIGHT
-    scaled_width = int(round(LIST_ROW_THUMB_HEIGHT * (width / height)))
-    return max(1, min(scaled_width, LIST_ROW_MAX_THUMB_WIDTH)), LIST_ROW_THUMB_HEIGHT
+        return max_width, row_height
+    scaled_width = int(round(row_height * (width / height)))
+    return max(1, min(scaled_width, max_width)), row_height
