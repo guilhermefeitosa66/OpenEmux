@@ -206,13 +206,17 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         group.add(self._ss_password_row)
 
+        # The developer credential is the project's own account, baked into
+        # official builds (or supplied via a local .env in development). It is not
+        # a normal setting, so it lives behind a collapsed "Advanced" disclosure
+        # rather than sitting in plain sight -- only an advanced user overriding
+        # it with their own ScreenScraper developer account ever needs it.
         self._ss_devid_row = Adw.EntryRow(title=self.t("prefs.screenscraper.devid"))
         self._ss_devid_row.set_text(settings.get("screenscraper_devid", ""))
         self._ss_devid_row.connect(
             "changed",
             lambda row: self.config.set_cover_sync_setting("screenscraper_devid", row.get_text()),
         )
-        group.add(self._ss_devid_row)
 
         self._ss_devpassword_row = Adw.PasswordEntryRow(
             title=self.t("prefs.screenscraper.devpassword")
@@ -222,11 +226,18 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             "changed",
             lambda row: self.config.set_cover_sync_setting("screenscraper_devpassword", row.get_text()),
         )
-        group.add(self._ss_devpassword_row)
 
-        # Official builds embed the project's developer credentials, so the dev
-        # fields are hidden (unless the user has already overridden them) and a
-        # friendlier note nudges the user to add their own account for quota.
+        self._ss_advanced_row = Adw.ExpanderRow(
+            title=self.t("prefs.screenscraper.advanced.title"),
+            subtitle=self.t("prefs.screenscraper.advanced.subtitle"),
+        )
+        self._ss_advanced_row.set_expanded(False)
+        self._ss_advanced_row.add_row(self._ss_devid_row)
+        self._ss_advanced_row.add_row(self._ss_devpassword_row)
+        group.add(self._ss_advanced_row)
+
+        # Official builds embed the project's developer credential; when present
+        # a friendlier "ready to use" note replaces the "credentials needed" hint.
         self._ss_embedded = has_embedded_dev_credentials()
         self._ss_hint_row = Adw.ActionRow(
             title=self.t("prefs.screenscraper.hint.title"),
@@ -253,24 +264,18 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
             COVER_SOURCE_SCREENSCRAPER,
         )
-        # The build supplies the developer credential, so hide the dev fields --
-        # unless the user has already entered their own, which still overrides it.
-        settings = self.config.get_cover_sync_settings()
-        user_has_dev = bool(
-            settings.get("screenscraper_devid") and settings.get("screenscraper_devpassword")
-        )
-        show_dev_fields = not self._ss_embedded or user_has_dev
-
+        # The dev credential lives inside the collapsed "Advanced" expander, so
+        # the group just shows/hides the normal user-account rows, the expander,
+        # and the matching hint.
         for row in (
             self._cover_art_type_row,
             self._ss_user_row,
             self._ss_password_row,
+            self._ss_advanced_row,
         ):
             row.set_visible(uses_screenscraper)
-        for row in (self._ss_devid_row, self._ss_devpassword_row):
-            row.set_visible(uses_screenscraper and show_dev_fields)
-        # Show the credentials-needed hint only when the user must supply the dev
-        # credential themselves; otherwise show the "ready to use" note.
+        # "Ready to use" when the build carries the credential, otherwise the
+        # "credentials needed" hint (the user must supply one under Advanced).
         self._ss_hint_row.set_visible(uses_screenscraper and not self._ss_embedded)
         self._ss_embedded_hint_row.set_visible(uses_screenscraper and self._ss_embedded)
 

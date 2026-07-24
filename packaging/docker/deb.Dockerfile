@@ -14,6 +14,7 @@ RUN apt-get update \
       imagemagick \
       fakeroot \
       xz-utils \
+      python3 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work

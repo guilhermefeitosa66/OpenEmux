@@ -842,9 +842,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _build_primary_menu(self):
         menu = Gio.Menu()
-        menu.append(self.t("menu.welcome"), "win.welcome")
         menu.append(self.t("menu.preferences"), "win.preferences")
         menu.append(self.t("menu.shortcuts"), "win.shortcuts")
+        menu.append(self.t("menu.welcome"), "win.welcome")
         menu.append(self.t("menu.about"), "win.about")
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
