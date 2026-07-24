@@ -22,6 +22,11 @@ install -Dm644 "$ROOT_DIR/LICENSE" "$DESTDIR/opt/openemux/LICENSE"
 # Ship only sources, no build/test caches.
 find "$DESTDIR/opt/openemux/src" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
+# Bake the ScreenScraper developer credential into the staged copy (never the
+# host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
+python3 "$ROOT_DIR/packaging/embed_screenscraper_credentials.py" \
+  "$DESTDIR/opt/openemux/src/openemux/core/embedded_credentials.py"
+
 install -Dm755 "$ROOT_DIR/packaging/common/openemux-launcher.sh" "$DESTDIR/usr/bin/openemux"
 install -Dm644 "$ROOT_DIR/packaging/common/openemux.desktop" \
   "$DESTDIR/usr/share/applications/$APP_ID.desktop"

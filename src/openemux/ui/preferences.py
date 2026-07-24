@@ -23,6 +23,7 @@ from openemux.core.config import (
     normalize_cover_art_type,
     normalize_cover_source,
 )
+from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
@@ -223,12 +224,23 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         group.add(self._ss_devpassword_row)
 
+        # Official builds embed the project's developer credentials, so the dev
+        # fields are hidden (unless the user has already overridden them) and a
+        # friendlier note nudges the user to add their own account for quota.
+        self._ss_embedded = has_embedded_dev_credentials()
         self._ss_hint_row = Adw.ActionRow(
             title=self.t("prefs.screenscraper.hint.title"),
             subtitle=self.t("prefs.screenscraper.hint.subtitle"),
         )
         self._ss_hint_row.set_subtitle_lines(0)
         group.add(self._ss_hint_row)
+
+        self._ss_embedded_hint_row = Adw.ActionRow(
+            title=self.t("prefs.screenscraper.hint.embedded.title"),
+            subtitle=self.t("prefs.screenscraper.hint.embedded.subtitle"),
+        )
+        self._ss_embedded_hint_row.set_subtitle_lines(0)
+        group.add(self._ss_embedded_hint_row)
 
         self._update_screenscraper_rows_visibility()
         return group
@@ -241,15 +253,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
             COVER_SOURCE_SCREENSCRAPER,
         )
+        # The build supplies the developer credential, so hide the dev fields --
+        # unless the user has already entered their own, which still overrides it.
+        settings = self.config.get_cover_sync_settings()
+        user_has_dev = bool(
+            settings.get("screenscraper_devid") and settings.get("screenscraper_devpassword")
+        )
+        show_dev_fields = not self._ss_embedded or user_has_dev
+
         for row in (
             self._cover_art_type_row,
             self._ss_user_row,
             self._ss_password_row,
-            self._ss_devid_row,
-            self._ss_devpassword_row,
-            self._ss_hint_row,
         ):
             row.set_visible(uses_screenscraper)
+        for row in (self._ss_devid_row, self._ss_devpassword_row):
+            row.set_visible(uses_screenscraper and show_dev_fields)
+        # Show the credentials-needed hint only when the user must supply the dev
+        # credential themselves; otherwise show the "ready to use" note.
+        self._ss_hint_row.set_visible(uses_screenscraper and not self._ss_embedded)
+        self._ss_embedded_hint_row.set_visible(uses_screenscraper and self._ss_embedded)
 
     def _on_cover_source_changed(self, *_args):
         self.config.set_cover_sync_setting("cover_source", self._selected_cover_source())

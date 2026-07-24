@@ -157,6 +157,42 @@ The version is read from `src/openemux/__init__.py`, the single source of truth
 (`pyproject.toml` derives it dynamically; the AppImage recipe carries its own
 copy that must be kept in sync).
 
+## Embedded ScreenScraper credentials
+
+Official builds bake the project's ScreenScraper **developer** account
+(`devid` + `devpassword`) into the artifact so cover scraping via ScreenScraper
+works out of the box. End users still add their own ScreenScraper account
+(`ssid`/`sspassword`) in Preferences — that is what spends their own quota
+rather than the project's shared pool.
+
+How it works:
+
+- [`src/openemux/core/embedded_credentials.py`](../src/openemux/core/embedded_credentials.py)
+  holds an **empty** `_EMBEDDED_BLOB` in git. Local and development builds
+  therefore ship no credential and ScreenScraper stays opt-in (off by default).
+  A unit test guards that the committed value stays empty.
+- At packaging time,
+  [`packaging/embed_screenscraper_credentials.py`](../packaging/embed_screenscraper_credentials.py)
+  reads two environment variables and rewrites `_EMBEDDED_BLOB` in the **staged
+  copy only** (never the host source): the `.deb`/`.rpm` inject in
+  [`stage_tree.sh`](../packaging/common/stage_tree.sh), the AppImage in its
+  recipe's `script:` step. The value is lightly obfuscated (XOR + base64) — not
+  real secrecy, just so it is not a plaintext, grep-able string.
+- Provide the credential as **CI secrets**, exported before the build:
+
+  ```bash
+  export SCREENSCRAPER_DEVID=...          # from a CI secret, never committed
+  export SCREENSCRAPER_DEVPASSWORD=...
+  make packages
+  ```
+
+  `packaging/build.sh` forwards both into the build container. Omit them and the
+  injection is a no-op.
+
+**Rotation.** A credential shipped in a client is extractable, so if the project
+account is ever abused, request a new `devid`/`devpassword` from ScreenScraper
+staff, update the CI secrets, and cut a new release — no source change needed.
+
 ## Cutting a release
 
 1. Bump `src/openemux/__init__.py` and the `version:` in

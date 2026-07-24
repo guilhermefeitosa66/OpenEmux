@@ -16,6 +16,10 @@ script:
   - ln -sfn usr/lib64 AppDir/runtime/compat/lib64
   - cp -r src AppDir/usr/lib/openemux/
   - cp -r src/openemux AppDir/usr/lib/python3/dist-packages/
+  # Bake the ScreenScraper developer credential into the bundled copies (never
+  # the host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
+  - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/python3/dist-packages/openemux/core/embedded_credentials.py
+  - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/openemux/src/openemux/core/embedded_credentials.py
   - cp -r vendors AppDir/usr/lib/openemux/
   - cp requirements.lock AppDir/usr/lib/openemux/
   - cp README.md LICENSE AppDir/usr/lib/openemux/

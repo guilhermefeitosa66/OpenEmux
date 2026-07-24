@@ -40,6 +40,8 @@ TRANSLATIONS = {
     "prefs.screenscraper.devpassword": "Developer password",
     "prefs.screenscraper.hint.title": "ScreenScraper credentials",
     "prefs.screenscraper.hint.subtitle": "The ScreenScraper API requires developer credentials, which OpenEmux does not ship. Request them from screenscraper.fr and add your own account above. Without them this source stays disabled and covers fall back to libretro.",
+    "prefs.screenscraper.hint.embedded.title": "ScreenScraper is ready to use",
+    "prefs.screenscraper.hint.embedded.subtitle": "OpenEmux provides the developer credentials, so ScreenScraper works out of the box. For your own quota (faster, more reliable scraping) and to spare the shared pool, add your free ScreenScraper account above.",
     "prefs.group.appearance": "Appearance",
     "prefs.group.shaders": "Shaders per Console",
     "prefs.group.language": "Language",
