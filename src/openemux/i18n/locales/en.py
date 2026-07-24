@@ -11,7 +11,7 @@ TRANSLATIONS = {
     "welcome.back": "Back",
     "welcome.next": "Next",
     "welcome.finish": "Get started",
-    "welcome.dont_show_again": "Don't show this again on startup",
+    "welcome.show_on_startup": "Show on startup",
     "welcome.welcome.title": "Welcome to OpenEmux",
     "welcome.welcome.body": "OpenEmux is a native Linux frontend for your retro game library. The sidebar on the left lists your consoles and collections; the grid on the right shows the games for whatever you select. This quick tour points out the essentials — you can reopen it any time from the main menu.",
     "welcome.import.title": "Import your ROMs",
