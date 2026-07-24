@@ -158,10 +158,11 @@ class WelcomeAssistant(Adw.Dialog):
         bar.set_margin_start(12)
         bar.set_margin_end(12)
 
-        self.dont_show_check = Gtk.CheckButton(label=self.t("welcome.dont_show_again"))
-        self.dont_show_check.set_active(not self.config.get_show_welcome_on_startup())
-        self.dont_show_check.connect("toggled", self._on_dont_show_toggled)
-        bar.append(self.dont_show_check)
+        # Positive framing that mirrors Preferences -> System: checked = show.
+        self.show_startup_check = Gtk.CheckButton(label=self.t("welcome.show_on_startup"))
+        self.show_startup_check.set_active(self.config.get_show_welcome_on_startup())
+        self.show_startup_check.connect("toggled", self._on_show_startup_toggled)
+        bar.append(self.show_startup_check)
 
         dots = Adw.CarouselIndicatorDots()
         dots.set_carousel(self.carousel)
@@ -232,5 +233,5 @@ class WelcomeAssistant(Adw.Dialog):
             return True
         return False
 
-    def _on_dont_show_toggled(self, check):
-        self.config.set_show_welcome_on_startup(not check.get_active())
+    def _on_show_startup_toggled(self, check):
+        self.config.set_show_welcome_on_startup(check.get_active())
