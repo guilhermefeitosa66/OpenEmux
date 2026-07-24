@@ -165,33 +165,45 @@ works out of the box. End users still add their own ScreenScraper account
 (`ssid`/`sspassword`) in Preferences — that is what spends their own quota
 rather than the project's shared pool.
 
-How it works:
+The credential lives **only** in a local, gitignored `.env` — there is no build
+CI; packages and releases are produced locally on an x86_64 host (see below).
+Copy [`.env.example`](../.env.example) to `.env` and fill it in:
 
-- [`src/openemux/core/embedded_credentials.py`](../src/openemux/core/embedded_credentials.py)
-  holds an **empty** `_EMBEDDED_BLOB` in git. Local and development builds
-  therefore ship no credential and ScreenScraper stays opt-in (off by default).
-  A unit test guards that the committed value stays empty.
-- At packaging time,
+```bash
+cp .env.example .env
+# edit .env:
+#   SCREENSCRAPER_DEVID=...
+#   SCREENSCRAPER_DEVPASSWORD=...
+```
+
+`.env` is ignored by git; only `.env.example` is committed. With it in place:
+
+- **Developing (`make run`)** — the `run` target sources `.env`, so the app
+  reads the credential from the `SCREENSCRAPER_DEVID`/`SCREENSCRAPER_DEVPASSWORD`
+  environment variables via
+  [`embedded_credentials.get_embedded_dev_credentials()`](../src/openemux/core/embedded_credentials.py).
+  ScreenScraper works in dev, the Developer ID/password fields in Preferences
+  stay **hidden**, and the key is **never written to `~/.openemux/config.yaml`**.
+  > If you previously typed the dev key into Preferences, remove
+  > `covers.sync.screenscraper_devid` and `covers.sync.screenscraper_devpassword`
+  > from `~/.openemux/config.yaml` once and let `.env` supply it instead.
+- **Building (`make packages`)** — [`packaging/build.sh`](../packaging/build.sh)
+  sources `.env` and forwards the two variables into the build container.
   [`packaging/embed_screenscraper_credentials.py`](../packaging/embed_screenscraper_credentials.py)
-  reads two environment variables and rewrites `_EMBEDDED_BLOB` in the **staged
-  copy only** (never the host source): the `.deb`/`.rpm` inject in
+  then rewrites `_EMBEDDED_BLOB` in the **staged copy only** (never the host
+  source): the `.deb`/`.rpm` inject in
   [`stage_tree.sh`](../packaging/common/stage_tree.sh), the AppImage in its
   recipe's `script:` step. The value is lightly obfuscated (XOR + base64) — not
   real secrecy, just so it is not a plaintext, grep-able string.
-- Provide the credential as **CI secrets**, exported before the build:
 
-  ```bash
-  export SCREENSCRAPER_DEVID=...          # from a CI secret, never committed
-  export SCREENSCRAPER_DEVPASSWORD=...
-  make packages
-  ```
-
-  `packaging/build.sh` forwards both into the build container. Omit them and the
-  injection is a no-op.
+`_EMBEDDED_BLOB` is **empty in git** and a unit test guards that it stays empty,
+so a build without a `.env` simply ships no credential and ScreenScraper stays
+opt-in (off by default). End users still add their own ScreenScraper account
+(`ssid`/`sspassword`) in Preferences — separate from this developer credential.
 
 **Rotation.** A credential shipped in a client is extractable, so if the project
 account is ever abused, request a new `devid`/`devpassword` from ScreenScraper
-staff, update the CI secrets, and cut a new release — no source change needed.
+staff, update your `.env`, and cut a new release — no source change needed.
 
 ## Cutting a release
 

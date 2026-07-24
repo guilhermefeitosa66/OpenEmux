@@ -1,8 +1,13 @@
+import os
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from openemux.core import cover_sync, embedded_credentials
+
+# Neutralise any ambient SCREENSCRAPER_* env so the blob-focused tests are not
+# influenced by a developer's local .env (empty string == "not set" here).
+_NO_ENV = {"SCREENSCRAPER_DEVID": "", "SCREENSCRAPER_DEVPASSWORD": ""}
 
 
 class ObfuscationRoundTripTests(unittest.TestCase):
@@ -18,11 +23,13 @@ class ObfuscationRoundTripTests(unittest.TestCase):
 
 
 class EmbeddedCredentialsTests(unittest.TestCase):
+    @mock.patch.dict(os.environ, _NO_ENV)
     def test_empty_blob_yields_no_credentials(self):
         with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", ""):
             self.assertEqual(embedded_credentials.get_embedded_dev_credentials(), ("", ""))
             self.assertFalse(embedded_credentials.has_embedded_dev_credentials())
 
+    @mock.patch.dict(os.environ, _NO_ENV)
     def test_populated_blob_yields_credentials(self):
         blob = embedded_credentials.obfuscate("build-dev", "build-pw")
         with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", blob):
@@ -31,6 +38,7 @@ class EmbeddedCredentialsTests(unittest.TestCase):
             )
             self.assertTrue(embedded_credentials.has_embedded_dev_credentials())
 
+    @mock.patch.dict(os.environ, _NO_ENV)
     def test_malformed_blob_degrades_to_none(self):
         with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", "!!!not-base64!!!"):
             self.assertEqual(embedded_credentials.get_embedded_dev_credentials(), ("", ""))
@@ -41,6 +49,39 @@ class EmbeddedCredentialsTests(unittest.TestCase):
         module_path = Path(embedded_credentials.__file__)
         self.assertIn('_EMBEDDED_BLOB = ""', module_path.read_text(encoding="utf-8"))
         self.assertEqual(embedded_credentials._EMBEDDED_BLOB, "")
+
+
+class EnvSourceTests(unittest.TestCase):
+    """The dev credential can come from SCREENSCRAPER_* env vars (a local .env)."""
+
+    @mock.patch.dict(os.environ, {"SCREENSCRAPER_DEVID": "env-dev", "SCREENSCRAPER_DEVPASSWORD": "env-pw"})
+    def test_env_supplies_credential_with_empty_blob(self):
+        with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", ""):
+            self.assertEqual(
+                embedded_credentials.get_embedded_dev_credentials(), ("env-dev", "env-pw")
+            )
+            self.assertTrue(embedded_credentials.has_embedded_dev_credentials())
+
+    @mock.patch.dict(os.environ, {"SCREENSCRAPER_DEVID": "env-dev", "SCREENSCRAPER_DEVPASSWORD": "env-pw"})
+    def test_env_overrides_blob(self):
+        blob = embedded_credentials.obfuscate("blob-dev", "blob-pw")
+        with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", blob):
+            self.assertEqual(
+                embedded_credentials.get_embedded_dev_credentials(), ("env-dev", "env-pw")
+            )
+
+    @mock.patch.dict(os.environ, {"SCREENSCRAPER_DEVID": "only-id", "SCREENSCRAPER_DEVPASSWORD": ""})
+    def test_partial_env_is_ignored_falls_back_to_blob(self):
+        blob = embedded_credentials.obfuscate("blob-dev", "blob-pw")
+        with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", blob):
+            self.assertEqual(
+                embedded_credentials.get_embedded_dev_credentials(), ("blob-dev", "blob-pw")
+            )
+
+    @mock.patch.dict(os.environ, _NO_ENV)
+    def test_no_env_and_no_blob_yields_nothing(self):
+        with mock.patch.object(embedded_credentials, "_EMBEDDED_BLOB", ""):
+            self.assertEqual(embedded_credentials.get_embedded_dev_credentials(), ("", ""))
 
 
 class ResolveDevCredentialsTests(unittest.TestCase):
