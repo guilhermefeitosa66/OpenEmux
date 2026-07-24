@@ -131,6 +131,13 @@ flowboxchild:focus-within .rom-card {
     color: #f6c90e;
 }
 
+/* ===== Welcome Assistant ===== */
+/* The slide illustration: rounded and lifted so it reads as a framed shot. */
+.welcome-image {
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
 /* ===== Input Mapping (preferences) ===== */
 .input-mapping-current {
     background-color: alpha(@accent_bg_color, 0.18);

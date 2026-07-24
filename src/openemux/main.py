@@ -202,6 +202,7 @@ class OpenEmuxApplication(Adw.Application):
         self.config_manager.ensure_rom_directories()
         self.main_window = OpenEmuxWindow(application=self)
         self.main_window.present()
+        self.main_window.maybe_show_welcome()
 
     def request_bootstrap_retry_from_ui(self, parent_window):
         if self._bootstrap_running:

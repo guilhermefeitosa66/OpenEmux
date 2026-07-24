@@ -63,6 +63,11 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Thu Jul 24 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.8.0-1
+- Add a Welcome Assistant that tours OpenEmux's features on first launch
+- Bundle ScreenScraper cover art support out of the box in official builds
+- Fix console list items shifting when hovering over the sidebar
+- Refresh the README and website screenshots for the current UI
 * Wed Jul 23 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.7.0-1
 - Choose the shader per ROM from the context menu, over the per-console setting
 - Choose the libretro core per console (Preferences) and per ROM (context menu)

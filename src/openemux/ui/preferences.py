@@ -23,6 +23,7 @@ from openemux.core.config import (
     normalize_cover_art_type,
     normalize_cover_source,
 )
+from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
@@ -205,13 +206,17 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         group.add(self._ss_password_row)
 
+        # The developer credential is the project's own account, baked into
+        # official builds (or supplied via a local .env in development). It is not
+        # a normal setting, so it lives behind a collapsed "Advanced" disclosure
+        # rather than sitting in plain sight -- only an advanced user overriding
+        # it with their own ScreenScraper developer account ever needs it.
         self._ss_devid_row = Adw.EntryRow(title=self.t("prefs.screenscraper.devid"))
         self._ss_devid_row.set_text(settings.get("screenscraper_devid", ""))
         self._ss_devid_row.connect(
             "changed",
             lambda row: self.config.set_cover_sync_setting("screenscraper_devid", row.get_text()),
         )
-        group.add(self._ss_devid_row)
 
         self._ss_devpassword_row = Adw.PasswordEntryRow(
             title=self.t("prefs.screenscraper.devpassword")
@@ -221,14 +226,32 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             "changed",
             lambda row: self.config.set_cover_sync_setting("screenscraper_devpassword", row.get_text()),
         )
-        group.add(self._ss_devpassword_row)
 
+        self._ss_advanced_row = Adw.ExpanderRow(
+            title=self.t("prefs.screenscraper.advanced.title"),
+            subtitle=self.t("prefs.screenscraper.advanced.subtitle"),
+        )
+        self._ss_advanced_row.set_expanded(False)
+        self._ss_advanced_row.add_row(self._ss_devid_row)
+        self._ss_advanced_row.add_row(self._ss_devpassword_row)
+        group.add(self._ss_advanced_row)
+
+        # Official builds embed the project's developer credential; when present
+        # a friendlier "ready to use" note replaces the "credentials needed" hint.
+        self._ss_embedded = has_embedded_dev_credentials()
         self._ss_hint_row = Adw.ActionRow(
             title=self.t("prefs.screenscraper.hint.title"),
             subtitle=self.t("prefs.screenscraper.hint.subtitle"),
         )
         self._ss_hint_row.set_subtitle_lines(0)
         group.add(self._ss_hint_row)
+
+        self._ss_embedded_hint_row = Adw.ActionRow(
+            title=self.t("prefs.screenscraper.hint.embedded.title"),
+            subtitle=self.t("prefs.screenscraper.hint.embedded.subtitle"),
+        )
+        self._ss_embedded_hint_row.set_subtitle_lines(0)
+        group.add(self._ss_embedded_hint_row)
 
         self._update_screenscraper_rows_visibility()
         return group
@@ -241,15 +264,20 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
             COVER_SOURCE_SCREENSCRAPER,
         )
+        # The dev credential lives inside the collapsed "Advanced" expander, so
+        # the group just shows/hides the normal user-account rows, the expander,
+        # and the matching hint.
         for row in (
             self._cover_art_type_row,
             self._ss_user_row,
             self._ss_password_row,
-            self._ss_devid_row,
-            self._ss_devpassword_row,
-            self._ss_hint_row,
+            self._ss_advanced_row,
         ):
             row.set_visible(uses_screenscraper)
+        # "Ready to use" when the build carries the credential, otherwise the
+        # "credentials needed" hint (the user must supply one under Advanced).
+        self._ss_hint_row.set_visible(uses_screenscraper and not self._ss_embedded)
+        self._ss_embedded_hint_row.set_visible(uses_screenscraper and self._ss_embedded)
 
     def _on_cover_source_changed(self, *_args):
         self.config.set_cover_sync_setting("cover_source", self._selected_cover_source())
@@ -1032,6 +1060,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         interface_group.add(self._gamepad_nav_row)
         page.add(interface_group)
 
+        welcome_group = Adw.PreferencesGroup(title=self.t("prefs.group.welcome"))
+        self._welcome_startup_row = Adw.SwitchRow(
+            title=self.t("settings.system.welcome.startup.title"),
+            subtitle=self.t("settings.system.welcome.startup.subtitle"),
+        )
+        self._welcome_startup_row.set_active(self.config.get_show_welcome_on_startup())
+        self._welcome_startup_row.connect("notify::active", self._on_welcome_startup_changed)
+        welcome_group.add(self._welcome_startup_row)
+
+        open_welcome_row = Adw.ActionRow(
+            title=self.t("settings.system.welcome.open.title"),
+            subtitle=self.t("settings.system.welcome.open.subtitle"),
+        )
+        open_welcome_row.set_activatable(True)
+        open_welcome_row.add_prefix(Gtk.Image.new_from_icon_name("start-here-symbolic"))
+        open_welcome_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        open_welcome_row.connect("activated", self._on_open_welcome)
+        welcome_group.add(open_welcome_row)
+        page.add(welcome_group)
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1071,6 +1119,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())
+
+    def _on_welcome_startup_changed(self, row, *_a):
+        self.config.set_show_welcome_on_startup(row.get_active())
+
+    def _on_open_welcome(self, _row):
+        # Close Preferences first so the assistant is not stacked over it.
+        self.close()
+        self.win._open_welcome()
 
     def _on_language_changed(self, *_a):
         idx = self._language_combo.get_selected()

@@ -440,6 +440,7 @@ class ConfigManager:
             "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
+            "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
         }
 
     def get_update_settings(self):
@@ -541,6 +542,14 @@ class ConfigManager:
     def set_gamepad_navigation(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["gamepad_navigation"] = bool(enabled)
+        self.save_config()
+
+    def get_show_welcome_on_startup(self):
+        return bool(self.config.get("ui", {}).get("show_welcome_on_startup", True))
+
+    def set_show_welcome_on_startup(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["show_welcome_on_startup"] = bool(enabled)
         self.save_config()
 
     def get_runtime_mode(self):

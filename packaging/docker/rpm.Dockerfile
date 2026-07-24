@@ -9,6 +9,7 @@ RUN dnf install -y \
       rpmdevtools \
       desktop-file-utils \
       ImageMagick \
+      python3 \
  && dnf clean all
 
 WORKDIR /work

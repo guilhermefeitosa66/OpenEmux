@@ -59,6 +59,7 @@ from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
+from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
 
@@ -843,6 +844,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append(self.t("menu.preferences"), "win.preferences")
         menu.append(self.t("menu.shortcuts"), "win.shortcuts")
+        menu.append(self.t("menu.welcome"), "win.welcome")
         menu.append(self.t("menu.about"), "win.about")
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
@@ -858,6 +860,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Plain-key accels (Delete, F2, F5) are safe next to the search entry:
         # a focused entry consumes the key press before window accels run.
         for name, handler, accels in (
+            ("welcome", lambda *_: self._open_welcome(), None),
             ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
@@ -981,6 +984,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _open_preferences(self):
         self._preferences_dialog = OpenEmuxPreferences(self)
         self._preferences_dialog.present(self)
+
+    def _open_welcome(self):
+        WelcomeAssistant(self).present(self)
+
+    def maybe_show_welcome(self):
+        """Show the onboarding tour on startup unless the user opted out.
+
+        Deferred to the idle loop so the main window paints first and the
+        assistant lands on top of a ready-to-use library.
+        """
+        if self.config_manager.get_show_welcome_on_startup():
+            GLib.idle_add(self._open_welcome)
 
     def _show_about(self):
         about = Adw.AboutDialog()
@@ -1382,14 +1397,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             menu_button.add_css_class("sidebar-menu-button")
             menu_button.set_valign(Gtk.Align.CENTER)
             menu_button.set_tooltip_text(self.t("context.more_options"))
-            menu_button.set_visible(False)
+            # Keep the button in the layout at all times and only fade it in on
+            # hover: toggling visibility would add/remove its (taller than the
+            # icon) allocation, growing the row and shoving the list below it.
+            # can-target follows opacity so the invisible button catches no clicks.
+            menu_button.set_opacity(0)
+            menu_button.set_can_target(False)
             menu_button.connect(
                 "clicked", lambda b, cid=console_id, r=row: self._on_sidebar_menu_button(b, r, cid)
             )
             box.append(menu_button)
 
             motion = Gtk.EventControllerMotion()
-            motion.connect("enter", lambda _c, _x, _y, b=menu_button: b.set_visible(True))
+            motion.connect("enter", lambda _c, _x, _y, b=menu_button: self._show_sidebar_menu_button(b))
             motion.connect("leave", lambda _c, b=menu_button, r=row: self._hide_sidebar_menu_button(b, r))
             row.add_controller(motion)
             row.menu_button = menu_button
@@ -1399,10 +1419,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._install_sidebar_context_menu(row, console_id)
         self.console_list.append(row)
 
+    def _show_sidebar_menu_button(self, button):
+        button.set_opacity(1)
+        button.set_can_target(True)
+
     def _hide_sidebar_menu_button(self, button, row):
         # Keep it while its own menu is open, so it does not vanish mid-click.
         if getattr(self, "_sidebar_menu_row", None) is not row:
-            button.set_visible(False)
+            button.set_opacity(0)
+            button.set_can_target(False)
 
     def _on_sidebar_menu_button(self, button, row, console_id):
         # Coordinates are relative to the row, which the popover is parented to.
@@ -1703,9 +1728,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._sidebar_menu_row = None
         button = getattr(row, "menu_button", None)
         # The pointer may have left the row while the menu was up; the button
-        # only belongs on the hovered row.
+        # only belongs on the hovered row. Fade it out (never hide it) so the
+        # row keeps its height -- see _append_console_sidebar_row.
         if button is not None and not row.get_state_flags() & Gtk.StateFlags.PRELIGHT:
-            button.set_visible(False)
+            button.set_opacity(0)
+            button.set_can_target(False)
         GLib.idle_add(popover.unparent)
 
     def _ensure_sidebar_action_group(self):

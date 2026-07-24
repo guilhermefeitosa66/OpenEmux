@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 from threading import Thread
 
-from openemux.core import screenscraper
+from openemux.core import embedded_credentials, screenscraper
 from openemux.core.scraper import find_local_cover
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
@@ -175,12 +175,28 @@ def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
 
 
 def _screenscraper_credentials(sync_settings):
+    devid, devpassword = _resolve_dev_credentials(sync_settings)
     return screenscraper.ScreenScraperCredentials(
-        devid=sync_settings.get("screenscraper_devid", ""),
-        devpassword=sync_settings.get("screenscraper_devpassword", ""),
+        devid=devid,
+        devpassword=devpassword,
         user=sync_settings.get("screenscraper_user", ""),
         password=sync_settings.get("screenscraper_password", ""),
     )
+
+
+def _resolve_dev_credentials(sync_settings):
+    """Pick the developer credential: user-configured wins, else the build's
+    embedded one, else nothing.
+
+    A user who supplies their own complete developer account overrides the
+    credential baked into official builds; otherwise the embedded credential
+    (empty in dev/local builds) is used so ScreenScraper works out of the box.
+    """
+    devid = (sync_settings.get("screenscraper_devid", "") or "").strip()
+    devpassword = (sync_settings.get("screenscraper_devpassword", "") or "").strip()
+    if devid and devpassword:
+        return devid, devpassword
+    return embedded_credentials.get_embedded_dev_credentials()
 
 
 def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):

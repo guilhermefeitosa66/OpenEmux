@@ -33,9 +33,11 @@ lock-deps:
 	$(PIP) freeze > requirements.lock
 
 
-# Running the app
+# Running the app. Sources the gitignored .env first so a ScreenScraper
+# developer credential there reaches the app as env vars -- no need to store it
+# in ~/.openemux/config.yaml (see docs/DEVELOPMENT.md).
 run:
-	PYTHONPATH=src $(PYTHON) src/openemux/main.py
+	set -a; [ -f .env ] && . ./.env; set +a; PYTHONPATH=src $(PYTHON) src/openemux/main.py
 
 # Run the unit test suite
 test:
