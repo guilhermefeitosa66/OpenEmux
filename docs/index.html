@@ -192,6 +192,26 @@
   .foot-links a{color:var(--muted)}
   .foot-links a:hover{color:var(--text)}
   .disclaimer{margin-top:26px;font-size:.8rem;color:#6f688c;max-width:70ch}
+
+  /* Horizontal "shelf" carousel of console libraries */
+  .shelf{display:flex;gap:20px;overflow-x:auto;scroll-snap-type:x proximity;padding:10px 4px 26px;margin-top:36px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .shelf::-webkit-scrollbar{height:10px}
+  .shelf::-webkit-scrollbar-track{background:transparent}
+  .shelf::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
+  .shelf figure{flex:0 0 auto;width:min(80vw,560px);scroll-snap-align:center;margin:0}
+  .shelf img{width:100%;height:auto;border-radius:12px;border:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  .shelf-hint{color:var(--muted);font-size:.82rem;margin-top:2px}
+  .shelf-hint .kbd{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:6px;font-size:.78rem}
+
+  /* Zoomable screenshots -> lightbox */
+  .shot img, .gallery img, .shelf img{cursor:zoom-in;transition:transform .15s ease}
+  .shelf img:hover, .gallery img:hover{transform:translateY(-3px)}
+  .lightbox{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;background:rgba(6,4,16,.9);padding:24px;backdrop-filter:blur(4px)}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:96vw;max-height:90vh;border-radius:10px;box-shadow:0 30px 90px rgba(0,0,0,.7)}
+  .lightbox-close{position:fixed;top:14px;right:22px;width:44px;height:44px;font-size:1.9rem;line-height:1;color:#fff;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;cursor:pointer;opacity:.9}
+  .lightbox-close:hover{opacity:1;background:rgba(255,255,255,.16)}
+  .lightbox-cap{position:fixed;bottom:18px;left:0;right:0;text-align:center;color:#d8d3ea;font-size:.9rem;pointer-events:none}
 </style>
 </head>
 <body>
@@ -284,7 +304,7 @@
         <li><strong>Emulation preserves history.</strong> So much of gaming's art, music and design lives on fragile aging hardware. Keeping it playable is legitimate — and it works best when it respects the people who made these games.</li>
       </ul>
     </div>
-    <div>
+    <div class="shot">
       <img src="assets/openemux-roms-nes.png" alt="OpenEmux NES library"/>
     </div>
   </div>
@@ -337,13 +357,23 @@
   <div class="wrap center">
     <span class="eyebrow">Screenshots</span>
     <h2>Your collection, on a shelf</h2>
-    <p class="lede">Cover art, organized by console — the way a game library should look.</p>
-    <div class="gallery">
-      <figure><img src="assets/openemux-roms-gba.png" alt="GBA library"/><figcaption>Game Boy Advance library</figcaption></figure>
-      <figure><img src="assets/openemux-roms-n64.png" alt="N64 library"/><figcaption>Nintendo 64 library</figcaption></figure>
-      <figure><img src="assets/openemux-gameplay-nes.png" alt="NES gameplay"/><figcaption>Gameplay via RetroArch — NES</figcaption></figure>
-      <figure><img src="assets/openemux-gameplay-gba.png" alt="GBA gameplay"/><figcaption>Gameplay via RetroArch — GBA</figcaption></figure>
+    <p class="lede">Cover art, organized by console — the way a game library should look. Every system, plus Favorites and your own custom collections. Scroll through, and click any shot to view it full-size.</p>
+    <div class="shelf">
+      <figure><img loading="lazy" src="assets/shelf/all.png" alt="OpenEmux — All games"/><figcaption>All games</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/favorites.png" alt="OpenEmux — Favorites"/><figcaption>Favorites</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/megaman.png" alt="OpenEmux — a custom collection spanning consoles"/><figcaption>Megaman — a custom collection</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/fc.png" alt="OpenEmux — NES / Famicom library"/><figcaption>NES / Famicom</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/gb.png" alt="OpenEmux — Game Boy library"/><figcaption>Game Boy</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/gbc.png" alt="OpenEmux — Game Boy Color library"/><figcaption>Game Boy Color</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library"/><figcaption>Game Boy Advance</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library"/><figcaption>Nintendo 64</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/nds.png" alt="OpenEmux — Nintendo DS library"/><figcaption>Nintendo DS</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/md.png" alt="OpenEmux — Sega Genesis / Mega Drive library"/><figcaption>Sega Genesis / Mega Drive</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/sms.png" alt="OpenEmux — Sega Master System library"/><figcaption>Sega Master System</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library"/><figcaption>PlayStation</figcaption></figure>
+      <figure><img loading="lazy" src="assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library"/><figcaption>Super Nintendo</figcaption></figure>
     </div>
+    <p class="shelf-hint">← scroll to browse every console →</p>
     <div style="margin-top:64px">
       <h2>Settings that make sense</h2>
       <p class="lede">ROM paths, BIOS checks, input mappings and shaders — all in one clean panel, no config files.</p>
@@ -428,6 +458,48 @@
     <p class="disclaimer">OpenEmux is an independent open-source project and is not affiliated with, endorsed by, or associated with OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari, or any other company. All trademarks are the property of their respective owners. OpenEmux distributes no games, ROMs, or BIOS files.</p>
   </div>
 </footer>
+
+<!-- Lightbox: click any screenshot to view it full-size (e-commerce style) -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">×</button>
+  <img id="lightboxImg" src="" alt=""/>
+  <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById('lightbox');
+  var img = document.getElementById('lightboxImg');
+  var cap = document.getElementById('lightboxCap');
+  var closeBtn = document.getElementById('lightboxClose');
+
+  function open(src, alt, caption) {
+    img.src = src;
+    img.alt = alt || '';
+    cap.textContent = caption || alt || '';
+    box.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    box.classList.remove('open');
+    document.body.style.overflow = '';
+    img.src = '';
+  }
+
+  document.querySelectorAll('.shot img, .gallery img, .shelf img').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var fig = el.closest('figure');
+      var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
+      open(el.currentSrc || el.src, el.alt, caption);
+    });
+  });
+
+  closeBtn.addEventListener('click', close);
+  box.addEventListener('click', function (e) { if (e.target === box) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && box.classList.contains('open')) close();
+  });
+})();
+</script>
 
 </body>
 </html>
