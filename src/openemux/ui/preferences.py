@@ -1055,6 +1055,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         interface_group.add(self._gamepad_nav_row)
         page.add(interface_group)
 
+        welcome_group = Adw.PreferencesGroup(title=self.t("prefs.group.welcome"))
+        self._welcome_startup_row = Adw.SwitchRow(
+            title=self.t("settings.system.welcome.startup.title"),
+            subtitle=self.t("settings.system.welcome.startup.subtitle"),
+        )
+        self._welcome_startup_row.set_active(self.config.get_show_welcome_on_startup())
+        self._welcome_startup_row.connect("notify::active", self._on_welcome_startup_changed)
+        welcome_group.add(self._welcome_startup_row)
+
+        open_welcome_row = Adw.ActionRow(
+            title=self.t("settings.system.welcome.open.title"),
+            subtitle=self.t("settings.system.welcome.open.subtitle"),
+        )
+        open_welcome_row.set_activatable(True)
+        open_welcome_row.add_prefix(Gtk.Image.new_from_icon_name("start-here-symbolic"))
+        open_welcome_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        open_welcome_row.connect("activated", self._on_open_welcome)
+        welcome_group.add(open_welcome_row)
+        page.add(welcome_group)
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1094,6 +1114,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())
+
+    def _on_welcome_startup_changed(self, row, *_a):
+        self.config.set_show_welcome_on_startup(row.get_active())
+
+    def _on_open_welcome(self, _row):
+        # Close Preferences first so the assistant is not stacked over it.
+        self.close()
+        self.win._open_welcome()
 
     def _on_language_changed(self, *_a):
         idx = self._language_combo.get_selected()

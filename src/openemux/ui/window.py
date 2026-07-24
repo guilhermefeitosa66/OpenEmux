@@ -59,6 +59,7 @@ from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
+from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
 
@@ -841,6 +842,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _build_primary_menu(self):
         menu = Gio.Menu()
+        menu.append(self.t("menu.welcome"), "win.welcome")
         menu.append(self.t("menu.preferences"), "win.preferences")
         menu.append(self.t("menu.shortcuts"), "win.shortcuts")
         menu.append(self.t("menu.about"), "win.about")
@@ -858,6 +860,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Plain-key accels (Delete, F2, F5) are safe next to the search entry:
         # a focused entry consumes the key press before window accels run.
         for name, handler, accels in (
+            ("welcome", lambda *_: self._open_welcome(), None),
             ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
@@ -981,6 +984,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _open_preferences(self):
         self._preferences_dialog = OpenEmuxPreferences(self)
         self._preferences_dialog.present(self)
+
+    def _open_welcome(self):
+        WelcomeAssistant(self).present(self)
+
+    def maybe_show_welcome(self):
+        """Show the onboarding tour on startup unless the user opted out.
+
+        Deferred to the idle loop so the main window paints first and the
+        assistant lands on top of a ready-to-use library.
+        """
+        if self.config_manager.get_show_welcome_on_startup():
+            GLib.idle_add(self._open_welcome)
 
     def _show_about(self):
         about = Adw.AboutDialog()
