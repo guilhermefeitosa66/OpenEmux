@@ -11,13 +11,17 @@ request spends.
 How the value gets here
 -----------------------
 * The placeholder below (:data:`_EMBEDDED_BLOB`) is **empty in the source tree**
-  and MUST stay empty in git. Local and development builds therefore ship no
-  embedded credential and behave exactly as before: ScreenScraper stays opt-in
-  and off by default.
-* Official release builds inject the credential at packaging time from a CI
-  secret, via ``packaging/embed_screenscraper_credentials.py`` (documented in
+  and MUST stay empty in git. A build with no credential ships nothing and
+  behaves exactly as before: ScreenScraper stays opt-in and off by default.
+* Official release builds inject the credential at packaging time from a local
+  ``.env`` (``make packages`` reads it), via
+  ``packaging/embed_screenscraper_credentials.py`` (documented in
   ``docs/DEVELOPMENT.md``). The injection only rewrites the built copy; it never
   touches the committed source.
+* During development the credential comes from the
+  ``SCREENSCRAPER_DEVID``/``SCREENSCRAPER_DEVPASSWORD`` environment variables
+  (loaded from the same ``.env`` by ``make run``), so it is never pasted into
+  Preferences nor written to ``~/.openemux/config.yaml``.
 
 On secrecy
 ----------
@@ -29,11 +33,19 @@ not the project's), and the ability to rotate this credential with ScreenScraper
 staff if it is ever abused.
 """
 import base64
+import os
 
 #: base64( XOR( "devid\ndevpassword", _OBFUSCATION_KEY ) ). Empty in the source
 #: tree; overwritten in official builds by the injection script. Never commit a
 #: non-empty value here (``tests/test_embedded_credentials.py`` guards this).
 _EMBEDDED_BLOB = ""
+
+#: Environment variables that supply the credential during development (loaded
+#: from a gitignored ``.env`` by ``make run`` -- see docs/DEVELOPMENT.md). They
+#: take precedence over the baked-in blob so a developer never has to paste the
+#: project's dev key into Preferences (which would store it in config.yaml).
+_ENV_DEVID = "SCREENSCRAPER_DEVID"
+_ENV_DEVPASSWORD = "SCREENSCRAPER_DEVPASSWORD"
 
 #: Fixed XOR key. Obfuscation only -- deliberately public; not a secret.
 _OBFUSCATION_KEY = b"OpenEmux-ScreenScraper-embed-v1"
@@ -63,11 +75,21 @@ def deobfuscate(blob):
 
 
 def get_embedded_dev_credentials():
-    """Return ``(devid, devpassword)`` baked into this build, or ``("", "")``.
+    """Return ``(devid, devpassword)`` for this build, or ``("", "")``.
+
+    Precedence: the ``SCREENSCRAPER_DEVID``/``SCREENSCRAPER_DEVPASSWORD``
+    environment variables (both set) first, then the baked-in ``_EMBEDDED_BLOB``.
+    The env source lets development builds get the credential from a local
+    ``.env`` without storing it in config.yaml or showing it in the UI.
 
     Never raises: a malformed blob degrades to "no embedded credential" so a bad
     injection can only fall back to libretro, never crash the app.
     """
+    env_devid = (os.environ.get(_ENV_DEVID) or "").strip()
+    env_devpassword = (os.environ.get(_ENV_DEVPASSWORD) or "").strip()
+    if env_devid and env_devpassword:
+        return (env_devid, env_devpassword)
+
     if not _EMBEDDED_BLOB:
         return ("", "")
     try:
