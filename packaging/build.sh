@@ -44,6 +44,11 @@ HOST_GID="${HOST_GID:-$(id -g)}"
 
 DOCKER_ARGS=(--rm -t -v "$ROOT_DIR:/work" -w /work
              -e HOST_UID="$HOST_UID" -e HOST_GID="$HOST_GID")
+# Pass the ScreenScraper developer credential through to the build (CI secrets).
+# Unset/empty means no embedded credential -- the injection step is then a no-op
+# and ScreenScraper stays opt-in, so local builds need nothing here.
+DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
+              -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
 # appimage-builder needs to mount squashfs/use FUSE-ish tooling while bundling.
 if [ "$TARGET" = "appimage" ]; then
   DOCKER_ARGS+=(--privileged)
