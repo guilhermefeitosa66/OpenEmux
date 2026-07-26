@@ -28,12 +28,21 @@ COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
 COVER_SOURCE_SCREENSCRAPER = "screenscraper"
 
 # Ordered provider names per configured cover source. "libretro" is the default
-# and yields exactly the historical single-provider behavior.
+# and yields exactly the historical single-provider behavior. The project's own
+# mirror (issue #74) closes every chain: it only ever fires for a ROM the
+# preferred sources missed, so appending it changes no existing match.
 _SOURCE_ORDER = {
-    COVER_SOURCE_LIBRETRO: ("libretro",),
-    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER: ("libretro", "screenscraper"),
-    COVER_SOURCE_SCREENSCRAPER: ("screenscraper",),
+    COVER_SOURCE_LIBRETRO: ("libretro", "openemux"),
+    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER: ("libretro", "screenscraper", "openemux"),
+    COVER_SOURCE_SCREENSCRAPER: ("screenscraper", "openemux"),
 }
+
+# The OpenEmux artwork mirror: a size-reduced WebP dump of the libretro box
+# arts, hosted in its own repository so the project has a fallback source under
+# its own control (and so the blobs stay out of the app repository).
+OPENEMUX_ARTWORK_BASE = (
+    "https://raw.githubusercontent.com/guilhermefeitosa66/openemux-artwork/main"
+)
 
 def _build_cover_url(system, game_name):
     return (
@@ -184,6 +193,42 @@ def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
     return [_build_cover_url(system, candidate) for candidate in names]
 
 
+def _build_openemux_art_url(system, game_name):
+    # The mirror keeps libretro's directory names with underscores for spaces,
+    # and every file is WebP (see openemux-artwork/README.md).
+    directory = system.replace(" ", "_")
+    return (
+        f"{OPENEMUX_ARTWORK_BASE}/"
+        f"{urllib.parse.quote(directory, safe='')}/"
+        f"{urllib.parse.quote(game_name + '.webp', safe='')}"
+    )
+
+
+def _openemux_candidates(console, rom_name, sync_settings, rom_path=None):
+    """The project's own art mirror (issue #74): libretro naming, WebP files.
+
+    Box art only -- the mirror carries no cartridge labels, so a label pass
+    must not receive box-art URLs from it.
+    """
+    art_kind = screenscraper.normalize_art_kind(
+        sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
+    )
+    if art_kind != screenscraper.DEFAULT_ART_KIND:
+        return []
+    system_id = resolve_system_id(console)
+    system = get_thumbnail_system(system_id)
+    if not system:
+        return []
+
+    names = _candidate_names(
+        rom_name=rom_name,
+        matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
+        region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
+        name_cleanup=bool(sync_settings.get("name_cleanup", True)),
+    )
+    return [_build_openemux_art_url(system, candidate) for candidate in names]
+
+
 def _screenscraper_credentials(sync_settings):
     devid, devpassword = _resolve_dev_credentials(sync_settings)
     return screenscraper.ScreenScraperCredentials(
@@ -230,6 +275,7 @@ def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):
 _PROVIDER_FUNCTIONS = {
     "libretro": "_libretro_candidates",
     "screenscraper": "_screenscraper_candidates",
+    "openemux": "_openemux_candidates",
 }
 
 
