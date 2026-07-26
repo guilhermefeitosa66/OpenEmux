@@ -216,6 +216,76 @@ class FrameAssetLookupTests(unittest.TestCase):
                 directory / "XYZ.svg",
             )
 
+    def test_cache_key_tells_shell_variants_apart(self):
+        # A different shell file is a different composite: nothing to
+        # invalidate by hand when the user picks a color.
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            base = cartridge_render._cache_key(None, directory / "XYZ.svg", 200, 1)
+            red = cartridge_render._cache_key(None, directory / "XYZ-red.svg", 200, 1)
+            self.assertNotEqual(base, red)
+
+    def test_color_variants_are_not_consoles(self):
+        # SFC-red.svg is a shell for SFC, not a console called "SFC-red".
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            (directory / "XYZ-gold.svg").write_text("<svg/>")
+            self.assertEqual(cartridge_render.consoles_with_frames(directory), ["XYZ"])
+
+    def test_frame_asset_resolution_by_color(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            # A set color resolves to its variant file.
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="red"),
+                directory / "XYZ-red.svg",
+            )
+            # A color with no file falls back to the authored shell...
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="blue"),
+                directory / "XYZ.svg",
+            )
+            # ...and so do "default"/None.
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="default"),
+                directory / "XYZ.svg",
+            )
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory),
+                directory / "XYZ.svg",
+            )
+
+    def test_frame_colors_come_from_the_files_on_disk(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            (directory / "XYZ-gold.svg").write_text("<svg/>")
+            self.assertEqual(
+                cartridge_render.frame_colors_for("XYZ", directory),
+                ["default", "gold", "red"],
+            )
+            # No base frame, no colors -- variants alone do not opt a console in.
+            (directory / "ABC-red.svg").write_text("<svg/>")
+            self.assertEqual(cartridge_render.frame_colors_for("ABC", directory), [])
+
+    def test_shipped_variants_resolve_for_every_console(self):
+        # Every console with a frame got the full first batch of shells.
+        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+            colors = cartridge_render.frame_colors_for(console)
+            self.assertIn("red", colors, console)
+            self.assertIn("white", colors, console)
+            self.assertEqual(
+                cartridge_render.frame_asset_for(console, color="red"),
+                cartridge_render.CARTRIDGE_ASSETS_DIR / f"{console}-red.svg",
+            )
+
     def test_missing_directory_yields_no_frames(self):
         with TemporaryDirectory() as tmp_dir:
             missing = Path(tmp_dir) / "nope"

@@ -129,9 +129,13 @@ def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
     return columns, max(0, available - used)
 
 
-def cartridge_frame_svg(console):
-    """The pre-render frame for a console, when one was authored as SVG."""
-    return cartridge_render.cartridge_frame(console)
+def cartridge_frame_svg(console, color=None):
+    """The pre-render frame for a console, when one was authored as SVG.
+
+    ``color`` picks a shell variant when one exists on disk; the default (and
+    any color with no file) is the authored ``<CONSOLE>.svg``.
+    """
+    return cartridge_render.cartridge_frame(console, color=color)
 
 
 class FixedSizePicture(Gtk.Picture):
@@ -782,6 +786,19 @@ class RomItem(Gtk.Box):
     def _refresh_cover_after_change(self):
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
 
+    def set_cartridge_frame(self, frame_path):
+        """Swap the shell SVG and re-compose the card (per-ROM color change).
+
+        Only meaningful on a card already drawn as a cartridge; the geometry is
+        identical across a console's shell variants, so the card size holds.
+        """
+        if not self.cartridge_frame_path or not frame_path:
+            return
+        if str(frame_path) == str(self.cartridge_frame_path):
+            return
+        self.cartridge_frame_path = frame_path
+        self._refresh_cover_after_change()
+
 
 class RomGrid(Gtk.FlowBox):
     def __init__(
@@ -803,11 +820,15 @@ class RomGrid(Gtk.FlowBox):
         on_delete_rom=None,
         on_selection_changed=None,
         context_services=None,
+        frame_color_for_rom=None,
     ):
         super().__init__()
         self.console = console
         self.context_services = context_services
         self.mixed_consoles = mixed_consoles
+        # Resolves a ROM's cartridge shell color (issue #79); None keeps every
+        # card on the authored shell.
+        self._frame_color_for_rom = frame_color_for_rom
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
@@ -887,6 +908,8 @@ class RomGrid(Gtk.FlowBox):
             cover_size = list_thumb_size(cover_size, self.zoom)
 
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
+        # The console's authored shell; per-ROM colors swap in a variant of it.
+        self._base_frame_path = cartridge_frame_path
 
         for rom in roms:
             item = RomItem(
@@ -901,7 +924,7 @@ class RomGrid(Gtk.FlowBox):
                 t,
                 self.roms_dir,
                 cover_size,
-                cartridge_frame_path=cartridge_frame_path,
+                cartridge_frame_path=self._frame_path_for_rom(rom),
                 mixed_consoles=mixed_consoles,
                 on_rename_rom=on_rename_rom,
                 on_delete_rom=on_delete_rom,
@@ -933,6 +956,27 @@ class RomGrid(Gtk.FlowBox):
         drag.connect("drag-update", self._on_band_update)
         drag.connect("drag-end", self._on_band_end)
         self.add_controller(drag)
+
+    # -- cartridge shells ----------------------------------------------------
+
+    def _frame_path_for_rom(self, rom):
+        """This ROM's shell: the console frame in the ROM's chosen color."""
+        if not self._base_frame_path:
+            return None
+        if self._frame_color_for_rom is None:
+            return self._base_frame_path
+        color = self._frame_color_for_rom(rom)
+        return cartridge_frame_svg(rom["console"], color) or self._base_frame_path
+
+    def refresh_rom_frame(self, rom):
+        """Re-resolve one card's shell after its cartridge color changed."""
+        path = str(rom.get("path", ""))
+        if not path or not self._base_frame_path:
+            return
+        for item in self._items:
+            if str(item.rom.get("path", "")) == path:
+                item.set_cartridge_frame(self._frame_path_for_rom(item.rom))
+                return
 
     # -- layout ------------------------------------------------------------
 

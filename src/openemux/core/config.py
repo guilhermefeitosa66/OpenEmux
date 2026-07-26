@@ -21,6 +21,7 @@ from openemux.core.library_view import (
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import get_real_home
 from openemux.core.cores import CoreConfigStore
+from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.update_checker import (
@@ -178,6 +179,7 @@ class ConfigManager:
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.shaders = ShaderConfigStore()
         self.cores = CoreConfigStore()
+        self.cartridge_colors = CartridgeColorStore()
         self.config = self.load_config()
 
     def load_config(self):
@@ -681,6 +683,28 @@ class ConfigManager:
 
     def set_show_all_shaders(self, enabled):
         return self.shaders.set_show_all_shaders(enabled)
+
+    # -- cartridge shell colors (issue #79): same shape as the shader overrides
+    def get_cartridge_color_for_console(self, console):
+        return self.cartridge_colors.get_console_color(console)
+
+    def set_cartridge_color_for_console(self, console, color_id):
+        return self.cartridge_colors.set_console_color(console, color_id)
+
+    def get_cartridge_color_for_rom(self, rom_path, console):
+        return self.cartridge_colors.get_effective_color(rom_path, console)
+
+    def get_rom_cartridge_color_override(self, rom_path):
+        return self.cartridge_colors.get_rom_color(rom_path)
+
+    def set_rom_cartridge_color(self, rom_path, console, color_id):
+        return self.cartridge_colors.set_rom_color(rom_path, console, color_id)
+
+    def repath_rom_cartridge_color(self, old_path, new_path):
+        return self.cartridge_colors.repath_rom(old_path, new_path)
+
+    def forget_rom_cartridge_color(self, rom_path):
+        return self.cartridge_colors.forget_rom(rom_path)
 
     def reset_shader_defaults(self):
         return self.shaders.reset_defaults()

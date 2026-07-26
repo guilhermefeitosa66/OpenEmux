@@ -44,6 +44,9 @@ FRAME_CACHE_VERSION = 2
 # The name the frame author gives the label object, as an id or inkscape:label.
 CLIP_MARKER = "label-clip"
 
+# The authored shell: the bare <CONSOLE>.svg, not a -<color> variant.
+DEFAULT_FRAME_COLOR = "default"
+
 # Blank-sticker tone used where no cover art is available.
 BLANK_LABEL_RGB = (0.87, 0.86, 0.83)
 
@@ -69,8 +72,12 @@ def rsvg_available() -> bool:
     return Rsvg is not None
 
 
-def frame_asset_for(console, assets_dir=None) -> Path | None:
+def frame_asset_for(console, assets_dir=None, color=None) -> Path | None:
     """The shipped frame SVG for a console, or None when none was authored.
+
+    ``color`` picks a shell variant (``<CONSOLE>-<color>.svg``); the authored
+    default is the bare ``<CONSOLE>.svg``. A color with no file falls back to
+    the default shell, so a stale stored color never breaks rendering.
 
     Existence of the file is the whole test, deliberately: librsvg availability
     is a separate, recoverable concern (a user can install the typelib later),
@@ -79,6 +86,10 @@ def frame_asset_for(console, assets_dir=None) -> Path | None:
     Rendering paths use `cartridge_frame(...)`, which does check.
     """
     directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
+    if color and color != DEFAULT_FRAME_COLOR:
+        variant = directory / f"{console}-{color}.svg"
+        if variant.is_file():
+            return variant
     candidate = directory / f"{console}.svg"
     return candidate if candidate.is_file() else None
 
@@ -89,16 +100,43 @@ def has_frame(console, assets_dir=None) -> bool:
 
 
 def consoles_with_frames(assets_dir=None) -> list[str]:
-    """Console ids that have a frame, sorted, derived from the shipped assets."""
+    """Console ids that have a frame, sorted, derived from the shipped assets.
+
+    Only base frames count: a ``-<color>`` variant is a shell for a console
+    already in the list, not a console of its own.
+    """
     directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
     if not directory.is_dir():
         return []
-    return sorted(path.stem for path in directory.glob("*.svg") if path.is_file())
+    return sorted(
+        path.stem
+        for path in directory.glob("*.svg")
+        if path.is_file() and "-" not in path.stem
+    )
 
 
-def cartridge_frame(console, assets_dir=None) -> Path | None:
+def frame_colors_for(console, assets_dir=None) -> list[str]:
+    """Shell color ids available for a console, from the files on disk.
+
+    Always starts with the default shell when the console has a frame at all;
+    empty when it has none. Order is left to the caller (the menu sorts by the
+    palette table), so this is plain sorted ids.
+    """
+    directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
+    if not (directory / f"{console}.svg").is_file():
+        return []
+    prefix = f"{console}-"
+    variants = sorted(
+        path.stem[len(prefix):]
+        for path in directory.glob(f"{prefix}*.svg")
+        if path.is_file() and path.stem[len(prefix):]
+    )
+    return [DEFAULT_FRAME_COLOR] + variants
+
+
+def cartridge_frame(console, assets_dir=None, color=None) -> Path | None:
     """The frame SVG for a console when it exists *and* can actually be used."""
-    candidate = frame_asset_for(console, assets_dir)
+    candidate = frame_asset_for(console, assets_dir, color=color)
     if candidate is None or not rsvg_available():
         return None
     return candidate if load_frame(candidate) else None

@@ -2164,6 +2164,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_delete_rom=self._confirm_delete_roms,
             on_selection_changed=self._on_selection_changed,
             context_services=self._rom_context_services,
+            frame_color_for_rom=self._cartridge_color_for_rom,
         )
         self._grids[console] = grid
         # The page was rebuilt, so whatever was selected on it is gone.
@@ -2198,6 +2199,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         else:
             label = self.shader_catalog.label_for_shader(shader_id)
         self._toast(self.t("toast.shader.rom_set", name=rom["name"], shader=label))
+
+    @property
+    def current_view_mode(self):
+        """The active library view mode (context menus gate entries on it)."""
+        return self._view_mode
+
+    def _cartridge_color_for_rom(self, rom):
+        """The shell color a card should draw with: per-ROM, then per-console."""
+        return self.config_manager.get_cartridge_color_for_rom(rom["path"], rom["console"])
+
+    def set_rom_cartridge_color(self, rom, color_id):
+        """Persist a per-ROM shell color (``color_id=None`` clears it).
+
+        Only the picked card is re-composed; the rest of the shelf is
+        untouched. The card may live on more than one loaded page (console
+        page plus Favorites), so every grid gets a chance to refresh it.
+        """
+        self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
+        for grid in self._grids.values():
+            grid.refresh_rom_frame(rom)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
@@ -2317,6 +2338,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.play_history.repath(rom["path"], renamed["path"])
         self.config_manager.repath_rom_shader(rom["path"], renamed["path"])
         self.config_manager.repath_rom_core(rom["path"], renamed["path"])
+        self.config_manager.repath_rom_cartridge_color(rom["path"], renamed["path"])
         self.collection_manager.repath_rom(rom["path"], renamed["path"])
         self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
         self._reload_current_page()
@@ -2357,6 +2379,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.play_history.forget(rom["path"])
             self.config_manager.forget_rom_shader(rom["path"])
             self.config_manager.forget_rom_core(rom["path"])
+            self.config_manager.forget_rom_cartridge_color(rom["path"])
             self.collection_manager.forget_rom(rom["path"])
             deleted += 1
 
