@@ -160,7 +160,7 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
         active_device = profile.get("active_device", "keyboard")
@@ -220,6 +220,16 @@ class RetroArchLauncher:
         overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
         overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
 
+        # Save states live in OpenEmux's own per-console tree (issue #73), so
+        # the app can list and manage them; thumbnails give the manager
+        # something to show. state_slot seeds "play from this state" launches.
+        states_dir = self.config_manager.get_console_states_dir(console)
+        states_dir.mkdir(parents=True, exist_ok=True)
+        overrides["savestate_directory"] = f'"{states_dir}"'
+        overrides["savestate_thumbnail_enable"] = '"true"'
+        if state_slot is not None:
+            overrides["state_slot"] = f'"{int(state_slot)}"'
+
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
@@ -229,7 +239,7 @@ class RetroArchLauncher:
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(override_path)
 
-    def launch_process(self, rom_path, console):
+    def launch_process(self, rom_path, console, state_slot=None):
         system_id = resolve_system_id(console)
         launch_prefix, prefix_error = self._launch_prefix()
         if prefix_error:
@@ -267,6 +277,7 @@ class RetroArchLauncher:
             core_filename=core_filename,
             shader_path=shader_path,
             shader_enabled=bool(shader_path),
+            state_slot=state_slot,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:

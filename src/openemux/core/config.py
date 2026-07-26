@@ -37,6 +37,9 @@ DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
 DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
 DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
+# Save states live under OpenEmux's own tree (issue #73), one directory per
+# console, so the app can list and manage them instead of RetroArch's default.
+DEFAULT_STATES_DIR = DEFAULT_CONFIG_DIR / "states"
 MIGRATION_VERSION = 2
 
 # Bumped when a UI default changes in a way that should reach configs written
@@ -683,6 +686,12 @@ class ConfigManager:
 
     def get_runtime_dir(self):
         return DEFAULT_RUNTIME_DIR
+
+    def get_states_dir(self):
+        return DEFAULT_STATES_DIR
+
+    def get_console_states_dir(self, console):
+        return DEFAULT_STATES_DIR / resolve_system_id(console)
 
     def get_network_cmd_port(self):
         try:
