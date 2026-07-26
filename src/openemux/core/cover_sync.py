@@ -8,10 +8,19 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import embedded_credentials, screenscraper
-from openemux.core.scraper import find_local_cover
+from openemux.core.scraper import COVER_ART, LABEL_ART, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+# Where each artwork type belongs on disk. Cartridge labels are a different
+# asset from box art -- the grid composites labels into a cartridge frame and
+# shows box art everywhere else -- so they get their own directory and never
+# overwrite one another.
+_ART_DIR_BY_KIND = {
+    "boxart": COVER_ART,
+    "cartridge_label": LABEL_ART,
+}
 
 COVER_SOURCE_LIBRETRO = "libretro"
 COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
@@ -291,7 +300,20 @@ def _sync_covers(
         if scope == "console" and selected_console in library_by_console
         else list(library_by_console.keys())
     )
-    logger.info("cover_sync started: scope=%s selected_console=%s consoles=%s", scope, selected_console, consoles)
+    # The configured artwork type decides which directory this run fills, so a
+    # label sync never clobbers box art already scraped for the same ROM.
+    art_kind = screenscraper.normalize_art_kind(
+        sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
+    )
+    art_dir = _ART_DIR_BY_KIND.get(art_kind, COVER_ART)
+    logger.info(
+        "cover_sync started: scope=%s selected_console=%s consoles=%s art_kind=%s dir=%s",
+        scope,
+        selected_console,
+        consoles,
+        art_kind,
+        art_dir,
+    )
 
     total = 0
     downloaded = 0
@@ -311,8 +333,8 @@ def _sync_covers(
             total += 1
             name = rom["name"]
 
-            if find_local_cover(roms_dir_path, console, name):
-                logger.info("cover_sync skip existing: console=%s rom=%s", console, name)
+            if find_local_art(roms_dir_path, console, name, art_dir):
+                logger.info("cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind)
                 skipped += 1
                 if on_progress:
                     on_progress(
@@ -328,7 +350,7 @@ def _sync_covers(
                     )
                 continue
 
-            target = roms_dir_path / console / "covers" / f"{name}.png"
+            target = roms_dir_path / console / art_dir / f"{name}.png"
             urls = _remote_cover_candidates(console, name, sync_settings, rom_path=rom.get("path"))
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
             found = False

@@ -88,7 +88,7 @@ class CoverSyncTests(unittest.TestCase):
         library = {"snes": [{"name": "Chrono Trigger", "path": "/tmp/Chrono Trigger.sfc", "console": "snes"}]}
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync.find_local_cover", return_value=None),
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch(
                     "openemux.core.cover_sync._remote_cover_candidates",
                     return_value=["u1", "u2", "u3"],
@@ -113,7 +113,7 @@ class CoverSyncTests(unittest.TestCase):
         library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync.find_local_cover", return_value=Path(tmp_dir) / "cover.png"),
+                patch("openemux.core.cover_sync.find_local_art", return_value=Path(tmp_dir) / "cover.png"),
                 patch("openemux.core.cover_sync._download_cover") as download_mock,
             ):
                 summary = _sync_covers(
@@ -127,6 +127,54 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 0)
         self.assertEqual(download_mock.call_count, 0)
 
+    def test_artwork_type_decides_the_destination_directory(self):
+        # Cartridge labels are composited into a frame and box art is shown on
+        # its own, so each kind gets its own directory instead of overwriting
+        # the other under "covers".
+        library = {"SFC": [{"name": "Chrono Trigger", "path": "/tmp/ct.sfc", "console": "SFC"}]}
+        for art_type, expected_dir in (("boxart", "covers"), ("cartridge_label", "labels")):
+            with TemporaryDirectory() as tmp_dir:
+                with (
+                    patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                    patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                    patch(
+                        "openemux.core.cover_sync._download_cover", return_value=True
+                    ) as download_mock,
+                ):
+                    _sync_covers(
+                        library_by_console=library,
+                        covers_dir=tmp_dir,
+                        scope="console",
+                        selected_console="SFC",
+                        sync_settings={"cover_art_type": art_type},
+                    )
+                target = download_mock.call_args[0][1]
+                self.assertEqual(target.parent.name, expected_dir, art_type)
+                self.assertEqual(target.name, "Chrono Trigger.png")
+
+    def test_label_sync_does_not_skip_a_rom_that_only_has_box_art(self):
+        # The skip check must look at the kind being synced: a ROM with box art
+        # but no label still needs its label downloaded.
+        library = {"SFC": [{"name": "Chrono Trigger", "path": "/tmp/ct.sfc", "console": "SFC"}]}
+        with TemporaryDirectory() as tmp_dir:
+            cover = Path(tmp_dir) / "SFC" / "covers"
+            cover.mkdir(parents=True)
+            (cover / "Chrono Trigger.png").write_bytes(b"boxart")
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._download_cover", return_value=True) as download_mock,
+            ):
+                summary = _sync_covers(
+                    library_by_console=library,
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={"cover_art_type": "cartridge_label"},
+                )
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["downloaded"], 1)
+        self.assertEqual(download_mock.call_args[0][1].parent.name, "labels")
+
     def test_cover_sync_reports_progress(self):
         library = {
             "PS": [
@@ -137,7 +185,7 @@ class CoverSyncTests(unittest.TestCase):
         events = []
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync.find_local_cover", return_value=None),
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
                 patch("openemux.core.cover_sync._download_cover", side_effect=[True, False]),
             ):

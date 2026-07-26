@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Bump whenever the frame art or the compositing logic changes so every cached
 # composite is regenerated.
-FRAME_CACHE_VERSION = 1
+FRAME_CACHE_VERSION = 2
 
 # The name the frame author gives the label object, as an id or inkscape:label.
 CLIP_MARKER = "label-clip"
