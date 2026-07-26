@@ -110,6 +110,8 @@ TRANSLATIONS = {
     "hints.close": "Fechar",
     "hints.enter_pane": "Entrar na lista",
     "hints.switch_pane": "Alternar painel",
+    "header.volume": "Volume do jogo",
+    "volume.mute": "Silenciar",
     "hints.select_enter": "Segurar: selecionar",
     "hints.select_toggle": "Selecionar",
     "hints.select_range": "Intervalo",

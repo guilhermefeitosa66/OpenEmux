@@ -362,6 +362,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header.pack_end(self.stop_btn)
 
+        header.pack_end(self._build_volume_button())
+
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
         refresh_btn.set_tooltip_text(self.t("header.refresh"))
@@ -464,6 +466,75 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._view_segment_buttons[mode] = button
         self.view_mode_segment = box
         return box
+
+    def _build_volume_button(self):
+        """Master volume for the running game (issue #69): slider + mute.
+
+        Lives next to Stop and is only sensitive while a game runs. The
+        slider is absolute dB; the runtime manager walks RetroArch there in
+        0.5 dB UDP steps from the level the launch seeded.
+        """
+        from openemux.core.retroarch_command import MAX_VOLUME_DB, MIN_VOLUME_DB
+
+        self.volume_btn = Gtk.MenuButton()
+        self.volume_btn.set_icon_name("audio-volume-high-symbolic")
+        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self.volume_btn.set_sensitive(False)
+
+        self._volume_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
+        )
+        self._volume_scale.set_size_request(180, -1)
+        self._volume_scale.set_value(self.config_manager.get_master_volume_db())
+        self._volume_scale.set_draw_value(True)
+        self._volume_scale.set_value_pos(Gtk.PositionType.RIGHT)
+        self._volume_scale.set_format_value_func(lambda _s, v: f"{v:+.1f} dB")
+        self._volume_scale.connect("value-changed", self._on_volume_scale_changed)
+
+        self._mute_button = Gtk.ToggleButton()
+        self._mute_button.set_icon_name("audio-volume-muted-symbolic")
+        self._mute_button.set_tooltip_text(self.t("volume.mute"))
+        self._mute_button.add_css_class("flat")
+        self._mute_toggle_guard = False
+        self._mute_button.connect("toggled", self._on_mute_toggled)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        box.append(self._mute_button)
+        box.append(self._volume_scale)
+
+        popover = Gtk.Popover()
+        popover.set_child(box)
+        self.volume_btn.set_popover(popover)
+        return self.volume_btn
+
+    def _on_volume_scale_changed(self, scale):
+        level = self.runtime_manager.set_master_volume_db(scale.get_value())
+        icon = "audio-volume-high-symbolic"
+        if level <= -30:
+            icon = "audio-volume-low-symbolic"
+        elif level <= -12:
+            icon = "audio-volume-medium-symbolic"
+        if not self._mute_button.get_active():
+            self.volume_btn.set_icon_name(icon)
+
+    def _on_mute_toggled(self, button):
+        if self._mute_toggle_guard:
+            return
+        muted = self.runtime_manager.toggle_mute()
+        if muted != button.get_active():
+            # The command did not go out (game gone mid-toggle): stay honest.
+            self._mute_toggle_guard = True
+            button.set_active(muted)
+            self._mute_toggle_guard = False
+        self.volume_btn.set_icon_name(
+            "audio-volume-muted-symbolic" if muted else "audio-volume-high-symbolic"
+        )
+        if not muted:
+            self._on_volume_scale_changed(self._volume_scale)
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -1150,6 +1221,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_placeholder_text(self.t("header.search"))
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self._mute_button.set_tooltip_text(self.t("volume.mute"))
         self.import_btn.set_tooltip_text(self.t("header.import"))
         self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
         for mode, button in self._view_segment_buttons.items():
@@ -3160,6 +3233,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _sync_runtime_controls(self):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
+        self.volume_btn.set_sensitive(is_running)
+        if is_running:
+            # A fresh launch starts unmuted at the persisted level.
+            self._mute_toggle_guard = True
+            self._mute_button.set_active(False)
+            self._mute_toggle_guard = False
+            self._volume_scale.set_value(self.runtime_manager.volume_db)
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()

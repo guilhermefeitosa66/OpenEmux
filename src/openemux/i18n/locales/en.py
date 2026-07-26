@@ -110,6 +110,8 @@ TRANSLATIONS = {
     "hints.close": "Close",
     "hints.enter_pane": "Enter list",
     "hints.switch_pane": "Switch pane",
+    "header.volume": "Game volume",
+    "volume.mute": "Mute",
     "hints.select_enter": "Hold: select",
     "hints.select_toggle": "Select",
     "hints.select_range": "Range",
