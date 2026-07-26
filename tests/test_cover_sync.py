@@ -238,26 +238,49 @@ class CoverSyncTests(unittest.TestCase):
 
 
 class CoverSourceProviderTests(unittest.TestCase):
-    """The libretro-only default must remain byte-for-byte what it always was."""
+    """libretro leads every default chain; the OpenEmux mirror closes it."""
 
-    def test_default_source_uses_libretro_provider_only(self):
+    def test_default_source_is_libretro_backed_by_the_mirror(self):
         for settings in ({}, {"cover_source": "libretro"}):
             names = [name for name, _fn in _ordered_providers(settings)]
-            self.assertEqual(names, ["libretro"], settings)
+            self.assertEqual(names, ["libretro", "openemux"], settings)
 
     def test_default_source_never_calls_screenscraper(self):
         with patch("openemux.core.cover_sync._screenscraper_candidates") as ss_mock:
             urls = _remote_cover_candidates("SFC", "Chrono Trigger", {})
         ss_mock.assert_not_called()
         self.assertTrue(urls)
-        self.assertTrue(all(u.startswith("https://thumbnails.libretro.com/") for u in urls))
 
-    def test_default_candidates_match_the_libretro_provider_exactly(self):
+    def test_default_candidates_lead_with_the_libretro_provider(self):
+        # The mirror only appends: every libretro candidate keeps its position,
+        # so existing matches resolve exactly as they always did.
         settings = {"region_priority": ["USA", "World"], "name_cleanup": True}
-        self.assertEqual(
-            _remote_cover_candidates("SFC", "Chrono Trigger", settings),
-            _libretro_candidates("SFC", "Chrono Trigger", settings),
+        libretro = _libretro_candidates("SFC", "Chrono Trigger", settings)
+        combined = _remote_cover_candidates("SFC", "Chrono Trigger", settings)
+        self.assertEqual(combined[: len(libretro)], libretro)
+        mirror_urls = combined[len(libretro):]
+        self.assertTrue(mirror_urls)
+        self.assertTrue(
+            all(u.startswith(cover_sync.OPENEMUX_ARTWORK_BASE) for u in mirror_urls)
         )
+
+    def test_openemux_mirror_urls_follow_the_repo_layout(self):
+        urls = cover_sync._openemux_candidates("SFC", "Chrono Trigger (USA)", {})
+        self.assertTrue(urls)
+        self.assertEqual(
+            urls[0],
+            "https://raw.githubusercontent.com/guilhermefeitosa66/openemux-artwork/"
+            "main/Nintendo_-_Super_Nintendo_Entertainment_System/"
+            "Chrono%20Trigger%20%28USA%29.webp",
+        )
+
+    def test_openemux_mirror_serves_no_cartridge_labels(self):
+        # The mirror only carries box art; a label pass must get nothing from
+        # it, not box-art URLs that would be saved into labels/.
+        urls = cover_sync._openemux_candidates(
+            "SFC", "Chrono Trigger", {"cover_art_type": "cartridge_label"}
+        )
+        self.assertEqual(urls, [])
 
     def test_libretro_then_screenscraper_appends_screenscraper_candidates(self):
         settings = {"cover_source": "libretro_then_screenscraper"}
@@ -267,7 +290,16 @@ class CoverSourceProviderTests(unittest.TestCase):
             urls = _remote_cover_candidates("SFC", "Chrono Trigger", settings)
         libretro_urls = _libretro_candidates("SFC", "Chrono Trigger", settings)
         self.assertEqual(urls[: len(libretro_urls)], libretro_urls)
-        self.assertEqual(urls[len(libretro_urls) :], ["ss1", "ss2"])
+        self.assertEqual(
+            urls[len(libretro_urls) : len(libretro_urls) + 2], ["ss1", "ss2"]
+        )
+        # The mirror still closes the chain, after both preferred sources.
+        self.assertTrue(
+            all(
+                u.startswith(cover_sync.OPENEMUX_ARTWORK_BASE)
+                for u in urls[len(libretro_urls) + 2 :]
+            )
+        )
 
     def test_screenscraper_only_source_skips_libretro(self):
         settings = {"cover_source": "screenscraper"}
@@ -275,11 +307,15 @@ class CoverSourceProviderTests(unittest.TestCase):
             "openemux.core.cover_sync._screenscraper_candidates", return_value=["ss1"]
         ):
             urls = _remote_cover_candidates("SFC", "Chrono Trigger", settings)
-        self.assertEqual(urls, ["ss1"])
+        self.assertEqual(urls[0], "ss1")
+        self.assertNotIn("thumbnails.libretro.com", " ".join(urls))
+        self.assertTrue(
+            all(u.startswith(cover_sync.OPENEMUX_ARTWORK_BASE) for u in urls[1:])
+        )
 
     def test_unknown_source_value_falls_back_to_libretro(self):
         names = [name for name, _fn in _ordered_providers({"cover_source": "bogus"})]
-        self.assertEqual(names, ["libretro"])
+        self.assertEqual(names, ["libretro", "openemux"])
 
     def test_screenscraper_provider_swallows_errors(self):
         with patch(
