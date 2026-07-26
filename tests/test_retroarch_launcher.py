@@ -60,6 +60,9 @@ class _DummyConfig:
     def get_master_volume_db(self):
         return -6.0
 
+    def get_console_states_dir(self, console):
+        return self.base_dir / "states" / console
+
 
 class RetroArchLauncherTests(unittest.TestCase):
     def test_resolve_retroarch_binary_from_project_relative_path(self):
@@ -202,6 +205,24 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines(None)
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
 
+    def test_override_owns_the_savestate_directory(self):
+        # Issue #73: states land in OpenEmux's per-console tree, with
+        # thumbnails for the manager; no slot key unless a launch asks for one.
+        lines = self._override_lines(None)
+        self.assertTrue(any(line.startswith('savestate_directory = "') for line in lines))
+        self.assertTrue(any("/states/GBA" in line for line in lines))
+        self.assertIn('savestate_thumbnail_enable = "true"', lines)
+        self.assertFalse(any(line.startswith("state_slot") for line in lines))
+
+    def test_override_seeds_the_state_slot_when_asked(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA", state_slot=3)
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        self.assertIn('state_slot = "3"', lines)
+
     def test_override_emits_turbo_timing_and_the_bound_modifier(self):
         # Issue #72: timing knobs always ride along (defaults are RetroArch's
         # own), and a bound turbo modifier lands as the port's turbo button.
@@ -247,8 +268,14 @@ class RetroArchLauncherTests(unittest.TestCase):
                 "gamepad_p4": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": False},
             },
         }
+        def _stable(lines):
+            # savestate_directory embeds each run's temp dir; not what this
+            # test compares.
+            return [l for l in lines if not l.startswith("savestate_directory")]
+
         self.assertEqual(
-            self._override_lines(legacy_only), self._override_lines(with_disabled_ports)
+            _stable(self._override_lines(legacy_only)),
+            _stable(self._override_lines(with_disabled_ports)),
         )
         self.assertIn('input_player1_a = "z"', self._override_lines(legacy_only))
 
