@@ -9,7 +9,7 @@ from threading import Thread
 
 from openemux.core import embedded_credentials, screenscraper
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
-from openemux.core.scraper import COVER_ART, LABEL_ART, find_local_art
+from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -256,6 +256,29 @@ def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
     return urls
 
 
+# Content-Type -> file extension, for providers whose URLs do not carry one.
+_EXT_BY_CONTENT_TYPE = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
+
+
+def _source_extension(url, response):
+    """The downloaded image's own format: URL extension, then Content-Type.
+
+    Saving a JPEG under ``.png`` loads fine (GdkPixbuf sniffs content) but lies
+    on disk; every extension in ``SUPPORTED_COVER_EXTS`` is found by the local
+    lookups, so the honest one costs nothing. Defaults to png when neither
+    signal is usable.
+    """
+    ext = Path(urllib.parse.urlparse(url).path).suffix.lstrip(".").lower()
+    if ext in SUPPORTED_COVER_EXTS:
+        return "jpg" if ext == "jpeg" else ext
+    content_type = (response.headers.get_content_type() or "").lower()
+    return _EXT_BY_CONTENT_TYPE.get(content_type, "png")
+
+
 def _download_cover(url, dest):
     # Media URLs can come from ScreenScraper, so redact before every log line in
     # case credentials were ever carried in the query string.
@@ -265,6 +288,9 @@ def _download_cover(url, dest):
         # url is an https cover endpoint built by one of the source providers.
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
+            # The caller's target carries the default .png; keep the source's
+            # real format instead when the URL or the response names one.
+            dest = dest.with_suffix(f".{_source_extension(url, resp)}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
