@@ -3,8 +3,8 @@
 Why this exists
 ---------------
 libretro's thumbnail repository only carries No-Intro-named box art. ScreenScraper
-additionally carries the *cartridge label* ("support") media, and matches by ROM
-hash rather than by filename, so it resolves many ROMs libretro misses.
+additionally carries the *cartridge label* ("support-texture") media, and matches
+by ROM hash rather than by filename, so it resolves many ROMs libretro misses.
 
 What the API actually requires (per https://www.screenscraper.fr/webapi2.php)
 -----------------------------------------------------------------------------
@@ -96,11 +96,17 @@ SYSTEM_ID_MAP = {
 }
 
 # ScreenScraper media `type` names, in preference order per OpenEmux art kind.
-# "box-2D" is the flat 2D box scan; "support-2D" is the cartridge/disc label
-# scan (the "support" == physical media), with "support-texture" as fallback.
+# "box-2D" is the flat 2D box scan.
+#
+# For the cartridge kind the only usable media is "support-texture": the label
+# artwork alone, scanned flat, which is what a cartridge frame's `label-clip`
+# slot expects. Its sibling "support-2D" is a photo of the *whole cartridge*
+# (plastic shell included) and must not be used as a fallback -- compositing it
+# into a frame yields a cartridge pasted inside a cartridge. Frames render a
+# blank label when no art is found, which is the better degradation.
 MEDIA_TYPES_BY_KIND = {
     "boxart": ("box-2D", "box-texture", "box-3D"),
-    "cartridge_label": ("support-2D", "support-texture"),
+    "cartridge_label": ("support-texture",),
 }
 
 DEFAULT_ART_KIND = "boxart"
