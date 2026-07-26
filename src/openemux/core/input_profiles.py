@@ -35,6 +35,33 @@ ANALOG_DPAD_MODES = (ANALOG_DPAD_OFF, ANALOG_DPAD_LEFT_STICK, ANALOG_DPAD_RIGHT_
 ANALOG_NATIVE_CONSOLES = {"N64", "PS", "PSP", "GC", "SATURN"}
 
 
+#: RetroArch turbo timing/behavior (issue #72). Period and duty cycle are in
+#: frames; mode 0 = classic (hold the turbo modifier + a button), 1 =
+#: single-button toggle, 2 = single-button hold.
+DEFAULT_TURBO_SETTINGS = {"period": 6, "duty_cycle": 3, "mode": 0}
+TURBO_MODES = (0, 1, 2)
+TURBO_PERIOD_RANGE = (2, 120)
+TURBO_DUTY_RANGE = (1, 119)
+
+
+def normalize_turbo_settings(value):
+    raw = value if isinstance(value, dict) else {}
+
+    def _int(key, default, low, high):
+        try:
+            number = int(raw.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return min(high, max(low, number))
+
+    period = _int("period", DEFAULT_TURBO_SETTINGS["period"], *TURBO_PERIOD_RANGE)
+    duty = _int("duty_cycle", DEFAULT_TURBO_SETTINGS["duty_cycle"], *TURBO_DUTY_RANGE)
+    mode = _int("mode", DEFAULT_TURBO_SETTINGS["mode"], 0, 2)
+    # The button must release within the period or it never re-fires.
+    duty = min(duty, period - 1)
+    return {"period": period, "duty_cycle": duty, "mode": mode}
+
+
 def default_analog_dpad_mode(console):
     canonical = resolve_system_id(console)
     if canonical in ANALOG_NATIVE_CONSOLES:
@@ -100,6 +127,9 @@ class InputProfileManager:
             # choice, not per-device: RetroArch applies it per port and every
             # pad on the console should behave the same way.
             "analog_dpad_mode": default_analog_dpad_mode(system_id),
+            # Turbo timing (issue #72). Turbo itself is on iff a turbo
+            # modifier is bound on a device; these only tune how it fires.
+            "turbo": dict(DEFAULT_TURBO_SETTINGS),
             "devices": devices,
         }
 
@@ -135,6 +165,9 @@ class InputProfileManager:
         base["analog_dpad_mode"] = normalize_analog_dpad_mode(
             loaded.get("analog_dpad_mode") if isinstance(loaded, dict) else None,
             system_id,
+        )
+        base["turbo"] = normalize_turbo_settings(
+            loaded.get("turbo") if isinstance(loaded, dict) else None
         )
         return base
 
@@ -182,6 +215,14 @@ class InputProfileManager:
     def set_analog_dpad_mode(self, console, mode):
         profile = self.load_profile(console)
         profile["analog_dpad_mode"] = normalize_analog_dpad_mode(mode, console)
+        return self.save_profile(console, profile)
+
+    def get_turbo_settings(self, console):
+        return normalize_turbo_settings(self.load_profile(console).get("turbo"))
+
+    def set_turbo_settings(self, console, settings):
+        profile = self.load_profile(console)
+        profile["turbo"] = normalize_turbo_settings(settings)
         return self.save_profile(console, profile)
 
     def get_device_profile(self, console, device_id=None):

@@ -12,6 +12,7 @@ from openemux.core.input_profiles import (
     InputProfileManager,
     default_analog_dpad_mode,
     normalize_analog_dpad_mode,
+    normalize_turbo_settings,
     player_for_device,
 )
 
@@ -123,6 +124,57 @@ class InputProfilesTests(unittest.TestCase):
             saved = manager.save_profile("SFC", {"active_device": "gamepad_p3", "devices": {}})
 
         self.assertEqual(saved["active_device"], "keyboard")
+
+
+class TurboSettingsTests(unittest.TestCase):
+    """Turbo timing (issue #72): normalized, clamped, per console."""
+
+    def test_defaults(self):
+        self.assertEqual(
+            normalize_turbo_settings(None),
+            {"period": 6, "duty_cycle": 3, "mode": 0},
+        )
+
+    def test_clamping_and_garbage(self):
+        settings = normalize_turbo_settings(
+            {"period": 999, "duty_cycle": -4, "mode": "x"}
+        )
+        self.assertEqual(settings["period"], 120)
+        self.assertEqual(settings["duty_cycle"], 1)
+        self.assertEqual(settings["mode"], 0)
+
+    def test_duty_cycle_never_reaches_the_period(self):
+        settings = normalize_turbo_settings({"period": 4, "duty_cycle": 10})
+        self.assertEqual(settings["duty_cycle"], 3)
+
+    def test_round_trip_through_the_profile(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.set_turbo_settings("FC", {"period": 10, "duty_cycle": 5, "mode": 1})
+            again = InputProfileManager(tmp_dir)
+            self.assertEqual(
+                again.get_turbo_settings("FC"),
+                {"period": 10, "duty_cycle": 5, "mode": 1},
+            )
+
+
+class TurboBindingTests(unittest.TestCase):
+    """The turbo modifier is an optional binding: never auto-filled."""
+
+    def test_turbo_stays_unbound_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.load_profile("FC")
+        for device in profile["devices"].values():
+            self.assertEqual(device["bindings"].get("turbo", ""), "")
+
+    def test_a_bound_turbo_survives_normalization(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.load_profile("FC")
+            profile["devices"]["gamepad_p1"]["bindings"]["turbo"] = "9"
+            saved = manager.save_profile("FC", profile)
+        self.assertEqual(saved["devices"]["gamepad_p1"]["bindings"]["turbo"], "9")
 
 
 class AnalogDpadModeTests(unittest.TestCase):

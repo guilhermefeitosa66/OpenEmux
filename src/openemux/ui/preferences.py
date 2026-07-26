@@ -26,10 +26,14 @@ from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
+    OPTIONAL_ACTIONS,
     get_actions_for_console,
 )
 from openemux.core.input_profiles import (
     ANALOG_DPAD_MODES,
+    TURBO_DUTY_RANGE,
+    TURBO_MODES,
+    TURBO_PERIOD_RANGE,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
     device_type_for,
@@ -565,6 +569,37 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         controller_group.add(self._analog_dpad_row)
         page.add(controller_group)
 
+        # Turbo timing (issue #72): tuning knobs; the modifier button itself is
+        # a normal binding row ("Turbo") in the mapping list below.
+        turbo_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.turbo"),
+            description=self.t("prefs.turbo.description"),
+        )
+        self._turbo_guard = False
+        self._turbo_period_row = Adw.SpinRow.new_with_range(*TURBO_PERIOD_RANGE, 1)
+        self._turbo_period_row.set_title(self.t("input.turbo.period"))
+        self._turbo_period_row.set_subtitle(self.t("input.turbo.period.subtitle"))
+        self._turbo_period_row.connect("notify::value", self._on_turbo_changed)
+        turbo_group.add(self._turbo_period_row)
+
+        self._turbo_duty_row = Adw.SpinRow.new_with_range(*TURBO_DUTY_RANGE, 1)
+        self._turbo_duty_row.set_title(self.t("input.turbo.duty"))
+        self._turbo_duty_row.set_subtitle(self.t("input.turbo.duty.subtitle"))
+        self._turbo_duty_row.connect("notify::value", self._on_turbo_changed)
+        turbo_group.add(self._turbo_duty_row)
+
+        self._turbo_mode_ids = list(TURBO_MODES)
+        self._turbo_mode_row = Adw.ComboRow(title=self.t("input.turbo.mode"))
+        self._turbo_mode_row.set_model(
+            Gtk.StringList.new(
+                [self.t(f"input.turbo.mode.{mode}") for mode in self._turbo_mode_ids]
+            )
+        )
+        self._turbo_mode_row.connect("notify::selected", self._on_turbo_changed)
+        turbo_group.add(self._turbo_mode_row)
+        self._sync_turbo_rows()
+        page.add(turbo_group)
+
         self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings"))
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self._map_all_btn = Gtk.Button(label=self.t("input.map_all"))
@@ -597,6 +632,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return "keyboard"
         return self._device_ids[idx]
 
+    def _sync_turbo_rows(self):
+        settings = self.config.input_profiles.get_turbo_settings(self._current_console())
+        self._turbo_guard = True
+        self._turbo_period_row.set_value(settings["period"])
+        self._turbo_duty_row.set_value(settings["duty_cycle"])
+        self._turbo_mode_row.set_selected(self._turbo_mode_ids.index(settings["mode"]))
+        self._turbo_guard = False
+
+    def _on_turbo_changed(self, *_a):
+        if self._turbo_guard:
+            return
+        self.config.input_profiles.set_turbo_settings(
+            self._current_console(),
+            {
+                "period": int(self._turbo_period_row.get_value()),
+                "duty_cycle": int(self._turbo_duty_row.get_value()),
+                "mode": self._turbo_mode_ids[self._turbo_mode_row.get_selected()],
+            },
+        )
+
     def _sync_analog_dpad_row(self):
         mode = self.config.input_profiles.get_analog_dpad_mode(self._current_console())
         self._analog_dpad_guard = True
@@ -612,6 +667,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _on_console_changed(self, *_a):
         self._cancel_capture()
         self._sync_analog_dpad_row()
+        self._sync_turbo_rows()
         self._refresh_bindings()
 
     def _on_device_changed(self, *_a):
@@ -659,7 +715,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         self._loaded_profile = profile
         self._visible_actions = list(visible_actions)
-        self._capture_sequence_actions = list(visible_actions)
+        # Map-all never demands the optional actions (turbo): forcing a user
+        # through binding a modifier they may not want defeats the flow.
+        self._capture_sequence_actions = [
+            action for action in visible_actions if action not in OPTIONAL_ACTIONS
+        ]
         self._bindings_buffer = {
             action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
         }

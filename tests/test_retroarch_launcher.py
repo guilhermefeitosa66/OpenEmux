@@ -202,6 +202,28 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines(None)
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
 
+    def test_override_emits_turbo_timing_and_the_bound_modifier(self):
+        # Issue #72: timing knobs always ride along (defaults are RetroArch's
+        # own), and a bound turbo modifier lands as the port's turbo button.
+        profile = {
+            "active_device": "gamepad_p1",
+            "turbo": {"period": 10, "duty_cycle": 5, "mode": 1},
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0", "turbo": "9"}},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_turbo_period = "10"', lines)
+        self.assertIn('input_turbo_duty_cycle = "5"', lines)
+        self.assertIn('input_turbo_mode = "1"', lines)
+        self.assertIn('input_player1_turbo_btn = "9"', lines)
+
+    def test_override_has_no_turbo_binding_when_none_is_bound(self):
+        lines = self._override_lines(None)
+        self.assertFalse(any("input_player1_turbo" in line for line in lines))
+        # ...but the timing keys still restate the defaults.
+        self.assertIn('input_turbo_period = "6"', lines)
+
     def test_override_enables_the_command_channel_and_seeds_the_volume(self):
         # Issue #69: every launch opens the loopback UDP channel and starts
         # the game at the persisted master volume, so live stepping has a
