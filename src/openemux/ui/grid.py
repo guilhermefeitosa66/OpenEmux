@@ -5,6 +5,7 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
 import logging
 
 from openemux.core import cartridge_render
+from openemux.core.selection import SelectionModel
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     LIST_ROW_MIN_WIDTH,
@@ -369,6 +370,18 @@ class RomItem(Gtk.Box):
         if not compact:
             self.cover_overlay.add_overlay(self.menu_button)
 
+        # List rows carry the inbox idiom: a checkbox at the start of the row,
+        # always visible, reflecting and driving this ROM's selection
+        # (issue #78). Clicking it must never launch the game.
+        self.select_check = None
+        if compact:
+            self.select_check = Gtk.CheckButton()
+            self.select_check.set_valign(Gtk.Align.CENTER)
+            self.select_check.set_tooltip_text(self.t("selection.row_checkbox"))
+            self._select_check_guard = False
+            self.select_check.connect("toggled", self._on_select_check_toggled)
+            self.append(self.select_check)
+
         self.append(self.cover_overlay)
 
         full_name = rom["name"]
@@ -592,6 +605,19 @@ class RomItem(Gtk.Box):
             self.add_css_class("rom-card-selected")
         else:
             self.remove_css_class("rom-card-selected")
+        # Keep the list-row checkbox honest without re-entering the toggle
+        # handler (the guard breaks the feedback loop).
+        if self.select_check is not None and self.select_check.get_active() != self.selected:
+            self._select_check_guard = True
+            self.select_check.set_active(self.selected)
+            self._select_check_guard = False
+
+    def _on_select_check_toggled(self, check):
+        if self._select_check_guard:
+            return
+        if self.on_toggle_selection:
+            # A checkbox is a plain toggle: no range semantics.
+            self.on_toggle_selection(self, True, False)
 
     def _on_hover_enter(self, controller, x, y):
         self.play_overlay.set_visible(True)
@@ -656,11 +682,14 @@ class RomItem(Gtk.Box):
             return
         if button != Gdk.BUTTON_PRIMARY:
             return
-        # Ctrl-click builds a selection card by card; the rubber band on the
-        # empty area is the other way in.
+        # Modifier clicks build the selection (issue #78): Ctrl toggles this
+        # card, Shift ranges from the anchor, Ctrl+Shift adds the range. A
+        # modifier click must never launch the game.
         state = gesture.get_current_event_state()
-        if state & Gdk.ModifierType.CONTROL_MASK and self.on_toggle_selection:
-            self.on_toggle_selection(self)
+        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        if (ctrl or shift) and self.on_toggle_selection:
+            self.on_toggle_selection(self, ctrl, shift)
             return
         if self.on_launch_callback:
             self.on_launch_callback(self.rom)
@@ -868,6 +897,10 @@ class RomGrid(Gtk.FlowBox):
         self._band = None
         self._band_origin = None
         self._band_base = ()
+        # One selection model shared by every input method (issue #78); the
+        # key detects when the search filter changed the visible set.
+        self._selection_model = SelectionModel(0)
+        self._selection_key = None
         # Columns are recomputed from the viewport width; see _retune_columns.
         self._column_state = None
         self._measured_card_width = None
@@ -1189,12 +1222,56 @@ class RomGrid(Gtk.FlowBox):
         return self.focus_first_card()
 
     # -- selection ---------------------------------------------------------
+    #
+    # Mouse, keyboard and gamepad all drive the pure SelectionModel
+    # (core/selection.py); this section maps items to indices over the
+    # *visible* cards and paints the result. The search filter hides cards in
+    # place, so the model is re-seeded whenever the visible set changed.
 
     def selected_roms(self):
         return [item.rom for item in self._items if item.selected]
 
     def clear_selection(self):
-        self._apply_selection(())
+        model, items = self._model_and_items()
+        model.clear()
+        self._paint_selection(model, items)
+
+    def select_all(self):
+        model, items = self._model_and_items()
+        model.select_all()
+        self._paint_selection(model, items)
+
+    def toggle_select_all(self):
+        """Select every visible ROM, or clear when everything already is."""
+        model, items = self._model_and_items()
+        if model.all_selected():
+            model.clear()
+        else:
+            model.select_all()
+        self._paint_selection(model, items)
+
+    def _visible_items(self):
+        return [
+            item
+            for item in self._items
+            if (parent := item.get_parent()) is not None and parent.get_visible()
+        ]
+
+    def _model_and_items(self):
+        """The model, re-seeded when the visible set changed (search filter)."""
+        items = self._visible_items()
+        key = tuple(id(item) for item in items)
+        if key != self._selection_key:
+            self._selection_key = key
+            self._selection_model.reset(len(items))
+            self._selection_model.replace(
+                [index for index, item in enumerate(items) if item.selected]
+            )
+        return self._selection_model, items
+
+    def _paint_selection(self, model, items):
+        selected = {items[index] for index in model.selected}
+        self._apply_selection(selected)
 
     def _apply_selection(self, items):
         chosen = set(items)
@@ -1207,13 +1284,54 @@ class RomGrid(Gtk.FlowBox):
         if changed and self.on_selection_changed:
             self.on_selection_changed(self.selected_roms())
 
-    def _toggle_item_selection(self, item):
-        current = [entry for entry in self._items if entry.selected]
-        if item in current:
-            current.remove(item)
+    def _toggle_item_selection(self, item, ctrl=True, shift=False):
+        """A card's selection gesture: Ctrl toggles, Shift ranges (issue #78)."""
+        model, items = self._model_and_items()
+        if item not in items:
+            return
+        index = items.index(item)
+        if shift and ctrl:
+            model.extend_additive(index)
+        elif shift:
+            model.extend(index)
         else:
-            current.append(item)
-        self._apply_selection(current)
+            model.toggle(index)
+        self._paint_selection(model, items)
+
+    def extend_selection_to(self, item, additive=False):
+        """Shift+arrows: grow the range from the anchor to ``item``."""
+        model, items = self._model_and_items()
+        if item not in items:
+            return
+        index = items.index(item)
+        if additive:
+            model.extend_additive(index)
+        else:
+            model.extend(index)
+        self._paint_selection(model, items)
+
+    def toggle_item(self, item):
+        """Ctrl+Space / gamepad Ⓐ in selection mode: flip one card."""
+        self._toggle_item_selection(item)
+
+    def select_item(self, item):
+        """Make ``item`` the whole selection (entering gamepad selection mode)."""
+        model, items = self._model_and_items()
+        if item not in items:
+            return
+        model.select(items.index(item))
+        self._paint_selection(model, items)
+
+    def note_cursor(self, item, keep_anchor=False):
+        """Follow plain/Ctrl movement so the next Shift range roots correctly."""
+        model, items = self._model_and_items()
+        if item in items:
+            model.move_cursor(items.index(item), keep_anchor=keep_anchor)
+
+    def _sync_model_from_view(self):
+        """Adopt a selection made outside the model (the rubber band)."""
+        model, items = self._model_and_items()
+        model.replace([index for index, item in enumerate(items) if item.selected])
 
     def _is_background(self, x, y):
         """True when (x, y) is empty grid, not a card."""
@@ -1255,6 +1373,9 @@ class RomGrid(Gtk.FlowBox):
         self._band = None
         self._band_origin = None
         self._band_base = ()
+        # The band bypassed the model; adopt its result so a Shift range or
+        # Ctrl toggle right after behaves as if the band had used it.
+        self._sync_model_from_view()
         self.queue_draw()
 
     def _items_in_band(self):

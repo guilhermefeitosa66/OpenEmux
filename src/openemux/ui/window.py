@@ -59,7 +59,7 @@ from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
-from openemux.ui.grid import RomGrid
+from openemux.ui.grid import LIST_MARGIN, RomGrid
 from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
@@ -713,6 +713,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.selection_label.set_hexpand(True)
         self.selection_label.set_xalign(0)
 
+        select_all_button = Gtk.Button(label=self.t("selection.select_all"))
+        select_all_button.connect("clicked", lambda _b: self._select_all_visible())
+
         sync_button = Gtk.Button(label=self.t("selection.sync_covers"))
         sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
 
@@ -731,7 +734,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         box.set_margin_bottom(6)
         box.set_margin_start(12)
         box.set_margin_end(12)
-        for child in (self.selection_label, sync_button, delete_button, clear_button):
+        for child in (self.selection_label, select_all_button, sync_button, delete_button, clear_button):
             box.append(child)
 
         self.selection_bar = Gtk.Revealer()
@@ -745,12 +748,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if count:
             self.selection_label.set_label(self.t("selection.count", count=count))
         self.selection_bar.set_reveal_child(bool(count))
+        self._update_master_check()
 
     def _clear_selection(self):
         grid = self._grids.get(self.current_console)
         if grid:
             grid.clear_selection()
         self._on_selection_changed([])
+        self.leave_selection_mode(clear=False)
+
+    def _select_all_visible(self):
+        """Ctrl+A / the master checkbox: every ROM the search still shows."""
+        grid = self._grids.get(self.current_console)
+        if grid:
+            grid.select_all()
+
+    # -- gamepad selection mode (issue #78) ----------------------------------
+
+    @property
+    def selection_mode_active(self):
+        return getattr(self, "_selection_mode", False)
+
+    def enter_selection_mode(self):
+        if self.selection_mode_active:
+            return
+        self._selection_mode = True
+        self.navigation.refresh_hints()
+        self._toast(self.t("toast.selection_mode.entered"), timeout=3)
+
+    def leave_selection_mode(self, clear=True):
+        if not self.selection_mode_active:
+            return
+        self._selection_mode = False
+        if clear:
+            self._clear_selection()
+        self.navigation.refresh_hints()
+
+    def focus_selection_actions(self):
+        """Gamepad Ⓧ in selection mode: put focus on the selection bar."""
+        if self._selected_roms and self.selection_bar.get_reveal_child():
+            self.selection_bar.get_child().child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _build_tip_bar(self):
         """A quiet single-line hint bar at the bottom of the content pane.
@@ -913,6 +950,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("import", lambda *_: self._on_import_clicked(None), ["<Ctrl>o"]),
             ("sync-covers", lambda *_: self._sync_covers_for_current_scope(), ["<Ctrl><Shift>s"]),
             ("delete-rom", lambda *_: self._delete_selected_or_focused(), ["Delete"]),
+            ("select-all", lambda *_: self._select_all_visible(), ["<Ctrl>a"]),
+            ("select-none", lambda *_: self._clear_selection(), ["<Ctrl><Shift>a"]),
             ("rename-rom", lambda *_: self._rename_focused_rom(), ["F2"]),
             ("toggle-favorite", lambda *_: self._favorite_focused_rom(), ["<Ctrl>d"]),
             ("focus-pane", lambda *_: self.navigation.toggle_pane_focus(), ["F6"]),
@@ -1080,6 +1119,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 ("<Ctrl>d", "shortcuts.favorite"),
                 ("F2", "shortcuts.rename"),
                 ("Delete", "shortcuts.delete"),
+                ("<Ctrl>a", "shortcuts.select_all"),
+                ("<Ctrl><Shift>a", "shortcuts.select_none"),
+                ("<Shift>Up", "shortcuts.select_range"),
+                ("<Ctrl>space", "shortcuts.select_toggle"),
             )),
         )
         section = Gtk.ShortcutsSection(section_name="general", visible=True)
@@ -1709,16 +1752,75 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.connect("response", _on_response)
         dialog.present(self)
 
+    def _make_library_page(self):
+        """One content-stack page: a pinned list header above the scroll area.
+
+        The header carries the master checkbox of list view (issue #78); it
+        sits outside the ScrolledWindow so it never scrolls away, and stays
+        hidden in the grid view modes.
+        """
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        check = Gtk.CheckButton()
+        check.set_tooltip_text(self.t("selection.master_checkbox"))
+        label = Gtk.Label(label=self.t("selection.select_all"))
+        label.add_css_class("dim-label")
+        label.add_css_class("caption")
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.add_css_class("toolbar")
+        header.set_margin_start(LIST_MARGIN)
+        header.set_margin_end(LIST_MARGIN)
+        header.append(check)
+        header.append(label)
+        header.set_visible(False)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        page.append(header)
+        page.append(scroll)
+
+        # Stashed for _render_console_page; the guard breaks the feedback loop
+        # between the master checkbox and the selection it reflects.
+        page.scroll = scroll
+        page.header = header
+        page.master_check = check
+        page.master_guard = [False]
+        check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
+        return page
+
+    def _on_master_check_toggled(self, page):
+        if page.master_guard[0]:
+            return
+        grid = self._grids.get(self.current_console)
+        if grid is None:
+            return
+        if page.master_check.get_active():
+            grid.select_all()
+        else:
+            grid.clear_selection()
+
+    def _update_master_check(self):
+        """Tri-state: none / some (indeterminate) / all visible selected."""
+        page = self._console_pages.get(self.current_console)
+        grid = self._grids.get(self.current_console)
+        if page is None or grid is None or not hasattr(page, "master_check"):
+            return
+        visible = grid._visible_items()
+        selected = sum(1 for item in visible if item.selected)
+        page.master_guard[0] = True
+        page.master_check.set_inconsistent(0 < selected < len(visible))
+        page.master_check.set_active(bool(visible) and selected == len(visible))
+        page.master_guard[0] = False
+
     def _ensure_collection_page(self, slug):
         """Add the content-stack page for a collection if it has none yet."""
         scope = collection_scope(slug)
         if scope in self._console_pages:
             return
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_vexpand(True)
-        self._console_pages[scope] = scroll
+        page = self._make_library_page()
+        self._console_pages[scope] = page
         self._console_loaded[scope] = False
-        self.content_stack.add_titled(scroll, scope, self._console_sidebar_label(scope))
+        self.content_stack.add_titled(page, scope, self._console_sidebar_label(scope))
 
     def _ensure_collection_loaded(self, slug):
         scope = collection_scope(slug)
@@ -1848,32 +1950,29 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._rebuild_console_sidebar(self.visible_consoles)
 
         if self.visible_consoles:
-            all_scroll = Gtk.ScrolledWindow()
-            all_scroll.set_vexpand(True)
-            self._console_pages[ALL_CONSOLES_ID] = all_scroll
+            all_page = self._make_library_page()
+            self._console_pages[ALL_CONSOLES_ID] = all_page
             self._console_loaded[ALL_CONSOLES_ID] = False
-            self.content_stack.add_titled(all_scroll, ALL_CONSOLES_ID, self.t("sidebar.all"))
+            self.content_stack.add_titled(all_page, ALL_CONSOLES_ID, self.t("sidebar.all"))
 
-        favorites_scroll = Gtk.ScrolledWindow()
-        favorites_scroll.set_vexpand(True)
-        self._console_pages[FAVORITES_ID] = favorites_scroll
+        favorites_page = self._make_library_page()
+        self._console_pages[FAVORITES_ID] = favorites_page
         self._console_loaded[FAVORITES_ID] = False
-        self.content_stack.add_titled(favorites_scroll, FAVORITES_ID, self.t("sidebar.favorites"))
+        self.content_stack.add_titled(favorites_page, FAVORITES_ID, self.t("sidebar.favorites"))
 
         for collection in self.collection_manager.list_collections():
             self._ensure_collection_page(collection["slug"])
 
         if self.visible_consoles:
             for console in self.visible_consoles:
-                scroll = Gtk.ScrolledWindow()
-                scroll.set_vexpand(True)
+                page = self._make_library_page()
                 placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
                 placeholder.add_css_class("dim-label")
                 placeholder.set_margin_top(32)
-                scroll.set_child(placeholder)
-                self._console_pages[console] = scroll
+                page.scroll.set_child(placeholder)
+                self._console_pages[console] = page
                 self._console_loaded[console] = False
-                self.content_stack.add_titled(scroll, console, console)
+                self.content_stack.add_titled(page, console, console)
 
         if not self.visible_consoles:
             empty = Adw.StatusPage(
@@ -2151,7 +2250,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._console_loaded[ALL_CONSOLES_ID] = True
 
     def _render_console_page(self, console, roms):
-        scroll = self._console_pages[console]
+        page = self._console_pages[console]
+        scroll = page.scroll
+        page.header.set_visible(False)
         # Each page follows its own scope's layout, not the one on screen now.
         display_settings = self.config_manager.get_display_settings(console)
         roms = self._sorted_roms(roms, order=display_settings["sort_order"])
@@ -2207,8 +2308,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             frame_color_for_rom=self._cartridge_color_for_rom,
         )
         self._grids[console] = grid
-        # The page was rebuilt, so whatever was selected on it is gone.
+        # The page was rebuilt, so whatever was selected on it is gone; the
+        # gamepad selection mode goes with it.
         self._on_selection_changed([])
+        self.leave_selection_mode(clear=False)
+        # The pinned master-checkbox header belongs to list view only.
+        page.header.set_visible(grid.compact)
         scroll.set_child(grid)
         if console == self.current_console:
             self._update_window_title(console)

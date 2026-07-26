@@ -61,14 +61,30 @@ NAV_TOKEN_ACTIONS = {
     "6": "menu",      # Select/Back/View: the primary menu, so Preferences,
                       # Shortcuts and About are reachable without a mouse
     "7": "confirm",   # Start
+    # The analog triggers, pressed direction only: the pad's Shift for range
+    # selection (issue #78). The resting direction ("-2"/"-5") stays unmapped
+    # so an idle trigger cannot read as held.
+    "+2": "range",
+    "+5": "range",
 }
 
 #: Actions that auto-repeat while their control is held.
 REPEATABLE_ACTIONS = {"up", "down", "left", "right"}
 
+#: Actions whose *held state* matters, emitted as ``<action>_on``/``_off``.
+STATEFUL_ACTIONS = {"range"}
+
+#: Actions with tap/long-press semantics: the tap is emitted on release, the
+#: hold as ``<action>_hold`` when the delay elapses (issue #78: holding Ⓐ
+#: enters selection mode; a tap still confirms).
+HOLDABLE_ACTIONS = {"confirm"}
+
 #: Auto-repeat timing (seconds): delay before the first repeat, then interval.
 REPEAT_DELAY = 0.40
 REPEAT_INTERVAL = 0.12
+
+#: How long a holdable button must stay down to fire its hold action.
+LONG_PRESS_DELAY = 0.5
 
 #: How often to rescan for pads when none is connected (seconds).
 RESCAN_INTERVAL = 1.0
@@ -152,6 +168,50 @@ class NavTokenTracker:
         self._held_buttons.clear()
         self._held_hats.clear()
         self._held_axes.clear()
+
+
+class HoldClock:
+    """Tap vs long-press for ``HOLDABLE_ACTIONS``. Injectable clock for tests.
+
+    ``press`` arms the timer; ``due_actions`` reports holds whose delay
+    elapsed (each fires once); ``release`` disarms and says whether the tap
+    should still be emitted -- it should unless the hold already fired.
+    """
+
+    def __init__(self, delay=LONG_PRESS_DELAY, now=time.monotonic):
+        self.delay = delay
+        self._now = now
+        self._deadline = {}
+        self._fired = set()
+
+    def press(self, action):
+        self._deadline[action] = self._now() + self.delay
+        self._fired.discard(action)
+
+    def release(self, action):
+        self._deadline.pop(action, None)
+        fired = action in self._fired
+        self._fired.discard(action)
+        return not fired
+
+    def due_actions(self):
+        now = self._now()
+        due = []
+        for action, when in list(self._deadline.items()):
+            if now >= when and action not in self._fired:
+                self._fired.add(action)
+                self._deadline.pop(action, None)
+                due.append(action)
+        return due
+
+    def next_deadline(self):
+        if not self._deadline:
+            return None
+        return max(0.0, min(self._deadline.values()) - self._now())
+
+    def clear(self):
+        self._deadline.clear()
+        self._fired.clear()
 
 
 class RepeatClock:
@@ -260,6 +320,7 @@ class GamepadNavigator:
     def _run(self):
         pads = {}
         repeat = RepeatClock()
+        hold = HoldClock()
         connected_announced = False
         was_suspended = False
         try:
@@ -282,12 +343,13 @@ class GamepadNavigator:
                     for tracker, _name in pads.values():
                         tracker.release_all()
                     repeat.clear()
+                    hold.clear()
                 was_suspended = suspended
 
                 timeout = IDLE_POLL
-                deadline = repeat.next_deadline()
-                if deadline is not None:
-                    timeout = min(timeout, deadline)
+                for deadline in (repeat.next_deadline(), hold.next_deadline()):
+                    if deadline is not None:
+                        timeout = min(timeout, deadline)
                 try:
                     readable, _w, _x = select.select(list(pads), [], [], timeout)
                 except OSError:
@@ -295,7 +357,7 @@ class GamepadNavigator:
                     continue
 
                 for fd in readable:
-                    if not self._read_fd(fd, pads, repeat, suspended):
+                    if not self._read_fd(fd, pads, repeat, hold, suspended):
                         # Device gone: close it and drop its repeats.
                         tracker, _name = pads.pop(fd)
                         tracker.release_all()
@@ -309,10 +371,12 @@ class GamepadNavigator:
                 if not suspended:
                     for action in repeat.due_actions():
                         self._emit(self._on_action, action)
+                    for action in hold.due_actions():
+                        self._emit(self._on_action, f"{action}_hold")
         finally:
             self._close_all(pads)
 
-    def _read_fd(self, fd, pads, repeat, suspended):
+    def _read_fd(self, fd, pads, repeat, hold, suspended):
         """Read pending events from one pad. False when the device is gone."""
         tracker, _name = pads[fd]
         try:
@@ -331,10 +395,23 @@ class GamepadNavigator:
                 action = action_for_token(token)
                 if action is None:
                     continue
+                if action in STATEFUL_ACTIONS:
+                    # Held state matters (the triggers): report both edges.
+                    if not suspended:
+                        self._emit(self._on_action, f"{action}_{'on' if pressed else 'off'}")
+                    continue
                 if not pressed:
                     repeat.release(action)
+                    if action in HOLDABLE_ACTIONS:
+                        # The tap fires on release -- unless the long press
+                        # already fired its hold action instead.
+                        if hold.release(action) and not suspended:
+                            self._emit(self._on_action, action)
                     continue
                 if suspended:
+                    continue
+                if action in HOLDABLE_ACTIONS:
+                    hold.press(action)
                     continue
                 if action in REPEATABLE_ACTIONS:
                     repeat.press(action)

@@ -8,6 +8,7 @@ from gi.repository import Gdk
 from openemux.ui.navigation import (
     CTX_DIALOG,
     CTX_GRID,
+    CTX_GRID_SELECTION,
     CTX_INPUT_CAPTURE,
     CTX_OTHER,
     CTX_POPOVER,
@@ -175,6 +176,70 @@ class PaneKeyTests(unittest.TestCase):
             for keyval in (Gdk.KEY_Right, Gdk.KEY_Tab, Gdk.KEY_BackSpace):
                 with self.subTest(context=context, keyval=keyval):
                     self.assertIsNone(pane_key_command(context, keyval))
+
+
+class SelectionKeyTests(unittest.TestCase):
+    """The selection modifiers in the grid (issue #78)."""
+
+    def test_shift_arrows_extend_the_range(self):
+        self.assertEqual(
+            pane_key_command(CTX_GRID, Gdk.KEY_Down, shift=True),
+            ("move-select", "down", False),
+        )
+
+    def test_ctrl_shift_arrows_extend_additively(self):
+        self.assertEqual(
+            pane_key_command(CTX_GRID, Gdk.KEY_Up, shift=True, ctrl=True),
+            ("move-select", "up", True),
+        )
+
+    def test_ctrl_arrows_move_without_selecting(self):
+        self.assertEqual(
+            pane_key_command(CTX_GRID, Gdk.KEY_Right, ctrl=True),
+            ("move-keep", "right"),
+        )
+
+    def test_ctrl_space_toggles_the_focused_card(self):
+        self.assertEqual(
+            pane_key_command(CTX_GRID, Gdk.KEY_space, ctrl=True),
+            ("toggle-select",),
+        )
+        # Plain Space is left to GTK (it activates the focused card).
+        self.assertIsNone(pane_key_command(CTX_GRID, Gdk.KEY_space))
+
+    def test_selection_context_routes_like_the_grid(self):
+        self.assertEqual(
+            pane_key_command(CTX_GRID_SELECTION, Gdk.KEY_Down, shift=True),
+            ("move-select", "down", False),
+        )
+
+
+class SelectionModeResolveTests(unittest.TestCase):
+    """The gamepad selection mode's button roles (issue #78)."""
+
+    def test_holding_a_enters_the_mode_from_the_grid(self):
+        self.assertEqual(resolve(CTX_GRID, "confirm_hold"), ("selection-enter",))
+        # A tap still launches: nothing existing is taken away.
+        self.assertEqual(resolve(CTX_GRID, "confirm"), ("activate",))
+
+    def test_mode_button_roles(self):
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "confirm"), ("toggle-select",))
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "back"), ("selection-exit",))
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "favorite"), ("selection-select-all",))
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "context"), ("selection-actions",))
+        for direction in ("up", "down", "left", "right"):
+            self.assertEqual(
+                resolve(CTX_GRID_SELECTION, direction), ("selection-move", direction)
+            )
+
+    def test_console_switching_still_works_inside_the_mode(self):
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "prev_console"), ("console-delta", -1))
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "next_console"), ("console-delta", 1))
+
+    def test_hold_is_inert_where_it_has_no_meaning(self):
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "confirm_hold"), ("noop",))
+        self.assertEqual(resolve(CTX_DIALOG, "confirm_hold"), ("noop",))
+        self.assertEqual(resolve(CTX_POPOVER, "confirm_hold"), ("noop",))
 
 
 if __name__ == "__main__":
