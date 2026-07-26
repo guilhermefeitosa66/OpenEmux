@@ -25,6 +25,9 @@ CTX_INPUT_CAPTURE = "input-capture"
 CTX_POPOVER = "popover"
 CTX_DIALOG = "dialog"
 CTX_GRID = "grid"
+# The grid while gamepad selection mode is on (issue #78): entered by holding
+# Ⓐ on a card, left with Ⓑ; the pad's buttons change roles inside it.
+CTX_GRID_SELECTION = "grid-selection"
 CTX_SIDEBAR = "sidebar"
 CTX_OTHER = "other"
 
@@ -112,12 +115,35 @@ def resolve(context, action):
             return ("move", action)
         if action == "confirm":
             return ("activate",)
+        if action == "confirm_hold":
+            # Holding Ⓐ on a card enters selection mode (issue #78); a tap
+            # still launches, so nothing existing is taken away.
+            return ("selection-enter",)
         if action == "back":
             return ("focus-sidebar",)
         if action == "context":
             return ("context-menu",)
         if action == "favorite":
             return ("favorite",)
+        return ("noop",)
+
+    if context == CTX_GRID_SELECTION:
+        if action in _DIRECTIONS:
+            # The controller extends the range while a trigger is held (the
+            # pad's Shift), otherwise just moves the cursor.
+            return ("selection-move", action)
+        if action == "confirm":
+            return ("toggle-select",)
+        if action == "confirm_hold":
+            return ("noop",)
+        if action == "favorite":
+            # No single card to favorite inside the mode; Ⓨ becomes the
+            # select-all / clear-all toggle.
+            return ("selection-select-all",)
+        if action == "context":
+            return ("selection-actions",)
+        if action == "back":
+            return ("selection-exit",)
         return ("noop",)
 
     if context == CTX_SIDEBAR:
@@ -148,17 +174,21 @@ _ARROW_ACTIONS = {
 }
 
 
-def pane_key_command(context, keyval, shift=False):
+def pane_key_command(context, keyval, shift=False, ctrl=False):
     """Command for a key inside the library, or None to leave it to GTK.
 
-    Two things are claimed here.
+    Three things are claimed here.
 
     The pane crossings: Right out of the sidebar would otherwise walk into the
     header-bar buttons rather than into the games.
 
-    And the arrows *inside the grid*: GtkFlowBox does not move focus on arrow
+    The arrows *inside the grid*: GtkFlowBox does not move focus on arrow
     keys (GtkListBox does, which is why the sidebar needs no help), so they are
     routed through the same table the gamepad uses.
+
+    And the selection modifiers (issue #78): Shift+arrows range from the
+    anchor, Ctrl+arrows move without selecting, Ctrl+Shift+arrows add the
+    range, Ctrl+Space toggles the focused card.
     """
     # While a binding is being captured the keys belong to the capture, not to
     # pane navigation: Tab and the arrows are bindable like anything else.
@@ -176,12 +206,20 @@ def pane_key_command(context, keyval, shift=False):
         # what makes the page follow the highlighted console.
         return None
 
-    if context == CTX_GRID:
+    if context in (CTX_GRID, CTX_GRID_SELECTION):
         if keyval == Gdk.KEY_BackSpace or forward_tab:
             return ("focus-sidebar",)
+        if keyval in (Gdk.KEY_space, Gdk.KEY_KP_Space) and ctrl:
+            return ("toggle-select",)
         action = _ARROW_ACTIONS.get(keyval)
         if action is not None:
-            return resolve(CTX_GRID, action)
+            if ctrl and shift:
+                return ("move-select", action, True)
+            if shift:
+                return ("move-select", action, False)
+            if ctrl:
+                return ("move-keep", action)
+            return resolve(context, action)
         return None
 
     return None
@@ -195,6 +233,8 @@ class NavigationController:
         self.gamepad_connected = False
         self._source = SOURCE_MOUSE
         self._hint_state = None
+        # True while a trigger (the pad's Shift) is held; see on_gamepad_action.
+        self.range_held = False
         # Gtk.Popover.popup() animates, so focus has not reached the menu by the
         # time the next button press arrives. Tracking the popover we opened
         # keeps the routing correct in that window.
@@ -304,7 +344,10 @@ class NavigationController:
             return False
 
         command = pane_key_command(
-            self.current_context(), keyval, bool(state & Gdk.ModifierType.SHIFT_MASK)
+            self.current_context(),
+            keyval,
+            shift=bool(state & Gdk.ModifierType.SHIFT_MASK),
+            ctrl=bool(state & Gdk.ModifierType.CONTROL_MASK),
         )
         if command is None:
             return False
@@ -338,6 +381,14 @@ class NavigationController:
 
     def on_gamepad_action(self, action):
         self._set_source(SOURCE_GAMEPAD)
+        # The triggers are the pad's Shift (issue #78): their held state is
+        # tracked here, not dispatched, and read by the selection-move command.
+        if action == "range_on":
+            self.range_held = True
+            return False
+        if action == "range_off":
+            self.range_held = False
+            return False
         self.dispatch(action)
         return False
 
@@ -399,6 +450,8 @@ class NavigationController:
             if node is getattr(self.window, "console_list", None):
                 return CTX_SIDEBAR
             if node is self._current_grid():
+                if getattr(self.window, "selection_mode_active", False):
+                    return CTX_GRID_SELECTION
                 return CTX_GRID
             node = node.get_parent()
         return CTX_OTHER
@@ -425,6 +478,60 @@ class NavigationController:
 
     def _cmd_noop(self):
         pass
+
+    # -- selection commands (issue #78) --------------------------------------
+
+    def _focused_item_and_grid(self):
+        grid = self._current_grid()
+        if grid is None:
+            return None, None
+        root = self.window.get_focus()
+        item = grid.item_for_widget(root) if root is not None else None
+        return item, grid
+
+    def _cmd_move_keep(self, direction):
+        """Ctrl+arrows: the cursor travels, the selection and anchor stay."""
+        self._cmd_move(direction)
+        item, grid = self._focused_item_and_grid()
+        if item is not None:
+            grid.note_cursor(item, keep_anchor=True)
+
+    def _cmd_move_select(self, direction, additive=False):
+        """Shift(+Ctrl)+arrows: move the cursor and grow the range to it."""
+        self._cmd_move(direction)
+        item, grid = self._focused_item_and_grid()
+        if item is not None:
+            grid.extend_selection_to(item, additive=additive)
+
+    def _cmd_toggle_select(self):
+        item, grid = self._focused_item_and_grid()
+        if item is not None:
+            grid.toggle_item(item)
+
+    def _cmd_selection_enter(self):
+        item, grid = self._focused_item_and_grid()
+        if item is None:
+            return
+        grid.select_item(item)
+        self.window.enter_selection_mode()
+
+    def _cmd_selection_exit(self):
+        self.window.leave_selection_mode(clear=True)
+
+    def _cmd_selection_move(self, direction):
+        """D-pad in selection mode: with a trigger held it ranges, else moves."""
+        if getattr(self, "range_held", False):
+            self._cmd_move_select(direction)
+        else:
+            self._cmd_move_keep(direction)
+
+    def _cmd_selection_select_all(self):
+        grid = self._current_grid()
+        if grid is not None:
+            grid.toggle_select_all()
+
+    def _cmd_selection_actions(self):
+        self.window.focus_selection_actions()
 
     def _cmd_move(self, direction):
         focus = self._focus_widget()
@@ -584,7 +691,15 @@ class NavigationController:
             return
 
         if source == SOURCE_GAMEPAD:
-            if context in (CTX_DIALOG, CTX_POPOVER):
+            if context == CTX_GRID_SELECTION:
+                hints = [
+                    ("Ⓐ", t("hints.select_toggle")),
+                    ("L2/R2+✚", t("hints.select_range")),
+                    ("Ⓨ", t("hints.select_all")),
+                    ("Ⓧ", t("hints.select_actions")),
+                    ("Ⓑ", t("hints.select_exit")),
+                ]
+            elif context in (CTX_DIALOG, CTX_POPOVER):
                 hints = [("Ⓐ", t("hints.confirm")), ("Ⓑ", t("hints.close"))]
             elif context == CTX_SIDEBAR:
                 hints = [
@@ -596,6 +711,7 @@ class NavigationController:
             else:
                 hints = [
                     ("Ⓐ", t("hints.open")),
+                    ("Ⓐ⏳", t("hints.select_enter")),
                     ("Ⓑ", t("hints.back")),
                     ("Ⓧ", t("hints.options")),
                     ("Ⓨ", t("hints.favorite")),

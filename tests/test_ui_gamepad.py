@@ -10,6 +10,7 @@ from openemux.core.gamepad_reader import (
 ABS_HAT0Y = ABS_HAT0X + 1
 from openemux.core.ui_gamepad import (
     NAV_TOKEN_ACTIONS,
+    HoldClock,
     NavTokenTracker,
     RepeatClock,
     REPEATABLE_ACTIONS,
@@ -53,8 +54,13 @@ class ActionMapTests(unittest.TestCase):
                 self.assertEqual(action_for_token(token), action)
 
     def test_the_triggers_are_not_directions(self):
-        """Axes 2 and 5 are L2/R2; a resting trigger would read as held."""
-        for token in ("+2", "-2", "+5", "-5"):
+        """Axes 2 and 5 are L2/R2: the range modifier when pressed (issue
+        #78), and still nothing at rest -- a resting trigger reading as a held
+        control was the original hazard."""
+        for token in ("+2", "+5"):
+            with self.subTest(token=token):
+                self.assertEqual(action_for_token(token), "range")
+        for token in ("-2", "-5"):
             with self.subTest(token=token):
                 self.assertIsNone(action_for_token(token))
 
@@ -186,6 +192,49 @@ class RepeatClockTests(unittest.TestCase):
         self.clock.press("down")
         self.clock.press("right")
         self.clock.clear()
+        self.time.advance(10)
+        self.assertEqual(self.clock.due_actions(), [])
+
+
+class HoldClockTests(unittest.TestCase):
+    """Tap vs long-press for Ⓐ (issue #78: hold enters selection mode)."""
+
+    def setUp(self):
+        self.time = FakeClock()
+        self.clock = HoldClock(delay=0.5, now=self.time)
+
+    def test_quick_release_is_a_tap(self):
+        self.clock.press("confirm")
+        self.time.advance(0.2)
+        self.assertEqual(self.clock.due_actions(), [])
+        # Released before the delay: the tap should still fire.
+        self.assertTrue(self.clock.release("confirm"))
+
+    def test_long_press_fires_the_hold_once_and_swallows_the_tap(self):
+        self.clock.press("confirm")
+        self.time.advance(0.6)
+        self.assertEqual(self.clock.due_actions(), ["confirm"])
+        # Only once, however long it stays held.
+        self.time.advance(5)
+        self.assertEqual(self.clock.due_actions(), [])
+        # The release must not fire the tap on top of the hold.
+        self.assertFalse(self.clock.release("confirm"))
+
+    def test_a_new_press_after_a_hold_starts_clean(self):
+        self.clock.press("confirm")
+        self.time.advance(0.6)
+        self.clock.due_actions()
+        self.clock.release("confirm")
+        self.clock.press("confirm")
+        self.time.advance(0.1)
+        self.assertTrue(self.clock.release("confirm"))
+
+    def test_next_deadline_and_clear(self):
+        self.assertIsNone(self.clock.next_deadline())
+        self.clock.press("confirm")
+        self.assertAlmostEqual(self.clock.next_deadline(), 0.5, places=6)
+        self.clock.clear()
+        self.assertIsNone(self.clock.next_deadline())
         self.time.advance(10)
         self.assertEqual(self.clock.due_actions(), [])
 
