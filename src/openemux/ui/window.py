@@ -32,7 +32,6 @@ from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
     sync_artwork_async,
-    sync_covers_async,
 )
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
@@ -2822,43 +2821,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 for console in self.visible_consoles:
                     library[console] = self.playlist_manager.load_playlist(console)
 
-        self._cover_sync_running = True
-        # Cooperative cancel: the worker polls this between ROMs and between
-        # candidate URLs, so stopping takes at most one HTTP request.
-        cancel_event = Event()
-        self._cover_sync_cancel = cancel_event
-        task_id = self._begin_task(
-            "covers",
-            self.t("status.covers.starting"),
-            on_cancel=cancel_event.set,
-        )
-        toast = Adw.Toast(title=self.t("toast.sync_started"))
-        toast.set_timeout(3)
-        self.toast_overlay.add_toast(toast)
-
-        def _on_progress(evt):
-            GLib.idle_add(
-                self._update_task,
-                task_id,
-                evt.get("processed", 0),
-                evt.get("total", 0),
-                # The counter is rendered by _refresh_banner; don't repeat it here.
-                self.t("status.covers.progress"),
-            )
-
-        def _on_done(summary):
-            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
-
-        sync_covers_async(
-            library_by_console=library,
-            covers_dir=self.roms_path,
-            scope=scope,
-            selected_console=selected_console,
-            on_done=_on_done,
-            sync_settings=self.config_manager.get_cover_sync_settings(),
-            on_progress=_on_progress,
-            should_cancel=cancel_event.is_set,
-        )
+        # Every sync is multi-kind now (issue #76): box art everywhere, labels
+        # where a frame exists -- each pass skips per kind, and passes no
+        # enabled provider serves are dropped inside the sync itself.
+        passes = build_artwork_passes(library, cartridge_render.consoles_with_frames())
+        if not passes:
+            self._toast(self.t("toast.sync_no_consoles"))
+            return
+        self._start_artwork_sync(passes)
 
     def _start_post_import_artwork_sync(self, imported_paths):
         """Fetch artwork for the ROMs an import just added.
