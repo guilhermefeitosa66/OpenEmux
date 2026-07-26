@@ -63,6 +63,89 @@ COVER_ART_TYPE_CARTRIDGE_LABEL = "cartridge_label"
 COVER_ART_TYPES = (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL)
 DEFAULT_COVER_ART_TYPE = COVER_ART_TYPE_BOXART
 
+# Artwork providers as an ordered list (issue #76). Order is precedence: the
+# topmost enabled provider serving a kind is tried first, the rest are
+# fallbacks. What each provider *can* serve is fixed here; what it is *asked*
+# to serve is the per-provider "kinds" selection in the config.
+ARTWORK_PROVIDER_IDS = ("libretro", "screenscraper", "openemux")
+ARTWORK_PROVIDER_KINDS_AVAILABLE = {
+    "libretro": (COVER_ART_TYPE_BOXART,),
+    "screenscraper": (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL),
+    "openemux": (COVER_ART_TYPE_BOXART,),
+}
+DEFAULT_ARTWORK_PROVIDERS = [
+    {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
+    {
+        "id": "screenscraper",
+        "enabled": True,
+        "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
+    },
+    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
+]
+
+
+def normalize_artwork_providers(value):
+    """Coerce a stored provider list to a full, valid, ordered configuration.
+
+    Configured order and flags win; unknown ids are dropped; providers the
+    config does not mention (a fresh id shipped in an update) are appended
+    with their defaults, so a new provider shows up without a migration.
+    """
+    defaults_by_id = {entry["id"]: entry for entry in DEFAULT_ARTWORK_PROVIDERS}
+    normalized = []
+    seen = set()
+    for raw in value or []:
+        if not isinstance(raw, dict):
+            continue
+        provider_id = raw.get("id")
+        if provider_id not in defaults_by_id or provider_id in seen:
+            continue
+        available = ARTWORK_PROVIDER_KINDS_AVAILABLE[provider_id]
+        kinds = [kind for kind in (raw.get("kinds") or []) if kind in available]
+        normalized.append(
+            {
+                "id": provider_id,
+                "enabled": bool(raw.get("enabled", True)),
+                # A provider with every kind unticked is effectively disabled,
+                # but the empty selection is kept as the user made it.
+                "kinds": kinds,
+            }
+        )
+        seen.add(provider_id)
+    for entry in DEFAULT_ARTWORK_PROVIDERS:
+        if entry["id"] not in seen:
+            normalized.append({k: (list(v) if isinstance(v, list) else v) for k, v in entry.items()})
+    return normalized
+
+
+def migrate_cover_source_to_providers(cover_source, cover_art_type):
+    """Derive the provider list an existing ``cover_source`` config meant.
+
+    The old enum picked which sources ran and in what order; the old artwork
+    type picked the one kind a manual sync fetched. Both collapse into the
+    list: order/enabled from the source, ScreenScraper's kinds from the type
+    (a label user keeps labels; a box-art user gains nothing they did not
+    have). The project mirror closes the chain, exactly as it already did.
+    """
+    source = normalize_cover_source(cover_source)
+    art_type = normalize_cover_art_type(cover_art_type)
+    screenscraper_kinds = [COVER_ART_TYPE_BOXART]
+    if art_type == COVER_ART_TYPE_CARTRIDGE_LABEL:
+        screenscraper_kinds = [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL]
+
+    libretro = {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
+    screenscraper = {
+        "id": "screenscraper",
+        "enabled": source != COVER_SOURCE_LIBRETRO,
+        "kinds": screenscraper_kinds,
+    }
+    openemux = {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
+
+    if source == COVER_SOURCE_SCREENSCRAPER:
+        libretro["enabled"] = False
+        return [screenscraper, libretro, openemux]
+    return [libretro, screenscraper, openemux]
+
 
 def normalize_cover_source(value):
     return value if value in COVER_SOURCES else DEFAULT_COVER_SOURCE
@@ -335,6 +418,15 @@ class ConfigManager:
         covers["sync"].setdefault("screenscraper_password", "")
         covers["sync"].setdefault("screenscraper_devid", "")
         covers["sync"].setdefault("screenscraper_devpassword", "")
+        # Issue #76: the provider list replaces the cover_source enum. A config
+        # that predates it gets the list its enum meant; the enum keys stay so
+        # a downgrade still finds them.
+        if "providers" not in covers["sync"]:
+            covers["sync"]["providers"] = migrate_cover_source_to_providers(
+                covers["sync"].get("cover_source"),
+                covers["sync"].get("cover_art_type"),
+            )
+        covers["sync"]["providers"] = normalize_artwork_providers(covers["sync"]["providers"])
         config["covers"] = covers
 
         library = config.get("library", {})
@@ -419,7 +511,21 @@ class ConfigManager:
             "screenscraper_password": str(sync.get("screenscraper_password", "") or ""),
             "screenscraper_devid": str(sync.get("screenscraper_devid", "") or ""),
             "screenscraper_devpassword": str(sync.get("screenscraper_devpassword", "") or ""),
+            "providers": normalize_artwork_providers(sync.get("providers")),
         }
+
+    def get_artwork_providers(self):
+        """The ordered artwork provider list (issue #76), always normalized."""
+        sync = self.config.get("covers", {}).get("sync", {})
+        return normalize_artwork_providers(sync.get("providers"))
+
+    def set_artwork_providers(self, providers):
+        """Persist the whole provider list (order, enabled flags, kinds)."""
+        normalized = normalize_artwork_providers(providers)
+        covers = self.config.setdefault("covers", {})
+        covers.setdefault("sync", {})["providers"] = normalized
+        self.save_config()
+        return normalized
 
     def set_cover_sync_setting(self, key, value):
         """Persist a single cover-sync setting, normalizing the known enums."""

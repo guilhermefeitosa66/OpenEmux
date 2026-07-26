@@ -13,15 +13,12 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Gdk, GLib, Pango
+from gi.repository import Adw, Gtk, Gdk, GLib
 
 from openemux.core.config import (
-    COVER_ART_TYPES,
-    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
-    COVER_SOURCE_SCREENSCRAPER,
-    COVER_SOURCES,
-    normalize_cover_art_type,
-    normalize_cover_source,
+    ARTWORK_PROVIDER_KINDS_AVAILABLE,
+    COVER_ART_TYPE_BOXART,
+    COVER_ART_TYPE_CARTRIDGE_LABEL,
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
@@ -140,55 +137,136 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         sync_row.connect("activated", lambda _r: self.win._show_sync_covers_dialog())
         maint_group.add(sync_row)
         page.add(maint_group)
-        page.add(self._build_cover_source_group())
+        page.add(self._build_artwork_providers_group())
+        page.add(self._build_screenscraper_group())
         return page
 
-    # ----- Cover sources --------------------------------------------------
-    def _build_cover_source_group(self):
-        """Cover art source selection (libretro / ScreenScraper).
+    # ----- Artwork providers ----------------------------------------------
+    def _build_artwork_providers_group(self):
+        """The ordered provider list (issue #76).
 
-        ScreenScraper needs the user's own credentials, so its rows only appear
-        once a ScreenScraper-backed source is picked.
+        One row per provider: an enable switch, move up/down for precedence,
+        and -- for providers that can serve more than one artwork kind -- a
+        per-kind switch inside the expander.
         """
+        self._providers_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.artwork_providers"),
+            description=self.t("prefs.artwork_providers.description"),
+        )
+        self._provider_rows = []
+        self._rebuild_provider_rows()
+        return self._providers_group
+
+    def _rebuild_provider_rows(self):
+        for row in self._provider_rows:
+            self._providers_group.remove(row)
+        self._provider_rows = []
+        providers = self.config.get_artwork_providers()
+        for index, entry in enumerate(providers):
+            row = self._make_provider_row(entry, index, len(providers))
+            self._providers_group.add(row)
+            self._provider_rows.append(row)
+        if hasattr(self, "_ss_user_row"):
+            self._update_screenscraper_rows_visibility()
+
+    def _make_provider_row(self, entry, index, count):
+        provider_id = entry["id"]
+        available = ARTWORK_PROVIDER_KINDS_AVAILABLE.get(provider_id, ())
+        title = self.t(f"prefs.provider.{provider_id}")
+        subtitle = self.t(f"prefs.provider.{provider_id}.subtitle")
+
+        multi_kind = len(available) > 1
+        row = Adw.ExpanderRow(title=title, subtitle=subtitle) if multi_kind else Adw.ActionRow(
+            title=title, subtitle=subtitle
+        )
+
+        up = Gtk.Button(icon_name="go-up-symbolic")
+        up.set_tooltip_text(self.t("prefs.provider.move_up"))
+        up.set_valign(Gtk.Align.CENTER)
+        up.add_css_class("flat")
+        up.set_sensitive(index > 0)
+        up.connect("clicked", lambda _b, i=index: self._move_provider(i, -1))
+        row.add_suffix(up)
+
+        down = Gtk.Button(icon_name="go-down-symbolic")
+        down.set_tooltip_text(self.t("prefs.provider.move_down"))
+        down.set_valign(Gtk.Align.CENTER)
+        down.add_css_class("flat")
+        down.set_sensitive(index < count - 1)
+        down.connect("clicked", lambda _b, i=index: self._move_provider(i, +1))
+        row.add_suffix(down)
+
+        switch = Gtk.Switch(active=bool(entry.get("enabled", True)))
+        switch.set_valign(Gtk.Align.CENTER)
+        switch.connect(
+            "notify::active",
+            lambda sw, _p, pid=provider_id: self._set_provider_enabled(pid, sw.get_active()),
+        )
+        row.add_suffix(switch)
+
+        if multi_kind:
+            kinds = entry.get("kinds") or []
+            for kind, key in (
+                (COVER_ART_TYPE_BOXART, "prefs.provider.kind.boxart"),
+                (COVER_ART_TYPE_CARTRIDGE_LABEL, "prefs.provider.kind.cartridge_label"),
+            ):
+                if kind not in available:
+                    continue
+                kind_row = Adw.SwitchRow(title=self.t(key))
+                kind_row.set_active(kind in kinds)
+                kind_row.connect(
+                    "notify::active",
+                    lambda r, _p, pid=provider_id, k=kind: self._set_provider_kind(
+                        pid, k, r.get_active()
+                    ),
+                )
+                row.add_row(kind_row)
+        return row
+
+    def _mutate_providers(self, mutate):
+        providers = self.config.get_artwork_providers()
+        mutate(providers)
+        self.config.set_artwork_providers(providers)
+
+    def _move_provider(self, index, delta):
+        def _mutate(providers):
+            other = index + delta
+            if 0 <= other < len(providers):
+                providers[index], providers[other] = providers[other], providers[index]
+
+        self._mutate_providers(_mutate)
+        self._rebuild_provider_rows()
+
+    def _set_provider_enabled(self, provider_id, enabled):
+        def _mutate(providers):
+            for entry in providers:
+                if entry["id"] == provider_id:
+                    entry["enabled"] = bool(enabled)
+
+        self._mutate_providers(_mutate)
+        self._update_screenscraper_rows_visibility()
+
+    def _set_provider_kind(self, provider_id, kind, active):
+        def _mutate(providers):
+            for entry in providers:
+                if entry["id"] != provider_id:
+                    continue
+                kinds = [k for k in entry.get("kinds") or [] if k != kind]
+                if active:
+                    kinds.append(kind)
+                # Keep the canonical kind order regardless of toggle order.
+                order = list(ARTWORK_PROVIDER_KINDS_AVAILABLE.get(provider_id, ()))
+                entry["kinds"] = sorted(kinds, key=order.index)
+
+        self._mutate_providers(_mutate)
+
+    def _build_screenscraper_group(self):
+        """ScreenScraper account rows, shown while that provider is enabled."""
         settings = self.config.get_cover_sync_settings()
-
         group = Adw.PreferencesGroup(
-            title=self.t("prefs.group.cover_source"),
-            description=self.t("prefs.cover_source.description"),
+            title=self.t("prefs.group.screenscraper"),
+            description=self.t("prefs.screenscraper.description"),
         )
-
-        self._cover_source_ids = list(COVER_SOURCES)
-        source_model = Gtk.StringList()
-        for source_id in self._cover_source_ids:
-            source_model.append(self.t(f"prefs.cover_source.option.{source_id}"))
-        self._cover_source_row = Adw.ComboRow(
-            title=self.t("prefs.cover_source.title"),
-            subtitle=self.t("prefs.cover_source.subtitle"),
-            model=source_model,
-        )
-        self._cover_source_row.set_selected(
-            self._cover_source_ids.index(normalize_cover_source(settings.get("cover_source")))
-        )
-        # Without a wrapping factory the longest option is ellipsized to fit the
-        # row width, which hides which sources are actually in play.
-        self._apply_wrapping_label_factory(self._cover_source_row)
-        self._cover_source_row.connect("notify::selected", self._on_cover_source_changed)
-        group.add(self._cover_source_row)
-
-        self._cover_art_type_ids = list(COVER_ART_TYPES)
-        art_model = Gtk.StringList()
-        for art_id in self._cover_art_type_ids:
-            art_model.append(self.t(f"prefs.cover_art_type.option.{art_id}"))
-        self._cover_art_type_row = Adw.ComboRow(
-            title=self.t("prefs.cover_art_type.title"),
-            subtitle=self.t("prefs.cover_art_type.subtitle"),
-            model=art_model,
-        )
-        self._cover_art_type_row.set_selected(
-            self._cover_art_type_ids.index(normalize_cover_art_type(settings.get("cover_art_type")))
-        )
-        self._cover_art_type_row.connect("notify::selected", self._on_cover_art_type_changed)
-        group.add(self._cover_art_type_row)
 
         self._ss_user_row = Adw.EntryRow(title=self.t("prefs.screenscraper.user"))
         self._ss_user_row.set_text(settings.get("screenscraper_user", ""))
@@ -256,19 +334,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._update_screenscraper_rows_visibility()
         return group
 
-    def _selected_cover_source(self):
-        return self._cover_source_ids[self._cover_source_row.get_selected()]
-
     def _update_screenscraper_rows_visibility(self):
-        uses_screenscraper = self._selected_cover_source() in (
-            COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
-            COVER_SOURCE_SCREENSCRAPER,
+        uses_screenscraper = any(
+            entry["id"] == "screenscraper" and entry.get("enabled", True)
+            for entry in self.config.get_artwork_providers()
         )
         # The dev credential lives inside the collapsed "Advanced" expander, so
         # the group just shows/hides the normal user-account rows, the expander,
         # and the matching hint.
         for row in (
-            self._cover_art_type_row,
             self._ss_user_row,
             self._ss_password_row,
             self._ss_advanced_row,
@@ -278,15 +352,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # "credentials needed" hint (the user must supply one under Advanced).
         self._ss_hint_row.set_visible(uses_screenscraper and not self._ss_embedded)
         self._ss_embedded_hint_row.set_visible(uses_screenscraper and self._ss_embedded)
-
-    def _on_cover_source_changed(self, *_args):
-        self.config.set_cover_sync_setting("cover_source", self._selected_cover_source())
-        self._update_screenscraper_rows_visibility()
-
-    def _on_cover_art_type_changed(self, *_args):
-        self.config.set_cover_sync_setting(
-            "cover_art_type", self._cover_art_type_ids[self._cover_art_type_row.get_selected()]
-        )
 
     # ----- BIOS page ------------------------------------------------------
     def _build_bios_page(self):
@@ -366,32 +431,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         if show_toast:
             self._toast(self.t("bios.reloaded"))
-
-    def _apply_wrapping_label_factory(self, combo_row):
-        """Let a ComboRow's options wrap instead of being cut off.
-
-        Adwaita ellipsizes the selected item to the row width, so a long option
-        ("libretro thumbnails, then ScreenScraper") reads as truncated text.
-        """
-
-        def _setup(_factory, list_item):
-            label = Gtk.Label()
-            label.set_wrap(True)
-            label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            label.set_max_width_chars(28)
-            label.set_halign(Gtk.Align.START)
-            label.set_xalign(0)
-            list_item.set_child(label)
-
-        def _bind(_factory, list_item):
-            item = list_item.get_item()
-            list_item.get_child().set_text(item.get_string() if item else "")
-
-        for setter in (combo_row.set_factory, combo_row.set_list_factory):
-            factory = Gtk.SignalListItemFactory()
-            factory.connect("setup", _setup)
-            factory.connect("bind", _bind)
-            setter(factory)
 
     def _apply_console_icon_factory(self, combo_row):
         """Render a console ComboRow as "<icon> ID — Name", like the sidebar.

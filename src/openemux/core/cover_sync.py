@@ -8,7 +8,11 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import embedded_credentials, screenscraper
-from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core.config import (
+    ARTWORK_PROVIDER_KINDS_AVAILABLE,
+    COVER_ART_TYPE_BOXART,
+    COVER_ART_TYPE_CARTRIDGE_LABEL,
+)
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
@@ -178,7 +182,13 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
 
 
 def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
-    """libretro thumbnails provider (the historical, credential-free source)."""
+    """libretro thumbnails provider (the historical, credential-free source).
+
+    Box art only: ``Named_Boxarts`` is all it serves, so a cartridge-label
+    pass must not receive box-art URLs that would be saved into ``labels/``.
+    """
+    if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
+        return []
     system_id = resolve_system_id(console)
     system = get_thumbnail_system(system_id)
     if not system:
@@ -210,10 +220,7 @@ def _openemux_candidates(console, rom_name, sync_settings, rom_path=None):
     Box art only -- the mirror carries no cartridge labels, so a label pass
     must not receive box-art URLs from it.
     """
-    art_kind = screenscraper.normalize_art_kind(
-        sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
-    )
-    if art_kind != screenscraper.DEFAULT_ART_KIND:
+    if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
         return []
     system_id = resolve_system_id(console)
     system = get_thumbnail_system(system_id)
@@ -279,10 +286,43 @@ _PROVIDER_FUNCTIONS = {
 }
 
 
+def _requested_art_kind(sync_settings):
+    return screenscraper.normalize_art_kind(
+        (sync_settings or {}).get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
+    )
+
+
 def _ordered_providers(sync_settings):
-    source = sync_settings.get("cover_source", COVER_SOURCE_LIBRETRO)
-    names = _SOURCE_ORDER.get(source, _SOURCE_ORDER[COVER_SOURCE_LIBRETRO])
+    """The provider chain for this run's artwork kind, in precedence order.
+
+    Driven by the configured provider list (issue #76) when present: enabled
+    providers only, and only those both *capable* of the kind being synced and
+    *asked* to serve it. Configs that predate the list fall back to the old
+    ``cover_source`` enum, which never gated on kind.
+    """
+    kind = _requested_art_kind(sync_settings)
+    providers = (sync_settings or {}).get("providers")
+    if providers:
+        names = [
+            entry.get("id")
+            for entry in providers
+            if entry.get("enabled", True)
+            and entry.get("id") in _PROVIDER_FUNCTIONS
+            and kind in ARTWORK_PROVIDER_KINDS_AVAILABLE.get(entry.get("id"), ())
+            and kind in (entry.get("kinds") or ())
+        ]
+    else:
+        source = sync_settings.get("cover_source", COVER_SOURCE_LIBRETRO)
+        names = _SOURCE_ORDER.get(source, _SOURCE_ORDER[COVER_SOURCE_LIBRETRO])
     return [(name, globals()[_PROVIDER_FUNCTIONS[name]]) for name in names]
+
+
+def has_provider_for_kind(sync_settings, art_kind):
+    """Whether any enabled provider serves ``art_kind`` -- a pass with none
+    would only burn requests and report every ROM as an error."""
+    probe = dict(sync_settings or {})
+    probe["cover_art_type"] = art_kind
+    return bool(_ordered_providers(probe))
 
 
 def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
@@ -560,11 +600,16 @@ def _sync_artwork(
     that touched no frame-capable console does not open an empty second pass.
     """
     settings = dict(sync_settings or {})
-    planned = [
-        (art_kind, library)
-        for art_kind, library in passes
-        if library and any(library.get(console) for console in library)
-    ]
+    planned = []
+    for art_kind, library in passes:
+        if not (library and any(library.get(console) for console in library)):
+            continue
+        # A kind no enabled provider serves would report every ROM as an
+        # error; dropping the pass is the configuration speaking, not a bug.
+        if not has_provider_for_kind(settings, art_kind):
+            logger.info("artwork pass dropped, no provider serves it: kind=%s", art_kind)
+            continue
+        planned.append((art_kind, library))
     grand_total = sum(
         len(roms) for _kind, library in planned for roms in library.values()
     )
