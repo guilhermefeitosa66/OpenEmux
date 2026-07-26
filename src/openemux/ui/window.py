@@ -188,6 +188,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         breakpoint.add_setter(self.split_view, "collapsed", True)
         self.add_breakpoint(breakpoint)
 
+        # Below this width the header cannot hold the segmented view switcher;
+        # the layout menu (which lists the same modes) remains the way in.
+        segment_breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("max-width: 700sp")
+        )
+        segment_breakpoint.add_setter(self.view_mode_segment, "visible", False)
+        self.add_breakpoint(segment_breakpoint)
+
         self._install_actions()
 
         # ----- Gamepad / keyboard UI navigation -----
@@ -345,6 +353,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self.search_button)
 
         header.pack_end(self._build_view_mode_button())
+        header.pack_end(self._build_view_mode_segment())
 
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
@@ -425,6 +434,36 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         "cartridge": "view-grid-symbolic",
         "list": "view-list-symbolic",
     }
+
+    #: Segmented-control icon per view mode. Unlike the menu-button icon these
+    #: three sit side by side, so each mode needs its own glyph.
+    VIEW_MODE_SEGMENT_ICONS = {
+        "cover": "view-grid-symbolic",
+        "cartridge": "input-gaming-symbolic",
+        "list": "view-list-symbolic",
+    }
+
+    def _build_view_mode_segment(self):
+        """Cover / Cartridge / List as one visible click each (issue #70).
+
+        Linked toggle buttons bound to the stateful ``win.view-mode`` action:
+        GTK keeps them radio-exclusive and in sync with the menu entries for
+        free, so per-scope persistence is untouched. On narrow windows the
+        segment hides (a breakpoint below) and the menu remains the way in.
+        """
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.add_css_class("linked")
+        self._view_segment_buttons = {}
+        for mode in VIEW_MODES:
+            button = Gtk.ToggleButton()
+            button.set_icon_name(self.VIEW_MODE_SEGMENT_ICONS.get(mode, "view-grid-symbolic"))
+            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
+            button.set_action_name("win.view-mode")
+            button.set_action_target_value(GLib.Variant("s", mode))
+            box.append(button)
+            self._view_segment_buttons[mode] = button
+        self.view_mode_segment = box
+        return box
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -1070,6 +1109,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.import_btn.set_tooltip_text(self.t("header.import"))
         self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
+        for mode, button in self._view_segment_buttons.items():
+            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
         self.sidebar_title.set_title(self.t("sidebar.header"))
         self._render_tip()
         self.refresh_library(preferred_view=visible)
