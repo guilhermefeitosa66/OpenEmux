@@ -676,6 +676,8 @@ class RomItem(Gtk.Box):
             ("remove-cover", self._act_remove_cover),
             ("choose-label", self._act_choose_label),
             ("remove-label", self._act_remove_label),
+            ("sync-cover", self._act_sync_cover),
+            ("sync-label", self._act_sync_label),
             ("rename", self._act_rename),
             ("delete", self._act_delete),
         ):
@@ -704,19 +706,34 @@ class RomItem(Gtk.Box):
                 "rom.toggle-favorite",
                 "starred-symbolic" if is_favorite else "non-starred-symbolic",
             ),
-            (self.t("context.cover.choose"), "rom.choose-cover", "image-x-generic-symbolic"),
         ]
-        if self.has_local_cover(self.rom, COVER_ART):
-            entries.append(
-                (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
-            )
-        if self.supports_label:
+        # One artwork pair at a time, following what the card is actually
+        # showing: the label inside a cartridge, the box art everywhere else
+        # (issue #77). The online search entries sit next to the manual pair.
+        showing_label = bool(self.cartridge_frame_path) and self.supports_label
+        if showing_label:
             entries.append(
                 (self.t("context.label.choose"), "rom.choose-label", "insert-image-symbolic")
             )
             if self.has_local_cover(self.rom, LABEL_ART):
                 entries.append(
                     (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
+                )
+        else:
+            entries.append(
+                (self.t("context.cover.choose"), "rom.choose-cover", "image-x-generic-symbolic")
+            )
+            if self.has_local_cover(self.rom, COVER_ART):
+                entries.append(
+                    (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
+                )
+        if self.context_services is not None:
+            entries.append(
+                (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
+            )
+            if self.supports_label:
+                entries.append(
+                    (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
                 )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
@@ -782,6 +799,16 @@ class RomItem(Gtk.Box):
     def _act_remove_label(self, _action, _param):
         logger.info("rom context action: remove_label rom=%s", self.rom.get("name"))
         self.on_remove_cover(self.rom, self._refresh_cover_after_change, LABEL_ART)
+
+    def _act_sync_cover(self, _action, _param):
+        logger.info("rom context action: sync_cover rom=%s", self.rom.get("name"))
+        if self.context_services is not None:
+            self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
+
+    def _act_sync_label(self, _action, _param):
+        logger.info("rom context action: sync_label rom=%s", self.rom.get("name"))
+        if self.context_services is not None:
+            self.context_services.win.open_artwork_manager(self.rom, LABEL_ART)
 
     def _refresh_cover_after_change(self):
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
@@ -976,6 +1003,14 @@ class RomGrid(Gtk.FlowBox):
         for item in self._items:
             if str(item.rom.get("path", "")) == path:
                 item.set_cartridge_frame(self._frame_path_for_rom(item.rom))
+                return
+
+    def refresh_rom_artwork(self, rom):
+        """Re-fetch one card's artwork after a cover or label file changed."""
+        path = str(rom.get("path", ""))
+        for item in self._items:
+            if str(item.rom.get("path", "")) == path:
+                item._refresh_cover_after_change()
                 return
 
     # -- layout ------------------------------------------------------------
