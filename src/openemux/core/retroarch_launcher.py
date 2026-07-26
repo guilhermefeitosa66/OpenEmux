@@ -15,7 +15,7 @@ from openemux.core.input_profiles import (
     normalize_turbo_settings,
     player_for_device,
 )
-from openemux.core.paths import get_real_home
+from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
@@ -65,7 +65,18 @@ class RetroArchLauncher:
         self.core_catalog = CoreCatalog(project_root=self.project_root)
 
     def _launch_prefix(self):
-        """Return (argv_prefix, error) for a native/vendored RetroArch binary."""
+        """Return (argv_prefix, error).
+
+        Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
+        flatpak-spawn (both apps see the same absolute paths under the real
+        home, which RetroArch reads via its own ``--filesystem=host``).
+        Otherwise resolve a native/vendored RetroArch binary.
+        """
+        if is_running_in_flatpak():
+            if not shutil.which("flatpak-spawn"):
+                return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
+            return ["flatpak-spawn", "--host", "flatpak", "run", RETROARCH_FLATPAK_ID], None
+
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
             return None, (

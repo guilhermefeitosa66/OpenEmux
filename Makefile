@@ -5,7 +5,7 @@ PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
 .PHONY: all setup venv run test clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: appimage appimage-clean deb rpm packages packages-clean
+.PHONY: appimage appimage-clean deb rpm flatpak packages packages-clean
 
 all: setup
 
@@ -73,15 +73,20 @@ deb:
 rpm:
 	./packaging/build.sh rpm
 
-# Build all three release artifacts into dist/
-packages: appimage deb rpm
+# Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
+# Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).
+flatpak:
+	./packaging/build.sh flatpak
+
+# Build all release artifacts into dist/
+packages: appimage deb rpm flatpak
 
 appimage-clean:
 	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Remove every packaged artifact
 packages-clean: appimage-clean
-	rm -f dist/*.deb dist/*.rpm
+	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak flatpak-repo .flatpak-build-dir
 
 # Cleaning
 clean:

@@ -96,7 +96,7 @@ from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.paths import get_project_root, is_running_in_appimage
+from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
@@ -142,7 +142,7 @@ def _ensure_desktop_integration():
     # user-level copy would shadow the package's entry with one pointing at
     # this interpreter, which is exactly how an installed app ends up
     # unreachable from the menu.
-    if is_running_in_appimage() or _is_packaged_install(project_root):
+    if is_running_in_appimage() or is_running_in_flatpak() or _is_packaged_install(project_root):
         _remove_generated_desktop_entry()
         return
 

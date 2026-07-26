@@ -14,6 +14,7 @@ artifacts. For user-facing install instructions, see the main
   - [AppImage](#appimage)
   - [Debian / Ubuntu (`.deb`)](#debian--ubuntu-deb)
   - [Fedora (`.rpm`)](#fedora-rpm)
+  - [Flatpak](#flatpak)
   - [Build everything](#build-everything)
 - [How the packages are laid out](#how-the-packages-are-laid-out)
 - [Cutting a release](#cutting-a-release)
@@ -85,7 +86,7 @@ module.
 
 ## Building the packages
 
-All three artifacts build **inside Docker** and land in `dist/`. Each package
+All artifacts build **inside Docker** and land in `dist/`. Each package
 script not only builds but also **install-tests** the result in a clean
 container (dependency resolution via apt/dnf plus a GTK4/Adwaita import smoke
 test), so a green run means the package actually installs and imports.
@@ -123,10 +124,29 @@ make rpm
 Override the build image if needed, e.g. `RPM_BUILD_IMAGE=fedora:42 make rpm`
 or `DEB_BUILD_IMAGE=ubuntu:25.04 make deb`.
 
+### Flatpak
+
+Builds a single-file bundle (`flatpak install ./OpenEmux-<version>.flatpak`;
+the GNOME runtime is pulled from the user's configured remote), and refreshes
+the ostree repo under `flatpak-repo/` that the separate
+[`openemux-flatpak`](https://github.com/guilhermefeitosa66/openemux-flatpak)
+repository publishes for `flatpak update`-able installs. The first run
+downloads the GNOME runtime + SDK inside the container (a few GB).
+
+Inside the sandbox OpenEmux launches the **host's RetroArch Flatpak**
+(`org.libretro.RetroArch`) via `flatpak-spawn`; users install it once with
+`flatpak install flathub org.libretro.RetroArch`, and its own Online Updater
+manages the cores.
+
+```bash
+make flatpak
+# -> dist/OpenEmux-<version>.flatpak  (+ flatpak-repo/)
+```
+
 ### Build everything
 
 ```bash
-make packages          # appimage + deb + rpm
+make packages          # appimage + deb + rpm + flatpak
 make packages-clean    # remove all built artifacts from dist/
 ```
 

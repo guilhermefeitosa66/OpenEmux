@@ -19,7 +19,7 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import get_real_home
+from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.shaders import ShaderConfigStore
@@ -181,7 +181,9 @@ DEFAULT_CONFIG = {
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 "mode": "buildbot_all_cores",
-                "enabled": True,
+                # In Flatpak, core management is delegated to the RetroArch
+                # Flatpak's own updater; OpenEmux must not download cores.
+                "enabled": not is_running_in_flatpak(),
                 "core_dir": None,
                 "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
