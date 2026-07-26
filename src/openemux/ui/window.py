@@ -27,7 +27,13 @@ from openemux.core.library_view import (
     zoom_step,
 )
 from openemux.core.play_history import PlayHistory
-from openemux.core.cover_sync import sync_covers_async
+from openemux.core import cartridge_render
+from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core.cover_sync import (
+    build_artwork_passes,
+    sync_artwork_async,
+    sync_covers_async,
+)
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
@@ -2752,6 +2758,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(message, timeout=6 if extracted else 5)
             # New files on disk: rebuild the playlists so they show up.
             self._rescan_all_consoles(show_toast=False)
+            # An import is exactly when the library gained ROMs with no artwork,
+            # so fetch it now instead of leaving a shelf of blank cartridges
+            # until the user remembers to sync by hand.
+            self._start_post_import_artwork_sync(summary["imported"])
         elif unknown or errors:
             self._toast(self.t("import.failed", unknown=unknown + errors), timeout=5)
         else:
@@ -2821,6 +2831,80 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             covers_dir=self.roms_path,
             scope=scope,
             selected_console=selected_console,
+            on_done=_on_done,
+            sync_settings=self.config_manager.get_cover_sync_settings(),
+            on_progress=_on_progress,
+            should_cancel=cancel_event.is_set,
+        )
+
+    def _start_post_import_artwork_sync(self, imported_paths):
+        """Fetch artwork for the ROMs an import just added.
+
+        Box art for every console involved, plus cartridge labels for the ones
+        that have a frame to composite a label into -- a label scraped for a
+        console with no frame has nothing to sit in and would be served as box
+        art on the card instead. Only the imported ROMs are covered, and the
+        artwork type configured in Preferences is left alone: both kinds are
+        wanted here regardless of which one the user picked for manual syncs.
+        """
+        if not imported_paths:
+            return
+
+        library = {}
+        for entry in self.playlist_manager.entries_for_paths(imported_paths):
+            library.setdefault(entry["console"], []).append(entry)
+        passes = build_artwork_passes(library, cartridge_render.consoles_with_frames())
+        if not passes:
+            return
+
+        if self._cover_sync_running:
+            # A sync the user started explicitly is already in flight. Don't
+            # fight it, and don't nag with "sync already running" on a path the
+            # user did not ask for -- the next manual sync picks these up.
+            logger.info("post-import artwork sync skipped: a sync is already running")
+            return
+
+        logger.info(
+            "post-import artwork sync: passes=%s",
+            [(kind, sorted(lib)) for kind, lib in passes],
+        )
+        self._start_artwork_sync(passes)
+
+    def _start_artwork_sync(self, passes):
+        """Run a multi-kind artwork sync as a single cancellable task."""
+        self._cover_sync_running = True
+        cancel_event = Event()
+        self._cover_sync_cancel = cancel_event
+        task_id = self._begin_task(
+            "covers",
+            self.t("status.covers.starting"),
+            on_cancel=cancel_event.set,
+        )
+        toast = Adw.Toast(title=self.t("toast.sync_started"))
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+        def _on_progress(evt):
+            # One task spans both kinds, so the label follows what is in flight.
+            label = (
+                "status.labels.progress"
+                if evt.get("art_kind") == COVER_ART_TYPE_CARTRIDGE_LABEL
+                else "status.covers.progress"
+            )
+            GLib.idle_add(
+                self._update_task,
+                task_id,
+                evt.get("processed", 0),
+                evt.get("total", 0),
+                self.t(label),
+            )
+
+        def _on_done(summary):
+            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
+
+        sync_artwork_async(
+            passes=passes,
+            covers_dir=self.roms_path,
             on_done=_on_done,
             sync_settings=self.config_manager.get_cover_sync_settings(),
             on_progress=_on_progress,

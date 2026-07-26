@@ -2,7 +2,6 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
-from pathlib import Path
 import logging
 
 from openemux.core import cartridge_render
@@ -23,8 +22,6 @@ from openemux.core.systems import get_system_display_name
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
 
 logger = logging.getLogger(__name__)
-
-CARTRIDGE_ASSETS_DIR = Path(__file__).parent / "assets" / "images" / "cartridges"
 
 # The composite is rendered above the logical card size so it stays sharp on
 # HiDPI displays; GTK scales the texture down when it is not needed.
@@ -134,10 +131,7 @@ def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
 
 def cartridge_frame_svg(console):
     """The pre-render frame for a console, when one was authored as SVG."""
-    candidate = CARTRIDGE_ASSETS_DIR / f"{console}.svg"
-    if not candidate.exists() or not cartridge_render.rsvg_available():
-        return None
-    return candidate if cartridge_render.load_frame(candidate) else None
+    return cartridge_render.cartridge_frame(console)
 
 
 class FixedSizePicture(Gtk.Picture):
