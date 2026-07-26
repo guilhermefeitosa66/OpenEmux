@@ -12,6 +12,7 @@ from openemux.core.input_actions import to_retroarch_overrides
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
     normalize_analog_dpad_mode,
+    normalize_turbo_settings,
     player_for_device,
 )
 from openemux.core.paths import get_real_home
@@ -193,6 +194,13 @@ class RetroArchLauncher:
             if extra.get("enabled"):
                 player = player_for_device(device_id)
                 overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+        # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
+        # itself is a normal binding ("turbo" action) emitted per port above,
+        # so without one bound these just restate the defaults.
+        turbo = normalize_turbo_settings(profile.get("turbo"))
+        overrides["input_turbo_period"] = f'"{turbo["period"]}"'
+        overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
+        overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:
