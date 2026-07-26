@@ -188,6 +188,14 @@ class RetroArchLauncher:
         else:
             overrides["video_shader_enable"] = '"false"'
 
+        # The UDP command channel (issue #69): loopback-only, and what lets
+        # the in-app volume control reach the running game. The persisted
+        # master volume seeds audio_volume so the level survives launches and
+        # the live stepping starts from a known point.
+        overrides["network_cmd_enable"] = '"true"'
+        overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
+        overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
+
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")

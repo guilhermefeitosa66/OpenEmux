@@ -54,6 +54,12 @@ class _DummyConfig:
     def get_shader_for_console(self, console):
         return self.shader_by_console.get(console, "disabled")
 
+    def get_network_cmd_port(self):
+        return 55355
+
+    def get_master_volume_db(self):
+        return -6.0
+
 
 class RetroArchLauncherTests(unittest.TestCase):
     def test_resolve_retroarch_binary_from_project_relative_path(self):
@@ -175,6 +181,15 @@ class RetroArchLauncherTests(unittest.TestCase):
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA")
             return Path(path).read_text(encoding="utf-8").splitlines()
+
+    def test_override_enables_the_command_channel_and_seeds_the_volume(self):
+        # Issue #69: every launch opens the loopback UDP channel and starts
+        # the game at the persisted master volume, so live stepping has a
+        # known starting point.
+        lines = self._override_lines(None)
+        self.assertIn('network_cmd_enable = "true"', lines)
+        self.assertIn('network_cmd_port = "55355"', lines)
+        self.assertIn('audio_volume = "-6.0"', lines)
 
     def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
         legacy_only = {

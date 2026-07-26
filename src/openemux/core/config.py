@@ -165,6 +165,12 @@ DEFAULT_CONFIG = {
     "consoles": list(SYSTEM_IDS),
     "runtime": {
         "mode": "retroarch_wrapper",
+        # RetroArch's UDP command channel (issue #69): written into every
+        # runtime override so the running game can be controlled live.
+        "network_cmd_port": 55355,
+        # Master volume in dB (0 = unity), persisted so the level chosen for
+        # one loud game carries into the next launch.
+        "master_volume_db": 0.0,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
@@ -677,6 +683,24 @@ class ConfigManager:
 
     def get_runtime_dir(self):
         return DEFAULT_RUNTIME_DIR
+
+    def get_network_cmd_port(self):
+        try:
+            return int(self.config.get("runtime", {}).get("network_cmd_port", 55355))
+        except (TypeError, ValueError):
+            return 55355
+
+    def get_master_volume_db(self):
+        from openemux.core.retroarch_command import clamp_volume_db
+
+        return clamp_volume_db(self.config.get("runtime", {}).get("master_volume_db", 0.0))
+
+    def set_master_volume_db(self, value):
+        from openemux.core.retroarch_command import clamp_volume_db
+
+        runtime = self.config.setdefault("runtime", {})
+        runtime["master_volume_db"] = clamp_volume_db(value)
+        self.save_config()
 
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
