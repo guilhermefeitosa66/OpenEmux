@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 
+from openemux.core.paths import is_running_in_flatpak
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
 from openemux.core.scanner import RomScanner
@@ -141,6 +142,11 @@ class FirstBootBootstrapper:
         return self.updater.ensure_environment()
 
     def _step_retroarch_cores(self, on_event=None):
+        if is_running_in_flatpak():
+            # Cores are managed by the RetroArch Flatpak's own updater; OpenEmux
+            # must not download binaries into its sandbox.
+            return {"skipped": "flatpak", "cores": {}, "shaders": {}, "warning": None}
+
         def _progress(evt):
             if on_event:
                 on_event(evt)

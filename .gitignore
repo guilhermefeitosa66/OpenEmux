@@ -53,3 +53,8 @@ vendors/snes9x/gtk/build/
 # Local-only release drafts (announcement posts, PT release notes)
 release/*post*.txt
 release/NOTAS_DE_RELEASE_*.md
+
+# Flatpak build outputs
+flatpak-repo/
+.flatpak-build-dir/
+.flatpak-builder/
