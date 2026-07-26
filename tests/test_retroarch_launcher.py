@@ -182,6 +182,26 @@ class RetroArchLauncherTests(unittest.TestCase):
             path = launcher._write_runtime_override("GBA")
             return Path(path).read_text(encoding="utf-8").splitlines()
 
+    def test_override_emits_the_analog_dpad_mode_per_port(self):
+        # Issue #71: the per-console profile decides whether the stick also
+        # drives the D-pad; every enabled port gets the same mode.
+        profile = {
+            "active_device": "gamepad_p1",
+            "analog_dpad_mode": 1,
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": True},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
+        self.assertIn('input_player2_analog_dpad_mode = "1"', lines)
+
+    def test_override_analog_dpad_mode_defaults_by_console(self):
+        # No mode in the profile: GBA (digital-only) folds the left stick in.
+        lines = self._override_lines(None)
+        self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
+
     def test_override_enables_the_command_channel_and_seeds_the_volume(self):
         # Issue #69: every launch opens the loopback UDP channel and starts
         # the game at the persisted master volume, so live stepping has a

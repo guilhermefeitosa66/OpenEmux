@@ -9,7 +9,11 @@ from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
 from openemux.core.input_actions import to_retroarch_overrides
-from openemux.core.input_profiles import EXTRA_PORT_DEVICE_IDS, player_for_device
+from openemux.core.input_profiles import (
+    EXTRA_PORT_DEVICE_IDS,
+    normalize_analog_dpad_mode,
+    player_for_device,
+)
 from openemux.core.paths import get_real_home
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
@@ -177,6 +181,18 @@ class RetroArchLauncher:
                     player=player_for_device(device_id),
                 )
             )
+        # Fold the analog stick onto the D-pad where the console wants it
+        # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
+        # the stick and the D-pad steer without re-remapping.
+        analog_mode = normalize_analog_dpad_mode(
+            profile.get("analog_dpad_mode"), console
+        )
+        overrides["input_player1_analog_dpad_mode"] = f'"{analog_mode}"'
+        for device_id in EXTRA_PORT_DEVICE_IDS:
+            extra = devices.get(device_id) or {}
+            if extra.get("enabled"):
+                player = player_for_device(device_id)
+                overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:

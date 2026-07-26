@@ -4,9 +4,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.input_profiles import (
+    ANALOG_DPAD_LEFT_STICK,
+    ANALOG_DPAD_OFF,
+    ANALOG_DPAD_RIGHT_STICK,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
     InputProfileManager,
+    default_analog_dpad_mode,
+    normalize_analog_dpad_mode,
     player_for_device,
 )
 
@@ -118,6 +123,42 @@ class InputProfilesTests(unittest.TestCase):
             saved = manager.save_profile("SFC", {"active_device": "gamepad_p3", "devices": {}})
 
         self.assertEqual(saved["active_device"], "keyboard")
+
+
+class AnalogDpadModeTests(unittest.TestCase):
+    """The stick folded onto the D-pad (issue #71), per console."""
+
+    def test_digital_consoles_default_to_the_left_stick(self):
+        for console in ("FC", "SFC", "GB", "MD"):
+            self.assertEqual(default_analog_dpad_mode(console), ANALOG_DPAD_LEFT_STICK)
+
+    def test_analog_native_consoles_default_off(self):
+        # Folding the stick onto the D-pad would steal it from the game.
+        for console in ("N64", "PS", "PSP", "GC", "SATURN"):
+            self.assertEqual(default_analog_dpad_mode(console), ANALOG_DPAD_OFF)
+
+    def test_normalization_rejects_garbage(self):
+        self.assertEqual(normalize_analog_dpad_mode(2, "SFC"), ANALOG_DPAD_RIGHT_STICK)
+        self.assertEqual(normalize_analog_dpad_mode("1", "SFC"), ANALOG_DPAD_LEFT_STICK)
+        self.assertEqual(normalize_analog_dpad_mode(9, "SFC"), ANALOG_DPAD_LEFT_STICK)
+        self.assertEqual(normalize_analog_dpad_mode("x", "N64"), ANALOG_DPAD_OFF)
+
+    def test_mode_round_trips_through_the_profile(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            self.assertEqual(manager.get_analog_dpad_mode("SFC"), ANALOG_DPAD_LEFT_STICK)
+            manager.set_analog_dpad_mode("SFC", ANALOG_DPAD_OFF)
+            self.assertEqual(manager.get_analog_dpad_mode("SFC"), ANALOG_DPAD_OFF)
+            # And survives a fresh manager (i.e. it is in the file).
+            again = InputProfileManager(tmp_dir)
+            self.assertEqual(again.get_analog_dpad_mode("SFC"), ANALOG_DPAD_OFF)
+
+    def test_legacy_profile_without_the_key_gets_the_console_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            path = Path(tmp_dir) / "SFC.config"
+            path.write_text(json.dumps({"console": "SFC", "devices": {}}), encoding="utf-8")
+            self.assertEqual(manager.get_analog_dpad_mode("SFC"), ANALOG_DPAD_LEFT_STICK)
 
 
 if __name__ == "__main__":

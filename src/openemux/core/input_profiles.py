@@ -22,6 +22,33 @@ EXTRA_PORT_DEVICE_IDS = ["gamepad_p2", "gamepad_p3", "gamepad_p4"]
 #: Devices eligible to drive player 1.
 PLAYER1_DEVICE_IDS = ["keyboard", "gamepad_p1"]
 
+#: RetroArch's input_playerN_analog_dpad_mode values (issue #71).
+ANALOG_DPAD_OFF = 0
+ANALOG_DPAD_LEFT_STICK = 1
+ANALOG_DPAD_RIGHT_STICK = 2
+ANALOG_DPAD_MODES = (ANALOG_DPAD_OFF, ANALOG_DPAD_LEFT_STICK, ANALOG_DPAD_RIGHT_STICK)
+
+#: Consoles whose pads use the analog stick natively: folding it onto the
+#: D-pad there would steal the stick from the game, so they default to off.
+#: Everything else defaults to the left stick -- a digital-only console has
+#: no analog input to lose, and "the stick also moves" is what players expect.
+ANALOG_NATIVE_CONSOLES = {"N64", "PS", "PSP", "GC", "SATURN"}
+
+
+def default_analog_dpad_mode(console):
+    canonical = resolve_system_id(console)
+    if canonical in ANALOG_NATIVE_CONSOLES:
+        return ANALOG_DPAD_OFF
+    return ANALOG_DPAD_LEFT_STICK
+
+
+def normalize_analog_dpad_mode(value, console):
+    try:
+        mode = int(value)
+    except (TypeError, ValueError):
+        return default_analog_dpad_mode(console)
+    return mode if mode in ANALOG_DPAD_MODES else default_analog_dpad_mode(console)
+
 
 def player_for_device(device_id):
     """Return the RetroArch port a device slot maps to (1-based)."""
@@ -69,6 +96,10 @@ class InputProfileManager:
             "version": PROFILE_VERSION,
             "console": system_id,
             "active_device": "keyboard",
+            # The stick folded onto the D-pad (issue #71) is a per-console
+            # choice, not per-device: RetroArch applies it per port and every
+            # pad on the console should behave the same way.
+            "analog_dpad_mode": default_analog_dpad_mode(system_id),
             "devices": devices,
         }
 
@@ -101,6 +132,10 @@ class InputProfileManager:
         base["version"] = PROFILE_VERSION
         base["console"] = system_id
         base["active_device"] = active_device
+        base["analog_dpad_mode"] = normalize_analog_dpad_mode(
+            loaded.get("analog_dpad_mode") if isinstance(loaded, dict) else None,
+            system_id,
+        )
         return base
 
     def load_profile(self, console):
@@ -138,6 +173,16 @@ class InputProfileManager:
         self.ensure_dir()
         for console in consoles:
             self.load_profile(console)
+
+    def get_analog_dpad_mode(self, console):
+        return self.load_profile(console).get(
+            "analog_dpad_mode", default_analog_dpad_mode(console)
+        )
+
+    def set_analog_dpad_mode(self, console, mode):
+        profile = self.load_profile(console)
+        profile["analog_dpad_mode"] = normalize_analog_dpad_mode(mode, console)
+        return self.save_profile(console, profile)
 
     def get_device_profile(self, console, device_id=None):
         profile = self.load_profile(console)
