@@ -1172,8 +1172,25 @@ class RomGrid(Gtk.FlowBox):
 
     def _on_child_activated(self, _box, child):
         item = child.get_child()
-        if isinstance(item, RomItem) and self.on_launch_callback:
-            self.on_launch_callback(item.rom)
+        if not (isinstance(item, RomItem) and self.on_launch_callback):
+            return
+        # A modifier click is a selection gesture (issue #78): the card's own
+        # click handler already toggled or extended the selection, but the
+        # FlowBox still emits child-activated for the same click -- launching
+        # here would fire the game on every Ctrl/Shift+click.
+        if self._selection_modifier_held():
+            return
+        self.on_launch_callback(item.rom)
+
+    def _selection_modifier_held(self):
+        """Whether Ctrl or Shift is down right now (selection, not launch)."""
+        display = self.get_display()
+        seat = display.get_default_seat() if display else None
+        keyboard = seat.get_keyboard() if seat else None
+        if keyboard is None:
+            return False
+        state = keyboard.get_modifier_state()
+        return bool(state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
 
     def _on_grid_key_pressed(self, _controller, keyval, _keycode, state):
         is_menu_key = keyval == Gdk.KEY_Menu or (
