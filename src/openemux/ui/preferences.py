@@ -29,6 +29,7 @@ from openemux.core.input_actions import (
     get_actions_for_console,
 )
 from openemux.core.input_profiles import (
+    ANALOG_DPAD_MODES,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
     device_type_for,
@@ -545,6 +546,23 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         self._port_enabled_switch.set_visible(False)
         controller_group.add(self._port_enabled_switch)
+
+        # Analog-as-D-pad (issue #71): per console, RetroArch's own
+        # analog_dpad_mode, so the stick and the D-pad steer together.
+        self._analog_dpad_ids = list(ANALOG_DPAD_MODES)
+        self._analog_dpad_row = Adw.ComboRow(
+            title=self.t("input.analog_dpad.title"),
+            subtitle=self.t("input.analog_dpad.subtitle"),
+        )
+        self._analog_dpad_row.set_model(
+            Gtk.StringList.new(
+                [self.t(f"input.analog_dpad.mode.{mode}") for mode in self._analog_dpad_ids]
+            )
+        )
+        self._analog_dpad_guard = False
+        self._sync_analog_dpad_row()
+        self._analog_dpad_row.connect("notify::selected", self._on_analog_dpad_changed)
+        controller_group.add(self._analog_dpad_row)
         page.add(controller_group)
 
         self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings"))
@@ -579,8 +597,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return "keyboard"
         return self._device_ids[idx]
 
+    def _sync_analog_dpad_row(self):
+        mode = self.config.input_profiles.get_analog_dpad_mode(self._current_console())
+        self._analog_dpad_guard = True
+        self._analog_dpad_row.set_selected(self._analog_dpad_ids.index(mode))
+        self._analog_dpad_guard = False
+
+    def _on_analog_dpad_changed(self, *_a):
+        if self._analog_dpad_guard:
+            return
+        mode = self._analog_dpad_ids[self._analog_dpad_row.get_selected()]
+        self.config.input_profiles.set_analog_dpad_mode(self._current_console(), mode)
+
     def _on_console_changed(self, *_a):
         self._cancel_capture()
+        self._sync_analog_dpad_row()
         self._refresh_bindings()
 
     def _on_device_changed(self, *_a):
