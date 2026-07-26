@@ -13,7 +13,9 @@ from openemux.core.cover_sync import (
     _normalize_rom_name,
     _ordered_providers,
     _remote_cover_candidates,
+    _sync_artwork,
     _sync_covers,
+    build_artwork_passes,
 )
 
 
@@ -328,3 +330,133 @@ class CancellationTests(unittest.TestCase):
         self.assertFalse(summary["cancelled"])
         self.assertEqual(summary["downloaded"], 5)
         self.assertEqual(summary["total"], 5)
+
+
+class ArtworkPassPlanningTests(unittest.TestCase):
+    """build_artwork_passes: box art everywhere, labels only where a frame is."""
+
+    LIB = {
+        "SFC": [{"name": "Chrono Trigger", "path": "/r/SFC/ct.smc", "console": "SFC"}],
+        "PS": [{"name": "Final Fantasy VII", "path": "/r/PS/ff7.cue", "console": "PS"}],
+    }
+
+    def test_labels_pass_covers_only_frame_capable_consoles(self):
+        passes = build_artwork_passes(self.LIB, ["SFC", "FC"])
+        self.assertEqual([kind for kind, _ in passes], ["boxart", "cartridge_label"])
+        self.assertEqual(sorted(passes[0][1]), ["PS", "SFC"])
+        # PS has no cartridge frame, so it must not appear in the label pass.
+        self.assertEqual(sorted(passes[1][1]), ["SFC"])
+
+    def test_no_label_pass_when_no_console_has_a_frame(self):
+        passes = build_artwork_passes({"PS": self.LIB["PS"]}, ["SFC", "FC"])
+        self.assertEqual([kind for kind, _ in passes], ["boxart"])
+
+    def test_empty_label_console_list_yields_box_art_only(self):
+        self.assertEqual(
+            [kind for kind, _ in build_artwork_passes(self.LIB, [])], ["boxart"]
+        )
+
+    def test_consoles_with_no_roms_are_dropped(self):
+        passes = build_artwork_passes({"SFC": [], "PS": self.LIB["PS"]}, ["SFC"])
+        self.assertEqual([kind for kind, _ in passes], ["boxart"])
+        self.assertEqual(sorted(passes[0][1]), ["PS"])
+
+    def test_nothing_to_do_yields_no_passes(self):
+        self.assertEqual(build_artwork_passes({}, ["SFC"]), [])
+        self.assertEqual(build_artwork_passes({"SFC": []}, ["SFC"]), [])
+
+
+class MultiPassArtworkSyncTests(unittest.TestCase):
+    """_sync_artwork: run the passes in order and aggregate them into one run."""
+
+    @staticmethod
+    def _rom(console, name):
+        return {"name": name, "path": f"/r/{console}/{name}", "console": console}
+
+    def _passes(self):
+        return [
+            ("boxart", {"SFC": [self._rom("SFC", "A"), self._rom("SFC", "B")]}),
+            ("cartridge_label", {"SFC": [self._rom("SFC", "A")]}),
+        ]
+
+    def test_each_pass_writes_to_its_own_directory(self):
+        written = []
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch(
+                    "openemux.core.cover_sync._download_cover",
+                    side_effect=lambda url, dest: written.append(dest) or True,
+                ),
+            ):
+                summary = _sync_artwork(passes=self._passes(), covers_dir=tmp_dir)
+
+        self.assertEqual([p.parent.name for p in written], ["covers", "covers", "labels"])
+        self.assertEqual(summary["downloaded"], 3)
+        self.assertEqual(summary["total"], 3)
+        self.assertEqual([p["art_kind"] for p in summary["passes"]], ["boxart", "cartridge_label"])
+
+    def test_progress_is_continuous_across_passes(self):
+        events = []
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._download_cover", return_value=True),
+            ):
+                _sync_artwork(
+                    passes=self._passes(),
+                    covers_dir=tmp_dir,
+                    on_progress=events.append,
+                )
+
+        # One combined total, and a counter that never restarts between kinds.
+        self.assertTrue(all(e["total"] == 3 for e in events), events)
+        self.assertEqual([e["processed"] for e in events], [1, 2, 3])
+        self.assertEqual(
+            [e["art_kind"] for e in events], ["boxart", "boxart", "cartridge_label"]
+        )
+
+    def test_empty_passes_are_dropped(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch("openemux.core.cover_sync._download_cover", return_value=True):
+                summary = _sync_artwork(
+                    passes=[("boxart", {}), ("cartridge_label", {"SFC": []})],
+                    covers_dir=tmp_dir,
+                )
+        self.assertEqual(summary["passes"], [])
+        self.assertEqual(summary["total"], 0)
+        self.assertFalse(summary["cancelled"])
+
+    def test_cancelling_stops_before_the_next_pass(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._download_cover", return_value=True),
+            ):
+                summary = _sync_artwork(
+                    passes=self._passes(),
+                    covers_dir=tmp_dir,
+                    should_cancel=lambda: True,
+                )
+        self.assertTrue(summary["cancelled"])
+        # Cancelled before any pass ran, so the label pass never started.
+        self.assertEqual(summary["passes"], [])
+
+    def test_configured_artwork_type_does_not_leak_into_the_passes(self):
+        # The post-import run wants both kinds regardless of the Preferences
+        # setting, so each pass must override cover_art_type for itself.
+        seen = []
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch(
+                    "openemux.core.cover_sync._download_cover",
+                    side_effect=lambda url, dest: seen.append(dest.parent.name) or True,
+                ),
+            ):
+                _sync_artwork(
+                    passes=self._passes(),
+                    covers_dir=tmp_dir,
+                    sync_settings={"cover_art_type": "cartridge_label"},
+                )
+        self.assertEqual(seen, ["covers", "covers", "labels"])

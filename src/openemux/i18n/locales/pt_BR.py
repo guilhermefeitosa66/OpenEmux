@@ -149,6 +149,7 @@ TRANSLATIONS = {
     "status.scan.progress": "Escaneando ROMs ({current}/{total})",
     "status.covers.starting": "Iniciando sync de capas...",
     "status.covers.progress": "Sincronizando capas",
+    "status.labels.progress": "Sincronizando rótulos de cartucho",
     "toast.running": "Executando {name} ({console})",
     "toast.finished": "{name} finalizado (código {code})",
     "toast.input_saved": "Mapeamento salvo para {console}",

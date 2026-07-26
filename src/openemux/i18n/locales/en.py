@@ -149,6 +149,7 @@ TRANSLATIONS = {
     "status.scan.progress": "Scanning ROMs ({current}/{total})",
     "status.covers.starting": "Starting cover sync...",
     "status.covers.progress": "Syncing covers",
+    "status.labels.progress": "Syncing cartridge labels",
     "toast.running": "Running {name} ({console})",
     "toast.finished": "{name} finished (code {code})",
     "toast.input_saved": "Input mapping saved for {console}",

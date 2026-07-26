@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -182,3 +183,49 @@ class RsvgUnavailableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrameAssetLookupTests(unittest.TestCase):
+    """Which consoles have a cartridge frame: the SVG assets are the list."""
+
+    def test_shipped_assets_are_discovered(self):
+        consoles = cartridge_render.consoles_with_frames()
+        # The frames actually authored so far. A new SVG opts a console in with
+        # no code change, so this asserts membership rather than an exact set.
+        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+            self.assertIn(console, consoles)
+        # Disc-based consoles have no cartridge to frame.
+        for console in ("PS", "MCD", "PCECD"):
+            self.assertNotIn(console, consoles)
+
+    def test_has_frame_matches_the_asset_on_disk(self):
+        self.assertTrue(cartridge_render.has_frame("SFC"))
+        self.assertFalse(cartridge_render.has_frame("PS"))
+        self.assertFalse(cartridge_render.has_frame("definitely-not-a-console"))
+
+    def test_lookup_is_driven_by_the_given_directory(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "notes.txt").write_text("ignored")
+            self.assertEqual(cartridge_render.consoles_with_frames(directory), ["XYZ"])
+            self.assertTrue(cartridge_render.has_frame("XYZ", directory))
+            self.assertFalse(cartridge_render.has_frame("SFC", directory))
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory),
+                directory / "XYZ.svg",
+            )
+
+    def test_missing_directory_yields_no_frames(self):
+        with TemporaryDirectory() as tmp_dir:
+            missing = Path(tmp_dir) / "nope"
+            self.assertEqual(cartridge_render.consoles_with_frames(missing), [])
+            self.assertFalse(cartridge_render.has_frame("SFC", missing))
+
+    def test_frame_asset_lookup_does_not_require_librsvg(self):
+        # Deciding whether a label is worth scraping must not depend on the
+        # rendering stack being installed: the typelib can be added later.
+        with unittest.mock.patch.object(cartridge_render, "Rsvg", None):
+            self.assertFalse(cartridge_render.rsvg_available())
+            self.assertTrue(cartridge_render.has_frame("SFC"))
+            self.assertIsNone(cartridge_render.cartridge_frame("SFC"))

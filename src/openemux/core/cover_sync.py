@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import embedded_credentials, screenscraper
+from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.scraper import COVER_ART, LABEL_ART, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
@@ -18,8 +19,8 @@ logger = logging.getLogger(__name__)
 # shows box art everywhere else -- so they get their own directory and never
 # overwrite one another.
 _ART_DIR_BY_KIND = {
-    "boxart": COVER_ART,
-    "cartridge_label": LABEL_ART,
+    COVER_ART_TYPE_BOXART: COVER_ART,
+    COVER_ART_TYPE_CARTRIDGE_LABEL: LABEL_ART,
 }
 
 COVER_SOURCE_LIBRETRO = "libretro"
@@ -427,6 +428,145 @@ def sync_covers_async(
             covers_dir=covers_dir,
             scope=scope,
             selected_console=selected_console,
+            sync_settings=sync_settings,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
+        )
+        if on_done:
+            on_done(summary)
+
+    Thread(target=_worker, daemon=True).start()
+
+
+def build_artwork_passes(library_by_console, label_consoles):
+    """Plan the artwork passes for a set of ROMs: box art, then labels.
+
+    Box art applies to every console. Cartridge labels only apply to the
+    consoles in ``label_consoles`` -- the ones with a cartridge frame to paste
+    a label into. Scraping a label for any other console is pointless work that
+    also ends up displayed as if it were box art, so those are dropped here
+    rather than filtered downstream.
+
+    ``label_consoles`` is passed in rather than looked up so this stays free of
+    the rendering stack; callers hand in
+    ``cartridge_render.consoles_with_frames()``.
+    """
+    eligible = set(label_consoles or ())
+    boxart = {console: roms for console, roms in library_by_console.items() if roms}
+    labels = {console: roms for console, roms in boxart.items() if console in eligible}
+
+    passes = []
+    if boxart:
+        passes.append((COVER_ART_TYPE_BOXART, boxart))
+    if labels:
+        passes.append((COVER_ART_TYPE_CARTRIDGE_LABEL, labels))
+    logger.info(
+        "artwork passes planned: boxart=%s labels=%s",
+        sorted(boxart),
+        sorted(labels),
+    )
+    return passes
+
+
+def _sync_artwork(
+    passes,
+    covers_dir,
+    sync_settings=None,
+    on_progress=None,
+    should_cancel=None,
+):
+    """Run several single-kind sync passes and aggregate them into one summary.
+
+    ``passes`` is a sequence of ``(art_kind, library_by_console)`` pairs, run in
+    order. Each pass overrides ``cover_art_type`` for itself, which is how one
+    run can fetch box art for the whole import and cartridge labels for only the
+    consoles that have a frame.
+
+    Progress is reported against the combined total of every pass and carries
+    the ``art_kind`` in flight, so a caller can show one task for the lot rather
+    than one per kind. Passes with an empty library are dropped, so an import
+    that touched no frame-capable console does not open an empty second pass.
+    """
+    settings = dict(sync_settings or {})
+    planned = [
+        (art_kind, library)
+        for art_kind, library in passes
+        if library and any(library.get(console) for console in library)
+    ]
+    grand_total = sum(
+        len(roms) for _kind, library in planned for roms in library.values()
+    )
+
+    aggregate = {
+        "cancelled": False,
+        "total": 0,
+        "downloaded": 0,
+        "skipped": 0,
+        "errors": 0,
+        "passes": [],
+    }
+    processed_before = 0
+
+    for art_kind, library in planned:
+        if should_cancel and should_cancel():
+            aggregate["cancelled"] = True
+            break
+
+        def _pass_progress(evt, art_kind=art_kind, offset=processed_before):
+            if not on_progress:
+                return
+            # Re-base this pass's counter onto the combined run so the banner
+            # advances monotonically across kinds instead of restarting.
+            forwarded = dict(evt)
+            forwarded["processed"] = offset + evt.get("processed", 0)
+            forwarded["total"] = grand_total
+            forwarded["art_kind"] = art_kind
+            on_progress(forwarded)
+
+        summary = _sync_covers(
+            library_by_console=library,
+            covers_dir=covers_dir,
+            scope="all",
+            selected_console=None,
+            sync_settings={**settings, "cover_art_type": art_kind},
+            on_progress=_pass_progress,
+            should_cancel=should_cancel,
+        )
+        summary["art_kind"] = art_kind
+        aggregate["passes"].append(summary)
+        for key in ("total", "downloaded", "skipped", "errors"):
+            aggregate[key] += summary[key]
+        processed_before += summary["total"]
+        if summary["cancelled"]:
+            aggregate["cancelled"] = True
+            break
+
+    logger.info(
+        "sync_artwork %s: passes=%s total=%d downloaded=%d skipped=%d errors=%d",
+        "cancelled" if aggregate["cancelled"] else "finished",
+        [p["art_kind"] for p in aggregate["passes"]],
+        aggregate["total"],
+        aggregate["downloaded"],
+        aggregate["skipped"],
+        aggregate["errors"],
+    )
+    return aggregate
+
+
+def sync_artwork_async(
+    passes,
+    covers_dir,
+    on_done,
+    sync_settings=None,
+    on_progress=None,
+    should_cancel=None,
+):
+    """Run :func:`_sync_artwork` on a background thread (see ``sync_covers_async``)."""
+
+    def _worker():
+        summary = _sync_artwork(
+            passes=passes,
+            covers_dir=covers_dir,
             sync_settings=sync_settings,
             on_progress=on_progress,
             should_cancel=should_cancel,
