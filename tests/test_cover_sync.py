@@ -177,6 +177,37 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 1)
         self.assertEqual(download_mock.call_args[0][1].parent.name, "labels")
 
+    def test_download_keeps_the_source_extension(self):
+        # The default target says .png, but the file on disk must tell the
+        # truth about its own format: URL extension first, Content-Type second,
+        # png only when neither names one (issue #75).
+        cases = [
+            ("https://cdn.example/art/label.jpg", "text/plain", "Game.jpg"),
+            ("https://cdn.example/art/label.jpeg", "text/plain", "Game.jpg"),
+            ("https://cdn.example/art/label.webp", "text/plain", "Game.webp"),
+            ("https://cdn.example/art/media?id=1", "image/jpeg", "Game.jpg"),
+            ("https://cdn.example/art/media?id=1", "image/webp", "Game.webp"),
+            ("https://cdn.example/art/media?id=1", "application/octet-stream", "Game.png"),
+            ("https://cdn.example/art/label.png", "image/jpeg", "Game.png"),
+        ]
+        from openemux.core.cover_sync import _download_cover
+
+        for url, content_type, expected_name in cases:
+            with TemporaryDirectory() as tmp_dir:
+                response = mock.MagicMock()
+                response.read.return_value = b"image-bytes"
+                response.headers.get_content_type.return_value = content_type
+                response.__enter__ = lambda s: s
+                response.__exit__ = lambda s, *a: False
+                with patch(
+                    "openemux.core.cover_sync.urllib.request.urlopen",
+                    return_value=response,
+                ):
+                    ok = _download_cover(url, Path(tmp_dir) / "labels" / "Game.png")
+                self.assertTrue(ok, url)
+                written = sorted(p.name for p in (Path(tmp_dir) / "labels").iterdir())
+                self.assertEqual(written, [expected_name], url)
+
     def test_cover_sync_reports_progress(self):
         library = {
             "PS": [
