@@ -12,15 +12,22 @@ Entries passed to :func:`build_context_popover` are one of:
   ``Gtk`` action name string (``"rom.rename"``) or a plain callable invoked on
   click; ``icon_name`` may be ``None`` to leave the icon column blank, which is
   how radio-style rows mark the ones that are not selected.
+* a ``(label, action, icon_name, swatch_hex)`` tuple -- the same row with a
+  small color square between the icon and the label (the cartridge-color
+  menu); ``swatch_hex`` may be ``None`` to keep the column aligned on rows
+  without a color, like the Default entry.
 * a :class:`Submenu` -- a row that opens a nested popover of its own entries.
 """
 
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+gi.require_version("Gdk", "4.0")
+from gi.repository import Gdk, Gtk
 
 SEPARATOR = None
+
+_SWATCH_SIZE = 14
 
 
 class Submenu:
@@ -67,9 +74,49 @@ def _icon_image(icon_name):
     return image
 
 
-def _menu_row(root_popover, label, action, icon_name):
+def _swatch_widget(swatch_hex):
+    """A small rounded color square, or a blank spacer to keep rows aligned."""
+    area = Gtk.DrawingArea()
+    area.set_content_width(_SWATCH_SIZE)
+    area.set_content_height(_SWATCH_SIZE)
+    area.set_valign(Gtk.Align.CENTER)
+    if not swatch_hex:
+        return area
+
+    rgba = Gdk.RGBA()
+    if not rgba.parse(swatch_hex):
+        rgba.parse("#9A9996")
+
+    def _draw(_area, cr, width, height):
+        radius = 3
+        # Rounded rectangle path, inset one device pixel so the hairline
+        # border is not clipped by the widget bounds.
+        x0, y0, x1, y1 = 0.5, 0.5, width - 0.5, height - 0.5
+        cr.new_sub_path()
+        cr.arc(x1 - radius, y0 + radius, radius, -1.5708, 0)
+        cr.arc(x1 - radius, y1 - radius, radius, 0, 1.5708)
+        cr.arc(x0 + radius, y1 - radius, radius, 1.5708, 3.1416)
+        cr.arc(x0 + radius, y0 + radius, radius, 3.1416, 4.7124)
+        cr.close_path()
+        cr.set_source_rgba(rgba.red, rgba.green, rgba.blue, rgba.alpha)
+        cr.fill_preserve()
+        # A translucent outline keeps the light swatches (white, clear)
+        # visible against a light menu background.
+        cr.set_source_rgba(0, 0, 0, 0.25)
+        cr.set_line_width(1)
+        cr.stroke()
+
+    area.set_draw_func(_draw)
+    return area
+
+
+def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
     content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     content.append(_icon_image(icon_name))
+    # "" is a deliberate blank: a spacer that keeps a swatch menu's labels
+    # aligned on rows that have no color of their own (the Default entry).
+    if swatch_hex is not None:
+        content.append(_swatch_widget(swatch_hex))
     text = Gtk.Label(label=label)
     text.set_halign(Gtk.Align.START)
     text.set_hexpand(True)
