@@ -2219,6 +2219,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self._grids.values():
             grid.refresh_rom_frame(rom)
 
+    def open_artwork_manager(self, rom, art_dir=COVER_ART):
+        """The per-ROM artwork manager (issue #77), on the tab for ``art_dir``."""
+        from openemux.ui.artwork_manager import ArtworkManagerWindow
+
+        window = ArtworkManagerWindow(
+            self,
+            rom,
+            art_dir=art_dir,
+            label_supported=cartridge_render.has_frame(rom["console"]),
+        )
+        window.present()
+
+    def refresh_rom_artwork(self, rom):
+        """Re-fetch one ROM's card artwork after the manager saved a file."""
+        for grid in self._grids.values():
+            grid.refresh_rom_artwork(rom)
+
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
 
