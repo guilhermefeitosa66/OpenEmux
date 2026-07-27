@@ -94,9 +94,12 @@ DEFAULT_ARTWORK_PROVIDERS = [
 def normalize_artwork_providers(value):
     """Coerce a stored provider list to a full, valid, ordered configuration.
 
-    Configured order and flags win; unknown ids are dropped; providers the
-    config does not mention (a fresh id shipped in an update) are appended
-    with their defaults, so a new provider shows up without a migration.
+    Configured order and enabled flags win; unknown ids are dropped;
+    providers the config does not mention (a fresh id shipped in an update)
+    are appended with their defaults, so a new provider shows up without a
+    migration. ``kinds`` always equals the provider's capabilities: an
+    enabled provider serves everything it can (per-kind opt-outs were dropped
+    from the UI), so a stored partial selection must not silently linger.
     """
     defaults_by_id = {entry["id"]: entry for entry in DEFAULT_ARTWORK_PROVIDERS}
     normalized = []
@@ -107,15 +110,11 @@ def normalize_artwork_providers(value):
         provider_id = raw.get("id")
         if provider_id not in defaults_by_id or provider_id in seen:
             continue
-        available = ARTWORK_PROVIDER_KINDS_AVAILABLE[provider_id]
-        kinds = [kind for kind in (raw.get("kinds") or []) if kind in available]
         normalized.append(
             {
                 "id": provider_id,
                 "enabled": bool(raw.get("enabled", True)),
-                # A provider with every kind unticked is effectively disabled,
-                # but the empty selection is kept as the user made it.
-                "kinds": kinds,
+                "kinds": list(ARTWORK_PROVIDER_KINDS_AVAILABLE[provider_id]),
             }
         )
         seen.add(provider_id)
@@ -125,26 +124,22 @@ def normalize_artwork_providers(value):
     return normalized
 
 
-def migrate_cover_source_to_providers(cover_source, cover_art_type):
+def migrate_cover_source_to_providers(cover_source, cover_art_type=None):
     """Derive the provider list an existing ``cover_source`` config meant.
 
-    The old enum picked which sources ran and in what order; the old artwork
-    type picked the one kind a manual sync fetched. Both collapse into the
-    list: order/enabled from the source, ScreenScraper's kinds from the type
-    (a label user keeps labels; a box-art user gains nothing they did not
-    have). The project mirror closes the chain, exactly as it already did.
+    The old enum picked which sources ran and in what order: order/enabled
+    carry over, the project mirror closes the chain exactly as it already
+    did. Kinds are not migrated -- an enabled provider serves everything it
+    can (``cover_art_type`` is accepted for the call site's sake and
+    ignored).
     """
     source = normalize_cover_source(cover_source)
-    art_type = normalize_cover_art_type(cover_art_type)
-    screenscraper_kinds = [COVER_ART_TYPE_BOXART]
-    if art_type == COVER_ART_TYPE_CARTRIDGE_LABEL:
-        screenscraper_kinds = [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL]
 
     libretro = {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
     screenscraper = {
         "id": "screenscraper",
         "enabled": source != COVER_SOURCE_LIBRETRO,
-        "kinds": screenscraper_kinds,
+        "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
     }
     openemux = {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
 

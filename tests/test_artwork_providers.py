@@ -44,6 +44,19 @@ class NormalizationTests(unittest.TestCase):
         libretro = next(p for p in normalized if p["id"] == "libretro")
         self.assertEqual(libretro["kinds"], [COVER_ART_TYPE_BOXART])
 
+    def test_fresh_default_order_is_mirror_first_all_enabled(self):
+        providers = normalize_artwork_providers(None)
+        self.assertEqual(provider_ids(providers), ["openemux", "libretro", "screenscraper"])
+        self.assertTrue(all(p["enabled"] for p in providers))
+
+    def test_partial_kind_selections_are_restored_to_full_capabilities(self):
+        # Per-kind opt-outs no longer exist: a stored partial selection (from
+        # the short-lived kinds UI) must not keep silently skipping labels.
+        value = [{"id": "screenscraper", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}]
+        normalized = normalize_artwork_providers(value)
+        screenscraper = next(p for p in normalized if p["id"] == "screenscraper")
+        self.assertEqual(screenscraper["kinds"], BOTH)
+
     def test_default_list_is_never_aliased(self):
         first = normalize_artwork_providers(None)
         first[0]["enabled"] = False
@@ -72,15 +85,13 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(provider_ids(providers), ["screenscraper", "libretro", "openemux"])
         self.assertEqual(provider_ids(providers, enabled_only=True), ["screenscraper", "openemux"])
 
-    def test_label_art_type_keeps_labels_on_screenscraper(self):
-        providers = migrate_cover_source_to_providers("screenscraper", "cartridge_label")
-        screenscraper = next(p for p in providers if p["id"] == "screenscraper")
-        self.assertIn(COVER_ART_TYPE_CARTRIDGE_LABEL, screenscraper["kinds"])
-
-    def test_boxart_type_leaves_screenscraper_boxart_only(self):
-        providers = migrate_cover_source_to_providers("libretro_then_screenscraper", "boxart")
-        screenscraper = next(p for p in providers if p["id"] == "screenscraper")
-        self.assertEqual(screenscraper["kinds"], [COVER_ART_TYPE_BOXART])
+    def test_screenscraper_always_serves_both_kinds(self):
+        # Per-kind opt-outs were dropped: an enabled provider serves
+        # everything it can, whatever the old artwork type said.
+        for art_type in ("boxart", "cartridge_label"):
+            providers = migrate_cover_source_to_providers("libretro_then_screenscraper", art_type)
+            screenscraper = next(p for p in providers if p["id"] == "screenscraper")
+            self.assertEqual(screenscraper["kinds"], BOTH, art_type)
 
 
 class ProviderChainTests(unittest.TestCase):
