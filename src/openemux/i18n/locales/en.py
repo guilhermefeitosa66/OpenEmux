@@ -328,6 +328,7 @@ TRANSLATIONS = {
     "artwork.provider.openemux": "OpenEmux mirror",
     "artwork.import.drop_hint": "Drop an image here",
     "artwork.import.add": "Add…",
+    "artwork.import.clear": "Remove this image",
     "artwork.import.crop": "Crop",
     "artwork.import.crop_apply": "Apply crop",
     "artwork.import.flip_h": "Flip horizontal",
