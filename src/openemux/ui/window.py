@@ -59,7 +59,7 @@ from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
-from openemux.ui.grid import LIST_MARGIN, RomGrid, RomItem
+from openemux.ui.grid import LIST_MARGIN, RomGrid
 from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
@@ -1914,22 +1914,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         scroll.set_vexpand(True)
         page.append(header)
         page.append(scroll)
-
-        # A plain click on the page's empty area clears the selection, like a
-        # file manager. The grid packs its rows to the top, so the area below
-        # the last row (and the side margins) belongs to the viewport, out of
-        # reach of the grid's own background handling.
-        clear_click = Gtk.GestureClick()
-        clear_click.set_button(Gdk.BUTTON_PRIMARY)
-        clear_click.connect(
-            "pressed", lambda _g, _n, x, y, p=page: setattr(p, "press_at", (x, y))
-        )
-        clear_click.connect(
-            "released",
-            lambda g, _n, x, y, p=page: self._on_page_background_release(p, g, x, y),
-        )
-        scroll.add_controller(clear_click)
-        page.press_at = None
+        # Empty-space clicks and the rubber band are handled by the grid's
+        # band gesture, which attaches itself to this scroller on map so it
+        # covers the whole page, not just the card rows.
 
         # Stashed for _render_console_page; the guard breaks the feedback loop
         # between the master checkbox and the selection it reflects.
@@ -1939,30 +1926,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         page.master_guard = [False]
         check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
         return page
-
-    def _on_page_background_release(self, page, gesture, x, y):
-        """Clear the selection when a plain click lands on empty page space.
-
-        Not on a drag (the rubber band selects; wiping its result on release
-        would undo it), not with a selection modifier held (Ctrl/Shift clicks
-        are selection gestures), and not on anything interactive -- a card or
-        a scrollbar.
-        """
-        pressed_at = getattr(page, "press_at", None)
-        page.press_at = None
-        if pressed_at is not None and abs(x - pressed_at[0]) + abs(y - pressed_at[1]) > 8:
-            return
-        state = gesture.get_current_event_state()
-        if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK):
-            return
-        target = page.scroll.pick(x, y, Gtk.PickFlags.DEFAULT)
-        node = target
-        while node is not None and node is not page.scroll:
-            if isinstance(node, (RomItem, Gtk.Scrollbar)):
-                return
-            node = node.get_parent()
-        if self._selected_roms:
-            self._clear_selection()
 
     def _on_master_check_toggled(self, page):
         if page.master_guard[0]:
