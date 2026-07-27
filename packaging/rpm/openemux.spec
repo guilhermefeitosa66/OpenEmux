@@ -63,6 +63,10 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.2-1
+- Give an imported image the whole area, with a trash button to clear it
+- Put the artwork import controls and the save destination on a single row
+
 * Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.1-1
 - Fix a crash when acting on a ROM's context menu, and log the stack when one happens
 - Sync a single ROM's cover or label straight from the menu, in the background

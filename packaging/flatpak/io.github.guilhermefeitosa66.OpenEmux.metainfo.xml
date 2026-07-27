@@ -82,6 +82,15 @@
   </keywords>
 
   <releases>
+    <release version="1.9.2" date="2026-07-27">
+      <description>
+        <p>The artwork Import tab, finished: it missed the 1.9.1 build.</p>
+        <ul>
+          <li>An imported image gets the whole area, with a trash button to clear it</li>
+          <li>The import controls and the save destination share a single row</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.9.1" date="2026-07-27">
       <description>
         <p>Fixes for the ROM artwork actions, and a friendlier artwork manager.</p>
