@@ -63,6 +63,9 @@ class _DummyConfig:
     def get_console_states_dir(self, console):
         return self.base_dir / "states" / console
 
+    def get_state_slot(self):
+        return 2
+
 
 class RetroArchLauncherTests(unittest.TestCase):
     def test_resolve_retroarch_binary_from_project_relative_path(self):
@@ -206,13 +209,13 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
 
     def test_override_owns_the_savestate_directory(self):
-        # Issue #73: states land in OpenEmux's per-console tree, with
-        # thumbnails for the manager; no slot key unless a launch asks for one.
+        # Issue #73: states land in OpenEmux's per-console tree, and the
+        # configured save slot is written so the hotkeys act on it.
         lines = self._override_lines(None)
         self.assertTrue(any(line.startswith('savestate_directory = "') for line in lines))
         self.assertTrue(any("/states/GBA" in line for line in lines))
         self.assertIn('savestate_thumbnail_enable = "true"', lines)
-        self.assertFalse(any(line.startswith("state_slot") for line in lines))
+        self.assertIn('state_slot = "2"', lines)
 
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:

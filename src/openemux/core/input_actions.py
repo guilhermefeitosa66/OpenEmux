@@ -23,14 +23,28 @@ ACTION_ORDER = [
     "menu_toggle",
     "save_state",
     "load_state",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
 ]
 
 #: Actions that stay unbound unless the user binds them: never auto-filled
 #: with a default or a fallback key. Turbo is opt-in by nature -- an
-#: accidental turbo modifier would corrupt normal play (issue #72).
-OPTIONAL_ACTIONS = {"turbo"}
+#: accidental turbo modifier would corrupt normal play (issue #72) -- and the
+#: newer hotkeys (slot stepping, volume) must not grab a fallback letter on
+#: profiles that predate them.
+OPTIONAL_ACTIONS = {
+    "turbo",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
+}
 
 FALLBACK_KEYS = ["g", "h", "j", "k", "l", "v", "b", "n", "m", "r", "t", "u", "i", "o", "p"]
 GLOBAL_HOTKEY_ACTIONS = [
@@ -38,6 +52,11 @@ GLOBAL_HOTKEY_ACTIONS = [
     "menu_toggle",
     "save_state",
     "load_state",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
 ]
@@ -119,6 +138,11 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "menu_toggle": "f1",
     "save_state": "f2",
     "load_state": "f4",
+    # RetroArch's own defaults for the volume hotkeys; the slot-stepping pair
+    # stays unbound (RetroArch's F6/F7 would collide with keys above).
+    "volume_up": "kp_plus",
+    "volume_down": "kp_minus",
+    "audio_mute": "f9",
     "fast_forward_toggle": "f6",
     "fullscreen_toggle": "f",
 }
@@ -181,6 +205,11 @@ RETROARCH_GLOBAL_HOTKEY_KEYS = {
     "menu_toggle": "input_menu_toggle",
     "save_state": "input_save_state",
     "load_state": "input_load_state",
+    "state_slot_increase": "input_state_slot_increase",
+    "state_slot_decrease": "input_state_slot_decrease",
+    "volume_up": "input_volume_up",
+    "volume_down": "input_volume_down",
+    "audio_mute": "input_audio_mute",
     "fast_forward_toggle": "input_toggle_fast_forward",
     "fullscreen_toggle": "input_toggle_fullscreen",
 }

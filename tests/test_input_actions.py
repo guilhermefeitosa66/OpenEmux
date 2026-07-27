@@ -133,3 +133,52 @@ class FullscreenToggleTests(unittest.TestCase):
     def test_is_offered_for_every_console(self):
         for console in ("FC", "SFC", "GBA", "PS", "MD"):
             self.assertIn("fullscreen_toggle", get_actions_for_console(console), console)
+
+
+class VolumeAndSlotHotkeyTests(unittest.TestCase):
+    """Volume and save-slot hotkeys (issues #69/#73 redo): bindable, optional."""
+
+    def test_actions_map_to_retroarch_hotkey_keys(self):
+        from openemux.core.input_actions import retroarch_key_for
+
+        expected = {
+            "volume_up": "input_volume_up",
+            "volume_down": "input_volume_down",
+            "audio_mute": "input_audio_mute",
+            "state_slot_increase": "input_state_slot_increase",
+            "state_slot_decrease": "input_state_slot_decrease",
+        }
+        for action, key in expected.items():
+            # Global hotkeys: never numbered per player.
+            self.assertEqual(retroarch_key_for(action, player=1), key)
+            self.assertEqual(retroarch_key_for(action, player=3), key)
+
+    def test_offered_for_every_console(self):
+        for console in ("FC", "SFC", "GBA", "PS", "MD"):
+            actions = get_actions_for_console(console)
+            for action in ("volume_up", "volume_down", "audio_mute",
+                           "state_slot_increase", "state_slot_decrease"):
+                self.assertIn(action, actions, console)
+
+    def test_never_auto_filled_on_existing_profiles(self):
+        # A profile that predates these actions must not have fallback letters
+        # grabbed for them: they stay unbound until the user binds them.
+        from openemux.core.input_actions import normalize_bindings
+
+        bindings = normalize_bindings({"a": "z"}, "keyboard", console="SFC")
+        for action in ("volume_up", "volume_down", "audio_mute",
+                       "state_slot_increase", "state_slot_decrease"):
+            self.assertEqual(bindings[action], "", action)
+
+    def test_fresh_profiles_get_retroarch_volume_defaults(self):
+        from openemux.core.input_actions import default_bindings_for_device
+
+        defaults = default_bindings_for_device("keyboard", console="SFC")
+        self.assertEqual(defaults["volume_up"], "kp_plus")
+        self.assertEqual(defaults["volume_down"], "kp_minus")
+        self.assertEqual(defaults["audio_mute"], "f9")
+        # The slot pair has no default anywhere (F6/F7 would collide).
+        self.assertEqual(defaults["state_slot_increase"], "")
+        self.assertEqual(defaults["state_slot_decrease"], "")
+        gamepad = default_bindings_for_device("gamepad", console="SFC")
+        self.assertEqual(gamepad["volume_up"], "")
