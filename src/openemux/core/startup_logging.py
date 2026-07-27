@@ -1,7 +1,9 @@
+import faulthandler
 import logging
 import os
 import sys
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +39,41 @@ def append_startup_error(message, exc_text=None, runtime_dir=None):
         return None
 
 
+def install_crash_handlers(log_path=None):
+    """Leave a trace behind when the process dies instead of just vanishing.
+
+    Two different failures are covered. A Python exception nobody caught goes
+    through ``sys.excepthook`` (and the threading one) into the log. A crash in
+    the GTK/GDK C stack cannot be caught at all -- the process is gone -- but
+    ``faulthandler`` writes the native and Python stacks to the log file on the
+    way down, which is the difference between a bare "segmentation fault" in
+    the terminal and knowing where it happened.
+    """
+    if log_path is not None:
+        try:
+            # Kept open for the lifetime of the process: faulthandler writes to
+            # this descriptor from a signal handler, so it cannot be reopened.
+            handle = open(log_path, "a", encoding="utf-8")
+            faulthandler.enable(file=handle, all_threads=True)
+        except OSError:
+            faulthandler.enable(all_threads=True)
+    else:
+        faulthandler.enable(all_threads=True)
+
+    def _log_exception(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        logging.getLogger("openemux").critical(
+            "unhandled exception", exc_info=(exc_type, exc_value, exc_tb)
+        )
+
+    sys.excepthook = _log_exception
+    threading.excepthook = lambda args: _log_exception(
+        args.exc_type, args.exc_value, args.exc_traceback
+    )
+
+
 def configure_startup_logging(runtime_dir=None):
     log_path = get_startup_log_path(runtime_dir=runtime_dir)
     handlers = [logging.StreamHandler()]
@@ -62,4 +99,5 @@ def configure_startup_logging(runtime_dir=None):
         os.environ.get("GDK_BACKEND"),
         sys.version.split()[0],
     )
+    install_crash_handlers(log_path)
     return log_path

@@ -132,6 +132,16 @@ flowboxchild:focus-visible {
     outline-offset: -2px;
 }
 
+/* The badge stamped on the picked artwork in the artwork manager. A filled
+   disc, so the check reads on a light cover as well as a dark one. */
+.artwork-check {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    border-radius: 999px;
+    padding: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
 .favorites-sidebar-icon {
     color: #f6c90e;
 }
