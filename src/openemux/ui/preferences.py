@@ -559,7 +559,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._sync_turbo_rows()
         page.add(turbo_group)
 
-        self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings"))
+        # Two groups: the controls a game reads (d-pad, face buttons, start…)
+        # and the frontend hotkeys (save/load state, volume, fullscreen…).
+        # They are bound the same way but answer different questions, and
+        # RetroArch itself treats the hotkeys as global rather than per-port.
+        self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings.game"))
+        self._system_bindings_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.bindings.system"),
+            description=self.t("prefs.group.bindings.system.description"),
+        )
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self._map_all_btn = Gtk.Button(label=self.t("input.map_all"))
         self._map_all_btn.add_css_class("flat")
@@ -575,6 +583,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         actions_box.append(save_btn)
         self._bindings_group.set_header_suffix(actions_box)
         page.add(self._bindings_group)
+        page.add(self._system_bindings_group)
 
         self._refresh_bindings()
         return page
@@ -653,9 +662,33 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return self.t("input.binding.hat", direction=arrows.get(detail, detail))
         return value
 
+    def _group_for_action(self, action):
+        """Frontend hotkeys go to the System group, controls to the Game one."""
+        if action in GLOBAL_HOTKEY_ACTIONS:
+            return self._system_bindings_group
+        return self._bindings_group
+
+    def _set_capture_prompt(self, prompt, action=None):
+        """Show "press a key…" on the group holding the row being captured.
+
+        ``prompt=None`` restores both groups to their resting descriptions --
+        the System group keeps a standing one explaining what it is for.
+        """
+        system_default = self.t("prefs.group.bindings.system.description")
+        if prompt is None or action is None:
+            self._bindings_group.set_description(None)
+            self._system_bindings_group.set_description(system_default)
+            return
+        if action in GLOBAL_HOTKEY_ACTIONS:
+            self._bindings_group.set_description(None)
+            self._system_bindings_group.set_description(prompt)
+        else:
+            self._bindings_group.set_description(prompt)
+            self._system_bindings_group.set_description(system_default)
+
     def _refresh_bindings(self):
-        for row in list(self._input_rows.values()):
-            self._bindings_group.remove(row)
+        for action, row in list(self._input_rows.items()):
+            self._group_for_action(action).remove(row)
         self._input_rows = {}
         self._input_buttons = {}
 
@@ -687,7 +720,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if is_extra_port:
             self._port_enabled_switch.set_active(bool(device.get("enabled", False)))
         self._map_all_btn.set_sensitive(True)
-        self._bindings_group.set_description(None)
+        self._set_capture_prompt(None)
+        # Ports 2-4 map no hotkeys at all (they are global), so the whole
+        # System group goes away rather than standing there empty.
+        self._system_bindings_group.set_visible(
+            any(action in GLOBAL_HOTKEY_ACTIONS for action in visible_actions)
+        )
 
         for action in visible_actions:
             row = Adw.ActionRow(title=self._input_action_label(action))
@@ -697,7 +735,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             button.connect("clicked", self._on_binding_clicked, action)
             row.add_suffix(button)
             row.set_activatable_widget(button)
-            self._bindings_group.add(row)
+            self._group_for_action(action).add(row)
             self._input_rows[action] = row
             self._input_buttons[action] = button
 
@@ -732,7 +770,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         prompt = self.t(prompt_key, action=self._input_action_label(action))
         if is_gamepad:
             prompt = f"{prompt} — {self.t('input.capture.cancel_hint')}"
-        self._bindings_group.set_description(prompt)
+        self._set_capture_prompt(prompt, action)
 
         if is_gamepad:
             self._start_gamepad_reader()
@@ -819,7 +857,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._capture_sequence_index = -1
         self._set_active_row(None)
         if hasattr(self, "_bindings_group"):
-            self._bindings_group.set_description(None)
+            self._set_capture_prompt(None)
         if show_toast and was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
