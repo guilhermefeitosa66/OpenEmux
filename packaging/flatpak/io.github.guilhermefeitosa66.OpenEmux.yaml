@@ -43,6 +43,11 @@ modules:
   - name: openemux
     buildsystem: simple
     build-commands:
+      # The dir source copies the whole working tree, gitignored build
+      # artifacts included, and setuptools reuses build/lib when it is there --
+      # which installed a pre-SVG snapshot of the cartridge art over the real
+      # one. Start from a clean slate.
+      - rm -rf build dist
       - pip3 install --verbose --exists-action=i --no-index --no-build-isolation
         --prefix=${FLATPAK_DEST} .
       - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
