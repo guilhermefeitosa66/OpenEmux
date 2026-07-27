@@ -55,11 +55,13 @@ def cartridge_render_works():
     is handed to Rsvg.
     """
     from openemux.core import cartridge_render
-    from openemux.ui import grid as gridmod
 
-    frames = sorted(gridmod.CARTRIDGE_ASSETS_DIR.glob("*.svg"))
+    assets_dir = cartridge_render.CARTRIDGE_ASSETS_DIR
+    # The base shells only: a "<CONSOLE>-<colour>.svg" variant is a shell for a
+    # console already covered, and rendering one proves nothing extra.
+    frames = sorted(p for p in assets_dir.glob("*.svg") if "-" not in p.stem)
     if not frames:
-        raise RuntimeError(f"no cartridge frames in {gridmod.CARTRIDGE_ASSETS_DIR}")
+        raise RuntimeError(f"no cartridge frames in {assets_dir}")
 
     with tempfile.TemporaryDirectory() as cache:
         out = cartridge_render.render_cartridge(
