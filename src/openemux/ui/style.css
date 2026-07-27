@@ -49,7 +49,12 @@ flowboxchild:focus-visible {
     outline: none;
 }
 
-flowboxchild:focus-within .rom-card {
+/* Only while steering with a keyboard or a controller (.keynav-active, as
+   every other focus ring below): a card keeps GTK focus after its context
+   menu closes, and an ungated :focus-within left that card ringed for good --
+   indistinguishable from .rom-card-selected, and not cleared by clicking
+   elsewhere, since empty page space takes no focus. */
+.keynav-active flowboxchild:focus-within .rom-card {
     outline: 2px solid @accent_bg_color;
     outline-offset: -2px;
     background-color: alpha(@accent_bg_color, 0.12);
