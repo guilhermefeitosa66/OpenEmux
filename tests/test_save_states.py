@@ -45,6 +45,35 @@ class ListStatesTests(unittest.TestCase):
     def test_missing_directory_is_empty(self):
         self.assertEqual(save_states.list_states("/nope/nothing", ROM), [])
 
+    def test_states_sorted_into_core_subdirectories_are_found(self):
+        # RetroArch with sort_savestates_enable files states under
+        # <console>/<Core Name>/ -- the layout that hid the user's saves.
+        with TemporaryDirectory() as tmp_dir:
+            core_dir = Path(tmp_dir) / "Snes9x"
+            core_dir.mkdir()
+            (core_dir / "Chrono Trigger (USA).state").write_bytes(b"s")
+            thumb = core_dir / "Chrono Trigger (USA).state.png"
+            thumb.write_bytes(b"p")
+            states = save_states.list_states(tmp_dir, ROM)
+            self.assertEqual([s.slot for s in states], [0])
+            self.assertEqual(states[0].thumbnail, thumb)
+
+    def test_same_slot_in_two_places_keeps_the_newest(self):
+        import os
+
+        with TemporaryDirectory() as tmp_dir:
+            flat = Path(tmp_dir) / "Chrono Trigger (USA).state"
+            flat.write_bytes(b"old")
+            os.utime(flat, (1000, 1000))
+            core_dir = Path(tmp_dir) / "bsnes"
+            core_dir.mkdir()
+            newer = core_dir / "Chrono Trigger (USA).state"
+            newer.write_bytes(b"new")
+            os.utime(newer, (2000, 2000))
+            states = save_states.list_states(tmp_dir, ROM)
+            self.assertEqual(len(states), 1)
+            self.assertEqual(states[0].path, newer)
+
 
 class SlotEntriesTests(unittest.TestCase):
     """The context menu's slot list: full range, empties visible (issue #73)."""
