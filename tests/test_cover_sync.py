@@ -129,6 +129,85 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 0)
         self.assertEqual(download_mock.call_count, 0)
 
+    def test_replace_existing_refetches_art_already_on_disk(self):
+        # The single-ROM sync from the context menu is an explicit "get this
+        # one again", so the skip-what-exists rule is off for it.
+        library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "gba" / "covers"
+            covers.mkdir(parents=True)
+            (covers / "Castlevania.png").write_bytes(b"old")
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch(
+                    "openemux.core.cover_sync._download_cover",
+                    side_effect=lambda _url, dest: (dest.write_bytes(b"new"), dest)[1],
+                ) as download_mock,
+            ):
+                summary = _sync_covers(
+                    library_by_console=library,
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="gba",
+                    sync_settings={},
+                    replace_existing=True,
+                )
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["downloaded"], 1)
+        self.assertEqual(download_mock.call_count, 1)
+
+    def test_replace_existing_drops_the_old_file_under_another_extension(self):
+        # The new file lands under the source's own extension; the previous one
+        # would still win find_local_art if it were left behind.
+        library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "gba" / "covers"
+            covers.mkdir(parents=True)
+            (covers / "Castlevania.png").write_bytes(b"old")
+
+            def _fake_download(_url, dest):
+                written = dest.with_suffix(".jpg")
+                written.write_bytes(b"new")
+                return written
+
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
+            ):
+                _sync_covers(
+                    library_by_console=library,
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="gba",
+                    sync_settings={},
+                    replace_existing=True,
+                )
+            self.assertEqual(sorted(p.name for p in covers.iterdir()), ["Castlevania.jpg"])
+
+    def test_replace_existing_keeps_the_file_it_just_wrote(self):
+        # Same extension in and out: the cleanup must not delete the download.
+        library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "gba" / "covers"
+            covers.mkdir(parents=True)
+            (covers / "Castlevania.png").write_bytes(b"old")
+            with (
+                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch(
+                    "openemux.core.cover_sync._download_cover",
+                    side_effect=lambda _url, dest: (dest.write_bytes(b"new"), dest)[1],
+                ),
+            ):
+                _sync_covers(
+                    library_by_console=library,
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="gba",
+                    sync_settings={},
+                    replace_existing=True,
+                )
+            self.assertEqual((covers / "Castlevania.png").read_bytes(), b"new")
+
     def test_artwork_type_decides_the_destination_directory(self):
         # Cartridge labels are composited into a frame and box art is shown on
         # its own, so each kind gets its own directory instead of overwriting

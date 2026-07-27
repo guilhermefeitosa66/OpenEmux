@@ -18,6 +18,7 @@ from openemux.core.library_view import (
     scale_length,
     scale_spacing,
 )
+from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
 from openemux.ui.context_menu import SEPARATOR, build_context_popover
@@ -707,6 +708,8 @@ class RomItem(Gtk.Box):
             ("remove-label", self._act_remove_label),
             ("sync-cover", self._act_sync_cover),
             ("sync-label", self._act_sync_label),
+            ("manage-cover", self._act_manage_cover),
+            ("manage-label", self._act_manage_label),
             ("rename", self._act_rename),
             ("delete", self._act_delete),
         ):
@@ -756,16 +759,23 @@ class RomItem(Gtk.Box):
                 entries.append(
                     (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
                 )
-        # One sync entry, following the view mode like the manual pair above:
-        # the label when the card is drawn as a cartridge, the cover elsewhere.
+        # Two artwork entries, both following the view mode like the manual pair
+        # above: sync fetches this one ROM's art in the background right away,
+        # manage opens the artwork window to search, pick or import by hand.
         if self.context_services is not None:
             if showing_label:
                 entries.append(
                     (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
                 )
+                entries.append(
+                    (self.t("context.label.manage"), "rom.manage-label", "document-properties-symbolic")
+                )
             else:
                 entries.append(
                     (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
+                )
+                entries.append(
+                    (self.t("context.cover.manage"), "rom.manage-cover", "document-properties-symbolic")
                 )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
@@ -835,10 +845,20 @@ class RomItem(Gtk.Box):
     def _act_sync_cover(self, _action, _param):
         logger.info("rom context action: sync_cover rom=%s", self.rom.get("name"))
         if self.context_services is not None:
-            self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
+            self.context_services.win.sync_rom_artwork(self.rom, COVER_ART_TYPE_BOXART)
 
     def _act_sync_label(self, _action, _param):
         logger.info("rom context action: sync_label rom=%s", self.rom.get("name"))
+        if self.context_services is not None:
+            self.context_services.win.sync_rom_artwork(self.rom, COVER_ART_TYPE_CARTRIDGE_LABEL)
+
+    def _act_manage_cover(self, _action, _param):
+        logger.info("rom context action: manage_cover rom=%s", self.rom.get("name"))
+        if self.context_services is not None:
+            self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
+
+    def _act_manage_label(self, _action, _param):
+        logger.info("rom context action: manage_label rom=%s", self.rom.get("name"))
         if self.context_services is not None:
             self.context_services.win.open_artwork_manager(self.rom, LABEL_ART)
 

@@ -307,6 +307,8 @@ TRANSLATIONS = {
     "context.label.remove": "Remove cartridge label image",
     "context.cover.sync": "Sync cover…",
     "context.label.sync": "Sync label…",
+    "context.cover.manage": "Manage cover…",
+    "context.label.manage": "Manage label…",
     "artwork.window.title": "Artwork — {name}",
     "artwork.tab.cover": "Cover",
     "artwork.tab.label": "Label",

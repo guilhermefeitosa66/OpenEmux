@@ -366,6 +366,12 @@ def _source_extension(url, response):
 
 
 def _download_cover(url, dest):
+    """Download ``url`` and return the file written, or ``False`` on failure.
+
+    The path is returned rather than a plain ``True`` because the extension is
+    decided here, from the source: a caller replacing existing art has to know
+    which file is the new one before it deletes the others.
+    """
     # Media URLs can come from ScreenScraper, so redact before every log line in
     # case credentials were ever carried in the query string.
     safe_url = screenscraper.redact(url)
@@ -380,13 +386,30 @@ def _download_cover(url, dest):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
-        return True
+        return dest
     except urllib.error.HTTPError:
         logger.info("cover_sync not_found: url=%s", safe_url)
         return False
     except Exception as exc:
         logger.warning("cover_sync error: url=%s error=%s", safe_url, screenscraper.redact(exc))
         return False
+
+
+def _drop_stale_art(roms_dir, console, rom_name, art_dir, keep):
+    """Remove ``rom_name``'s art files in ``art_dir`` other than ``keep``."""
+    if not isinstance(keep, (str, Path)):
+        # Nothing to compare against: deleting here would risk taking the file
+        # that was just downloaded with it.
+        return
+    for ext in SUPPORTED_COVER_EXTS:
+        candidate = Path(roms_dir) / console / art_dir / f"{rom_name}.{ext}"
+        if candidate == Path(keep) or not candidate.exists():
+            continue
+        try:
+            candidate.unlink()
+            logger.info("cover_sync replaced art: console=%s rom=%s old=%s", console, rom_name, candidate)
+        except OSError as exc:
+            logger.warning("cover_sync could not remove old art: path=%s error=%s", candidate, exc)
 
 
 def _sync_covers(
@@ -397,8 +420,14 @@ def _sync_covers(
     sync_settings=None,
     on_progress=None,
     should_cancel=None,
+    replace_existing=False,
 ):
     """Sync covers, optionally stopping early.
+
+    ``replace_existing`` turns off the skip-what-is-already-there rule. A
+    library-wide sync leaves existing art alone -- it is a fill-in-the-blanks
+    pass -- but syncing one ROM the user just asked for would otherwise do
+    nothing at all on the very games whose art is wrong.
 
     ``should_cancel`` is polled between ROMs and between candidate URLs, so a
     cancel takes effect within one HTTP request rather than at the end of the
@@ -446,7 +475,7 @@ def _sync_covers(
             total += 1
             name = rom["name"]
 
-            if find_local_art(roms_dir_path, console, name, art_dir):
+            if not replace_existing and find_local_art(roms_dir_path, console, name, art_dir):
                 logger.info("cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind)
                 skipped += 1
                 if on_progress:
@@ -472,9 +501,14 @@ def _sync_covers(
                     logger.info("cover_sync cancelled mid-candidate: console=%s rom=%s", console, name)
                     cancelled = True
                     break
-                if _download_cover(url, target):
+                written = _download_cover(url, target)
+                if written:
                     downloaded += 1
                     found = True
+                    if replace_existing:
+                        # Art saved earlier under another extension would still
+                        # win the local lookup, so the replaced file has to go.
+                        _drop_stale_art(roms_dir_path, console, name, art_dir, keep=written)
                     logger.info(
                         "cover_sync selected candidate: console=%s rom=%s url=%s",
                         console,
@@ -586,6 +620,7 @@ def _sync_artwork(
     sync_settings=None,
     on_progress=None,
     should_cancel=None,
+    replace_existing=False,
 ):
     """Run several single-kind sync passes and aggregate them into one summary.
 
@@ -648,6 +683,7 @@ def _sync_artwork(
             sync_settings={**settings, "cover_art_type": art_kind},
             on_progress=_pass_progress,
             should_cancel=should_cancel,
+            replace_existing=replace_existing,
         )
         summary["art_kind"] = art_kind
         aggregate["passes"].append(summary)
@@ -677,6 +713,7 @@ def sync_artwork_async(
     sync_settings=None,
     on_progress=None,
     should_cancel=None,
+    replace_existing=False,
 ):
     """Run :func:`_sync_artwork` on a background thread (see ``sync_covers_async``)."""
 
@@ -687,6 +724,7 @@ def sync_artwork_async(
             sync_settings=sync_settings,
             on_progress=on_progress,
             should_cancel=should_cancel,
+            replace_existing=replace_existing,
         )
         if on_done:
             on_done(summary)

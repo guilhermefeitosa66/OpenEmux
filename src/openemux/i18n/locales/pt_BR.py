@@ -307,6 +307,8 @@ TRANSLATIONS = {
     "context.label.remove": "Remover imagem do rótulo",
     "context.cover.sync": "Sincronizar capa…",
     "context.label.sync": "Sincronizar rótulo…",
+    "context.cover.manage": "Gerenciar capa…",
+    "context.label.manage": "Gerenciar rótulo…",
     "artwork.window.title": "Imagens — {name}",
     "artwork.tab.cover": "Capa",
     "artwork.tab.label": "Rótulo",
