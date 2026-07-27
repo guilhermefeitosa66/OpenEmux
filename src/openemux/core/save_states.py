@@ -44,32 +44,42 @@ def _slot_for(path):
 
 
 def list_states(states_dir, rom_path):
-    """Every user slot saved for ``rom_path``, sorted by slot number."""
+    """Every user slot saved for ``rom_path``, sorted by slot number.
+
+    RetroArch with ``sort_savestates_enable`` on files each state into a
+    per-core subdirectory (``SFC/Snes9x/…``) rather than the console dir
+    itself, so the immediate subdirectories are scanned too. When the same
+    slot exists in more than one place (two cores saved it), the newest file
+    wins -- it is the one the user just made.
+    """
     directory = Path(states_dir)
     if not directory.is_dir():
         return []
     stem = rom_state_stem(rom_path)
-    states = []
-    for path in directory.iterdir():
-        if not path.is_file() or path.stem != stem:
-            continue
-        slot = _slot_for(path)
-        if slot is None:  # .state.auto, .png companions, unrelated files
-            continue
-        try:
-            mtime = path.stat().st_mtime
-        except OSError:
-            continue
-        thumbnail = path.with_name(path.name + ".png")
-        states.append(
-            SaveState(
+    scan_dirs = [directory] + [sub for sub in directory.iterdir() if sub.is_dir()]
+    by_slot = {}
+    for scan_dir in scan_dirs:
+        for path in scan_dir.iterdir():
+            if not path.is_file() or path.stem != stem:
+                continue
+            slot = _slot_for(path)
+            if slot is None:  # .state.auto, .png companions, unrelated files
+                continue
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            current = by_slot.get(slot)
+            if current is not None and current.mtime >= mtime:
+                continue
+            thumbnail = path.with_name(path.name + ".png")
+            by_slot[slot] = SaveState(
                 path,
                 slot,
                 mtime,
                 thumbnail=thumbnail if thumbnail.is_file() else None,
             )
-        )
-    return sorted(states, key=lambda state: state.slot)
+    return sorted(by_slot.values(), key=lambda state: state.slot)
 
 
 def slot_entries(states_dir, rom_path, max_slot=9):
