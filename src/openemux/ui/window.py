@@ -2447,6 +2447,27 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self._grids.values():
             grid.refresh_rom_frame(rom)
 
+    def sync_rom_artwork(self, rom, art_kind):
+        """Fetch one ROM's artwork of ``art_kind`` right away, in the background.
+
+        The context menu's sync entries are a quick single-ROM action: no
+        window, no picking -- the same provider chain the library-wide sync
+        uses, aimed at one game. Art already on disk is replaced, because the
+        reason to sync one game by hand is usually that what it has is wrong.
+        """
+        if self._cover_sync_running:
+            self._toast(self.t("toast.sync_running"), timeout=3)
+            return
+        passes = [(art_kind, {rom["console"]: [rom]})]
+        logger.info(
+            "rom artwork sync: rom=%s console=%s kind=%s", rom["name"], rom["console"], art_kind
+        )
+        self._start_artwork_sync(
+            passes,
+            replace_existing=True,
+            on_finished=lambda: self.refresh_rom_artwork(rom),
+        )
+
     def open_artwork_manager(self, rom, art_dir=COVER_ART):
         """The per-ROM artwork manager (issue #77), on the tab for ``art_dir``."""
         from openemux.ui.artwork_manager import ArtworkManagerWindow
@@ -3135,8 +3156,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         self._start_artwork_sync(passes)
 
-    def _start_artwork_sync(self, passes):
-        """Run a multi-kind artwork sync as a single cancellable task."""
+    def _start_artwork_sync(self, passes, replace_existing=False, on_finished=None):
+        """Run a multi-kind artwork sync as a single cancellable task.
+
+        ``on_finished`` runs on the UI thread once the sync is done, for the
+        callers whose view the generic reload does not cover (a single ROM
+        synced while a collection is on screen).
+        """
         self._cover_sync_running = True
         cancel_event = Event()
         self._cover_sync_cancel = cancel_event
@@ -3165,7 +3191,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )
 
         def _on_done(summary):
-            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
+            GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary, on_finished)
 
         sync_artwork_async(
             passes=passes,
@@ -3174,9 +3200,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             sync_settings=self.config_manager.get_cover_sync_settings(),
             on_progress=_on_progress,
             should_cancel=cancel_event.is_set,
+            replace_existing=replace_existing,
         )
 
-    def _on_cover_sync_done_ui(self, task_id, summary):
+    def _on_cover_sync_done_ui(self, task_id, summary, on_finished=None):
         self._cover_sync_running = False
         self._cover_sync_cancel = None
         self._finish_task(task_id)
@@ -3199,6 +3226,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._ensure_favorites_loaded()
         elif self.current_console in self._grids:
             self._ensure_console_loaded(self.current_console)
+        if on_finished:
+            on_finished()
         return False
 
     def _on_refresh_clicked(self, _button):

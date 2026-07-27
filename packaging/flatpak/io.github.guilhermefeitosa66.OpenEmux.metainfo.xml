@@ -82,6 +82,19 @@
   </keywords>
 
   <releases>
+    <release version="1.9.1" date="2026-07-27">
+      <description>
+        <p>Fixes for the ROM artwork actions, and a friendlier artwork manager.</p>
+        <ul>
+          <li>Fix a crash when acting on a ROM's context menu</li>
+          <li>Sync one ROM's cover or label from the menu, in the background</li>
+          <li>Open the artwork manager from its own "Manage cover/label" entries</li>
+          <li>Show search results on the library's grid, and mark the picked image</li>
+          <li>Cancel a running artwork search</li>
+          <li>Give an imported image the whole area, with one row of edit controls</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-07-27">
       <description>
         <p>Personalise the shelf, act on many games at once, and take control of the running game.</p>

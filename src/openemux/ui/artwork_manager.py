@@ -25,7 +25,9 @@ from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk
 from openemux.core import artwork_search
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.hasher import compute_crc32
+from openemux.core.library_view import ZOOM_LEVELS, scale_spacing
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, save_local_art
+from openemux.ui.grid import GRID_SPACING, FixedSizePicture, cover_size_for_console
 from threading import Thread
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,9 @@ _KIND_BY_PAGE = {
     "label": (COVER_ART_TYPE_CARTRIDGE_LABEL, LABEL_ART),
 }
 
-_RESULT_THUMB = 160
+#: Results are laid out like the library's own shelf, at the largest zoom the
+#: grid offers: this is where a cover is judged, so it is worth the room.
+_RESULT_ZOOM = ZOOM_LEVELS[-1]
 
 
 class _SearchTab(Gtk.Box):
@@ -48,6 +52,7 @@ class _SearchTab(Gtk.Box):
         self.art_kind, self.art_dir = _KIND_BY_PAGE[page_id]
         self._search_seq = 0
         self._candidates = {}
+        self._running = False
         t = manager.t
 
         self.set_margin_top(12)
@@ -73,6 +78,13 @@ class _SearchTab(Gtk.Box):
         self.by_hash_btn.set_sensitive(False)
         self.by_hash_btn.connect("clicked", lambda _b: self._start_search(by_hash=True))
         buttons.append(self.by_hash_btn)
+        # Only up while a search runs: a provider chain can take a while, and
+        # the only way out used to be closing the window.
+        self.cancel_btn = Gtk.Button(label=t("artwork.search.cancel"))
+        self.cancel_btn.add_css_class("destructive-action")
+        self.cancel_btn.set_visible(False)
+        self.cancel_btn.connect("clicked", lambda _b: self._cancel_search())
+        buttons.append(self.cancel_btn)
         self.spinner = Gtk.Spinner()
         buttons.append(self.spinner)
         self.status = Gtk.Label(xalign=0, hexpand=True)
@@ -83,9 +95,14 @@ class _SearchTab(Gtk.Box):
         self.results = Gtk.FlowBox()
         self.results.set_valign(Gtk.Align.START)
         self.results.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.results.set_homogeneous(True)
-        self.results.set_column_spacing(8)
-        self.results.set_row_spacing(8)
+        self.results.set_homogeneous(False)
+        # Same lattice as the library grid, so a result reads exactly like the
+        # card it is going to become.
+        self.results.add_css_class("rom-grid")
+        spacing = scale_spacing(GRID_SPACING, _RESULT_ZOOM)
+        self.results.set_column_spacing(spacing)
+        self.results.set_row_spacing(spacing)
+        self.results.connect("selected-children-changed", self._sync_selection_marks)
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_child(self.results)
         self.append(scroller)
@@ -111,7 +128,9 @@ class _SearchTab(Gtk.Box):
     def _set_hash(self, digest):
         if digest:
             self.hash_entry.set_text(digest)
-            self.by_hash_btn.set_sensitive(True)
+            # A hash that lands mid-search must not re-arm the button the
+            # running search just disabled.
+            self.by_hash_btn.set_sensitive(not self._running)
         else:
             self.hash_entry.set_placeholder_text("")
         return False
@@ -123,10 +142,8 @@ class _SearchTab(Gtk.Box):
         self._candidates.clear()
         while (child := self.results.get_child_at_index(0)) is not None:
             self.results.remove(child)
-        self.spinner.start()
+        self._set_running(True)
         self.status.set_text(self.manager.t("artwork.search.running"))
-        self.by_name_btn.set_sensitive(False)
-        self.by_hash_btn.set_sensitive(False)
 
         dest = self.manager.temp_dir / f"{self.page_id}-{seq}"
         rom = self.manager.rom
@@ -146,15 +163,32 @@ class _SearchTab(Gtk.Box):
     def _add_result(self, seq, candidate):
         if seq != self._search_seq:
             return False
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        picture = Gtk.Picture()
-        picture.set_size_request(_RESULT_THUMB, _RESULT_THUMB)
-        picture.set_content_fit(Gtk.ContentFit.CONTAIN)
         try:
-            picture.set_paintable(Gdk.Texture.new_from_filename(str(candidate.path)))
+            texture = Gdk.Texture.new_from_filename(str(candidate.path))
         except GLib.Error:
             return False
-        card.append(picture)
+
+        width, height = cover_size_for_console(self.manager.rom.get("console"), _RESULT_ZOOM)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("rom-card")
+
+        # The check sits on top of the artwork so the picked image says so
+        # itself, instead of leaving the selection to a thin outline.
+        overlay = Gtk.Overlay()
+        picture = FixedSizePicture(width, height)
+        picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        picture.add_css_class("rom-cover")
+        picture.set_paintable(texture)
+        overlay.set_child(picture)
+        check = Gtk.Image.new_from_icon_name("object-select-symbolic")
+        check.set_pixel_size(48)
+        check.set_halign(Gtk.Align.CENTER)
+        check.set_valign(Gtk.Align.CENTER)
+        check.add_css_class("artwork-check")
+        check.set_visible(False)
+        overlay.add_overlay(check)
+        card.append(overlay)
+
         provider = Gtk.Label(label=self.manager.t(f"artwork.provider.{candidate.provider}"))
         provider.add_css_class("dim-label")
         provider.add_css_class("caption")
@@ -163,18 +197,59 @@ class _SearchTab(Gtk.Box):
         child = Gtk.FlowBoxChild()
         child.set_child(card)
         child.candidate = candidate
+        child.check = check
+        child.card = card
         self.results.append(child)
         if len(self._candidates) == 0:
             self.results.select_child(child)
         self._candidates[id(child)] = candidate
+        self._sync_selection_marks()
         return False
+
+    def _sync_selection_marks(self, *_args):
+        """Show the check on the selected result, and only on that one."""
+        selected = {id(child) for child in self.results.get_selected_children()}
+        index = 0
+        while (child := self.results.get_child_at_index(index)) is not None:
+            index += 1
+            chosen = id(child) in selected
+            check = getattr(child, "check", None)
+            card = getattr(child, "card", None)
+            if check is not None:
+                check.set_visible(chosen)
+            if card is None:
+                continue
+            if chosen:
+                card.add_css_class("rom-card-selected")
+            else:
+                card.remove_css_class("rom-card-selected")
+
+    def _cancel_search(self):
+        """Drop the running search: the sequence bump is what stops it.
+
+        Every callback the search holds is bound to the sequence it started
+        with, so bumping it makes the worker's ``should_cancel`` true and
+        discards whatever is already in flight toward the UI.
+        """
+        self._search_seq += 1
+        logger.info("artwork search cancelled: page=%s", self.page_id)
+        self._set_running(False)
+        self.status.set_text(self.manager.t("artwork.search.cancelled"))
+
+    def _set_running(self, running):
+        self._running = running
+        self.cancel_btn.set_visible(running)
+        self.by_name_btn.set_sensitive(not running)
+        self.by_hash_btn.set_sensitive(not running and bool(self.hash_entry.get_text()))
+        if running:
+            self.spinner.start()
+        else:
+            self.spinner.stop()
 
     def _search_done(self, seq, count):
         if seq != self._search_seq:
             return False
-        self.spinner.stop()
-        self.by_name_btn.set_sensitive(True)
-        self.by_hash_btn.set_sensitive(bool(self.hash_entry.get_text()))
+        self._set_running(False)
         key = "artwork.search.none" if count == 0 else "artwork.search.found"
         self.status.set_text(self.manager.t(key, count=count))
         return False
@@ -519,7 +594,8 @@ class ArtworkManagerWindow(Adw.Window):
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
         self.set_title(self.t("artwork.window.title", name=rom.get("name", "")))
-        self.set_default_size(780, 640)
+        # Wide enough for two result cards side by side at the grid's top zoom.
+        self.set_default_size(980, 720)
 
         stack = Adw.ViewStack()
         self.stack = stack
