@@ -9,8 +9,13 @@ from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
 from openemux.core.input_actions import to_retroarch_overrides
-from openemux.core.input_profiles import EXTRA_PORT_DEVICE_IDS, player_for_device
-from openemux.core.paths import get_real_home
+from openemux.core.input_profiles import (
+    EXTRA_PORT_DEVICE_IDS,
+    normalize_analog_dpad_mode,
+    normalize_turbo_settings,
+    player_for_device,
+)
+from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
@@ -60,7 +65,18 @@ class RetroArchLauncher:
         self.core_catalog = CoreCatalog(project_root=self.project_root)
 
     def _launch_prefix(self):
-        """Return (argv_prefix, error) for a native/vendored RetroArch binary."""
+        """Return (argv_prefix, error).
+
+        Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
+        flatpak-spawn (both apps see the same absolute paths under the real
+        home, which RetroArch reads via its own ``--filesystem=host``).
+        Otherwise resolve a native/vendored RetroArch binary.
+        """
+        if is_running_in_flatpak():
+            if not shutil.which("flatpak-spawn"):
+                return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
+            return ["flatpak-spawn", "--host", "flatpak", "run", RETROARCH_FLATPAK_ID], None
+
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
             return None, (
@@ -155,7 +171,7 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
         active_device = profile.get("active_device", "keyboard")
@@ -177,6 +193,25 @@ class RetroArchLauncher:
                     player=player_for_device(device_id),
                 )
             )
+        # Fold the analog stick onto the D-pad where the console wants it
+        # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
+        # the stick and the D-pad steer without re-remapping.
+        analog_mode = normalize_analog_dpad_mode(
+            profile.get("analog_dpad_mode"), console
+        )
+        overrides["input_player1_analog_dpad_mode"] = f'"{analog_mode}"'
+        for device_id in EXTRA_PORT_DEVICE_IDS:
+            extra = devices.get(device_id) or {}
+            if extra.get("enabled"):
+                player = player_for_device(device_id)
+                overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+        # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
+        # itself is a normal binding ("turbo" action) emitted per port above,
+        # so without one bound these just restate the defaults.
+        turbo = normalize_turbo_settings(profile.get("turbo"))
+        overrides["input_turbo_period"] = f'"{turbo["period"]}"'
+        overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
+        overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:
@@ -188,6 +223,27 @@ class RetroArchLauncher:
         else:
             overrides["video_shader_enable"] = '"false"'
 
+        # The UDP command channel (issue #69): loopback-only, and what lets
+        # the in-app volume control reach the running game. The persisted
+        # master volume seeds audio_volume so the level survives launches and
+        # the live stepping starts from a known point.
+        overrides["network_cmd_enable"] = '"true"'
+        overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
+        overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
+
+        # Save states live in OpenEmux's own per-console tree (issue #73), so
+        # the app can list and manage them; thumbnails give the manager
+        # something to show. state_slot seeds "play from this state" launches.
+        states_dir = self.config_manager.get_console_states_dir(console)
+        states_dir.mkdir(parents=True, exist_ok=True)
+        overrides["savestate_directory"] = f'"{states_dir}"'
+        overrides["savestate_thumbnail_enable"] = '"true"'
+        # The slot the save/load hotkeys act on: the launch-specific slot (a
+        # "load this save" launch) wins over the configured default.
+        if state_slot is None:
+            state_slot = self.config_manager.get_state_slot()
+        overrides["state_slot"] = f'"{int(state_slot)}"'
+
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
@@ -197,7 +253,7 @@ class RetroArchLauncher:
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(override_path)
 
-    def launch_process(self, rom_path, console):
+    def launch_process(self, rom_path, console, state_slot=None):
         system_id = resolve_system_id(console)
         launch_prefix, prefix_error = self._launch_prefix()
         if prefix_error:
@@ -235,6 +291,7 @@ class RetroArchLauncher:
             core_filename=core_filename,
             shader_path=shader_path,
             shader_enabled=bool(shader_path),
+            state_slot=state_slot,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:

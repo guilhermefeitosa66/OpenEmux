@@ -13,25 +13,22 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Gdk, GLib, Pango
+from gi.repository import Adw, Gtk, Gdk, GLib
 
-from openemux.core.config import (
-    COVER_ART_TYPES,
-    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
-    COVER_SOURCE_SCREENSCRAPER,
-    COVER_SOURCES,
-    normalize_cover_art_type,
-    normalize_cover_source,
-)
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
+    OPTIONAL_ACTIONS,
     get_actions_for_console,
 )
 from openemux.core.input_profiles import (
+    ANALOG_DPAD_MODES,
+    TURBO_DUTY_RANGE,
+    TURBO_MODES,
+    TURBO_PERIOD_RANGE,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
     device_type_for,
@@ -140,55 +137,100 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         sync_row.connect("activated", lambda _r: self.win._show_sync_covers_dialog())
         maint_group.add(sync_row)
         page.add(maint_group)
-        page.add(self._build_cover_source_group())
+        page.add(self._build_artwork_providers_group())
+        page.add(self._build_screenscraper_group())
         return page
 
-    # ----- Cover sources --------------------------------------------------
-    def _build_cover_source_group(self):
-        """Cover art source selection (libretro / ScreenScraper).
+    # ----- Artwork providers ----------------------------------------------
+    def _build_artwork_providers_group(self):
+        """The ordered provider list (issue #76).
 
-        ScreenScraper needs the user's own credentials, so its rows only appear
-        once a ScreenScraper-backed source is picked.
+        One uniform row per provider so the right-side controls line up:
+        move up/down first, then the enable switch. No per-kind options: an
+        enabled provider fetches every artwork kind it serves.
         """
+        self._providers_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.artwork_providers"),
+            description=self.t("prefs.artwork_providers.description"),
+        )
+        self._provider_rows = []
+        self._rebuild_provider_rows()
+        return self._providers_group
+
+    def _rebuild_provider_rows(self):
+        for row in self._provider_rows:
+            self._providers_group.remove(row)
+        self._provider_rows = []
+        providers = self.config.get_artwork_providers()
+        for index, entry in enumerate(providers):
+            row = self._make_provider_row(entry, index, len(providers))
+            self._providers_group.add(row)
+            self._provider_rows.append(row)
+        if hasattr(self, "_ss_user_row"):
+            self._update_screenscraper_rows_visibility()
+
+    def _make_provider_row(self, entry, index, count):
+        provider_id = entry["id"]
+        row = Adw.ActionRow(
+            title=self.t(f"prefs.provider.{provider_id}"),
+            subtitle=self.t(f"prefs.provider.{provider_id}.subtitle"),
+        )
+
+        up = Gtk.Button(icon_name="go-up-symbolic")
+        up.set_tooltip_text(self.t("prefs.provider.move_up"))
+        up.set_valign(Gtk.Align.CENTER)
+        up.add_css_class("flat")
+        up.set_sensitive(index > 0)
+        up.connect("clicked", lambda _b, i=index: self._move_provider(i, -1))
+        row.add_suffix(up)
+
+        down = Gtk.Button(icon_name="go-down-symbolic")
+        down.set_tooltip_text(self.t("prefs.provider.move_down"))
+        down.set_valign(Gtk.Align.CENTER)
+        down.add_css_class("flat")
+        down.set_sensitive(index < count - 1)
+        down.connect("clicked", lambda _b, i=index: self._move_provider(i, +1))
+        row.add_suffix(down)
+
+        switch = Gtk.Switch(active=bool(entry.get("enabled", True)))
+        switch.set_valign(Gtk.Align.CENTER)
+        switch.connect(
+            "notify::active",
+            lambda sw, _p, pid=provider_id: self._set_provider_enabled(pid, sw.get_active()),
+        )
+        row.add_suffix(switch)
+        return row
+
+    def _mutate_providers(self, mutate):
+        providers = self.config.get_artwork_providers()
+        mutate(providers)
+        self.config.set_artwork_providers(providers)
+
+    def _move_provider(self, index, delta):
+        def _mutate(providers):
+            other = index + delta
+            if 0 <= other < len(providers):
+                providers[index], providers[other] = providers[other], providers[index]
+
+        self._mutate_providers(_mutate)
+        self._rebuild_provider_rows()
+
+    def _set_provider_enabled(self, provider_id, enabled):
+        def _mutate(providers):
+            for entry in providers:
+                if entry["id"] == provider_id:
+                    entry["enabled"] = bool(enabled)
+
+        self._mutate_providers(_mutate)
+        self._update_screenscraper_rows_visibility()
+
+    def _build_screenscraper_group(self):
+        """ScreenScraper account rows, shown while that provider is enabled."""
         settings = self.config.get_cover_sync_settings()
-
         group = Adw.PreferencesGroup(
-            title=self.t("prefs.group.cover_source"),
-            description=self.t("prefs.cover_source.description"),
+            title=self.t("prefs.group.screenscraper"),
+            description=self.t("prefs.screenscraper.description"),
         )
-
-        self._cover_source_ids = list(COVER_SOURCES)
-        source_model = Gtk.StringList()
-        for source_id in self._cover_source_ids:
-            source_model.append(self.t(f"prefs.cover_source.option.{source_id}"))
-        self._cover_source_row = Adw.ComboRow(
-            title=self.t("prefs.cover_source.title"),
-            subtitle=self.t("prefs.cover_source.subtitle"),
-            model=source_model,
-        )
-        self._cover_source_row.set_selected(
-            self._cover_source_ids.index(normalize_cover_source(settings.get("cover_source")))
-        )
-        # Without a wrapping factory the longest option is ellipsized to fit the
-        # row width, which hides which sources are actually in play.
-        self._apply_wrapping_label_factory(self._cover_source_row)
-        self._cover_source_row.connect("notify::selected", self._on_cover_source_changed)
-        group.add(self._cover_source_row)
-
-        self._cover_art_type_ids = list(COVER_ART_TYPES)
-        art_model = Gtk.StringList()
-        for art_id in self._cover_art_type_ids:
-            art_model.append(self.t(f"prefs.cover_art_type.option.{art_id}"))
-        self._cover_art_type_row = Adw.ComboRow(
-            title=self.t("prefs.cover_art_type.title"),
-            subtitle=self.t("prefs.cover_art_type.subtitle"),
-            model=art_model,
-        )
-        self._cover_art_type_row.set_selected(
-            self._cover_art_type_ids.index(normalize_cover_art_type(settings.get("cover_art_type")))
-        )
-        self._cover_art_type_row.connect("notify::selected", self._on_cover_art_type_changed)
-        group.add(self._cover_art_type_row)
 
         self._ss_user_row = Adw.EntryRow(title=self.t("prefs.screenscraper.user"))
         self._ss_user_row.set_text(settings.get("screenscraper_user", ""))
@@ -256,19 +298,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._update_screenscraper_rows_visibility()
         return group
 
-    def _selected_cover_source(self):
-        return self._cover_source_ids[self._cover_source_row.get_selected()]
-
     def _update_screenscraper_rows_visibility(self):
-        uses_screenscraper = self._selected_cover_source() in (
-            COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER,
-            COVER_SOURCE_SCREENSCRAPER,
+        uses_screenscraper = any(
+            entry["id"] == "screenscraper" and entry.get("enabled", True)
+            for entry in self.config.get_artwork_providers()
         )
         # The dev credential lives inside the collapsed "Advanced" expander, so
         # the group just shows/hides the normal user-account rows, the expander,
         # and the matching hint.
         for row in (
-            self._cover_art_type_row,
             self._ss_user_row,
             self._ss_password_row,
             self._ss_advanced_row,
@@ -278,15 +316,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # "credentials needed" hint (the user must supply one under Advanced).
         self._ss_hint_row.set_visible(uses_screenscraper and not self._ss_embedded)
         self._ss_embedded_hint_row.set_visible(uses_screenscraper and self._ss_embedded)
-
-    def _on_cover_source_changed(self, *_args):
-        self.config.set_cover_sync_setting("cover_source", self._selected_cover_source())
-        self._update_screenscraper_rows_visibility()
-
-    def _on_cover_art_type_changed(self, *_args):
-        self.config.set_cover_sync_setting(
-            "cover_art_type", self._cover_art_type_ids[self._cover_art_type_row.get_selected()]
-        )
 
     # ----- BIOS page ------------------------------------------------------
     def _build_bios_page(self):
@@ -366,32 +395,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         if show_toast:
             self._toast(self.t("bios.reloaded"))
-
-    def _apply_wrapping_label_factory(self, combo_row):
-        """Let a ComboRow's options wrap instead of being cut off.
-
-        Adwaita ellipsizes the selected item to the row width, so a long option
-        ("libretro thumbnails, then ScreenScraper") reads as truncated text.
-        """
-
-        def _setup(_factory, list_item):
-            label = Gtk.Label()
-            label.set_wrap(True)
-            label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            label.set_max_width_chars(28)
-            label.set_halign(Gtk.Align.START)
-            label.set_xalign(0)
-            list_item.set_child(label)
-
-        def _bind(_factory, list_item):
-            item = list_item.get_item()
-            list_item.get_child().set_text(item.get_string() if item else "")
-
-        for setter in (combo_row.set_factory, combo_row.set_list_factory):
-            factory = Gtk.SignalListItemFactory()
-            factory.connect("setup", _setup)
-            factory.connect("bind", _bind)
-            setter(factory)
 
     def _apply_console_icon_factory(self, combo_row):
         """Render a console ComboRow as "<icon> ID — Name", like the sidebar.
@@ -506,9 +509,65 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         self._port_enabled_switch.set_visible(False)
         controller_group.add(self._port_enabled_switch)
+
+        # Analog-as-D-pad (issue #71): per console, RetroArch's own
+        # analog_dpad_mode, so the stick and the D-pad steer together.
+        self._analog_dpad_ids = list(ANALOG_DPAD_MODES)
+        self._analog_dpad_row = Adw.ComboRow(
+            title=self.t("input.analog_dpad.title"),
+            subtitle=self.t("input.analog_dpad.subtitle"),
+        )
+        self._analog_dpad_row.set_model(
+            Gtk.StringList.new(
+                [self.t(f"input.analog_dpad.mode.{mode}") for mode in self._analog_dpad_ids]
+            )
+        )
+        self._analog_dpad_guard = False
+        self._sync_analog_dpad_row()
+        self._analog_dpad_row.connect("notify::selected", self._on_analog_dpad_changed)
+        controller_group.add(self._analog_dpad_row)
         page.add(controller_group)
 
-        self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings"))
+        # Turbo timing (issue #72): tuning knobs; the modifier button itself is
+        # a normal binding row ("Turbo") in the mapping list below.
+        turbo_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.turbo"),
+            description=self.t("prefs.turbo.description"),
+        )
+        self._turbo_guard = False
+        self._turbo_period_row = Adw.SpinRow.new_with_range(*TURBO_PERIOD_RANGE, 1)
+        self._turbo_period_row.set_title(self.t("input.turbo.period"))
+        self._turbo_period_row.set_subtitle(self.t("input.turbo.period.subtitle"))
+        self._turbo_period_row.connect("notify::value", self._on_turbo_changed)
+        turbo_group.add(self._turbo_period_row)
+
+        self._turbo_duty_row = Adw.SpinRow.new_with_range(*TURBO_DUTY_RANGE, 1)
+        self._turbo_duty_row.set_title(self.t("input.turbo.duty"))
+        self._turbo_duty_row.set_subtitle(self.t("input.turbo.duty.subtitle"))
+        self._turbo_duty_row.connect("notify::value", self._on_turbo_changed)
+        turbo_group.add(self._turbo_duty_row)
+
+        self._turbo_mode_ids = list(TURBO_MODES)
+        self._turbo_mode_row = Adw.ComboRow(title=self.t("input.turbo.mode"))
+        self._turbo_mode_row.set_model(
+            Gtk.StringList.new(
+                [self.t(f"input.turbo.mode.{mode}") for mode in self._turbo_mode_ids]
+            )
+        )
+        self._turbo_mode_row.connect("notify::selected", self._on_turbo_changed)
+        turbo_group.add(self._turbo_mode_row)
+        self._sync_turbo_rows()
+        page.add(turbo_group)
+
+        # Two groups: the controls a game reads (d-pad, face buttons, start…)
+        # and the frontend hotkeys (save/load state, volume, fullscreen…).
+        # They are bound the same way but answer different questions, and
+        # RetroArch itself treats the hotkeys as global rather than per-port.
+        self._bindings_group = Adw.PreferencesGroup(title=self.t("prefs.group.bindings.game"))
+        self._system_bindings_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.bindings.system"),
+            description=self.t("prefs.group.bindings.system.description"),
+        )
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self._map_all_btn = Gtk.Button(label=self.t("input.map_all"))
         self._map_all_btn.add_css_class("flat")
@@ -524,6 +583,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         actions_box.append(save_btn)
         self._bindings_group.set_header_suffix(actions_box)
         page.add(self._bindings_group)
+        page.add(self._system_bindings_group)
 
         self._refresh_bindings()
         return page
@@ -540,8 +600,42 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return "keyboard"
         return self._device_ids[idx]
 
+    def _sync_turbo_rows(self):
+        settings = self.config.input_profiles.get_turbo_settings(self._current_console())
+        self._turbo_guard = True
+        self._turbo_period_row.set_value(settings["period"])
+        self._turbo_duty_row.set_value(settings["duty_cycle"])
+        self._turbo_mode_row.set_selected(self._turbo_mode_ids.index(settings["mode"]))
+        self._turbo_guard = False
+
+    def _on_turbo_changed(self, *_a):
+        if self._turbo_guard:
+            return
+        self.config.input_profiles.set_turbo_settings(
+            self._current_console(),
+            {
+                "period": int(self._turbo_period_row.get_value()),
+                "duty_cycle": int(self._turbo_duty_row.get_value()),
+                "mode": self._turbo_mode_ids[self._turbo_mode_row.get_selected()],
+            },
+        )
+
+    def _sync_analog_dpad_row(self):
+        mode = self.config.input_profiles.get_analog_dpad_mode(self._current_console())
+        self._analog_dpad_guard = True
+        self._analog_dpad_row.set_selected(self._analog_dpad_ids.index(mode))
+        self._analog_dpad_guard = False
+
+    def _on_analog_dpad_changed(self, *_a):
+        if self._analog_dpad_guard:
+            return
+        mode = self._analog_dpad_ids[self._analog_dpad_row.get_selected()]
+        self.config.input_profiles.set_analog_dpad_mode(self._current_console(), mode)
+
     def _on_console_changed(self, *_a):
         self._cancel_capture()
+        self._sync_analog_dpad_row()
+        self._sync_turbo_rows()
         self._refresh_bindings()
 
     def _on_device_changed(self, *_a):
@@ -568,9 +662,33 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return self.t("input.binding.hat", direction=arrows.get(detail, detail))
         return value
 
+    def _group_for_action(self, action):
+        """Frontend hotkeys go to the System group, controls to the Game one."""
+        if action in GLOBAL_HOTKEY_ACTIONS:
+            return self._system_bindings_group
+        return self._bindings_group
+
+    def _set_capture_prompt(self, prompt, action=None):
+        """Show "press a key…" on the group holding the row being captured.
+
+        ``prompt=None`` restores both groups to their resting descriptions --
+        the System group keeps a standing one explaining what it is for.
+        """
+        system_default = self.t("prefs.group.bindings.system.description")
+        if prompt is None or action is None:
+            self._bindings_group.set_description(None)
+            self._system_bindings_group.set_description(system_default)
+            return
+        if action in GLOBAL_HOTKEY_ACTIONS:
+            self._bindings_group.set_description(None)
+            self._system_bindings_group.set_description(prompt)
+        else:
+            self._bindings_group.set_description(prompt)
+            self._system_bindings_group.set_description(system_default)
+
     def _refresh_bindings(self):
-        for row in list(self._input_rows.values()):
-            self._bindings_group.remove(row)
+        for action, row in list(self._input_rows.items()):
+            self._group_for_action(action).remove(row)
         self._input_rows = {}
         self._input_buttons = {}
 
@@ -589,7 +707,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         self._loaded_profile = profile
         self._visible_actions = list(visible_actions)
-        self._capture_sequence_actions = list(visible_actions)
+        # Map-all never demands the optional actions (turbo): forcing a user
+        # through binding a modifier they may not want defeats the flow.
+        self._capture_sequence_actions = [
+            action for action in visible_actions if action not in OPTIONAL_ACTIONS
+        ]
         self._bindings_buffer = {
             action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
         }
@@ -598,7 +720,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if is_extra_port:
             self._port_enabled_switch.set_active(bool(device.get("enabled", False)))
         self._map_all_btn.set_sensitive(True)
-        self._bindings_group.set_description(None)
+        self._set_capture_prompt(None)
+        # Ports 2-4 map no hotkeys at all (they are global), so the whole
+        # System group goes away rather than standing there empty.
+        self._system_bindings_group.set_visible(
+            any(action in GLOBAL_HOTKEY_ACTIONS for action in visible_actions)
+        )
 
         for action in visible_actions:
             row = Adw.ActionRow(title=self._input_action_label(action))
@@ -608,7 +735,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             button.connect("clicked", self._on_binding_clicked, action)
             row.add_suffix(button)
             row.set_activatable_widget(button)
-            self._bindings_group.add(row)
+            self._group_for_action(action).add(row)
             self._input_rows[action] = row
             self._input_buttons[action] = button
 
@@ -643,7 +770,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         prompt = self.t(prompt_key, action=self._input_action_label(action))
         if is_gamepad:
             prompt = f"{prompt} — {self.t('input.capture.cancel_hint')}"
-        self._bindings_group.set_description(prompt)
+        self._set_capture_prompt(prompt, action)
 
         if is_gamepad:
             self._start_gamepad_reader()
@@ -730,7 +857,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._capture_sequence_index = -1
         self._set_active_row(None)
         if hasattr(self, "_bindings_group"):
-            self._bindings_group.set_description(None)
+            self._set_capture_prompt(None)
         if show_toast and was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
@@ -1041,6 +1168,23 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._language_combo.connect("notify::selected", self._on_language_changed)
         lang_group.add(self._language_combo)
         page.add(lang_group)
+
+        # Save states (issue #73 redo): only the slot lives here -- saving and
+        # loading are RetroArch hotkeys, bound on the Input page.
+        states_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.states"),
+            description=self.t("prefs.states.description"),
+        )
+        self._state_slot_row = Adw.SpinRow.new_with_range(0, self.config.MAX_STATE_SLOT, 1)
+        self._state_slot_row.set_title(self.t("prefs.states.slot"))
+        self._state_slot_row.set_subtitle(self.t("prefs.states.slot.subtitle"))
+        self._state_slot_row.set_value(self.config.get_state_slot())
+        self._state_slot_row.connect(
+            "notify::value",
+            lambda row, _p: self.config.set_state_slot(int(row.get_value())),
+        )
+        states_group.add(self._state_slot_row)
+        page.add(states_group)
 
         interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
         self._tips_row = Adw.SwitchRow(

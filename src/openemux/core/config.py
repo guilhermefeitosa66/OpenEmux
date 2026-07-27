@@ -19,8 +19,9 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import get_real_home
+from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.cores import CoreConfigStore
+from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.update_checker import (
@@ -36,6 +37,9 @@ DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
 DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
 DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
 DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
+# Save states live under OpenEmux's own tree (issue #73), one directory per
+# console, so the app can list and manage them instead of RetroArch's default.
+DEFAULT_STATES_DIR = DEFAULT_CONFIG_DIR / "states"
 MIGRATION_VERSION = 2
 
 # Bumped when a UI default changes in a way that should reach configs written
@@ -62,6 +66,88 @@ COVER_ART_TYPE_CARTRIDGE_LABEL = "cartridge_label"
 COVER_ART_TYPES = (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL)
 DEFAULT_COVER_ART_TYPE = COVER_ART_TYPE_BOXART
 
+# Artwork providers as an ordered list (issue #76). Order is precedence: the
+# topmost enabled provider serving a kind is tried first, the rest are
+# fallbacks. What each provider *can* serve is fixed here; what it is *asked*
+# to serve is the per-provider "kinds" selection in the config.
+ARTWORK_PROVIDER_IDS = ("libretro", "screenscraper", "openemux")
+ARTWORK_PROVIDER_KINDS_AVAILABLE = {
+    "libretro": (COVER_ART_TYPE_BOXART,),
+    "screenscraper": (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL),
+    "openemux": (COVER_ART_TYPE_BOXART,),
+}
+# Fresh-install precedence: the project's own mirror first (fully under our
+# control, no quotas), libretro second, ScreenScraper last (quota'd, and the
+# only one needing credentials). Migrated configs keep the order their old
+# cover_source enum meant instead.
+DEFAULT_ARTWORK_PROVIDERS = [
+    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
+    {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
+    {
+        "id": "screenscraper",
+        "enabled": True,
+        "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
+    },
+]
+
+
+def normalize_artwork_providers(value):
+    """Coerce a stored provider list to a full, valid, ordered configuration.
+
+    Configured order and enabled flags win; unknown ids are dropped;
+    providers the config does not mention (a fresh id shipped in an update)
+    are appended with their defaults, so a new provider shows up without a
+    migration. ``kinds`` always equals the provider's capabilities: an
+    enabled provider serves everything it can (per-kind opt-outs were dropped
+    from the UI), so a stored partial selection must not silently linger.
+    """
+    defaults_by_id = {entry["id"]: entry for entry in DEFAULT_ARTWORK_PROVIDERS}
+    normalized = []
+    seen = set()
+    for raw in value or []:
+        if not isinstance(raw, dict):
+            continue
+        provider_id = raw.get("id")
+        if provider_id not in defaults_by_id or provider_id in seen:
+            continue
+        normalized.append(
+            {
+                "id": provider_id,
+                "enabled": bool(raw.get("enabled", True)),
+                "kinds": list(ARTWORK_PROVIDER_KINDS_AVAILABLE[provider_id]),
+            }
+        )
+        seen.add(provider_id)
+    for entry in DEFAULT_ARTWORK_PROVIDERS:
+        if entry["id"] not in seen:
+            normalized.append({k: (list(v) if isinstance(v, list) else v) for k, v in entry.items()})
+    return normalized
+
+
+def migrate_cover_source_to_providers(cover_source, cover_art_type=None):
+    """Derive the provider list an existing ``cover_source`` config meant.
+
+    The old enum picked which sources ran and in what order: order/enabled
+    carry over, the project mirror closes the chain exactly as it already
+    did. Kinds are not migrated -- an enabled provider serves everything it
+    can (``cover_art_type`` is accepted for the call site's sake and
+    ignored).
+    """
+    source = normalize_cover_source(cover_source)
+
+    libretro = {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
+    screenscraper = {
+        "id": "screenscraper",
+        "enabled": source != COVER_SOURCE_LIBRETRO,
+        "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
+    }
+    openemux = {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]}
+
+    if source == COVER_SOURCE_SCREENSCRAPER:
+        libretro["enabled"] = False
+        return [screenscraper, libretro, openemux]
+    return [libretro, screenscraper, openemux]
+
 
 def normalize_cover_source(value):
     return value if value in COVER_SOURCES else DEFAULT_COVER_SOURCE
@@ -81,6 +167,15 @@ DEFAULT_CONFIG = {
     "consoles": list(SYSTEM_IDS),
     "runtime": {
         "mode": "retroarch_wrapper",
+        # RetroArch's UDP command channel (issue #69): written into every
+        # runtime override so the running game can be controlled live.
+        "network_cmd_port": 55355,
+        # Master volume in dB (0 = unity), persisted so the level chosen for
+        # one loud game carries into the next launch.
+        "master_volume_db": 0.0,
+        # The slot RetroArch's save/load hotkeys act on (issue #73 redo):
+        # picked in Preferences, written as state_slot at every launch.
+        "state_slot": 0,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
@@ -88,7 +183,9 @@ DEFAULT_CONFIG = {
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 "mode": "buildbot_all_cores",
-                "enabled": True,
+                # In Flatpak, core management is delegated to the RetroArch
+                # Flatpak's own updater; OpenEmux must not download cores.
+                "enabled": not is_running_in_flatpak(),
                 "core_dir": None,
                 "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
@@ -178,6 +275,7 @@ class ConfigManager:
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.shaders = ShaderConfigStore()
         self.cores = CoreConfigStore()
+        self.cartridge_colors = CartridgeColorStore()
         self.config = self.load_config()
 
     def load_config(self):
@@ -333,6 +431,15 @@ class ConfigManager:
         covers["sync"].setdefault("screenscraper_password", "")
         covers["sync"].setdefault("screenscraper_devid", "")
         covers["sync"].setdefault("screenscraper_devpassword", "")
+        # Issue #76: the provider list replaces the cover_source enum. A config
+        # that predates it gets the list its enum meant; the enum keys stay so
+        # a downgrade still finds them.
+        if "providers" not in covers["sync"]:
+            covers["sync"]["providers"] = migrate_cover_source_to_providers(
+                covers["sync"].get("cover_source"),
+                covers["sync"].get("cover_art_type"),
+            )
+        covers["sync"]["providers"] = normalize_artwork_providers(covers["sync"]["providers"])
         config["covers"] = covers
 
         library = config.get("library", {})
@@ -417,7 +524,21 @@ class ConfigManager:
             "screenscraper_password": str(sync.get("screenscraper_password", "") or ""),
             "screenscraper_devid": str(sync.get("screenscraper_devid", "") or ""),
             "screenscraper_devpassword": str(sync.get("screenscraper_devpassword", "") or ""),
+            "providers": normalize_artwork_providers(sync.get("providers")),
         }
+
+    def get_artwork_providers(self):
+        """The ordered artwork provider list (issue #76), always normalized."""
+        sync = self.config.get("covers", {}).get("sync", {})
+        return normalize_artwork_providers(sync.get("providers"))
+
+    def set_artwork_providers(self, providers):
+        """Persist the whole provider list (order, enabled flags, kinds)."""
+        normalized = normalize_artwork_providers(providers)
+        covers = self.config.setdefault("covers", {})
+        covers.setdefault("sync", {})["providers"] = normalized
+        self.save_config()
+        return normalized
 
     def set_cover_sync_setting(self, key, value):
         """Persist a single cover-sync setting, normalizing the known enums."""
@@ -570,6 +691,48 @@ class ConfigManager:
     def get_runtime_dir(self):
         return DEFAULT_RUNTIME_DIR
 
+    def get_states_dir(self):
+        return DEFAULT_STATES_DIR
+
+    def get_console_states_dir(self, console):
+        return DEFAULT_STATES_DIR / resolve_system_id(console)
+
+    MAX_STATE_SLOT = 9
+
+    def get_state_slot(self):
+        try:
+            slot = int(self.config.get("runtime", {}).get("state_slot", 0))
+        except (TypeError, ValueError):
+            return 0
+        return min(self.MAX_STATE_SLOT, max(0, slot))
+
+    def set_state_slot(self, slot):
+        runtime = self.config.setdefault("runtime", {})
+        try:
+            value = int(slot)
+        except (TypeError, ValueError):
+            value = 0
+        runtime["state_slot"] = min(self.MAX_STATE_SLOT, max(0, value))
+        self.save_config()
+
+    def get_network_cmd_port(self):
+        try:
+            return int(self.config.get("runtime", {}).get("network_cmd_port", 55355))
+        except (TypeError, ValueError):
+            return 55355
+
+    def get_master_volume_db(self):
+        from openemux.core.retroarch_command import clamp_volume_db
+
+        return clamp_volume_db(self.config.get("runtime", {}).get("master_volume_db", 0.0))
+
+    def set_master_volume_db(self, value):
+        from openemux.core.retroarch_command import clamp_volume_db
+
+        runtime = self.config.setdefault("runtime", {})
+        runtime["master_volume_db"] = clamp_volume_db(value)
+        self.save_config()
+
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
 
@@ -681,6 +844,28 @@ class ConfigManager:
 
     def set_show_all_shaders(self, enabled):
         return self.shaders.set_show_all_shaders(enabled)
+
+    # -- cartridge shell colors (issue #79): same shape as the shader overrides
+    def get_cartridge_color_for_console(self, console):
+        return self.cartridge_colors.get_console_color(console)
+
+    def set_cartridge_color_for_console(self, console, color_id):
+        return self.cartridge_colors.set_console_color(console, color_id)
+
+    def get_cartridge_color_for_rom(self, rom_path, console):
+        return self.cartridge_colors.get_effective_color(rom_path, console)
+
+    def get_rom_cartridge_color_override(self, rom_path):
+        return self.cartridge_colors.get_rom_color(rom_path)
+
+    def set_rom_cartridge_color(self, rom_path, console, color_id):
+        return self.cartridge_colors.set_rom_color(rom_path, console, color_id)
+
+    def repath_rom_cartridge_color(self, old_path, new_path):
+        return self.cartridge_colors.repath_rom(old_path, new_path)
+
+    def forget_rom_cartridge_color(self, rom_path):
+        return self.cartridge_colors.forget_rom(rom_path)
 
     def reset_shader_defaults(self):
         return self.shaders.reset_defaults()

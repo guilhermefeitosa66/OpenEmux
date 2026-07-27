@@ -63,6 +63,15 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.0-1
+- Pick a cartridge shell colour per game, from a palette of twelve
+- Select several ROMs with Shift/Ctrl, the keyboard, or a gamepad selection mode
+- Manage artwork per ROM: search every provider by name or hash, or import your own
+- Order and toggle the artwork providers, with OpenEmux's own mirror as a new source
+- Control the running game's volume and save states from the app or new hotkeys
+- Fold the analog stick onto the D-pad, and map a turbo/autofire modifier
+- Ship a Flatpak, installable as a bundle or from the OpenEmux repository
+
 * Thu Jul 24 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.8.0-1
 - Add a Welcome Assistant that tours OpenEmux's features on first launch
 - Bundle ScreenScraper cover art support out of the box in official builds

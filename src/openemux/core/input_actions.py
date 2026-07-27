@@ -18,13 +18,33 @@ ACTION_ORDER = [
     "r1",
     "r2",
     "r3",
+    "turbo",
     "enable_hotkey",
     "menu_toggle",
     "save_state",
     "load_state",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
 ]
+
+#: Actions that stay unbound unless the user binds them: never auto-filled
+#: with a default or a fallback key. Turbo is opt-in by nature -- an
+#: accidental turbo modifier would corrupt normal play (issue #72) -- and the
+#: newer hotkeys (slot stepping, volume) must not grab a fallback letter on
+#: profiles that predate them.
+OPTIONAL_ACTIONS = {
+    "turbo",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
+}
 
 FALLBACK_KEYS = ["g", "h", "j", "k", "l", "v", "b", "n", "m", "r", "t", "u", "i", "o", "p"]
 GLOBAL_HOTKEY_ACTIONS = [
@@ -32,6 +52,11 @@ GLOBAL_HOTKEY_ACTIONS = [
     "menu_toggle",
     "save_state",
     "load_state",
+    "state_slot_increase",
+    "state_slot_decrease",
+    "volume_up",
+    "volume_down",
+    "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
 ]
@@ -113,6 +138,11 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "menu_toggle": "f1",
     "save_state": "f2",
     "load_state": "f4",
+    # RetroArch's own defaults for the volume hotkeys; the slot-stepping pair
+    # stays unbound (RetroArch's F6/F7 would collide with keys above).
+    "volume_up": "kp_plus",
+    "volume_down": "kp_minus",
+    "audio_mute": "f9",
     "fast_forward_toggle": "f6",
     "fullscreen_toggle": "f",
 }
@@ -164,6 +194,8 @@ PLAYER_ACTION_SUFFIXES = {
     "r1": "r",
     "r2": "r2",
     "r3": "r3",
+    # The turbo modifier: hold it (or use single-button modes) to auto-fire.
+    "turbo": "turbo",
 }
 
 #: Hotkeys are global in RetroArch: they are NOT numbered per player and must
@@ -173,6 +205,11 @@ RETROARCH_GLOBAL_HOTKEY_KEYS = {
     "menu_toggle": "input_menu_toggle",
     "save_state": "input_save_state",
     "load_state": "input_load_state",
+    "state_slot_increase": "input_state_slot_increase",
+    "state_slot_decrease": "input_state_slot_decrease",
+    "volume_up": "input_volume_up",
+    "volume_down": "input_volume_down",
+    "audio_mute": "input_audio_mute",
     "fast_forward_toggle": "input_toggle_fast_forward",
     "fullscreen_toggle": "input_toggle_fullscreen",
 }
@@ -205,7 +242,9 @@ def default_gamepad_bindings():
 def get_actions_for_console(console):
     system_id = resolve_system_id(console)
     gameplay = CONSOLE_GAMEPLAY_ACTIONS.get(system_id, GAMEPLAY_ACTIONS_FULL)
-    return list(gameplay) + list(GLOBAL_HOTKEY_ACTIONS)
+    # Turbo rides along for every console: RetroArch implements it at the
+    # frontend level, so it is not a per-console capability.
+    return list(gameplay) + ["turbo"] + list(GLOBAL_HOTKEY_ACTIONS)
 
 
 def default_bindings_for_device(device_type, console=None):
@@ -233,6 +272,8 @@ def normalize_bindings(bindings, device_type, console=None):
     fallback_index = 0
     for action in allowed_actions:
         if normalized[action]:
+            continue
+        if action in OPTIONAL_ACTIONS:
             continue
         default_value = defaults.get(action, "")
         if default_value and default_value not in used_keys:

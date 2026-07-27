@@ -250,7 +250,7 @@
       <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for Linux</a>
       <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ View on GitHub</a>
     </div>
-    <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb &amp; .rpm</p>
+    <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak</p>
     <div class="shot">
       <img src="assets/openemux-roms-snes.png" alt="OpenEmux library view showing SNES games with cover art"/>
     </div>
@@ -407,7 +407,7 @@
   <div class="wrap center">
     <span class="eyebrow">Get started</span>
     <h2>Running in under a minute</h2>
-    <p class="lede">Grab a package for your distro, or the universal AppImage. OpenEmux handles the rest on first launch.</p>
+    <p class="lede">Grab a package for your distro, the universal AppImage, or the Flatpak. OpenEmux handles the rest on first launch.</p>
     <div class="steps">
       <div class="card">
         <div class="step-n">AppImage</div>
@@ -428,6 +428,22 @@
         <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
         <p style="margin-top:12px;font-size:.85rem">Fedora 40 or newer.</p>
       </div>
+      <div class="card">
+        <div class="step-n">Flatpak</div>
+        <h3>Sandboxed, auto-updating</h3>
+        <pre><code>flatpak install -y flathub org.libretro.RetroArch
+flatpak remote-add --if-not-exists --no-gpg-verify \
+  openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
+flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
+        <p style="margin-top:12px;font-size:.85rem">Updates arrive with <code>flatpak update</code>. A single-file <code>.flatpak</code> bundle is on the Releases page too.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:22px;text-align:left">
+      <div class="step-n">Checksums</div>
+      <h3>Verify your download</h3>
+      <p style="font-size:.9rem">Every release ships a <code>SHA256SUMS</code> file. Put it next to the artifact you downloaded and run:</p>
+      <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
+      <p style="margin-top:12px;font-size:.85rem"><code>OK</code> means the file is exactly what was published. Anything else means it is corrupt or tampered with — don't run it.</p>
     </div>
     <p style="margin-top:22px"><a class="btn btn-primary btn-sm" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download from Releases →</a></p>
     <p class="lede" style="margin-top:40px">Prefer building it yourself? <code>make bootstrap &amp;&amp; make run</code> — see the <a href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">build instructions</a>.</p>

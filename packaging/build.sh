@@ -10,9 +10,9 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm) ;;
+  appimage|deb|rpm|flatpak) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm}" >&2
+    echo "usage: $0 {appimage|deb|rpm|flatpak}" >&2
     exit 2
     ;;
 esac
@@ -59,8 +59,10 @@ DOCKER_ARGS=(--rm -t -v "$ROOT_DIR:/work" -w /work
 # stays opt-in, so a build without a .env needs nothing here.
 DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
               -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
-# appimage-builder needs to mount squashfs/use FUSE-ish tooling while bundling.
-if [ "$TARGET" = "appimage" ]; then
+# appimage-builder needs to mount squashfs/use FUSE-ish tooling while
+# bundling, and flatpak-builder's bubblewrap sandbox needs the same inside
+# Docker.
+if [ "$TARGET" = "appimage" ] || [ "$TARGET" = "flatpak" ]; then
   DOCKER_ARGS+=(--privileged)
 fi
 

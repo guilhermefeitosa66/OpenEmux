@@ -4,8 +4,8 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run test clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: appimage appimage-clean deb rpm packages packages-clean
+.PHONY: all setup venv run test icons clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: appimage appimage-clean deb rpm flatpak checksums packages packages-clean
 
 all: setup
 
@@ -43,6 +43,13 @@ run:
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
 
+# Browse the symbolic icons the UI may use (Adwaita only -- see the tool's
+# docstring for why the desktop's other themes are excluded).
+#   make icons              browse everything
+#   make icons FILTER=view  open on a filter
+icons:
+	PYTHONPATH=src $(PYTHON) tools/icon_browser.py $(FILTER)
+
 check-retroarch:
 	@echo "Checking RetroArch binary..."
 	@if [ -x vendors/RetroArch-Linux-x86_64.AppImage ]; then \
@@ -73,15 +80,31 @@ deb:
 rpm:
 	./packaging/build.sh rpm
 
-# Build all three release artifacts into dist/
-packages: appimage deb rpm
+# Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
+# Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).
+flatpak:
+	./packaging/build.sh flatpak
+
+# One SHA256SUMS over every artifact in dist/, so a download can be verified
+# with `sha256sum -c SHA256SUMS`. SHA-256 rather than MD5: MD5 collisions are
+# practical, which makes it useless against a tampered file -- the one thing
+# the checksum is for. One file rather than one per artifact keeps a single
+# command verifying the whole release.
+checksums:
+	@cd dist && rm -f SHA256SUMS && \
+		find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | sort | \
+		xargs -r sha256sum > SHA256SUMS && \
+		echo "==> dist/SHA256SUMS" && cat SHA256SUMS
+
+# Build all release artifacts into dist/, checksummed
+packages: appimage deb rpm flatpak checksums
 
 appimage-clean:
 	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Remove every packaged artifact
 packages-clean: appimage-clean
-	rm -f dist/*.deb dist/*.rpm
+	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo .flatpak-build-dir
 
 # Cleaning
 clean:

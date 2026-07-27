@@ -8,22 +8,45 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import embedded_credentials, screenscraper
-from openemux.core.scraper import find_local_cover
+from openemux.core.config import (
+    ARTWORK_PROVIDER_KINDS_AVAILABLE,
+    COVER_ART_TYPE_BOXART,
+    COVER_ART_TYPE_CARTRIDGE_LABEL,
+)
+from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+# Where each artwork type belongs on disk. Cartridge labels are a different
+# asset from box art -- the grid composites labels into a cartridge frame and
+# shows box art everywhere else -- so they get their own directory and never
+# overwrite one another.
+_ART_DIR_BY_KIND = {
+    COVER_ART_TYPE_BOXART: COVER_ART,
+    COVER_ART_TYPE_CARTRIDGE_LABEL: LABEL_ART,
+}
 
 COVER_SOURCE_LIBRETRO = "libretro"
 COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
 COVER_SOURCE_SCREENSCRAPER = "screenscraper"
 
 # Ordered provider names per configured cover source. "libretro" is the default
-# and yields exactly the historical single-provider behavior.
+# and yields exactly the historical single-provider behavior. The project's own
+# mirror (issue #74) closes every chain: it only ever fires for a ROM the
+# preferred sources missed, so appending it changes no existing match.
 _SOURCE_ORDER = {
-    COVER_SOURCE_LIBRETRO: ("libretro",),
-    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER: ("libretro", "screenscraper"),
-    COVER_SOURCE_SCREENSCRAPER: ("screenscraper",),
+    COVER_SOURCE_LIBRETRO: ("libretro", "openemux"),
+    COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER: ("libretro", "screenscraper", "openemux"),
+    COVER_SOURCE_SCREENSCRAPER: ("screenscraper", "openemux"),
 }
+
+# The OpenEmux artwork mirror: a size-reduced WebP dump of the libretro box
+# arts, hosted in its own repository so the project has a fallback source under
+# its own control (and so the blobs stay out of the app repository).
+OPENEMUX_ARTWORK_BASE = (
+    "https://raw.githubusercontent.com/guilhermefeitosa66/openemux-artwork/main"
+)
 
 def _build_cover_url(system, game_name):
     return (
@@ -159,7 +182,13 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
 
 
 def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
-    """libretro thumbnails provider (the historical, credential-free source)."""
+    """libretro thumbnails provider (the historical, credential-free source).
+
+    Box art only: ``Named_Boxarts`` is all it serves, so a cartridge-label
+    pass must not receive box-art URLs that would be saved into ``labels/``.
+    """
+    if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
+        return []
     system_id = resolve_system_id(console)
     system = get_thumbnail_system(system_id)
     if not system:
@@ -172,6 +201,39 @@ def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
         name_cleanup=bool(sync_settings.get("name_cleanup", True)),
     )
     return [_build_cover_url(system, candidate) for candidate in names]
+
+
+def _build_openemux_art_url(system, game_name):
+    # The mirror keeps libretro's directory names with underscores for spaces,
+    # and every file is WebP (see openemux-artwork/README.md).
+    directory = system.replace(" ", "_")
+    return (
+        f"{OPENEMUX_ARTWORK_BASE}/"
+        f"{urllib.parse.quote(directory, safe='')}/"
+        f"{urllib.parse.quote(game_name + '.webp', safe='')}"
+    )
+
+
+def _openemux_candidates(console, rom_name, sync_settings, rom_path=None):
+    """The project's own art mirror (issue #74): libretro naming, WebP files.
+
+    Box art only -- the mirror carries no cartridge labels, so a label pass
+    must not receive box-art URLs from it.
+    """
+    if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
+        return []
+    system_id = resolve_system_id(console)
+    system = get_thumbnail_system(system_id)
+    if not system:
+        return []
+
+    names = _candidate_names(
+        rom_name=rom_name,
+        matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
+        region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
+        name_cleanup=bool(sync_settings.get("name_cleanup", True)),
+    )
+    return [_build_openemux_art_url(system, candidate) for candidate in names]
 
 
 def _screenscraper_credentials(sync_settings):
@@ -220,13 +282,47 @@ def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):
 _PROVIDER_FUNCTIONS = {
     "libretro": "_libretro_candidates",
     "screenscraper": "_screenscraper_candidates",
+    "openemux": "_openemux_candidates",
 }
 
 
+def _requested_art_kind(sync_settings):
+    return screenscraper.normalize_art_kind(
+        (sync_settings or {}).get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
+    )
+
+
 def _ordered_providers(sync_settings):
-    source = sync_settings.get("cover_source", COVER_SOURCE_LIBRETRO)
-    names = _SOURCE_ORDER.get(source, _SOURCE_ORDER[COVER_SOURCE_LIBRETRO])
+    """The provider chain for this run's artwork kind, in precedence order.
+
+    Driven by the configured provider list (issue #76) when present: enabled
+    providers only, and only those both *capable* of the kind being synced and
+    *asked* to serve it. Configs that predate the list fall back to the old
+    ``cover_source`` enum, which never gated on kind.
+    """
+    kind = _requested_art_kind(sync_settings)
+    providers = (sync_settings or {}).get("providers")
+    if providers:
+        names = [
+            entry.get("id")
+            for entry in providers
+            if entry.get("enabled", True)
+            and entry.get("id") in _PROVIDER_FUNCTIONS
+            and kind in ARTWORK_PROVIDER_KINDS_AVAILABLE.get(entry.get("id"), ())
+            and kind in (entry.get("kinds") or ())
+        ]
+    else:
+        source = sync_settings.get("cover_source", COVER_SOURCE_LIBRETRO)
+        names = _SOURCE_ORDER.get(source, _SOURCE_ORDER[COVER_SOURCE_LIBRETRO])
     return [(name, globals()[_PROVIDER_FUNCTIONS[name]]) for name in names]
+
+
+def has_provider_for_kind(sync_settings, art_kind):
+    """Whether any enabled provider serves ``art_kind`` -- a pass with none
+    would only burn requests and report every ROM as an error."""
+    probe = dict(sync_settings or {})
+    probe["cover_art_type"] = art_kind
+    return bool(_ordered_providers(probe))
 
 
 def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
@@ -246,6 +342,29 @@ def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
     return urls
 
 
+# Content-Type -> file extension, for providers whose URLs do not carry one.
+_EXT_BY_CONTENT_TYPE = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
+
+
+def _source_extension(url, response):
+    """The downloaded image's own format: URL extension, then Content-Type.
+
+    Saving a JPEG under ``.png`` loads fine (GdkPixbuf sniffs content) but lies
+    on disk; every extension in ``SUPPORTED_COVER_EXTS`` is found by the local
+    lookups, so the honest one costs nothing. Defaults to png when neither
+    signal is usable.
+    """
+    ext = Path(urllib.parse.urlparse(url).path).suffix.lstrip(".").lower()
+    if ext in SUPPORTED_COVER_EXTS:
+        return "jpg" if ext == "jpeg" else ext
+    content_type = (response.headers.get_content_type() or "").lower()
+    return _EXT_BY_CONTENT_TYPE.get(content_type, "png")
+
+
 def _download_cover(url, dest):
     # Media URLs can come from ScreenScraper, so redact before every log line in
     # case credentials were ever carried in the query string.
@@ -255,6 +374,9 @@ def _download_cover(url, dest):
         # url is an https cover endpoint built by one of the source providers.
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
+            # The caller's target carries the default .png; keep the source's
+            # real format instead when the URL or the response names one.
+            dest = dest.with_suffix(f".{_source_extension(url, resp)}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
@@ -291,7 +413,20 @@ def _sync_covers(
         if scope == "console" and selected_console in library_by_console
         else list(library_by_console.keys())
     )
-    logger.info("cover_sync started: scope=%s selected_console=%s consoles=%s", scope, selected_console, consoles)
+    # The configured artwork type decides which directory this run fills, so a
+    # label sync never clobbers box art already scraped for the same ROM.
+    art_kind = screenscraper.normalize_art_kind(
+        sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND)
+    )
+    art_dir = _ART_DIR_BY_KIND.get(art_kind, COVER_ART)
+    logger.info(
+        "cover_sync started: scope=%s selected_console=%s consoles=%s art_kind=%s dir=%s",
+        scope,
+        selected_console,
+        consoles,
+        art_kind,
+        art_dir,
+    )
 
     total = 0
     downloaded = 0
@@ -311,8 +446,8 @@ def _sync_covers(
             total += 1
             name = rom["name"]
 
-            if find_local_cover(roms_dir_path, console, name):
-                logger.info("cover_sync skip existing: console=%s rom=%s", console, name)
+            if find_local_art(roms_dir_path, console, name, art_dir):
+                logger.info("cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind)
                 skipped += 1
                 if on_progress:
                     on_progress(
@@ -328,7 +463,7 @@ def _sync_covers(
                     )
                 continue
 
-            target = roms_dir_path / console / "covers" / f"{name}.png"
+            target = roms_dir_path / console / art_dir / f"{name}.png"
             urls = _remote_cover_candidates(console, name, sync_settings, rom_path=rom.get("path"))
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
             found = False
@@ -405,6 +540,150 @@ def sync_covers_async(
             covers_dir=covers_dir,
             scope=scope,
             selected_console=selected_console,
+            sync_settings=sync_settings,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
+        )
+        if on_done:
+            on_done(summary)
+
+    Thread(target=_worker, daemon=True).start()
+
+
+def build_artwork_passes(library_by_console, label_consoles):
+    """Plan the artwork passes for a set of ROMs: box art, then labels.
+
+    Box art applies to every console. Cartridge labels only apply to the
+    consoles in ``label_consoles`` -- the ones with a cartridge frame to paste
+    a label into. Scraping a label for any other console is pointless work that
+    also ends up displayed as if it were box art, so those are dropped here
+    rather than filtered downstream.
+
+    ``label_consoles`` is passed in rather than looked up so this stays free of
+    the rendering stack; callers hand in
+    ``cartridge_render.consoles_with_frames()``.
+    """
+    eligible = set(label_consoles or ())
+    boxart = {console: roms for console, roms in library_by_console.items() if roms}
+    labels = {console: roms for console, roms in boxart.items() if console in eligible}
+
+    passes = []
+    if boxart:
+        passes.append((COVER_ART_TYPE_BOXART, boxart))
+    if labels:
+        passes.append((COVER_ART_TYPE_CARTRIDGE_LABEL, labels))
+    logger.info(
+        "artwork passes planned: boxart=%s labels=%s",
+        sorted(boxart),
+        sorted(labels),
+    )
+    return passes
+
+
+def _sync_artwork(
+    passes,
+    covers_dir,
+    sync_settings=None,
+    on_progress=None,
+    should_cancel=None,
+):
+    """Run several single-kind sync passes and aggregate them into one summary.
+
+    ``passes`` is a sequence of ``(art_kind, library_by_console)`` pairs, run in
+    order. Each pass overrides ``cover_art_type`` for itself, which is how one
+    run can fetch box art for the whole import and cartridge labels for only the
+    consoles that have a frame.
+
+    Progress is reported against the combined total of every pass and carries
+    the ``art_kind`` in flight, so a caller can show one task for the lot rather
+    than one per kind. Passes with an empty library are dropped, so an import
+    that touched no frame-capable console does not open an empty second pass.
+    """
+    settings = dict(sync_settings or {})
+    planned = []
+    for art_kind, library in passes:
+        if not (library and any(library.get(console) for console in library)):
+            continue
+        # A kind no enabled provider serves would report every ROM as an
+        # error; dropping the pass is the configuration speaking, not a bug.
+        if not has_provider_for_kind(settings, art_kind):
+            logger.info("artwork pass dropped, no provider serves it: kind=%s", art_kind)
+            continue
+        planned.append((art_kind, library))
+    grand_total = sum(
+        len(roms) for _kind, library in planned for roms in library.values()
+    )
+
+    aggregate = {
+        "cancelled": False,
+        "total": 0,
+        "downloaded": 0,
+        "skipped": 0,
+        "errors": 0,
+        "passes": [],
+    }
+    processed_before = 0
+
+    for art_kind, library in planned:
+        if should_cancel and should_cancel():
+            aggregate["cancelled"] = True
+            break
+
+        def _pass_progress(evt, art_kind=art_kind, offset=processed_before):
+            if not on_progress:
+                return
+            # Re-base this pass's counter onto the combined run so the banner
+            # advances monotonically across kinds instead of restarting.
+            forwarded = dict(evt)
+            forwarded["processed"] = offset + evt.get("processed", 0)
+            forwarded["total"] = grand_total
+            forwarded["art_kind"] = art_kind
+            on_progress(forwarded)
+
+        summary = _sync_covers(
+            library_by_console=library,
+            covers_dir=covers_dir,
+            scope="all",
+            selected_console=None,
+            sync_settings={**settings, "cover_art_type": art_kind},
+            on_progress=_pass_progress,
+            should_cancel=should_cancel,
+        )
+        summary["art_kind"] = art_kind
+        aggregate["passes"].append(summary)
+        for key in ("total", "downloaded", "skipped", "errors"):
+            aggregate[key] += summary[key]
+        processed_before += summary["total"]
+        if summary["cancelled"]:
+            aggregate["cancelled"] = True
+            break
+
+    logger.info(
+        "sync_artwork %s: passes=%s total=%d downloaded=%d skipped=%d errors=%d",
+        "cancelled" if aggregate["cancelled"] else "finished",
+        [p["art_kind"] for p in aggregate["passes"]],
+        aggregate["total"],
+        aggregate["downloaded"],
+        aggregate["skipped"],
+        aggregate["errors"],
+    )
+    return aggregate
+
+
+def sync_artwork_async(
+    passes,
+    covers_dir,
+    on_done,
+    sync_settings=None,
+    on_progress=None,
+    should_cancel=None,
+):
+    """Run :func:`_sync_artwork` on a background thread (see ``sync_covers_async``)."""
+
+    def _worker():
+        summary = _sync_artwork(
+            passes=passes,
+            covers_dir=covers_dir,
             sync_settings=sync_settings,
             on_progress=on_progress,
             should_cancel=should_cancel,

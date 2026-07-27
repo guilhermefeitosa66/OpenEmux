@@ -32,11 +32,12 @@ version = { attr = "openemux.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
+# Every non-Python file the app reads at runtime. Only the pip-installed
+# builds (the Flatpak) honor this list -- the deb/rpm/AppImage copy src/
+# wholesale -- so anything missing here goes unnoticed until it is missing in
+# the sandbox. tests/test_package_data.py fails when an asset is not covered.
 openemux = [
     "ui/style.css",
-    "ui/assets/images/*.png",
-    "ui/assets/images/cartridges/*.png",
-    "ui/assets/icons/systems/*.png",
-    "ui/assets/icons/controllers/*.png",
-    "ui/assets/icons/settings/*.png",
+    "ui/assets/**/*.png",
+    "ui/assets/**/*.svg",
 ]

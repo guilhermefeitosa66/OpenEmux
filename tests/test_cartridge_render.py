@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -182,3 +183,119 @@ class RsvgUnavailableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrameAssetLookupTests(unittest.TestCase):
+    """Which consoles have a cartridge frame: the SVG assets are the list."""
+
+    def test_shipped_assets_are_discovered(self):
+        consoles = cartridge_render.consoles_with_frames()
+        # The frames actually authored so far. A new SVG opts a console in with
+        # no code change, so this asserts membership rather than an exact set.
+        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+            self.assertIn(console, consoles)
+        # Disc-based consoles have no cartridge to frame.
+        for console in ("PS", "MCD", "PCECD"):
+            self.assertNotIn(console, consoles)
+
+    def test_has_frame_matches_the_asset_on_disk(self):
+        self.assertTrue(cartridge_render.has_frame("SFC"))
+        self.assertFalse(cartridge_render.has_frame("PS"))
+        self.assertFalse(cartridge_render.has_frame("definitely-not-a-console"))
+
+    def test_lookup_is_driven_by_the_given_directory(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "notes.txt").write_text("ignored")
+            self.assertEqual(cartridge_render.consoles_with_frames(directory), ["XYZ"])
+            self.assertTrue(cartridge_render.has_frame("XYZ", directory))
+            self.assertFalse(cartridge_render.has_frame("SFC", directory))
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory),
+                directory / "XYZ.svg",
+            )
+
+    def test_cache_key_tells_shell_variants_apart(self):
+        # A different shell file is a different composite: nothing to
+        # invalidate by hand when the user picks a color.
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            base = cartridge_render._cache_key(None, directory / "XYZ.svg", 200, 1)
+            red = cartridge_render._cache_key(None, directory / "XYZ-red.svg", 200, 1)
+            self.assertNotEqual(base, red)
+
+    def test_color_variants_are_not_consoles(self):
+        # SFC-red.svg is a shell for SFC, not a console called "SFC-red".
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            (directory / "XYZ-gold.svg").write_text("<svg/>")
+            self.assertEqual(cartridge_render.consoles_with_frames(directory), ["XYZ"])
+
+    def test_frame_asset_resolution_by_color(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            # A set color resolves to its variant file.
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="red"),
+                directory / "XYZ-red.svg",
+            )
+            # A color with no file falls back to the authored shell...
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="blue"),
+                directory / "XYZ.svg",
+            )
+            # ...and so do "default"/None.
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory, color="default"),
+                directory / "XYZ.svg",
+            )
+            self.assertEqual(
+                cartridge_render.frame_asset_for("XYZ", directory),
+                directory / "XYZ.svg",
+            )
+
+    def test_frame_colors_come_from_the_files_on_disk(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            (directory / "XYZ.svg").write_text("<svg/>")
+            (directory / "XYZ-red.svg").write_text("<svg/>")
+            (directory / "XYZ-gold.svg").write_text("<svg/>")
+            self.assertEqual(
+                cartridge_render.frame_colors_for("XYZ", directory),
+                ["default", "gold", "red"],
+            )
+            # No base frame, no colors -- variants alone do not opt a console in.
+            (directory / "ABC-red.svg").write_text("<svg/>")
+            self.assertEqual(cartridge_render.frame_colors_for("ABC", directory), [])
+
+    def test_shipped_variants_resolve_for_every_console(self):
+        # Every console with a frame got the full first batch of shells.
+        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+            colors = cartridge_render.frame_colors_for(console)
+            self.assertIn("red", colors, console)
+            self.assertIn("white", colors, console)
+            self.assertEqual(
+                cartridge_render.frame_asset_for(console, color="red"),
+                cartridge_render.CARTRIDGE_ASSETS_DIR / f"{console}-red.svg",
+            )
+
+    def test_missing_directory_yields_no_frames(self):
+        with TemporaryDirectory() as tmp_dir:
+            missing = Path(tmp_dir) / "nope"
+            self.assertEqual(cartridge_render.consoles_with_frames(missing), [])
+            self.assertFalse(cartridge_render.has_frame("SFC", missing))
+
+    def test_frame_asset_lookup_does_not_require_librsvg(self):
+        # Deciding whether a label is worth scraping must not depend on the
+        # rendering stack being installed: the typelib can be added later.
+        with unittest.mock.patch.object(cartridge_render, "Rsvg", None):
+            self.assertFalse(cartridge_render.rsvg_available())
+            self.assertTrue(cartridge_render.has_frame("SFC"))
+            self.assertIsNone(cartridge_render.cartridge_frame("SFC"))

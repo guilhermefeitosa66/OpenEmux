@@ -51,6 +51,20 @@ SAMPLE_PAYLOAD = json.dumps(
                         "format": "png",
                     },
                     {
+                        "type": "support-texture",
+                        "parent": "jeu",
+                        "url": "https://www.screenscraper.fr/image.php?gameid=2169&media=support-texture&region=us",
+                        "region": "us",
+                        "format": "png",
+                    },
+                    {
+                        "type": "support-texture",
+                        "parent": "jeu",
+                        "url": "https://www.screenscraper.fr/image.php?gameid=2169&media=support-texture&region=eu",
+                        "region": "eu",
+                        "format": "png",
+                    },
+                    {
                         "type": "support-2D",
                         "parent": "jeu",
                         "url": "https://www.screenscraper.fr/image.php?gameid=2169&media=support-2D&region=us",
@@ -171,10 +185,22 @@ class MediaParsingTests(unittest.TestCase):
         self.assertTrue(urls)
         self.assertTrue(all("media=box-2D" in url for url in urls))
 
-    def test_cartridge_label_kind_selects_support_2d_media(self):
+    def test_cartridge_label_kind_selects_support_texture_media(self):
         urls = parse_media_urls(self.payload, art_kind="cartridge_label")
         self.assertTrue(urls)
-        self.assertTrue(all("media=support-2D" in url for url in urls))
+        self.assertTrue(all("media=support-texture" in url for url in urls))
+
+    def test_cartridge_label_never_falls_back_to_whole_cartridge_photo(self):
+        # support-2D is a photo of the cartridge shell, not the label: pasting
+        # it into a cartridge frame would nest a cartridge inside a cartridge.
+        # With no texture available the kind must yield nothing at all.
+        payload = json.loads(SAMPLE_PAYLOAD)
+        medias = payload["response"]["jeu"]["medias"]
+        payload["response"]["jeu"]["medias"] = [
+            m for m in medias if m.get("type") != "support-texture"
+        ]
+        self.assertTrue(any(m.get("type") == "support-2D" for m in payload["response"]["jeu"]["medias"]))
+        self.assertEqual(parse_media_urls(payload, art_kind="cartridge_label"), [])
 
     def test_region_preference_orders_candidates(self):
         # USA first -> the us box art must precede the jp one.
@@ -237,7 +263,7 @@ class LookupTests(unittest.TestCase):
             opener=fake_open,
         )
         self.assertTrue(urls)
-        self.assertTrue(all("support-2D" in url for url in urls))
+        self.assertTrue(all("support-texture" in url for url in urls))
 
     def test_lookup_without_credentials_returns_empty(self):
         called = []

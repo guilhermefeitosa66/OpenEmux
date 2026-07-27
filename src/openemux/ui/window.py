@@ -27,7 +27,12 @@ from openemux.core.library_view import (
     zoom_step,
 )
 from openemux.core.play_history import PlayHistory
-from openemux.core.cover_sync import sync_covers_async
+from openemux.core import cartridge_render
+from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core.cover_sync import (
+    build_artwork_passes,
+    sync_artwork_async,
+)
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import get_project_root
@@ -54,7 +59,7 @@ from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
-from openemux.ui.grid import RomGrid
+from openemux.ui.grid import LIST_MARGIN, RomGrid
 from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
@@ -182,6 +187,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
         breakpoint.add_setter(self.split_view, "collapsed", True)
         self.add_breakpoint(breakpoint)
+
+        # Below this width the header cannot hold the segmented view switcher;
+        # the layout menu (which lists the same modes) remains the way in.
+        segment_breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("max-width: 700sp")
+        )
+        segment_breakpoint.add_setter(self.view_mode_segment, "visible", False)
+        self.add_breakpoint(segment_breakpoint)
 
         self._install_actions()
 
@@ -340,6 +353,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self.search_button)
 
         header.pack_end(self._build_view_mode_button())
+        header.pack_end(self._build_view_mode_segment())
 
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
@@ -347,6 +361,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header.pack_end(self.stop_btn)
+
+        header.pack_end(self._build_volume_button())
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -420,6 +436,111 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         "cartridge": "view-grid-symbolic",
         "list": "view-list-symbolic",
     }
+
+    #: Segmented-control icon per view mode. Unlike the menu-button icon these
+    #: three sit side by side, so each mode needs its own glyph. Adwaita only:
+    #: an icon from another installed theme renders as a broken image on a
+    #: stock GNOME system (`make icons` browses the safe set).
+    VIEW_MODE_SEGMENT_ICONS = {
+        # A tighter, fuller 2x2 than view-grid, which reads better against the
+        # other two at 16px.
+        "cover": "preferences-desktop-apps-symbolic",
+        # A Zip-disk glyph: the closest thing Adwaita has to a cartridge, and
+        # far more on-the-nose than the gamepad this used to be.
+        "cartridge": "media-zip-symbolic",
+        "list": "view-list-symbolic",
+    }
+
+    def _build_view_mode_segment(self):
+        """Cover / Cartridge / List as one visible click each (issue #70).
+
+        Linked toggle buttons bound to the stateful ``win.view-mode`` action:
+        GTK keeps them radio-exclusive and in sync with the menu entries for
+        free, so per-scope persistence is untouched. On narrow windows the
+        segment hides (a breakpoint below) and the menu remains the way in.
+        """
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.add_css_class("linked")
+        self._view_segment_buttons = {}
+        for mode in VIEW_MODES:
+            button = Gtk.ToggleButton()
+            button.set_icon_name(self.VIEW_MODE_SEGMENT_ICONS.get(mode, "view-grid-symbolic"))
+            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
+            button.set_action_name("win.view-mode")
+            button.set_action_target_value(GLib.Variant("s", mode))
+            box.append(button)
+            self._view_segment_buttons[mode] = button
+        self.view_mode_segment = box
+        return box
+
+    def _build_volume_button(self):
+        """Master volume for the running game (issue #69): slider + mute.
+
+        Lives next to Stop and is only sensitive while a game runs. The
+        slider is absolute dB; the runtime manager walks RetroArch there in
+        0.5 dB UDP steps from the level the launch seeded.
+        """
+        from openemux.core.retroarch_command import MAX_VOLUME_DB, MIN_VOLUME_DB
+
+        self.volume_btn = Gtk.MenuButton()
+        self.volume_btn.set_icon_name("audio-volume-high-symbolic")
+        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self.volume_btn.set_sensitive(False)
+
+        self._volume_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
+        )
+        self._volume_scale.set_size_request(180, -1)
+        self._volume_scale.set_value(self.config_manager.get_master_volume_db())
+        self._volume_scale.set_draw_value(True)
+        self._volume_scale.set_value_pos(Gtk.PositionType.RIGHT)
+        self._volume_scale.set_format_value_func(lambda _s, v: f"{v:+.1f} dB")
+        self._volume_scale.connect("value-changed", self._on_volume_scale_changed)
+
+        self._mute_button = Gtk.ToggleButton()
+        self._mute_button.set_icon_name("audio-volume-muted-symbolic")
+        self._mute_button.set_tooltip_text(self.t("volume.mute"))
+        self._mute_button.add_css_class("flat")
+        self._mute_toggle_guard = False
+        self._mute_button.connect("toggled", self._on_mute_toggled)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        box.append(self._mute_button)
+        box.append(self._volume_scale)
+
+        popover = Gtk.Popover()
+        popover.set_child(box)
+        self.volume_btn.set_popover(popover)
+        return self.volume_btn
+
+    def _on_volume_scale_changed(self, scale):
+        level = self.runtime_manager.set_master_volume_db(scale.get_value())
+        icon = "audio-volume-high-symbolic"
+        if level <= -30:
+            icon = "audio-volume-low-symbolic"
+        elif level <= -12:
+            icon = "audio-volume-medium-symbolic"
+        if not self._mute_button.get_active():
+            self.volume_btn.set_icon_name(icon)
+
+    def _on_mute_toggled(self, button):
+        if self._mute_toggle_guard:
+            return
+        muted = self.runtime_manager.toggle_mute()
+        if muted != button.get_active():
+            # The command did not go out (game gone mid-toggle): stay honest.
+            self._mute_toggle_guard = True
+            button.set_active(muted)
+            self._mute_toggle_guard = False
+        self.volume_btn.set_icon_name(
+            "audio-volume-muted-symbolic" if muted else "audio-volume-high-symbolic"
+        )
+        if not muted:
+            self._on_volume_scale_changed(self._volume_scale)
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -669,6 +790,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.selection_label.set_hexpand(True)
         self.selection_label.set_xalign(0)
 
+        select_all_button = Gtk.Button(label=self.t("selection.select_all"))
+        select_all_button.connect("clicked", lambda _b: self._select_all_visible())
+
         sync_button = Gtk.Button(label=self.t("selection.sync_covers"))
         sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
 
@@ -687,7 +811,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         box.set_margin_bottom(6)
         box.set_margin_start(12)
         box.set_margin_end(12)
-        for child in (self.selection_label, sync_button, delete_button, clear_button):
+        for child in (self.selection_label, select_all_button, sync_button, delete_button, clear_button):
             box.append(child)
 
         self.selection_bar = Gtk.Revealer()
@@ -701,12 +825,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if count:
             self.selection_label.set_label(self.t("selection.count", count=count))
         self.selection_bar.set_reveal_child(bool(count))
+        self._update_master_check()
 
     def _clear_selection(self):
         grid = self._grids.get(self.current_console)
         if grid:
             grid.clear_selection()
         self._on_selection_changed([])
+        self.leave_selection_mode(clear=False)
+
+    def _select_all_visible(self):
+        """Ctrl+A / the master checkbox: every ROM the search still shows."""
+        grid = self._grids.get(self.current_console)
+        if grid:
+            grid.select_all()
+
+    # -- gamepad selection mode (issue #78) ----------------------------------
+
+    @property
+    def selection_mode_active(self):
+        return getattr(self, "_selection_mode", False)
+
+    def enter_selection_mode(self):
+        if self.selection_mode_active:
+            return
+        self._selection_mode = True
+        self.navigation.refresh_hints()
+        self._toast(self.t("toast.selection_mode.entered"), timeout=3)
+
+    def leave_selection_mode(self, clear=True):
+        if not self.selection_mode_active:
+            return
+        self._selection_mode = False
+        if clear:
+            self._clear_selection()
+        self.navigation.refresh_hints()
+
+    def focus_selection_actions(self):
+        """Gamepad Ⓧ in selection mode: put focus on the selection bar."""
+        if self._selected_roms and self.selection_bar.get_reveal_child():
+            self.selection_bar.get_child().child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _build_tip_bar(self):
         """A quiet single-line hint bar at the bottom of the content pane.
@@ -869,6 +1027,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("import", lambda *_: self._on_import_clicked(None), ["<Ctrl>o"]),
             ("sync-covers", lambda *_: self._sync_covers_for_current_scope(), ["<Ctrl><Shift>s"]),
             ("delete-rom", lambda *_: self._delete_selected_or_focused(), ["Delete"]),
+            ("select-all", lambda *_: self._select_all_visible(), ["<Ctrl>a"]),
+            ("select-none", lambda *_: self._clear_selection(), ["<Ctrl><Shift>a"]),
             ("rename-rom", lambda *_: self._rename_focused_rom(), ["F2"]),
             ("toggle-favorite", lambda *_: self._favorite_focused_rom(), ["<Ctrl>d"]),
             ("focus-pane", lambda *_: self.navigation.toggle_pane_focus(), ["F6"]),
@@ -1036,6 +1196,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 ("<Ctrl>d", "shortcuts.favorite"),
                 ("F2", "shortcuts.rename"),
                 ("Delete", "shortcuts.delete"),
+                ("<Ctrl>a", "shortcuts.select_all"),
+                ("<Ctrl><Shift>a", "shortcuts.select_none"),
+                ("<Shift>Up", "shortcuts.select_range"),
+                ("<Ctrl>space", "shortcuts.select_toggle"),
             )),
         )
         section = Gtk.ShortcutsSection(section_name="general", visible=True)
@@ -1063,8 +1227,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_placeholder_text(self.t("header.search"))
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self._mute_button.set_tooltip_text(self.t("volume.mute"))
         self.import_btn.set_tooltip_text(self.t("header.import"))
         self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
+        for mode, button in self._view_segment_buttons.items():
+            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
         self.sidebar_title.set_title(self.t("sidebar.header"))
         self._render_tip()
         self.refresh_library(preferred_view=visible)
@@ -1663,16 +1831,78 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.connect("response", _on_response)
         dialog.present(self)
 
+    def _make_library_page(self):
+        """One content-stack page: a pinned list header above the scroll area.
+
+        The header carries the master checkbox of list view (issue #78); it
+        sits outside the ScrolledWindow so it never scrolls away, and stays
+        hidden in the grid view modes.
+        """
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        check = Gtk.CheckButton()
+        check.set_tooltip_text(self.t("selection.master_checkbox"))
+        label = Gtk.Label(label=self.t("selection.select_all"))
+        label.add_css_class("dim-label")
+        label.add_css_class("caption")
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.add_css_class("toolbar")
+        header.set_margin_start(LIST_MARGIN)
+        header.set_margin_end(LIST_MARGIN)
+        header.append(check)
+        header.append(label)
+        header.set_visible(False)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        page.append(header)
+        page.append(scroll)
+        # Empty-space clicks and the rubber band are handled by the grid's
+        # band gesture, which attaches itself to this scroller on map so it
+        # covers the whole page, not just the card rows.
+
+        # Stashed for _render_console_page; the guard breaks the feedback loop
+        # between the master checkbox and the selection it reflects.
+        page.scroll = scroll
+        page.header = header
+        page.master_check = check
+        page.master_guard = [False]
+        check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
+        return page
+
+    def _on_master_check_toggled(self, page):
+        if page.master_guard[0]:
+            return
+        grid = self._grids.get(self.current_console)
+        if grid is None:
+            return
+        if page.master_check.get_active():
+            grid.select_all()
+        else:
+            grid.clear_selection()
+
+    def _update_master_check(self):
+        """Tri-state: none / some (indeterminate) / all visible selected."""
+        page = self._console_pages.get(self.current_console)
+        grid = self._grids.get(self.current_console)
+        if page is None or grid is None or not hasattr(page, "master_check"):
+            return
+        visible = grid._visible_items()
+        selected = sum(1 for item in visible if item.selected)
+        page.master_guard[0] = True
+        page.master_check.set_inconsistent(0 < selected < len(visible))
+        page.master_check.set_active(bool(visible) and selected == len(visible))
+        page.master_guard[0] = False
+
     def _ensure_collection_page(self, slug):
         """Add the content-stack page for a collection if it has none yet."""
         scope = collection_scope(slug)
         if scope in self._console_pages:
             return
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_vexpand(True)
-        self._console_pages[scope] = scroll
+        page = self._make_library_page()
+        self._console_pages[scope] = page
         self._console_loaded[scope] = False
-        self.content_stack.add_titled(scroll, scope, self._console_sidebar_label(scope))
+        self.content_stack.add_titled(page, scope, self._console_sidebar_label(scope))
 
     def _ensure_collection_loaded(self, slug):
         scope = collection_scope(slug)
@@ -1802,32 +2032,29 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._rebuild_console_sidebar(self.visible_consoles)
 
         if self.visible_consoles:
-            all_scroll = Gtk.ScrolledWindow()
-            all_scroll.set_vexpand(True)
-            self._console_pages[ALL_CONSOLES_ID] = all_scroll
+            all_page = self._make_library_page()
+            self._console_pages[ALL_CONSOLES_ID] = all_page
             self._console_loaded[ALL_CONSOLES_ID] = False
-            self.content_stack.add_titled(all_scroll, ALL_CONSOLES_ID, self.t("sidebar.all"))
+            self.content_stack.add_titled(all_page, ALL_CONSOLES_ID, self.t("sidebar.all"))
 
-        favorites_scroll = Gtk.ScrolledWindow()
-        favorites_scroll.set_vexpand(True)
-        self._console_pages[FAVORITES_ID] = favorites_scroll
+        favorites_page = self._make_library_page()
+        self._console_pages[FAVORITES_ID] = favorites_page
         self._console_loaded[FAVORITES_ID] = False
-        self.content_stack.add_titled(favorites_scroll, FAVORITES_ID, self.t("sidebar.favorites"))
+        self.content_stack.add_titled(favorites_page, FAVORITES_ID, self.t("sidebar.favorites"))
 
         for collection in self.collection_manager.list_collections():
             self._ensure_collection_page(collection["slug"])
 
         if self.visible_consoles:
             for console in self.visible_consoles:
-                scroll = Gtk.ScrolledWindow()
-                scroll.set_vexpand(True)
+                page = self._make_library_page()
                 placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
                 placeholder.add_css_class("dim-label")
                 placeholder.set_margin_top(32)
-                scroll.set_child(placeholder)
-                self._console_pages[console] = scroll
+                page.scroll.set_child(placeholder)
+                self._console_pages[console] = page
                 self._console_loaded[console] = False
-                self.content_stack.add_titled(scroll, console, console)
+                self.content_stack.add_titled(page, console, console)
 
         if not self.visible_consoles:
             empty = Adw.StatusPage(
@@ -2105,7 +2332,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._console_loaded[ALL_CONSOLES_ID] = True
 
     def _render_console_page(self, console, roms):
-        scroll = self._console_pages[console]
+        page = self._console_pages[console]
+        scroll = page.scroll
+        page.header.set_visible(False)
         # Each page follows its own scope's layout, not the one on screen now.
         display_settings = self.config_manager.get_display_settings(console)
         roms = self._sorted_roms(roms, order=display_settings["sort_order"])
@@ -2158,10 +2387,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_delete_rom=self._confirm_delete_roms,
             on_selection_changed=self._on_selection_changed,
             context_services=self._rom_context_services,
+            frame_color_for_rom=self._cartridge_color_for_rom,
         )
         self._grids[console] = grid
-        # The page was rebuilt, so whatever was selected on it is gone.
+        # The page was rebuilt, so whatever was selected on it is gone; the
+        # gamepad selection mode goes with it.
         self._on_selection_changed([])
+        self.leave_selection_mode(clear=False)
+        # The pinned master-checkbox header belongs to list view only.
+        page.header.set_visible(grid.compact)
         scroll.set_child(grid)
         if console == self.current_console:
             self._update_window_title(console)
@@ -2192,6 +2426,70 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         else:
             label = self.shader_catalog.label_for_shader(shader_id)
         self._toast(self.t("toast.shader.rom_set", name=rom["name"], shader=label))
+
+    @property
+    def current_view_mode(self):
+        """The active library view mode (context menus gate entries on it)."""
+        return self._view_mode
+
+    def _cartridge_color_for_rom(self, rom):
+        """The shell color a card should draw with: per-ROM, then per-console."""
+        return self.config_manager.get_cartridge_color_for_rom(rom["path"], rom["console"])
+
+    def set_rom_cartridge_color(self, rom, color_id):
+        """Persist a per-ROM shell color (``color_id=None`` clears it).
+
+        Only the picked card is re-composed; the rest of the shelf is
+        untouched. The card may live on more than one loaded page (console
+        page plus Favorites), so every grid gets a chance to refresh it.
+        """
+        self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
+        for grid in self._grids.values():
+            grid.refresh_rom_frame(rom)
+
+    def open_artwork_manager(self, rom, art_dir=COVER_ART):
+        """The per-ROM artwork manager (issue #77), on the tab for ``art_dir``."""
+        from openemux.ui.artwork_manager import ArtworkManagerWindow
+
+        window = ArtworkManagerWindow(
+            self,
+            rom,
+            art_dir=art_dir,
+            label_supported=cartridge_render.has_frame(rom["console"]),
+        )
+        window.present()
+
+    def refresh_rom_artwork(self, rom):
+        """Re-fetch one ROM's card artwork after the manager saved a file."""
+        for grid in self._grids.values():
+            grid.refresh_rom_artwork(rom)
+
+    def launch_rom_at_state(self, rom, slot):
+        """Launch a ROM parked on ``slot`` and load that state once it is up.
+
+        RetroArch has no launch-and-load flag OpenEmux could pass, so this is
+        best effort: the slot is seeded via the runtime override, and the
+        LOAD_STATE command goes out over UDP after the game had a moment to
+        boot. If the game is slower than that, the state is one hotkey away
+        on the already-selected slot.
+        """
+        success, error_msg = self.runtime_manager.launch(
+            rom["path"], rom["console"], state_slot=slot
+        )
+        self._sync_runtime_controls()
+        if not success:
+            if error_msg:
+                self._toast(error_msg, timeout=5)
+            return
+        self.play_history.record_launch(rom["path"])
+        self._toast(self.t("states.toast.launching", name=rom["name"], slot=slot))
+
+        def _load_when_up():
+            if self.runtime_manager.is_running():
+                self.runtime_manager.load_state()
+            return False
+
+        GLib.timeout_add_seconds(4, _load_when_up)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
@@ -2311,6 +2609,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.play_history.repath(rom["path"], renamed["path"])
         self.config_manager.repath_rom_shader(rom["path"], renamed["path"])
         self.config_manager.repath_rom_core(rom["path"], renamed["path"])
+        self.config_manager.repath_rom_cartridge_color(rom["path"], renamed["path"])
         self.collection_manager.repath_rom(rom["path"], renamed["path"])
         self._toast(self.t("toast.rom.renamed", name=renamed["name"]))
         self._reload_current_page()
@@ -2351,6 +2650,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.play_history.forget(rom["path"])
             self.config_manager.forget_rom_shader(rom["path"])
             self.config_manager.forget_rom_core(rom["path"])
+            self.config_manager.forget_rom_cartridge_color(rom["path"])
             self.collection_manager.forget_rom(rom["path"])
             deleted += 1
 
@@ -2752,6 +3052,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(message, timeout=6 if extracted else 5)
             # New files on disk: rebuild the playlists so they show up.
             self._rescan_all_consoles(show_toast=False)
+            # An import is exactly when the library gained ROMs with no artwork,
+            # so fetch it now instead of leaving a shelf of blank cartridges
+            # until the user remembers to sync by hand.
+            self._start_post_import_artwork_sync(summary["imported"])
         elif unknown or errors:
             self._toast(self.t("import.failed", unknown=unknown + errors), timeout=5)
         else:
@@ -2789,9 +3093,51 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 for console in self.visible_consoles:
                     library[console] = self.playlist_manager.load_playlist(console)
 
+        # Every sync is multi-kind now (issue #76): box art everywhere, labels
+        # where a frame exists -- each pass skips per kind, and passes no
+        # enabled provider serves are dropped inside the sync itself.
+        passes = build_artwork_passes(library, cartridge_render.consoles_with_frames())
+        if not passes:
+            self._toast(self.t("toast.sync_no_consoles"))
+            return
+        self._start_artwork_sync(passes)
+
+    def _start_post_import_artwork_sync(self, imported_paths):
+        """Fetch artwork for the ROMs an import just added.
+
+        Box art for every console involved, plus cartridge labels for the ones
+        that have a frame to composite a label into -- a label scraped for a
+        console with no frame has nothing to sit in and would be served as box
+        art on the card instead. Only the imported ROMs are covered, and the
+        artwork type configured in Preferences is left alone: both kinds are
+        wanted here regardless of which one the user picked for manual syncs.
+        """
+        if not imported_paths:
+            return
+
+        library = {}
+        for entry in self.playlist_manager.entries_for_paths(imported_paths):
+            library.setdefault(entry["console"], []).append(entry)
+        passes = build_artwork_passes(library, cartridge_render.consoles_with_frames())
+        if not passes:
+            return
+
+        if self._cover_sync_running:
+            # A sync the user started explicitly is already in flight. Don't
+            # fight it, and don't nag with "sync already running" on a path the
+            # user did not ask for -- the next manual sync picks these up.
+            logger.info("post-import artwork sync skipped: a sync is already running")
+            return
+
+        logger.info(
+            "post-import artwork sync: passes=%s",
+            [(kind, sorted(lib)) for kind, lib in passes],
+        )
+        self._start_artwork_sync(passes)
+
+    def _start_artwork_sync(self, passes):
+        """Run a multi-kind artwork sync as a single cancellable task."""
         self._cover_sync_running = True
-        # Cooperative cancel: the worker polls this between ROMs and between
-        # candidate URLs, so stopping takes at most one HTTP request.
         cancel_event = Event()
         self._cover_sync_cancel = cancel_event
         task_id = self._begin_task(
@@ -2804,23 +3150,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(toast)
 
         def _on_progress(evt):
+            # One task spans both kinds, so the label follows what is in flight.
+            label = (
+                "status.labels.progress"
+                if evt.get("art_kind") == COVER_ART_TYPE_CARTRIDGE_LABEL
+                else "status.covers.progress"
+            )
             GLib.idle_add(
                 self._update_task,
                 task_id,
                 evt.get("processed", 0),
                 evt.get("total", 0),
-                # The counter is rendered by _refresh_banner; don't repeat it here.
-                self.t("status.covers.progress"),
+                self.t(label),
             )
 
         def _on_done(summary):
             GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary)
 
-        sync_covers_async(
-            library_by_console=library,
+        sync_artwork_async(
+            passes=passes,
             covers_dir=self.roms_path,
-            scope=scope,
-            selected_console=selected_console,
             on_done=_on_done,
             sync_settings=self.config_manager.get_cover_sync_settings(),
             on_progress=_on_progress,
@@ -2920,6 +3269,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _sync_runtime_controls(self):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
+        self.volume_btn.set_sensitive(is_running)
+        if is_running:
+            # A fresh launch starts unmuted at the persisted level.
+            self._mute_toggle_guard = True
+            self._mute_button.set_active(False)
+            self._mute_toggle_guard = False
+            self._volume_scale.set_value(self.runtime_manager.volume_db)
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()
