@@ -15,11 +15,6 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib
 
-from openemux.core.config import (
-    ARTWORK_PROVIDER_KINDS_AVAILABLE,
-    COVER_ART_TYPE_BOXART,
-    COVER_ART_TYPE_CARTRIDGE_LABEL,
-)
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -151,17 +146,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         """The ordered provider list (issue #76).
 
         One uniform row per provider so the right-side controls line up:
-        move up/down first, then the enable switch. Providers serving more
-        than one artwork kind expand through a chevron on the *left* -- an
-        Adw.ExpanderRow would park its arrow after the suffixes and knock the
-        controls out of column with the plain rows.
+        move up/down first, then the enable switch. No per-kind options: an
+        enabled provider fetches every artwork kind it serves.
         """
         self._providers_group = Adw.PreferencesGroup(
             title=self.t("prefs.group.artwork_providers"),
             description=self.t("prefs.artwork_providers.description"),
         )
         self._provider_rows = []
-        self._provider_expanded = set()
         self._rebuild_provider_rows()
         return self._providers_group
 
@@ -171,38 +163,18 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._provider_rows = []
         providers = self.config.get_artwork_providers()
         for index, entry in enumerate(providers):
-            for row in self._make_provider_rows(entry, index, len(providers)):
-                self._providers_group.add(row)
-                self._provider_rows.append(row)
+            row = self._make_provider_row(entry, index, len(providers))
+            self._providers_group.add(row)
+            self._provider_rows.append(row)
         if hasattr(self, "_ss_user_row"):
             self._update_screenscraper_rows_visibility()
 
-    def _make_provider_rows(self, entry, index, count):
+    def _make_provider_row(self, entry, index, count):
         provider_id = entry["id"]
-        available = ARTWORK_PROVIDER_KINDS_AVAILABLE.get(provider_id, ())
-        multi_kind = len(available) > 1
-        expanded = provider_id in self._provider_expanded
-
         row = Adw.ActionRow(
             title=self.t(f"prefs.provider.{provider_id}"),
             subtitle=self.t(f"prefs.provider.{provider_id}.subtitle"),
         )
-
-        kind_rows = []
-        if multi_kind:
-            chevron = Gtk.Button(
-                icon_name="pan-down-symbolic" if expanded else "pan-end-symbolic"
-            )
-            chevron.set_tooltip_text(self.t("prefs.provider.kinds"))
-            chevron.set_valign(Gtk.Align.CENTER)
-            chevron.add_css_class("flat")
-            chevron.connect(
-                "clicked",
-                lambda btn, pid=provider_id, rows=kind_rows: self._toggle_provider_kinds(
-                    btn, pid, rows
-                ),
-            )
-            row.add_prefix(chevron)
 
         up = Gtk.Button(icon_name="go-up-symbolic")
         up.set_tooltip_text(self.t("prefs.provider.move_up"))
@@ -227,42 +199,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             lambda sw, _p, pid=provider_id: self._set_provider_enabled(pid, sw.get_active()),
         )
         row.add_suffix(switch)
-
-        rows = [row]
-        if multi_kind:
-            kinds = entry.get("kinds") or []
-            for kind, key in (
-                (COVER_ART_TYPE_BOXART, "prefs.provider.kind.boxart"),
-                (COVER_ART_TYPE_CARTRIDGE_LABEL, "prefs.provider.kind.cartridge_label"),
-            ):
-                if kind not in available:
-                    continue
-                kind_row = Adw.SwitchRow(title=self.t(key))
-                # Indent under the parent so the nesting reads at a glance.
-                spacer = Gtk.Box()
-                spacer.set_size_request(24, -1)
-                kind_row.add_prefix(spacer)
-                kind_row.set_visible(expanded)
-                kind_row.set_active(kind in kinds)
-                kind_row.connect(
-                    "notify::active",
-                    lambda r, _p, pid=provider_id, k=kind: self._set_provider_kind(
-                        pid, k, r.get_active()
-                    ),
-                )
-                kind_rows.append(kind_row)
-                rows.append(kind_row)
-        return rows
-
-    def _toggle_provider_kinds(self, chevron, provider_id, kind_rows):
-        expanded = provider_id not in self._provider_expanded
-        if expanded:
-            self._provider_expanded.add(provider_id)
-        else:
-            self._provider_expanded.discard(provider_id)
-        chevron.set_icon_name("pan-down-symbolic" if expanded else "pan-end-symbolic")
-        for kind_row in kind_rows:
-            kind_row.set_visible(expanded)
+        return row
 
     def _mutate_providers(self, mutate):
         providers = self.config.get_artwork_providers()
@@ -286,20 +223,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         self._mutate_providers(_mutate)
         self._update_screenscraper_rows_visibility()
-
-    def _set_provider_kind(self, provider_id, kind, active):
-        def _mutate(providers):
-            for entry in providers:
-                if entry["id"] != provider_id:
-                    continue
-                kinds = [k for k in entry.get("kinds") or [] if k != kind]
-                if active:
-                    kinds.append(kind)
-                # Keep the canonical kind order regardless of toggle order.
-                order = list(ARTWORK_PROVIDER_KINDS_AVAILABLE.get(provider_id, ()))
-                entry["kinds"] = sorted(kinds, key=order.index)
-
-        self._mutate_providers(_mutate)
 
     def _build_screenscraper_group(self):
         """ScreenScraper account rows, shown while that provider is enabled."""
