@@ -442,7 +442,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     #: an icon from another installed theme renders as a broken image on a
     #: stock GNOME system (`make icons` browses the safe set).
     VIEW_MODE_SEGMENT_ICONS = {
-        "cover": "view-grid-symbolic",
+        # A tighter, fuller 2x2 than view-grid, which reads better against the
+        # other two at 16px.
+        "cover": "preferences-desktop-apps-symbolic",
         # A Zip-disk glyph: the closest thing Adwaita has to a cartridge, and
         # far more on-the-nose than the gamepad this used to be.
         "cartridge": "media-zip-symbolic",
