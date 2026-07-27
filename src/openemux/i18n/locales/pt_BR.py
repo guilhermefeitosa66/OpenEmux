@@ -52,6 +52,7 @@ TRANSLATIONS = {
     "prefs.provider.screenscraper.subtitle": "Capa da caixa e rótulos de cartucho · identifica pelo hash da ROM",
     "prefs.provider.openemux": "Espelho do OpenEmux",
     "prefs.provider.openemux.subtitle": "Capa da caixa · o acervo hospedado do próprio projeto",
+    "prefs.provider.kinds": "Tipos de imagem",
     "prefs.provider.move_up": "Prioridade maior",
     "prefs.provider.move_down": "Prioridade menor",
     "prefs.provider.kind.boxart": "Capa da caixa",

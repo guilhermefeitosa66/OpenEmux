@@ -52,6 +52,7 @@ TRANSLATIONS = {
     "prefs.provider.screenscraper.subtitle": "Box art and cartridge labels · matches by ROM hash",
     "prefs.provider.openemux": "OpenEmux mirror",
     "prefs.provider.openemux.subtitle": "Box art · the project's own hosted set",
+    "prefs.provider.kinds": "Artwork kinds",
     "prefs.provider.move_up": "Higher priority",
     "prefs.provider.move_down": "Lower priority",
     "prefs.provider.kind.boxart": "Box art",
