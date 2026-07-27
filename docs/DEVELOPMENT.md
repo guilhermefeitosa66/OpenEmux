@@ -16,6 +16,7 @@ artifacts. For user-facing install instructions, see the main
   - [Fedora (`.rpm`)](#fedora-rpm)
   - [Flatpak](#flatpak)
   - [Build everything](#build-everything)
+  - [Checksums](#checksums)
 - [How the packages are laid out](#how-the-packages-are-laid-out)
 - [Cutting a release](#cutting-a-release)
 
@@ -146,9 +147,24 @@ make flatpak
 ### Build everything
 
 ```bash
-make packages          # appimage + deb + rpm + flatpak
+make packages          # appimage + deb + rpm + flatpak, then checksums
+make checksums         # (re)write dist/SHA256SUMS over whatever is in dist/
 make packages-clean    # remove all built artifacts from dist/
 ```
+
+### Checksums
+
+`make packages` finishes by writing **`dist/SHA256SUMS`**, one file listing
+every artifact, which ships with the release so users can run:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+SHA-256 rather than MD5: MD5 collisions are practical, which makes an MD5
+useless against exactly the tampering a checksum exists to detect. One
+combined file rather than one per artifact keeps verification to a single
+command.
 
 ## How the packages are laid out
 
@@ -227,10 +243,17 @@ staff, update your `.env`, and cut a new release — no source change needed.
 
 ## Cutting a release
 
-1. Bump `src/openemux/__init__.py` and the `version:` in
-   `packaging/appimage/AppImageBuilder.yml`.
-2. `make packages` and confirm all three green (build **and** install-test).
+1. Bump the version in all four places: `src/openemux/__init__.py`, the
+   `version:` in `packaging/appimage/AppImageBuilder.yml`, a `%changelog` entry
+   in `packaging/rpm/openemux.spec`, and a `<release>` entry in
+   `packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml`.
+2. `make packages` and confirm every artifact is green (build **and**
+   install-test), and that `dist/SHA256SUMS` covers them all.
 3. Commit, tag `vX.Y.Z`, push `main` and the tag.
-4. `gh release create vX.Y.Z --target main` with the three `dist/` artifacts.
-   The README/website download links point at `releases/latest`, so they need no
-   per-version edits — only update them when adding a new *format*.
+4. `gh release create vX.Y.Z --target main dist/*` — every artifact plus
+   `SHA256SUMS`. The README/website download links point at `releases/latest`,
+   so they need no per-version edits — only update them when adding a new
+   *format*.
+5. Publish the Flatpak to the distribution repo, or `flatpak update` never
+   offers the new version:
+   `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=vX.Y.Z`
