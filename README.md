@@ -64,7 +64,7 @@ OpenEmux exists to give that legitimate, personal-library experience the polishe
 
 ## Download & Install
 
-Grab the latest build from the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest). Three formats are available — pick whichever suits your distro.
+Grab the latest build from the [Releases page](https://github.com/guilhermefeitosa66/OpenEmux/releases/latest). Four formats are available — pick whichever suits your distro.
 
 On first launch, OpenEmux automatically sets up its configuration directory, downloads the required libretro cores from the RetroArch Buildbot, and gets everything ready for you.
 
@@ -98,6 +98,42 @@ sudo dnf install ./openemux-*.x86_64.rpm
 ```
 
 The `.deb` and `.rpm` install OpenEmux under `/opt/openemux` and add an `openemux` launcher plus a desktop entry, so it shows up in your application menu.
+
+### Flatpak
+
+OpenEmux plays games through the **RetroArch Flatpak**, which you install once:
+
+```bash
+flatpak install -y flathub org.libretro.RetroArch
+```
+
+Then either add the OpenEmux repository — this is the option that gets updates through `flatpak update`:
+
+```bash
+flatpak remote-add --if-not-exists --no-gpg-verify openemux \
+  https://guilhermefeitosa66.github.io/openemux-flatpak/repo
+flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux
+```
+
+…or install the single-file bundle from the Releases page, which needs no repository but does not auto-update:
+
+```bash
+flatpak install -y ./OpenEmux-*.flatpak
+```
+
+Run it with `flatpak run io.github.guilhermefeitosa66.OpenEmux`, or from your application menu.
+
+> The repository is served over HTTPS from GitHub Pages and is unsigned, hence `--no-gpg-verify`. Cores are managed by RetroArch's own Online Updater in this format, since the sandbox does not download them itself.
+
+### Verifying your download
+
+Every release ships a `SHA256SUMS` file. Download it next to the artifact and check that the file you got is the file that was published:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+`OpenEmux-1.9.0-x86_64.AppImage: OK` means the file is intact. Anything else means the download is corrupt or has been tampered with — do not run it.
 
 ---
 
@@ -186,7 +222,8 @@ make test
 make appimage   # universal AppImage
 make deb        # Debian/Ubuntu package
 make rpm        # Fedora package
-make packages   # all three at once
+make flatpak    # Flatpak bundle
+make packages   # all of them, plus dist/SHA256SUMS
 ```
 
 > 📖 **Full [Developer Guide](docs/DEVELOPMENT.md)** — project layout, running

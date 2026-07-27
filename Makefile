@@ -5,7 +5,7 @@ PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
 .PHONY: all setup venv run test icons clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: appimage appimage-clean deb rpm flatpak packages packages-clean
+.PHONY: appimage appimage-clean deb rpm flatpak checksums packages packages-clean
 
 all: setup
 
@@ -85,15 +85,26 @@ rpm:
 flatpak:
 	./packaging/build.sh flatpak
 
-# Build all release artifacts into dist/
-packages: appimage deb rpm flatpak
+# One SHA256SUMS over every artifact in dist/, so a download can be verified
+# with `sha256sum -c SHA256SUMS`. SHA-256 rather than MD5: MD5 collisions are
+# practical, which makes it useless against a tampered file -- the one thing
+# the checksum is for. One file rather than one per artifact keeps a single
+# command verifying the whole release.
+checksums:
+	@cd dist && rm -f SHA256SUMS && \
+		find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | sort | \
+		xargs -r sha256sum > SHA256SUMS && \
+		echo "==> dist/SHA256SUMS" && cat SHA256SUMS
+
+# Build all release artifacts into dist/, checksummed
+packages: appimage deb rpm flatpak checksums
 
 appimage-clean:
 	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Remove every packaged artifact
 packages-clean: appimage-clean
-	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak flatpak-repo .flatpak-build-dir
+	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo .flatpak-build-dir
 
 # Cleaning
 clean:
