@@ -15,6 +15,10 @@ Files currently imported:
 - `settings/shaders.png` from `OpenEmu/Graphics.xcassets/Preferences/gameplay_tab_icon...`
 - `settings/system.png` from `OpenEmu/Graphics.xcassets/Preferences/cores_tab_icon...`
 
+Not imported -- authored for OpenEmux:
+- `symbolic/openemux-crop-symbolic.svg`, because the Adwaita icon set carries no
+  crop icon. Same license as the project.
+
 Naming convention for imported system/controller files:
 - `<system_plugin_slug>__<original_filename>.png`
 - examples: `systems/genesis__genesis_library.png`, `controllers/n64__controller_n64.png`

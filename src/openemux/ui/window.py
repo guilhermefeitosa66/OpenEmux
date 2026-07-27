@@ -323,6 +323,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         images_dir = Path(__file__).parent / "assets" / "images"
         icon_theme = Gtk.IconTheme.get_for_display(self.get_display())
         icon_theme.add_search_path(str(images_dir))
+        # Symbolic icons the app ships because the system theme has none, looked
+        # up by name like any other icon so they follow the theme's colours.
+        icon_theme.add_search_path(str(Path(__file__).parent / "assets" / "icons" / "symbolic"))
         icon_name = self.get_application().get_application_id() or "logo"
         if hasattr(Gtk.Window, "set_default_icon_name"):
             Gtk.Window.set_default_icon_name(icon_name)

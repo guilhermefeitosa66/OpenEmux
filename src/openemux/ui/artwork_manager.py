@@ -422,38 +422,76 @@ class _ImportTab(Gtk.Box):
         self.set_margin_start(12)
         self.set_margin_end(12)
 
-        # Drop area / add button.
-        drop_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        drop_box.add_css_class("card")
-        drop_box.set_size_request(-1, 72)
-        drop_label = Gtk.Label(label=t("artwork.import.drop_hint"))
-        drop_label.add_css_class("dim-label")
-        drop_label.set_vexpand(True)
-        drop_label.set_valign(Gtk.Align.CENTER)
-        drop_box.append(drop_label)
-        add_btn = Gtk.Button(label=t("artwork.import.add"), halign=Gtk.Align.CENTER)
-        add_btn.set_margin_bottom(8)
-        add_btn.connect("clicked", lambda _b: self._choose_file())
-        drop_box.append(add_btn)
-        self.append(drop_box)
-
         target = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
         target.connect("drop", self._on_drop)
         self.add_controller(target)
 
-        # Preview and edit actions.
-        self.preview = _PreviewArea()
-        self.append(self.preview)
+        # One area, two states: the drop invitation until there is an image,
+        # then the image with the whole area to itself. Splitting the height
+        # between the two wasted it on a hint nobody needs any more.
+        self.area = Gtk.Stack()
+        self.area.set_vexpand(True)
+        self.area.add_named(self._build_drop_box(t), "empty")
+        self.area.add_named(self._build_preview(t), "image")
+        self.append(self.area)
 
+        self.append(self._build_actions(t, label_supported))
+        self._show_image(False)
+
+    def _build_drop_box(self, t):
+        drop_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        drop_box.add_css_class("card")
+        drop_box.set_vexpand(True)
+        drop_label = Gtk.Label(label=t("artwork.import.drop_hint"))
+        drop_label.add_css_class("dim-label")
+        drop_label.set_vexpand(True)
+        drop_label.set_valign(Gtk.Align.END)
+        drop_box.append(drop_label)
+        add_btn = Gtk.Button(label=t("artwork.import.add"), halign=Gtk.Align.CENTER)
+        add_btn.set_vexpand(True)
+        add_btn.set_valign(Gtk.Align.START)
+        add_btn.connect("clicked", lambda _b: self._choose_file())
+        drop_box.append(add_btn)
+        return drop_box
+
+    def _build_preview(self, t):
+        self.preview = _PreviewArea()
+        overlay = Gtk.Overlay()
+        overlay.set_child(self.preview)
+        # Top corner of the image itself: the way back out is where the image
+        # is, not in a toolbar the eye has to go find.
+        clear = Gtk.Button(icon_name="user-trash-symbolic")
+        clear.set_tooltip_text(t("artwork.import.clear"))
+        clear.add_css_class("osd")
+        clear.add_css_class("circular")
+        clear.set_halign(Gtk.Align.END)
+        clear.set_valign(Gtk.Align.START)
+        clear.set_margin_top(8)
+        clear.set_margin_end(8)
+        clear.connect("clicked", lambda _b: self._clear_image())
+        overlay.add_overlay(clear)
+        return overlay
+
+    def _build_actions(self, t, label_supported):
+        """Everything that acts on the loaded image, on a single row."""
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         actions.set_halign(Gtk.Align.CENTER)
-        self.crop_toggle = Gtk.ToggleButton(label=t("artwork.import.crop"))
+
+        self.crop_toggle = Gtk.ToggleButton()
+        self.crop_toggle.set_child(
+            Adw.ButtonContent(icon_name="openemux-crop-symbolic", label=t("artwork.import.crop"))
+        )
         self.crop_toggle.connect("toggled", self._on_crop_toggled)
         actions.append(self.crop_toggle)
         self.crop_apply = Gtk.Button(label=t("artwork.import.crop_apply"))
+        self.crop_apply.add_css_class("suggested-action")
         self.crop_apply.set_visible(False)
         self.crop_apply.connect("clicked", lambda _b: self._apply_crop())
         actions.append(self.crop_apply)
+
+        # The four transforms read as one control, so they are linked.
+        transforms = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        transforms.add_css_class("linked")
         for icon, tooltip, handler in (
             ("object-flip-horizontal-symbolic", t("artwork.import.flip_h"),
              lambda: self._transform(lambda p: p.flip(True))),
@@ -469,18 +507,24 @@ class _ImportTab(Gtk.Box):
             btn = Gtk.Button(icon_name=icon)
             btn.set_tooltip_text(tooltip)
             btn.connect("clicked", lambda _b, fn=handler: fn())
-            actions.append(btn)
-        reset = Gtk.Button(label=t("artwork.import.reset"))
+            transforms.append(btn)
+        actions.append(transforms)
+
+        reset = Gtk.Button()
+        reset.set_child(
+            Adw.ButtonContent(icon_name="edit-undo-symbolic", label=t("artwork.import.reset"))
+        )
         reset.connect("clicked", lambda _b: self._reset())
         actions.append(reset)
-        self._action_bar = actions
-        actions.set_sensitive(False)
-        self.append(actions)
 
-        # Destination selector.
-        dest_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        dest_box.set_halign(Gtk.Align.CENTER)
-        dest_box.append(Gtk.Label(label=t("artwork.import.destination")))
+        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        separator.set_margin_start(6)
+        separator.set_margin_end(6)
+        actions.append(separator)
+
+        # Destination, on the same row: it belongs to the same decision, and on
+        # its own line it read as a second, unrelated toolbar.
+        actions.append(Gtk.Label(label=t("artwork.import.destination")))
         model = Gtk.StringList()
         self._dest_dirs = [COVER_ART]
         model.append(t("artwork.import.destination.cover"))
@@ -488,8 +532,24 @@ class _ImportTab(Gtk.Box):
             model.append(t("artwork.import.destination.label"))
             self._dest_dirs.append(LABEL_ART)
         self.dest_dropdown = Gtk.DropDown(model=model)
-        dest_box.append(self.dest_dropdown)
-        self.append(dest_box)
+        actions.append(self.dest_dropdown)
+
+        self._action_bar = actions
+        return actions
+
+    def _show_image(self, has_image):
+        """Swap between the drop invitation and the loaded image."""
+        self.area.set_visible_child_name("image" if has_image else "empty")
+        # Nothing on that row means anything without an image to apply it to.
+        self._action_bar.set_sensitive(has_image)
+
+    def _clear_image(self):
+        """Drop the imported image and go back to the drop area."""
+        self._original = None
+        self.pixbuf = None
+        self.preview.set_pixbuf(None)
+        self.crop_toggle.set_active(False)
+        self._show_image(False)
 
     def set_default_destination(self, art_dir):
         if art_dir in self._dest_dirs:
@@ -547,7 +607,7 @@ class _ImportTab(Gtk.Box):
         self.pixbuf = pixbuf
         self.preview.set_pixbuf(pixbuf)
         self.crop_toggle.set_active(False)
-        self._action_bar.set_sensitive(True)
+        self._show_image(True)
         return True
 
     # -- edits ---------------------------------------------------------------
