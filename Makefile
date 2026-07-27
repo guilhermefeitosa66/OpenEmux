@@ -104,7 +104,15 @@ appimage-clean:
 
 # Remove every packaged artifact
 packages-clean: appimage-clean
-	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo .flatpak-build-dir
+	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo
+	@# The flatpak build runs as root inside its container, so the tree it
+	@# leaves behind is root-owned and rm(1) on the host cannot touch it.
+	@# Delete it the way it was created rather than reaching for sudo.
+	@if [ -e .flatpak-build-dir ]; then \
+		img=openemux-build-flatpak; \
+		docker image inspect $$img >/dev/null 2>&1 || img=alpine; \
+		docker run --rm -v "$(CURDIR)":/work -w /work $$img rm -rf /work/.flatpak-build-dir; \
+	fi
 
 # Cleaning
 clean:
