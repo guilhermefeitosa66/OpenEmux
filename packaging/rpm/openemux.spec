@@ -63,6 +63,13 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.1-1
+- Fix a crash when acting on a ROM's context menu, and log the stack when one happens
+- Sync a single ROM's cover or label straight from the menu, in the background
+- Open the artwork manager from its own "Manage cover/label" entries
+- Show search results on the library's grid, mark the pick, and allow cancelling a search
+- Give an imported image the whole area, with one row of edit controls
+
 * Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.0-1
 - Pick a cartridge shell colour per game, from a palette of twelve
 - Select several ROMs with Shift/Ctrl, the keyboard, or a gamepad selection mode
