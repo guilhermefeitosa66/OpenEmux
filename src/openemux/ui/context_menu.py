@@ -20,11 +20,15 @@ Entries passed to :func:`build_context_popover` are one of:
 * a :class:`Submenu` -- a row that opens a nested popover of its own entries.
 """
 
+import logging
+
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gtk
+from gi.repository import Gdk, GLib, Gtk
+
+logger = logging.getLogger(__name__)
 
 SEPARATOR = None
 
@@ -111,6 +115,46 @@ def _swatch_widget(swatch_hex):
     return area
 
 
+def _run_after_close(root_popover, callback):
+    """Close the whole menu, then run ``callback`` once GTK is done with it.
+
+    Closing a popover tears its surface down and repoints the pointer focus,
+    and the grid drops the popover altogether right after. Anything that opens
+    a window or relayouts the main window from inside the click runs in the
+    middle of that teardown, which is where GTK 4.14 crashes: the pointer focus
+    still points into the popover whose surface is already gone, and
+    ``gtk_window_native_layout`` asks that surface for a motion event. An idle
+    callback runs after the teardown, so the two never overlap.
+
+    The callback is also the last place a context-menu action can raise, so an
+    exception is logged here instead of escaping into the main loop.
+    """
+    root_popover.popdown()
+
+    def _run():
+        try:
+            callback()
+        except Exception:
+            logger.exception("context menu action failed")
+        return False
+
+    GLib.idle_add(_run)
+
+
+def _activate_action_row(root_popover, action_name):
+    """Fire a named action after the menu is gone.
+
+    The action group lives on the widget the popover hangs off (the ROM card),
+    which is looked up now: by the time the idle runs the popover has been
+    unparented and can no longer resolve anything.
+    """
+    anchor = root_popover.get_parent()
+    if anchor is None:
+        logger.warning("context menu row has no anchor: action=%s", action_name)
+        return
+    _run_after_close(root_popover, lambda: anchor.activate_action(action_name, None))
+
+
 def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
     content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     content.append(_icon_image(icon_name))
@@ -133,12 +177,14 @@ def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
     elif callable(action):
         # Close the whole chain first so the callback's dialog is not covered
         # by a lingering popover, then run it.
-        button.connect("clicked", lambda _b, cb=action: (root_popover.popdown(), cb()))
+        button.connect("clicked", lambda _b, cb=action: _run_after_close(root_popover, cb))
     else:
-        button.set_action_name(action)
-        # The action fires on click; close the menu in the same pass so the
-        # popover does not linger over whatever dialog the action opens.
-        button.connect("clicked", lambda _b: root_popover.popdown())
+        # Deliberately not set_action_name: GTK would fire the action from
+        # inside the click, while the menu is still coming down. The action is
+        # activated by hand once that is over -- see _run_after_close.
+        button.connect(
+            "clicked", lambda _b, name=action: _activate_action_row(root_popover, name)
+        )
     return button
 
 
