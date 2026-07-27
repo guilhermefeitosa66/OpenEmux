@@ -28,6 +28,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Graphene
 
 from openemux.ui.grid import RomGrid, RomItem
+from openemux.ui.navigation import NavigationController
 
 # ---- XTest driver ----------------------------------------------------------
 xlib = ctypes.CDLL("libX11.so.6")
@@ -136,6 +137,11 @@ class Harness(Adw.Application):
 
         win.set_child(scroll)
         win.present()
+        # The production keyboard routing, wired to this window: the
+        # controller only needs the grid registry and scope attributes.
+        win._grids = {"SFC": grid}
+        win.current_console = "SFC"
+        self.nav = NavigationController(win)
 
     def card_center(self, index):
         """Screen coords of card ``index`` (no WM in the nested X: win at 0,0)."""
@@ -206,6 +212,41 @@ def scenario(app, driver, results):
     driver.click(*centers[1], mod=XK_Shift_L)
     snap("shift-after-plain")
 
+    # --- keyboard: Shift+arrows range from the focused card ---------------
+    def on_main(fn):
+        done = threading.Event()
+        out = {}
+        def run():
+            out["v"] = fn()
+            done.set()
+            return False
+        GLib.idle_add(run)
+        done.wait(5)
+        return out.get("v")
+
+    if empty_y is not None and empty_y < collect.h - 25:
+        driver.click(collect.w / 2, empty_y)  # clear; the anchor goes stale
+        def kb(keyval, shift=False, ctrl=False):
+            state = 0
+            if shift:
+                state |= Gdk.ModifierType.SHIFT_MASK
+            if ctrl:
+                state |= Gdk.ModifierType.CONTROL_MASK
+            return on_main(lambda: app.nav.handle_pane_key(keyval, state))
+
+        on_main(lambda: app.grid._items[0].get_parent().grab_focus())
+        time.sleep(0.2)
+        kb(Gdk.KEY_Right, shift=True)   # roots at the focused card 0
+        snap("kb-shift-right-1")        # {0,1}
+        kb(Gdk.KEY_Right, shift=True)   # same sequence, anchor holds
+        snap("kb-shift-right-2")        # {0,1,2}
+        kb(Gdk.KEY_Left)                # plain move: selection untouched
+        snap("kb-plain-left")           # still {0,1,2}
+        kb(Gdk.KEY_Left, shift=True)    # new sequence: re-roots at card 1
+        snap("kb-shift-left-reroot")    # {0,1}
+    else:
+        print("SKIP keyboard checks: page is full", flush=True)
+
     time.sleep(0.5)
     GLib.idle_add(app.quit)
 
@@ -227,6 +268,10 @@ def main():
         "band-drag": lambda n: n >= 2,
         "plain-click-last": lambda n: True,
         "shift-after-plain": lambda n: n >= 2,
+        "kb-shift-right-1": 2,
+        "kb-shift-right-2": 3,
+        "kb-plain-left": 3,
+        "kb-shift-left-reroot": 2,
     }
     launches = [d for k, d in EVENTS if k == "LAUNCH"]
     failures = []
