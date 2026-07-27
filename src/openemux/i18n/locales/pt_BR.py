@@ -321,6 +321,8 @@ TRANSLATIONS = {
     "artwork.search.running": "Buscando…",
     "artwork.search.found": "{count} imagem(ns) encontrada(s)",
     "artwork.search.none": "Nenhuma imagem encontrada",
+    "artwork.search.cancel": "Cancelar busca",
+    "artwork.search.cancelled": "Busca cancelada",
     "artwork.provider.libretro": "libretro",
     "artwork.provider.screenscraper": "ScreenScraper",
     "artwork.provider.openemux": "Espelho do OpenEmux",
