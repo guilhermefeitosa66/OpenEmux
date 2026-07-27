@@ -688,11 +688,11 @@ class RomItem(Gtk.Box):
         state = gesture.get_current_event_state()
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
-        if (ctrl or shift) and self.on_toggle_selection:
+        if self.on_toggle_selection:
             self.on_toggle_selection(self, ctrl, shift)
-            return
-        if self.on_launch_callback:
-            self.on_launch_callback(self.rom)
+        # A plain click launches through the FlowBox's child activation
+        # (grid._on_child_activated) -- launching here too fired the game
+        # twice per click, the second attempt bouncing off "already running".
 
     def _ensure_action_group(self):
         if getattr(self, "_action_group", None) is not None:
@@ -1014,17 +1014,12 @@ class RomGrid(Gtk.FlowBox):
         key.connect("key-pressed", self._on_grid_key_pressed)
         self.add_controller(key)
 
-        # Dragging across the empty area selects whatever it sweeps over. The
-        # gesture sits on the grid, so it only ever starts on the background --
-        # a press that lands on a card is left to the card.
+        # The rubber band attaches to the ScrolledWindow on map (see
+        # _attach_band_gesture): the grid only covers the card rows, and a
+        # band naturally starts from the empty page space below or beside
+        # them, which belongs to the scroller.
+        self._band_scroller = None
         self.connect("map", self._watch_viewport)
-
-        drag = Gtk.GestureDrag()
-        drag.set_button(Gdk.BUTTON_PRIMARY)
-        drag.connect("drag-begin", self._on_band_begin)
-        drag.connect("drag-update", self._on_band_update)
-        drag.connect("drag-end", self._on_band_end)
-        self.add_controller(drag)
 
     # -- cartridge shells ----------------------------------------------------
 
@@ -1077,6 +1072,73 @@ class RomGrid(Gtk.FlowBox):
             return
         self._hadjustment = scroller.get_hadjustment()
         self._hadjustment.connect("notify::page-size", lambda *_a: self._retune_columns())
+        self._attach_band_gesture(scroller)
+
+    def _attach_band_gesture(self, scroller):
+        """Put the rubber band on the whole page, not just the card rows.
+
+        The FlowBox packs to the top and left, so most of a page's empty space
+        -- below the last row, beside the last column -- belongs to the
+        viewport, out of reach of a gesture on the grid itself. Pages keep
+        their ScrolledWindow across re-renders while the grid is rebuilt, so
+        the previous grid's gesture is dropped before this one attaches.
+        """
+        # The viewport, not the scrolled window: empty-page presses target the
+        # viewport, and a press must reach the gesture's own widget (or a
+        # descendant) at press time for the drag to begin there.
+        host = self.get_ancestor(Gtk.Viewport) or scroller
+        previous = getattr(host, "_openemux_band_gesture", None)
+        if previous is not None:
+            host.remove_controller(previous)
+        drag = Gtk.GestureDrag()
+        drag.set_button(Gdk.BUTTON_PRIMARY)
+        drag.connect("drag-begin", self._on_band_begin)
+        drag.connect("drag-update", self._on_band_update)
+        drag.connect("drag-end", self._on_band_end)
+        host.add_controller(drag)
+        host._openemux_band_gesture = drag
+        self._band_scroller = host
+
+        # A stationary press never reliably reaches drag-begin, so the plain
+        # click on empty space -- which must clear the selection, like a file
+        # manager -- gets its own click gesture on the same host.
+        previous_click = getattr(host, "_openemux_clear_gesture", None)
+        if previous_click is not None:
+            host.remove_controller(previous_click)
+        click = Gtk.GestureClick()
+        click.set_button(Gdk.BUTTON_PRIMARY)
+        click.connect(
+            "pressed", lambda _g, _n, x, y: setattr(self, "_clear_press_at", (x, y))
+        )
+        click.connect("released", self._on_background_click_released)
+        host.add_controller(click)
+        host._openemux_clear_gesture = click
+
+    def _on_background_click_released(self, gesture, _n_press, x, y):
+        """A plain click on empty page space clears the selection.
+
+        Not after a drag (that is the rubber band, whose result must survive
+        its own release), not with Ctrl/Shift held (selection gestures), and
+        only on true background (no card under the pointer).
+        """
+        pressed_at = getattr(self, "_clear_press_at", None)
+        self._clear_press_at = None
+        if pressed_at is not None and abs(x - pressed_at[0]) + abs(y - pressed_at[1]) > 8:
+            return
+        state = gesture.get_current_event_state()
+        if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK):
+            return
+        if not self._is_background(x, y):
+            return
+        if any(item.selected for item in self._items):
+            self.clear_selection()
+
+    def _to_grid_coords(self, x, y):
+        """Scroller-space -> grid-space (the band maths live in grid space)."""
+        if self._band_scroller is None:
+            return x, y
+        ok, point = self._band_scroller.compute_point(self, Graphene.Point().init(x, y))
+        return (point.x, point.y) if ok else (x, y)
 
     def _retune_columns(self):
         """Pack the cards left-to-right with fixed gaps, like an icon view.
@@ -1311,7 +1373,13 @@ class RomGrid(Gtk.FlowBox):
             self.on_selection_changed(self.selected_roms())
 
     def _toggle_item_selection(self, item, ctrl=True, shift=False):
-        """A card's selection gesture: Ctrl toggles, Shift ranges (issue #78)."""
+        """A card's click gesture: Ctrl toggles, Shift ranges (issue #78).
+
+        A plain click (no modifier) does not touch the selection -- it
+        launches, elsewhere -- but it does move the anchor, so a Shift+click
+        right after ranges from the game the user just clicked, the way a
+        file manager roots ranges at the last click.
+        """
         model, items = self._model_and_items()
         if item not in items:
             return
@@ -1320,8 +1388,11 @@ class RomGrid(Gtk.FlowBox):
             model.extend_additive(index)
         elif shift:
             model.extend(index)
-        else:
+        elif ctrl:
             model.toggle(index)
+        else:
+            model.move_cursor(index)
+            return
         self._paint_selection(model, items)
 
     def extend_selection_to(self, item, additive=False):
@@ -1360,10 +1431,15 @@ class RomGrid(Gtk.FlowBox):
         model.replace([index for index, item in enumerate(items) if item.selected])
 
     def _is_background(self, x, y):
-        """True when (x, y) is empty grid, not a card."""
-        target = self.pick(x, y, Gtk.PickFlags.DEFAULT)
-        while target is not None and target is not self:
-            if isinstance(target, RomItem):
+        """True when (x, y) -- in scroller space -- is empty page, not a card.
+
+        The scrollbars count as "not background" too: a drag on one must keep
+        scrolling, never start a band.
+        """
+        host = self._band_scroller or self
+        target = host.pick(x, y, Gtk.PickFlags.DEFAULT)
+        while target is not None and target is not host:
+            if isinstance(target, (RomItem, Gtk.Scrollbar)):
                 return False
             target = target.get_parent()
         return True
@@ -1377,9 +1453,11 @@ class RomGrid(Gtk.FlowBox):
         self._band_base = tuple(item for item in self._items if item.selected) if (
             state & Gdk.ModifierType.CONTROL_MASK
         ) else ()
-        self._band_origin = (start_x, start_y)
+        self._band_origin = self._to_grid_coords(start_x, start_y)
         self._band = None
         if not self._band_base:
+            # A plain press on empty space clears -- which also makes a plain
+            # *click* there clear the selection, the file-manager behavior.
             self._apply_selection(())
 
     def _on_band_update(self, gesture, offset_x, offset_y):
