@@ -438,10 +438,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     }
 
     #: Segmented-control icon per view mode. Unlike the menu-button icon these
-    #: three sit side by side, so each mode needs its own glyph.
+    #: three sit side by side, so each mode needs its own glyph. Adwaita only:
+    #: an icon from another installed theme renders as a broken image on a
+    #: stock GNOME system (`make icons` browses the safe set).
     VIEW_MODE_SEGMENT_ICONS = {
         "cover": "view-grid-symbolic",
-        "cartridge": "input-gaming-symbolic",
+        # A Zip-disk glyph: the closest thing Adwaita has to a cartridge, and
+        # far more on-the-nose than the gamepad this used to be.
+        "cartridge": "media-zip-symbolic",
         "list": "view-list-symbolic",
     }
 

@@ -4,7 +4,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run test clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: all setup venv run test icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: appimage appimage-clean deb rpm flatpak packages packages-clean
 
 all: setup
@@ -42,6 +42,13 @@ run:
 # Run the unit test suite
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
+
+# Browse the symbolic icons the UI may use (Adwaita only -- see the tool's
+# docstring for why the desktop's other themes are excluded).
+#   make icons              browse everything
+#   make icons FILTER=view  open on a filter
+icons:
+	PYTHONPATH=src $(PYTHON) tools/icon_browser.py $(FILTER)
 
 check-retroarch:
 	@echo "Checking RetroArch binary..."
