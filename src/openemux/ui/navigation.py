@@ -497,7 +497,17 @@ class NavigationController:
             grid.note_cursor(item, keep_anchor=True)
 
     def _cmd_move_select(self, direction, additive=False):
-        """Shift(+Ctrl)+arrows: move the cursor and grow the range to it."""
+        """Shift(+Ctrl)+arrows: move the cursor and grow the range to it.
+
+        The range roots at the card focused *before* the move -- plain-arrow
+        navigation moves focus without touching the selection model, so the
+        first Shift+arrow of a sequence must re-anchor at where the user
+        actually stands (file-manager behavior); the grid keeps the anchor
+        for the follow-up presses of the same sequence.
+        """
+        item, grid = self._focused_item_and_grid()
+        if item is not None:
+            grid.begin_range_from(item)
         self._cmd_move(direction)
         item, grid = self._focused_item_and_grid()
         if item is not None:

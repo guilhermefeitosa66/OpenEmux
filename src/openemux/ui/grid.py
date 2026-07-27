@@ -1407,6 +1407,25 @@ class RomGrid(Gtk.FlowBox):
             model.extend(index)
         self._paint_selection(model, items)
 
+    def begin_range_from(self, item):
+        """Root a keyboard Shift-range at the focused card (issue #78).
+
+        Plain arrows move the *focus* without the model hearing about it, so
+        without this the first Shift+arrow would range from wherever the
+        anchor last was -- some earlier click -- instead of from the card the
+        user is standing on, the way a file manager ranges. Called with the
+        pre-move focus: when it differs from the model's cursor a new Shift
+        sequence is starting there and the anchor re-roots; when it matches,
+        the sequence is already running and the anchor must hold so the range
+        keeps growing from the same root.
+        """
+        model, items = self._model_and_items()
+        if item not in items:
+            return
+        index = items.index(item)
+        if index != model.cursor:
+            model.move_cursor(index)
+
     def toggle_item(self, item):
         """Ctrl+Space / gamepad Ⓐ in selection mode: flip one card."""
         self._toggle_item_selection(item)
