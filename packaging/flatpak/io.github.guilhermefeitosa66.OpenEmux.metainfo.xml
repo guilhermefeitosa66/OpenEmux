@@ -82,6 +82,20 @@
   </keywords>
 
   <releases>
+    <release version="1.9.0" date="2026-07-27">
+      <description>
+        <p>Personalise the shelf, act on many games at once, and take control of the running game.</p>
+        <ul>
+          <li>Pick a cartridge shell colour per game, from a palette of twelve</li>
+          <li>Select several ROMs with Shift/Ctrl, the keyboard, or a gamepad selection mode</li>
+          <li>Manage artwork per ROM: search every provider by name or hash, or import and edit your own</li>
+          <li>Order and switch the artwork providers, with OpenEmux's own mirror as a new source</li>
+          <li>Adjust the running game's volume, and start a game from any save-state slot</li>
+          <li>Fold the analog stick onto the D-pad, and map a turbo/autofire modifier</li>
+          <li>OpenEmux now ships as a Flatpak</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.8.0" date="2026-07-25">
       <description>
         <p>ScreenScraper out of the box, cartridge labels, and per-ROM overrides.</p>
