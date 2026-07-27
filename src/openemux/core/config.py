@@ -76,14 +76,18 @@ ARTWORK_PROVIDER_KINDS_AVAILABLE = {
     "screenscraper": (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL),
     "openemux": (COVER_ART_TYPE_BOXART,),
 }
+# Fresh-install precedence: the project's own mirror first (fully under our
+# control, no quotas), libretro second, ScreenScraper last (quota'd, and the
+# only one needing credentials). Migrated configs keep the order their old
+# cover_source enum meant instead.
 DEFAULT_ARTWORK_PROVIDERS = [
+    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {
         "id": "screenscraper",
         "enabled": True,
         "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
     },
-    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
 ]
 
 

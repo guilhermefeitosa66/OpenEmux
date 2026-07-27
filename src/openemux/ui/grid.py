@@ -756,13 +756,16 @@ class RomItem(Gtk.Box):
                 entries.append(
                     (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
                 )
+        # One sync entry, following the view mode like the manual pair above:
+        # the label when the card is drawn as a cartridge, the cover elsewhere.
         if self.context_services is not None:
-            entries.append(
-                (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
-            )
-            if self.supports_label:
+            if showing_label:
                 entries.append(
                     (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
+                )
+            else:
+                entries.append(
+                    (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
                 )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
