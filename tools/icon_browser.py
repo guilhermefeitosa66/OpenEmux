@@ -1,24 +1,68 @@
 #!/usr/bin/env python3
-"""Browse the icon theme's symbolic icons with their names.
+"""Browse the symbolic icons OpenEmux is allowed to use, with their names.
 
 A dev utility for picking icons for the UI (header buttons, menu rows): a
-searchable grid of every symbolic icon the running GTK icon theme knows,
-rendered through the app's own theme and stylesheet, with the icon name under
-each one. Clicking an icon copies its name to the clipboard.
+searchable grid rendered through the app's own theme and stylesheet, with the
+icon name under each one. Clicking an icon copies its name to the clipboard.
+
+**Only Adwaita ships here.** The developer's desktop usually has extra icon
+themes installed (Papirus, Numix, Mint's XApp set…) and the running GTK theme
+happily lists all of them -- but an icon from those renders as a broken image
+on a stock GNOME system, inside the Flatpak's GNOME runtime, or on any distro
+without that theme package. ``adwaita-icon-theme`` is what the packages
+declare as a dependency, so Adwaita plus GTK's own built-ins is exactly the
+safe set, and the only thing this browser offers.
 
 The icons the view-mode segmented control uses today are marked, so a
 candidate can be compared against what is already there.
 
     PYTHONPATH=src python3 tools/icon_browser.py [initial filter]
+    make icons                       # same thing
+    make icons FILTER=view           # opening on a filter
 """
 
 import sys
+from pathlib import Path
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GObject, Gtk
+from gi.repository import Adw, Gdk, Gio, GObject, Gtk
+
+#: Where the adwaita-icon-theme package installs its icons.
+ADWAITA_DIRS = [
+    Path("/usr/share/icons/Adwaita"),
+    Path("/app/share/icons/Adwaita"),  # inside the Flatpak sandbox
+]
+
+#: GTK bundles a handful of icons in its own gresource, always present.
+GTK_ICON_RESOURCE = "/org/gtk/libgtk/icons/"
+
+
+def safe_icon_names():
+    """Symbolic icons guaranteed to exist wherever OpenEmux is installed."""
+    names = set()
+    for directory in ADWAITA_DIRS:
+        if directory.is_dir():
+            names |= {path.stem for path in directory.rglob("*.svg")}
+
+    def walk(path):
+        try:
+            children = Gio.resources_enumerate_children(path, Gio.ResourceLookupFlags.NONE)
+        except Exception:
+            return
+        for child in children:
+            if child.endswith("/"):
+                walk(path + child)
+            elif child.endswith((".svg", ".png")):
+                names.add(child.rsplit(".", 1)[0])
+
+    walk(GTK_ICON_RESOURCE)
+    # ".symbolic" is how GTK names the recolorable copies in its resource.
+    return sorted(
+        n for n in names if n.endswith("-symbolic") and not n.endswith(".symbolic")
+    )
 
 #: Where each icon is used today, shown as the badge under the name.
 IN_USE = {
@@ -87,10 +131,8 @@ class IconBrowser(Adw.Application):
         self.flow.set_margin_bottom(12)
         self.flow.set_filter_func(self._filter_cell)
 
-        theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-        names = sorted(n for n in theme.get_icon_names() if n.endswith("-symbolic"))
         # In-use icons first, so the comparison is the first thing on screen.
-        names.sort(key=lambda n: (n not in IN_USE, n))
+        names = sorted(safe_icon_names(), key=lambda n: (n not in IN_USE, n))
         for name in names:
             self.flow.append(self._make_cell(name))
 
@@ -177,7 +219,9 @@ class IconBrowser(Adw.Application):
         self.flow.invalidate_filter()
         query = self.search.get_text().strip().lower()
         shown = sum(1 for c in self._cells if not query or query in c.icon_name.lower())
-        self.count_label.set_label(f"{shown} of {len(self._cells)} symbolic icons")
+        self.count_label.set_label(
+            f"{shown} of {len(self._cells)} Adwaita symbolic icons (safe everywhere)"
+        )
 
 
 if __name__ == "__main__":
