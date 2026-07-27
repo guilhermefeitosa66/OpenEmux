@@ -14,6 +14,9 @@ RUN apt-get update \
       flatpak-builder \
       ca-certificates \
       python3 \
+      # eu-strip: flatpak-builder splits debug symbols out of every compiled
+      # module (PyYAML's C extension here) and fails hard without it.
+      elfutils \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
