@@ -363,7 +363,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self.stop_btn)
 
         header.pack_end(self._build_volume_button())
-        header.pack_end(self._build_state_button())
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -467,68 +466,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._view_segment_buttons[mode] = button
         self.view_mode_segment = box
         return box
-
-    def _build_state_button(self):
-        """Quick save-state controls for the running game (issue #73).
-
-        Save / Load act on the active slot; the stepper moves between slots
-        over the same UDP channel the volume uses.
-        """
-        self.state_btn = Gtk.MenuButton()
-        self.state_btn.set_icon_name("media-floppy-symbolic")
-        self.state_btn.set_tooltip_text(self.t("header.states"))
-        self.state_btn.set_sensitive(False)
-
-        save_btn = Gtk.Button(label=self.t("states.save"))
-        save_btn.connect("clicked", lambda _b: self._on_quick_state(save=True))
-        load_btn = Gtk.Button(label=self.t("states.load"))
-        load_btn.connect("clicked", lambda _b: self._on_quick_state(save=False))
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        actions.set_homogeneous(True)
-        actions.append(save_btn)
-        actions.append(load_btn)
-
-        minus = Gtk.Button.new_from_icon_name("go-previous-symbolic")
-        minus.add_css_class("flat")
-        minus.connect("clicked", lambda _b: self._on_state_slot_step(-1))
-        plus = Gtk.Button.new_from_icon_name("go-next-symbolic")
-        plus.add_css_class("flat")
-        plus.connect("clicked", lambda _b: self._on_state_slot_step(+1))
-        self._state_slot_label = Gtk.Label()
-        self._state_slot_label.set_hexpand(True)
-        slot_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        slot_box.append(minus)
-        slot_box.append(self._state_slot_label)
-        slot_box.append(plus)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.append(actions)
-        box.append(slot_box)
-
-        popover = Gtk.Popover()
-        popover.set_child(box)
-        self.state_btn.set_popover(popover)
-        self._refresh_state_slot_label()
-        return self.state_btn
-
-    def _refresh_state_slot_label(self):
-        self._state_slot_label.set_label(
-            self.t("states.slot", slot=self.runtime_manager.state_slot)
-        )
-
-    def _on_state_slot_step(self, delta):
-        self.runtime_manager.step_state_slot(delta)
-        self._refresh_state_slot_label()
-
-    def _on_quick_state(self, save):
-        ok = self.runtime_manager.save_state() if save else self.runtime_manager.load_state()
-        if ok:
-            key = "toast.state.saved" if save else "toast.state.loaded"
-            self._toast(self.t(key, slot=self.runtime_manager.state_slot), timeout=2)
 
     def _build_volume_button(self):
         """Master volume for the running game (issue #69): slider + mute.
@@ -2521,12 +2458,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self._grids.values():
             grid.refresh_rom_artwork(rom)
 
-    def open_save_state_manager(self, rom):
-        """The per-ROM save-state browser (issue #73)."""
-        from openemux.ui.save_state_manager import SaveStateManagerDialog
-
-        SaveStateManagerDialog(self, rom).present(self)
-
     def launch_rom_at_state(self, rom, slot):
         """Launch a ROM parked on ``slot`` and load that state once it is up.
 
@@ -3333,8 +3264,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
         self.volume_btn.set_sensitive(is_running)
-        self.state_btn.set_sensitive(is_running)
-        self._refresh_state_slot_label()
         if is_running:
             # A fresh launch starts unmuted at the persisted level.
             self._mute_toggle_guard = True

@@ -9,8 +9,9 @@ Entries passed to :func:`build_context_popover` are one of:
 
 * ``SEPARATOR`` (``None``) -- a divider between sections.
 * a ``(label, action, icon_name)`` tuple -- a leaf row. ``action`` is either a
-  ``Gtk`` action name string (``"rom.rename"``) or a plain callable invoked on
-  click; ``icon_name`` may be ``None`` to leave the icon column blank, which is
+  ``Gtk`` action name string (``"rom.rename"``), a plain callable invoked on
+  click, or ``None`` for a display-only (insensitive) row -- an empty save
+  slot; ``icon_name`` may be ``None`` to leave the icon column blank, which is
   how radio-style rows mark the ones that are not selected.
 * a ``(label, action, icon_name, swatch_hex)`` tuple -- the same row with a
   small color square between the icon and the label (the cartridge-color
@@ -126,7 +127,10 @@ def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
     button.set_child(content)
     button.add_css_class("flat")
     button.add_css_class("context-menu-item")
-    if callable(action):
+    if action is None:
+        # A display-only row (an empty save slot): visible, not clickable.
+        button.set_sensitive(False)
+    elif callable(action):
         # Close the whole chain first so the callback's dialog is not covered
         # by a lingering popover, then run it.
         button.connect("clicked", lambda _b, cb=action: (root_popover.popdown(), cb()))

@@ -46,6 +46,25 @@ class ListStatesTests(unittest.TestCase):
         self.assertEqual(save_states.list_states("/nope/nothing", ROM), [])
 
 
+class SlotEntriesTests(unittest.TestCase):
+    """The context menu's slot list: full range, empties visible (issue #73)."""
+
+    def test_full_range_with_empties_as_none(self):
+        with TemporaryDirectory() as tmp_dir:
+            (Path(tmp_dir) / "Chrono Trigger (USA).state").write_bytes(b"s")
+            (Path(tmp_dir) / "Chrono Trigger (USA).state4").write_bytes(b"s")
+            entries = save_states.slot_entries(tmp_dir, ROM)
+        self.assertEqual(len(entries), 10)
+        self.assertEqual([slot for slot, _ in entries], list(range(10)))
+        filled = {slot for slot, mtime in entries if mtime is not None}
+        self.assertEqual(filled, {0, 4})
+
+    def test_missing_directory_is_all_empty(self):
+        entries = save_states.slot_entries("/nope/nothing", ROM)
+        self.assertTrue(all(mtime is None for _slot, mtime in entries))
+        self.assertEqual(len(entries), 10)
+
+
 class DeleteStateTests(unittest.TestCase):
     def test_delete_removes_state_and_screenshot(self):
         with TemporaryDirectory() as tmp_dir:

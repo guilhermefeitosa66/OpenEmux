@@ -72,6 +72,17 @@ def list_states(states_dir, rom_path):
     return sorted(states, key=lambda state: state.slot)
 
 
+def slot_entries(states_dir, rom_path, max_slot=9):
+    """``(slot, mtime-or-None)`` for every slot up to ``max_slot``.
+
+    The context menu's "load state" list wants the full slot range with the
+    empty ones visible (shown as "empty"), so absence is data here, not an
+    omission.
+    """
+    by_slot = {state.slot: state.mtime for state in list_states(states_dir, rom_path)}
+    return [(slot, by_slot.get(slot)) for slot in range(max_slot + 1)]
+
+
 def delete_state(state):
     """Remove one state and its screenshot; True when the state file went."""
     removed = False

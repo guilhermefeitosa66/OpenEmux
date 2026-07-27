@@ -21,9 +21,6 @@ class RuntimeManager:
         # audio_volume, which is what keeps the tracker honest.
         self.volume_db = self.config_manager.get_master_volume_db()
         self.muted = False
-        # The active save-state slot (issue #73): stepped over UDP, tracked
-        # locally because RetroArch only exposes relative slot commands.
-        self.state_slot = 0
 
     def launch(self, rom_path, console, state_slot=None):
         system_id = resolve_system_id(console)
@@ -42,7 +39,6 @@ class RuntimeManager:
             self.active_rom = {"path": rom_path, "console": system_id}
             self.volume_db = self.config_manager.get_master_volume_db()
             self.muted = False
-            self.state_slot = int(state_slot or 0)
             return True, None
 
         if mode == "integrated_core":
@@ -104,27 +100,11 @@ class RuntimeManager:
         return self.muted
 
     # -- save states (issue #73) -------------------------------------------
-    MAX_STATE_SLOT = 9
-
-    def save_state(self):
-        return self.send_command("SAVE_STATE")
-
     def load_state(self):
+        """Load the active slot's state -- used right after a launch seeded
+        with state_slot ("load this save" from the context menu). In-game
+        save/load lives on RetroArch's own hotkeys, not in this UI."""
         return self.send_command("LOAD_STATE")
-
-    def step_state_slot(self, delta):
-        """Move the active slot by ±1, clamped to 0..MAX_STATE_SLOT.
-
-        Returns the (locally tracked) slot after the move; unchanged when the
-        clamp refuses or no game runs.
-        """
-        target = self.state_slot + int(delta)
-        if not 0 <= target <= self.MAX_STATE_SLOT:
-            return self.state_slot
-        command = "STATE_SLOT_PLUS" if delta > 0 else "STATE_SLOT_MINUS"
-        if self.send_command(command):
-            self.state_slot = target
-        return self.state_slot
 
     def poll_active(self):
         if not self.active_process:

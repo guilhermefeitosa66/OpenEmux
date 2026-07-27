@@ -32,6 +32,7 @@ class RomContextMenuServices:
         color = self._cartridge_color_submenu(rom)
         if color is not None:
             entries.append(color)
+        entries.append(self._load_state_submenu(rom))
         return entries
 
     def _add_to_collection_submenu(self, rom):
@@ -167,6 +168,33 @@ class RomContextMenuServices:
                 )
             )
         return Submenu(t("context.cartridge_color"), entries, "color-select-symbolic")
+
+    def _load_state_submenu(self, rom):
+        """Pick a save-state slot to launch this ROM from (issue #73 redo).
+
+        One row per slot, stamped with the save's date/time; empty slots stay
+        visible but insensitive, so the numbering never shifts around. In-game
+        saving and loading is RetroArch-hotkey territory -- this menu only
+        covers "start the game from that save".
+        """
+        from datetime import datetime
+
+        from openemux.core import save_states
+
+        t = self.win.t
+        states_dir = self.win.config_manager.get_console_states_dir(rom["console"])
+        entries = []
+        for slot, mtime in save_states.slot_entries(states_dir, rom["path"]):
+            if mtime is None:
+                label = t("states.slot_empty", slot=slot)
+                entries.append((label, None, None))
+                continue
+            stamp = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
+            label = t("states.slot_stamped", slot=slot, stamp=stamp)
+            entries.append(
+                (label, (lambda r=rom, s=slot: self.win.launch_rom_at_state(r, s)), None)
+            )
+        return Submenu(t("context.load_state"), entries, "media-floppy-symbolic")
 
     def _shader_submenu(self, rom):
         console = rom.get("console")

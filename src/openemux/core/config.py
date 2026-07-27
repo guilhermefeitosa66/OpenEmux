@@ -174,6 +174,9 @@ DEFAULT_CONFIG = {
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
         "master_volume_db": 0.0,
+        # The slot RetroArch's save/load hotkeys act on (issue #73 redo):
+        # picked in Preferences, written as state_slot at every launch.
+        "state_slot": 0,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
@@ -694,6 +697,24 @@ class ConfigManager:
 
     def get_console_states_dir(self, console):
         return DEFAULT_STATES_DIR / resolve_system_id(console)
+
+    MAX_STATE_SLOT = 9
+
+    def get_state_slot(self):
+        try:
+            slot = int(self.config.get("runtime", {}).get("state_slot", 0))
+        except (TypeError, ValueError):
+            return 0
+        return min(self.MAX_STATE_SLOT, max(0, slot))
+
+    def set_state_slot(self, slot):
+        runtime = self.config.setdefault("runtime", {})
+        try:
+            value = int(slot)
+        except (TypeError, ValueError):
+            value = 0
+        runtime["state_slot"] = min(self.MAX_STATE_SLOT, max(0, value))
+        self.save_config()
 
     def get_network_cmd_port(self):
         try:

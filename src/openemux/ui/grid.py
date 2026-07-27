@@ -707,7 +707,6 @@ class RomItem(Gtk.Box):
             ("remove-label", self._act_remove_label),
             ("sync-cover", self._act_sync_cover),
             ("sync-label", self._act_sync_label),
-            ("save-states", self._act_save_states),
             ("rename", self._act_rename),
             ("delete", self._act_delete),
         ):
@@ -765,9 +764,6 @@ class RomItem(Gtk.Box):
                 entries.append(
                     (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
                 )
-            entries.append(
-                (self.t("context.save_states"), "rom.save-states", "media-floppy-symbolic")
-            )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
         if self.context_services is not None:
@@ -843,10 +839,6 @@ class RomItem(Gtk.Box):
         if self.context_services is not None:
             self.context_services.win.open_artwork_manager(self.rom, LABEL_ART)
 
-    def _act_save_states(self, _action, _param):
-        logger.info("rom context action: save_states rom=%s", self.rom.get("name"))
-        if self.context_services is not None:
-            self.context_services.win.open_save_state_manager(self.rom)
 
     def _refresh_cover_after_change(self):
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)

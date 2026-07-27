@@ -238,8 +238,11 @@ class RetroArchLauncher:
         states_dir.mkdir(parents=True, exist_ok=True)
         overrides["savestate_directory"] = f'"{states_dir}"'
         overrides["savestate_thumbnail_enable"] = '"true"'
-        if state_slot is not None:
-            overrides["state_slot"] = f'"{int(state_slot)}"'
+        # The slot the save/load hotkeys act on: the launch-specific slot (a
+        # "load this save" launch) wins over the configured default.
+        if state_slot is None:
+            state_slot = self.config_manager.get_state_slot()
+        overrides["state_slot"] = f'"{int(state_slot)}"'
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
