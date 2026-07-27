@@ -479,7 +479,7 @@ class _ImportTab(Gtk.Box):
 
         self.crop_toggle = Gtk.ToggleButton()
         self.crop_toggle.set_child(
-            Adw.ButtonContent(icon_name="openemux-crop-symbolic", label=t("artwork.import.crop"))
+            Adw.ButtonContent(icon_name="edit-cut-symbolic", label=t("artwork.import.crop"))
         )
         self.crop_toggle.connect("toggled", self._on_crop_toggled)
         actions.append(self.crop_toggle)
