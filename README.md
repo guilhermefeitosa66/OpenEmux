@@ -186,6 +186,9 @@ A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, 
 
 Join the OpenEmux community on Reddit at [r/OpenEmux](https://www.reddit.com/r/OpenEmux/) — share your setup, ask for help, report issues, and follow what's coming next.
 
+Bug reports and feature suggestions shape this project, and the people behind them
+are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
 ---
 
 ## Support the Project
