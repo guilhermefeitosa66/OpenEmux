@@ -20,6 +20,7 @@ class _DummyConfig:
         # to the automatic candidate list.
         self.core_hints = core_hints
         self.rom_core = None
+        self.input_tuning = {}
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -57,6 +58,11 @@ class _DummyConfig:
 
     def get_network_cmd_port(self):
         return 55355
+
+    def get_input_tuning(self):
+        # Whatever the test does not care about stays at RetroArch's own
+        # defaults, which write nothing (issues #154, #155).
+        return dict(self.input_tuning)
 
     def get_master_volume_db(self):
         return -6.0
