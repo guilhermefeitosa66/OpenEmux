@@ -14,6 +14,8 @@ UI must never block on the emulator.
 
 import logging
 import socket
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,12 @@ DEFAULT_NETWORK_CMD_PORT = 55355
 
 #: RetroArch's own volume step per VOLUME_UP/VOLUME_DOWN command.
 VOLUME_STEP_DB = 0.5
+
+#: One packet per RetroArch frame. RetroArch polls its command socket once
+#: per frame; anything faster overruns the receive buffer and is dropped,
+#: which is why a slider drag did nothing while MUTE -- a single packet in a
+#: single frame -- always landed (issue #125).
+VOLUME_PACING_INTERVAL = 0.016
 
 #: The slider's floor; RetroArch itself goes to -80 but everything below
 #: -40 dB is inaudible in practice. 0 dB is unity gain.
@@ -54,6 +62,28 @@ class RetroArchCommandClient:
     def __init__(self, port=DEFAULT_NETWORK_CMD_PORT, host="127.0.0.1"):
         self.port = int(port)
         self.host = host
+        # One reusable socket rather than one per packet: a volume walk is
+        # dozens of datagrams and each fresh socket is a syscall pair for no
+        # gain. Guarded because the pacer sends from its own thread.
+        self._sock = None
+        self._sock_lock = threading.Lock()
+
+    def _ensure_socket(self):
+        if self._sock is None:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return self._sock
+
+    def _drop_socket(self):
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            self._sock = None
+
+    def close(self):
+        with self._sock_lock:
+            self._drop_socket()
 
     def send(self, command):
         """Send one command; True when the packet left, False otherwise."""
@@ -61,17 +91,119 @@ class RetroArchCommandClient:
         if not payload:
             return False
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                sock.sendto(payload.encode("utf-8"), (self.host, self.port))
+            with self._sock_lock:
+                self._ensure_socket().sendto(
+                    payload.encode("utf-8"), (self.host, self.port)
+                )
             return True
         except OSError as exc:
+            # A broken socket must not stay cached, or every later command
+            # fails against the same dead handle.
+            with self._sock_lock:
+                self._drop_socket()
             logger.warning("retroarch command failed: cmd=%s error=%s", payload, exc)
             return False
 
-    def send_repeated(self, command, count):
-        """Send the same command ``count`` times (volume stepping)."""
+    def send_repeated(self, command, count, delay=0.0):
+        """Send the same command ``count`` times.
+
+        ``delay`` seconds between packets. It defaults to 0 so this stays the
+        honest primitive, but any caller stepping the volume wants
+        ``VOLUME_PACING_INTERVAL`` -- see ``VolumePacer``.
+        """
         sent = 0
-        for _ in range(max(0, int(count))):
+        total = max(0, int(count))
+        for index in range(total):
             if self.send(command):
                 sent += 1
+            if delay and index < total - 1:
+                time.sleep(delay)
         return sent
+
+
+class VolumePacer:
+    """Walks a running game's volume toward a target, one packet per frame.
+
+    RetroArch drains its command socket once per frame, so turning a slider
+    drag into N back-to-back datagrams overruns the receive buffer and nearly
+    all of them are dropped. That is the whole of issue #125, and it explains
+    the reported asymmetry: MUTE is one packet in one frame and always lands.
+
+    ``set_target`` only moves the goal, so a fast drag coalesces into a single
+    walk instead of N overlapping bursts. The tracked level advances **only**
+    for packets that actually left the socket -- assuming otherwise is how the
+    tracker drifted permanently out of sync with RetroArch's real level.
+
+    ``sleep`` is injectable so the pacing is assertable without real time.
+    """
+
+    def __init__(self, client, level=MAX_VOLUME_DB, sleep=time.sleep,
+                 interval=VOLUME_PACING_INTERVAL):
+        self._client = client
+        self._sleep = sleep
+        self._interval = interval
+        self._lock = threading.Lock()
+        self._level = clamp_volume_db(level)
+        self._target = self._level
+        self._worker = None
+
+    @property
+    def level(self):
+        """The level RetroArch is at, as far as delivered packets can say."""
+        with self._lock:
+            return self._level
+
+    @property
+    def target(self):
+        with self._lock:
+            return self._target
+
+    def reset(self, level):
+        """Re-seed the tracker -- at launch RetroArch is told audio_volume."""
+        with self._lock:
+            self._level = clamp_volume_db(level)
+            self._target = self._level
+
+    def set_target(self, target_db):
+        """Move the goal. Starts a worker only if one is not already walking."""
+        target = clamp_volume_db(target_db)
+        start = None
+        with self._lock:
+            self._target = target
+            if self._worker is None:
+                # Assigned under the lock so a second caller cannot start a
+                # second worker between the check and the assignment.
+                self._worker = threading.Thread(
+                    target=self._run, name="openemux-volume-pacer", daemon=True
+                )
+                start = self._worker
+        if start is not None:
+            start.start()
+        return target
+
+    def join(self, timeout=None):
+        """Wait for the current walk to finish. Test/shutdown helper."""
+        worker = self._worker
+        if worker is not None:
+            worker.join(timeout)
+
+    def _run(self):
+        while True:
+            with self._lock:
+                command, _count = volume_steps(self._level, self._target)
+                if command is None:
+                    self._worker = None
+                    return
+                step = VOLUME_STEP_DB if command == "VOLUME_UP" else -VOLUME_STEP_DB
+
+            if not self._client.send(command):
+                # The datagram never left. Stop rather than spin: the tracker
+                # stays at what actually landed, so the next drag walks from
+                # the truth instead of compounding the error.
+                with self._lock:
+                    self._worker = None
+                return
+
+            with self._lock:
+                self._level = clamp_volume_db(self._level + step)
+            self._sleep(self._interval)

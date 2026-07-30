@@ -154,6 +154,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._cover_sync_running = False
         self._scan_running = False
         self._import_running = False
+        # The volume/mute controls are seeded once per launch, not on every
+        # runtime poll -- see _sync_runtime_controls (issue #125).
+        self._runtime_controls_seeded = False
         self._task_seq = 0
         self._tasks = {}
         # console_id -> Gdk.Texture (or None when the console ships no asset)
@@ -487,6 +490,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.volume_btn.set_tooltip_text(self.t("header.volume"))
         self.volume_btn.set_sensitive(False)
 
+        # Set while the app itself writes into the scale, so an echo of the
+        # runtime's own level is not mistaken for a user drag (issue #125).
+        self._volume_scale_guard = False
         self._volume_scale = Gtk.Scale.new_with_range(
             Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
         )
@@ -518,7 +524,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return self.volume_btn
 
     def _on_volume_scale_changed(self, scale):
-        level = self.runtime_manager.set_master_volume_db(scale.get_value())
+        if self._volume_scale_guard:
+            # The runtime poll echoes the current level back into the scale.
+            # Treating that as a user drag re-entered the whole volume path
+            # and wrote config.yaml once a second, forever (issue #125).
+            level = scale.get_value()
+        else:
+            level = self.runtime_manager.set_master_volume_db(scale.get_value())
         icon = "audio-volume-high-symbolic"
         if level <= -30:
             icon = "audio-volume-low-symbolic"
@@ -3299,12 +3311,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
         self.volume_btn.set_sensitive(is_running)
-        if is_running:
-            # A fresh launch starts unmuted at the persisted level.
+        if is_running and not self._runtime_controls_seeded:
+            # A fresh launch starts unmuted at the persisted level. Seeded
+            # once per launch rather than on every poll: this runs once a
+            # second, and re-pushing the level into the scale re-emitted
+            # value-changed each time. It would also fight the user mid-drag
+            # now that the tracked level walks to its target (issue #125).
             self._mute_toggle_guard = True
             self._mute_button.set_active(False)
             self._mute_toggle_guard = False
+            self._volume_scale_guard = True
             self._volume_scale.set_value(self.runtime_manager.volume_db)
+            self._volume_scale_guard = False
+        self._runtime_controls_seeded = is_running
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()
