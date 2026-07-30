@@ -61,14 +61,49 @@ def build_context_popover(entries):
 def _build_menu_box(entries, root_popover):
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     box.add_css_class("context-menu-box")
+    # One open submenu at a time, shared by every row of this box: pointing at
+    # another row closes whatever the previous one opened.
+    hover = {"open": None}
     for entry in entries:
         if entry is SEPARATOR:
             box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         elif isinstance(entry, Submenu):
-            box.append(_submenu_row(root_popover, entry))
+            box.append(_submenu_row(root_popover, entry, hover))
         else:
-            box.append(_menu_row(root_popover, *entry))
+            box.append(_menu_row(root_popover, *entry, hover=hover))
     return box
+
+
+def _reveal_on_hover(button, hover, child=None):
+    """Open ``child`` when the row is pointed at or focused.
+
+    A submenu that waits for a click reads as a button rather than as a menu,
+    so it opens on hover like every other menu people use. Focus counts too,
+    so keyboard and gamepad navigation behave the same as the pointer.
+
+    Rows *without* a submenu take part as well: pointing at one closes the
+    open submenu, which is what keeps a single branch showing at a time.
+
+    Deliberately no close-on-leave: reaching a submenu means leaving the row
+    that opened it, and closing there would make it unreachable.
+    """
+
+    def _enter(*_args):
+        current = hover.get("open")
+        if current is not None and current is not child:
+            current.popdown()
+            hover["open"] = None
+        if child is not None and not child.get_visible():
+            child.popup()
+            hover["open"] = child
+
+    motion = Gtk.EventControllerMotion()
+    motion.connect("enter", _enter)
+    button.add_controller(motion)
+
+    focus = Gtk.EventControllerFocus()
+    focus.connect("enter", _enter)
+    button.add_controller(focus)
 
 
 def _icon_image(icon_name):
@@ -155,7 +190,7 @@ def _activate_action_row(root_popover, action_name):
     _run_after_close(root_popover, lambda: anchor.activate_action(action_name, None))
 
 
-def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
+def _menu_row(root_popover, label, action, icon_name, swatch_hex=None, hover=None):
     content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     content.append(_icon_image(icon_name))
     # "" is a deliberate blank: a spacer that keeps a swatch menu's labels
@@ -185,10 +220,13 @@ def _menu_row(root_popover, label, action, icon_name, swatch_hex=None):
         button.connect(
             "clicked", lambda _b, name=action: _activate_action_row(root_popover, name)
         )
+    if hover is not None:
+        # No submenu of its own, but pointing at it still closes the open one.
+        _reveal_on_hover(button, hover)
     return button
 
 
-def _submenu_row(root_popover, submenu):
+def _submenu_row(root_popover, submenu, hover):
     content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     content.append(_icon_image(submenu.icon_name))
     text = Gtk.Label(label=submenu.label)
@@ -209,7 +247,9 @@ def _submenu_row(root_popover, submenu):
     child.set_child(_build_menu_box(submenu.entries, root_popover))
     child.set_parent(button)
 
+    # Hover is the way in; the click stays for anyone who reaches for it.
     button.connect("clicked", lambda _b: child.popup())
+    _reveal_on_hover(button, hover, child)
     # The nested popover is parented to this row; drop it when the row goes so
     # it is not left orphaned when the whole menu is torn down.
     button.connect("destroy", lambda _b: child.unparent())
