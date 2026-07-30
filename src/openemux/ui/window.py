@@ -194,6 +194,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
         breakpoint.add_setter(self.split_view, "collapsed", True)
+        # The content header holds six end-packed widgets at full width. At
+        # this breakpoint the sidebar collapses onto the content anyway, so
+        # the hamburger is one navigation away regardless and the gear is the
+        # right thing to drop first (issue #131).
+        breakpoint.add_setter(self.preferences_btn, "visible", False)
         self.add_breakpoint(breakpoint)
 
         # Below this width the header cannot hold the segmented view switcher;
@@ -380,6 +385,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self.restart_btn)
 
         header.pack_end(self._build_volume_button())
+
+        # The primary menu lives only in the sidebar header, so Preferences
+        # cost a trip through the hamburger -- and once the split view
+        # collapses, a back-navigation first. The action already exists, so
+        # this is only a second way in (issue #131).
+        self.preferences_btn = Gtk.Button()
+        # preferences-system-symbolic, not emblem-system-symbolic: several
+        # common icon themes draw the latter as a hamburger, which would put
+        # two identical menu glyphs in adjacent header bars.
+        self.preferences_btn.set_icon_name("preferences-system-symbolic")
+        self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
+        self.preferences_btn.set_action_name("win.preferences")
+        header.pack_end(self.preferences_btn)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -1257,6 +1275,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.restart_btn.set_tooltip_text(self.t("header.restart"))
+        self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
         self.volume_btn.set_tooltip_text(self.t("header.volume"))
         self._mute_button.set_tooltip_text(self.t("volume.mute"))
         self.import_btn.set_tooltip_text(self.t("header.import"))
