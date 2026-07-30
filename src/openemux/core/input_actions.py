@@ -139,8 +139,17 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "l1": "d",
     "l2": "e",
     "l3": "3",
-    # Hotkeys: keep RetroArch defaults while protecting gameplay keys via enable_hotkey.
-    "enable_hotkey": "right shift",
+    # No modifier on a keyboard. It exists for pads, where Select has to do
+    # double duty because there are only ~10 buttons; a keyboard has plenty of
+    # free keys and none of the hotkey defaults below collide with a gameplay
+    # key, so a modifier would only add a keypress.
+    #
+    # This is also what already happened in practice: the previous default,
+    # "right shift", is not a name RetroArch resolves, so input_enable_hotkey
+    # was effectively unbound and the hotkeys fired directly. Fixing the key
+    # translation (issue #144) would otherwise have silently turned that into
+    # "hold Right Shift for every hotkey".
+    "enable_hotkey": "",
     "menu_toggle": "f1",
     "save_state": "f2",
     "load_state": "f4",
@@ -327,7 +336,11 @@ def normalize_bindings(bindings, device_type, console=None):
         # A gamepad has no letters. Handing a pad profile a keyboard fallback
         # key produces a binding that can never fire, which reads in the UI as
         # "bound" while doing nothing at all.
-        if device_type == "gamepad":
+        #
+        # A hotkey never takes a fallback either: it has a considered default
+        # or it stays unbound. Handing enable_hotkey an arbitrary letter would
+        # gate every other hotkey behind a key nobody chose.
+        if device_type == "gamepad" or is_hotkey:
             continue
         while fallback_index < len(FALLBACK_KEYS) and FALLBACK_KEYS[fallback_index] in used_keys:
             fallback_index += 1
@@ -336,6 +349,78 @@ def normalize_bindings(bindings, device_type, console=None):
             used_keys.add(FALLBACK_KEYS[fallback_index])
             fallback_index += 1
     return {action: normalized.get(action, "") for action in allowed_actions}
+
+
+#: GTK key name -> RetroArch key name, for the keys where the two vocabularies
+#: disagree (issue #144). ``Gdk.keyval_name()`` is what input capture reads, and
+#: RetroArch resolves config tokens through its own table; a name that is not in
+#: that table resolves to nothing, so the binding reads as bound in Preferences
+#: and can never fire.
+#:
+#: Names on the right were taken from RetroArch's own key table and from the
+#: tokens RetroArch writes into retroarch.cfg (``num1``, ``rshift``, ``pageup``,
+#: ``kp_equals``, ``backquote``, ``leftbracket``…). Anything not listed here is
+#: already identical in both vocabularies -- letters, ``f1``-``f12``, ``minus``,
+#: ``comma``, the arrow keys -- and passes through untouched.
+#:
+#: Legacy spellings this app itself produced are included so a profile saved
+#: before the fix is healed on the next launch rather than needing a reset.
+RETROARCH_KEY_NAMES = {
+    # Top-row digits. RetroArch reserves the bare digits for nothing and files
+    # these under num*, while the keypad ones are keypad*.
+    **{str(digit): f"num{digit}" for digit in range(10)},
+    **{f"kp_{digit}": f"keypad{digit}" for digit in range(10)},
+    "equal": "equals",
+    "kp_equal": "kp_equals",
+    "kp_add": "kp_plus",
+    "kp_subtract": "kp_minus",
+    "kp_decimal": "kp_period",
+    "page_up": "pageup",
+    "page_down": "pagedown",
+    "prior": "pageup",
+    "next": "pagedown",
+    "delete": "del",
+    "return": "enter",
+    "grave": "backquote",
+    "bracketleft": "leftbracket",
+    "bracketright": "rightbracket",
+    "apostrophe": "quote",
+    "caps_lock": "capslock",
+    "num_lock": "numlock",
+    "print": "print_screen",
+    # Modifiers. RetroArch names the left-hand one bare and prefixes the right.
+    "shift_l": "shift",
+    "shift_r": "rshift",
+    "control_l": "ctrl",
+    "control_r": "rctrl",
+    "alt_l": "alt",
+    "alt_r": "ralt",
+    "super_l": "lsuper",
+    "super_r": "rsuper",
+    "meta_l": "lmeta",
+    "meta_r": "rmeta",
+    # Spellings written by earlier versions of this app's own capture table.
+    "left shift": "shift",
+    "right shift": "rshift",
+    "left ctrl": "ctrl",
+    "right ctrl": "rctrl",
+    "left alt": "alt",
+    "right alt": "ralt",
+    "left super": "lsuper",
+    "right super": "rsuper",
+}
+
+
+def retroarch_key_token(value):
+    """Translate one keyboard binding into the token RetroArch understands.
+
+    Idempotent: a value already in RetroArch's vocabulary passes through, so
+    this is safe to apply both at capture time and again when the runtime
+    override is written.
+    """
+    if not value:
+        return value
+    return RETROARCH_KEY_NAMES.get(str(value).strip().lower(), value)
 
 
 def _quote(value):
@@ -371,7 +456,9 @@ def to_retroarch_overrides(bindings, device_type, console=None, player=1):
             continue
 
         if device_type == "keyboard":
-            overrides[base_key] = _quote(bind_value)
+            # Translated here as well as at capture time, so a profile saved
+            # with a GTK spelling is healed without a reset (issue #144).
+            overrides[base_key] = _quote(retroarch_key_token(bind_value))
             continue
 
         # Gamepad: infer axis or button token.

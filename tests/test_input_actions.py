@@ -9,6 +9,7 @@ from openemux.core.input_actions import (
     get_actions_for_console,
     normalize_bindings,
     retroarch_key_for,
+    retroarch_key_token,
     to_retroarch_overrides,
 )
 
@@ -31,7 +32,9 @@ class InputActionsTests(unittest.TestCase):
         self.assertEqual(normalized["a"], "z")
         self.assertEqual(normalized["b"], "x")
         self.assertEqual(normalized["start"], "enter")
-        self.assertEqual(normalized["enable_hotkey"], "right shift")
+        # No modifier on a keyboard: there are plenty of free keys and none of
+        # the hotkey defaults collide with a gameplay one (issue #144).
+        self.assertEqual(normalized["enable_hotkey"], "")
 
     def test_gamepad_axis_binding_generates_axis_suffix(self):
         overrides = to_retroarch_overrides({"l2": "+2", "a": "0"}, "gamepad")
@@ -50,7 +53,8 @@ class InputActionsTests(unittest.TestCase):
             "keyboard",
             console="GBA",
         )
-        self.assertEqual(overrides["input_enable_hotkey"], '"right shift"')
+        # Translated to the token RetroArch actually resolves (issue #144).
+        self.assertEqual(overrides["input_enable_hotkey"], '"rshift"')
         self.assertEqual(overrides["input_menu_toggle"], '"f1"')
         self.assertEqual(overrides["input_save_state"], '"f2"')
         self.assertEqual(overrides["input_load_state"], '"f4"')
@@ -142,6 +146,113 @@ class FullscreenToggleTests(unittest.TestCase):
     def test_is_offered_for_every_console(self):
         for console in ("FC", "SFC", "GBA", "PS", "MD"):
             self.assertIn("fullscreen_toggle", get_actions_for_console(console), console)
+
+
+class RetroArchKeyNameTests(unittest.TestCase):
+    """Issue #144: GTK and RetroArch name keys differently.
+
+    Names on the RetroArch side were taken from its own key table and from
+    the tokens RetroArch writes into retroarch.cfg.
+    """
+
+    def test_the_reported_case_equals_versus_equal(self):
+        # Binding "-" worked and "=" did not: GTK calls it `equal`, RetroArch
+        # `equals`, and an unresolvable token simply never fires.
+        self.assertEqual(retroarch_key_token("equal"), "equals")
+        self.assertEqual(retroarch_key_token("minus"), "minus")
+
+    def test_top_row_digits_are_not_bare_digits(self):
+        for digit in range(10):
+            self.assertEqual(retroarch_key_token(str(digit)), f"num{digit}")
+
+    def test_keypad_digits_are_distinct_from_the_top_row(self):
+        self.assertEqual(retroarch_key_token("kp_0"), "keypad0")
+        self.assertEqual(retroarch_key_token("kp_9"), "keypad9")
+
+    def test_page_keys(self):
+        self.assertEqual(retroarch_key_token("page_up"), "pageup")
+        self.assertEqual(retroarch_key_token("page_down"), "pagedown")
+
+    def test_modifiers_use_retroarchs_left_bare_right_prefixed_form(self):
+        self.assertEqual(retroarch_key_token("shift_l"), "shift")
+        self.assertEqual(retroarch_key_token("shift_r"), "rshift")
+        self.assertEqual(retroarch_key_token("control_r"), "rctrl")
+        self.assertEqual(retroarch_key_token("alt_l"), "alt")
+
+    def test_the_spellings_this_app_used_to_write_are_healed(self):
+        # A profile saved before the fix must not need a reset.
+        self.assertEqual(retroarch_key_token("right shift"), "rshift")
+        self.assertEqual(retroarch_key_token("left ctrl"), "ctrl")
+
+    def test_shared_names_pass_through_untouched(self):
+        for name in ("a", "z", "f1", "f12", "enter", "space", "escape",
+                     "up", "down", "left", "right", "comma", "minus"):
+            self.assertEqual(retroarch_key_token(name), name)
+
+    def test_translation_is_idempotent(self):
+        # Applied at capture *and* when the override is written.
+        for name in ("equal", "1", "page_up", "right shift", "kp_0"):
+            once = retroarch_key_token(name)
+            self.assertEqual(retroarch_key_token(once), once, name)
+
+    def test_empty_stays_empty(self):
+        self.assertEqual(retroarch_key_token(""), "")
+        self.assertIsNone(retroarch_key_token(None))
+
+    def test_overrides_are_written_with_the_translated_token(self):
+        overrides = to_retroarch_overrides(
+            {"volume_up": "equal", "volume_down": "minus", "r3": "1"},
+            "keyboard",
+        )
+        self.assertEqual(overrides["input_volume_up"], '"equals"')
+        self.assertEqual(overrides["input_volume_down"], '"minus"')
+        self.assertEqual(overrides["input_player1_r3"], '"num1"')
+
+    def test_gamepad_tokens_are_left_alone(self):
+        # Pad tokens are a different namespace: "1" is button one, not a key.
+        overrides = to_retroarch_overrides({"a": "1", "l2": "+2"}, "gamepad")
+        self.assertEqual(overrides["input_player1_a_btn"], '"1"')
+        self.assertEqual(overrides["input_player1_l2_axis"], '"+2"')
+
+
+class KeyboardHotkeyModifierTests(unittest.TestCase):
+    """Issue #144: no enable_hotkey on a keyboard, and no fallback letter."""
+
+    def test_keyboard_has_no_hotkey_modifier(self):
+        defaults = default_bindings_for_device("keyboard", console="SFC")
+        self.assertEqual(defaults["enable_hotkey"], "")
+        normalized = normalize_bindings({}, "keyboard", console="SFC")
+        self.assertEqual(normalized["enable_hotkey"], "")
+
+    def test_it_is_therefore_not_written_to_the_override(self):
+        overrides = to_retroarch_overrides({}, "keyboard", console="SFC")
+        self.assertNotIn("input_enable_hotkey", overrides)
+
+    def test_the_pad_keeps_its_modifier(self):
+        # A pad has ~10 buttons, so Select has to do double duty (issue #124).
+        normalized = normalize_bindings({}, "gamepad", console="SFC")
+        self.assertEqual(normalized["enable_hotkey"], "6")
+
+    def test_no_hotkey_is_ever_handed_a_fallback_letter(self):
+        from openemux.core.input_actions import FALLBACK_KEYS
+
+        normalized = normalize_bindings({}, "keyboard", console="SFC")
+        for action in GLOBAL_HOTKEY_ACTIONS:
+            self.assertNotIn(normalized[action], FALLBACK_KEYS, action)
+
+    def test_no_keyboard_hotkey_default_collides_with_a_gameplay_key(self):
+        # What makes dropping the modifier safe: without one, a hotkey key
+        # pressed during play would otherwise also move the character.
+        defaults = default_bindings_for_device("keyboard", console=None)
+        gameplay = {
+            defaults[action]
+            for action in defaults
+            if action not in GLOBAL_HOTKEY_ACTIONS and defaults[action]
+        }
+        for action in GLOBAL_HOTKEY_ACTIONS:
+            value = defaults.get(action)
+            if value:
+                self.assertNotIn(value, gameplay, action)
 
 
 class AnalogStickAxisTests(unittest.TestCase):

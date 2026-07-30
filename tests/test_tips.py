@@ -60,6 +60,17 @@ class KeyLabelTests(unittest.TestCase):
         self.assertEqual(format_key_label(""), "")
         self.assertEqual(format_key_label(None), "")
 
+    def test_retroarch_tokens_read_as_keys(self):
+        # Bindings are stored as RetroArch tokens since issue #144, and
+        # "num1" or "pageup" is not what anyone reads off their keyboard.
+        self.assertEqual(format_key_label("num1"), "1")
+        self.assertEqual(format_key_label("keypad7"), "Keypad 7")
+        self.assertEqual(format_key_label("pageup"), "Page Up")
+        self.assertEqual(format_key_label("pagedown"), "Page Down")
+        self.assertEqual(format_key_label("equals"), "=")
+        self.assertEqual(format_key_label("rshift"), "Right Shift")
+        self.assertEqual(format_key_label("del"), "Delete")
+
 
 class PickNextTipTests(unittest.TestCase):
     def test_empty_list_returns_none(self):
