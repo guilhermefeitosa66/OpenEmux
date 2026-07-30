@@ -178,6 +178,15 @@ class RuntimeManager:
             self.muted = not self.muted
         return self.muted
 
+    def restart_active(self):
+        """Reset the running game without reloading the core or the content.
+
+        RetroArch's own RESET: the process stays up, so this is near-instant
+        and is *not* a way to pick up config changes -- the runtime override
+        is read once at spawn. Relaunching is what does that (issue #130).
+        """
+        return self.send_command("RESET")
+
     # -- save states (issue #73) -------------------------------------------
     def load_state(self):
         """Load the active slot's state -- used right after a launch seeded
