@@ -212,6 +212,7 @@ TRANSLATIONS = {
     "settings.input.subtitle": "Keyboard and gamepad mapping",
     "input.console": "Console",
     "input.device": "Input device",
+    "input.device.subtitle": "Which map you are editing. The keyboard and player 1’s controller are both always active.",
     "input.device.keyboard": "Keyboard",
     "input.device.gamepad_p1": "Gamepad Port 1",
     "input.device.gamepad_p2": "Gamepad Port 2",
