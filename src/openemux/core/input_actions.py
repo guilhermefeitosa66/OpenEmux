@@ -177,6 +177,29 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "fast_forward_toggle": "5",  # Select + R1
 }
 
+#: Analog stick axes. Deliberately *not* user-facing actions: they stay out
+#: of ACTION_ORDER and get_actions_for_console(), so Preferences rows, input
+#: capture and normalize_bindings never see them.
+#:
+#: RetroArch's input_playerN_analog_dpad_mode cannot fold a stick onto the
+#: D-pad without first knowing which axes that stick is, and nothing else in
+#: a profile expresses that. Without these keys mode 1 has nothing to read and
+#: silently does nothing under any configuration (issue #126).
+#:
+#: Numbering matches what the codebase already assumes for udev pads in
+#: ui_gamepad.py: axes 0/1 are the left stick, 3/4 the right one. Axes 2 and 5
+#: are the analog triggers and are bound as l2/r2 instead.
+ANALOG_STICK_BINDINGS = {
+    "l_x_minus": "-0",
+    "l_x_plus": "+0",
+    "l_y_minus": "-1",
+    "l_y_plus": "+1",
+    "r_x_minus": "-3",
+    "r_x_plus": "+3",
+    "r_y_minus": "-4",
+    "r_y_plus": "+4",
+}
+
 #: Highest RetroArch port OpenEmux exposes in the UI.
 MAX_PLAYERS = 4
 
@@ -344,5 +367,12 @@ def to_retroarch_overrides(bindings, device_type, console=None, player=1):
         # Gamepad: infer axis or button token.
         suffix = "_axis" if _is_axis_binding(bind_value) else "_btn"
         overrides[f"{base_key}{suffix}"] = _quote(bind_value)
+
+    if device_type == "gamepad":
+        # The sticks are not bindable actions, but analog_dpad_mode is dead
+        # without them and an analog-native console needs them to read the
+        # stick at all (issue #126).
+        for suffix, token in ANALOG_STICK_BINDINGS.items():
+            overrides[f"input_player{player}_{suffix}_axis"] = _quote(token)
 
     return overrides

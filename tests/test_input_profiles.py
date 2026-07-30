@@ -215,6 +215,49 @@ class AnalogDpadModeTests(unittest.TestCase):
             self.assertEqual(manager.get_analog_dpad_mode("SFC"), ANALOG_DPAD_LEFT_STICK)
 
 
+class ProfileSettingsSurviveBindingSavesTests(unittest.TestCase):
+    """Issue #126: the settings written by their own rows must not be lost.
+
+    ``analog_dpad_mode`` and ``turbo`` are persisted the moment their row
+    changes, while bindings are persisted by the Save button. Saving from a
+    snapshot taken before the row changed silently reverted it -- change the
+    stick row, press Save, lose the choice. Preferences now re-reads first,
+    which is the flow these exercise.
+    """
+
+    def test_analog_mode_survives_a_later_binding_save(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.set_analog_dpad_mode("SFC", ANALOG_DPAD_RIGHT_STICK)
+
+            profile = manager.load_profile("SFC")
+            profile["devices"]["gamepad_p1"]["bindings"]["a"] = "1"
+            manager.save_profile("SFC", profile)
+
+            reloaded = InputProfileManager(tmp_dir)
+            self.assertEqual(
+                reloaded.get_analog_dpad_mode("SFC"), ANALOG_DPAD_RIGHT_STICK
+            )
+            self.assertEqual(
+                reloaded.load_profile("SFC")["devices"]["gamepad_p1"]["bindings"]["a"],
+                "1",
+            )
+
+    def test_turbo_settings_survive_a_later_binding_save(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.set_turbo_settings("SFC", {"period": 10, "duty_cycle": 4, "mode": 1})
+
+            profile = manager.load_profile("SFC")
+            profile["devices"]["gamepad_p1"]["bindings"]["b"] = "0"
+            manager.save_profile("SFC", profile)
+
+            self.assertEqual(
+                InputProfileManager(tmp_dir).get_turbo_settings("SFC"),
+                {"period": 10, "duty_cycle": 4, "mode": 1},
+            )
+
+
 class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
     """Issue #124: repair profiles pinned to pad buttons that do not exist."""
 

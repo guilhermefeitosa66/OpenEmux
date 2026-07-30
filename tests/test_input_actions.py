@@ -144,6 +144,46 @@ class FullscreenToggleTests(unittest.TestCase):
             self.assertIn("fullscreen_toggle", get_actions_for_console(console), console)
 
 
+class AnalogStickAxisTests(unittest.TestCase):
+    """Issue #126: the sticks have to be declared or they do nothing."""
+
+    def test_gamepad_overrides_declare_every_stick_axis(self):
+        from openemux.core.input_actions import ANALOG_STICK_BINDINGS
+
+        overrides = to_retroarch_overrides({"a": "0"}, "gamepad", console="SFC")
+        for suffix, token in ANALOG_STICK_BINDINGS.items():
+            self.assertEqual(overrides[f"input_player1_{suffix}_axis"], f'"{token}"')
+
+    def test_axes_follow_the_port_being_written(self):
+        overrides = to_retroarch_overrides({"a": "0"}, "gamepad", player=3)
+        self.assertEqual(overrides["input_player3_l_x_minus_axis"], '"-0"')
+        self.assertNotIn("input_player1_l_x_minus_axis", overrides)
+
+    def test_keyboard_overrides_declare_none(self):
+        overrides = to_retroarch_overrides({"a": "z"}, "keyboard", console="SFC")
+        self.assertFalse([key for key in overrides if key.endswith("_x_plus_axis")])
+
+    def test_axes_are_not_bindable_actions(self):
+        # They must stay out of the action list, or Preferences would grow
+        # rows for them and input capture would demand the user bind a stick.
+        from openemux.core.input_actions import ACTION_ORDER, ANALOG_STICK_BINDINGS
+
+        for console in ("FC", "SFC", "N64"):
+            actions = get_actions_for_console(console)
+            for suffix in ANALOG_STICK_BINDINGS:
+                self.assertNotIn(suffix, actions, console)
+                self.assertNotIn(suffix, ACTION_ORDER)
+
+    def test_axes_do_not_collide_with_the_analog_triggers(self):
+        # Axes 2 and 5 are the triggers (l2/r2); claiming them for a stick
+        # would make a resting trigger read as a held direction.
+        from openemux.core.input_actions import ANALOG_STICK_BINDINGS
+
+        claimed = {token.lstrip("+-") for token in ANALOG_STICK_BINDINGS.values()}
+        self.assertNotIn("2", claimed)
+        self.assertNotIn("5", claimed)
+
+
 class GamepadHotkeyReachabilityTests(unittest.TestCase):
     """Issue #124: the gamepad hotkey defaults must exist on a real pad.
 
