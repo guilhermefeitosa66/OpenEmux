@@ -14,6 +14,7 @@ from openemux.core.input_profiles import (
     PLAYER1_DEVICE_IDS,
     device_type_for,
     normalize_analog_dpad_mode,
+    normalize_controller_type,
     normalize_turbo_settings,
     player_for_device,
 )
@@ -225,6 +226,20 @@ class RetroArchLauncher:
             if extra.get("enabled"):
                 player = player_for_device(device_id)
                 overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+        # Which controller the core is told is in each port (issue #151).
+        # Left out entirely when unset, so the core keeps its own default --
+        # PlayStation boots as a digital pad, and an analog game needs
+        # DualShock chosen here just as it does in RetroArch.
+        controller_type = normalize_controller_type(
+            profile.get("controller_type"), console
+        )
+        if controller_type is not None:
+            overrides["input_libretro_device_p1"] = f'"{controller_type}"'
+            for device_id in EXTRA_PORT_DEVICE_IDS:
+                extra = devices.get(device_id) or {}
+                if extra.get("enabled"):
+                    player = player_for_device(device_id)
+                    overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
         # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
         # itself is a normal binding ("turbo" action) emitted per port above,
         # so without one bound these just restate the defaults.

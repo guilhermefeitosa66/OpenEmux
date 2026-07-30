@@ -32,6 +32,7 @@ from openemux.core.input_profiles import (
     TURBO_PERIOD_RANGE,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
+    controller_types_for,
     device_type_for,
     player_for_device,
 )
@@ -545,6 +546,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._port_enabled_switch.set_visible(False)
         controller_group.add(self._port_enabled_switch)
 
+        # Which controller the core is told is plugged in (issue #151). Only
+        # shown where the console's core publishes more than one -- most
+        # publish exactly one, and a combo with a single entry is furniture.
+        self._controller_type_row = Adw.ComboRow(
+            title=self.t("input.controller_type.title"),
+            subtitle=self.t("input.controller_type.subtitle"),
+        )
+        self._controller_type_guard = False
+        self._controller_type_ids = []
+        self._sync_controller_type_row()
+        self._controller_type_row.connect(
+            "notify::selected", self._on_controller_type_changed
+        )
+        controller_group.add(self._controller_type_row)
+
         # Analog-as-D-pad (issue #71): per console, RetroArch's own
         # analog_dpad_mode, so the stick and the D-pad steer together.
         self._analog_dpad_ids = list(ANALOG_DPAD_MODES)
@@ -674,6 +690,39 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             },
         )
 
+    def _sync_controller_type_row(self):
+        console = self._current_console()
+        types = controller_types_for(console)
+        self._controller_type_row.set_visible(bool(types))
+        if not types:
+            self._controller_type_ids = []
+            return
+        # None first: "whatever the core boots with", which is the default and
+        # the only honest option for a core we have not verified.
+        self._controller_type_ids = [None] + [ident for ident, _label in types]
+        labels = [self.t("input.controller_type.core_default")] + [
+            label for _ident, label in types
+        ]
+        self._controller_type_guard = True
+        self._controller_type_row.set_model(Gtk.StringList.new(labels))
+        current = self.config.input_profiles.get_controller_type(console)
+        self._controller_type_row.set_selected(
+            self._controller_type_ids.index(current)
+            if current in self._controller_type_ids
+            else 0
+        )
+        self._controller_type_guard = False
+
+    def _on_controller_type_changed(self, *_a):
+        if self._controller_type_guard:
+            return
+        index = self._controller_type_row.get_selected()
+        if index < 0 or index >= len(self._controller_type_ids):
+            return
+        self.config.input_profiles.set_controller_type(
+            self._current_console(), self._controller_type_ids[index]
+        )
+
     def _sync_analog_dpad_row(self):
         mode = self.config.input_profiles.get_analog_dpad_mode(self._current_console())
         self._analog_dpad_guard = True
@@ -688,6 +737,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_console_changed(self, *_a):
         self._cancel_capture()
+        self._sync_controller_type_row()
         self._sync_analog_dpad_row()
         self._sync_turbo_rows()
         self._refresh_bindings()
