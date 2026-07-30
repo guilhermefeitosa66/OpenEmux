@@ -74,12 +74,24 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # exclusive-capture mode -- when the dialog goes away.
         self.connect("closed", lambda _d: self._on_closed())
 
-        self.add(self._build_library_page())
-        self.add(self._build_bios_page())
-        self.add(self._build_input_page())
-        self.add(self._build_video_page())
-        self.add(self._build_cores_page())
-        self.add(self._build_system_page())
+        # Kept by name so a caller can open the dialog straight on one of
+        # them -- the header's controller button lands on "input".
+        self._pages = {
+            "library": self._build_library_page(),
+            "bios": self._build_bios_page(),
+            "input": self._build_input_page(),
+            "video": self._build_video_page(),
+            "cores": self._build_cores_page(),
+            "system": self._build_system_page(),
+        }
+        for page in self._pages.values():
+            self.add(page)
+
+    def show_page(self, name):
+        """Open on a named page. Unknown names leave the dialog as it is."""
+        page = self._pages.get(name)
+        if page is not None:
+            self.set_visible_page(page)
 
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):

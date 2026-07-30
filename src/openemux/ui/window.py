@@ -197,11 +197,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
         breakpoint.add_setter(self.split_view, "collapsed", True)
-        # The content header holds six end-packed widgets at full width. At
-        # this breakpoint the sidebar collapses onto the content anyway, so
-        # the hamburger is one navigation away regardless and the gear is the
-        # right thing to drop first (issue #131).
-        breakpoint.add_setter(self.preferences_btn, "visible", False)
+        # The content header is dense at full width. At this breakpoint the
+        # sidebar collapses onto the content anyway, so the hamburger is one
+        # navigation away regardless and the settings pair is the right thing
+        # to drop first (issue #131).
+        breakpoint.add_setter(self.settings_box, "visible", False)
         self.add_breakpoint(breakpoint)
 
         # Below this width the header cannot hold the segmented view switcher;
@@ -331,6 +331,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.content_stack.get_visible_child_name(),
             self.current_console,
         )
+        self._sync_console_header_controls()
+
+    def _console_scope_id(self):
+        """The console this page is showing, or None.
+
+        All, Favourites and a collection each span several consoles, so there
+        is no single input profile to jump to from them.
+        """
+        scope = self.current_console
+        return scope if scope in SYSTEM_IDS else None
+
+    def _sync_console_header_controls(self):
+        """Show the header controls that only make sense on a console page."""
+        button = getattr(self, "console_input_btn", None)
+        if button is None:
+            return  # called before the header exists
+        button.set_visible(self._console_scope_id() is not None)
 
     def t(self, key, **kwargs):
         return tr(self.locale, key, **kwargs)
@@ -380,6 +397,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         header.pack_end(self._build_volume_button())
 
+        # The two settings buttons ride in one box so the narrow breakpoint
+        # can drop them together, without fighting the per-scope visibility
+        # of the controller one.
+        self.settings_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+        # Straight to this console's controller mapping. Only shown on a
+        # console's own page: on All, Favourites or a collection there is no
+        # single console to configure.
+        self.console_input_btn = Gtk.Button()
+        self.console_input_btn.set_icon_name("input-gaming-symbolic")
+        self.console_input_btn.set_tooltip_text(self.t("header.console_input"))
+        self.console_input_btn.set_visible(False)
+        self.console_input_btn.connect(
+            "clicked", lambda _b: self._open_preferences(page="input")
+        )
+        self.settings_box.append(self.console_input_btn)
+
         # The primary menu lives only in the sidebar header, so Preferences
         # cost a trip through the hamburger -- and once the split view
         # collapses, a back-navigation first. The action already exists, so
@@ -391,7 +425,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.preferences_btn.set_icon_name("preferences-system-symbolic")
         self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
         self.preferences_btn.set_action_name("win.preferences")
-        header.pack_end(self.preferences_btn)
+        self.settings_box.append(self.preferences_btn)
+        header.pack_end(self.settings_box)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -1197,8 +1232,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.search_button.set_active(not self.search_button.get_active())
 
-    def _open_preferences(self):
+    def _open_preferences(self, page=None):
         self._preferences_dialog = OpenEmuxPreferences(self)
+        if page:
+            self._preferences_dialog.show_page(page)
         self._preferences_dialog.present(self)
 
     def _open_welcome(self):
@@ -1284,6 +1321,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
         self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
+        self.console_input_btn.set_tooltip_text(self.t("header.console_input"))
         self.volume_btn.set_tooltip_text(self.t("header.volume"))
         self._mute_button.set_tooltip_text(self.t("volume.mute"))
         self.import_btn.set_tooltip_text(self.t("header.import"))

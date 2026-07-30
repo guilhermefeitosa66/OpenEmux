@@ -146,6 +146,7 @@ TRANSLATIONS = {
     "sidebar.settings": "Settings",
     "header.stop": "Stop running game",
     "header.preferences": "Preferences",
+    "header.console_input": "Controller settings for this console",
     "filter.missing_artwork": "Only without artwork",
     "rom.artwork.missing": "No artwork found for this game",
     "rom.artwork.search": "Search artwork…",
