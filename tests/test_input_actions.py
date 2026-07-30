@@ -116,13 +116,22 @@ class FullscreenToggleTests(unittest.TestCase):
     def test_gamepad_binding_uses_a_button_token(self):
         bindings = default_bindings_for_device("gamepad", console="SFC")
         overrides = to_retroarch_overrides(bindings, "gamepad", console="SFC")
-        self.assertEqual(overrides["input_toggle_fullscreen_btn"], '"15"')
+        # Select + L1 since #124; the old "15" was a button no pad has.
+        self.assertEqual(overrides["input_toggle_fullscreen_btn"], '"4"')
 
     def test_default_does_not_collide_with_another_binding(self):
         values = list(DEFAULT_KEYBOARD_BINDINGS.values())
         self.assertEqual(values.count("f"), 1)
-        gamepad = list(DEFAULT_GAMEPAD_BINDINGS.values())
-        self.assertEqual(gamepad.count("15"), 1)
+        # On a pad the hotkey shares a token with the gameplay button it rides
+        # on (Select + L1), so "4" appears twice on purpose -- what must stay
+        # unique is the hotkey token among the hotkeys themselves.
+        hotkey_tokens = [
+            DEFAULT_GAMEPAD_BINDINGS[action]
+            for action in GLOBAL_HOTKEY_ACTIONS
+            if action in DEFAULT_GAMEPAD_BINDINGS and action != "enable_hotkey"
+        ]
+        self.assertEqual(hotkey_tokens.count("4"), 1)
+        self.assertEqual(len(hotkey_tokens), len(set(hotkey_tokens)))
 
     def test_stays_unnumbered_on_extra_ports(self):
         # One global hotkey set: writing it from port 2 would clobber port 1.
@@ -133,6 +142,66 @@ class FullscreenToggleTests(unittest.TestCase):
     def test_is_offered_for_every_console(self):
         for console in ("FC", "SFC", "GBA", "PS", "MD"):
             self.assertIn("fullscreen_toggle", get_actions_for_console(console), console)
+
+
+class GamepadHotkeyReachabilityTests(unittest.TestCase):
+    """Issue #124: the gamepad hotkey defaults must exist on a real pad.
+
+    The old defaults pointed at buttons 11-15. An Xbox-style pad stops at 10,
+    so ``enable_hotkey`` could never be pressed -- and RetroArch gates *every*
+    hotkey behind it, which is why remapping save/load in Preferences changed
+    nothing at all.
+    """
+
+    def _xbox_button_indices(self):
+        from openemux.core.gamepad_reader import build_button_index_map
+
+        try:
+            from tests.test_gamepad_reader import XBOX_KEY_CODES
+        except ImportError:  # `unittest discover -s tests` puts tests/ on sys.path
+            from test_gamepad_reader import XBOX_KEY_CODES
+        return set(build_button_index_map(XBOX_KEY_CODES).values())
+
+    def test_every_gamepad_default_is_a_button_the_pad_exposes(self):
+        available = self._xbox_button_indices()
+        for action, token in DEFAULT_GAMEPAD_BINDINGS.items():
+            if not token.isdigit():
+                continue  # axis ("+2") and hat ("h0up") tokens live elsewhere
+            self.assertIn(int(token), available, f"{action} -> {token}")
+
+    def test_thumbstick_clicks_skip_the_guide_button(self):
+        # Button 8 is BTN_MODE (Guide) on an Xbox pad; L3/R3 are 9 and 10.
+        self.assertEqual(DEFAULT_GAMEPAD_BINDINGS["l3"], "9")
+        self.assertEqual(DEFAULT_GAMEPAD_BINDINGS["r3"], "10")
+
+    def test_enable_hotkey_is_emitted_and_shares_the_select_token(self):
+        bindings = default_bindings_for_device("gamepad", console="SFC")
+        overrides = to_retroarch_overrides(bindings, "gamepad", console="SFC")
+        # The overlap with `select` is the point of a modifier, and it has to
+        # survive normalization's dedup rather than being dropped by it.
+        self.assertEqual(overrides["input_enable_hotkey_btn"], '"6"')
+        self.assertEqual(overrides["input_player1_select_btn"], '"6"')
+
+    def test_every_hotkey_survives_normalization(self):
+        normalized = normalize_bindings({}, "gamepad", console="SFC")
+        for action in ("enable_hotkey", "menu_toggle", "save_state",
+                       "load_state", "fast_forward_toggle", "fullscreen_toggle"):
+            self.assertEqual(normalized[action], DEFAULT_GAMEPAD_BINDINGS[action], action)
+
+    def test_gamepad_profiles_never_get_a_keyboard_fallback_letter(self):
+        from openemux.core.input_actions import FALLBACK_KEYS
+
+        for console in ("FC", "SFC", "GBA", "PS", "MD", "N64"):
+            normalized = normalize_bindings({}, "gamepad", console=console)
+            for action, value in normalized.items():
+                self.assertNotIn(value, FALLBACK_KEYS, f"{console}/{action}")
+
+    def test_a_partial_profile_still_gets_reachable_hotkeys(self):
+        # The user rebound a face button; the hotkeys must still fill in.
+        normalized = normalize_bindings({"a": "1", "b": "0"}, "gamepad", console="SFC")
+        self.assertEqual(normalized["a"], "1")
+        self.assertEqual(normalized["enable_hotkey"], "6")
+        self.assertEqual(normalized["save_state"], "2")
 
 
 class VolumeAndSlotHotkeyTests(unittest.TestCase):

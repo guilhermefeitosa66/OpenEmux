@@ -9,7 +9,9 @@ from openemux.core.input_profiles import (
     ANALOG_DPAD_RIGHT_STICK,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
+    PROFILE_VERSION,
     InputProfileManager,
+    clear_unreachable_gamepad_buttons,
     default_analog_dpad_mode,
     normalize_analog_dpad_mode,
     normalize_turbo_settings,
@@ -211,6 +213,96 @@ class AnalogDpadModeTests(unittest.TestCase):
             path = Path(tmp_dir) / "SFC.config"
             path.write_text(json.dumps({"console": "SFC", "devices": {}}), encoding="utf-8")
             self.assertEqual(manager.get_analog_dpad_mode("SFC"), ANALOG_DPAD_LEFT_STICK)
+
+
+class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
+    """Issue #124: repair profiles pinned to pad buttons that do not exist."""
+
+    def _v2_profile(self):
+        return {
+            "version": 2,
+            "console": "SFC",
+            "active_device": "gamepad_p1",
+            "devices": {
+                "gamepad_p1": {
+                    "type": "gamepad",
+                    "enabled": True,
+                    "bindings": {
+                        "a": "0",
+                        "select": "6",
+                        "enable_hotkey": "14",
+                        "save_state": "11",
+                        "load_state": "12",
+                        "fast_forward_toggle": "13",
+                        "fullscreen_toggle": "15",
+                        "l2": "+2",
+                        "up": "h0up",
+                    },
+                }
+            },
+        }
+
+    def test_v2_hotkeys_are_replaced_by_reachable_defaults(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "SFC.config"
+            path.write_text(json.dumps(self._v2_profile()), encoding="utf-8")
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.load_profile("SFC")
+
+            bindings = profile["devices"]["gamepad_p1"]["bindings"]
+            self.assertEqual(bindings["enable_hotkey"], "6")
+            self.assertEqual(bindings["save_state"], "2")
+            self.assertEqual(bindings["load_state"], "3")
+            self.assertEqual(bindings["fullscreen_toggle"], "4")
+            self.assertEqual(bindings["fast_forward_toggle"], "5")
+
+    def test_migration_is_persisted_at_the_new_version(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "SFC.config"
+            path.write_text(json.dumps(self._v2_profile()), encoding="utf-8")
+            InputProfileManager(tmp_dir).load_profile("SFC")
+
+            # load_profile re-saves when normalization changed anything, so the
+            # repair survives without the user resetting anything.
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(stored["version"], PROFILE_VERSION)
+            self.assertEqual(
+                stored["devices"]["gamepad_p1"]["bindings"]["enable_hotkey"], "6"
+            )
+
+    def test_reachable_and_non_button_bindings_are_left_alone(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "SFC.config"
+            path.write_text(json.dumps(self._v2_profile()), encoding="utf-8")
+            bindings = InputProfileManager(tmp_dir).load_profile("SFC")[
+                "devices"
+            ]["gamepad_p1"]["bindings"]
+            self.assertEqual(bindings["a"], "0")
+            self.assertEqual(bindings["select"], "6")
+            # SFC has no L2, so the axis token is exercised on the helper
+            # directly below; here the hat proves non-button tokens survive.
+            self.assertEqual(bindings["up"], "h0up")
+
+    def test_a_current_profile_is_not_migrated_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.load_profile("SFC")
+            profile = manager.load_profile("SFC")
+            profile["devices"]["gamepad_p1"]["bindings"]["save_state"] = "11"
+            saved = manager.save_profile("SFC", profile)
+            # Already at PROFILE_VERSION: a deliberate choice is the user's.
+            self.assertEqual(
+                saved["devices"]["gamepad_p1"]["bindings"]["save_state"], "11"
+            )
+
+    def test_helper_only_clears_out_of_range_button_indices(self):
+        cleared = clear_unreachable_gamepad_buttons(
+            {"a": "10", "b": "11", "l2": "+2", "up": "h0up", "x": ""}
+        )
+        self.assertEqual(cleared["a"], "10")
+        self.assertEqual(cleared["b"], "")
+        self.assertEqual(cleared["l2"], "+2")
+        self.assertEqual(cleared["up"], "h0up")
 
 
 if __name__ == "__main__":

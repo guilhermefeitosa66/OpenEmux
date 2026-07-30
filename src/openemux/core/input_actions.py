@@ -162,14 +162,19 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "r1": "5",
     "l2": "+2",
     "r2": "+5",
-    "l3": "8",
-    "r3": "9",
-    "enable_hotkey": "14",
-    "menu_toggle": "10",
-    "save_state": "11",
-    "load_state": "12",
-    "fast_forward_toggle": "13",
-    "fullscreen_toggle": "15",
+    # On an Xbox-style pad button 8 is Guide; the thumbsticks are 9 and 10.
+    "l3": "9",
+    "r3": "10",
+    # Hotkeys follow the Select-as-modifier convention, so every index stays
+    # within the 0-10 range a common controller actually exposes (issue #124).
+    # Anything above that made enable_hotkey unreachable, and because it gates
+    # every other hotkey in RetroArch, all of them died with it.
+    "enable_hotkey": "6",  # Select -- the modifier, deliberately also `select`
+    "menu_toggle": "7",  # Select + Start
+    "save_state": "2",  # Select + X
+    "load_state": "3",  # Select + Y
+    "fullscreen_toggle": "4",  # Select + L1
+    "fast_forward_toggle": "5",  # Select + R1
 }
 
 #: Highest RetroArch port OpenEmux exposes in the UI.
@@ -276,9 +281,20 @@ def normalize_bindings(bindings, device_type, console=None):
         if action in OPTIONAL_ACTIONS:
             continue
         default_value = defaults.get(action, "")
-        if default_value and default_value not in used_keys:
+        # Hotkeys are exempt from the dedup on purpose: they only fire while
+        # enable_hotkey is held, so sharing a token with a gameplay button is
+        # what a modifier *is* (Select + X), not a conflict. Without this the
+        # enable_hotkey default is rejected for colliding with `select` and
+        # the whole hotkey set stays dead (issue #124).
+        is_hotkey = action in GLOBAL_HOTKEY_ACTIONS
+        if default_value and (is_hotkey or default_value not in used_keys):
             normalized[action] = default_value
             used_keys.add(default_value)
+            continue
+        # A gamepad has no letters. Handing a pad profile a keyboard fallback
+        # key produces a binding that can never fire, which reads in the UI as
+        # "bound" while doing nothing at all.
+        if device_type == "gamepad":
             continue
         while fallback_index < len(FALLBACK_KEYS) and FALLBACK_KEYS[fallback_index] in used_keys:
             fallback_index += 1

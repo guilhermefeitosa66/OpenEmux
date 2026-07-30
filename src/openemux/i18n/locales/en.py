@@ -257,6 +257,7 @@ TRANSLATIONS = {
     "input.turbo.mode.1": "Single button (toggle)",
     "input.turbo.mode.2": "Single button (hold)",
     "input.action.enable_hotkey": "Enable hotkey",
+    "input.action.enable_hotkey.subtitle": "Hold this button to trigger the hotkeys below",
     "input.action.menu_toggle": "RetroArch menu",
     "input.action.save_state": "Save state",
     "input.action.load_state": "Load state",

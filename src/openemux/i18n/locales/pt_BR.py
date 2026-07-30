@@ -257,6 +257,7 @@ TRANSLATIONS = {
     "input.turbo.mode.1": "Botão único (alternar)",
     "input.turbo.mode.2": "Botão único (segurar)",
     "input.action.enable_hotkey": "Ativar hotkey",
+    "input.action.enable_hotkey.subtitle": "Segure este botão para acionar as hotkeys abaixo",
     "input.action.menu_toggle": "Menu do RetroArch",
     "input.action.save_state": "Salvar estado",
     "input.action.load_state": "Carregar estado",

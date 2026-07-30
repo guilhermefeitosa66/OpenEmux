@@ -212,6 +212,11 @@ class RetroArchLauncher:
         overrides["input_turbo_period"] = f'"{turbo["period"]}"'
         overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
         overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
+        # Select doubles as the gamepad hotkey modifier (issue #124), so a
+        # *tap* has to still reach the game as Select while a *hold* opens a
+        # hotkey. This is how many frames RetroArch waits before deciding;
+        # without it Select feels unresponsive in games that use it.
+        overrides["input_hotkey_block_delay"] = '"5"'
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:
