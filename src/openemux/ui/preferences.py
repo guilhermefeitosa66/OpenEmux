@@ -645,6 +645,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _input_action_label(self, action):
         return self.t(f"input.action.{action}")
 
+    def _input_action_subtitle(self, action):
+        """Extra explanation for rows whose title cannot carry it.
+
+        Only ``enable_hotkey`` needs one today: it reads as one more row among
+        the System Hotkeys while actually gating every one of them (#124).
+        """
+        if action == "enable_hotkey":
+            return self.t("input.action.enable_hotkey.subtitle")
+        return None
+
     def _binding_display(self, value):
         if not value:
             return self.t("input.binding.empty")
@@ -729,6 +739,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         for action in visible_actions:
             row = Adw.ActionRow(title=self._input_action_label(action))
+            subtitle = self._input_action_subtitle(action)
+            if subtitle:
+                row.set_subtitle(subtitle)
             button = Gtk.Button(label=self._binding_display(self._bindings_buffer.get(action, "")))
             button.set_valign(Gtk.Align.CENTER)
             button.set_size_request(150, -1)

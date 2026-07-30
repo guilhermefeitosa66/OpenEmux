@@ -203,6 +203,13 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
         self.assertIn('input_player2_analog_dpad_mode = "1"', lines)
 
+    def test_override_gives_the_hotkey_modifier_a_block_delay(self):
+        # Issue #124: Select is both a gameplay button and the hotkey
+        # modifier, so RetroArch has to wait a few frames before deciding
+        # which one a press was -- otherwise a tap never reaches the game.
+        lines = self._override_lines(None)
+        self.assertIn('input_hotkey_block_delay = "5"', lines)
+
     def test_override_analog_dpad_mode_defaults_by_console(self):
         # No mode in the profile: GBA (digital-only) folds the left stick in.
         lines = self._override_lines(None)

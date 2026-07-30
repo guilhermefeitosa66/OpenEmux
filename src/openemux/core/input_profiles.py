@@ -10,7 +10,11 @@ from openemux.core.input_actions import (
 )
 from openemux.core.systems import resolve_system_id
 
-PROFILE_VERSION = 2
+PROFILE_VERSION = 3
+
+#: Lowest pad button index that no common controller exposes. An Xbox-style
+#: pad stops at 10, so anything from here up can never be pressed.
+FIRST_UNREACHABLE_GAMEPAD_BUTTON = 11
 
 #: Every device slot a profile can hold, in UI order.
 DEVICE_IDS = ["keyboard", "gamepad_p1", "gamepad_p2", "gamepad_p3", "gamepad_p4"]
@@ -60,6 +64,30 @@ def normalize_turbo_settings(value):
     # The button must release within the period or it never re-fires.
     duty = min(duty, period - 1)
     return {"period": period, "duty_cycle": duty, "mode": mode}
+
+
+def clear_unreachable_gamepad_buttons(bindings):
+    """Blank pad bindings pointing at a button the hardware does not have.
+
+    Profiles written before version 3 bound the hotkeys to buttons 11-15
+    (issue #124). Since ``enable_hotkey`` gates every other hotkey in
+    RetroArch, one unreachable modifier silently disabled the whole set.
+    Blanking the token is enough: ``normalize_bindings`` refills it from the
+    current defaults on the same pass, so the repair needs no manual reset.
+
+    Only bare button indices are considered -- axis (``+2``) and hat
+    (``h0up``) tokens are a different namespace and never out of range.
+    """
+    if not isinstance(bindings, dict):
+        return {}
+    cleaned = {}
+    for action, value in bindings.items():
+        token = str(value).strip()
+        if token.isdigit() and int(token) >= FIRST_UNREACHABLE_GAMEPAD_BUTTON:
+            cleaned[action] = ""
+            continue
+        cleaned[action] = value
+    return cleaned
 
 
 def default_analog_dpad_mode(console):
@@ -138,6 +166,11 @@ class InputProfileManager:
         base = self.default_profile(system_id)
         loaded = profile or {}
 
+        try:
+            loaded_version = int(loaded.get("version", 0)) if isinstance(loaded, dict) else 0
+        except (TypeError, ValueError):
+            loaded_version = 0
+
         devices = loaded.get("devices", {}) if isinstance(loaded, dict) else {}
         # Devices absent from the file (e.g. a 1.2.x profile that only knew
         # keyboard + gamepad_p1) fall back to defaults, with ports 2-4 disabled.
@@ -147,6 +180,8 @@ class InputProfileManager:
             if not isinstance(loaded_device, dict):
                 loaded_device = {}
             bindings = loaded_device.get("bindings", {})
+            if loaded_version < 3 and default_device["type"] == "gamepad":
+                bindings = clear_unreachable_gamepad_buttons(bindings)
             default_device["bindings"] = normalize_bindings(bindings, default_device["type"], console=system_id)
             if device_id in EXTRA_PORT_DEVICE_IDS:
                 default_device["enabled"] = bool(loaded_device.get("enabled", False))
