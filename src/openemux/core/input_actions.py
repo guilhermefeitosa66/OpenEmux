@@ -18,6 +18,10 @@ ACTION_ORDER = [
     "r1",
     "r2",
     "r3",
+    "l_up",
+    "l_down",
+    "l_left",
+    "l_right",
     "turbo",
     "enable_hotkey",
     "menu_toggle",
@@ -66,6 +70,19 @@ GLOBAL_HOTKEY_ACTIONS = [
     "fullscreen_toggle",
     "reset_game",
 ]
+#: The left stick as four bindable directions (issue #158).
+#:
+#: On a pad the stick is declared as axes (ANALOG_STICK_BINDINGS) and needs no
+#: rows. On a keyboard there is nothing to declare -- RetroArch takes a plain
+#: key for an analog direction, ``input_player1_l_x_minus = "j"`` -- and
+#: without these an N64 or PlayStation game that needs the stick simply cannot
+#: be played without a pad.
+ANALOG_STICK_DIRECTION_ACTIONS = ["l_up", "l_down", "l_left", "l_right"]
+
+#: Consoles whose core actually reads an analog stick. Elsewhere the rows
+#: would be a dead end: the core has no analog input for them to reach.
+ANALOG_STICK_CONSOLES = {"N64", "PS", "PSP", "GC", "SATURN"}
+
 GAMEPLAY_ACTIONS_2BTN = ["up", "down", "left", "right", "a", "b", "start", "select"]
 GAMEPLAY_ACTIONS_2BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "l1", "r1", "start", "select"]
 GAMEPLAY_ACTIONS_4BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "x", "y", "l1", "r1", "start", "select"]
@@ -139,6 +156,12 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "l1": "d",
     "l2": "e",
     "l3": "3",
+    # The left stick, WASD-shaped but on the right hand so the left one stays
+    # on the D-pad arrows (issue #158).
+    "l_up": "i",
+    "l_left": "j",
+    "l_down": "k",
+    "l_right": "l",
     # No modifier on a keyboard. It exists for pads, where Select has to do
     # double duty because there are only ~10 buttons; a keyboard has plenty of
     # free keys and none of the hotkey defaults below collide with a gameplay
@@ -244,6 +267,13 @@ PLAYER_ACTION_SUFFIXES = {
     "r1": "r",
     "r2": "r2",
     "r3": "r3",
+    # The left stick's four directions. RetroArch takes a key here directly
+    # (input_player1_l_x_minus = "j"); the pad's physical stick is declared
+    # separately as axes (issue #158).
+    "l_up": "l_y_minus",
+    "l_down": "l_y_plus",
+    "l_left": "l_x_minus",
+    "l_right": "l_x_plus",
     # The turbo modifier: hold it (or use single-button modes) to auto-fire.
     "turbo": "turbo",
 }
@@ -296,9 +326,13 @@ def default_gamepad_bindings():
 def get_actions_for_console(console):
     system_id = resolve_system_id(console)
     gameplay = CONSOLE_GAMEPLAY_ACTIONS.get(system_id, GAMEPLAY_ACTIONS_FULL)
+    actions = list(gameplay)
+    # Only where the core reads a stick at all (issue #158).
+    if system_id in ANALOG_STICK_CONSOLES:
+        actions += list(ANALOG_STICK_DIRECTION_ACTIONS)
     # Turbo rides along for every console: RetroArch implements it at the
     # frontend level, so it is not a per-console capability.
-    return list(gameplay) + ["turbo"] + list(GLOBAL_HOTKEY_ACTIONS)
+    return actions + ["turbo"] + list(GLOBAL_HOTKEY_ACTIONS)
 
 
 def default_bindings_for_device(device_type, console=None):

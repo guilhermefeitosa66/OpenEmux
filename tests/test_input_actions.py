@@ -409,6 +409,84 @@ class AnalogStickAxisTests(unittest.TestCase):
         self.assertNotIn("5", claimed)
 
 
+class KeyboardAnalogStickTests(unittest.TestCase):
+    """Issue #158: the left stick, playable from the keyboard.
+
+    A pad declares its stick as axes; a keyboard has nothing to declare --
+    RetroArch takes a plain key for an analog direction. Without these an N64
+    or PlayStation game that needs the stick cannot be played without a pad.
+    """
+
+    def test_the_rows_appear_only_where_a_stick_exists(self):
+        for console in ("N64", "PS", "PSP", "GC", "SATURN"):
+            actions = get_actions_for_console(console)
+            for action in ("l_up", "l_down", "l_left", "l_right"):
+                self.assertIn(action, actions, console)
+        # A digital console's core has no analog input to reach.
+        for console in ("FC", "SFC", "GB", "MD"):
+            actions = get_actions_for_console(console)
+            self.assertNotIn("l_up", actions, console)
+
+    def test_the_ijkl_defaults(self):
+        defaults = default_bindings_for_device("keyboard", console="N64")
+        self.assertEqual(defaults["l_up"], "i")
+        self.assertEqual(defaults["l_left"], "j")
+        self.assertEqual(defaults["l_down"], "k")
+        self.assertEqual(defaults["l_right"], "l")
+
+    def test_they_reach_retroarch_as_plain_key_binds(self):
+        # input_player1_l_x_minus, no suffix -- the keyboard form, alongside
+        # the _axis form a pad uses.
+        overrides = to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console="N64"),
+            "keyboard",
+            console="N64",
+        )
+        self.assertEqual(overrides["input_player1_l_y_minus"], '"i"')
+        self.assertEqual(overrides["input_player1_l_x_minus"], '"j"')
+        self.assertEqual(overrides["input_player1_l_y_plus"], '"k"')
+        self.assertEqual(overrides["input_player1_l_x_plus"], '"l"')
+
+    def test_up_is_y_minus(self):
+        # Same sign convention the pad axes already use (-1 is up).
+        from openemux.core.input_actions import PLAYER_ACTION_SUFFIXES
+
+        self.assertEqual(PLAYER_ACTION_SUFFIXES["l_up"], "l_y_minus")
+        self.assertEqual(PLAYER_ACTION_SUFFIXES["l_down"], "l_y_plus")
+
+    def test_the_pad_keeps_declaring_axes_and_binds_no_directions(self):
+        overrides = to_retroarch_overrides(
+            default_bindings_for_device("gamepad", console="N64"),
+            "gamepad",
+            console="N64",
+        )
+        self.assertEqual(overrides["input_player1_l_x_minus_axis"], '"-0"')
+        # The physical stick is the axes; the direction rows stay unbound.
+        self.assertNotIn("input_player1_l_x_minus_btn", overrides)
+
+    def test_the_defaults_do_not_collide_with_anything_else(self):
+        defaults = default_bindings_for_device("keyboard", console="N64")
+        bound = [value for value in defaults.values() if value]
+        self.assertEqual(len(bound), len(set(bound)))
+
+
+class ForcedAnalogDpadModeTests(unittest.TestCase):
+    """Issue #152: the only modes that do anything on an analog console."""
+
+    def test_all_five_modes_are_offered(self):
+        from openemux.core.input_profiles import ANALOG_DPAD_MODES
+
+        self.assertEqual(tuple(ANALOG_DPAD_MODES), (0, 1, 2, 3, 4))
+
+    def test_the_forced_modes_survive_normalization(self):
+        from openemux.core.input_profiles import normalize_analog_dpad_mode
+
+        self.assertEqual(normalize_analog_dpad_mode(3, "N64"), 3)
+        self.assertEqual(normalize_analog_dpad_mode("4", "PS"), 4)
+        # Still nothing above the real range.
+        self.assertEqual(normalize_analog_dpad_mode(5, "N64"), 0)
+
+
 class GamepadHotkeyReachabilityTests(unittest.TestCase):
     """Issue #124: the gamepad hotkey defaults must exist on a real pad.
 
