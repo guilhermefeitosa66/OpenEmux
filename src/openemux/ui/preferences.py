@@ -23,6 +23,7 @@ from openemux.core.input_actions import (
     GLOBAL_HOTKEY_ACTIONS,
     OPTIONAL_ACTIONS,
     get_actions_for_console,
+    retroarch_key_token,
 )
 from openemux.core.input_profiles import (
     ANALOG_DPAD_MODES,
@@ -934,20 +935,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     @staticmethod
     def _normalize_key(keyval):
+        """A captured key, as the token RetroArch will resolve.
+
+        GTK and RetroArch are different vocabularies -- ``=`` is ``equal`` to
+        one and ``equals`` to the other -- and a token RetroArch cannot resolve
+        produces a binding that reads as bound here and never fires (#144).
+        """
         key_name = Gdk.keyval_name(keyval)
         if not key_name:
             return ""
-        special = {
-            "Return": "enter", "KP_Enter": "enter", "Escape": "escape", "space": "space",
-            "Up": "up", "Down": "down", "Left": "left", "Right": "right",
-            "Shift_L": "left shift", "Shift_R": "right shift",
-            "Control_L": "left ctrl", "Control_R": "right ctrl",
-            "Alt_L": "left alt", "Alt_R": "right alt",
-            "Super_L": "left super", "Super_R": "right super",
-        }
-        if key_name in special:
-            return special[key_name]
-        return key_name.lower()
+        return retroarch_key_token(key_name.lower())
 
     def _commit_capture(self, value):
         """Store a captured binding and advance the sequence, if any.

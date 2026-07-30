@@ -31,16 +31,38 @@ TIP_KEYS = [
     "tips.search",
 ]
 
-# Bindings are stored lowercase ("right shift", "f2"); these render them the way
-# a user reads them off the keyboard.
+# Bindings are stored as RetroArch tokens ("rshift", "num1", "f2"); these
+# render them the way a user reads them off the keyboard. The spellings this
+# app used before issue #144 are kept so an unmigrated profile still reads
+# sensibly in the hint bar.
 _KEY_LABEL_OVERRIDES = {
     "enter": "Enter",
     "space": "Space",
+    "escape": "Esc",
+    "shift": "Shift",
+    "rshift": "Right Shift",
+    "ctrl": "Ctrl",
+    "rctrl": "Right Ctrl",
+    "alt": "Alt",
+    "ralt": "Right Alt",
+    "pageup": "Page Up",
+    "pagedown": "Page Down",
+    "equals": "=",
+    "minus": "-",
+    "del": "Delete",
+    "backquote": "`",
+    "leftbracket": "[",
+    "rightbracket": "]",
+    "quote": "'",
+    "kp_plus": "Keypad +",
+    "kp_minus": "Keypad -",
+    "capslock": "Caps Lock",
+    "numlock": "Num Lock",
+    # Pre-#144 spellings.
     "right shift": "Right Shift",
     "left shift": "Left Shift",
     "right ctrl": "Right Ctrl",
     "left ctrl": "Left Ctrl",
-    "escape": "Esc",
 }
 
 
@@ -51,6 +73,12 @@ def format_key_label(binding):
         return ""
     if value in _KEY_LABEL_OVERRIDES:
         return _KEY_LABEL_OVERRIDES[value]
+    # RetroArch files the top-row digits as num0-num9 and the keypad ones as
+    # keypad0-keypad9; neither reads as a key name on its own.
+    if value.startswith("num") and value[3:].isdigit():
+        return value[3:]
+    if value.startswith("keypad") and value[6:].isdigit():
+        return f"Keypad {value[6:]}"
     if len(value) > 1 and value[0] == "f" and value[1:].isdigit():
         return value.upper()
     if len(value) == 1:
