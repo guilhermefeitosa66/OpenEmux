@@ -432,6 +432,81 @@ class V4KeyboardDefaultsMigrationTests(unittest.TestCase):
                 self.assertEqual(pad.get(action, ""), "", action)
 
 
+class V5KeyboardDefaultsMigrationTests(unittest.TestCase):
+    """Issue #153/#158: the new hotkeys and stick keys reach old profiles."""
+
+    def _v4_profile(self, keyboard_bindings, console="PS"):
+        return {
+            "version": 4,
+            "console": console,
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {
+                    "type": "keyboard",
+                    "enabled": True,
+                    "bindings": keyboard_bindings,
+                }
+            },
+        }
+
+    def _load(self, tmp_dir, profile, console="PS"):
+        path = Path(tmp_dir) / f"{console}.config"
+        path.write_text(json.dumps(profile), encoding="utf-8")
+        return InputProfileManager(tmp_dir).load_profile(console)
+
+    def test_the_new_hotkeys_are_filled(self):
+        with TemporaryDirectory() as tmp_dir:
+            bindings = self._load(tmp_dir, self._v4_profile({"a": "z"}))[
+                "devices"
+            ]["keyboard"]["bindings"]
+            self.assertEqual(bindings["rewind"], "w")
+            self.assertEqual(bindings["pause_toggle"], "p")
+            self.assertEqual(bindings["screenshot"], "f8")
+            self.assertEqual(bindings["disk_next"], "n")
+            self.assertEqual(bindings["disk_prev"], "b")
+            self.assertEqual(bindings["disk_eject_toggle"], "f9")
+
+    def test_the_stick_keys_are_filled_on_an_analog_console(self):
+        with TemporaryDirectory() as tmp_dir:
+            bindings = self._load(tmp_dir, self._v4_profile({"a": "z"}))[
+                "devices"
+            ]["keyboard"]["bindings"]
+            self.assertEqual(bindings["l_up"], "i")
+            self.assertEqual(bindings["l_left"], "j")
+
+    def test_a_digital_console_gets_no_stick_keys(self):
+        with TemporaryDirectory() as tmp_dir:
+            bindings = self._load(
+                tmp_dir, self._v4_profile({"a": "z"}, console="SFC"), console="SFC"
+            )["devices"]["keyboard"]["bindings"]
+            self.assertNotIn("l_up", bindings)
+
+    def test_a_deliberate_binding_is_left_alone(self):
+        with TemporaryDirectory() as tmp_dir:
+            bindings = self._load(
+                tmp_dir, self._v4_profile({"rewind": "f12", "disk_next": "y"})
+            )["devices"]["keyboard"]["bindings"]
+            self.assertEqual(bindings["rewind"], "f12")
+            self.assertEqual(bindings["disk_next"], "y")
+
+    def test_it_does_not_run_twice(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.load_profile("PS")
+            profile["devices"]["keyboard"]["bindings"]["rewind"] = ""
+            manager.save_profile("PS", profile)
+            again = InputProfileManager(tmp_dir).load_profile("PS")
+            self.assertEqual(again["devices"]["keyboard"]["bindings"]["rewind"], "")
+
+    def test_the_pad_gets_none_of_them(self):
+        with TemporaryDirectory() as tmp_dir:
+            pad = self._load(tmp_dir, self._v4_profile({"a": "z"}))["devices"][
+                "gamepad_p1"
+            ]["bindings"]
+            for action in ("rewind", "pause_toggle", "disk_next", "l_up"):
+                self.assertEqual(pad.get(action, ""), "", action)
+
+
 class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
     """Issue #124: repair profiles pinned to pad buttons that do not exist."""
 

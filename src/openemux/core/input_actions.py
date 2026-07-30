@@ -35,6 +35,15 @@ ACTION_ORDER = [
     "fast_forward_toggle",
     "fullscreen_toggle",
     "reset_game",
+    "rewind",
+    "pause_toggle",
+    "slowmotion_toggle",
+    "fast_forward_hold",
+    "screenshot",
+    "game_focus_toggle",
+    "disk_eject_toggle",
+    "disk_next",
+    "disk_prev",
 ]
 
 #: Actions that stay unbound unless the user binds them: never auto-filled
@@ -53,6 +62,18 @@ OPTIONAL_ACTIONS = {
     # handed out by default -- and on a pad every reachable Select combo is
     # already taken, so any default would fire two hotkeys at once (#130).
     "reset_game",
+    # The rest of the frontend hotkeys (issue #153). The keyboard gets a
+    # default for each; a pad has no Select combo left, and none of these is
+    # worth displacing save or load state for.
+    "rewind",
+    "pause_toggle",
+    "slowmotion_toggle",
+    "fast_forward_hold",
+    "screenshot",
+    "game_focus_toggle",
+    "disk_eject_toggle",
+    "disk_next",
+    "disk_prev",
 }
 
 FALLBACK_KEYS = ["g", "h", "j", "k", "l", "v", "b", "n", "m", "r", "t", "u", "i", "o", "p"]
@@ -69,6 +90,15 @@ GLOBAL_HOTKEY_ACTIONS = [
     "fast_forward_toggle",
     "fullscreen_toggle",
     "reset_game",
+    "rewind",
+    "pause_toggle",
+    "slowmotion_toggle",
+    "fast_forward_hold",
+    "screenshot",
+    "game_focus_toggle",
+    "disk_eject_toggle",
+    "disk_next",
+    "disk_prev",
 ]
 #: The left stick as four bindable directions (issue #158).
 #:
@@ -187,6 +217,18 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "fast_forward_toggle": "f6",
     "fullscreen_toggle": "f",
     "reset_game": "r",
+    # Issue #153, the initial letter wherever one was free. `s` is the X
+    # button and `j`/`l` are the analog stick (#158), so screenshot and eject
+    # fall back to the F-key block the other frontend hotkeys already use.
+    "rewind": "w",             # reWind -- `r` is Restart
+    "pause_toggle": "p",       # Pause
+    "slowmotion_toggle": "o",  # slOw
+    "fast_forward_hold": "h",  # Hold
+    "screenshot": "f8",        # RetroArch's own default
+    "game_focus_toggle": "g",  # Game focus
+    "disk_eject_toggle": "f9",
+    "disk_next": "n",          # Next
+    "disk_prev": "b",          # Back
     # Turbo stays unbound on a pad -- an accidental modifier there would
     # corrupt normal play (issue #72) -- but a dedicated key is safe.
     "turbo": "t",
@@ -296,6 +338,19 @@ RETROARCH_GLOBAL_HOTKEY_KEYS = {
     # focus, which is the point: a button in the OpenEmux window needed an
     # alt-tab away from the game to reach it (issue #130).
     "reset_game": "input_reset",
+    # Issue #153. Names taken from a real retroarch.cfg -- the slow-motion
+    # toggle is input_toggle_slowmotion, not input_slowmotion.
+    "rewind": "input_rewind",
+    "pause_toggle": "input_pause_toggle",
+    "slowmotion_toggle": "input_toggle_slowmotion",
+    "fast_forward_hold": "input_hold_fast_forward",
+    "screenshot": "input_screenshot",
+    "game_focus_toggle": "input_game_focus_toggle",
+    # Without these a 2+ disc PlayStation, Saturn or Mega CD game cannot be
+    # finished from inside OpenEmux at all.
+    "disk_eject_toggle": "input_disk_eject_toggle",
+    "disk_next": "input_disk_next",
+    "disk_prev": "input_disk_prev",
 }
 
 #: Kept for backwards compatibility: the player-1 view of the key table.
