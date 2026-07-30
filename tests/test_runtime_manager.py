@@ -243,6 +243,55 @@ class CommandDispatchTests(unittest.TestCase):
             self.assertTrue(manager.send_command("LOAD_STATE"))
             self.assertEqual(client.sent, ["LOAD_STATE"])
 
+    def test_relaunch_terminates_and_hands_back_the_rom(self):
+        # Issue #129: bindings reach RetroArch only through the
+        # --appendconfig file written at spawn, so only a fresh process
+        # picks up a remap. RESET (#130) keeps the process and cannot.
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            process = _FakeProcess()
+            manager.active_process = process
+            manager.active_rom = {"path": "/roms/x.sfc", "console": "SFC"}
+
+            rom, error = manager.relaunch_active()
+            self.assertIsNone(error)
+            self.assertTrue(process.terminated)
+            # Captured before the teardown: _clear_active wipes active_rom.
+            self.assertEqual(rom, {"path": "/roms/x.sfc", "console": "SFC"})
+            self.assertEqual(client.sent, [])
+
+    def test_relaunch_is_a_no_op_with_no_game_running(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            rom, error = manager.relaunch_active()
+            self.assertIsNone(rom)
+            self.assertTrue(error)
+
+    def test_relaunch_rom_launches_the_same_rom_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            launched = {}
+
+            def _fake_launch(rom_path, console, state_slot=None):
+                launched["args"] = (rom_path, console)
+                return _FakeProcess(), None
+
+            manager.retroarch_launcher.launch_process = _fake_launch
+            success, error = manager.relaunch_rom(
+                {"path": "/roms/x.sfc", "console": "SFC"}
+            )
+            self.assertTrue(success, error)
+            self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
+
+    def test_relaunch_rom_refuses_without_a_rom(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            success, error = manager.relaunch_rom(None)
+            self.assertFalse(success)
+            self.assertTrue(error)
+
     def test_restart_sends_reset_to_a_running_game(self):
         # Issue #130: RetroArch's own RESET, so the core and the content are
         # never reloaded -- which is also why it cannot pick up config
