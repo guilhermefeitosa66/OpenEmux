@@ -239,6 +239,8 @@ TRANSLATIONS = {
     "input.controller_type.title": "Tipo de controle",
     "input.controller_type.subtitle": "O que o console emulado entende que está conectado. O PlayStation inicia como controle digital, então jogos analógicos precisam do DualShock.",
     "input.controller_type.core_default": "Padrão do core",
+    "input.dpad_analog.title": "D-pad também move o analógico",
+    "input.dpad_analog.subtitle": "Para jogos que só leem o analógico. Os dois disparam no mesmo toque — o RetroArch não consegue alternar entre eles com o jogo aberto.",
     "input.analog_dpad.title": "Analógico como direcional",
     "input.analog_dpad.subtitle": "O analógico também move o direcional, sem re-mapear",
     "input.analog_dpad.mode.0": "Desligado",

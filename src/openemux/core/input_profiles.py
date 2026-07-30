@@ -311,6 +311,8 @@ class InputProfileManager:
             # None means "leave it to the core", so nothing changes for the
             # consoles where there is nothing worth choosing.
             "controller_type": None,
+            # Whether a pad's D-pad also drives the left stick (issue #156).
+            "dpad_drives_analog": False,
             "devices": devices,
         }
 
@@ -365,6 +367,9 @@ class InputProfileManager:
         base["controller_type"] = normalize_controller_type(
             loaded.get("controller_type") if isinstance(loaded, dict) else None,
             system_id,
+        )
+        base["dpad_drives_analog"] = bool(
+            loaded.get("dpad_drives_analog") if isinstance(loaded, dict) else False
         )
         return base
 
@@ -422,6 +427,14 @@ class InputProfileManager:
     def set_controller_type(self, console, device):
         profile = self.load_profile(console)
         profile["controller_type"] = normalize_controller_type(device, console)
+        return self.save_profile(console, profile)
+
+    def get_dpad_drives_analog(self, console):
+        return bool(self.load_profile(console).get("dpad_drives_analog"))
+
+    def set_dpad_drives_analog(self, console, enabled):
+        profile = self.load_profile(console)
+        profile["dpad_drives_analog"] = bool(enabled)
         return self.save_profile(console, profile)
 
     def get_turbo_settings(self, console):

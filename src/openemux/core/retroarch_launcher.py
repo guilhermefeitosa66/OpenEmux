@@ -9,7 +9,11 @@ from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
 from openemux.core import input_tuning
-from openemux.core.input_actions import conflicting_stock_hotkeys, to_retroarch_overrides
+from openemux.core.input_actions import (
+    conflicting_stock_hotkeys,
+    to_retroarch_overrides,
+    with_dpad_as_analog,
+)
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
     PLAYER1_DEVICE_IDS,
@@ -188,13 +192,25 @@ class RetroArchLauncher:
         # analog stick axes. It still appeared to work because RetroArch's
         # own autoconfig maps the buttons, which is what made it so hard to
         # notice (issue #150).
+        # A pad's D-pad can stand in for the left stick (issue #156).
+        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
+
+        def _bindings_for(device_id, device, device_type):
+            bindings = device.get("bindings", {})
+            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
+            # pointing the arrows at it too would just be noise (issue #158).
+            if dpad_as_analog and device_type == "gamepad":
+                return with_dpad_as_analog(bindings)
+            return bindings
+
         overrides = {}
         for device_id in PLAYER1_DEVICE_IDS:
             device = devices.get(device_id) or {}
+            device_type = device_type_for(device_id)
             overrides.update(
                 to_retroarch_overrides(
-                    device.get("bindings", {}),
-                    device_type_for(device_id),
+                    _bindings_for(device_id, device, device_type),
+                    device_type,
                     console=console,
                 )
             )
@@ -203,10 +219,11 @@ class RetroArchLauncher:
             extra = devices.get(device_id) or {}
             if not extra.get("enabled"):
                 continue
+            extra_type = extra.get("type", "gamepad")
             overrides.update(
                 to_retroarch_overrides(
-                    extra.get("bindings", {}),
-                    extra.get("type", "gamepad"),
+                    _bindings_for(device_id, extra, extra_type),
+                    extra_type,
                     console=console,
                     player=player_for_device(device_id),
                 )
