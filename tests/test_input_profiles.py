@@ -163,12 +163,18 @@ class TurboSettingsTests(unittest.TestCase):
 class TurboBindingTests(unittest.TestCase):
     """The turbo modifier is an optional binding: never auto-filled."""
 
-    def test_turbo_stays_unbound_by_default(self):
+    def test_turbo_stays_unbound_on_every_pad(self):
+        # Issue #72: an accidental turbo modifier on a pad would corrupt
+        # normal play, and there is no spare button for it. The keyboard has
+        # a dedicated key since issue #146.
         with TemporaryDirectory() as tmp_dir:
             manager = InputProfileManager(tmp_dir)
             profile = manager.load_profile("FC")
-        for device in profile["devices"].values():
-            self.assertEqual(device["bindings"].get("turbo", ""), "")
+        for device_id, device in profile["devices"].items():
+            if device["type"] == "keyboard":
+                self.assertEqual(device["bindings"].get("turbo"), "t")
+                continue
+            self.assertEqual(device["bindings"].get("turbo", ""), "", device_id)
 
     def test_a_bound_turbo_survives_normalization(self):
         with TemporaryDirectory() as tmp_dir:
@@ -256,6 +262,120 @@ class ProfileSettingsSurviveBindingSavesTests(unittest.TestCase):
                 InputProfileManager(tmp_dir).get_turbo_settings("SFC"),
                 {"period": 10, "duty_cycle": 4, "mode": 1},
             )
+
+
+class V4KeyboardDefaultsMigrationTests(unittest.TestCase):
+    """Issue #146: the new keyboard defaults have to reach existing profiles.
+
+    All five actions are in OPTIONAL_ACTIONS, which normalize_bindings skips
+    by design, and first_boot already wrote a .config for every console -- so
+    a new default alone reaches nobody who has already run the app.
+    """
+
+    def _v3_profile(self, keyboard_bindings):
+        return {
+            "version": 3,
+            "console": "SFC",
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {
+                    "type": "keyboard",
+                    "enabled": True,
+                    "bindings": keyboard_bindings,
+                }
+            },
+        }
+
+    def _load(self, tmp_dir, profile):
+        path = Path(tmp_dir) / "SFC.config"
+        path.write_text(json.dumps(profile), encoding="utf-8")
+        return InputProfileManager(tmp_dir).load_profile("SFC"), path
+
+    def test_unbound_actions_are_filled(self):
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(
+                tmp_dir, self._v3_profile({"a": "z", "audio_mute": "f9"})
+            )
+            bindings = profile["devices"]["keyboard"]["bindings"]
+            self.assertEqual(bindings["reset_game"], "r")
+            self.assertEqual(bindings["turbo"], "t")
+            self.assertEqual(bindings["state_slot_increase"], "pageup")
+            self.assertEqual(bindings["state_slot_decrease"], "pagedown")
+
+    def test_the_superseded_mute_default_is_replaced(self):
+        # f9 was what the app put there, not a choice anyone made.
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(tmp_dir, self._v3_profile({"audio_mute": "f9"}))
+            self.assertEqual(
+                profile["devices"]["keyboard"]["bindings"]["audio_mute"], "m"
+            )
+
+    def test_a_deliberate_binding_is_left_alone(self):
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(
+                tmp_dir,
+                self._v3_profile({"audio_mute": "f10", "reset_game": "backspace"}),
+            )
+            bindings = profile["devices"]["keyboard"]["bindings"]
+            self.assertEqual(bindings["audio_mute"], "f10")
+            self.assertEqual(bindings["reset_game"], "backspace")
+
+    def test_it_is_persisted_at_the_new_version(self):
+        with TemporaryDirectory() as tmp_dir:
+            _profile, path = self._load(tmp_dir, self._v3_profile({"a": "z"}))
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(stored["version"], PROFILE_VERSION)
+            self.assertEqual(
+                stored["devices"]["keyboard"]["bindings"]["reset_game"], "r"
+            )
+
+    def test_it_does_not_run_twice(self):
+        # Once migrated, clearing a binding must stick.
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.load_profile("SFC")
+            profile["devices"]["keyboard"]["bindings"]["reset_game"] = ""
+            manager.save_profile("SFC", profile)
+            again = InputProfileManager(tmp_dir).load_profile("SFC")
+            self.assertEqual(
+                again["devices"]["keyboard"]["bindings"]["reset_game"], ""
+            )
+
+    def test_the_superseded_hotkey_modifier_is_cleared(self):
+        # "right shift" is not a name RetroArch resolves, so hotkeys have
+        # always fired directly. Translating it (issue #144) would otherwise
+        # start demanding a modifier for every hotkey on existing profiles.
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(
+                tmp_dir, self._v3_profile({"enable_hotkey": "right shift"})
+            )
+            self.assertEqual(
+                profile["devices"]["keyboard"]["bindings"]["enable_hotkey"], ""
+            )
+
+    def test_a_deliberate_hotkey_modifier_survives(self):
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(
+                tmp_dir, self._v3_profile({"enable_hotkey": "f12"})
+            )
+            self.assertEqual(
+                profile["devices"]["keyboard"]["bindings"]["enable_hotkey"], "f12"
+            )
+
+    def test_the_pad_keeps_its_modifier(self):
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(tmp_dir, self._v3_profile({"a": "z"}))
+            self.assertEqual(
+                profile["devices"]["gamepad_p1"]["bindings"]["enable_hotkey"], "6"
+            )
+
+    def test_the_pad_is_not_touched(self):
+        with TemporaryDirectory() as tmp_dir:
+            profile, _path = self._load(tmp_dir, self._v3_profile({"a": "z"}))
+            pad = profile["devices"]["gamepad_p1"]["bindings"]
+            for action in ("reset_game", "turbo", "audio_mute",
+                           "state_slot_increase", "state_slot_decrease"):
+                self.assertEqual(pad.get(action, ""), "", action)
 
 
 class UnreachableGamepadButtonMigrationTests(unittest.TestCase):

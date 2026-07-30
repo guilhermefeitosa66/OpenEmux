@@ -10,7 +10,7 @@ from openemux.core.input_actions import (
 )
 from openemux.core.systems import resolve_system_id
 
-PROFILE_VERSION = 3
+PROFILE_VERSION = 4
 
 #: Lowest pad button index that no common controller exposes. An Xbox-style
 #: pad stops at 10, so anything from here up can never be pressed.
@@ -88,6 +88,57 @@ def clear_unreachable_gamepad_buttons(bindings):
             continue
         cleaned[action] = value
     return cleaned
+
+
+#: Keyboard bindings introduced in profile version 4 (issue #146), and the
+#: value each one replaces when it is still whatever the app put there.
+#:
+#: These actions are all in OPTIONAL_ACTIONS, which normalize_bindings skips by
+#: design so a profile that predates an action never has one auto-filled. That
+#: protection also means a new default reaches nobody who has already run the
+#: app -- first_boot writes a .config for every console on first launch -- so
+#: they are filled once, here.
+V4_KEYBOARD_DEFAULTS = {
+    "reset_game": ("",),
+    "turbo": ("",),
+    "state_slot_increase": ("",),
+    "state_slot_decrease": ("",),
+    # f9 was the old shipped default rather than a choice anyone made.
+    "audio_mute": ("", "f9"),
+}
+
+#: Bindings version 4 *blanks* when they still hold a superseded default.
+#:
+#: ``enable_hotkey`` shipped as "right shift", which is not a name RetroArch
+#: resolves -- so input_enable_hotkey was effectively unbound and keyboard
+#: hotkeys have always fired directly. Once issue #144 translates it to
+#: `rshift` it starts working, silently demanding a modifier for every hotkey
+#: on profiles that already exist. Clearing the value nobody chose keeps the
+#: behaviour people actually have.
+V4_KEYBOARD_CLEARED = {"enable_hotkey": ("right shift", "rshift")}
+
+
+def apply_v4_keyboard_defaults(bindings, defaults):
+    """Bring a keyboard profile up to version 4 (issue #146).
+
+    Only touches a value that is empty or still a superseded default, so a
+    deliberate binding is always left alone.
+    """
+    if not isinstance(bindings, dict):
+        bindings = {}
+    updated = dict(bindings)
+    for action, replaceable in V4_KEYBOARD_DEFAULTS.items():
+        new_value = defaults.get(action, "")
+        if not new_value:
+            continue
+        current = str(updated.get(action, "")).strip().lower()
+        if current in replaceable:
+            updated[action] = new_value
+    for action, superseded in V4_KEYBOARD_CLEARED.items():
+        current = str(updated.get(action, "")).strip().lower()
+        if current in superseded:
+            updated[action] = ""
+    return updated
 
 
 def default_analog_dpad_mode(console):
@@ -170,6 +221,7 @@ class InputProfileManager:
             loaded_version = int(loaded.get("version", 0)) if isinstance(loaded, dict) else 0
         except (TypeError, ValueError):
             loaded_version = 0
+        keyboard_defaults = default_keyboard_bindings()
 
         devices = loaded.get("devices", {}) if isinstance(loaded, dict) else {}
         # Devices absent from the file (e.g. a 1.2.x profile that only knew
@@ -182,6 +234,8 @@ class InputProfileManager:
             bindings = loaded_device.get("bindings", {})
             if loaded_version < 3 and default_device["type"] == "gamepad":
                 bindings = clear_unreachable_gamepad_buttons(bindings)
+            if loaded_version < 4 and default_device["type"] == "keyboard":
+                bindings = apply_v4_keyboard_defaults(bindings, keyboard_defaults)
             default_device["bindings"] = normalize_bindings(bindings, default_device["type"], console=system_id)
             if device_id in EXTRA_PORT_DEVICE_IDS:
                 default_device["enabled"] = bool(loaded_device.get("enabled", False))

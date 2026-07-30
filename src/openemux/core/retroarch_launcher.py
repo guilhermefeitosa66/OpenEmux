@@ -8,7 +8,7 @@ import logging
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
-from openemux.core.input_actions import to_retroarch_overrides
+from openemux.core.input_actions import conflicting_stock_hotkeys, to_retroarch_overrides
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
     normalize_analog_dpad_mode,
@@ -193,6 +193,10 @@ class RetroArchLauncher:
                     player=player_for_device(device_id),
                 )
             )
+        # This file is appended to RetroArch's own config, so a stock hotkey
+        # sitting on a key we just bound would still fire alongside ours --
+        # `m` would mute and cycle the shader at the same time (issue #146).
+        overrides.update(conflicting_stock_hotkeys(overrides))
         # Fold the analog stick onto the D-pad where the console wants it
         # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
         # the stick and the D-pad steer without re-remapping.

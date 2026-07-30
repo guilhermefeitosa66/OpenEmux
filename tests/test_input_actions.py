@@ -4,6 +4,7 @@ from openemux.core.input_actions import (
     DEFAULT_GAMEPAD_BINDINGS,
     DEFAULT_KEYBOARD_BINDINGS,
     GLOBAL_HOTKEY_ACTIONS,
+    conflicting_stock_hotkeys,
     default_bindings_for_device,
     RETROARCH_BASE_KEYS,
     get_actions_for_console,
@@ -255,6 +256,119 @@ class KeyboardHotkeyModifierTests(unittest.TestCase):
                 self.assertNotIn(value, gameplay, action)
 
 
+class StockHotkeyConflictTests(unittest.TestCase):
+    """Issue #146: our override is appended to RetroArch's own config.
+
+    A stock hotkey sitting on a key we bind still fires alongside ours, so
+    pressing `m` would mute *and* cycle the shader.
+    """
+
+    def _keyboard_overrides(self, console="SFC"):
+        # Seeded from the defaults, as a real profile is: normalize_bindings
+        # deliberately never auto-fills an OPTIONAL_ACTIONS entry, so an empty
+        # dict is "the user unbound everything", not "a fresh profile".
+        return to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console=console),
+            "keyboard",
+            console=console,
+        )
+
+    def test_the_shipped_defaults_clear_the_hotkeys_they_take(self):
+        cleared = conflicting_stock_hotkeys(self._keyboard_overrides())
+        # r -> reset_game, m -> audio_mute, t -> turbo.
+        self.assertEqual(cleared.get("input_rewind"), '"nul"')
+        self.assertEqual(cleared.get("input_shader_next"), '"nul"')
+        self.assertEqual(cleared.get("input_cheat_index_minus"), '"nul"')
+
+    def test_clearing_follows_the_consoles_own_action_set(self):
+        # `e` is the l2 default, and only a console with shoulder triggers
+        # binds it -- so slow motion only has to go where l2 exists.
+        full = conflicting_stock_hotkeys(self._keyboard_overrides(console=None))
+        self.assertEqual(full.get("input_hold_slowmotion"), '"nul"')
+        # SFC has no L2.
+        sfc = conflicting_stock_hotkeys(self._keyboard_overrides(console="SFC"))
+        self.assertNotIn("input_hold_slowmotion", sfc)
+
+    def test_untouched_hotkeys_are_left_alone(self):
+        cleared = conflicting_stock_hotkeys(self._keyboard_overrides())
+        for key in ("input_shader_prev", "input_cheat_toggle",
+                    "input_pause_toggle", "input_frame_advance",
+                    "input_screenshot", "input_exit_emulator"):
+            self.assertNotIn(key, cleared)
+
+    def test_a_hotkey_we_write_ourselves_is_never_cleared(self):
+        # Our value already wins; clearing it would undo our own binding.
+        overrides = self._keyboard_overrides()
+        cleared = conflicting_stock_hotkeys(overrides)
+        for key in ("input_reset", "input_audio_mute", "input_menu_toggle",
+                    "input_toggle_fullscreen"):
+            self.assertIn(key, overrides)
+            self.assertNotIn(key, cleared)
+
+    def test_a_gamepad_profile_clears_nothing(self):
+        # "6" is a button, not a key: pad tokens are a different namespace.
+        overrides = to_retroarch_overrides({}, "gamepad", console="SFC")
+        self.assertEqual(conflicting_stock_hotkeys(overrides), {})
+
+    def test_a_user_rebinding_moves_the_conflict(self):
+        bindings = default_bindings_for_device("keyboard", console="SFC")
+        bindings["a"] = "p"
+        bindings["reset_game"] = ""
+        overrides = to_retroarch_overrides(bindings, "keyboard", console="SFC")
+        cleared = conflicting_stock_hotkeys(overrides)
+        # `a` is now `p`, so pause has to go...
+        self.assertEqual(cleared.get("input_pause_toggle"), '"nul"')
+        # ...and with reset unbound, RetroArch's own rewind on `r` is free
+        # to stay.
+        self.assertNotIn("input_rewind", cleared)
+
+
+class KeyboardDefaultsTests(unittest.TestCase):
+    """The keyboard defaults requested in issue #146."""
+
+    def test_the_requested_keys(self):
+        defaults = default_bindings_for_device("keyboard", console="SFC")
+        self.assertEqual(defaults["reset_game"], "r")
+        self.assertEqual(defaults["audio_mute"], "m")
+        self.assertEqual(defaults["turbo"], "t")
+        self.assertEqual(defaults["state_slot_increase"], "pageup")
+        self.assertEqual(defaults["state_slot_decrease"], "pagedown")
+
+    def test_they_reach_retroarch_under_the_right_keys(self):
+        overrides = to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console="SFC"),
+            "keyboard",
+            console="SFC",
+        )
+        self.assertEqual(overrides["input_reset"], '"r"')
+        self.assertEqual(overrides["input_audio_mute"], '"m"')
+        self.assertEqual(overrides["input_state_slot_increase"], '"pageup"')
+        self.assertEqual(overrides["input_state_slot_decrease"], '"pagedown"')
+        self.assertEqual(overrides["input_player1_turbo"], '"t"')
+
+    def test_none_of_them_collides_with_a_gameplay_key(self):
+        defaults = default_bindings_for_device("keyboard", console=None)
+        gameplay = {
+            value
+            for action, value in defaults.items()
+            if action not in GLOBAL_HOTKEY_ACTIONS and action != "turbo" and value
+        }
+        for action in ("reset_game", "audio_mute", "turbo",
+                       "state_slot_increase", "state_slot_decrease"):
+            self.assertNotIn(defaults[action], gameplay, action)
+
+    def test_the_defaults_are_unique_among_themselves(self):
+        defaults = default_bindings_for_device("keyboard", console=None)
+        bound = [value for value in defaults.values() if value]
+        self.assertEqual(len(bound), len(set(bound)))
+
+    def test_the_pad_is_untouched(self):
+        pad = default_bindings_for_device("gamepad", console="SFC")
+        for action in ("reset_game", "audio_mute", "turbo",
+                       "state_slot_increase", "state_slot_decrease"):
+            self.assertEqual(pad[action], "", action)
+
+
 class AnalogStickAxisTests(unittest.TestCase):
     """Issue #126: the sticks have to be declared or they do nothing."""
 
@@ -372,15 +486,16 @@ class ResetGameHotkeyTests(unittest.TestCase):
         for console in ("FC", "SFC", "GBA", "PS", "MD", "N64"):
             self.assertIn("reset_game", get_actions_for_console(console), console)
 
-    def test_it_is_never_bound_by_default(self):
-        # A reset throws away everything since the last save, and on a pad
-        # every reachable Select combo is already taken -- a default would
-        # fire two hotkeys at once.
-        for device in ("keyboard", "gamepad"):
-            defaults = default_bindings_for_device(device, console="SFC")
-            self.assertEqual(defaults["reset_game"], "", device)
-            normalized = normalize_bindings({}, device, console="SFC")
-            self.assertEqual(normalized["reset_game"], "", device)
+    def test_it_is_never_bound_on_a_pad(self):
+        # Every reachable Select combo is already taken, so a pad default
+        # would fire two hotkeys at once. The keyboard gets `r` (issue #146).
+        defaults = default_bindings_for_device("gamepad", console="SFC")
+        self.assertEqual(defaults["reset_game"], "")
+        self.assertEqual(normalize_bindings({}, "gamepad", console="SFC")["reset_game"], "")
+
+    def test_the_keyboard_default_is_r(self):
+        defaults = default_bindings_for_device("keyboard", console="SFC")
+        self.assertEqual(defaults["reset_game"], "r")
 
     def test_an_unbound_reset_emits_no_key_at_all(self):
         overrides = to_retroarch_overrides({}, "gamepad", console="SFC")
@@ -451,9 +566,10 @@ class VolumeAndSlotHotkeyTests(unittest.TestCase):
         defaults = default_bindings_for_device("keyboard", console="SFC")
         self.assertEqual(defaults["volume_up"], "kp_plus")
         self.assertEqual(defaults["volume_down"], "kp_minus")
-        self.assertEqual(defaults["audio_mute"], "f9")
-        # The slot pair has no default anywhere (F6/F7 would collide).
-        self.assertEqual(defaults["state_slot_increase"], "")
-        self.assertEqual(defaults["state_slot_decrease"], "")
+        self.assertEqual(defaults["audio_mute"], "m")
+        # The page keys rather than RetroArch's F6/F7, which would collide
+        # with fast_forward_toggle (issue #146).
+        self.assertEqual(defaults["state_slot_increase"], "pageup")
+        self.assertEqual(defaults["state_slot_decrease"], "pagedown")
         gamepad = default_bindings_for_device("gamepad", console="SFC")
         self.assertEqual(gamepad["volume_up"], "")
