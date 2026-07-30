@@ -321,6 +321,8 @@ TRANSLATIONS = {
     "context.cover.sync": "Sync cover…",
     "context.label.sync": "Sync label…",
     "context.cover.manage": "Manage cover…",
+    "context.cover.artwork": "Cover image",
+    "context.label.artwork": "Label image",
     "context.label.manage": "Manage label…",
     "artwork.window.title": "Artwork — {name}",
     "artwork.tab.cover": "Cover",
