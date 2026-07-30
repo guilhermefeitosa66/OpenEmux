@@ -147,6 +147,7 @@ TRANSLATIONS = {
     "sidebar.settings": "Settings",
     "header.stop": "Stop running game",
     "header.restart": "Restart running game",
+    "header.preferences": "Preferences",
     "header.search": "Search ROMs",
     "header.refresh": "Reload visible page",
     "console.nes.full": "Nintendo Entertainment System",
