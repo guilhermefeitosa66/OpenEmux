@@ -2,11 +2,13 @@
 
 import socket
 import unittest
+from unittest.mock import patch
 
 from openemux.core.retroarch_command import (
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
     RetroArchCommandClient,
+    VolumePacer,
     clamp_volume_db,
     volume_steps,
 )
@@ -58,6 +60,57 @@ class CommandClientTests(unittest.TestCase):
         client = RetroArchCommandClient(1)
         self.assertFalse(client.send(""))
         self.assertFalse(client.send(None))
+
+    def test_the_socket_is_reused_across_commands(self):
+        # A volume walk is dozens of datagrams; one socket per packet is a
+        # syscall pair each time for no gain (issue #125).
+        client = RetroArchCommandClient(55355)
+        client.send("MUTE")
+        first = client._sock
+        client.send("MUTE")
+        self.assertIsNotNone(first)
+        self.assertIs(client._sock, first)
+        client.close()
+        self.assertIsNone(client._sock)
+
+
+class PacedDeliveryTests(unittest.TestCase):
+    """Issue #125: paced steps actually arrive; unpaced bursts did not."""
+
+    def test_a_paced_walk_delivers_every_step(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server:
+            server.bind(("127.0.0.1", 0))
+            server.settimeout(2)
+            port = server.getsockname()[1]
+            client = RetroArchCommandClient(port)
+
+            # Driven with a no-op sleep: the real 16 ms cadence over a full
+            # 40 dB walk would be 1.3 s, uncomfortably close to the timeout
+            # above, and what is under test here is delivery, not timing.
+            pacer = VolumePacer(client, level=0.0, sleep=lambda _s: None)
+            pacer.set_target(-10.0)
+            pacer.join(5)
+
+            for _ in range(20):
+                data, _addr = server.recvfrom(64)
+                self.assertEqual(data, b"VOLUME_DOWN")
+            self.assertEqual(pacer.level, -10.0)
+            client.close()
+
+    def test_send_repeated_can_pace_itself(self):
+        client = RetroArchCommandClient(55355)
+        with patch("openemux.core.retroarch_command.time.sleep") as sleep:
+            self.assertEqual(client.send_repeated("VOLUME_UP", 4, delay=0.016), 4)
+        # Between packets only -- no trailing wait after the last one.
+        self.assertEqual(sleep.call_count, 3)
+        client.close()
+
+    def test_send_repeated_stays_unpaced_by_default(self):
+        client = RetroArchCommandClient(55355)
+        with patch("openemux.core.retroarch_command.time.sleep") as sleep:
+            client.send_repeated("VOLUME_UP", 4)
+        self.assertEqual(sleep.call_count, 0)
+        client.close()
 
 
 if __name__ == "__main__":
