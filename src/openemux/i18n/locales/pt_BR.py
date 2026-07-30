@@ -144,6 +144,7 @@ TRANSLATIONS = {
     "sidebar.settings": "Configurações",
     "header.stop": "Parar jogo em execução",
     "header.preferences": "Preferências",
+    "header.console_input": "Configurar controle deste console",
     "filter.missing_artwork": "Somente sem capa",
     "rom.artwork.missing": "Nenhuma capa encontrada para este jogo",
     "rom.artwork.search": "Buscar capa…",
