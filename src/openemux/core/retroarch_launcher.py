@@ -11,6 +11,8 @@ from openemux.core.cores import CoreCatalog
 from openemux.core.input_actions import conflicting_stock_hotkeys, to_retroarch_overrides
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
+    PLAYER1_DEVICE_IDS,
+    device_type_for,
     normalize_analog_dpad_mode,
     normalize_turbo_settings,
     player_for_device,
@@ -174,12 +176,26 @@ class RetroArchLauncher:
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
-        active_device = profile.get("active_device", "keyboard")
-        device = devices.get(active_device, {})
-        device_type = device.get("type", "keyboard")
-        bindings = device.get("bindings", {})
-        # Port 1 comes from the active device, exactly as before.
-        overrides = to_retroarch_overrides(bindings, device_type, console=console)
+        # Port 1 gets *both* device maps, not just the "active" one.
+        #
+        # RetroArch keeps keyboard and joypad binds under separate keys --
+        # input_player1_a vs input_player1_a_btn, input_enable_hotkey vs
+        # input_enable_hotkey_btn -- so they never collide and both can be
+        # live at once. Emitting only the active device meant a plugged-in
+        # pad got none of OpenEmux's configuration: not the hotkeys, not the
+        # analog stick axes. It still appeared to work because RetroArch's
+        # own autoconfig maps the buttons, which is what made it so hard to
+        # notice (issue #150).
+        overrides = {}
+        for device_id in PLAYER1_DEVICE_IDS:
+            device = devices.get(device_id) or {}
+            overrides.update(
+                to_retroarch_overrides(
+                    device.get("bindings", {}),
+                    device_type_for(device_id),
+                    console=console,
+                )
+            )
         # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
         for device_id in EXTRA_PORT_DEVICE_IDS:
             extra = devices.get(device_id) or {}

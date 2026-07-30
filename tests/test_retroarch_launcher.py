@@ -236,13 +236,36 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_player1_analog_dpad_mode = "0"', lines)
         self.assertIn('input_player1_l_x_plus_axis = "+0"', lines)
 
-    def test_keyboard_profiles_declare_no_axes(self):
+    def test_port_one_carries_both_the_keyboard_and_the_pad(self):
+        # Issue #150: RetroArch keeps keyboard and joypad binds under separate
+        # keys, so both can be live at once. Emitting only the "active" device
+        # meant a plugged-in pad got none of OpenEmux's configuration -- no
+        # hotkeys, no analog axes -- while still appearing to work through
+        # RetroArch's own autoconfig.
         profile = {
             "active_device": "keyboard",
-            "devices": {"keyboard": {"type": "keyboard", "bindings": {"a": "z"}}},
+            "devices": {
+                "keyboard": {"type": "keyboard", "bindings": {"a": "z"}},
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+            },
         }
         lines = self._override_lines(profile)
-        self.assertFalse([line for line in lines if "_l_x_plus_axis" in line])
+        self.assertIn('input_player1_a = "z"', lines)
+        self.assertIn('input_player1_a_btn = "0"', lines)
+        self.assertIn('input_player1_l_x_plus_axis = "+0"', lines)
+
+    def test_the_pad_is_configured_even_when_the_profile_says_keyboard(self):
+        profile = {
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {"type": "keyboard", "bindings": {"a": "z"}},
+                "gamepad_p1": {"type": "gamepad", "bindings": {}},
+            },
+        }
+        lines = self._override_lines(profile)
+        # The pad hotkeys from issue #124 reach RetroArch too.
+        self.assertIn('input_enable_hotkey_btn = "6"', lines)
+        self.assertIn('input_save_state_btn = "2"', lines)
 
     def test_extra_ports_declare_their_own_axes(self):
         profile = {

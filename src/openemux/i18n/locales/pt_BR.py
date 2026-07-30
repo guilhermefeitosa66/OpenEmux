@@ -208,6 +208,7 @@ TRANSLATIONS = {
     "settings.input.subtitle": "Mapeamento de teclado e gamepad",
     "input.console": "Console",
     "input.device": "Dispositivo de entrada",
+    "input.device.subtitle": "Qual mapeamento você está editando. O teclado e o controle do jogador 1 ficam sempre ativos.",
     "input.device.keyboard": "Teclado",
     "input.device.gamepad_p1": "Gamepad Porta 1",
     "input.device.gamepad_p2": "Gamepad Porta 2",

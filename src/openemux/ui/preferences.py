@@ -524,7 +524,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         controller_group.add(self._console_combo)
 
         self._device_ids = list(DEVICE_IDS)
-        self._device_combo = Adw.ComboRow(title=self.t("input.device"))
+        # Picks which map is being edited, not which one is live: the
+        # keyboard and player 1's pad are both always active (issue #150).
+        self._device_combo = Adw.ComboRow(
+            title=self.t("input.device"),
+            subtitle=self.t("input.device.subtitle"),
+        )
         self._device_combo.set_model(
             Gtk.StringList.new([self.t(f"input.device.{d}") for d in self._device_ids])
         )
