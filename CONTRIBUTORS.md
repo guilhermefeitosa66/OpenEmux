@@ -20,7 +20,7 @@ release, the `make flatpak` target, and the
 [openemux-flatpak](https://github.com/guilhermefeitosa66/openemux-flatpak)
 repository that makes `flatpak update` work.
 
-### mozertdev
+### mozertdev ([@mozertdev](https://github.com/mozertdev))
 
 From the [Diolinux Plus](https://plus.diolinux.com.br/) community. Ran a
 detailed hands-on test of **v1.9.2** end to end — install, import, artwork,
