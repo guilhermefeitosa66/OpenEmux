@@ -16,6 +16,7 @@ from openemux.core.cover_sync import (
     _sync_artwork,
     _sync_covers,
     build_artwork_passes,
+    fuzzy_candidate_names,
 )
 
 
@@ -606,3 +607,151 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
                     sync_settings={"cover_art_type": "cartridge_label"},
                 )
         self.assertEqual(seen, ["covers", "covers", "labels"])
+
+
+class FuzzyTitleFallbackTests(unittest.TestCase):
+    """Issue #127: last-resort guesses for the ~5% the exact names miss."""
+
+    def test_the_parenthesised_alternate_title_is_tried_on_its_own(self):
+        # The reporter's example: the thumbnail repo may file the game under
+        # either name, so both halves are worth trying.
+        candidates = fuzzy_candidate_names("Aero Fighters (Sonic Wings) (USA)")
+        self.assertIn("Aero Fighters", candidates)
+        self.assertIn("Sonic Wings", candidates)
+
+    def test_region_and_revision_tags_are_not_mistaken_for_titles(self):
+        for name in (
+            "Contra (USA) (Rev A)",
+            "Sonic (Japan, USA)",
+            "Zelda (En,Fr,De,Es,It)",
+            "Metroid (Beta)",
+            "Doom (v1.1)",
+            "Kirby [!]",
+        ):
+            for candidate in fuzzy_candidate_names(name):
+                self.assertNotIn("(", candidate, name)
+                self.assertNotIn("[", candidate, name)
+
+    def test_mid_title_tags_are_stripped_not_only_trailing_ones(self):
+        # _normalize_rom_name only peels tags off the end.
+        candidates = fuzzy_candidate_names("Super Mario (USA) World [!] Deluxe")
+        self.assertIn("Super Mario World Deluxe", candidates)
+
+    def test_punctuation_is_dropped_as_a_separate_candidate(self):
+        candidates = fuzzy_candidate_names("Castlevania - Aria of Sorrow")
+        self.assertIn("Castlevania - Aria of Sorrow", candidates)
+        self.assertIn("Castlevania Aria of Sorrow", candidates)
+
+    def test_a_clean_name_produces_no_useless_duplicates(self):
+        candidates = fuzzy_candidate_names("Chrono Trigger")
+        self.assertEqual(len(candidates), len(set(candidates)))
+
+
+class FuzzyPassWiringTests(unittest.TestCase):
+    def _library(self):
+        return {
+            "snes": [
+                {
+                    "name": "Aero Fighters (Sonic Wings) (USA)",
+                    "path": "/tmp/Aero Fighters (Sonic Wings) (USA).sfc",
+                    "console": "snes",
+                }
+            ]
+        }
+
+    def test_the_fuzzy_pass_only_runs_after_the_exact_names_miss(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch(
+                    "openemux.core.cover_sync._remote_cover_candidates",
+                    return_value=["u1", "u2"],
+                ),
+                patch(
+                    "openemux.core.cover_sync._download_cover", return_value=True
+                ) as download_mock,
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="snes",
+                    sync_settings={},
+                )
+        # First candidate hit: the fallback must not have been consulted.
+        self.assertEqual(download_mock.call_count, 1)
+        self.assertEqual(summary["downloaded"], 1)
+        self.assertEqual(summary["missed"], [])
+
+    def test_a_miss_falls_through_to_the_fuzzy_titles(self):
+        seen_names = []
+
+        def _candidates(_console, rom_name, _settings, rom_path=None):
+            seen_names.append(rom_name)
+            return [f"url-for-{rom_name}"]
+
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch(
+                    "openemux.core.cover_sync._remote_cover_candidates",
+                    side_effect=_candidates,
+                ),
+                patch("openemux.core.cover_sync._download_cover", return_value=False),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="snes",
+                    sync_settings={},
+                )
+        self.assertEqual(seen_names[0], "Aero Fighters (Sonic Wings) (USA)")
+        self.assertIn("Sonic Wings", seen_names)
+        self.assertEqual(summary["errors"], 1)
+
+    def test_the_summary_names_the_roms_that_still_need_artwork(self):
+        # errors used to be a bare count, so the UI could say how many failed
+        # but never which ones.
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch(
+                    "openemux.core.cover_sync._remote_cover_candidates",
+                    return_value=["u1"],
+                ),
+                patch("openemux.core.cover_sync._download_cover", return_value=False),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="snes",
+                    sync_settings={},
+                )
+        self.assertEqual(
+            summary["missed"],
+            [{"console": "snes", "rom_name": "Aero Fighters (Sonic Wings) (USA)"}],
+        )
+        self.assertEqual(summary["errors"], len(summary["missed"]))
+
+    def test_the_fuzzy_pass_is_capped_and_says_so(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch(
+                    "openemux.core.cover_sync._remote_cover_candidates",
+                    side_effect=lambda c, n, s, rom_path=None: [f"{n}-{i}" for i in range(50)],
+                ),
+                patch("openemux.core.cover_sync._download_cover", return_value=False),
+                self.assertLogs("openemux.core.cover_sync", level="INFO") as logs,
+            ):
+                _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="snes",
+                    sync_settings={},
+                )
+        # Truncation is logged, never silent.
+        self.assertTrue(any("fuzzy pass capped" in line for line in logs.output))

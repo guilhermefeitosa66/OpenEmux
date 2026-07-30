@@ -142,6 +142,24 @@ flowboxchild:focus-visible {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
+/* Stamped on a card whose ROM has no artwork (issue #127). Muted rather than
+   alarming: a missing cover is a gap to fill, not an error. The filled disc
+   is the .artwork-check idiom, so it reads on a light cover and a dark one. */
+.artwork-missing-badge {
+    background-color: alpha(@window_bg_color, 0.85);
+    color: @warning_color;
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Sits inside the empty cover, so it has to stay quiet until looked at. */
+.artwork-search-button {
+    font-size: 0.85em;
+    margin-top: 4px;
+    opacity: 0.85;
+}
+
 .favorites-sidebar-icon {
     color: #f6c90e;
 }

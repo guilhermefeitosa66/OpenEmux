@@ -162,6 +162,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # The volume/mute controls are seeded once per launch, not on every
         # runtime poll -- see _sync_runtime_controls (issue #125).
         self._runtime_controls_seeded = False
+        # "Show only ROMs without artwork" (issue #127). Session-only: a way
+        # to work through the gaps, not a mode to leave the library in.
+        self._filter_missing_artwork = False
         self._task_seq = 0
         self._tasks = {}
         # console_id -> Gdk.Texture (or None when the console ships no asset)
@@ -627,6 +630,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         sort_section = Gio.Menu()
         sort_section.append_submenu(self.t("header.sort_by"), sort_menu)
         menu.append_section(None, sort_section)
+
+        # A filter, not a layout -- but this is the menu people already open
+        # to change what the library shows them (issue #127).
+        filter_section = Gio.Menu()
+        filter_section.append(
+            self.t("filter.missing_artwork"), "win.filter-missing-artwork"
+        )
+        menu.append_section(None, filter_section)
 
         zoom_section = Gio.Menu()
         zoom_item = Gio.MenuItem.new(None, None)
@@ -1119,6 +1130,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         follow_global_action.connect("activate", self._on_layout_follow_global_action)
         self.add_action(follow_global_action)
+
+        # "Show only ROMs without artwork" (issue #127): a view filter, so it
+        # sits with the other view controls rather than in Preferences, and
+        # it is deliberately not persisted -- it is a way to work through the
+        # gaps, not a mode to leave the library in.
+        missing_artwork_action = Gio.SimpleAction.new_stateful(
+            "filter-missing-artwork", None, GLib.Variant("b", False)
+        )
+        missing_artwork_action.connect("activate", self._on_missing_artwork_action)
+        self.add_action(missing_artwork_action)
 
     def _focused_rom_item(self):
         return RomGrid.item_for_widget(self.get_focus())
@@ -3310,20 +3331,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
 
-    def _on_search_changed(self, entry):
-        query = entry.get_text().lower()
+    def _on_search_changed(self, _entry):
+        self.apply_library_filters()
+
+    def apply_library_filters(self):
+        """Decide card visibility from the search query and the artwork filter.
+
+        One place owns it. Filtering used to be an ad-hoc loop inside the
+        search handler; adding a second independent loop for the artwork
+        filter would let the two fight over the same visibility flag (#127).
+
+        Public because the grid calls back into it when a card's artwork
+        state settles, which happens after the filter first ran.
+        """
         visible = self.content_stack.get_visible_child_name()
         if not visible or visible not in self._grids:
             return
         grid = self._grids[visible]
+        query = self.search_entry.get_text().lower()
+        only_missing = self._filter_missing_artwork
+
         child = grid.get_first_child()
         while child:
-            flow_child = child
-            inner = flow_child.get_child()
-            if inner and hasattr(inner, "rom"):
-                matches = query in inner.rom["name"].lower()
-                flow_child.set_visible(matches or not query)
+            inner = child.get_child()
+            if inner is not None and hasattr(inner, "rom"):
+                shown = (not query) or query in inner.rom["name"].lower()
+                if only_missing and getattr(inner, "has_artwork", None) is not False:
+                    # `None` means the fetch has not resolved yet: hide it
+                    # rather than flash it in and out as state arrives.
+                    shown = False
+                child.set_visible(shown)
             child = child.get_next_sibling()
+
+        # Bypassing this is how selection desyncs from what is on screen.
+        grid.sync_visible_selection()
+
+    def _on_missing_artwork_action(self, action, _param):
+        enabled = not action.get_state().get_boolean()
+        action.set_state(GLib.Variant("b", enabled))
+        self._filter_missing_artwork = enabled
+        self.apply_library_filters()
 
     def _on_stop_game_clicked(self, _button):
         success, error_msg = self.runtime_manager.stop_active()
