@@ -10,7 +10,8 @@ Remote download is handled by openemux.core.cover_sync.
 
 from pathlib import Path
 import shutil
-from threading import Thread
+
+from openemux.core import cover_cache
 
 SUPPORTED_COVER_EXTS = ("png", "jpg", "jpeg", "webp")
 
@@ -99,10 +100,15 @@ def save_local_cover(roms_dir: Path, console: str, rom_name: str, source_path: s
 
 def fetch_cover(rom: dict, roms_dir: str | Path, on_done_callback=None, kinds=(COVER_ART,)) -> None:
     """
-    Resolve local artwork in a background thread to avoid UI blocking.
+    Resolve local artwork off the main thread to avoid UI blocking.
 
     `kinds` is tried in order, so a card can prefer the cartridge label and fall
     back to the box art when no label was configured.
+
+    Runs on the shared, bounded decode pool rather than a thread of its own:
+    a 500-ROM console used to spawn 500 OS threads here (issue #128). The
+    ``on_done_callback(rom, path_or_None)`` contract is unchanged, and it is
+    still invoked on a worker -- which is now where the decode belongs too.
     """
 
     def _worker():
@@ -114,4 +120,4 @@ def fetch_cover(rom: dict, roms_dir: str | Path, on_done_callback=None, kinds=(C
         if on_done_callback:
             on_done_callback(rom, str(found) if found else None)
 
-    Thread(target=_worker, daemon=True).start()
+    cover_cache.submit(_worker)

@@ -4,7 +4,7 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
 import logging
 
-from openemux.core import cartridge_render
+from openemux.core import cartridge_render, cover_cache
 from openemux.core.selection import SelectionModel
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
@@ -436,10 +436,27 @@ class RomItem(Gtk.Box):
             badges.append(self.menu_button)
             self.append(badges)
 
-        # Trigger async cover art fetch
-        fetch_cover(rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
+        # Deferred to the map signal rather than fired here: a card that is
+        # filtered out of the view is never mapped, so it queues no work until
+        # it is actually shown.
+        #
+        # Measured, because it is easy to assume otherwise: Gtk.FlowBox does
+        # *not* virtualize scrolling -- children below the fold are still
+        # mapped -- so this is not a substitute for virtualization, which is
+        # out of scope for this issue. What keeps a big library responsive is
+        # the bounded pool and the decode moving off the main thread (#128).
+        self._cover_fetch_started = False
+        self.connect("map", self._on_first_map)
 
         self._context_popover = None
+
+    def _on_first_map(self, *_args):
+        if self._cover_fetch_started:
+            return
+        self._cover_fetch_started = True
+        fetch_cover(
+            self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds
+        )
 
     @classmethod
     def _truncate_name(cls, name, limit=None):
@@ -479,12 +496,19 @@ class RomItem(Gtk.Box):
         self._placeholder_widget = placeholder
 
     def _on_cover_fetched(self, rom, cover_path):
-        """Called from background thread when cover art is ready."""
+        """Called on a worker thread once the cover path is resolved.
+
+        The decode happens *here*, not in the idle callback. It used to be
+        handed to the main thread, which serialised every JPEG/PNG decode and
+        rescale in the library onto the one thread that cannot afford it
+        (issue #128). Only assigning the result to a widget has to be on the
+        main loop, and that is all the idle callback does now.
+        """
         if self.cartridge_frame_path:
-            # Still on the worker thread: compose the cover into the cartridge
-            # (cached on disk, so this only costs anything the first time). A
-            # ROM with no cover renders as a blank cartridge instead of the
-            # generic icon, keeping the shelf consistent.
+            # Compose the cover into the cartridge (cached on disk, so this
+            # only costs anything the first time). A ROM with no cover renders
+            # as a blank cartridge instead of the generic icon, keeping the
+            # shelf consistent.
             composite = cartridge_render.render_cartridge(
                 cover_path,
                 self.cartridge_frame_path,
@@ -494,51 +518,50 @@ class RomItem(Gtk.Box):
                 scale=CARTRIDGE_RENDER_SCALE,
             )
             if composite:
-                GLib.idle_add(self._load_cover_image, str(composite))
-                return
+                # Full resolution: the composite is already the card's shape,
+                # and the full-size art is what keeps it sharp on HiDPI.
+                pixbuf = cover_cache.load_cover(str(composite))
+                if pixbuf is not None:
+                    GLib.idle_add(self._apply_cover_pixbuf, pixbuf, True)
+                    return
         if cover_path:
-            # Schedule UI update on the main thread
-            GLib.idle_add(self._load_cover_image, cover_path)
-            return
-        # Cover was removed or does not exist: restore placeholder immediately.
+            width, height = self._cover_target_size()
+            pixbuf = cover_cache.load_cover(cover_path, width, height)
+            if pixbuf is not None:
+                GLib.idle_add(self._apply_cover_pixbuf, pixbuf, False)
+                return
+        # No cover, or one that would not decode -- cover_cache logs the
+        # latter, so a corrupt file is no longer indistinguishable from a
+        # missing one.
         GLib.idle_add(self._restore_placeholder)
 
     def _restore_placeholder(self):
         self._set_placeholder()
         return False
 
-    def _load_cover_image(self, cover_path):
-        """Load cover image into the widget (must run on main thread)."""
+    def _apply_cover_pixbuf(self, pixbuf, full_resolution):
+        """Hand an already-decoded cover to the widget (main thread only)."""
         try:
-            if self.cartridge_frame_path:
-                # The composite is already the card's shape, and handing GTK
-                # the full-resolution texture keeps it sharp on HiDPI.
-                self.cover_image.set_paintable(Gdk.Texture.new_from_filename(cover_path))
-                self.cover_image.set_visible(True)
-                if hasattr(self, "_placeholder_widget"):
-                    self._set_cover_widget(self.cover_image)
-                    del self._placeholder_widget
-                return False
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                cover_path,
-                self._cover_target_size()[0],
-                self._cover_target_size()[1],
-                True,
-            )
-            if self.mixed_consoles and not self.compact:
-                # Shrink the widget to the scaled art so the rounded corners and
-                # shadow hug the cover, not the empty area around it. Not in a
-                # row: there the thumbnail box is a column shared with every
-                # other row, and resizing it per cover would stagger the titles.
-                self.cover_image.set_size_request(pixbuf.get_width(), pixbuf.get_height())
-            self.cover_image.set_pixbuf(pixbuf)
+            if full_resolution:
+                self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+            else:
+                if self.mixed_consoles and not self.compact:
+                    # Shrink the widget to the scaled art so the rounded
+                    # corners and shadow hug the cover, not the empty area
+                    # around it. Not in a row: there the thumbnail box is a
+                    # column shared with every other row, and resizing it per
+                    # cover would stagger the titles.
+                    self.cover_image.set_size_request(
+                        pixbuf.get_width(), pixbuf.get_height()
+                    )
+                self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
             # Remove placeholder if present
             if hasattr(self, "_placeholder_widget"):
                 self._set_cover_widget(self.cover_image)
                 del self._placeholder_widget
         except Exception:
-            pass  # Keep placeholder on error
+            logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
 
     def _cover_target_size(self):
