@@ -30,7 +30,19 @@ PLAYER1_DEVICE_IDS = ["keyboard", "gamepad_p1"]
 ANALOG_DPAD_OFF = 0
 ANALOG_DPAD_LEFT_STICK = 1
 ANALOG_DPAD_RIGHT_STICK = 2
-ANALOG_DPAD_MODES = (ANALOG_DPAD_OFF, ANALOG_DPAD_LEFT_STICK, ANALOG_DPAD_RIGHT_STICK)
+#: RetroArch ignores the plain modes when the core natively reads analog --
+#: which is exactly the analog-native consoles, the ones where someone might
+#: want the stick to *also* work as a D-pad. The Forced variants are the only
+#: ones that do anything there (issue #152).
+ANALOG_DPAD_LEFT_STICK_FORCED = 3
+ANALOG_DPAD_RIGHT_STICK_FORCED = 4
+ANALOG_DPAD_MODES = (
+    ANALOG_DPAD_OFF,
+    ANALOG_DPAD_LEFT_STICK,
+    ANALOG_DPAD_RIGHT_STICK,
+    ANALOG_DPAD_LEFT_STICK_FORCED,
+    ANALOG_DPAD_RIGHT_STICK_FORCED,
+)
 
 #: Consoles whose pads use the analog stick natively: folding it onto the
 #: D-pad there would steal the stick from the game, so they default to off.
