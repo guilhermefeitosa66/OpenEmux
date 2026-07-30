@@ -21,7 +21,7 @@ from openemux.core.library_view import (
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
-from openemux.ui.context_menu import SEPARATOR, build_context_popover
+from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 
 logger = logging.getLogger(__name__)
 
@@ -818,44 +818,60 @@ class RomItem(Gtk.Box):
                 "starred-symbolic" if is_favorite else "non-starred-symbolic",
             ),
         ]
-        # One artwork pair at a time, following what the card is actually
+        # One artwork kind at a time, following what the card is actually
         # showing: the label inside a cartridge, the box art everywhere else
-        # (issue #77). The online search entries sit next to the manual pair.
+        # (issue #77).
+        #
+        # Everything that acts on that artwork lives in one submenu. Choose,
+        # remove and manage were three sibling rows at the top level, which is
+        # most of the menu's length spent on something that is not the common
+        # case. Sync stays outside: it is the one-click "just fetch it".
         showing_label = bool(self.cartridge_frame_path) and self.supports_label
         if showing_label:
-            entries.append(
-                (self.t("context.label.choose"), "rom.choose-label", "insert-image-symbolic")
-            )
-            if self.has_local_cover(self.rom, LABEL_ART):
-                entries.append(
-                    (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
-                )
+            kind, art_dir = "label", LABEL_ART
         else:
-            entries.append(
-                (self.t("context.cover.choose"), "rom.choose-cover", "image-x-generic-symbolic")
-            )
-            if self.has_local_cover(self.rom, COVER_ART):
-                entries.append(
-                    (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
-                )
-        # Two artwork entries, both following the view mode like the manual pair
-        # above: sync fetches this one ROM's art in the background right away,
-        # manage opens the artwork window to search, pick or import by hand.
+            kind, art_dir = "cover", COVER_ART
+
         if self.context_services is not None:
-            if showing_label:
-                entries.append(
-                    (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
+            entries.append(
+                (
+                    self.t(f"context.{kind}.sync"),
+                    f"rom.sync-{kind}",
+                    "folder-download-symbolic",
                 )
-                entries.append(
-                    (self.t("context.label.manage"), "rom.manage-label", "document-properties-symbolic")
+            )
+
+        artwork_entries = []
+        if self.context_services is not None:
+            artwork_entries.append(
+                (
+                    self.t(f"context.{kind}.manage"),
+                    f"rom.manage-{kind}",
+                    "document-properties-symbolic",
                 )
-            else:
-                entries.append(
-                    (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
+            )
+        artwork_entries.append(
+            (
+                self.t(f"context.{kind}.choose"),
+                f"rom.choose-{kind}",
+                "insert-image-symbolic" if showing_label else "image-x-generic-symbolic",
+            )
+        )
+        if self.has_local_cover(self.rom, art_dir):
+            artwork_entries.append(
+                (
+                    self.t(f"context.{kind}.remove"),
+                    f"rom.remove-{kind}",
+                    "user-trash-symbolic",
                 )
-                entries.append(
-                    (self.t("context.cover.manage"), "rom.manage-cover", "document-properties-symbolic")
-                )
+            )
+        entries.append(
+            Submenu(
+                self.t(f"context.{kind}.artwork"),
+                artwork_entries,
+                "image-x-generic-symbolic",
+            )
+        )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
         if self.context_services is not None:

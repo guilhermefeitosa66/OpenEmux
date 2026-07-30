@@ -317,6 +317,8 @@ TRANSLATIONS = {
     "context.cover.sync": "Sincronizar capa…",
     "context.label.sync": "Sincronizar rótulo…",
     "context.cover.manage": "Gerenciar capa…",
+    "context.cover.artwork": "Imagem da capa",
+    "context.label.artwork": "Imagem do rótulo",
     "context.label.manage": "Gerenciar rótulo…",
     "artwork.window.title": "Imagens — {name}",
     "artwork.tab.cover": "Capa",

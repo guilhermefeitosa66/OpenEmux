@@ -18,11 +18,12 @@ class RomContextMenuServices:
 
     def build_submenus(self, rom):
         """Return the extra entries to splice into ``rom``'s context menu."""
+        # Load state comes first and the collection entries last: picking up
+        # where you left off is what people reach this menu for during play,
+        # while filing a game away is housekeeping. The add/remove collection
+        # pair stays adjacent -- they are two halves of the same thing.
         entries = []
-        entries.append(self._add_to_collection_submenu(rom))
-        remove = self._remove_from_collection_entry(rom)
-        if remove is not None:
-            entries.append(remove)
+        entries.append(self._load_state_submenu(rom))
         core = self._core_submenu(rom)
         if core is not None:
             entries.append(core)
@@ -32,7 +33,10 @@ class RomContextMenuServices:
         color = self._cartridge_color_submenu(rom)
         if color is not None:
             entries.append(color)
-        entries.append(self._load_state_submenu(rom))
+        entries.append(self._add_to_collection_submenu(rom))
+        remove = self._remove_from_collection_entry(rom)
+        if remove is not None:
+            entries.append(remove)
         return entries
 
     def _add_to_collection_submenu(self, rom):
