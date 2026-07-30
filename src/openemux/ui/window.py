@@ -88,6 +88,11 @@ def collection_scope(slug):
     return f"{COLLECTION_ID_PREFIX}{slug}"
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 6
+
+#: Relaunch polls for the old process to exit rather than blocking the main
+#: loop on wait(). 200 ms x 15 gives RetroArch ~3 s to go away (issue #129).
+RELAUNCH_POLL_INTERVAL_MS = 200
+RELAUNCH_MAX_POLLS = 15
 CONSOLE_ICON_FILES = {
     "A2600": "atari_2600__atari2600_library@2x.png",
     "A5200": "atari_5200__atari5200_library@2x.png",
@@ -3308,6 +3313,40 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=error_msg)
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
+
+    def _relaunch_active_rom(self):
+        """Stop the running game and start the same ROM again.
+
+        Not the same thing as Restart (#130): only a fresh process re-reads
+        the runtime override, so this is the only way an input remap takes
+        effect (#129). The wait for the old process is polled rather than
+        blocking -- wait() on the main loop would freeze the UI.
+        """
+        rom, error_msg = self.runtime_manager.relaunch_active()
+        self._sync_runtime_controls()
+        if rom is None:
+            if error_msg:
+                self._toast(error_msg, timeout=4)
+            return False
+
+        self._toast(self.t("toast.relaunching"))
+        remaining = [RELAUNCH_MAX_POLLS]
+
+        def _launch_when_free():
+            if self.runtime_manager.is_running():
+                remaining[0] -= 1
+                if remaining[0] > 0:
+                    return True
+                self._toast(self.t("toast.relaunch_failed"), timeout=5)
+                return False
+            success, launch_error = self.runtime_manager.relaunch_rom(rom)
+            self._sync_runtime_controls()
+            if not success and launch_error:
+                self._toast(launch_error, timeout=5)
+            return False
+
+        GLib.timeout_add(RELAUNCH_POLL_INTERVAL_MS, _launch_when_free)
+        return True
 
     def _on_restart_game_clicked(self, _button=None):
         """Reset the running game. No confirmation dialog on purpose: this is

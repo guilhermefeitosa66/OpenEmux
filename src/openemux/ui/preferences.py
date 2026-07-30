@@ -477,6 +477,23 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.page.input"), icon_name="input-gaming-symbolic"
         )
 
+        # Bindings reach RetroArch only through the --appendconfig file
+        # written at spawn. The process never re-reads it and the UDP command
+        # interface has no config-write or remap-reload verb, so a remap made
+        # while a game runs genuinely cannot apply until the game restarts.
+        # Say so instead of letting it look broken, and offer the one action
+        # that does apply it (issue #129).
+        #
+        # Adw.PreferencesPage has no banner slot, so it rides in a group of
+        # its own -- which must be the first thing on the page.
+        self._relaunch_banner = Adw.Banner(title=self.t("prefs.input.banner.running"))
+        self._relaunch_banner.set_button_label(self.t("prefs.input.banner.relaunch"))
+        self._relaunch_banner.connect("button-clicked", self._on_relaunch_clicked)
+        self._relaunch_banner.set_revealed(False)
+        banner_group = Adw.PreferencesGroup()
+        banner_group.add(self._relaunch_banner)
+        page.add(banner_group)
+
         controller_group = Adw.PreferencesGroup(title=self.t("prefs.group.controller"))
         self._console_ids = list(SYSTEM_IDS)
         self._console_combo = Adw.ComboRow(title=self.t("input.console"))
@@ -586,7 +603,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         page.add(self._system_bindings_group)
 
         self._refresh_bindings()
+        self._sync_relaunch_banner()
         return page
+
+    def _sync_relaunch_banner(self):
+        """Show the banner only while there is a game to relaunch."""
+        banner = getattr(self, "_relaunch_banner", None)
+        if banner is None:
+            return
+        banner.set_revealed(self.win.runtime_manager.is_running())
+
+    def _on_relaunch_clicked(self, _banner):
+        self.win._relaunch_active_rom()
+        # The game is briefly gone and then back, so the banner is left up
+        # rather than flickering; this re-checks once the dust settles, which
+        # is also what takes it down if the relaunch failed.
+        GLib.timeout_add_seconds(5, self._sync_relaunch_banner_once)
+
+    def _sync_relaunch_banner_once(self):
+        self._sync_relaunch_banner()
+        return False
 
     def _current_console(self):
         idx = self._console_combo.get_selected()
@@ -985,6 +1021,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.save_input_profile(console_id, profile)
         self._loaded_profile = profile
         self._toast(self.t("toast.input_saved", console=console_id))
+        # A game may have started (or ended) since the page was built, and a
+        # remap saved mid-game is exactly when the notice matters (#129).
+        self._sync_relaunch_banner()
 
     def _reset_defaults(self):
         console_id = self._current_console()

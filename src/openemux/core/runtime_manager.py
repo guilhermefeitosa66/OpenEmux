@@ -178,6 +178,38 @@ class RuntimeManager:
             self.muted = not self.muted
         return self.muted
 
+    def relaunch_rom(self, rom):
+        """Launch ``rom`` again -- the second half of a relaunch.
+
+        Split out because ``launch()`` refuses while a process is alive, so
+        the caller has to wait for the exit before this can run and the UI
+        must not block the main loop doing it (issue #129).
+        """
+        if not rom:
+            return False, "No game to relaunch."
+        return self.launch(rom.get("path"), rom.get("console"))
+
+    def relaunch_active(self):
+        """Stop the running game and start the same ROM again.
+
+        Deliberately distinct from ``restart_active``: bindings reach
+        RetroArch only through the --appendconfig file written at spawn, the
+        process never re-reads it, and the UDP interface has no config-write
+        or remap-reload verb. Terminating and launching again regenerates
+        that override, which is the only thing that applies a remap (#129).
+
+        Returns ``(rom, error)``: the ROM to relaunch once the process is
+        gone, so the caller can poll for the exit rather than blocking.
+        """
+        if not self.is_running():
+            return None, "No active game process."
+        # Captured first: _clear_active wipes it as soon as the process goes.
+        rom = dict(self.active_rom or {})
+        success, error = self.stop_active()
+        if not success:
+            return None, error
+        return rom, None
+
     def restart_active(self):
         """Reset the running game without reloading the core or the content.
 
