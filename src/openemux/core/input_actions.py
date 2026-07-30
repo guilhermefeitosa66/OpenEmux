@@ -153,13 +153,20 @@ DEFAULT_KEYBOARD_BINDINGS = {
     "menu_toggle": "f1",
     "save_state": "f2",
     "load_state": "f4",
-    # RetroArch's own defaults for the volume hotkeys; the slot-stepping pair
-    # stays unbound (RetroArch's F6/F7 would collide with keys above).
+    # RetroArch's own defaults for the volume hotkeys. The save-slot pair uses
+    # the page keys rather than RetroArch's F6/F7, which would collide with
+    # fast_forward_toggle below (issue #146).
     "volume_up": "kp_plus",
     "volume_down": "kp_minus",
-    "audio_mute": "f9",
+    "state_slot_increase": "pageup",
+    "state_slot_decrease": "pagedown",
+    "audio_mute": "m",
     "fast_forward_toggle": "f6",
     "fullscreen_toggle": "f",
+    "reset_game": "r",
+    # Turbo stays unbound on a pad -- an accidental modifier there would
+    # corrupt normal play (issue #72) -- but a dedicated key is safe.
+    "turbo": "t",
 }
 
 DEFAULT_GAMEPAD_BINDINGS = {
@@ -409,6 +416,71 @@ RETROARCH_KEY_NAMES = {
     "left super": "lsuper",
     "right super": "rsuper",
 }
+
+
+#: RetroArch's own stock keyboard hotkeys and the key each one takes.
+#:
+#: The runtime override is *appended* to RetroArch's config, so a stock hotkey
+#: sitting on a key we also bind still fires alongside ours: pressing `m` would
+#: mute *and* cycle the shader (issue #146). Anything here that collides with an
+#: OpenEmux binding is explicitly unbound.
+RETROARCH_STOCK_KEYBOARD_HOTKEYS = {
+    "input_rewind": "r",
+    "input_shader_next": "m",
+    "input_shader_prev": "n",
+    "input_shader_toggle": "comma",
+    "input_cheat_index_minus": "t",
+    "input_cheat_index_plus": "y",
+    "input_cheat_toggle": "u",
+    "input_hold_slowmotion": "e",
+    "input_hold_fast_forward": "l",
+    "input_frame_advance": "k",
+    "input_pause_toggle": "p",
+    "input_screenshot": "f8",
+    "input_fps_toggle": "f3",
+    "input_desktop_menu_toggle": "f5",
+    "input_grab_mouse_toggle": "f11",
+    "input_game_focus_toggle": "scroll_lock",
+    "input_netplay_game_watch": "i",
+    "input_netplay_player_chat": "tilde",
+    "input_exit_emulator": "escape",
+    "input_volume_up": "add",
+    "input_volume_down": "subtract",
+    "input_state_slot_increase": "f7",
+    "input_state_slot_decrease": "f6",
+    "input_reset": "h",
+    "input_audio_mute": "f9",
+    "input_menu_toggle": "f1",
+    "input_save_state": "f2",
+    "input_load_state": "f4",
+    "input_toggle_fast_forward": "f6",
+    "input_toggle_fullscreen": "f",
+}
+
+
+def conflicting_stock_hotkeys(overrides):
+    """RetroArch hotkeys to unbind because an OpenEmux binding took their key.
+
+    ``overrides`` is the dict from :func:`to_retroarch_overrides`, which only
+    ever holds binding keys. Gamepad entries carry a ``_btn``/``_axis`` suffix
+    and are skipped: a pad token like ``"6"`` is a button, not a key.
+
+    A hotkey we write ourselves is never cleared -- our value already wins.
+    """
+    claimed = set()
+    for key, value in overrides.items():
+        if key.endswith(("_btn", "_axis", "_mbtn")):
+            continue
+        claimed.add(str(value).strip('"').strip().lower())
+    claimed.discard("")
+
+    cleared = {}
+    for key, stock_value in RETROARCH_STOCK_KEYBOARD_HOTKEYS.items():
+        if key in overrides:
+            continue
+        if stock_value in claimed:
+            cleared[key] = '"nul"'
+    return cleared
 
 
 def retroarch_key_token(value):
