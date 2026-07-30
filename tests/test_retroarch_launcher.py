@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
+from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.retroarch_launcher import RetroArchLauncher
 
 
@@ -202,6 +203,57 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines(profile)
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
         self.assertIn('input_player2_analog_dpad_mode = "1"', lines)
+
+    def test_override_declares_the_analog_stick_axes(self):
+        # Issue #126: analog_dpad_mode = "1" folds the left stick onto the
+        # D-pad only if RetroArch knows which axes the stick is. Nothing else
+        # in a profile says so, and without these keys mode 1 silently does
+        # nothing -- the stick simply never steered.
+        profile = {
+            "active_device": "gamepad_p1",
+            "devices": {"gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}}},
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
+        for suffix, token in ANALOG_STICK_BINDINGS.items():
+            self.assertIn(f'input_player1_{suffix}_axis = "{token}"', lines)
+
+    def test_analog_native_consoles_still_declare_the_axes(self):
+        # N64/PS keep analog_dpad_mode off (folding would steal the stick from
+        # the game) but the stick has to work natively there, which it cannot
+        # do unless the axes are declared.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "core.so")
+            cfg.input_profile = {
+                "active_device": "gamepad_p1",
+                "devices": {"gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}}},
+            }
+            launcher = RetroArchLauncher(base, cfg)
+            lines = Path(launcher._write_runtime_override("N64")).read_text(
+                encoding="utf-8"
+            ).splitlines()
+        self.assertIn('input_player1_analog_dpad_mode = "0"', lines)
+        self.assertIn('input_player1_l_x_plus_axis = "+0"', lines)
+
+    def test_keyboard_profiles_declare_no_axes(self):
+        profile = {
+            "active_device": "keyboard",
+            "devices": {"keyboard": {"type": "keyboard", "bindings": {"a": "z"}}},
+        }
+        lines = self._override_lines(profile)
+        self.assertFalse([line for line in lines if "_l_x_plus_axis" in line])
+
+    def test_extra_ports_declare_their_own_axes(self):
+        profile = {
+            "active_device": "gamepad_p1",
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": True},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player2_l_y_minus_axis = "-1"', lines)
 
     def test_override_gives_the_hotkey_modifier_a_block_delay(self):
         # Issue #124: Select is both a gameplay button and the hotkey

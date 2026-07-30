@@ -961,7 +961,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _save_input(self):
         console_id = self._current_console()
         device_id = self._current_device()
-        profile = self._loaded_profile or self.config.get_input_profile(console_id)
+        # Read the profile back rather than trusting the snapshot taken when
+        # the bindings were last refreshed. The analog-stick and turbo rows
+        # write straight to disk as they change, so saving a binding from a
+        # stale snapshot silently reverted whichever of them was touched
+        # first -- change the stick row, press Save, lose the choice (#126).
+        profile = self.config.get_input_profile(console_id)
         devices = profile.setdefault("devices", {})
         device = devices.setdefault(
             device_id,
