@@ -122,6 +122,145 @@ def _strip_trailing_number(name):
     return re.sub(r"\s+\d{1,2}$", "", name).strip()
 
 
+# Bracketed groups that carry metadata rather than a title. Anything in
+# square brackets is a GoodTools-style marker ([!], [b1], [T+Eng]); the
+# parenthesised forms below are No-Intro's. Whatever is left in parentheses
+# after these is a genuine alternate title (issue #127).
+_REGION_WORDS = {
+    "usa", "us", "u", "europe", "eu", "e", "japan", "jp", "j", "world", "asia",
+    "australia", "korea", "china", "taiwan", "brazil", "canada", "france",
+    "germany", "italy", "spain", "netherlands", "sweden", "russia", "uk",
+    "hong kong", "latin america", "scandinavia", "unknown",
+}
+_METADATA_TAG_RE = re.compile(
+    r"^(?:"
+    r"rev\s*[\w.]+"          # (Rev A), (Rev 1)
+    r"|v?\d+(?:\.\d+)+[a-z]?"  # (v1.1), (1.0)
+    r"|beta\s*\d*|proto\s*\d*|demo|sample|kiosk|promo"
+    r"|unl|pirate|alt\s*\d*|fix|hack|trainer|aftermarket|homebrew"
+    r"|virtual console|vc|gb compatible|sgb enhanced|nes|arcade"
+    r"|[a-z]{2}(?:\s*,\s*[a-z]{2})+"  # language lists: En,Fr,De
+    r"|[a-z]{2}"                      # a bare language code
+    r")$",
+    re.IGNORECASE,
+)
+
+
+def _is_metadata_tag(text):
+    value = text.strip()
+    if not value:
+        return True
+    parts = [part.strip().lower() for part in value.split(",")]
+    if parts and all(part in _REGION_WORDS for part in parts):
+        return True
+    return bool(_METADATA_TAG_RE.match(value))
+
+
+def _alternate_titles(rom_name):
+    """Titles hiding inside parentheses, e.g. "Aero Fighters (Sonic Wings)".
+
+    Both halves are real names the thumbnail repo might file the game under,
+    so both are worth trying in their own right. Region and revision tags
+    look identical structurally, so anything that reads as one is skipped.
+    """
+    titles = []
+    for group in re.findall(r"\(([^()]*)\)", rom_name):
+        if _is_metadata_tag(group):
+            continue
+        candidate = group.strip()
+        if candidate and candidate not in titles:
+            titles.append(candidate)
+    return titles
+
+
+def _strip_all_tags(name):
+    """Drop every bracketed group, not only the trailing ones.
+
+    ``_normalize_rom_name`` only peels tags off the end, so a mid-title
+    "(USA)" or "(Rev A)" survived into the lookup name.
+    """
+    stripped = re.sub(r"\s*[\(\[][^\)\]]*[\)\]]\s*", " ", name)
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
+def _drop_punctuation(name):
+    """Collapse punctuation the thumbnail name may not share."""
+    cleaned = re.sub(r"[^\w\s]", " ", name, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def fuzzy_candidate_names(rom_name):
+    """Last-resort title guesses, tried only after every exact name misses.
+
+    The existing matching is pure exact-URL guessing: normalize, then re-add
+    a fixed region set. That covers ~95% of a library and the remaining
+    misses are mostly naming shapes it has no rule for -- a mid-title tag, a
+    punctuation difference, or a game filed under its other name.
+    """
+    candidates = []
+
+    def _append(value):
+        value = (value or "").strip()
+        if value and value not in candidates:
+            candidates.append(value)
+
+    untagged = _strip_all_tags(rom_name)
+    for seed in (untagged, _strip_accents(untagged)):
+        _append(seed)
+        _append(_drop_punctuation(seed))
+        _append(_lower_connectors(seed))
+        _append(_strip_sequence_markers(seed))
+
+    for alternate in _alternate_titles(rom_name):
+        for seed in (alternate, _strip_accents(alternate)):
+            _append(seed)
+            _append(_drop_punctuation(seed))
+            _append(_lower_connectors(seed))
+
+    for name in list(candidates):
+        variant = _the_variant(name)
+        if variant:
+            _append(variant)
+
+    return candidates
+
+
+#: Ceiling on the last-resort pass. Each fuzzy title re-expands across the
+#: region list, so an uncapped pass would turn one miss into hundreds of
+#: requests. Truncation is logged rather than silent.
+MAX_FUZZY_CANDIDATES = 40
+
+
+def _fuzzy_urls_for(console, rom_name, sync_settings, rom, already_tried):
+    """URLs for the fuzzy titles, minus everything already attempted."""
+    seen = set(already_tried)
+    urls = []
+    truncated = False
+    for fuzzy_name in fuzzy_candidate_names(rom_name):
+        if fuzzy_name == rom_name:
+            continue
+        for url in _remote_cover_candidates(
+            console, fuzzy_name, sync_settings, rom_path=rom.get("path")
+        ):
+            if url in seen:
+                continue
+            seen.add(url)
+            if len(urls) >= MAX_FUZZY_CANDIDATES:
+                truncated = True
+                break
+            urls.append(url)
+        if truncated:
+            break
+    if truncated:
+        logger.info(
+            "cover_sync fuzzy pass capped: console=%s rom=%s cap=%d",
+            console,
+            rom_name,
+            MAX_FUZZY_CANDIDATES,
+        )
+    return urls
+
+
 def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     base_names = []
 
@@ -461,6 +600,7 @@ def _sync_covers(
     downloaded = 0
     skipped = 0
     errors = 0
+    missed = []
     total_targets = sum(len(library_by_console.get(console, [])) for console in consoles)
 
     for console in consoles:
@@ -495,16 +635,24 @@ def _sync_covers(
             target = roms_dir_path / console / art_dir / f"{name}.png"
             urls = _remote_cover_candidates(console, name, sync_settings, rom_path=rom.get("path"))
             logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
-            found = False
-            for url in urls:
-                if should_cancel and should_cancel():
-                    logger.info("cover_sync cancelled mid-candidate: console=%s rom=%s", console, name)
-                    cancelled = True
-                    break
-                written = _download_cover(url, target)
-                if written:
-                    downloaded += 1
-                    found = True
+
+            def _try_urls(candidate_urls):
+                """Download the first candidate that resolves.
+
+                Returns (found, cancelled) so the caller keeps owning both
+                counters and the outer loop's control flow.
+                """
+                for url in candidate_urls:
+                    if should_cancel and should_cancel():
+                        logger.info(
+                            "cover_sync cancelled mid-candidate: console=%s rom=%s",
+                            console,
+                            name,
+                        )
+                        return False, True
+                    written = _download_cover(url, target)
+                    if not written:
+                        continue
                     if replace_existing:
                         # Art saved earlier under another extension would still
                         # win the local lookup, so the replaced file has to go.
@@ -515,14 +663,47 @@ def _sync_covers(
                         name,
                         screenscraper.redact(url),
                     )
-                    break
+                    return True, False
+                return False, False
+
+            found, cancelled_here = _try_urls(urls)
+            if cancelled_here:
+                cancelled = True
+            tried_count = len(urls)
+
+            if not found and not cancelled:
+                # Every exact name missed. Fall back to the fuzzy titles --
+                # mid-title tags stripped, punctuation dropped, and the
+                # parenthesised alternate title tried in its own right
+                # (issue #127). Deduplicated against what was already
+                # attempted, since most fuzzy names regenerate the same URLs.
+                extra = _fuzzy_urls_for(console, name, sync_settings, rom, urls)
+                if extra:
+                    logger.info(
+                        "cover_sync fuzzy pass: console=%s rom=%s candidates=%d",
+                        console,
+                        name,
+                        len(extra),
+                    )
+                    found, cancelled_here = _try_urls(extra)
+                    if cancelled_here:
+                        cancelled = True
+                    tried_count += len(extra)
+
+            if found:
+                downloaded += 1
 
             if cancelled:
                 total -= 1  # this ROM was not actually processed
                 break
             if not found:
-                logger.info("cover_sync missed: console=%s rom=%s tried=%d", console, name, len(urls))
+                logger.info(
+                    "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
+                )
                 errors += 1
+                # Carried through to the summary so the UI can say *which*
+                # ROMs to look at, not just how many failed.
+                missed.append({"console": console, "rom_name": name})
             if on_progress:
                 on_progress(
                     {
@@ -544,6 +725,9 @@ def _sync_covers(
         "downloaded": downloaded,
         "skipped": skipped,
         "errors": errors,
+        # The identities behind `errors`, so the UI can name the ROMs that
+        # still need artwork instead of only counting them (issue #127).
+        "missed": missed,
     }
     logger.info(
         "cover_sync %s: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d",
