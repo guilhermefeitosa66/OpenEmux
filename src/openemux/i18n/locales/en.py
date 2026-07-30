@@ -243,6 +243,8 @@ TRANSLATIONS = {
     "input.controller_type.title": "Controller type",
     "input.controller_type.subtitle": "What the emulated console is told is plugged in. PlayStation starts as a digital pad, so analog games need DualShock.",
     "input.controller_type.core_default": "Core default",
+    "input.dpad_analog.title": "D-pad also moves the analog stick",
+    "input.dpad_analog.subtitle": "For games that only read the stick. Both fire from the same press — RetroArch cannot switch between them while a game runs.",
     "input.analog_dpad.title": "Analog stick as D-pad",
     "input.analog_dpad.subtitle": "The stick also moves the D-pad, no re-mapping needed",
     "input.analog_dpad.mode.0": "Off",

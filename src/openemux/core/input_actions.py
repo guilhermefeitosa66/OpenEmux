@@ -572,6 +572,35 @@ def conflicting_stock_hotkeys(overrides):
     return cleared
 
 
+#: D-pad action -> the left-stick direction it stands in for (issue #156).
+DPAD_TO_ANALOG_ACTIONS = {
+    "up": "l_up",
+    "down": "l_down",
+    "left": "l_left",
+    "right": "l_right",
+}
+
+
+def with_dpad_as_analog(bindings):
+    """Point the D-pad at the left stick as well as at the D-pad.
+
+    Handheld frontends offer this as a live toggle that swaps one for the
+    other. RetroArch has no command for that -- the full UDP list has nothing
+    for remaps or analog mode -- so this does the thing that *is* possible and
+    is arguably better: the same press reaches both, because RetroArch accepts
+    a hat token for an analog direction just as it does for a D-pad one.
+
+    A direction the user bound by hand is left alone; only unbound ones are
+    filled, so this never overwrites a deliberate mapping.
+    """
+    augmented = dict(bindings or {})
+    for dpad_action, stick_action in DPAD_TO_ANALOG_ACTIONS.items():
+        token = str(augmented.get(dpad_action, "") or "").strip()
+        if token and not str(augmented.get(stick_action, "") or "").strip():
+            augmented[stick_action] = token
+    return augmented
+
+
 def retroarch_key_token(value):
     """Translate one keyboard binding into the token RetroArch understands.
 

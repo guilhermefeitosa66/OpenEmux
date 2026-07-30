@@ -478,6 +478,55 @@ class KeyboardAnalogStickTests(unittest.TestCase):
         self.assertEqual(len(bound), len(set(bound)))
 
 
+class DpadAsAnalogTests(unittest.TestCase):
+    """Issue #156: the D-pad standing in for the left stick.
+
+    Handheld frontends offer this as a live toggle. RetroArch has no command
+    for that, so this does the thing that is possible: the hat token drives
+    both, because RetroArch accepts it for an analog direction too.
+    """
+
+    def test_the_dpad_tokens_reach_the_stick(self):
+        from openemux.core.input_actions import with_dpad_as_analog
+
+        augmented = with_dpad_as_analog(
+            {"up": "h0up", "down": "h0down", "left": "h0left", "right": "h0right"}
+        )
+        self.assertEqual(augmented["l_up"], "h0up")
+        self.assertEqual(augmented["l_down"], "h0down")
+        self.assertEqual(augmented["l_left"], "h0left")
+        self.assertEqual(augmented["l_right"], "h0right")
+
+    def test_the_dpad_still_works_as_a_dpad(self):
+        from openemux.core.input_actions import with_dpad_as_analog
+
+        overrides = to_retroarch_overrides(
+            with_dpad_as_analog({"up": "h0up"}), "gamepad", console="N64"
+        )
+        self.assertEqual(overrides["input_player1_up_btn"], '"h0up"')
+        self.assertEqual(overrides["input_player1_l_y_minus_btn"], '"h0up"')
+
+    def test_a_direction_the_user_bound_is_left_alone(self):
+        from openemux.core.input_actions import with_dpad_as_analog
+
+        augmented = with_dpad_as_analog({"up": "h0up", "l_up": "9"})
+        self.assertEqual(augmented["l_up"], "9")
+
+    def test_an_unbound_dpad_direction_fills_nothing(self):
+        from openemux.core.input_actions import with_dpad_as_analog
+
+        augmented = with_dpad_as_analog({"up": "", "down": "h0down"})
+        self.assertEqual(augmented.get("l_up", ""), "")
+        self.assertEqual(augmented["l_down"], "h0down")
+
+    def test_it_does_not_mutate_the_input(self):
+        from openemux.core.input_actions import with_dpad_as_analog
+
+        original = {"up": "h0up"}
+        with_dpad_as_analog(original)
+        self.assertNotIn("l_up", original)
+
+
 class ForcedAnalogDpadModeTests(unittest.TestCase):
     """Issue #152: the only modes that do anything on an analog console."""
 

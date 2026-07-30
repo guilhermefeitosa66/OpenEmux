@@ -578,6 +578,17 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._sync_analog_dpad_row()
         self._analog_dpad_row.connect("notify::selected", self._on_analog_dpad_changed)
         controller_group.add(self._analog_dpad_row)
+
+        # The other direction (issue #156): the pad's D-pad standing in for
+        # the stick, for a game that only reads analog.
+        self._dpad_analog_row = Adw.SwitchRow(
+            title=self.t("input.dpad_analog.title"),
+            subtitle=self.t("input.dpad_analog.subtitle"),
+        )
+        self._dpad_analog_guard = False
+        self._sync_dpad_analog_row()
+        self._dpad_analog_row.connect("notify::active", self._on_dpad_analog_changed)
+        controller_group.add(self._dpad_analog_row)
         page.add(controller_group)
 
         # Stick and feedback tuning (issues #154, #155). Global rather than
@@ -758,6 +769,27 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             },
         )
 
+    def _sync_dpad_analog_row(self):
+        console = self._current_console()
+        # Only where the core reads a stick at all -- elsewhere there is
+        # nothing for the D-pad to stand in for.
+        has_stick = "l_up" in get_actions_for_console(console)
+        self._dpad_analog_row.set_visible(has_stick)
+        if not has_stick:
+            return
+        self._dpad_analog_guard = True
+        self._dpad_analog_row.set_active(
+            self.config.input_profiles.get_dpad_drives_analog(console)
+        )
+        self._dpad_analog_guard = False
+
+    def _on_dpad_analog_changed(self, *_a):
+        if self._dpad_analog_guard:
+            return
+        self.config.input_profiles.set_dpad_drives_analog(
+            self._current_console(), self._dpad_analog_row.get_active()
+        )
+
     def _on_tuning_changed(self, row, _param, name):
         if self._tuning_guard:
             return
@@ -833,6 +865,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._cancel_capture()
         self._sync_controller_type_row()
         self._sync_analog_dpad_row()
+        self._sync_dpad_analog_row()
         self._sync_turbo_rows()
         self._refresh_bindings()
 
