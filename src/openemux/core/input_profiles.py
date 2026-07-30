@@ -10,7 +10,7 @@ from openemux.core.input_actions import (
 )
 from openemux.core.systems import resolve_system_id
 
-PROFILE_VERSION = 4
+PROFILE_VERSION = 5
 
 #: Lowest pad button index that no common controller exposes. An Xbox-style
 #: pad stops at 10, so anything from here up can never be pressed.
@@ -181,6 +181,40 @@ V4_KEYBOARD_DEFAULTS = {
 #: behaviour people actually have.
 V4_KEYBOARD_CLEARED = {"enable_hotkey": ("right shift", "rshift")}
 
+#: Keyboard bindings introduced in profile version 5 (issue #153). Same rule
+#: as version 4: fill only what is still empty, so nothing a user chose is
+#: touched. They are all in OPTIONAL_ACTIONS, which normalize_bindings skips
+#: by design, so without this they would reach only fresh installs.
+V5_KEYBOARD_ACTIONS = (
+    "rewind",
+    "pause_toggle",
+    "slowmotion_toggle",
+    "fast_forward_hold",
+    "screenshot",
+    "game_focus_toggle",
+    "disk_eject_toggle",
+    "disk_next",
+    "disk_prev",
+    # Not a hotkey, but introduced alongside them and equally invisible to
+    # normalize_bindings on an existing profile (issue #158).
+    "l_up",
+    "l_down",
+    "l_left",
+    "l_right",
+)
+
+
+def apply_v5_keyboard_defaults(bindings, defaults):
+    """Fill the version-5 keyboard bindings that are still unset."""
+    if not isinstance(bindings, dict):
+        bindings = {}
+    updated = dict(bindings)
+    for action in V5_KEYBOARD_ACTIONS:
+        new_value = defaults.get(action, "")
+        if new_value and not str(updated.get(action, "")).strip():
+            updated[action] = new_value
+    return updated
+
 
 def apply_v4_keyboard_defaults(bindings, defaults):
     """Bring a keyboard profile up to version 4 (issue #146).
@@ -304,6 +338,8 @@ class InputProfileManager:
                 bindings = clear_unreachable_gamepad_buttons(bindings)
             if loaded_version < 4 and default_device["type"] == "keyboard":
                 bindings = apply_v4_keyboard_defaults(bindings, keyboard_defaults)
+            if loaded_version < 5 and default_device["type"] == "keyboard":
+                bindings = apply_v5_keyboard_defaults(bindings, keyboard_defaults)
             default_device["bindings"] = normalize_bindings(bindings, default_device["type"], console=system_id)
             if device_id in EXTRA_PORT_DEVICE_IDS:
                 default_device["enabled"] = bool(loaded_device.get("enabled", False))

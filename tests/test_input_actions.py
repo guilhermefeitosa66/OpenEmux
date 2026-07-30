@@ -275,10 +275,20 @@ class StockHotkeyConflictTests(unittest.TestCase):
 
     def test_the_shipped_defaults_clear_the_hotkeys_they_take(self):
         cleared = conflicting_stock_hotkeys(self._keyboard_overrides())
-        # r -> reset_game, m -> audio_mute, t -> turbo.
-        self.assertEqual(cleared.get("input_rewind"), '"nul"')
+        # m -> audio_mute, t -> turbo, n -> disk_next.
         self.assertEqual(cleared.get("input_shader_next"), '"nul"')
         self.assertEqual(cleared.get("input_cheat_index_minus"), '"nul"')
+        self.assertEqual(cleared.get("input_shader_prev"), '"nul"')
+        # Rewind is no longer cleared: we bind it ourselves now (#153), so
+        # our value simply wins rather than needing the stock one removed.
+        self.assertNotIn("input_rewind", cleared)
+
+    def test_the_analog_stick_keys_clear_what_sits_on_them(self):
+        # i and k are the stick on an analog console (#158), and RetroArch
+        # ships frame advance on k and netplay watch on i.
+        cleared = conflicting_stock_hotkeys(self._keyboard_overrides(console="PS"))
+        self.assertEqual(cleared.get("input_frame_advance"), '"nul"')
+        self.assertEqual(cleared.get("input_netplay_game_watch"), '"nul"')
 
     def test_clearing_follows_the_consoles_own_action_set(self):
         # `e` is the l2 default, and only a console with shoulder triggers
@@ -291,9 +301,8 @@ class StockHotkeyConflictTests(unittest.TestCase):
 
     def test_untouched_hotkeys_are_left_alone(self):
         cleared = conflicting_stock_hotkeys(self._keyboard_overrides())
-        for key in ("input_shader_prev", "input_cheat_toggle",
-                    "input_pause_toggle", "input_frame_advance",
-                    "input_screenshot", "input_exit_emulator"):
+        for key in ("input_cheat_toggle", "input_exit_emulator",
+                    "input_grab_mouse_toggle", "input_desktop_menu_toggle"):
             self.assertNotIn(key, cleared)
 
     def test_a_hotkey_we_write_ourselves_is_never_cleared(self):
@@ -312,15 +321,14 @@ class StockHotkeyConflictTests(unittest.TestCase):
 
     def test_a_user_rebinding_moves_the_conflict(self):
         bindings = default_bindings_for_device("keyboard", console="SFC")
-        bindings["a"] = "p"
-        bindings["reset_game"] = ""
+        bindings["a"] = "u"
+        bindings["disk_next"] = ""
         overrides = to_retroarch_overrides(bindings, "keyboard", console="SFC")
         cleared = conflicting_stock_hotkeys(overrides)
-        # `a` is now `p`, so pause has to go...
-        self.assertEqual(cleared.get("input_pause_toggle"), '"nul"')
-        # ...and with reset unbound, RetroArch's own rewind on `r` is free
-        # to stay.
-        self.assertNotIn("input_rewind", cleared)
+        # `a` is now `u`, so RetroArch's cheat toggle has to go...
+        self.assertEqual(cleared.get("input_cheat_toggle"), '"nul"')
+        # ...and with disk_next unbound, `n` is free for shader_prev again.
+        self.assertNotIn("input_shader_prev", cleared)
 
 
 class KeyboardDefaultsTests(unittest.TestCase):
