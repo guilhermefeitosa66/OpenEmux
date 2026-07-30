@@ -30,6 +30,7 @@ ACTION_ORDER = [
     "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
+    "reset_game",
 ]
 
 #: Actions that stay unbound unless the user binds them: never auto-filled
@@ -44,6 +45,10 @@ OPTIONAL_ACTIONS = {
     "volume_up",
     "volume_down",
     "audio_mute",
+    # Resetting throws away everything since the last save, so it is never
+    # handed out by default -- and on a pad every reachable Select combo is
+    # already taken, so any default would fire two hotkeys at once (#130).
+    "reset_game",
 }
 
 FALLBACK_KEYS = ["g", "h", "j", "k", "l", "v", "b", "n", "m", "r", "t", "u", "i", "o", "p"]
@@ -59,6 +64,7 @@ GLOBAL_HOTKEY_ACTIONS = [
     "audio_mute",
     "fast_forward_toggle",
     "fullscreen_toggle",
+    "reset_game",
 ]
 GAMEPLAY_ACTIONS_2BTN = ["up", "down", "left", "right", "a", "b", "start", "select"]
 GAMEPLAY_ACTIONS_2BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "l1", "r1", "start", "select"]
@@ -240,6 +246,10 @@ RETROARCH_GLOBAL_HOTKEY_KEYS = {
     "audio_mute": "input_audio_mute",
     "fast_forward_toggle": "input_toggle_fast_forward",
     "fullscreen_toggle": "input_toggle_fullscreen",
+    # RetroArch's own soft reset. Handled by RetroArch while the game has
+    # focus, which is the point: a button in the OpenEmux window needed an
+    # alt-tab away from the game to reach it (issue #130).
+    "reset_game": "input_reset",
 }
 
 #: Kept for backwards compatibility: the player-1 view of the key table.

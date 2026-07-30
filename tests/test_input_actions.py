@@ -244,6 +244,61 @@ class GamepadHotkeyReachabilityTests(unittest.TestCase):
         self.assertEqual(normalized["save_state"], "2")
 
 
+class ResetGameHotkeyTests(unittest.TestCase):
+    """Issue #130: restarting is a bindable hotkey, not a header button.
+
+    A button in the OpenEmux window needed an alt-tab away from the game to
+    reach it. RetroArch's own ``input_reset`` fires while the game has focus,
+    which is the only time anyone wants it.
+    """
+
+    def test_it_maps_to_retroarchs_reset_key(self):
+        self.assertEqual(retroarch_key_for("reset_game"), "input_reset")
+        # Global, like every other hotkey: never numbered per player.
+        self.assertEqual(retroarch_key_for("reset_game", player=3), "input_reset")
+
+    def test_it_is_offered_for_every_console(self):
+        for console in ("FC", "SFC", "GBA", "PS", "MD", "N64"):
+            self.assertIn("reset_game", get_actions_for_console(console), console)
+
+    def test_it_is_never_bound_by_default(self):
+        # A reset throws away everything since the last save, and on a pad
+        # every reachable Select combo is already taken -- a default would
+        # fire two hotkeys at once.
+        for device in ("keyboard", "gamepad"):
+            defaults = default_bindings_for_device(device, console="SFC")
+            self.assertEqual(defaults["reset_game"], "", device)
+            normalized = normalize_bindings({}, device, console="SFC")
+            self.assertEqual(normalized["reset_game"], "", device)
+
+    def test_an_unbound_reset_emits_no_key_at_all(self):
+        overrides = to_retroarch_overrides({}, "gamepad", console="SFC")
+        self.assertNotIn("input_reset", overrides)
+        self.assertNotIn("input_reset_btn", overrides)
+
+    def test_a_bound_reset_reaches_retroarch(self):
+        overrides = to_retroarch_overrides(
+            {"reset_game": "8"}, "gamepad", console="SFC"
+        )
+        self.assertEqual(overrides["input_reset_btn"], '"8"')
+        keyboard = to_retroarch_overrides(
+            {"reset_game": "h"}, "keyboard", console="SFC"
+        )
+        self.assertEqual(keyboard["input_reset"], '"h"')
+
+    def test_it_lands_in_the_system_hotkeys_group(self):
+        # GLOBAL_HOTKEY_ACTIONS is what routes a row to the System group in
+        # Preferences, which is where the user was told to look for it.
+        self.assertIn("reset_game", GLOBAL_HOTKEY_ACTIONS)
+
+    def test_extra_ports_do_not_rewrite_it(self):
+        for player in (2, 3, 4):
+            overrides = to_retroarch_overrides(
+                {"reset_game": "8"}, "gamepad", console="SFC", player=player
+            )
+            self.assertNotIn("input_reset_btn", overrides)
+
+
 class VolumeAndSlotHotkeyTests(unittest.TestCase):
     """Volume and save-slot hotkeys (issues #69/#73 redo): bindable, optional."""
 

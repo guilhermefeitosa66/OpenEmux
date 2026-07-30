@@ -292,37 +292,6 @@ class CommandDispatchTests(unittest.TestCase):
             self.assertFalse(success)
             self.assertTrue(error)
 
-    def test_restart_sends_reset_to_a_running_game(self):
-        # Issue #130: RetroArch's own RESET, so the core and the content are
-        # never reloaded -- which is also why it cannot pick up config
-        # changes. Relaunching is the thing that does that.
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            client = _FakeClient()
-            manager._command_client_cache = client
-            manager.active_process = _FakeProcess()
-            self.assertTrue(manager.restart_active())
-            self.assertEqual(client.sent, ["RESET"])
-
-    def test_restart_is_a_no_op_with_no_game_running(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            client = _FakeClient()
-            manager._command_client_cache = client
-            self.assertFalse(manager.restart_active())
-            self.assertEqual(client.sent, [])
-
-    def test_restart_stops_once_the_process_has_exited(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            client = _FakeClient()
-            manager._command_client_cache = client
-            process = _FakeProcess()
-            manager.active_process = process
-            process.exit_code = 0
-            self.assertFalse(manager.restart_active())
-            self.assertEqual(client.sent, [])
-
     def test_the_client_is_reused_across_commands(self):
         with TemporaryDirectory() as tmp_dir:
             manager, _config = _manager(tmp_dir)

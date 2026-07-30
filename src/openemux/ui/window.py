@@ -378,15 +378,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header.pack_end(self.stop_btn)
 
-        self.restart_btn = Gtk.Button()
-        # Not view-refresh-symbolic: the rescan button already uses that on
-        # the other side of the same header bar.
-        self.restart_btn.set_icon_name("media-playlist-repeat-symbolic")
-        self.restart_btn.set_tooltip_text(self.t("header.restart"))
-        self.restart_btn.set_sensitive(False)
-        self.restart_btn.connect("clicked", self._on_restart_game_clicked)
-        header.pack_end(self.restart_btn)
-
         header.pack_end(self._build_volume_button())
 
         # The primary menu lives only in the sidebar header, so Preferences
@@ -1093,8 +1084,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
             ("stop-game", lambda *_: self._on_stop_game_clicked(None), ["<Ctrl>Escape"]),
-            # Not <Ctrl>r -- that is rescan, above.
-            ("restart-game", lambda *_: self._on_restart_game_clicked(None), ["<Ctrl><Shift>r"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1243,7 +1232,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 ("<Ctrl>f", "shortcuts.search"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
                 ("<Ctrl>Escape", "shortcuts.stop"),
-                ("<Ctrl><Shift>r", "shortcuts.restart"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),
             ("shortcuts.group.library", (
@@ -1295,7 +1283,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_placeholder_text(self.t("header.search"))
         self.search_button.set_tooltip_text(self.t("header.search.toggle"))
         self.stop_btn.set_tooltip_text(self.t("header.stop"))
-        self.restart_btn.set_tooltip_text(self.t("header.restart"))
         self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
         self.volume_btn.set_tooltip_text(self.t("header.volume"))
         self._mute_button.set_tooltip_text(self.t("volume.mute"))
@@ -3414,14 +3401,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         GLib.timeout_add(RELAUNCH_POLL_INTERVAL_MS, _launch_when_free)
         return True
 
-    def _on_restart_game_clicked(self, _button=None):
-        """Reset the running game. No confirmation dialog on purpose: this is
-        for restart-heavy arcade and shmup play, where a prompt per restart
-        costs more than the occasional misclick (issue #130)."""
-        if not self.runtime_manager.restart_active():
-            return
-        self._toast(self.t("toast.restarted"))
-
     def _poll_runtime_state(self):
         result = self.runtime_manager.poll_active()
         if result is not None:
@@ -3436,7 +3415,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _sync_runtime_controls(self):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
-        self.restart_btn.set_sensitive(is_running)
         self.volume_btn.set_sensitive(is_running)
         if is_running and not self._runtime_controls_seeded:
             # A fresh launch starts unmuted at the persisted level. Seeded

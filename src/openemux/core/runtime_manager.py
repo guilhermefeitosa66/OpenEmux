@@ -192,8 +192,9 @@ class RuntimeManager:
     def relaunch_active(self):
         """Stop the running game and start the same ROM again.
 
-        Deliberately distinct from ``restart_active``: bindings reach
-        RetroArch only through the --appendconfig file written at spawn, the
+        Deliberately distinct from the ``reset_game`` hotkey, which is a soft
+        reset that keeps the same process: bindings reach RetroArch only
+        through the --appendconfig file written at spawn, the
         process never re-reads it, and the UDP interface has no config-write
         or remap-reload verb. Terminating and launching again regenerates
         that override, which is the only thing that applies a remap (#129).
@@ -209,15 +210,6 @@ class RuntimeManager:
         if not success:
             return None, error
         return rom, None
-
-    def restart_active(self):
-        """Reset the running game without reloading the core or the content.
-
-        RetroArch's own RESET: the process stays up, so this is near-instant
-        and is *not* a way to pick up config changes -- the runtime override
-        is read once at spawn. Relaunching is what does that (issue #130).
-        """
-        return self.send_command("RESET")
 
     # -- save states (issue #73) -------------------------------------------
     def load_state(self):
