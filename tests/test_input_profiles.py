@@ -12,6 +12,8 @@ from openemux.core.input_profiles import (
     PROFILE_VERSION,
     InputProfileManager,
     clear_unreachable_gamepad_buttons,
+    controller_types_for,
+    normalize_controller_type,
     default_analog_dpad_mode,
     normalize_analog_dpad_mode,
     normalize_turbo_settings,
@@ -262,6 +264,58 @@ class ProfileSettingsSurviveBindingSavesTests(unittest.TestCase):
                 InputProfileManager(tmp_dir).get_turbo_settings("SFC"),
                 {"period": 10, "duty_cycle": 4, "mode": 1},
             )
+
+
+class ControllerTypeTests(unittest.TestCase):
+    """Issue #151: what the core is told is plugged into the port.
+
+    The ids come from loading each core and reading the controller info it
+    publishes, so they are the core's own, not derived from libretro's
+    subclass formula.
+    """
+
+    def test_only_consoles_with_a_real_choice_offer_one(self):
+        self.assertTrue(controller_types_for("PS"))
+        self.assertTrue(controller_types_for("MD"))
+        # mupen64plus_next publishes exactly one type, so there is nothing
+        # to pick -- which is why this is not the Super Mario 64 fix.
+        self.assertEqual(controller_types_for("N64"), ())
+        self.assertEqual(controller_types_for("GB"), ())
+
+    def test_playstation_offers_dualshock(self):
+        ids = dict(controller_types_for("PS"))
+        self.assertEqual(ids[517], "DualShock")
+        self.assertEqual(ids[1], "Standard")
+
+    def test_mega_drive_offers_the_six_button_pad(self):
+        ids = dict(controller_types_for("MD"))
+        self.assertEqual(ids[513], "MD Joypad 6 Button")
+
+    def test_unset_means_the_cores_own_default(self):
+        self.assertIsNone(normalize_controller_type(None, "PS"))
+        self.assertIsNone(normalize_controller_type("", "PS"))
+
+    def test_an_id_the_console_does_not_offer_is_refused(self):
+        self.assertIsNone(normalize_controller_type(513, "PS"))
+        self.assertIsNone(normalize_controller_type(517, "N64"))
+        self.assertIsNone(normalize_controller_type("nonsense", "PS"))
+
+    def test_a_valid_id_survives_as_an_int(self):
+        self.assertEqual(normalize_controller_type("517", "PS"), 517)
+        self.assertEqual(normalize_controller_type(517, "PS"), 517)
+
+    def test_it_round_trips_through_the_profile(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            self.assertIsNone(manager.get_controller_type("PS"))
+            manager.set_controller_type("PS", 517)
+            self.assertEqual(InputProfileManager(tmp_dir).get_controller_type("PS"), 517)
+
+    def test_a_console_without_choices_never_stores_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.set_controller_type("N64", 517)
+            self.assertIsNone(manager.get_controller_type("N64"))
 
 
 class V4KeyboardDefaultsMigrationTests(unittest.TestCase):

@@ -38,6 +38,58 @@ ANALOG_DPAD_MODES = (ANALOG_DPAD_OFF, ANALOG_DPAD_LEFT_STICK, ANALOG_DPAD_RIGHT_
 #: no analog input to lose, and "the stick also moves" is what players expect.
 ANALOG_NATIVE_CONSOLES = {"N64", "PS", "PSP", "GC", "SATURN"}
 
+#: The controller types a console's core actually publishes, and the labels it
+#: publishes them under (issue #151).
+#:
+#: Taken by loading each core and reading RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
+#: rather than deriving ids from libretro's subclass formula -- the formula is
+#: right in principle and wrong often enough in practice. The labels are the
+#: cores' own, so what OpenEmux shows matches what RetroArch shows.
+#:
+#: Only consoles with a choice worth making are listed. Everything else stays
+#: on the core's own default, which is what writing no key means. Notably N64
+#: publishes exactly one type, so there is nothing to offer there.
+CONSOLE_CONTROLLER_TYPES = {
+    # pcsx_rearmed. The core boots as "standard", which is digital only, so an
+    # analog game needs DualShock picked by hand -- in RetroArch too.
+    "PS": (
+        (1, "Standard"),
+        (517, "DualShock"),
+        (261, "Analog"),
+        (258, "Mouse"),
+        (260, "GunCon"),
+    ),
+    # genesis_plus_gx. A lot of Mega Drive games want the six-button pad.
+    "MD": (
+        (1, "Joypad Auto"),
+        (257, "MD Joypad 3 Button"),
+        (513, "MD Joypad 6 Button"),
+    ),
+    # snes9x.
+    "SFC": (
+        (1, "SNES Joypad"),
+        (2, "SNES Mouse"),
+        (257, "Multitap"),
+    ),
+}
+
+
+def controller_types_for(console):
+    """The selectable controller types for ``console``; empty when it has none."""
+    return CONSOLE_CONTROLLER_TYPES.get(resolve_system_id(console), ())
+
+
+def normalize_controller_type(value, console):
+    """A valid device id for ``console``, or None meaning "the core's default"."""
+    types = controller_types_for(console)
+    if not types:
+        return None
+    try:
+        device = int(value)
+    except (TypeError, ValueError):
+        return None
+    return device if any(device == ident for ident, _label in types) else None
+
 
 #: RetroArch turbo timing/behavior (issue #72). Period and duty cycle are in
 #: frames; mode 0 = classic (hold the turbo modifier + a button), 1 =
@@ -209,6 +261,10 @@ class InputProfileManager:
             # Turbo timing (issue #72). Turbo itself is on iff a turbo
             # modifier is bound on a device; these only tune how it fires.
             "turbo": dict(DEFAULT_TURBO_SETTINGS),
+            # Which controller the core is told is plugged in (issue #151).
+            # None means "leave it to the core", so nothing changes for the
+            # consoles where there is nothing worth choosing.
+            "controller_type": None,
             "devices": devices,
         }
 
@@ -258,6 +314,10 @@ class InputProfileManager:
         base["turbo"] = normalize_turbo_settings(
             loaded.get("turbo") if isinstance(loaded, dict) else None
         )
+        base["controller_type"] = normalize_controller_type(
+            loaded.get("controller_type") if isinstance(loaded, dict) else None,
+            system_id,
+        )
         return base
 
     def load_profile(self, console):
@@ -304,6 +364,16 @@ class InputProfileManager:
     def set_analog_dpad_mode(self, console, mode):
         profile = self.load_profile(console)
         profile["analog_dpad_mode"] = normalize_analog_dpad_mode(mode, console)
+        return self.save_profile(console, profile)
+
+    def get_controller_type(self, console):
+        return normalize_controller_type(
+            self.load_profile(console).get("controller_type"), console
+        )
+
+    def set_controller_type(self, console, device):
+        profile = self.load_profile(console)
+        profile["controller_type"] = normalize_controller_type(device, console)
         return self.save_profile(console, profile)
 
     def get_turbo_settings(self, console):
