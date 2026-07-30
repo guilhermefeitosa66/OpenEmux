@@ -8,6 +8,7 @@ import logging
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
+from openemux.core import input_tuning
 from openemux.core.input_actions import conflicting_stock_hotkeys, to_retroarch_overrides
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
@@ -240,6 +241,12 @@ class RetroArchLauncher:
                 if extra.get("enabled"):
                     player = player_for_device(device_id)
                     overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
+        # Deadzone, sensitivity, rumble, latency (issues #154, #155). Global
+        # rather than per console: a worn stick drifts the same everywhere.
+        # Only values that differ from RetroArch's own defaults are written.
+        overrides.update(
+            input_tuning.to_retroarch_overrides(self.config_manager.get_input_tuning())
+        )
         # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
         # itself is a normal binding ("turbo" action) emitted per port above,
         # so without one bound these just restate the defaults.

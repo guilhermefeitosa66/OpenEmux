@@ -36,6 +36,7 @@ from openemux.core.input_profiles import (
     device_type_for,
     player_for_device,
 )
+from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.core.bios_manager import scan_all_bios_status
@@ -579,6 +580,73 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         controller_group.add(self._analog_dpad_row)
         page.add(controller_group)
 
+        # Stick and feedback tuning (issues #154, #155). Global rather than
+        # per console: a worn stick drifts the same on every system, and
+        # vibration strength belongs to the pad -- making these per console
+        # would mean setting the deadzone thirty-one times.
+        tuning_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.input_tuning"),
+            description=self.t("prefs.group.input_tuning.description"),
+        )
+        self._tuning_guard = True
+        self._tuning_rows = {}
+        for name, digits, step in (
+            ("analog_deadzone", 2, 0.05),
+            ("analog_sensitivity", 2, 0.05),
+            ("axis_threshold", 2, 0.05),
+        ):
+            low, high = INPUT_TUNING[name][3], INPUT_TUNING[name][4]
+            row = Adw.SpinRow.new_with_range(low, high, step)
+            row.set_digits(digits)
+            row.set_title(self.t(f"input.tuning.{name}"))
+            row.set_subtitle(self.t(f"input.tuning.{name}.subtitle"))
+            row.set_value(self.config.get_input_tuning_value(name))
+            row.connect("notify::value", self._on_tuning_changed, name)
+            tuning_group.add(row)
+            self._tuning_rows[name] = row
+
+        rumble = Adw.SpinRow.new_with_range(0, 100, 5)
+        rumble.set_title(self.t("input.tuning.rumble_gain"))
+        rumble.set_subtitle(self.t("input.tuning.rumble_gain.subtitle"))
+        rumble.set_value(self.config.get_input_tuning_value("rumble_gain"))
+        rumble.connect("notify::value", self._on_tuning_changed, "rumble_gain")
+        tuning_group.add(rumble)
+        self._tuning_rows["rumble_gain"] = rumble
+
+        self._poll_row = Adw.ComboRow(
+            title=self.t("input.tuning.poll_type_behavior"),
+            subtitle=self.t("input.tuning.poll_type_behavior.subtitle"),
+        )
+        self._poll_row.set_model(
+            Gtk.StringList.new([self.t(f"input.tuning.poll.{i}") for i in range(3)])
+        )
+        self._poll_row.set_selected(self.config.get_input_tuning_value("poll_type_behavior"))
+        self._poll_row.connect("notify::selected", self._on_poll_type_changed)
+        tuning_group.add(self._poll_row)
+
+        self._focus_row = Adw.ComboRow(
+            title=self.t("input.tuning.auto_game_focus"),
+            subtitle=self.t("input.tuning.auto_game_focus.subtitle"),
+        )
+        self._focus_row.set_model(
+            Gtk.StringList.new([self.t(f"input.tuning.focus.{i}") for i in range(3)])
+        )
+        self._focus_row.set_selected(self.config.get_input_tuning_value("auto_game_focus"))
+        self._focus_row.connect("notify::selected", self._on_auto_focus_changed)
+        tuning_group.add(self._focus_row)
+
+        self._descriptor_row = Adw.SwitchRow(
+            title=self.t("input.tuning.descriptor_label_show"),
+            subtitle=self.t("input.tuning.descriptor_label_show.subtitle"),
+        )
+        self._descriptor_row.set_active(
+            self.config.get_input_tuning_value("descriptor_label_show")
+        )
+        self._descriptor_row.connect("notify::active", self._on_descriptor_changed)
+        tuning_group.add(self._descriptor_row)
+        self._tuning_guard = False
+        page.add(tuning_group)
+
         # Turbo timing (issue #72): tuning knobs; the modifier button itself is
         # a normal binding row ("Turbo") in the mapping list below.
         turbo_group = Adw.PreferencesGroup(
@@ -688,6 +756,32 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 "duty_cycle": int(self._turbo_duty_row.get_value()),
                 "mode": self._turbo_mode_ids[self._turbo_mode_row.get_selected()],
             },
+        )
+
+    def _on_tuning_changed(self, row, _param, name):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(name, row.get_value())
+
+    def _on_poll_type_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "poll_type_behavior", self._poll_row.get_selected()
+        )
+
+    def _on_auto_focus_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "auto_game_focus", self._focus_row.get_selected()
+        )
+
+    def _on_descriptor_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "descriptor_label_show", self._descriptor_row.get_active()
         )
 
     def _sync_controller_type_row(self):

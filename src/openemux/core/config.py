@@ -733,6 +733,28 @@ class ConfigManager:
         runtime["master_volume_db"] = clamp_volume_db(value)
         self.save_config()
 
+    # -- global input tuning (issues #154, #155) ---------------------------
+    def get_input_tuning(self):
+        """Every tuning value, clamped, with RetroArch's defaults filled in."""
+        from openemux.core import input_tuning
+
+        stored = self.config.get("input", {}) or {}
+        return {
+            name: input_tuning.clamp(name, stored.get(name, input_tuning.default_for(name)))
+            for name in input_tuning.INPUT_TUNING
+        }
+
+    def get_input_tuning_value(self, name):
+        return self.get_input_tuning()[name]
+
+    def set_input_tuning_value(self, name, value):
+        from openemux.core import input_tuning
+
+        section = self.config.setdefault("input", {})
+        section[name] = input_tuning.clamp(name, value)
+        self.save_config()
+        return section[name]
+
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
 
