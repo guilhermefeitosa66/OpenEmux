@@ -82,6 +82,14 @@
   </keywords>
 
   <releases>
+    <release version="1.10.1" date="2026-07-31">
+      <description>
+        <p>A fix for games running far too fast outside the Flatpak.</p>
+        <ul>
+          <li>Hand RetroArch an audio driver it actually has, so audio starts and the emulation runs at the right speed</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.10.0" date="2026-07-31">
       <description>
         <p>Controls you can actually configure, and changes that reach the running game.</p>
