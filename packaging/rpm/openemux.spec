@@ -63,6 +63,9 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Fri Jul 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.1-1
+- Fix games running several times too fast when RetroArch's audio driver fails to start
+
 * Fri Jul 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.0-1
 - Apply a saved remap to the running game, keeping its progress
 - Configure a connected gamepad and the keyboard together, not either/or
