@@ -40,7 +40,7 @@ _IMAGE_DIR = Path(__file__).parent / "assets" / "images" / "welcome"
 
 #: How long each frame of a multi-image slide is held, and how long the
 #: slide across to the next one takes.
-SLIDESHOW_INTERVAL_MS = 1500
+SLIDESHOW_INTERVAL_MS = 2500
 SLIDESHOW_TRANSITION_MS = 400
 
 
