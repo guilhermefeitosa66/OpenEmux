@@ -180,6 +180,13 @@ DEFAULT_CONFIG = {
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
             "extra_flags": [],
+            # Which audio driver RetroArch is told to use (issue #176).
+            # "auto" picks one the host actually offers, because the global
+            # retroarch.cfg may name a driver the bundled build lacks --
+            # which kills audio, and with it the clock RetroArch paces
+            # emulation by. "inherit" restores the pre-#176 behaviour; any
+            # other value is passed through for deliberate JACK/ALSA setups.
+            "audio_driver": "auto",
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 "mode": "buildbot_all_cores",
@@ -779,6 +786,14 @@ class ConfigManager:
 
     def get_retroarch_extra_flags(self):
         return self.config.get("runtime", {}).get("retroarch", {}).get("extra_flags", [])
+
+    def get_retroarch_audio_driver(self):
+        """The raw ``audio_driver`` setting; see core/audio_driver.py (#176)."""
+        return (
+            self.config.get("runtime", {})
+            .get("retroarch", {})
+            .get("audio_driver", "auto")
+        )
 
     def get_retroarch_core_hints(self, console):
         canonical = resolve_system_id(console)

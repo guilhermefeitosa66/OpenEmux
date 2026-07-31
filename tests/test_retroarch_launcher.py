@@ -21,6 +21,10 @@ class _DummyConfig:
         self.core_hints = core_hints
         self.rom_core = None
         self.input_tuning = {}
+        # "inherit" keeps the override free of audio_driver, so the existing
+        # assertions stay about what they were written for; the #176 tests set
+        # it explicitly.
+        self.audio_driver = "inherit"
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -33,6 +37,9 @@ class _DummyConfig:
 
     def get_retroarch_extra_flags(self):
         return []
+
+    def get_retroarch_audio_driver(self):
+        return self.audio_driver
 
     def get_input_profile(self, _console):
         if self.input_profile is not None:
@@ -344,6 +351,28 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('network_cmd_enable = "true"', lines)
         self.assertIn('network_cmd_port = "55355"', lines)
         self.assertIn('audio_volume = "-6.0"', lines)
+
+    def _override_lines_with_audio_driver(self, setting):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg.audio_driver = setting
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA")
+            return Path(path).read_text(encoding="utf-8").splitlines()
+
+    def test_override_pins_the_audio_driver(self):
+        # Issue #176: the global retroarch.cfg may name a driver the RetroArch
+        # we launch was not built with ("pipewire" against the vendored
+        # build). RetroArch then falls back to alsa, audio never starts, and
+        # the emulation -- paced off the audio clock -- runs at the display's
+        # refresh rate instead of the core's.
+        lines = self._override_lines_with_audio_driver("jack")
+        self.assertIn('audio_driver = "jack"', lines)
+
+    def test_override_leaves_the_audio_driver_alone_when_inheriting(self):
+        lines = self._override_lines_with_audio_driver("inherit")
+        self.assertEqual([l for l in lines if l.startswith("audio_driver")], [])
 
     def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
         legacy_only = {
