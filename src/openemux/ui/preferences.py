@@ -38,7 +38,7 @@ from openemux.core.input_profiles import (
 )
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
-from openemux.core.systems import SYSTEM_IDS, get_system_display_name
+from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 
@@ -493,16 +493,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
 
         # Bindings reach RetroArch only through the --appendconfig file
-        # written at spawn. The process never re-reads it and the UDP command
-        # interface has no config-write or remap-reload verb, so a remap made
-        # while a game runs genuinely cannot apply until the game restarts.
-        # Say so instead of letting it look broken, and offer the one action
-        # that does apply it (issue #129).
+        # written at spawn, so a remap only lands in a running game via the
+        # state-carrying relaunch (issue #129). Save and Reset trigger it
+        # themselves; the banner's button covers the rows that write straight
+        # to disk as they change (analog mode, turbo, tuning sliders).
         #
         # Adw.PreferencesPage has no banner slot, so it rides in a group of
         # its own -- which must be the first thing on the page.
         self._relaunch_banner = Adw.Banner(title=self.t("prefs.input.banner.running"))
-        self._relaunch_banner.set_button_label(self.t("prefs.input.banner.relaunch"))
+        self._relaunch_banner.set_button_label(self.t("prefs.input.banner.apply_now"))
         self._relaunch_banner.connect("button-clicked", self._on_relaunch_clicked)
         self._relaunch_banner.set_revealed(False)
         banner_group = Adw.PreferencesGroup()
@@ -727,7 +726,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         banner.set_revealed(self.win.runtime_manager.is_running())
 
     def _on_relaunch_clicked(self, _banner):
-        self.win._relaunch_active_rom()
+        # State-preserving apply, same as Save uses -- the button exists for
+        # the rows that persist as they change and so never pass through
+        # _save_input (issue #129).
+        self.win.apply_input_changes_to_running_game()
         # The game is briefly gone and then back, so the banner is left up
         # rather than flickering; this re-checks once the dust settles, which
         # is also what takes it down if the relaunch failed.
@@ -1212,8 +1214,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.save_input_profile(console_id, profile)
         self._loaded_profile = profile
         self._toast(self.t("toast.input_saved", console=console_id))
-        # A game may have started (or ended) since the page was built, and a
-        # remap saved mid-game is exactly when the notice matters (#129).
+        # A remap saved mid-game reaches the running game through the
+        # state-carrying relaunch (#129) -- but only when the profile being
+        # edited is the running console's; saving the SNES bindings must not
+        # restart a Game Boy session that never reads them.
+        self._apply_to_running_game_if_relevant(console_id)
+        # A game may have started (or ended) since the page was built.
         self._sync_relaunch_banner()
 
     def _reset_defaults(self):
@@ -1223,6 +1229,17 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._cancel_capture()
         self._refresh_bindings()
         self._toast(self.t("toast.input_reset", console=console_id))
+        # A reset writes the profile just like Save does (#129).
+        self._apply_to_running_game_if_relevant(console_id)
+
+    def _apply_to_running_game_if_relevant(self, console_id):
+        """Push a just-written profile into the running game, if it uses it."""
+        manager = self.win.runtime_manager
+        if not manager.is_running():
+            return
+        active = (manager.active_rom or {}).get("console")
+        if active and resolve_system_id(active) == resolve_system_id(console_id):
+            self.win.apply_input_changes_to_running_game()
 
     # ----- Video / Shaders page ------------------------------------------
     def _build_video_page(self):
