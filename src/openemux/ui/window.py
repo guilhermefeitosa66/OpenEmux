@@ -162,6 +162,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # The volume/mute controls are seeded once per launch, not on every
         # runtime poll -- see _sync_runtime_controls (issue #125).
         self._runtime_controls_seeded = False
+        # Callbacks that re-apply translated text, registered where each
+        # widget is built -- see _translatable.
+        self._retranslate = []
         # "Show only ROMs without artwork" (issue #127). Session-only: a way
         # to work through the gaps, not a mode to leave the library in.
         self._filter_missing_artwork = False
@@ -382,7 +385,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.search_button = Gtk.ToggleButton()
         self.search_button.set_icon_name("system-search-symbolic")
-        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
+        self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
         header.pack_end(self._build_view_mode_button())
@@ -390,7 +393,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
-        self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self._translatable(lambda: self.stop_btn.set_tooltip_text(self.t("header.stop")))
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header.pack_end(self.stop_btn)
@@ -407,7 +410,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # single console to configure.
         self.console_input_btn = Gtk.Button()
         self.console_input_btn.set_icon_name("input-gaming-symbolic")
-        self.console_input_btn.set_tooltip_text(self.t("header.console_input"))
+        self._translatable(lambda: self.console_input_btn.set_tooltip_text(self.t("header.console_input")))
         self.console_input_btn.set_visible(False)
         self.console_input_btn.connect(
             "clicked", lambda _b: self._open_preferences(page="input")
@@ -423,26 +426,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # common icon themes draw the latter as a hamburger, which would put
         # two identical menu glyphs in adjacent header bars.
         self.preferences_btn.set_icon_name("preferences-system-symbolic")
-        self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
+        self._translatable(lambda: self.preferences_btn.set_tooltip_text(self.t("header.preferences")))
         self.preferences_btn.set_action_name("win.preferences")
         self.settings_box.append(self.preferences_btn)
         header.pack_end(self.settings_box)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
-        refresh_btn.set_tooltip_text(self.t("header.refresh"))
+        self._translatable(lambda: refresh_btn.set_tooltip_text(self.t("header.refresh")))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header.pack_start(refresh_btn)
 
         self.import_btn = Gtk.Button()
         self.import_btn.set_icon_name("folder-download-symbolic")
-        self.import_btn.set_tooltip_text(self.t("header.import"))
+        self._translatable(lambda: self.import_btn.set_tooltip_text(self.t("header.import")))
         self.import_btn.connect("clicked", self._on_import_clicked)
         header.pack_start(self.import_btn)
 
         self.covers_btn = Gtk.Button()
         self.covers_btn.set_icon_name("emblem-photos-symbolic")
-        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
+        self._translatable(lambda: self.covers_btn.set_tooltip_text(self.t("header.sync_covers")))
         self.covers_btn.connect("clicked", self._on_sync_covers_clicked)
         header.pack_start(self.covers_btn)
 
@@ -451,7 +454,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Search revealed on demand (HIG: search is a mode, not a permanent field).
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_hexpand(True)
-        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self._translatable(lambda: self.search_entry.set_placeholder_text(self.t("header.search")))
         self.search_entry.connect("search-changed", self._on_search_changed)
         self.search_bar = Gtk.SearchBar()
         self.search_bar.set_key_capture_widget(self)
@@ -529,7 +532,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for mode in VIEW_MODES:
             button = Gtk.ToggleButton()
             button.set_icon_name(self.VIEW_MODE_SEGMENT_ICONS.get(mode, "view-grid-symbolic"))
-            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
+            self._translatable(
+                lambda b=button, m=mode: b.set_tooltip_text(self.t(f"view_mode.{m}"))
+            )
             button.set_action_name("win.view-mode")
             button.set_action_target_value(GLib.Variant("s", mode))
             box.append(button)
@@ -548,7 +553,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.volume_btn = Gtk.MenuButton()
         self.volume_btn.set_icon_name("audio-volume-high-symbolic")
-        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self._translatable(lambda: self.volume_btn.set_tooltip_text(self.t("header.volume")))
         self.volume_btn.set_sensitive(False)
 
         # Set while the app itself writes into the scale, so an echo of the
@@ -566,7 +571,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self._mute_button = Gtk.ToggleButton()
         self._mute_button.set_icon_name("audio-volume-muted-symbolic")
-        self._mute_button.set_tooltip_text(self.t("volume.mute"))
+        self._translatable(lambda: self._mute_button.set_tooltip_text(self.t("volume.mute")))
         self._mute_button.add_css_class("flat")
         self._mute_toggle_guard = False
         self._mute_button.connect("toggled", self._on_mute_toggled)
@@ -623,7 +628,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         controls live in the same menu, as they do in GNOME Files.
         """
         self.view_mode_button = Gtk.MenuButton()
-        self.view_mode_button.set_tooltip_text(self.t("header.view_mode"))
+        self._translatable(lambda: self.view_mode_button.set_tooltip_text(self.t("header.view_mode")))
         self._populate_view_mode_menu()
         return self.view_mode_button
 
@@ -692,7 +697,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_out_button = Gtk.Button.new_from_icon_name("zoom-out-symbolic")
         self.zoom_out_button.add_css_class("circular")
         self.zoom_out_button.add_css_class("flat")
-        self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out"))
+        self._translatable(lambda: self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out")))
         self.zoom_out_button.connect("clicked", lambda _b: self._step_zoom(-1))
 
         self.zoom_label = Gtk.Label()
@@ -702,7 +707,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_in_button = Gtk.Button.new_from_icon_name("zoom-in-symbolic")
         self.zoom_in_button.add_css_class("circular")
         self.zoom_in_button.add_css_class("flat")
-        self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in"))
+        self._translatable(lambda: self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in")))
         self.zoom_in_button.connect("clicked", lambda _b: self._step_zoom(1))
 
         for child in (self.zoom_out_button, self.zoom_label, self.zoom_in_button):
@@ -1088,7 +1093,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
         button.set_menu_model(menu)
-        button.set_tooltip_text(self.t("menu.primary"))
+        self._translatable(lambda: button.set_tooltip_text(self.t("menu.primary")))
         button.set_primary(True)
         # Held for the gamepad's Select button, which opens this menu from
         # wherever the focus happens to be.
@@ -1312,23 +1317,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(timeout)
         self.toast_overlay.add_toast(toast)
 
+    def _translatable(self, apply):
+        """Apply translated text now, and again on every language change.
+
+        This used to be a list of set_tooltip_text calls inside
+        _apply_language_change, far from where each widget was built -- so
+        every widget added since had to be remembered there, and one of them
+        was not: the "New collection" button kept the old language until the
+        app restarted. Registering the callback next to the widget is what
+        stops the two drifting apart.
+        """
+        apply()
+        self._retranslate.append(apply)
+
     def _apply_language_change(self, locale):
         self.config_manager.set_locale(locale)
         self.locale = locale
         language_name = LANGUAGE_META.get(locale, LANGUAGE_META["en"])["native_name"]
         visible = self.content_stack.get_visible_child_name()
-        self.search_entry.set_placeholder_text(self.t("header.search"))
-        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
-        self.stop_btn.set_tooltip_text(self.t("header.stop"))
-        self.preferences_btn.set_tooltip_text(self.t("header.preferences"))
-        self.console_input_btn.set_tooltip_text(self.t("header.console_input"))
-        self.volume_btn.set_tooltip_text(self.t("header.volume"))
-        self._mute_button.set_tooltip_text(self.t("volume.mute"))
-        self.import_btn.set_tooltip_text(self.t("header.import"))
-        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
-        for mode, button in self._view_segment_buttons.items():
-            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
-        self.sidebar_title.set_title(self.t("sidebar.header"))
+        for apply in self._retranslate:
+            apply()
         self._render_tip()
         self.refresh_library(preferred_view=visible)
         self._toast(self.t("toast.language.updated", language=language_name))
@@ -1524,6 +1532,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         header = Adw.HeaderBar()
         self.sidebar_title = Adw.WindowTitle.new(self.t("sidebar.header"), "")
+        self._translatable(lambda: self.sidebar_title.set_title(self.t("sidebar.header")))
         header.set_title_widget(self.sidebar_title)
         header.pack_end(self._build_primary_menu())
         toolbar.add_top_bar(header)
@@ -1543,9 +1552,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # A visible entry point for collections, so the feature is discoverable
         # without anyone guessing that right-click does something.
         new_collection = Gtk.Button()
-        new_collection.set_child(
-            Adw.ButtonContent(icon_name="list-add-symbolic", label=self.t("collections.new"))
+        new_collection_content = Adw.ButtonContent(icon_name="list-add-symbolic")
+        self._translatable(
+            lambda: new_collection_content.set_label(self.t("collections.new"))
         )
+        new_collection.set_child(new_collection_content)
         new_collection.add_css_class("flat")
         new_collection.set_margin_top(6)
         new_collection.set_margin_bottom(6)
