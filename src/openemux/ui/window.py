@@ -1317,6 +1317,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(timeout)
         self.toast_overlay.add_toast(toast)
 
+    def _sync_sidebar_footer(self):
+        """Offer playlists only once there are games to put in one.
+
+        On an empty library it was the sidebar's only button, which is most of
+        why people read it as the way to add games.
+        """
+        button = getattr(self, "new_collection_btn", None)
+        if button is not None:
+            button.set_visible(bool(self.visible_consoles))
+
     def _translatable(self, apply):
         """Apply translated text now, and again on every language change.
 
@@ -1549,22 +1559,45 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         scroll.set_child(self.console_list)
         toolbar.set_content(scroll)
 
-        # A visible entry point for collections, so the feature is discoverable
-        # without anyone guessing that right-click does something.
-        new_collection = Gtk.Button()
+        # Two entry points side by side, so neither has to be guessed at.
+        #
+        # "New playlist" alone was being read as "import ROMs here" -- it was
+        # the only button in the sidebar, and the header's import icon was not
+        # being found. Importing now has a labelled button of its own, and the
+        # playlist button is hidden until there is something to put in one:
+        # offering to group games before any game exists is what made it look
+        # like the way to add them.
+        footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        footer_box.set_homogeneous(True)
+        footer_box.set_margin_top(6)
+        footer_box.set_margin_bottom(6)
+        footer_box.set_margin_start(6)
+        footer_box.set_margin_end(6)
+
+        sidebar_import = Gtk.Button()
+        sidebar_import_content = Adw.ButtonContent(icon_name="folder-download-symbolic")
+        self._translatable(
+            lambda: sidebar_import_content.set_label(self.t("sidebar.import"))
+        )
+        sidebar_import.set_child(sidebar_import_content)
+        sidebar_import.add_css_class("flat")
+        sidebar_import.connect("clicked", lambda _b: self._on_import_clicked(None))
+        footer_box.append(sidebar_import)
+
+        self.new_collection_btn = Gtk.Button()
         new_collection_content = Adw.ButtonContent(icon_name="list-add-symbolic")
         self._translatable(
             lambda: new_collection_content.set_label(self.t("collections.new"))
         )
-        new_collection.set_child(new_collection_content)
-        new_collection.add_css_class("flat")
-        new_collection.set_margin_top(6)
-        new_collection.set_margin_bottom(6)
-        new_collection.set_margin_start(6)
-        new_collection.set_margin_end(6)
-        new_collection.connect("clicked", lambda _b: self._prompt_new_collection())
+        self.new_collection_btn.set_child(new_collection_content)
+        self.new_collection_btn.add_css_class("flat")
+        self.new_collection_btn.connect(
+            "clicked", lambda _b: self._prompt_new_collection()
+        )
+        footer_box.append(self.new_collection_btn)
+
         footer = Adw.Bin()
-        footer.set_child(new_collection)
+        footer.set_child(footer_box)
         toolbar.add_bottom_bar(footer)
 
         page = Adw.NavigationPage.new(toolbar, self.t("sidebar.header"))
@@ -2224,6 +2257,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._initial_roms = {}
 
         self.visible_consoles = self._discover_visible_consoles()
+        self._sync_sidebar_footer()
         self._rebuild_console_sidebar(self.visible_consoles)
 
         if self.visible_consoles:
@@ -2252,17 +2286,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.content_stack.add_titled(page, console, console)
 
         if not self.visible_consoles:
+            # Drag-and-drop is the fastest way in and used to go unmentioned
+            # here: the page only offered "choose a folder", so the one thing
+            # someone with a folder of ROMs open would try was undocumented.
             empty = Adw.StatusPage(
-                icon_name="folder-open-symbolic",
+                icon_name="folder-download-symbolic",
                 title=self.t("library.empty.title"),
                 description=self.t("library.empty.body"),
             )
-            choose = Gtk.Button(label=self.t("library.empty.action"))
-            choose.add_css_class("suggested-action")
+            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            actions.set_halign(Gtk.Align.CENTER)
+            import_btn = Gtk.Button(label=self.t("library.empty.action"))
+            import_btn.add_css_class("suggested-action")
+            import_btn.add_css_class("pill")
+            import_btn.connect("clicked", lambda _b: self._on_import_clicked(None))
+            actions.append(import_btn)
+            choose = Gtk.Button(label=self.t("library.empty.choose"))
             choose.add_css_class("pill")
-            choose.set_halign(Gtk.Align.CENTER)
             choose.connect("clicked", lambda _b: self._choose_roms_path())
-            empty.set_child(choose)
+            actions.append(choose)
+            empty.set_child(actions)
             self.content_stack.add_titled(empty, "library-empty", "Library")
 
         target_view = preferred_view
