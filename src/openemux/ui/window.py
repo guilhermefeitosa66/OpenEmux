@@ -93,6 +93,19 @@ MAX_INPUT_HINTS = 6
 #: loop on wait(). 200 ms x 15 gives RetroArch ~3 s to go away (issue #129).
 RELAUNCH_POLL_INTERVAL_MS = 200
 RELAUNCH_MAX_POLLS = 15
+
+#: Applying a remap to a running game waits for the scratch save state to hit
+#: the disk before relaunching (issue #129). 200 ms x 25 gives a slow core
+#: ~5 s to write it; a core without save-state support never does, and the
+#: timeout is what keeps that from becoming a relaunch that loses the game.
+SNAPSHOT_POLL_INTERVAL_MS = 200
+SNAPSHOT_MAX_POLLS = 25
+
+#: How long after a relaunch the scratch state is loaded back, mirroring
+#: launch_rom_at_state's boot allowance; the scratch file is deleted a few
+#: seconds after that, once RetroArch can no longer need it.
+RESUME_LOAD_DELAY_S = 4
+RESUME_DISCARD_DELAY_S = 10
 CONSOLE_ICON_FILES = {
     "A2600": "atari_2600__atari2600_library@2x.png",
     "A5200": "atari_5200__atari5200_library@2x.png",
@@ -3580,13 +3593,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
 
-    def _relaunch_active_rom(self):
+    def _relaunch_active_rom(self, resume_marker=None):
         """Stop the running game and start the same ROM again.
 
         Not the same thing as Restart (#130): only a fresh process re-reads
         the runtime override, so this is the only way an input remap takes
         effect (#129). The wait for the old process is polled rather than
         blocking -- wait() on the main loop would freeze the UI.
+
+        With ``resume_marker`` (a confirmed snapshot from
+        ``RuntimeManager.snapshot_active``), the scratch state is loaded back
+        once the new process has had time to boot, so the relaunch carries
+        the gameplay across instead of starting the game over.
         """
         rom, error_msg = self.runtime_manager.relaunch_active()
         self._sync_runtime_controls()
@@ -3597,6 +3615,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self._toast(self.t("toast.relaunching"))
         remaining = [RELAUNCH_MAX_POLLS]
+
+        def _discard_scratch():
+            self.runtime_manager.discard_snapshot(resume_marker)
+            return False
+
+        def _resume_when_up():
+            if self.runtime_manager.is_running():
+                self.runtime_manager.load_state_slot(resume_marker["slot"])
+                GLib.timeout_add_seconds(RESUME_DISCARD_DELAY_S, _discard_scratch)
+            return False
 
         def _launch_when_free():
             if self.runtime_manager.is_running():
@@ -3609,9 +3637,48 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._sync_runtime_controls()
             if not success and launch_error:
                 self._toast(launch_error, timeout=5)
+            if success and resume_marker is not None:
+                GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
             return False
 
         GLib.timeout_add(RELAUNCH_POLL_INTERVAL_MS, _launch_when_free)
+        return True
+
+    def apply_input_changes_to_running_game(self):
+        """Make a saved remap reach the running game, keeping its progress.
+
+        The whole of issue #129: the process only reads bindings at spawn and
+        the UDP interface has no config or remap verb, so the change is
+        carried across a relaunch -- snapshot to a scratch slot, wait for the
+        file to actually land, relaunch with the regenerated override, load
+        the snapshot back. If the core cannot save states the timeout fires
+        and nothing is relaunched: losing the game to apply a binding is
+        worse than the binding waiting for the next launch.
+        """
+        if not self.runtime_manager.is_running():
+            return False
+        marker = self.runtime_manager.snapshot_active()
+        if marker is None:
+            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
+            return False
+        self._toast(self.t("toast.input_apply.saving"))
+        remaining = [SNAPSHOT_MAX_POLLS]
+
+        def _relaunch_when_saved():
+            if self.runtime_manager.snapshot_ready(marker):
+                self._relaunch_active_rom(resume_marker=marker)
+                return False
+            if not self.runtime_manager.is_running():
+                # The game quit on its own mid-apply; the change simply
+                # applies to the next launch, nothing to report.
+                return False
+            remaining[0] -= 1
+            if remaining[0] > 0:
+                return True
+            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
+            return False
+
+        GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
         return True
 
     def _poll_runtime_state(self):

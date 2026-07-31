@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
-from openemux.core.runtime_manager import RuntimeManager
+from openemux.core.runtime_manager import HOT_APPLY_STATE_SLOT, RuntimeManager
 
 
 class _DummyConfig:
@@ -32,6 +32,9 @@ class _DummyConfig:
 
     def get_runtime_dir(self):
         return self.base_dir / "runtime"
+
+    def get_console_states_dir(self, console):
+        return self.base_dir / "states" / str(console)
 
 
 class _FakeProcess:
@@ -292,6 +295,15 @@ class CommandDispatchTests(unittest.TestCase):
             self.assertFalse(success)
             self.assertTrue(error)
 
+    def test_load_state_slot_targets_the_given_slot(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+            self.assertTrue(manager.load_state_slot(HOT_APPLY_STATE_SLOT))
+            self.assertEqual(client.sent, ["LOAD_STATE_SLOT 100"])
+
     def test_the_client_is_reused_across_commands(self):
         with TemporaryDirectory() as tmp_dir:
             manager, _config = _manager(tmp_dir)
@@ -306,6 +318,87 @@ class CommandDispatchTests(unittest.TestCase):
             second = manager._command_client()
             self.assertIsNot(first, second)
             self.assertIsNone(manager._pacer)
+
+
+class HotApplyTests(unittest.TestCase):
+    """Issue #129: a remap reaches a running game via a state-carrying
+    relaunch -- snapshot to a scratch slot, confirm the file landed, relaunch,
+    load it back. The confirmation is what keeps a core without save-state
+    support from turning the apply into a relaunch that loses the game."""
+
+    def _running_manager(self, tmp_dir):
+        manager, config = _manager(tmp_dir)
+        client = _FakeClient()
+        manager._command_client_cache = client
+        manager.active_process = _FakeProcess()
+        manager.active_rom = {"path": "/roms/Super Game.sfc", "console": "SFC"}
+        return manager, config, client
+
+    def _write_scratch(self, config, mtime=None):
+        states_dir = config.get_console_states_dir("SFC")
+        states_dir.mkdir(parents=True, exist_ok=True)
+        state = states_dir / f"Super Game.state{HOT_APPLY_STATE_SLOT}"
+        state.write_bytes(b"fake state")
+        if mtime is not None:
+            import os
+
+            os.utime(state, (mtime, mtime))
+        return state
+
+    def test_snapshot_sends_the_scratch_slot_save(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config, client = self._running_manager(tmp_dir)
+            marker = manager.snapshot_active()
+            self.assertIsNotNone(marker)
+            self.assertEqual(client.sent, ["SAVE_STATE_SLOT 100"])
+            self.assertEqual(marker["slot"], HOT_APPLY_STATE_SLOT)
+            self.assertEqual(marker["rom"]["console"], "SFC")
+
+    def test_snapshot_refuses_with_no_game_running(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            self.assertIsNone(manager.snapshot_active())
+            self.assertEqual(client.sent, [])
+
+    def test_ready_only_once_the_state_file_lands(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config, _client = self._running_manager(tmp_dir)
+            marker = manager.snapshot_active()
+            # UDP went out but RetroArch has written nothing yet.
+            self.assertFalse(manager.snapshot_ready(marker))
+            self._write_scratch(config)
+            self.assertTrue(manager.snapshot_ready(marker))
+
+    def test_a_leftover_scratch_state_does_not_read_as_saved(self):
+        # A previous apply's file sitting on disk must not confirm this one:
+        # relaunching on it would resume yesterday's game, losing today's.
+        with TemporaryDirectory() as tmp_dir:
+            manager, config, _client = self._running_manager(tmp_dir)
+            stale = self._write_scratch(config, mtime=1000.0)
+            marker = manager.snapshot_active()
+            self.assertFalse(manager.snapshot_ready(marker))
+            # RetroArch rewrites the slot: newer mtime, now it counts.
+            import os
+
+            os.utime(stale, (2000.0, 2000.0))
+            self.assertTrue(manager.snapshot_ready(marker))
+
+    def test_discard_removes_the_scratch_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config, _client = self._running_manager(tmp_dir)
+            marker = manager.snapshot_active()
+            state = self._write_scratch(config)
+            self.assertTrue(manager.discard_snapshot(marker))
+            self.assertFalse(state.exists())
+            self.assertFalse(manager.discard_snapshot(marker))
+
+    def test_snapshot_reports_failure_when_the_packet_does_not_leave(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config, client = self._running_manager(tmp_dir)
+            client.fail_after = 0
+            self.assertIsNone(manager.snapshot_active())
 
 
 if __name__ == "__main__":

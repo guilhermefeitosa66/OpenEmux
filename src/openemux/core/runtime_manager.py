@@ -1,6 +1,7 @@
 import atexit
 import threading
 
+from openemux.core import save_states
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
@@ -13,6 +14,11 @@ from openemux.core.systems import resolve_system_id
 #: A drag emits a value every 0.5 dB and each write is a synchronous YAML
 #: dump, so persisting per tick meant dozens of disk writes per drag.
 VOLUME_PERSIST_DEBOUNCE = 0.75
+
+#: The scratch slot that carries gameplay across an input-change relaunch
+#: (issue #129). Far outside the 0-9 range the states UI manages, so the
+#: snapshot never clobbers a state the user saved on purpose.
+HOT_APPLY_STATE_SLOT = 100
 
 
 class RuntimeManager:
@@ -177,6 +183,76 @@ class RuntimeManager:
         if self.send_command("MUTE"):
             self.muted = not self.muted
         return self.muted
+
+    # -- live input apply (issue #129) -------------------------------------
+    # The UDP interface has no config-write or remap-reload verb (checked
+    # against the vendored RetroArch 1.22: SAVE/LOAD_STATE_SLOT exist,
+    # SET_CONFIG_PARAM does not), so "apply while running" is a relaunch that
+    # carries the gameplay across: snapshot to a scratch slot, restart with
+    # the regenerated override, load the snapshot back.
+
+    def snapshot_active(self, slot=HOT_APPLY_STATE_SLOT):
+        """Ask the running game to save a scratch state; a marker or ``None``.
+
+        The command is fire-and-forget UDP, so the caller must poll
+        ``snapshot_ready(marker)`` to learn whether RetroArch actually wrote
+        the file -- a core without save-state support never will, and that
+        must not turn into a relaunch that silently loses the game.
+        """
+        if not self.is_running():
+            return None
+        rom = dict(self.active_rom or {})
+        states_dir = self.config_manager.get_console_states_dir(rom.get("console"))
+        existing = self._scratch_state(states_dir, rom.get("path"), slot)
+        if not self.send_command(f"SAVE_STATE_SLOT {int(slot)}"):
+            return None
+        return {
+            "rom": rom,
+            "states_dir": states_dir,
+            "slot": int(slot),
+            # A leftover scratch file from an earlier apply must not read as
+            # "saved": ready means newer than whatever was there beforehand.
+            "baseline_mtime": existing.mtime if existing else None,
+        }
+
+    @staticmethod
+    def _scratch_state(states_dir, rom_path, slot):
+        for state in save_states.list_states(states_dir, rom_path):
+            if state.slot == int(slot):
+                return state
+        return None
+
+    def snapshot_ready(self, marker):
+        """True once the scratch state from ``snapshot_active`` is on disk."""
+        if not marker:
+            return False
+        state = self._scratch_state(
+            marker["states_dir"], marker["rom"].get("path"), marker["slot"]
+        )
+        if state is None:
+            return False
+        baseline = marker.get("baseline_mtime")
+        return baseline is None or state.mtime > baseline
+
+    def discard_snapshot(self, marker):
+        """Delete the scratch state once it has been loaded back."""
+        if not marker:
+            return False
+        state = self._scratch_state(
+            marker["states_dir"], marker["rom"].get("path"), marker["slot"]
+        )
+        if state is None:
+            return False
+        return save_states.delete_state(state)
+
+    def load_state_slot(self, slot):
+        """Load a specific slot's state into the running game, over UDP.
+
+        Unlike seeding ``state_slot`` at launch, this leaves the save/load
+        hotkeys on the configured slot -- a quick-save right after an apply
+        must not land on the scratch slot.
+        """
+        return self.send_command(f"LOAD_STATE_SLOT {int(slot)}")
 
     def relaunch_rom(self, rom):
         """Launch ``rom`` again -- the second half of a relaunch.
