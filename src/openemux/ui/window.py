@@ -136,7 +136,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.locale = self.config_manager.get_locale()
         self.set_title("OpenEmux")
         self._setup_window_icon()
-        self.set_default_size(1200, 800)
+        self.set_default_size(*self._default_window_size())
         # Minimum size required for the adaptive breakpoint to compute layout.
         self.set_size_request(360, 420)
         self.load_css()
@@ -1316,6 +1316,38 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast = Adw.Toast(title=text)
         toast.set_timeout(timeout)
         self.toast_overlay.add_toast(toast)
+
+    #: Share of the monitor the window opens at, and the size used when the
+    #: monitor cannot be read (headless, or a display with no monitor yet).
+    DEFAULT_SCREEN_SHARE = 0.8
+    FALLBACK_WINDOW_SIZE = (1200, 800)
+
+    @classmethod
+    def _size_for_monitor(cls, geometry):
+        """80% of a monitor, never larger than the monitor itself."""
+        if geometry is None or geometry.width <= 0 or geometry.height <= 0:
+            return cls.FALLBACK_WINDOW_SIZE
+        return (
+            min(geometry.width, int(geometry.width * cls.DEFAULT_SCREEN_SHARE)),
+            min(geometry.height, int(geometry.height * cls.DEFAULT_SCREEN_SHARE)),
+        )
+
+    def _default_window_size(self):
+        """Open at a share of the screen rather than a fixed box.
+
+        The fixed 1200x800 was *taller* than a 720p monitor, so those users
+        got a window the compositor had to clamp -- opening cut off before
+        anyone touched it. GTK reports geometry in logical pixels, so a HiDPI
+        screen reports its scaled size and needs no special case.
+        """
+        display = Gdk.Display.get_default()
+        if display is None:
+            return self.FALLBACK_WINDOW_SIZE
+        monitors = display.get_monitors()
+        if monitors is None or monitors.get_n_items() == 0:
+            return self.FALLBACK_WINDOW_SIZE
+        monitor = monitors.get_item(0)
+        return self._size_for_monitor(monitor.get_geometry() if monitor else None)
 
     def _sync_sidebar_footer(self):
         """Offer playlists only once there are games to put in one.
