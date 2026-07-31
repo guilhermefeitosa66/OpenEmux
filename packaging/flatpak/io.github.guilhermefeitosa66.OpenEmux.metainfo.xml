@@ -82,6 +82,21 @@
   </keywords>
 
   <releases>
+    <release version="1.10.0" date="2026-07-31">
+      <description>
+        <p>Controls you can actually configure, and changes that reach the running game.</p>
+        <ul>
+          <li>A remap saved mid-game now applies immediately, keeping your progress</li>
+          <li>A connected gamepad and the keyboard are configured together, not either/or</li>
+          <li>Analog deadzone and sensitivity, rumble, latency and the rest of the input knobs</li>
+          <li>Choose which controller the core is told is plugged in, per console</li>
+          <li>The missing system hotkeys, including disk control for multi-disc games</li>
+          <li>Play the left analog stick from the keyboard, and let a pad's D-pad move it</li>
+          <li>Every symbolic icon ships with the app, so none go missing on any desktop</li>
+          <li>Missing artwork is now visible and recoverable, and covers decode off the main thread</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.9.2" date="2026-07-27">
       <description>
         <p>The artwork Import tab, finished: it missed the 1.9.1 build.</p>

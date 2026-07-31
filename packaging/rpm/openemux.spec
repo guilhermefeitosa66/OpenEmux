@@ -63,6 +63,19 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Fri Jul 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.0-1
+- Apply a saved remap to the running game, keeping its progress
+- Configure a connected gamepad and the keyboard together, not either/or
+- Add analog deadzone and sensitivity, rumble, latency and the remaining input knobs
+- Choose which controller the core is told is plugged in, per console
+- Add the missing system hotkeys, including disk control for multi-disc games
+- Play the left analog stick from the keyboard, and let a pad's D-pad move it
+- Bundle every symbolic icon the UI uses, so none go missing on any desktop
+- Make missing artwork visible and recoverable; decode covers off the main thread
+- Write keyboard bindings as key names RetroArch can resolve
+- Set a console's default core and shader from the sidebar
+- Complete the five stub locales and rename Preferences to Settings
+
 * Mon Jul 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.9.2-1
 - Give an imported image the whole area, with a trash button to clear it
 - Put the artwork import controls and the save destination on a single row
