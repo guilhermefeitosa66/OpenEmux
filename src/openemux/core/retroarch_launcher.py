@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
+from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
@@ -294,6 +295,19 @@ class RetroArchLauncher:
         overrides["network_cmd_enable"] = '"true"'
         overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
         overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
+
+        # Which audio driver RetroArch is told to use (issue #176). The global
+        # retroarch.cfg may name one the RetroArch we launch was not built
+        # with -- "pipewire" is the common case, and the vendored build has no
+        # such driver. RetroArch then falls back to alsa, which fails on a
+        # PipeWire host, and audio never starts. That reads to the user as
+        # *speed*, not silence: emulation is paced off the audio clock, so
+        # without it the game runs at the display's refresh rate.
+        audio_driver = resolve_audio_driver(
+            self.config_manager.get_retroarch_audio_driver()
+        )
+        if audio_driver:
+            overrides["audio_driver"] = f'"{audio_driver}"'
 
         # Save states live in OpenEmux's own per-console tree (issue #73), so
         # the app can list and manage them; thumbnails give the manager
