@@ -31,6 +31,16 @@ test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 test -f /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 
+echo "==> verify the vendored symbolic icons all shipped"
+SRC_ICONS="$(find src/openemux/ui/assets/icons/symbolic -name '*.svg' | wc -l)"
+PKG_ICONS="$(find /opt/openemux/src/openemux/ui/assets/icons/symbolic -name '*.svg' | wc -l)"
+if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
+  echo "FAIL: expected $SRC_ICONS symbolic icons in the package, found $PKG_ICONS" >&2
+  exit 1
+fi
+test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/LICENSE
+echo "all $PKG_ICONS symbolic icons present"
+
 echo "==> import smoke test against installed deps"
 OPENEMUX_PROJECT_ROOT=/opt/openemux PYTHONPATH=/opt/openemux/src python3 - <<'PY'
 import gi

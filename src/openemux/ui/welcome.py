@@ -19,12 +19,17 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
+from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale  # noqa: E402
+
 #: (slide id, sidebar icon, illustration filename). The heading/body strings are
 #: looked up as ``welcome.<id>.title`` / ``welcome.<id>.body``.
 SLIDES = [
     ("welcome", "start-here-symbolic", "welcome.png"),
     ("import", "folder-download-symbolic", "import.png"),
-    ("views", "view-grid-symbolic", "views.png"),
+    # A sequence: the view modes are a thing you *see* change, so the slide
+    # cycles them instead of describing them (issue: welcome refresh).
+    ("views", "view-grid-symbolic",
+     ("views-1.png", "views-2.png", "views-3.png", "views-4.png")),
     ("covers", "image-x-generic-symbolic", "covers.png"),
     ("shaders", "applications-graphics-symbolic", "shaders.png"),
     ("shortcuts", "preferences-desktop-keyboard-symbolic", "shortcuts.png"),
@@ -32,6 +37,11 @@ SLIDES = [
 ]
 
 _IMAGE_DIR = Path(__file__).parent / "assets" / "images" / "welcome"
+
+#: How long each frame of a multi-image slide is held, and how long the
+#: slide across to the next one takes.
+SLIDESHOW_INTERVAL_MS = 2500
+SLIDESHOW_TRANSITION_MS = 400
 
 
 class WelcomeAssistant(Adw.Dialog):
@@ -41,6 +51,12 @@ class WelcomeAssistant(Adw.Dialog):
         self.t = win.t
         self.config = win.config_manager
         self._syncing = False
+        # Same idea as the main window: register the callback that retranslates
+        # a widget next to the widget, so the language picker below can change
+        # the whole assistant without anything being forgotten.
+        self._retranslate = []
+        self._slideshows = {}
+        self._slideshow_timer = None
 
         self.set_title(self.t("welcome.title"))
         self.set_content_width(900)
@@ -72,6 +88,8 @@ class WelcomeAssistant(Adw.Dialog):
         toolbar.set_content(body)
         self.set_child(toolbar)
 
+        self.connect("closed", lambda _d: self._stop_slideshow())
+
         # Left/Right step through slides; Escape closes (Adw.Dialog default).
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", self._on_key)
@@ -96,7 +114,10 @@ class WelcomeAssistant(Adw.Dialog):
             box.set_margin_start(12)
             box.set_margin_end(12)
             box.append(Gtk.Image.new_from_icon_name(icon))
-            label = Gtk.Label(label=self.t(f"welcome.{slide_id}.title"))
+            label = Gtk.Label()
+            self._translatable(
+                lambda l=label, s=slide_id: l.set_label(self.t(f"welcome.{s}.title"))
+            )
             label.set_halign(Gtk.Align.START)
             label.set_hexpand(True)
             label.set_ellipsize(3)  # PANGO_ELLIPSIZE_END
@@ -123,32 +144,131 @@ class WelcomeAssistant(Adw.Dialog):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
         box.set_valign(Gtk.Align.CENTER)
 
-        image_path = _IMAGE_DIR / image
-        if image_path.exists():
-            picture = Gtk.Picture.new_for_filename(str(image_path))
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.set_can_shrink(True)
-            picture.set_size_request(-1, 300)
-            picture.add_css_class("welcome-image")
-            box.append(picture)
+        frames = (image,) if isinstance(image, str) else tuple(image)
+        pictures = [self._picture(name) for name in frames]
+        pictures = [p for p in pictures if p is not None]
+        if len(pictures) == 1:
+            box.append(pictures[0])
+        elif pictures:
+            # A stack rather than a carousel: this one advances on its own and
+            # must not steal the horizontal drag that moves between slides.
+            stack = Gtk.Stack()
+            stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT)
+            stack.set_transition_duration(SLIDESHOW_TRANSITION_MS)
+            for index, picture in enumerate(pictures):
+                stack.add_named(picture, str(index))
+            stack.set_visible_child_name("0")
+            self._slideshows[slide_id] = (stack, len(pictures))
+            box.append(stack)
 
-        heading = Gtk.Label(label=self.t(f"welcome.{slide_id}.title"))
+        heading = Gtk.Label()
         heading.add_css_class("title-1")
         heading.set_halign(Gtk.Align.CENTER)
         heading.set_justify(Gtk.Justification.CENTER)
         heading.set_wrap(True)
+        self._translatable(lambda: heading.set_label(self.t(f"welcome.{slide_id}.title")))
         box.append(heading)
 
-        body = Gtk.Label(label=self.t(f"welcome.{slide_id}.body"))
+        body = Gtk.Label()
         body.set_wrap(True)
         body.set_justify(Gtk.Justification.CENTER)
         body.set_halign(Gtk.Align.CENTER)
         body.add_css_class("body")
+        self._translatable(lambda: body.set_label(self.t(f"welcome.{slide_id}.body")))
         box.append(body)
+
+        if slide_id == "welcome":
+            box.append(self._build_language_row())
 
         clamp.set_child(box)
         scroller.set_child(clamp)
         return scroller
+
+    def _picture(self, name):
+        path = _IMAGE_DIR / name
+        if not path.exists():
+            return None
+        picture = Gtk.Picture.new_for_filename(str(path))
+        picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        picture.set_can_shrink(True)
+        picture.set_size_request(-1, 300)
+        picture.add_css_class("welcome-image")
+        return picture
+
+    def _translatable(self, apply):
+        apply()
+        self._retranslate.append(apply)
+
+    # ----- language -------------------------------------------------------
+    def _build_language_row(self):
+        """Pick the language before reading any of the tour.
+
+        Someone who cannot read the first slide cannot find Settings either,
+        so the choice belongs here rather than only in Settings > System.
+        """
+        self._locales = list(SUPPORTED_LOCALES)
+        # Flag + native name in one string, the same shape Settings uses, so
+        # the two pickers read alike. Native names never need retranslating.
+        dropdown = Gtk.DropDown.new_from_strings([
+            f"{LANGUAGE_META.get(code, LANGUAGE_META['en'])['flag']} "
+            f"{LANGUAGE_META.get(code, LANGUAGE_META['en'])['native_name']}"
+            for code in self._locales
+        ])
+        current = normalize_locale(self.win.locale)
+        # Seeding the selection emits notify::selected; without the guard the
+        # dialog "changes" the language to whatever it already was the moment
+        # it opens, toast and all.
+        self._syncing = True
+        dropdown.set_selected(
+            self._locales.index(current) if current in self._locales else 0
+        )
+        self._syncing = False
+        # Centred and only as wide as it needs to be: a full-width row here
+        # would read as a setting rather than a one-off choice.
+        dropdown.set_halign(Gtk.Align.CENTER)
+        dropdown.set_size_request(210, -1)
+        dropdown.set_margin_top(4)
+        dropdown.connect("notify::selected", self._on_language_selected)
+        self._language_row = dropdown
+        return dropdown
+
+    def _on_language_selected(self, *_args):
+        if self._syncing:
+            return
+        index = self._language_row.get_selected()
+        if not (0 <= index < len(self._locales)):
+            return
+        locale = self._locales[index]
+        if locale == normalize_locale(self.win.locale):
+            return
+        # The window retranslates itself and re-reads the library; the
+        # assistant then replays its own registrations.
+        self.win._apply_language_change(locale)
+        self.t = self.win.t
+        self.set_title(self.t("welcome.title"))
+        for apply in self._retranslate:
+            apply()
+
+    # ----- slideshow ------------------------------------------------------
+    def _stop_slideshow(self):
+        if self._slideshow_timer is not None:
+            GLib.source_remove(self._slideshow_timer)
+            self._slideshow_timer = None
+
+    def _start_slideshow(self, slide_id):
+        """Cycle a multi-image slide, but only while it is the one on screen."""
+        self._stop_slideshow()
+        entry = self._slideshows.get(slide_id)
+        if entry is None:
+            return
+        stack, count = entry
+
+        def _advance():
+            nxt = (int(stack.get_visible_child_name()) + 1) % count
+            stack.set_visible_child_name(str(nxt))
+            return True
+
+        self._slideshow_timer = GLib.timeout_add(SLIDESHOW_INTERVAL_MS, _advance)
 
     def _build_bottom_bar(self):
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -208,6 +328,9 @@ class WelcomeAssistant(Adw.Dialog):
         self.next_button.set_label(
             self.t("welcome.finish") if last else self.t("welcome.next")
         )
+        # Every path that moves between slides ends here, so this is the one
+        # place that has to know which slide is on screen.
+        self._start_slideshow(SLIDES[max(0, min(index, len(SLIDES) - 1))][0])
 
     def _on_page_changed(self, _carousel, index):
         if self._syncing:

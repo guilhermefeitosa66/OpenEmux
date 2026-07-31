@@ -8,10 +8,18 @@ import logging
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog
-from openemux.core.input_actions import to_retroarch_overrides
+from openemux.core import input_tuning
+from openemux.core.input_actions import (
+    conflicting_stock_hotkeys,
+    to_retroarch_overrides,
+    with_dpad_as_analog,
+)
 from openemux.core.input_profiles import (
     EXTRA_PORT_DEVICE_IDS,
+    PLAYER1_DEVICE_IDS,
+    device_type_for,
     normalize_analog_dpad_mode,
+    normalize_controller_type,
     normalize_turbo_settings,
     player_for_device,
 )
@@ -174,25 +182,56 @@ class RetroArchLauncher:
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
-        active_device = profile.get("active_device", "keyboard")
-        device = devices.get(active_device, {})
-        device_type = device.get("type", "keyboard")
-        bindings = device.get("bindings", {})
-        # Port 1 comes from the active device, exactly as before.
-        overrides = to_retroarch_overrides(bindings, device_type, console=console)
+        # Port 1 gets *both* device maps, not just the "active" one.
+        #
+        # RetroArch keeps keyboard and joypad binds under separate keys --
+        # input_player1_a vs input_player1_a_btn, input_enable_hotkey vs
+        # input_enable_hotkey_btn -- so they never collide and both can be
+        # live at once. Emitting only the active device meant a plugged-in
+        # pad got none of OpenEmux's configuration: not the hotkeys, not the
+        # analog stick axes. It still appeared to work because RetroArch's
+        # own autoconfig maps the buttons, which is what made it so hard to
+        # notice (issue #150).
+        # A pad's D-pad can stand in for the left stick (issue #156).
+        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
+
+        def _bindings_for(device_id, device, device_type):
+            bindings = device.get("bindings", {})
+            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
+            # pointing the arrows at it too would just be noise (issue #158).
+            if dpad_as_analog and device_type == "gamepad":
+                return with_dpad_as_analog(bindings)
+            return bindings
+
+        overrides = {}
+        for device_id in PLAYER1_DEVICE_IDS:
+            device = devices.get(device_id) or {}
+            device_type = device_type_for(device_id)
+            overrides.update(
+                to_retroarch_overrides(
+                    _bindings_for(device_id, device, device_type),
+                    device_type,
+                    console=console,
+                )
+            )
         # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
         for device_id in EXTRA_PORT_DEVICE_IDS:
             extra = devices.get(device_id) or {}
             if not extra.get("enabled"):
                 continue
+            extra_type = extra.get("type", "gamepad")
             overrides.update(
                 to_retroarch_overrides(
-                    extra.get("bindings", {}),
-                    extra.get("type", "gamepad"),
+                    _bindings_for(device_id, extra, extra_type),
+                    extra_type,
                     console=console,
                     player=player_for_device(device_id),
                 )
             )
+        # This file is appended to RetroArch's own config, so a stock hotkey
+        # sitting on a key we just bound would still fire alongside ours --
+        # `m` would mute and cycle the shader at the same time (issue #146).
+        overrides.update(conflicting_stock_hotkeys(overrides))
         # Fold the analog stick onto the D-pad where the console wants it
         # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
         # the stick and the D-pad steer without re-remapping.
@@ -205,6 +244,26 @@ class RetroArchLauncher:
             if extra.get("enabled"):
                 player = player_for_device(device_id)
                 overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+        # Which controller the core is told is in each port (issue #151).
+        # Left out entirely when unset, so the core keeps its own default --
+        # PlayStation boots as a digital pad, and an analog game needs
+        # DualShock chosen here just as it does in RetroArch.
+        controller_type = normalize_controller_type(
+            profile.get("controller_type"), console
+        )
+        if controller_type is not None:
+            overrides["input_libretro_device_p1"] = f'"{controller_type}"'
+            for device_id in EXTRA_PORT_DEVICE_IDS:
+                extra = devices.get(device_id) or {}
+                if extra.get("enabled"):
+                    player = player_for_device(device_id)
+                    overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
+        # Deadzone, sensitivity, rumble, latency (issues #154, #155). Global
+        # rather than per console: a worn stick drifts the same everywhere.
+        # Only values that differ from RetroArch's own defaults are written.
+        overrides.update(
+            input_tuning.to_retroarch_overrides(self.config_manager.get_input_tuning())
+        )
         # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
         # itself is a normal binding ("turbo" action) emitted per port above,
         # so without one bound these just restate the defaults.
@@ -212,6 +271,11 @@ class RetroArchLauncher:
         overrides["input_turbo_period"] = f'"{turbo["period"]}"'
         overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
         overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
+        # Select doubles as the gamepad hotkey modifier (issue #124), so a
+        # *tap* has to still reach the game as Select while a *hold* opens a
+        # hotkey. This is how many frames RetroArch waits before deciding;
+        # without it Select feels unresponsive in games that use it.
+        overrides["input_hotkey_block_delay"] = '"5"'
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:

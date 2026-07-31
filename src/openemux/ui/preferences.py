@@ -23,6 +23,7 @@ from openemux.core.input_actions import (
     GLOBAL_HOTKEY_ACTIONS,
     OPTIONAL_ACTIONS,
     get_actions_for_console,
+    retroarch_key_token,
 )
 from openemux.core.input_profiles import (
     ANALOG_DPAD_MODES,
@@ -31,11 +32,13 @@ from openemux.core.input_profiles import (
     TURBO_PERIOD_RANGE,
     DEVICE_IDS,
     EXTRA_PORT_DEVICE_IDS,
+    controller_types_for,
     device_type_for,
     player_for_device,
 )
+from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
-from openemux.core.systems import SYSTEM_IDS, get_system_display_name
+from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 
@@ -73,12 +76,24 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # exclusive-capture mode -- when the dialog goes away.
         self.connect("closed", lambda _d: self._on_closed())
 
-        self.add(self._build_library_page())
-        self.add(self._build_bios_page())
-        self.add(self._build_input_page())
-        self.add(self._build_video_page())
-        self.add(self._build_cores_page())
-        self.add(self._build_system_page())
+        # Kept by name so a caller can open the dialog straight on one of
+        # them -- the header's controller button lands on "input".
+        self._pages = {
+            "library": self._build_library_page(),
+            "bios": self._build_bios_page(),
+            "input": self._build_input_page(),
+            "video": self._build_video_page(),
+            "cores": self._build_cores_page(),
+            "system": self._build_system_page(),
+        }
+        for page in self._pages.values():
+            self.add(page)
+
+    def show_page(self, name):
+        """Open on a named page. Unknown names leave the dialog as it is."""
+        page = self._pages.get(name)
+        if page is not None:
+            self.set_visible_page(page)
 
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):
@@ -477,6 +492,22 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.page.input"), icon_name="input-gaming-symbolic"
         )
 
+        # Bindings reach RetroArch only through the --appendconfig file
+        # written at spawn, so a remap only lands in a running game via the
+        # state-carrying relaunch (issue #129). Save and Reset trigger it
+        # themselves; the banner's button covers the rows that write straight
+        # to disk as they change (analog mode, turbo, tuning sliders).
+        #
+        # Adw.PreferencesPage has no banner slot, so it rides in a group of
+        # its own -- which must be the first thing on the page.
+        self._relaunch_banner = Adw.Banner(title=self.t("prefs.input.banner.running"))
+        self._relaunch_banner.set_button_label(self.t("prefs.input.banner.apply_now"))
+        self._relaunch_banner.connect("button-clicked", self._on_relaunch_clicked)
+        self._relaunch_banner.set_revealed(False)
+        banner_group = Adw.PreferencesGroup()
+        banner_group.add(self._relaunch_banner)
+        page.add(banner_group)
+
         controller_group = Adw.PreferencesGroup(title=self.t("prefs.group.controller"))
         self._console_ids = list(SYSTEM_IDS)
         self._console_combo = Adw.ComboRow(title=self.t("input.console"))
@@ -494,7 +525,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         controller_group.add(self._console_combo)
 
         self._device_ids = list(DEVICE_IDS)
-        self._device_combo = Adw.ComboRow(title=self.t("input.device"))
+        # Picks which map is being edited, not which one is live: the
+        # keyboard and player 1's pad are both always active (issue #150).
+        self._device_combo = Adw.ComboRow(
+            title=self.t("input.device"),
+            subtitle=self.t("input.device.subtitle"),
+        )
         self._device_combo.set_model(
             Gtk.StringList.new([self.t(f"input.device.{d}") for d in self._device_ids])
         )
@@ -509,6 +545,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         self._port_enabled_switch.set_visible(False)
         controller_group.add(self._port_enabled_switch)
+
+        # Which controller the core is told is plugged in (issue #151). Only
+        # shown where the console's core publishes more than one -- most
+        # publish exactly one, and a combo with a single entry is furniture.
+        self._controller_type_row = Adw.ComboRow(
+            title=self.t("input.controller_type.title"),
+            subtitle=self.t("input.controller_type.subtitle"),
+        )
+        self._controller_type_guard = False
+        self._controller_type_ids = []
+        self._sync_controller_type_row()
+        self._controller_type_row.connect(
+            "notify::selected", self._on_controller_type_changed
+        )
+        controller_group.add(self._controller_type_row)
 
         # Analog-as-D-pad (issue #71): per console, RetroArch's own
         # analog_dpad_mode, so the stick and the D-pad steer together.
@@ -526,7 +577,85 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._sync_analog_dpad_row()
         self._analog_dpad_row.connect("notify::selected", self._on_analog_dpad_changed)
         controller_group.add(self._analog_dpad_row)
+
+        # The other direction (issue #156): the pad's D-pad standing in for
+        # the stick, for a game that only reads analog.
+        self._dpad_analog_row = Adw.SwitchRow(
+            title=self.t("input.dpad_analog.title"),
+            subtitle=self.t("input.dpad_analog.subtitle"),
+        )
+        self._dpad_analog_guard = False
+        self._sync_dpad_analog_row()
+        self._dpad_analog_row.connect("notify::active", self._on_dpad_analog_changed)
+        controller_group.add(self._dpad_analog_row)
         page.add(controller_group)
+
+        # Stick and feedback tuning (issues #154, #155). Global rather than
+        # per console: a worn stick drifts the same on every system, and
+        # vibration strength belongs to the pad -- making these per console
+        # would mean setting the deadzone thirty-one times.
+        tuning_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.input_tuning"),
+            description=self.t("prefs.group.input_tuning.description"),
+        )
+        self._tuning_guard = True
+        self._tuning_rows = {}
+        for name, digits, step in (
+            ("analog_deadzone", 2, 0.05),
+            ("analog_sensitivity", 2, 0.05),
+            ("axis_threshold", 2, 0.05),
+        ):
+            low, high = INPUT_TUNING[name][3], INPUT_TUNING[name][4]
+            row = Adw.SpinRow.new_with_range(low, high, step)
+            row.set_digits(digits)
+            row.set_title(self.t(f"input.tuning.{name}"))
+            row.set_subtitle(self.t(f"input.tuning.{name}.subtitle"))
+            row.set_value(self.config.get_input_tuning_value(name))
+            row.connect("notify::value", self._on_tuning_changed, name)
+            tuning_group.add(row)
+            self._tuning_rows[name] = row
+
+        rumble = Adw.SpinRow.new_with_range(0, 100, 5)
+        rumble.set_title(self.t("input.tuning.rumble_gain"))
+        rumble.set_subtitle(self.t("input.tuning.rumble_gain.subtitle"))
+        rumble.set_value(self.config.get_input_tuning_value("rumble_gain"))
+        rumble.connect("notify::value", self._on_tuning_changed, "rumble_gain")
+        tuning_group.add(rumble)
+        self._tuning_rows["rumble_gain"] = rumble
+
+        self._poll_row = Adw.ComboRow(
+            title=self.t("input.tuning.poll_type_behavior"),
+            subtitle=self.t("input.tuning.poll_type_behavior.subtitle"),
+        )
+        self._poll_row.set_model(
+            Gtk.StringList.new([self.t(f"input.tuning.poll.{i}") for i in range(3)])
+        )
+        self._poll_row.set_selected(self.config.get_input_tuning_value("poll_type_behavior"))
+        self._poll_row.connect("notify::selected", self._on_poll_type_changed)
+        tuning_group.add(self._poll_row)
+
+        self._focus_row = Adw.ComboRow(
+            title=self.t("input.tuning.auto_game_focus"),
+            subtitle=self.t("input.tuning.auto_game_focus.subtitle"),
+        )
+        self._focus_row.set_model(
+            Gtk.StringList.new([self.t(f"input.tuning.focus.{i}") for i in range(3)])
+        )
+        self._focus_row.set_selected(self.config.get_input_tuning_value("auto_game_focus"))
+        self._focus_row.connect("notify::selected", self._on_auto_focus_changed)
+        tuning_group.add(self._focus_row)
+
+        self._descriptor_row = Adw.SwitchRow(
+            title=self.t("input.tuning.descriptor_label_show"),
+            subtitle=self.t("input.tuning.descriptor_label_show.subtitle"),
+        )
+        self._descriptor_row.set_active(
+            self.config.get_input_tuning_value("descriptor_label_show")
+        )
+        self._descriptor_row.connect("notify::active", self._on_descriptor_changed)
+        tuning_group.add(self._descriptor_row)
+        self._tuning_guard = False
+        page.add(tuning_group)
 
         # Turbo timing (issue #72): tuning knobs; the modifier button itself is
         # a normal binding row ("Turbo") in the mapping list below.
@@ -586,7 +715,29 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         page.add(self._system_bindings_group)
 
         self._refresh_bindings()
+        self._sync_relaunch_banner()
         return page
+
+    def _sync_relaunch_banner(self):
+        """Show the banner only while there is a game to relaunch."""
+        banner = getattr(self, "_relaunch_banner", None)
+        if banner is None:
+            return
+        banner.set_revealed(self.win.runtime_manager.is_running())
+
+    def _on_relaunch_clicked(self, _banner):
+        # State-preserving apply, same as Save uses -- the button exists for
+        # the rows that persist as they change and so never pass through
+        # _save_input (issue #129).
+        self.win.apply_input_changes_to_running_game()
+        # The game is briefly gone and then back, so the banner is left up
+        # rather than flickering; this re-checks once the dust settles, which
+        # is also what takes it down if the relaunch failed.
+        GLib.timeout_add_seconds(5, self._sync_relaunch_banner_once)
+
+    def _sync_relaunch_banner_once(self):
+        self._sync_relaunch_banner()
+        return False
 
     def _current_console(self):
         idx = self._console_combo.get_selected()
@@ -620,6 +771,86 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             },
         )
 
+    def _sync_dpad_analog_row(self):
+        console = self._current_console()
+        # Only where the core reads a stick at all -- elsewhere there is
+        # nothing for the D-pad to stand in for.
+        has_stick = "l_up" in get_actions_for_console(console)
+        self._dpad_analog_row.set_visible(has_stick)
+        if not has_stick:
+            return
+        self._dpad_analog_guard = True
+        self._dpad_analog_row.set_active(
+            self.config.input_profiles.get_dpad_drives_analog(console)
+        )
+        self._dpad_analog_guard = False
+
+    def _on_dpad_analog_changed(self, *_a):
+        if self._dpad_analog_guard:
+            return
+        self.config.input_profiles.set_dpad_drives_analog(
+            self._current_console(), self._dpad_analog_row.get_active()
+        )
+
+    def _on_tuning_changed(self, row, _param, name):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(name, row.get_value())
+
+    def _on_poll_type_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "poll_type_behavior", self._poll_row.get_selected()
+        )
+
+    def _on_auto_focus_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "auto_game_focus", self._focus_row.get_selected()
+        )
+
+    def _on_descriptor_changed(self, *_a):
+        if self._tuning_guard:
+            return
+        self.config.set_input_tuning_value(
+            "descriptor_label_show", self._descriptor_row.get_active()
+        )
+
+    def _sync_controller_type_row(self):
+        console = self._current_console()
+        types = controller_types_for(console)
+        self._controller_type_row.set_visible(bool(types))
+        if not types:
+            self._controller_type_ids = []
+            return
+        # None first: "whatever the core boots with", which is the default and
+        # the only honest option for a core we have not verified.
+        self._controller_type_ids = [None] + [ident for ident, _label in types]
+        labels = [self.t("input.controller_type.core_default")] + [
+            label for _ident, label in types
+        ]
+        self._controller_type_guard = True
+        self._controller_type_row.set_model(Gtk.StringList.new(labels))
+        current = self.config.input_profiles.get_controller_type(console)
+        self._controller_type_row.set_selected(
+            self._controller_type_ids.index(current)
+            if current in self._controller_type_ids
+            else 0
+        )
+        self._controller_type_guard = False
+
+    def _on_controller_type_changed(self, *_a):
+        if self._controller_type_guard:
+            return
+        index = self._controller_type_row.get_selected()
+        if index < 0 or index >= len(self._controller_type_ids):
+            return
+        self.config.input_profiles.set_controller_type(
+            self._current_console(), self._controller_type_ids[index]
+        )
+
     def _sync_analog_dpad_row(self):
         mode = self.config.input_profiles.get_analog_dpad_mode(self._current_console())
         self._analog_dpad_guard = True
@@ -634,7 +865,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_console_changed(self, *_a):
         self._cancel_capture()
+        self._sync_controller_type_row()
         self._sync_analog_dpad_row()
+        self._sync_dpad_analog_row()
         self._sync_turbo_rows()
         self._refresh_bindings()
 
@@ -644,6 +877,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _input_action_label(self, action):
         return self.t(f"input.action.{action}")
+
+    def _input_action_subtitle(self, action):
+        """Extra explanation for rows whose title cannot carry it.
+
+        Only ``enable_hotkey`` needs one today: it reads as one more row among
+        the System Hotkeys while actually gating every one of them (#124).
+        """
+        if action == "enable_hotkey":
+            return self.t("input.action.enable_hotkey.subtitle")
+        return None
 
     def _binding_display(self, value):
         if not value:
@@ -729,6 +972,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         for action in visible_actions:
             row = Adw.ActionRow(title=self._input_action_label(action))
+            subtitle = self._input_action_subtitle(action)
+            if subtitle:
+                row.set_subtitle(subtitle)
             button = Gtk.Button(label=self._binding_display(self._bindings_buffer.get(action, "")))
             button.set_valign(Gtk.Align.CENTER)
             button.set_size_request(150, -1)
@@ -885,20 +1131,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     @staticmethod
     def _normalize_key(keyval):
+        """A captured key, as the token RetroArch will resolve.
+
+        GTK and RetroArch are different vocabularies -- ``=`` is ``equal`` to
+        one and ``equals`` to the other -- and a token RetroArch cannot resolve
+        produces a binding that reads as bound here and never fires (#144).
+        """
         key_name = Gdk.keyval_name(keyval)
         if not key_name:
             return ""
-        special = {
-            "Return": "enter", "KP_Enter": "enter", "Escape": "escape", "space": "space",
-            "Up": "up", "Down": "down", "Left": "left", "Right": "right",
-            "Shift_L": "left shift", "Shift_R": "right shift",
-            "Control_L": "left ctrl", "Control_R": "right ctrl",
-            "Alt_L": "left alt", "Alt_R": "right alt",
-            "Super_L": "left super", "Super_R": "right super",
-        }
-        if key_name in special:
-            return special[key_name]
-        return key_name.lower()
+        return retroarch_key_token(key_name.lower())
 
     def _commit_capture(self, value):
         """Store a captured binding and advance the sequence, if any.
@@ -948,7 +1190,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _save_input(self):
         console_id = self._current_console()
         device_id = self._current_device()
-        profile = self._loaded_profile or self.config.get_input_profile(console_id)
+        # Read the profile back rather than trusting the snapshot taken when
+        # the bindings were last refreshed. The analog-stick and turbo rows
+        # write straight to disk as they change, so saving a binding from a
+        # stale snapshot silently reverted whichever of them was touched
+        # first -- change the stick row, press Save, lose the choice (#126).
+        profile = self.config.get_input_profile(console_id)
         devices = profile.setdefault("devices", {})
         device = devices.setdefault(
             device_id,
@@ -967,6 +1214,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.save_input_profile(console_id, profile)
         self._loaded_profile = profile
         self._toast(self.t("toast.input_saved", console=console_id))
+        # A remap saved mid-game reaches the running game through the
+        # state-carrying relaunch (#129) -- but only when the profile being
+        # edited is the running console's; saving the SNES bindings must not
+        # restart a Game Boy session that never reads them.
+        self._apply_to_running_game_if_relevant(console_id)
+        # A game may have started (or ended) since the page was built.
+        self._sync_relaunch_banner()
 
     def _reset_defaults(self):
         console_id = self._current_console()
@@ -975,6 +1229,17 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._cancel_capture()
         self._refresh_bindings()
         self._toast(self.t("toast.input_reset", console=console_id))
+        # A reset writes the profile just like Save does (#129).
+        self._apply_to_running_game_if_relevant(console_id)
+
+    def _apply_to_running_game_if_relevant(self, console_id):
+        """Push a just-written profile into the running game, if it uses it."""
+        manager = self.win.runtime_manager
+        if not manager.is_running():
+            return
+        active = (manager.active_rom or {}).get("console")
+        if active and resolve_system_id(active) == resolve_system_id(console_id):
+            self.win.apply_input_changes_to_running_game()
 
     # ----- Video / Shaders page ------------------------------------------
     def _build_video_page(self):

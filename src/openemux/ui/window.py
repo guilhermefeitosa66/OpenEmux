@@ -53,7 +53,7 @@ from openemux.core.scraper import (
     save_local_art,
 )
 from openemux.core.scanner import RomScanner
-from openemux.core.shaders import ShaderCatalog
+from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
@@ -88,6 +88,24 @@ def collection_scope(slug):
     return f"{COLLECTION_ID_PREFIX}{slug}"
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 6
+
+#: Relaunch polls for the old process to exit rather than blocking the main
+#: loop on wait(). 200 ms x 15 gives RetroArch ~3 s to go away (issue #129).
+RELAUNCH_POLL_INTERVAL_MS = 200
+RELAUNCH_MAX_POLLS = 15
+
+#: Applying a remap to a running game waits for the scratch save state to hit
+#: the disk before relaunching (issue #129). 200 ms x 25 gives a slow core
+#: ~5 s to write it; a core without save-state support never does, and the
+#: timeout is what keeps that from becoming a relaunch that loses the game.
+SNAPSHOT_POLL_INTERVAL_MS = 200
+SNAPSHOT_MAX_POLLS = 25
+
+#: How long after a relaunch the scratch state is loaded back, mirroring
+#: launch_rom_at_state's boot allowance; the scratch file is deleted a few
+#: seconds after that, once RetroArch can no longer need it.
+RESUME_LOAD_DELAY_S = 4
+RESUME_DISCARD_DELAY_S = 10
 CONSOLE_ICON_FILES = {
     "A2600": "atari_2600__atari2600_library@2x.png",
     "A5200": "atari_5200__atari5200_library@2x.png",
@@ -131,7 +149,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.locale = self.config_manager.get_locale()
         self.set_title("OpenEmux")
         self._setup_window_icon()
-        self.set_default_size(1200, 800)
+        self.set_default_size(*self._default_window_size())
         # Minimum size required for the adaptive breakpoint to compute layout.
         self.set_size_request(360, 420)
         self.load_css()
@@ -154,6 +172,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._cover_sync_running = False
         self._scan_running = False
         self._import_running = False
+        # The volume/mute controls are seeded once per launch, not on every
+        # runtime poll -- see _sync_runtime_controls (issue #125).
+        self._runtime_controls_seeded = False
+        # Callbacks that re-apply translated text, registered where each
+        # widget is built -- see _translatable.
+        self._retranslate = []
+        # "Show only ROMs without artwork" (issue #127). Session-only: a way
+        # to work through the gaps, not a mode to leave the library in.
+        self._filter_missing_artwork = False
         self._task_seq = 0
         self._tasks = {}
         # console_id -> Gdk.Texture (or None when the console ships no asset)
@@ -186,6 +213,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
         breakpoint.add_setter(self.split_view, "collapsed", True)
+        # The content header is dense at full width. At this breakpoint the
+        # sidebar collapses onto the content anyway, so the hamburger is one
+        # navigation away regardless and the settings pair is the right thing
+        # to drop first (issue #131).
+        breakpoint.add_setter(self.settings_box, "visible", False)
         self.add_breakpoint(breakpoint)
 
         # Below this width the header cannot hold the segmented view switcher;
@@ -315,6 +347,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.content_stack.get_visible_child_name(),
             self.current_console,
         )
+        self._sync_console_header_controls()
+
+    def _console_scope_id(self):
+        """The console this page is showing, or None.
+
+        All, Favourites and a collection each span several consoles, so there
+        is no single input profile to jump to from them.
+        """
+        scope = self.current_console
+        return scope if scope in SYSTEM_IDS else None
+
+    def _sync_console_header_controls(self):
+        """Show the header controls that only make sense on a console page."""
+        button = getattr(self, "console_input_btn", None)
+        if button is None:
+            return  # called before the header exists
+        button.set_visible(self._console_scope_id() is not None)
 
     def t(self, key, **kwargs):
         return tr(self.locale, key, **kwargs)
@@ -349,7 +398,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.search_button = Gtk.ToggleButton()
         self.search_button.set_icon_name("system-search-symbolic")
-        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
+        self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
         header.pack_end(self._build_view_mode_button())
@@ -357,28 +406,59 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.stop_btn = Gtk.Button()
         self.stop_btn.set_icon_name("media-playback-stop-symbolic")
-        self.stop_btn.set_tooltip_text(self.t("header.stop"))
+        self._translatable(lambda: self.stop_btn.set_tooltip_text(self.t("header.stop")))
         self.stop_btn.set_sensitive(False)
         self.stop_btn.connect("clicked", self._on_stop_game_clicked)
         header.pack_end(self.stop_btn)
 
         header.pack_end(self._build_volume_button())
 
+        # The two settings buttons ride in one box so the narrow breakpoint
+        # can drop them together, without fighting the per-scope visibility
+        # of the controller one.
+        self.settings_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+        # Straight to this console's controller mapping. Only shown on a
+        # console's own page: on All, Favourites or a collection there is no
+        # single console to configure.
+        self.console_input_btn = Gtk.Button()
+        self.console_input_btn.set_icon_name("input-gaming-symbolic")
+        self._translatable(lambda: self.console_input_btn.set_tooltip_text(self.t("header.console_input")))
+        self.console_input_btn.set_visible(False)
+        self.console_input_btn.connect(
+            "clicked", lambda _b: self._open_preferences(page="input")
+        )
+        self.settings_box.append(self.console_input_btn)
+
+        # The primary menu lives only in the sidebar header, so Preferences
+        # cost a trip through the hamburger -- and once the split view
+        # collapses, a back-navigation first. The action already exists, so
+        # this is only a second way in (issue #131).
+        self.preferences_btn = Gtk.Button()
+        # preferences-system-symbolic, not emblem-system-symbolic: several
+        # common icon themes draw the latter as a hamburger, which would put
+        # two identical menu glyphs in adjacent header bars.
+        self.preferences_btn.set_icon_name("preferences-system-symbolic")
+        self._translatable(lambda: self.preferences_btn.set_tooltip_text(self.t("header.preferences")))
+        self.preferences_btn.set_action_name("win.preferences")
+        self.settings_box.append(self.preferences_btn)
+        header.pack_end(self.settings_box)
+
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
-        refresh_btn.set_tooltip_text(self.t("header.refresh"))
+        self._translatable(lambda: refresh_btn.set_tooltip_text(self.t("header.refresh")))
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header.pack_start(refresh_btn)
 
         self.import_btn = Gtk.Button()
         self.import_btn.set_icon_name("folder-download-symbolic")
-        self.import_btn.set_tooltip_text(self.t("header.import"))
+        self._translatable(lambda: self.import_btn.set_tooltip_text(self.t("header.import")))
         self.import_btn.connect("clicked", self._on_import_clicked)
         header.pack_start(self.import_btn)
 
         self.covers_btn = Gtk.Button()
         self.covers_btn.set_icon_name("emblem-photos-symbolic")
-        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
+        self._translatable(lambda: self.covers_btn.set_tooltip_text(self.t("header.sync_covers")))
         self.covers_btn.connect("clicked", self._on_sync_covers_clicked)
         header.pack_start(self.covers_btn)
 
@@ -387,7 +467,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Search revealed on demand (HIG: search is a mode, not a permanent field).
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_hexpand(True)
-        self.search_entry.set_placeholder_text(self.t("header.search"))
+        self._translatable(lambda: self.search_entry.set_placeholder_text(self.t("header.search")))
         self.search_entry.connect("search-changed", self._on_search_changed)
         self.search_bar = Gtk.SearchBar()
         self.search_bar.set_key_capture_widget(self)
@@ -465,7 +545,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for mode in VIEW_MODES:
             button = Gtk.ToggleButton()
             button.set_icon_name(self.VIEW_MODE_SEGMENT_ICONS.get(mode, "view-grid-symbolic"))
-            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
+            self._translatable(
+                lambda b=button, m=mode: b.set_tooltip_text(self.t(f"view_mode.{m}"))
+            )
             button.set_action_name("win.view-mode")
             button.set_action_target_value(GLib.Variant("s", mode))
             box.append(button)
@@ -484,9 +566,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.volume_btn = Gtk.MenuButton()
         self.volume_btn.set_icon_name("audio-volume-high-symbolic")
-        self.volume_btn.set_tooltip_text(self.t("header.volume"))
+        self._translatable(lambda: self.volume_btn.set_tooltip_text(self.t("header.volume")))
         self.volume_btn.set_sensitive(False)
 
+        # Set while the app itself writes into the scale, so an echo of the
+        # runtime's own level is not mistaken for a user drag (issue #125).
+        self._volume_scale_guard = False
         self._volume_scale = Gtk.Scale.new_with_range(
             Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
         )
@@ -499,7 +584,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self._mute_button = Gtk.ToggleButton()
         self._mute_button.set_icon_name("audio-volume-muted-symbolic")
-        self._mute_button.set_tooltip_text(self.t("volume.mute"))
+        self._translatable(lambda: self._mute_button.set_tooltip_text(self.t("volume.mute")))
         self._mute_button.add_css_class("flat")
         self._mute_toggle_guard = False
         self._mute_button.connect("toggled", self._on_mute_toggled)
@@ -518,7 +603,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return self.volume_btn
 
     def _on_volume_scale_changed(self, scale):
-        level = self.runtime_manager.set_master_volume_db(scale.get_value())
+        if self._volume_scale_guard:
+            # The runtime poll echoes the current level back into the scale.
+            # Treating that as a user drag re-entered the whole volume path
+            # and wrote config.yaml once a second, forever (issue #125).
+            level = scale.get_value()
+        else:
+            level = self.runtime_manager.set_master_volume_db(scale.get_value())
         icon = "audio-volume-high-symbolic"
         if level <= -30:
             icon = "audio-volume-low-symbolic"
@@ -550,7 +641,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         controls live in the same menu, as they do in GNOME Files.
         """
         self.view_mode_button = Gtk.MenuButton()
-        self.view_mode_button.set_tooltip_text(self.t("header.view_mode"))
+        self._translatable(lambda: self.view_mode_button.set_tooltip_text(self.t("header.view_mode")))
         self._populate_view_mode_menu()
         return self.view_mode_button
 
@@ -584,6 +675,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         sort_section.append_submenu(self.t("header.sort_by"), sort_menu)
         menu.append_section(None, sort_section)
 
+        # A filter, not a layout -- but this is the menu people already open
+        # to change what the library shows them (issue #127).
+        filter_section = Gio.Menu()
+        filter_section.append(
+            self.t("filter.missing_artwork"), "win.filter-missing-artwork"
+        )
+        menu.append_section(None, filter_section)
+
         zoom_section = Gio.Menu()
         zoom_item = Gio.MenuItem.new(None, None)
         # A custom item: a menu model cannot express a -/+ stepper, and
@@ -611,7 +710,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_out_button = Gtk.Button.new_from_icon_name("zoom-out-symbolic")
         self.zoom_out_button.add_css_class("circular")
         self.zoom_out_button.add_css_class("flat")
-        self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out"))
+        self._translatable(lambda: self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out")))
         self.zoom_out_button.connect("clicked", lambda _b: self._step_zoom(-1))
 
         self.zoom_label = Gtk.Label()
@@ -621,7 +720,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_in_button = Gtk.Button.new_from_icon_name("zoom-in-symbolic")
         self.zoom_in_button.add_css_class("circular")
         self.zoom_in_button.add_css_class("flat")
-        self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in"))
+        self._translatable(lambda: self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in")))
         self.zoom_in_button.connect("clicked", lambda _b: self._step_zoom(1))
 
         for child in (self.zoom_out_button, self.zoom_label, self.zoom_in_button):
@@ -1007,7 +1106,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
         button.set_menu_model(menu)
-        button.set_tooltip_text(self.t("menu.primary"))
+        self._translatable(lambda: button.set_tooltip_text(self.t("menu.primary")))
         button.set_primary(True)
         # Held for the gamepad's Select button, which opens this menu from
         # wherever the focus happens to be.
@@ -1073,6 +1172,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         follow_global_action.connect("activate", self._on_layout_follow_global_action)
         self.add_action(follow_global_action)
+
+        # "Show only ROMs without artwork" (issue #127): a view filter, so it
+        # sits with the other view controls rather than in Preferences, and
+        # it is deliberately not persisted -- it is a way to work through the
+        # gaps, not a mode to leave the library in.
+        missing_artwork_action = Gio.SimpleAction.new_stateful(
+            "filter-missing-artwork", None, GLib.Variant("b", False)
+        )
+        missing_artwork_action.connect("activate", self._on_missing_artwork_action)
+        self.add_action(missing_artwork_action)
 
     def _focused_rom_item(self):
         return RomGrid.item_for_widget(self.get_focus())
@@ -1141,8 +1250,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.search_button.set_active(not self.search_button.get_active())
 
-    def _open_preferences(self):
+    def _open_preferences(self, page=None):
         self._preferences_dialog = OpenEmuxPreferences(self)
+        if page:
+            self._preferences_dialog.show_page(page)
         self._preferences_dialog.present(self)
 
     def _open_welcome(self):
@@ -1219,21 +1330,68 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(timeout)
         self.toast_overlay.add_toast(toast)
 
+    #: Share of the monitor the window opens at, and the size used when the
+    #: monitor cannot be read (headless, or a display with no monitor yet).
+    DEFAULT_SCREEN_SHARE = 0.8
+    FALLBACK_WINDOW_SIZE = (1200, 800)
+
+    @classmethod
+    def _size_for_monitor(cls, geometry):
+        """80% of a monitor, never larger than the monitor itself."""
+        if geometry is None or geometry.width <= 0 or geometry.height <= 0:
+            return cls.FALLBACK_WINDOW_SIZE
+        return (
+            min(geometry.width, int(geometry.width * cls.DEFAULT_SCREEN_SHARE)),
+            min(geometry.height, int(geometry.height * cls.DEFAULT_SCREEN_SHARE)),
+        )
+
+    def _default_window_size(self):
+        """Open at a share of the screen rather than a fixed box.
+
+        The fixed 1200x800 was *taller* than a 720p monitor, so those users
+        got a window the compositor had to clamp -- opening cut off before
+        anyone touched it. GTK reports geometry in logical pixels, so a HiDPI
+        screen reports its scaled size and needs no special case.
+        """
+        display = Gdk.Display.get_default()
+        if display is None:
+            return self.FALLBACK_WINDOW_SIZE
+        monitors = display.get_monitors()
+        if monitors is None or monitors.get_n_items() == 0:
+            return self.FALLBACK_WINDOW_SIZE
+        monitor = monitors.get_item(0)
+        return self._size_for_monitor(monitor.get_geometry() if monitor else None)
+
+    def _sync_sidebar_footer(self):
+        """Offer playlists only once there are games to put in one.
+
+        On an empty library it was the sidebar's only button, which is most of
+        why people read it as the way to add games.
+        """
+        button = getattr(self, "new_collection_btn", None)
+        if button is not None:
+            button.set_visible(bool(self.visible_consoles))
+
+    def _translatable(self, apply):
+        """Apply translated text now, and again on every language change.
+
+        This used to be a list of set_tooltip_text calls inside
+        _apply_language_change, far from where each widget was built -- so
+        every widget added since had to be remembered there, and one of them
+        was not: the "New collection" button kept the old language until the
+        app restarted. Registering the callback next to the widget is what
+        stops the two drifting apart.
+        """
+        apply()
+        self._retranslate.append(apply)
+
     def _apply_language_change(self, locale):
         self.config_manager.set_locale(locale)
         self.locale = locale
         language_name = LANGUAGE_META.get(locale, LANGUAGE_META["en"])["native_name"]
         visible = self.content_stack.get_visible_child_name()
-        self.search_entry.set_placeholder_text(self.t("header.search"))
-        self.search_button.set_tooltip_text(self.t("header.search.toggle"))
-        self.stop_btn.set_tooltip_text(self.t("header.stop"))
-        self.volume_btn.set_tooltip_text(self.t("header.volume"))
-        self._mute_button.set_tooltip_text(self.t("volume.mute"))
-        self.import_btn.set_tooltip_text(self.t("header.import"))
-        self.covers_btn.set_tooltip_text(self.t("header.sync_covers"))
-        for mode, button in self._view_segment_buttons.items():
-            button.set_tooltip_text(self.t(f"view_mode.{mode}"))
-        self.sidebar_title.set_title(self.t("sidebar.header"))
+        for apply in self._retranslate:
+            apply()
         self._render_tip()
         self.refresh_library(preferred_view=visible)
         self._toast(self.t("toast.language.updated", language=language_name))
@@ -1429,6 +1587,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         header = Adw.HeaderBar()
         self.sidebar_title = Adw.WindowTitle.new(self.t("sidebar.header"), "")
+        self._translatable(lambda: self.sidebar_title.set_title(self.t("sidebar.header")))
         header.set_title_widget(self.sidebar_title)
         header.pack_end(self._build_primary_menu())
         toolbar.add_top_bar(header)
@@ -1445,20 +1604,45 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         scroll.set_child(self.console_list)
         toolbar.set_content(scroll)
 
-        # A visible entry point for collections, so the feature is discoverable
-        # without anyone guessing that right-click does something.
-        new_collection = Gtk.Button()
-        new_collection.set_child(
-            Adw.ButtonContent(icon_name="list-add-symbolic", label=self.t("collections.new"))
+        # Two entry points side by side, so neither has to be guessed at.
+        #
+        # "New playlist" alone was being read as "import ROMs here" -- it was
+        # the only button in the sidebar, and the header's import icon was not
+        # being found. Importing now has a labelled button of its own, and the
+        # playlist button is hidden until there is something to put in one:
+        # offering to group games before any game exists is what made it look
+        # like the way to add them.
+        footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        footer_box.set_homogeneous(True)
+        footer_box.set_margin_top(6)
+        footer_box.set_margin_bottom(6)
+        footer_box.set_margin_start(6)
+        footer_box.set_margin_end(6)
+
+        sidebar_import = Gtk.Button()
+        sidebar_import_content = Adw.ButtonContent(icon_name="folder-download-symbolic")
+        self._translatable(
+            lambda: sidebar_import_content.set_label(self.t("sidebar.import"))
         )
-        new_collection.add_css_class("flat")
-        new_collection.set_margin_top(6)
-        new_collection.set_margin_bottom(6)
-        new_collection.set_margin_start(6)
-        new_collection.set_margin_end(6)
-        new_collection.connect("clicked", lambda _b: self._prompt_new_collection())
+        sidebar_import.set_child(sidebar_import_content)
+        sidebar_import.add_css_class("flat")
+        sidebar_import.connect("clicked", lambda _b: self._on_import_clicked(None))
+        footer_box.append(sidebar_import)
+
+        self.new_collection_btn = Gtk.Button()
+        new_collection_content = Adw.ButtonContent(icon_name="list-add-symbolic")
+        self._translatable(
+            lambda: new_collection_content.set_label(self.t("collections.new"))
+        )
+        self.new_collection_btn.set_child(new_collection_content)
+        self.new_collection_btn.add_css_class("flat")
+        self.new_collection_btn.connect(
+            "clicked", lambda _b: self._prompt_new_collection()
+        )
+        footer_box.append(self.new_collection_btn)
+
         footer = Adw.Bin()
-        footer.set_child(new_collection)
+        footer.set_child(footer_box)
         toolbar.add_bottom_bar(footer)
 
         page = Adw.NavigationPage.new(toolbar, self.t("sidebar.header"))
@@ -1658,7 +1842,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._sidebar_menu_console = console_id
         self._ensure_sidebar_action_group()
 
-        popover = build_context_popover([
+        entries = [
             # Not the header button's wording: there the action is "reload what
             # is on screen", here it is "rescan this console's folder".
             (self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"),
@@ -1666,14 +1850,103 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             (self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
             SEPARATOR,
             self._layout_submenu_for_console(console_id),
-            SEPARATOR,
-            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic"),
-        ])
+        ]
+        # Appended one at a time: SEPARATOR *is* None, so a submenu that has
+        # nothing to offer would otherwise draw itself as a divider.
+        for submenu in (
+            self._core_submenu_for_console(console_id),
+            self._shader_submenu_for_console(console_id),
+        ):
+            if submenu is not None:
+                entries.append(submenu)
+        entries.append(SEPARATOR)
+        entries.append(
+            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
+        )
+        popover = build_context_popover(entries)
         popover.set_parent(row)
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self._sidebar_menu_row = row
         popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
         popover.popup()
+
+    def _core_submenu_for_console(self, console):
+        """The console's default core, from the sidebar.
+
+        The same setting Preferences > Cores edits, one right-click away from
+        the console it applies to. Returns None when nothing is installed for
+        this system: an empty submenu is worse than no submenu.
+        """
+        cores = self.core_catalog.cores_for_console(console)
+        if not cores:
+            return None
+
+        override = self.config_manager.get_console_core_override(console)
+        automatic = cores[0].display_name
+        entries = [
+            (
+                self.t("context.core.automatic", core=automatic),
+                (lambda c=console: self._set_console_core(c, None)),
+                "emblem-ok-symbolic" if not override else None,
+            ),
+            SEPARATOR,
+        ]
+        for core in cores:
+            entries.append(
+                (
+                    core.display_name,
+                    (lambda c=console, f=core.filename: self._set_console_core(c, f)),
+                    "emblem-ok-symbolic" if override == core.filename else None,
+                )
+            )
+        return Submenu(self.t("context.console.core"), entries, "application-x-executable-symbolic")
+
+    def _set_console_core(self, console, core_filename):
+        self.config_manager.set_console_core_override(console, core_filename)
+        if core_filename:
+            # The same warning Preferences gives: a core whose BIOS is missing
+            # will fail at launch, and that is worth knowing when picking it.
+            self._warn_missing_bios_for_core(console, core_filename)
+        label = (
+            self.core_catalog.display_name_for(core_filename)
+            if core_filename
+            else self.t("context.core.automatic_short")
+        )
+        logger.info("sidebar context action: core console=%s core=%s", console, core_filename)
+        self._toast(self.t("toast.console_core_set", console=console, core=label))
+
+    def _shader_submenu_for_console(self, console):
+        """The console's default shader, from the sidebar."""
+        show_all = bool(
+            self.config_manager.get_shader_settings().get("show_all_shaders", False)
+        )
+        options = self.shader_catalog.get_options(show_all=show_all)
+        if not options:
+            return None
+
+        current = normalize_shader_id(self.config_manager.get_shader_for_console(console))
+        entries = []
+        for shader_id, label in options:
+            entries.append(
+                (
+                    label,
+                    (lambda c=console, s=shader_id: self._set_console_shader(c, s)),
+                    "emblem-ok-symbolic" if shader_id == current else None,
+                )
+            )
+        return Submenu(self.t("context.console.shader"), entries, "applications-graphics-symbolic")
+
+    def _set_console_shader(self, console, shader_id):
+        shader_id = normalize_shader_id(shader_id)
+        self.config_manager.set_shader_for_console(console, shader_id)
+        logger.info("sidebar context action: shader console=%s shader=%s", console, shader_id)
+        self._toast(
+            self.t(
+                "toast.console_shader_set",
+                console=console,
+                shader=self.shader_catalog.label_for_shader(shader_id),
+            )
+        )
 
     def _layout_submenu_for_console(self, console):
         """The Layout ▸ shortcut on a sidebar console, mirroring the header menu.
@@ -2029,6 +2302,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._initial_roms = {}
 
         self.visible_consoles = self._discover_visible_consoles()
+        self._sync_sidebar_footer()
         self._rebuild_console_sidebar(self.visible_consoles)
 
         if self.visible_consoles:
@@ -2057,17 +2331,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.content_stack.add_titled(page, console, console)
 
         if not self.visible_consoles:
+            # Drag-and-drop is the fastest way in and used to go unmentioned
+            # here: the page only offered "choose a folder", so the one thing
+            # someone with a folder of ROMs open would try was undocumented.
             empty = Adw.StatusPage(
-                icon_name="folder-open-symbolic",
+                icon_name="folder-download-symbolic",
                 title=self.t("library.empty.title"),
                 description=self.t("library.empty.body"),
             )
-            choose = Gtk.Button(label=self.t("library.empty.action"))
-            choose.add_css_class("suggested-action")
+            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            actions.set_halign(Gtk.Align.CENTER)
+            import_btn = Gtk.Button(label=self.t("library.empty.action"))
+            import_btn.add_css_class("suggested-action")
+            import_btn.add_css_class("pill")
+            import_btn.connect("clicked", lambda _b: self._on_import_clicked(None))
+            actions.append(import_btn)
+            choose = Gtk.Button(label=self.t("library.empty.choose"))
             choose.add_css_class("pill")
-            choose.set_halign(Gtk.Align.CENTER)
             choose.connect("clicked", lambda _b: self._choose_roms_path())
-            empty.set_child(choose)
+            actions.append(choose)
+            empty.set_child(actions)
             self.content_stack.add_titled(empty, "library-empty", "Library")
 
         target_view = preferred_view
@@ -3261,20 +3544,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
 
-    def _on_search_changed(self, entry):
-        query = entry.get_text().lower()
+    def _on_search_changed(self, _entry):
+        self.apply_library_filters()
+
+    def apply_library_filters(self):
+        """Decide card visibility from the search query and the artwork filter.
+
+        One place owns it. Filtering used to be an ad-hoc loop inside the
+        search handler; adding a second independent loop for the artwork
+        filter would let the two fight over the same visibility flag (#127).
+
+        Public because the grid calls back into it when a card's artwork
+        state settles, which happens after the filter first ran.
+        """
         visible = self.content_stack.get_visible_child_name()
         if not visible or visible not in self._grids:
             return
         grid = self._grids[visible]
+        query = self.search_entry.get_text().lower()
+        only_missing = self._filter_missing_artwork
+
         child = grid.get_first_child()
         while child:
-            flow_child = child
-            inner = flow_child.get_child()
-            if inner and hasattr(inner, "rom"):
-                matches = query in inner.rom["name"].lower()
-                flow_child.set_visible(matches or not query)
+            inner = child.get_child()
+            if inner is not None and hasattr(inner, "rom"):
+                shown = (not query) or query in inner.rom["name"].lower()
+                if only_missing and getattr(inner, "has_artwork", None) is not False:
+                    # `None` means the fetch has not resolved yet: hide it
+                    # rather than flash it in and out as state arrives.
+                    shown = False
+                child.set_visible(shown)
             child = child.get_next_sibling()
+
+        # Bypassing this is how selection desyncs from what is on screen.
+        grid.sync_visible_selection()
+
+    def _on_missing_artwork_action(self, action, _param):
+        enabled = not action.get_state().get_boolean()
+        action.set_state(GLib.Variant("b", enabled))
+        self._filter_missing_artwork = enabled
+        self.apply_library_filters()
 
     def _on_stop_game_clicked(self, _button):
         success, error_msg = self.runtime_manager.stop_active()
@@ -3283,6 +3592,94 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=error_msg)
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
+
+    def _relaunch_active_rom(self, resume_marker=None):
+        """Stop the running game and start the same ROM again.
+
+        Not the same thing as Restart (#130): only a fresh process re-reads
+        the runtime override, so this is the only way an input remap takes
+        effect (#129). The wait for the old process is polled rather than
+        blocking -- wait() on the main loop would freeze the UI.
+
+        With ``resume_marker`` (a confirmed snapshot from
+        ``RuntimeManager.snapshot_active``), the scratch state is loaded back
+        once the new process has had time to boot, so the relaunch carries
+        the gameplay across instead of starting the game over.
+        """
+        rom, error_msg = self.runtime_manager.relaunch_active()
+        self._sync_runtime_controls()
+        if rom is None:
+            if error_msg:
+                self._toast(error_msg, timeout=4)
+            return False
+
+        self._toast(self.t("toast.relaunching"))
+        remaining = [RELAUNCH_MAX_POLLS]
+
+        def _discard_scratch():
+            self.runtime_manager.discard_snapshot(resume_marker)
+            return False
+
+        def _resume_when_up():
+            if self.runtime_manager.is_running():
+                self.runtime_manager.load_state_slot(resume_marker["slot"])
+                GLib.timeout_add_seconds(RESUME_DISCARD_DELAY_S, _discard_scratch)
+            return False
+
+        def _launch_when_free():
+            if self.runtime_manager.is_running():
+                remaining[0] -= 1
+                if remaining[0] > 0:
+                    return True
+                self._toast(self.t("toast.relaunch_failed"), timeout=5)
+                return False
+            success, launch_error = self.runtime_manager.relaunch_rom(rom)
+            self._sync_runtime_controls()
+            if not success and launch_error:
+                self._toast(launch_error, timeout=5)
+            if success and resume_marker is not None:
+                GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
+            return False
+
+        GLib.timeout_add(RELAUNCH_POLL_INTERVAL_MS, _launch_when_free)
+        return True
+
+    def apply_input_changes_to_running_game(self):
+        """Make a saved remap reach the running game, keeping its progress.
+
+        The whole of issue #129: the process only reads bindings at spawn and
+        the UDP interface has no config or remap verb, so the change is
+        carried across a relaunch -- snapshot to a scratch slot, wait for the
+        file to actually land, relaunch with the regenerated override, load
+        the snapshot back. If the core cannot save states the timeout fires
+        and nothing is relaunched: losing the game to apply a binding is
+        worse than the binding waiting for the next launch.
+        """
+        if not self.runtime_manager.is_running():
+            return False
+        marker = self.runtime_manager.snapshot_active()
+        if marker is None:
+            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
+            return False
+        self._toast(self.t("toast.input_apply.saving"))
+        remaining = [SNAPSHOT_MAX_POLLS]
+
+        def _relaunch_when_saved():
+            if self.runtime_manager.snapshot_ready(marker):
+                self._relaunch_active_rom(resume_marker=marker)
+                return False
+            if not self.runtime_manager.is_running():
+                # The game quit on its own mid-apply; the change simply
+                # applies to the next launch, nothing to report.
+                return False
+            remaining[0] -= 1
+            if remaining[0] > 0:
+                return True
+            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
+            return False
+
+        GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
+        return True
 
     def _poll_runtime_state(self):
         result = self.runtime_manager.poll_active()
@@ -3299,12 +3696,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is_running = self.runtime_manager.is_running()
         self.stop_btn.set_sensitive(is_running)
         self.volume_btn.set_sensitive(is_running)
-        if is_running:
-            # A fresh launch starts unmuted at the persisted level.
+        if is_running and not self._runtime_controls_seeded:
+            # A fresh launch starts unmuted at the persisted level. Seeded
+            # once per launch rather than on every poll: this runs once a
+            # second, and re-pushing the level into the scale re-emitted
+            # value-changed each time. It would also fight the user mid-drag
+            # now that the tracked level walks to its target (issue #125).
             self._mute_toggle_guard = True
             self._mute_button.set_active(False)
             self._mute_toggle_guard = False
+            self._volume_scale_guard = True
             self._volume_scale.set_value(self.runtime_manager.volume_db)
+            self._volume_scale_guard = False
+        self._runtime_controls_seeded = is_running
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()

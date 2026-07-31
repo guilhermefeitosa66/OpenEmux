@@ -35,6 +35,23 @@ BUNDLE="dist/OpenEmux-${VERSION}.flatpak"
 flatpak build-bundle flatpak-repo "$BUNDLE" "$APP_ID"
 echo "==> built: $BUNDLE"
 
+echo "==> verify the vendored symbolic icons made it into the build"
+# pip installs them as package data; a pattern regression in pyproject would
+# drop them from the Flatpak only, so count them against the source tree.
+ICONS_DIR="$(find .flatpak-build-dir/files -type d -path '*openemux/ui/assets/icons/symbolic' | head -1)"
+if [ -z "$ICONS_DIR" ]; then
+  echo "FAIL: openemux/ui/assets/icons/symbolic missing from the flatpak build" >&2
+  exit 1
+fi
+SRC_ICONS="$(find src/openemux/ui/assets/icons/symbolic -name '*.svg' | wc -l)"
+PKG_ICONS="$(find "$ICONS_DIR" -name '*.svg' | wc -l)"
+if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
+  echo "FAIL: expected $SRC_ICONS symbolic icons in the flatpak, found $PKG_ICONS" >&2
+  exit 1
+fi
+test -f "$ICONS_DIR/LICENSE"
+echo "all $PKG_ICONS symbolic icons present"
+
 echo "==> verify the bundle installs"
 flatpak install -y --user --noninteractive "./$BUNDLE"
 flatpak info --user "$APP_ID"

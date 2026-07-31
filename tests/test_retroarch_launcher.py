@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
+from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.retroarch_launcher import RetroArchLauncher
 
 
@@ -19,6 +20,7 @@ class _DummyConfig:
         # to the automatic candidate list.
         self.core_hints = core_hints
         self.rom_core = None
+        self.input_tuning = {}
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -56,6 +58,11 @@ class _DummyConfig:
 
     def get_network_cmd_port(self):
         return 55355
+
+    def get_input_tuning(self):
+        # Whatever the test does not care about stays at RetroArch's own
+        # defaults, which write nothing (issues #154, #155).
+        return dict(self.input_tuning)
 
     def get_master_volume_db(self):
         return -6.0
@@ -202,6 +209,87 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines(profile)
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
         self.assertIn('input_player2_analog_dpad_mode = "1"', lines)
+
+    def test_override_declares_the_analog_stick_axes(self):
+        # Issue #126: analog_dpad_mode = "1" folds the left stick onto the
+        # D-pad only if RetroArch knows which axes the stick is. Nothing else
+        # in a profile says so, and without these keys mode 1 silently does
+        # nothing -- the stick simply never steered.
+        profile = {
+            "active_device": "gamepad_p1",
+            "devices": {"gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}}},
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
+        for suffix, token in ANALOG_STICK_BINDINGS.items():
+            self.assertIn(f'input_player1_{suffix}_axis = "{token}"', lines)
+
+    def test_analog_native_consoles_still_declare_the_axes(self):
+        # N64/PS keep analog_dpad_mode off (folding would steal the stick from
+        # the game) but the stick has to work natively there, which it cannot
+        # do unless the axes are declared.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "core.so")
+            cfg.input_profile = {
+                "active_device": "gamepad_p1",
+                "devices": {"gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}}},
+            }
+            launcher = RetroArchLauncher(base, cfg)
+            lines = Path(launcher._write_runtime_override("N64")).read_text(
+                encoding="utf-8"
+            ).splitlines()
+        self.assertIn('input_player1_analog_dpad_mode = "0"', lines)
+        self.assertIn('input_player1_l_x_plus_axis = "+0"', lines)
+
+    def test_port_one_carries_both_the_keyboard_and_the_pad(self):
+        # Issue #150: RetroArch keeps keyboard and joypad binds under separate
+        # keys, so both can be live at once. Emitting only the "active" device
+        # meant a plugged-in pad got none of OpenEmux's configuration -- no
+        # hotkeys, no analog axes -- while still appearing to work through
+        # RetroArch's own autoconfig.
+        profile = {
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {"type": "keyboard", "bindings": {"a": "z"}},
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player1_a = "z"', lines)
+        self.assertIn('input_player1_a_btn = "0"', lines)
+        self.assertIn('input_player1_l_x_plus_axis = "+0"', lines)
+
+    def test_the_pad_is_configured_even_when_the_profile_says_keyboard(self):
+        profile = {
+            "active_device": "keyboard",
+            "devices": {
+                "keyboard": {"type": "keyboard", "bindings": {"a": "z"}},
+                "gamepad_p1": {"type": "gamepad", "bindings": {}},
+            },
+        }
+        lines = self._override_lines(profile)
+        # The pad hotkeys from issue #124 reach RetroArch too.
+        self.assertIn('input_enable_hotkey_btn = "6"', lines)
+        self.assertIn('input_save_state_btn = "2"', lines)
+
+    def test_extra_ports_declare_their_own_axes(self):
+        profile = {
+            "active_device": "gamepad_p1",
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {"a": "0"}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {"a": "0"}, "enabled": True},
+            },
+        }
+        lines = self._override_lines(profile)
+        self.assertIn('input_player2_l_y_minus_axis = "-1"', lines)
+
+    def test_override_gives_the_hotkey_modifier_a_block_delay(self):
+        # Issue #124: Select is both a gameplay button and the hotkey
+        # modifier, so RetroArch has to wait a few frames before deciding
+        # which one a press was -- otherwise a tap never reaches the game.
+        lines = self._override_lines(None)
+        self.assertIn('input_hotkey_block_delay = "5"', lines)
 
     def test_override_analog_dpad_mode_defaults_by_console(self):
         # No mode in the profile: GBA (digital-only) folds the left stick in.

@@ -15,8 +15,19 @@ class I18nTests(unittest.TestCase):
         self.assertEqual(tr("unknown", "settings.title"), "Settings")
 
     def test_missing_key_in_locale_uses_english(self):
-        # de locale is partial by design in this phase.
-        self.assertEqual(tr("de", "context.cover.remove"), "Remove cover image")
+        # This used to lean on German being incomplete. Every locale is
+        # complete now (and a test enforces it), so the fallback is exercised
+        # with a locale that genuinely lacks the key instead.
+        from openemux.i18n import LOCALE_TRANSLATIONS
+
+        original = LOCALE_TRANSLATIONS["de"].pop("context.cover.remove")
+        try:
+            self.assertEqual(tr("de", "context.cover.remove"), "Remove cover image")
+        finally:
+            LOCALE_TRANSLATIONS["de"]["context.cover.remove"] = original
+
+    def test_a_translated_key_is_not_taken_from_english(self):
+        self.assertEqual(tr("de", "context.cover.remove"), "Coverbild entfernen")
 
     def test_missing_key_in_english_returns_key(self):
         self.assertEqual(tr("en", "i18n.missing.key"), "i18n.missing.key")

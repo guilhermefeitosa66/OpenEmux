@@ -4,7 +4,7 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
 import logging
 
-from openemux.core import cartridge_render
+from openemux.core import cartridge_render, cover_cache
 from openemux.core.selection import SelectionModel
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
@@ -21,7 +21,7 @@ from openemux.core.library_view import (
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
-from openemux.ui.context_menu import SEPARATOR, build_context_popover
+from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +195,7 @@ class RomItem(Gtk.Box):
         compact=False,
         zoom=DEFAULT_ZOOM,
         context_services=None,
+        on_artwork_state=None,
     ):
         super().__init__(
             orientation=(
@@ -212,6 +213,9 @@ class RomItem(Gtk.Box):
         self.on_delete_rom = on_delete_rom
         # Builds the data-driven submenus (shader, and later core/collection).
         self.context_services = context_services
+        # Artwork state settles asynchronously, so the "without artwork"
+        # filter has to be re-applied when it does (issue #127).
+        self.on_artwork_state = on_artwork_state
         # Selection lives in the grid (it spans cards); the card only reports
         # the ctrl-click that toggles it.
         self.on_toggle_selection = on_toggle_selection
@@ -351,6 +355,23 @@ class RomItem(Gtk.Box):
         if not compact:
             self.cover_overlay.add_overlay(self.favorite_button)
 
+        # "This ROM has no artwork" must be visible in *every* view mode. In
+        # the default cartridge shelf a cover-less ROM renders as a blank
+        # cartridge rather than the generic placeholder, so nothing
+        # distinguished it from one whose art simply had not loaded (#127).
+        # None until the fetch resolves; the badge only appears on False.
+        self.has_artwork = None
+        self.artwork_badge = Gtk.Image.new_from_icon_name("image-missing-symbolic")
+        self.artwork_badge.add_css_class("artwork-missing-badge")
+        self.artwork_badge.set_tooltip_text(self.t("rom.artwork.missing"))
+        self.artwork_badge.set_visible(False)
+        self.artwork_badge.set_halign(Gtk.Align.END)
+        self.artwork_badge.set_valign(Gtk.Align.END)
+        if not compact:
+            self.artwork_badge.set_margin_bottom(6)
+            self.artwork_badge.set_margin_end(6)
+            self.cover_overlay.add_overlay(self.artwork_badge)
+
         # Right-click is not obvious to everyone, so the same menu is one click
         # away from a button that appears on hover.
         self.menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
@@ -436,10 +457,27 @@ class RomItem(Gtk.Box):
             badges.append(self.menu_button)
             self.append(badges)
 
-        # Trigger async cover art fetch
-        fetch_cover(rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
+        # Deferred to the map signal rather than fired here: a card that is
+        # filtered out of the view is never mapped, so it queues no work until
+        # it is actually shown.
+        #
+        # Measured, because it is easy to assume otherwise: Gtk.FlowBox does
+        # *not* virtualize scrolling -- children below the fold are still
+        # mapped -- so this is not a substitute for virtualization, which is
+        # out of scope for this issue. What keeps a big library responsive is
+        # the bounded pool and the decode moving off the main thread (#128).
+        self._cover_fetch_started = False
+        self.connect("map", self._on_first_map)
 
         self._context_popover = None
+
+    def _on_first_map(self, *_args):
+        if self._cover_fetch_started:
+            return
+        self._cover_fetch_started = True
+        fetch_cover(
+            self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds
+        )
 
     @classmethod
     def _truncate_name(cls, name, limit=None):
@@ -471,6 +509,23 @@ class RomItem(Gtk.Box):
         placeholder_center.set_halign(Gtk.Align.CENTER)
         placeholder_center.set_valign(Gtk.Align.CENTER)
         placeholder_center.append(icon)
+
+        # The empty cover is exactly where someone notices art is missing, so
+        # the fix starts there rather than through the context menu. Reuses
+        # the artwork manager that already ships a name search and a CRC32
+        # search -- no new dialog, and no editing filenames by hand (#127).
+        if not self.compact and self.context_services is not None:
+            search_btn = Gtk.Button(label=self.t("rom.artwork.search"))
+            search_btn.add_css_class("flat")
+            search_btn.add_css_class("artwork-search-button")
+            # Pointer-only, like the other in-card buttons: a focus stop here
+            # would make an arrow key step through the card's insides.
+            search_btn.set_focusable(False)
+            search_btn.set_can_focus(False)
+            search_btn.set_halign(Gtk.Align.CENTER)
+            search_btn.connect("clicked", self._on_search_artwork_clicked)
+            placeholder_center.append(search_btn)
+
         placeholder.append(placeholder_center)
 
         # Replace cover image with placeholder in the configured cover area.
@@ -479,12 +534,24 @@ class RomItem(Gtk.Box):
         self._placeholder_widget = placeholder
 
     def _on_cover_fetched(self, rom, cover_path):
-        """Called from background thread when cover art is ready."""
+        """Called on a worker thread once the cover path is resolved.
+
+        The decode happens *here*, not in the idle callback. It used to be
+        handed to the main thread, which serialised every JPEG/PNG decode and
+        rescale in the library onto the one thread that cannot afford it
+        (issue #128). Only assigning the result to a widget has to be on the
+        main loop, and that is all the idle callback does now.
+        """
+        # Recorded before the composite branch, so it is right in cartridge
+        # mode too -- where a cover-less ROM still takes the normal image
+        # path and would otherwise look identical to one with art (#127).
+        self.has_artwork = bool(cover_path)
+        GLib.idle_add(self._sync_artwork_state)
         if self.cartridge_frame_path:
-            # Still on the worker thread: compose the cover into the cartridge
-            # (cached on disk, so this only costs anything the first time). A
-            # ROM with no cover renders as a blank cartridge instead of the
-            # generic icon, keeping the shelf consistent.
+            # Compose the cover into the cartridge (cached on disk, so this
+            # only costs anything the first time). A ROM with no cover renders
+            # as a blank cartridge instead of the generic icon, keeping the
+            # shelf consistent.
             composite = cartridge_render.render_cartridge(
                 cover_path,
                 self.cartridge_frame_path,
@@ -494,51 +561,63 @@ class RomItem(Gtk.Box):
                 scale=CARTRIDGE_RENDER_SCALE,
             )
             if composite:
-                GLib.idle_add(self._load_cover_image, str(composite))
-                return
+                # Full resolution: the composite is already the card's shape,
+                # and the full-size art is what keeps it sharp on HiDPI.
+                pixbuf = cover_cache.load_cover(str(composite))
+                if pixbuf is not None:
+                    GLib.idle_add(self._apply_cover_pixbuf, pixbuf, True)
+                    return
         if cover_path:
-            # Schedule UI update on the main thread
-            GLib.idle_add(self._load_cover_image, cover_path)
-            return
-        # Cover was removed or does not exist: restore placeholder immediately.
+            width, height = self._cover_target_size()
+            pixbuf = cover_cache.load_cover(cover_path, width, height)
+            if pixbuf is not None:
+                GLib.idle_add(self._apply_cover_pixbuf, pixbuf, False)
+                return
+        # No cover, or one that would not decode -- cover_cache logs the
+        # latter, so a corrupt file is no longer indistinguishable from a
+        # missing one.
         GLib.idle_add(self._restore_placeholder)
 
     def _restore_placeholder(self):
         self._set_placeholder()
         return False
 
-    def _load_cover_image(self, cover_path):
-        """Load cover image into the widget (must run on main thread)."""
+    def _on_search_artwork_clicked(self, _button):
+        if self.context_services is None:
+            return
+        logger.info("rom artwork: search from empty cover rom=%s", self.rom.get("name"))
+        self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
+
+    def _sync_artwork_state(self):
+        """Reflect the resolved artwork state (main thread only)."""
+        self.artwork_badge.set_visible(self.has_artwork is False)
+        if self.on_artwork_state:
+            self.on_artwork_state(self)
+        return False
+
+    def _apply_cover_pixbuf(self, pixbuf, full_resolution):
+        """Hand an already-decoded cover to the widget (main thread only)."""
         try:
-            if self.cartridge_frame_path:
-                # The composite is already the card's shape, and handing GTK
-                # the full-resolution texture keeps it sharp on HiDPI.
-                self.cover_image.set_paintable(Gdk.Texture.new_from_filename(cover_path))
-                self.cover_image.set_visible(True)
-                if hasattr(self, "_placeholder_widget"):
-                    self._set_cover_widget(self.cover_image)
-                    del self._placeholder_widget
-                return False
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                cover_path,
-                self._cover_target_size()[0],
-                self._cover_target_size()[1],
-                True,
-            )
-            if self.mixed_consoles and not self.compact:
-                # Shrink the widget to the scaled art so the rounded corners and
-                # shadow hug the cover, not the empty area around it. Not in a
-                # row: there the thumbnail box is a column shared with every
-                # other row, and resizing it per cover would stagger the titles.
-                self.cover_image.set_size_request(pixbuf.get_width(), pixbuf.get_height())
-            self.cover_image.set_pixbuf(pixbuf)
+            if full_resolution:
+                self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+            else:
+                if self.mixed_consoles and not self.compact:
+                    # Shrink the widget to the scaled art so the rounded
+                    # corners and shadow hug the cover, not the empty area
+                    # around it. Not in a row: there the thumbnail box is a
+                    # column shared with every other row, and resizing it per
+                    # cover would stagger the titles.
+                    self.cover_image.set_size_request(
+                        pixbuf.get_width(), pixbuf.get_height()
+                    )
+                self.cover_image.set_pixbuf(pixbuf)
             self.cover_image.set_visible(True)
             # Remove placeholder if present
             if hasattr(self, "_placeholder_widget"):
                 self._set_cover_widget(self.cover_image)
                 del self._placeholder_widget
         except Exception:
-            pass  # Keep placeholder on error
+            logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
 
     def _cover_target_size(self):
@@ -739,44 +818,60 @@ class RomItem(Gtk.Box):
                 "starred-symbolic" if is_favorite else "non-starred-symbolic",
             ),
         ]
-        # One artwork pair at a time, following what the card is actually
+        # One artwork kind at a time, following what the card is actually
         # showing: the label inside a cartridge, the box art everywhere else
-        # (issue #77). The online search entries sit next to the manual pair.
+        # (issue #77).
+        #
+        # Everything that acts on that artwork lives in one submenu. Choose,
+        # remove and manage were three sibling rows at the top level, which is
+        # most of the menu's length spent on something that is not the common
+        # case. Sync stays outside: it is the one-click "just fetch it".
         showing_label = bool(self.cartridge_frame_path) and self.supports_label
         if showing_label:
-            entries.append(
-                (self.t("context.label.choose"), "rom.choose-label", "insert-image-symbolic")
-            )
-            if self.has_local_cover(self.rom, LABEL_ART):
-                entries.append(
-                    (self.t("context.label.remove"), "rom.remove-label", "user-trash-symbolic")
-                )
+            kind, art_dir = "label", LABEL_ART
         else:
-            entries.append(
-                (self.t("context.cover.choose"), "rom.choose-cover", "image-x-generic-symbolic")
-            )
-            if self.has_local_cover(self.rom, COVER_ART):
-                entries.append(
-                    (self.t("context.cover.remove"), "rom.remove-cover", "user-trash-symbolic")
-                )
-        # Two artwork entries, both following the view mode like the manual pair
-        # above: sync fetches this one ROM's art in the background right away,
-        # manage opens the artwork window to search, pick or import by hand.
+            kind, art_dir = "cover", COVER_ART
+
         if self.context_services is not None:
-            if showing_label:
-                entries.append(
-                    (self.t("context.label.sync"), "rom.sync-label", "folder-download-symbolic")
+            entries.append(
+                (
+                    self.t(f"context.{kind}.sync"),
+                    f"rom.sync-{kind}",
+                    "folder-download-symbolic",
                 )
-                entries.append(
-                    (self.t("context.label.manage"), "rom.manage-label", "document-properties-symbolic")
+            )
+
+        artwork_entries = []
+        if self.context_services is not None:
+            artwork_entries.append(
+                (
+                    self.t(f"context.{kind}.manage"),
+                    f"rom.manage-{kind}",
+                    "document-properties-symbolic",
                 )
-            else:
-                entries.append(
-                    (self.t("context.cover.sync"), "rom.sync-cover", "folder-download-symbolic")
+            )
+        artwork_entries.append(
+            (
+                self.t(f"context.{kind}.choose"),
+                f"rom.choose-{kind}",
+                "insert-image-symbolic" if showing_label else "image-x-generic-symbolic",
+            )
+        )
+        if self.has_local_cover(self.rom, art_dir):
+            artwork_entries.append(
+                (
+                    self.t(f"context.{kind}.remove"),
+                    f"rom.remove-{kind}",
+                    "user-trash-symbolic",
                 )
-                entries.append(
-                    (self.t("context.cover.manage"), "rom.manage-cover", "document-properties-symbolic")
-                )
+            )
+        entries.append(
+            Submenu(
+                self.t(f"context.{kind}.artwork"),
+                artwork_entries,
+                "image-x-generic-symbolic",
+            )
+        )
         # Data-driven submenus (shader today; core/collection later). Their own
         # section, between the cover rows and the file actions.
         if self.context_services is not None:
@@ -925,6 +1020,8 @@ class RomGrid(Gtk.FlowBox):
         # key detects when the search filter changed the visible set.
         self._selection_model = SelectionModel(0)
         self._selection_key = None
+        # Coalesces the burst of artwork-state callbacks into one filter pass.
+        self._artwork_filter_pending = False
         # Columns are recomputed from the viewport width; see _retune_columns.
         self._column_state = None
         self._measured_card_width = None
@@ -1016,6 +1113,7 @@ class RomGrid(Gtk.FlowBox):
                 compact=self.compact,
                 zoom=self.zoom,
                 context_services=self.context_services,
+                on_artwork_state=self._on_item_artwork_state,
             )
             self._items.append(item)
             self.append(item)
@@ -1359,6 +1457,33 @@ class RomGrid(Gtk.FlowBox):
             for item in self._items
             if (parent := item.get_parent()) is not None and parent.get_visible()
         ]
+
+    def sync_visible_selection(self):
+        """Re-seed the selection model after the visible set changed.
+
+        Filtering by hand and skipping this is how selection desyncs: the
+        model would still hold indices into the previous visible list.
+        """
+        model, items = self._model_and_items()
+        self._paint_selection(model, items)
+
+    def _on_item_artwork_state(self, _item):
+        """A card resolved its artwork state; the filter may need re-applying.
+
+        Coalesced onto one idle pass: a page of cards resolves as a burst and
+        re-filtering per card would walk the whole grid N times (#127).
+        """
+        if self._artwork_filter_pending:
+            return
+        self._artwork_filter_pending = True
+        GLib.idle_add(self._flush_artwork_filter)
+
+    def _flush_artwork_filter(self):
+        self._artwork_filter_pending = False
+        win = getattr(self.context_services, "win", None)
+        if win is not None and hasattr(win, "apply_library_filters"):
+            win.apply_library_filters()
+        return False
 
     def _model_and_items(self):
         """The model, re-seeded when the visible set changed (search filter)."""
