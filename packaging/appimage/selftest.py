@@ -76,6 +76,20 @@ def cartridge_render_works():
     return f"{frames[0].name} -> {size} bytes"
 
 
+def bundled_symbolic_icons():
+    """Every symbolic name the UI uses must have its vendored fallback SVG.
+
+    The bundle also ships adwaita-icon-theme, but the fallback set is what
+    keeps icons rendering when the host's active theme shadows it; a build
+    where the directory went missing must not ship.
+    """
+    from openemux.ui.icons import SYMBOLIC_ICON_DIR
+    svgs = list(SYMBOLIC_ICON_DIR.glob("*.svg"))
+    if not svgs:
+        raise RuntimeError(f"no vendored symbolic icons in {SYMBOLIC_ICON_DIR}")
+    return f"{len(svgs)} icons in {SYMBOLIC_ICON_DIR.name}/"
+
+
 def ui_imports():
     from openemux.ui import window  # noqa: F401  - exercises the whole chain
     import openemux
@@ -86,6 +100,7 @@ print(f"self-check inside {os.environ.get('APPDIR', '?')}")
 check("image loaders (png/jpeg/svg)", image_loaders)
 check("Rsvg bindings", rsvg_bindings)
 check("cartridge render (cairo <-> GI)", cartridge_render_works)
+check("bundled symbolic icons", bundled_symbolic_icons)
 check("UI import chain", ui_imports)
 
 if failures:

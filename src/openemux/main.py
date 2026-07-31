@@ -183,6 +183,11 @@ class OpenEmuxApplication(Adw.Application):
         self.main_window = None
 
     def do_activate(self):
+        # Register the vendored symbolic icons before any window exists, so
+        # every lookup can fall back to them when the host theme lacks a name.
+        from openemux.ui.icons import register_bundled_icons
+        register_bundled_icons()
+
         if self._bootstrap_running:
             if self._bootstrap_window:
                 self._bootstrap_window.present()
