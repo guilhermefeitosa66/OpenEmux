@@ -53,7 +53,7 @@ from openemux.core.scraper import (
     save_local_art,
 )
 from openemux.core.scanner import RomScanner
-from openemux.core.shaders import ShaderCatalog
+from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
@@ -1753,7 +1753,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._sidebar_menu_console = console_id
         self._ensure_sidebar_action_group()
 
-        popover = build_context_popover([
+        entries = [
             # Not the header button's wording: there the action is "reload what
             # is on screen", here it is "rescan this console's folder".
             (self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"),
@@ -1761,14 +1761,103 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             (self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
             SEPARATOR,
             self._layout_submenu_for_console(console_id),
-            SEPARATOR,
-            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic"),
-        ])
+        ]
+        # Appended one at a time: SEPARATOR *is* None, so a submenu that has
+        # nothing to offer would otherwise draw itself as a divider.
+        for submenu in (
+            self._core_submenu_for_console(console_id),
+            self._shader_submenu_for_console(console_id),
+        ):
+            if submenu is not None:
+                entries.append(submenu)
+        entries.append(SEPARATOR)
+        entries.append(
+            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
+        )
+        popover = build_context_popover(entries)
         popover.set_parent(row)
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self._sidebar_menu_row = row
         popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
         popover.popup()
+
+    def _core_submenu_for_console(self, console):
+        """The console's default core, from the sidebar.
+
+        The same setting Preferences > Cores edits, one right-click away from
+        the console it applies to. Returns None when nothing is installed for
+        this system: an empty submenu is worse than no submenu.
+        """
+        cores = self.core_catalog.cores_for_console(console)
+        if not cores:
+            return None
+
+        override = self.config_manager.get_console_core_override(console)
+        automatic = cores[0].display_name
+        entries = [
+            (
+                self.t("context.core.automatic", core=automatic),
+                (lambda c=console: self._set_console_core(c, None)),
+                "emblem-ok-symbolic" if not override else None,
+            ),
+            SEPARATOR,
+        ]
+        for core in cores:
+            entries.append(
+                (
+                    core.display_name,
+                    (lambda c=console, f=core.filename: self._set_console_core(c, f)),
+                    "emblem-ok-symbolic" if override == core.filename else None,
+                )
+            )
+        return Submenu(self.t("context.console.core"), entries, "application-x-executable-symbolic")
+
+    def _set_console_core(self, console, core_filename):
+        self.config_manager.set_console_core_override(console, core_filename)
+        if core_filename:
+            # The same warning Preferences gives: a core whose BIOS is missing
+            # will fail at launch, and that is worth knowing when picking it.
+            self._warn_missing_bios_for_core(console, core_filename)
+        label = (
+            self.core_catalog.display_name_for(core_filename)
+            if core_filename
+            else self.t("context.core.automatic_short")
+        )
+        logger.info("sidebar context action: core console=%s core=%s", console, core_filename)
+        self._toast(self.t("toast.console_core_set", console=console, core=label))
+
+    def _shader_submenu_for_console(self, console):
+        """The console's default shader, from the sidebar."""
+        show_all = bool(
+            self.config_manager.get_shader_settings().get("show_all_shaders", False)
+        )
+        options = self.shader_catalog.get_options(show_all=show_all)
+        if not options:
+            return None
+
+        current = normalize_shader_id(self.config_manager.get_shader_for_console(console))
+        entries = []
+        for shader_id, label in options:
+            entries.append(
+                (
+                    label,
+                    (lambda c=console, s=shader_id: self._set_console_shader(c, s)),
+                    "emblem-ok-symbolic" if shader_id == current else None,
+                )
+            )
+        return Submenu(self.t("context.console.shader"), entries, "applications-graphics-symbolic")
+
+    def _set_console_shader(self, console, shader_id):
+        shader_id = normalize_shader_id(shader_id)
+        self.config_manager.set_shader_for_console(console, shader_id)
+        logger.info("sidebar context action: shader console=%s shader=%s", console, shader_id)
+        self._toast(
+            self.t(
+                "toast.console_shader_set",
+                console=console,
+                shader=self.shader_catalog.label_for_shader(shader_id),
+            )
+        )
 
     def _layout_submenu_for_console(self, console):
         """The Layout ▸ shortcut on a sidebar console, mirroring the header menu.
