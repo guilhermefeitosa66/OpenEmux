@@ -26,8 +26,12 @@ finish-args:
   - --device=dri
   # Cover-art sync from the libretro thumbnail servers
   - --share=network
-  # ROM library + cover writing, and reading the RetroArch Flatpak's cores dir
+  # ROM library + cover writing
   - --filesystem=home
+  # Read the RetroArch Flatpak's cores dir. --filesystem=home does NOT cover
+  # it: Flatpak blacklists ~/.var/app from other apps' sandboxes, so without
+  # this explicit grant no core is ever found (issue #179).
+  - --filesystem=~/.var/app/org.libretro.RetroArch:ro
   # Launch the RetroArch Flatpak on the host via flatpak-spawn
   - --talk-name=org.freedesktop.Flatpak
 
