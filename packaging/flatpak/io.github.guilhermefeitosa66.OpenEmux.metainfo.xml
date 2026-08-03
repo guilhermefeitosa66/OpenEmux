@@ -82,6 +82,14 @@
   </keywords>
 
   <releases>
+    <release version="1.10.2" date="2026-08-02">
+      <description>
+        <p>A fix for the all-Flatpak setup: games launch again.</p>
+        <ul>
+          <li>Grant the sandbox read access to the RetroArch Flatpak's cores, which --filesystem=home does not cover; without it every launch failed with "No RetroArch core found"</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.10.1" date="2026-07-31">
       <description>
         <p>A fix for games running far too fast outside the Flatpak.</p>

@@ -63,6 +63,9 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Sun Aug 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.2-1
+- Grant the Flatpak read access to the RetroArch Flatpak cores dir, so games launch on Flatpak-only setups
+
 * Fri Jul 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.1-1
 - Fix games running several times too fast when RetroArch's audio driver fails to start
 
