@@ -30,6 +30,14 @@ covering gamepad hotkeys, the master volume control, analog stick defaults,
 artwork gaps, cover-rendering performance, live input remapping, a restart
 action, and one-click access to Preferences.
 
+### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
+
+Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
+game would launch on a fully-Flatpak setup (OpenEmux + RetroArch, Fedora
+Silverblue): the OpenEmux sandbox could not see the RetroArch Flatpak's cores
+directory. The report exposed a missing `--filesystem` grant in the manifest
+that broke every Flatpak-on-Flatpak install, fixed in v1.10.2.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
