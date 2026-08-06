@@ -34,7 +34,10 @@
     }
 
     html {
-      scroll-behavior: smooth
+      scroll-behavior: smooth;
+      /* Safety net: nothing may widen the document past the viewport on phones.
+         `clip` (not `hidden`) keeps the sticky header working. */
+      overflow-x: clip;
     }
 
     body {
@@ -64,6 +67,17 @@
       max-width: var(--maxw);
       margin: 0 auto;
       padding: 0 24px
+    }
+
+    /* Grid items default to `min-width: auto`, so a child that cannot wrap
+       (a <pre> line, a long URL) pushes its column wider than the track and
+       drags the whole document past the viewport. */
+    .grid>*,
+    .steps>*,
+    .split>*,
+    .gallery>*,
+    .carousel-track>* {
+      min-width: 0
     }
 
     section {
@@ -166,7 +180,9 @@
       text-decoration: none
     }
 
-    @media(max-width:760px) {
+    /* The full link row needs ~832px next to the brand; collapse it before
+       that, or the Download button is pushed past the viewport edge. */
+    @media(max-width:860px) {
       .nav-links a:not(.btn) {
         display: none
       }
@@ -499,6 +515,7 @@
       border-radius: 10px;
       padding: 14px 16px;
       overflow-x: auto;
+      max-width: 100%;
       margin: 0;
     }
 
@@ -738,6 +755,40 @@
       color: #d8d3ea;
       font-size: .9rem;
       pointer-events: none
+    }
+
+    /* ---------- phones ---------- */
+    @media(max-width:600px) {
+      .wrap {
+        padding: 0 16px
+      }
+
+      section {
+        padding: 64px 0
+      }
+
+      .card {
+        padding: 20px
+      }
+
+      .support {
+        padding: 36px 20px
+      }
+
+      /* Wrap commands at spaces instead of forcing a wide line; the <pre>
+         keeps its own scrollbar for the odd unbreakable token. */
+      pre {
+        white-space: pre-wrap;
+        padding: 12px 14px
+      }
+
+      code {
+        font-size: .8rem
+      }
+
+      .lightbox {
+        padding: 12px
+      }
     }
   </style>
 </head>
