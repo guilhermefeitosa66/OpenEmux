@@ -17,6 +17,7 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import cover_sync, screenscraper
+from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,24 @@ logger = logging.getLogger(__name__)
 #: and every extra URL is a network round-trip.
 MAX_RESULTS_PER_PROVIDER = 4
 
+#: How many name-base suggestions the picker shows (#185); each one costs at
+#: most one mirror request for its preview.
+MAX_SUGGESTIONS = 10
+
+#: The two suggestion modes, doubling as the candidate's provider id so the
+#: UI can label approximate matches clearly (#185).
+SUGGESTION_MODE_FTS = "suggestion_fts"
+SUGGESTION_MODE_FUZZY = "suggestion_fuzzy"
+
+
 #: Downloaded candidate: where it landed, which provider offered it.
+#: ``title`` names the canonical stem behind a name-base suggestion.
 class ArtworkCandidate:
-    def __init__(self, path, provider, url):
+    def __init__(self, path, provider, url, title=None):
         self.path = Path(path)
         self.provider = provider
         self.url = url
+        self.title = title
 
 
 def provider_candidates(console, rom_name, sync_settings, art_kind, rom_path=None):
@@ -122,5 +135,71 @@ def search_artwork_async(on_done=None, **kwargs):
         results = search_artwork(**kwargs)
         if on_done:
             on_done(results)
+
+    Thread(target=_worker, daemon=True).start()
+
+
+def suggest_artwork(
+    console,
+    query,
+    dest_dir,
+    limit=MAX_SUGGESTIONS,
+    on_result=None,
+    should_cancel=None,
+    index=None,
+):
+    """Name-base suggestions with mirror previews (#185): ``(mode, results)``.
+
+    Queries the local game-name index for the ROM's console -- FTS5 first,
+    the similarity-ranked approximate mode only when FTS finds nothing, and
+    the returned mode says which one answered so the UI can label
+    approximate matches as such. Every candidate's preview comes from the
+    project mirror, where each suggested stem is known to exist, so the
+    whole pass costs at most one request per shown candidate. A missing or
+    degraded index simply yields no suggestions.
+    """
+    thumb_system = get_thumbnail_system(resolve_system_id(console))
+    if not thumb_system:
+        return SUGGESTION_MODE_FTS, []
+    if index is None:
+        index = cover_sync._get_name_index()
+    mode = SUGGESTION_MODE_FTS
+    try:
+        stems = index.suggest(thumb_system, query, limit=limit)
+        if not stems:
+            mode = SUGGESTION_MODE_FUZZY
+            stems = index.suggest(thumb_system, query, limit=limit, approximate=True)
+    except Exception as exc:  # noqa: BLE001 - suggestions must never break the dialog
+        logger.warning("artwork suggestions failed: error=%s", exc)
+        return mode, []
+
+    results = []
+    seen_digests = set()
+    for position, stem in enumerate(stems):
+        if should_cancel and should_cancel():
+            break
+        url = cover_sync._build_openemux_art_url(thumb_system, stem)
+        path, digest = _download(url, dest_dir, position)
+        if path is None or digest in seen_digests:
+            continue
+        seen_digests.add(digest)
+        candidate = ArtworkCandidate(path, mode, url, title=stem)
+        results.append(candidate)
+        if on_result:
+            on_result(candidate)
+    logger.info(
+        "artwork suggestions done: console=%s query=%s mode=%s offered=%d shown=%d",
+        console, query, mode, len(stems), len(results),
+    )
+    return mode, results
+
+
+def suggest_artwork_async(on_done=None, **kwargs):
+    """Run :func:`suggest_artwork` on a background thread."""
+
+    def _worker():
+        mode, results = suggest_artwork(**kwargs)
+        if on_done:
+            on_done(mode, results)
 
     Thread(target=_worker, daemon=True).start()

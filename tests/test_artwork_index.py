@@ -235,3 +235,47 @@ class ShippedZipTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SuggestionTests(unittest.TestCase):
+    """#185: the manual picker's FTS/fuzzy suggestion modes."""
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "games.db"
+        _build_db(self.db_path, _LADDER_ROWS)
+        self.index = ArtworkNameIndex(db_path=self.db_path)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_fts_mode_matches_all_tokens_with_prefix(self):
+        stems = self.index.suggest(SNES, "final fant")
+        self.assertTrue(stems)
+        self.assertTrue(all("Final Fantasy" in stem for stem in stems))
+
+    def test_fts_mode_is_scoped_to_the_system(self):
+        self.assertEqual(self.index.suggest(MD, "chrono trigger"), [])
+
+    def test_fts_mode_respects_the_limit(self):
+        stems = self.index.suggest(SNES, "final", limit=2)
+        self.assertEqual(len(stems), 2)
+
+    def test_approximate_mode_survives_a_typo(self):
+        # FTS finds nothing for the misspelling; similarity ranking does.
+        self.assertEqual(self.index.suggest(SNES, "Chrno Triger"), [])
+        stems = self.index.suggest(SNES, "Chrno Triger", approximate=True)
+        self.assertTrue(stems)
+        self.assertIn("Chrono Trigger", stems[0])
+
+    def test_only_index_stems_are_ever_suggested(self):
+        stems = self.index.suggest(SNES, "donald duck", approximate=True)
+        known = {name for name, _system in _LADDER_ROWS}
+        self.assertTrue(stems)
+        self.assertTrue(set(stems) <= known)
+
+    def test_degradation_yields_no_suggestions(self):
+        broken = ArtworkNameIndex(db_path="/nonexistent/games.db",
+                                  shipped_zip="/nonexistent.zip")
+        self.assertEqual(broken.suggest(SNES, "chrono"), [])
+        self.assertEqual(broken.suggest(SNES, "chrono", approximate=True), [])

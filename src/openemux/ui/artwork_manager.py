@@ -20,7 +20,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk
+from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
 from openemux.core import artwork_search
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
@@ -78,6 +78,13 @@ class _SearchTab(Gtk.Box):
         self.by_hash_btn.set_sensitive(False)
         self.by_hash_btn.connect("clicked", lambda _b: self._start_search(by_hash=True))
         buttons.append(self.by_hash_btn)
+        # Name-base suggestions (issue #185): box art only -- the mirror
+        # behind the previews carries no cartridge labels.
+        self.suggest_btn = None
+        if self.art_kind == COVER_ART_TYPE_BOXART:
+            self.suggest_btn = Gtk.Button(label=t("artwork.search.suggestions"))
+            self.suggest_btn.connect("clicked", lambda _b: self._start_suggestions())
+            buttons.append(self.suggest_btn)
         # Only up while a search runs: a provider chain can take a while, and
         # the only way out used to be closing the window.
         self.cancel_btn = Gtk.Button(label=t("artwork.search.cancel"))
@@ -189,6 +196,14 @@ class _SearchTab(Gtk.Box):
         overlay.add_overlay(check)
         card.append(overlay)
 
+        if getattr(candidate, "title", None):
+            # A name-base suggestion: the canonical stem is the whole point
+            # of the candidate, so it is named on the card (issue #185).
+            title = Gtk.Label(label=candidate.title)
+            title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            title.set_max_width_chars(28)
+            title.add_css_class("caption")
+            card.append(title)
         provider = Gtk.Label(label=self.manager.t(f"artwork.provider.{candidate.provider}"))
         provider.add_css_class("dim-label")
         provider.add_css_class("caption")
@@ -241,6 +256,8 @@ class _SearchTab(Gtk.Box):
         self.cancel_btn.set_visible(running)
         self.by_name_btn.set_sensitive(not running)
         self.by_hash_btn.set_sensitive(not running and bool(self.hash_entry.get_text()))
+        if self.suggest_btn is not None:
+            self.suggest_btn.set_sensitive(not running)
         if running:
             self.spinner.start()
         else:
@@ -250,8 +267,54 @@ class _SearchTab(Gtk.Box):
         if seq != self._search_seq:
             return False
         self._set_running(False)
+        if count == 0 and self.suggest_btn is not None:
+            # The provider chain came up empty: exactly the case the
+            # name-base suggestions exist for (issue #185).
+            self._start_suggestions()
+            return False
         key = "artwork.search.none" if count == 0 else "artwork.search.found"
         self.status.set_text(self.manager.t(key, count=count))
+        return False
+
+    # -- name-base suggestions (issue #185) --------------------------------
+    def _start_suggestions(self):
+        self._search_seq += 1
+        seq = self._search_seq
+        self._candidates.clear()
+        while (child := self.results.get_child_at_index(0)) is not None:
+            self.results.remove(child)
+        self._set_running(True)
+        self.status.set_text(self.manager.t("artwork.search.running"))
+
+        dest = self.manager.temp_dir / f"{self.page_id}-suggest-{seq}"
+        rom = self.manager.rom
+        artwork_search.suggest_artwork_async(
+            console=rom["console"],
+            query=self.name_entry.get_text().strip() or rom["name"],
+            dest_dir=dest,
+            on_result=lambda cand, s=seq: GLib.idle_add(self._add_result, s, cand),
+            should_cancel=lambda s=seq: s != self._search_seq or self.manager.closed,
+            on_done=lambda mode, results, s=seq: GLib.idle_add(
+                self._suggestions_done, s, mode, len(results)
+            ),
+        )
+
+    def _suggestions_done(self, seq, mode, count):
+        if seq != self._search_seq:
+            return False
+        self._set_running(False)
+        if count == 0:
+            self.status.set_text(self.manager.t("artwork.search.none"))
+        elif mode == artwork_search.SUGGESTION_MODE_FUZZY:
+            # Approximate matches must say so: similarity-ranked candidates
+            # are for a human to judge, never to silently trust.
+            self.status.set_text(
+                self.manager.t("artwork.search.suggestions_fuzzy", count=count)
+            )
+        else:
+            self.status.set_text(
+                self.manager.t("artwork.search.suggestions_found", count=count)
+            )
         return False
 
     def selected_candidate(self):
