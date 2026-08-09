@@ -745,7 +745,8 @@ class FtsStageWiringTests(unittest.TestCase):
                 ),
                 patch(
                     "openemux.core.cover_sync._get_name_index",
-                    return_value=ArtworkNameIndex(db_path="/nonexistent/games.db"),
+                    return_value=ArtworkNameIndex(db_path="/nonexistent/games.db",
+                                                  shipped_zip="/nonexistent.zip"),
                 ),
                 patch("openemux.core.cover_sync._download_cover", return_value=False),
             ):

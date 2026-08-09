@@ -46,8 +46,10 @@ logger = logging.getLogger(__name__)
 #: Where the extracted database lives, under the user config dir.
 INDEX_DIRNAME = "artwork-index"
 DB_FILENAME = "games.db"
-#: The shipped artifact, relative to the project root (#184 delivery shape).
-SHIPPED_DB_ZIP = Path("tools") / "games.db.zip"
+#: The shipped artifact (#184 delivery shape): inside the package tree, so
+#: every packaging path (AppImage, deb/rpm, Flatpak, source checkout) that
+#: ships ``src/openemux`` ships the database with it.
+DEFAULT_SHIPPED_ZIP = Path(__file__).resolve().parent.parent / "data" / "games.db.zip"
 
 #: Rows fetched per FTS round; the ladder only needs enough to detect
 #: ambiguity and pick a region, not the full match list.
@@ -112,11 +114,11 @@ def _fts_query(tokens, joiner=" "):
 class ArtworkNameIndex:
     """Read-only access to the local name index. Never raises to callers."""
 
-    def __init__(self, db_path=None, project_root=None):
+    def __init__(self, db_path=None, shipped_zip=None):
         if db_path is None:
             db_path = Path.home() / ".openemux" / INDEX_DIRNAME / DB_FILENAME
         self._db_path = Path(db_path)
-        self._project_root = Path(project_root) if project_root else None
+        self._shipped_zip = Path(shipped_zip) if shipped_zip else DEFAULT_SHIPPED_ZIP
         self._unavailable = False
         self._fts_ok = None
         self._has_crc_table = None
@@ -125,9 +127,7 @@ class ArtworkNameIndex:
     def _ensure_db_file(self):
         if self._db_path.exists():
             return True
-        if self._project_root is None:
-            return False
-        shipped = self._project_root / SHIPPED_DB_ZIP
+        shipped = self._shipped_zip
         if not shipped.exists():
             return False
         try:
