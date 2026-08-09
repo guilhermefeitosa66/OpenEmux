@@ -25,7 +25,11 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Graphene, Gtk
 
 from openemux.core import screen_geometry
-from openemux.core.retroarch_command import MAX_VOLUME_DB, MIN_VOLUME_DB
+from openemux.core.retroarch_command import (
+    MAX_VOLUME_DB,
+    MIN_VOLUME_DB,
+    VOLUME_SNAP_WINDOW_DB,
+)
 from openemux.core.x11_embed import RetroArchWindowEmbedder
 
 logger = logging.getLogger(__name__)
@@ -202,6 +206,9 @@ class GameWindow(Adw.Window):
         self._volume_scale.set_format_value_func(
             lambda _s, v: f"{10 ** (v / 20) * 100:.0f}%  {v:+.1f} dB"
         )
+        # The range continues past 100%, so unity gain gets a tick mark,
+        # desktop-volume style; _on_volume_changed snaps drags onto it.
+        self._volume_scale.add_mark(0.0, Gtk.PositionType.BOTTOM, None)
         self._volume_seed_guard = False
         self._volume_scale.set_value(self._runtime.volume_db)
         self._volume_scale.connect("value-changed", self._on_volume_changed)
@@ -273,7 +280,12 @@ class GameWindow(Adw.Window):
         if self._volume_seed_guard:
             level = scale.get_value()
         else:
-            level = self._runtime.set_master_volume_db(scale.get_value())
+            value = scale.get_value()
+            if value != 0.0 and abs(value) <= VOLUME_SNAP_WINDOW_DB:
+                # Magnetic 100%: re-enters this handler at exactly 0 dB.
+                scale.set_value(0.0)
+                return
+            level = self._runtime.set_master_volume_db(value)
             # The slider floor (-40 dB) is quiet but not silent; reaching
             # it should read as "off", so the control mutes there and
             # releases that mute -- only its own -- on the way back up.

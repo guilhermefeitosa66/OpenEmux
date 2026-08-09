@@ -40,6 +40,11 @@ MAX_VOLUME_DB = 12.0
 #: What garbage input falls back to: unity gain, never the +12 dB ceiling.
 DEFAULT_VOLUME_DB = 0.0
 
+#: How close (in dB) a slider drag must get to unity gain to snap onto it.
+#: The sliders mark 0 dB with a tick, desktop-volume style, now that the
+#: range continues past 100%; the snap makes landing exactly there easy.
+VOLUME_SNAP_WINDOW_DB = 1.0
+
 #: Extra distance walked when the target sits on RetroArch's top clamp.
 #: RetroArch pins at +12 dB, so overshooting is free -- and because the
 #: pin is exact, it re-synchronizes the tracker with the real level after

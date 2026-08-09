@@ -565,7 +565,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         slider is absolute dB; the runtime manager walks RetroArch there in
         0.5 dB UDP steps from the level the launch seeded.
         """
-        from openemux.core.retroarch_command import MAX_VOLUME_DB, MIN_VOLUME_DB
+        from openemux.core.retroarch_command import (
+            MAX_VOLUME_DB,
+            MIN_VOLUME_DB,
+            VOLUME_SNAP_WINDOW_DB,
+        )
+        self._volume_snap_window_db = VOLUME_SNAP_WINDOW_DB
 
         self.volume_btn = Gtk.MenuButton()
         self.volume_btn.set_icon_name("audio-volume-high-symbolic")
@@ -586,6 +591,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._volume_scale.set_format_value_func(
             lambda _s, v: f"{10 ** (v / 20) * 100:.0f}%  {v:+.1f} dB"
         )
+        # The range continues past 100%, so unity gain gets a tick mark,
+        # desktop-volume style; the changed handler snaps drags onto it.
+        self._volume_scale.add_mark(0.0, Gtk.PositionType.BOTTOM, None)
         self._volume_scale.connect("value-changed", self._on_volume_scale_changed)
 
         self._mute_button = Gtk.ToggleButton()
@@ -615,7 +623,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # and wrote config.yaml once a second, forever (issue #125).
             level = scale.get_value()
         else:
-            level = self.runtime_manager.set_master_volume_db(scale.get_value())
+            value = scale.get_value()
+            if value != 0.0 and abs(value) <= self._volume_snap_window_db:
+                # Magnetic 100%: re-enters this handler at exactly 0 dB.
+                scale.set_value(0.0)
+                return
+            level = self.runtime_manager.set_master_volume_db(value)
         icon = "audio-volume-high-symbolic"
         if level <= -30:
             icon = "audio-volume-low-symbolic"
