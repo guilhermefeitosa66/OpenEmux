@@ -6,6 +6,7 @@ from unittest import mock
 from unittest.mock import patch
 
 from openemux.core import cover_sync
+from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.cover_sync import (
     _build_cover_url,
     _candidate_names,
@@ -93,8 +94,12 @@ class CoverSyncTests(unittest.TestCase):
             with (
                 patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch(
-                    "openemux.core.cover_sync._remote_cover_candidates",
-                    return_value=["u1", "u2", "u3"],
+                    "openemux.core.cover_sync._staged_cover_candidates",
+                    return_value=[
+                        ("libretro", "exact", "u1"),
+                        ("libretro", "normalized", "u2"),
+                        ("openemux", "normalized", "u3"),
+                    ],
                 ),
                 patch(
                     "openemux.core.cover_sync._download_cover",
@@ -111,6 +116,9 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 1)
         self.assertEqual(summary["errors"], 0)
         self.assertEqual(download_mock.call_count, 3)
+        # The winning candidate's ladder stage lands in the tally (#175).
+        self.assertEqual(summary["stages"]["normalized"], 1)
+        self.assertEqual(summary["stages"]["exact"], 0)
 
     def test_cover_sync_existing_local_is_skipped(self):
         library = {"gba": [{"name": "Castlevania", "path": "/tmp/Castlevania.gba", "console": "gba"}]}
@@ -139,7 +147,8 @@ class CoverSyncTests(unittest.TestCase):
             covers.mkdir(parents=True)
             (covers / "Castlevania.png").write_bytes(b"old")
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
                 patch(
                     "openemux.core.cover_sync._download_cover",
                     side_effect=lambda _url, dest: (dest.write_bytes(b"new"), dest)[1],
@@ -172,7 +181,8 @@ class CoverSyncTests(unittest.TestCase):
                 return written
 
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
                 patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
             ):
                 _sync_covers(
@@ -193,7 +203,8 @@ class CoverSyncTests(unittest.TestCase):
             covers.mkdir(parents=True)
             (covers / "Castlevania.png").write_bytes(b"old")
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
                 patch(
                     "openemux.core.cover_sync._download_cover",
                     side_effect=lambda _url, dest: (dest.write_bytes(b"new"), dest)[1],
@@ -218,7 +229,8 @@ class CoverSyncTests(unittest.TestCase):
             with TemporaryDirectory() as tmp_dir:
                 with (
                     patch("openemux.core.cover_sync.find_local_art", return_value=None),
-                    patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                    patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
                     patch(
                         "openemux.core.cover_sync._download_cover", return_value=True
                     ) as download_mock,
@@ -243,7 +255,8 @@ class CoverSyncTests(unittest.TestCase):
             cover.mkdir(parents=True)
             (cover / "Chrono Trigger.png").write_bytes(b"boxart")
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
                 patch("openemux.core.cover_sync._download_cover", return_value=True) as download_mock,
             ):
                 summary = _sync_covers(
@@ -299,7 +312,9 @@ class CoverSyncTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             with (
                 patch("openemux.core.cover_sync.find_local_art", return_value=None),
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u1"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u1")]),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
                 patch("openemux.core.cover_sync._download_cover", side_effect=[True, False]),
             ):
                 _sync_covers(
@@ -530,7 +545,8 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
         written = []
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u")]),
                 patch(
                     "openemux.core.cover_sync._download_cover",
                     side_effect=lambda url, dest: written.append(dest) or True,
@@ -547,7 +563,8 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
         events = []
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u")]),
                 patch("openemux.core.cover_sync._download_cover", return_value=True),
             ):
                 _sync_artwork(
@@ -577,7 +594,8 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
     def test_cancelling_stops_before_the_next_pass(self):
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u")]),
                 patch("openemux.core.cover_sync._download_cover", return_value=True),
             ):
                 summary = _sync_artwork(
@@ -595,7 +613,8 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
         seen = []
         with TemporaryDirectory() as tmp_dir:
             with (
-                patch("openemux.core.cover_sync._remote_cover_candidates", return_value=["u"]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "exact", "u")]),
                 patch(
                     "openemux.core.cover_sync._download_cover",
                     side_effect=lambda url, dest: seen.append(dest.parent.name) or True,
@@ -647,7 +666,9 @@ class FuzzyTitleFallbackTests(unittest.TestCase):
         self.assertEqual(len(candidates), len(set(candidates)))
 
 
-class FuzzyPassWiringTests(unittest.TestCase):
+class FtsStageWiringTests(unittest.TestCase):
+    """Stage 4 (#175): the FTS resolution runs once, last, and only on a miss."""
+
     def _library(self):
         return {
             "snes": [
@@ -659,14 +680,17 @@ class FuzzyPassWiringTests(unittest.TestCase):
             ]
         }
 
-    def test_the_fuzzy_pass_only_runs_after_the_exact_names_miss(self):
+    def test_the_fts_stage_only_runs_after_every_provider_missed(self):
         with TemporaryDirectory() as tmp_dir:
             with (
                 patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch(
-                    "openemux.core.cover_sync._remote_cover_candidates",
-                    return_value=["u1", "u2"],
+                    "openemux.core.cover_sync._staged_cover_candidates",
+                    return_value=[("libretro", "exact", "u1"), ("libretro", "normalized", "u2")],
                 ),
+                patch(
+                    "openemux.core.cover_sync._fts_stage_candidates", return_value=[]
+                ) as fts_mock,
                 patch(
                     "openemux.core.cover_sync._download_cover", return_value=True
                 ) as download_mock,
@@ -678,24 +702,50 @@ class FuzzyPassWiringTests(unittest.TestCase):
                     selected_console="snes",
                     sync_settings={},
                 )
-        # First candidate hit: the fallback must not have been consulted.
+        # First candidate hit: the last-resort stage must not have run.
         self.assertEqual(download_mock.call_count, 1)
         self.assertEqual(summary["downloaded"], 1)
-        self.assertEqual(summary["missed"], [])
+        self.assertEqual(fts_mock.call_count, 0)
 
-    def test_a_miss_falls_through_to_the_fuzzy_titles(self):
-        seen_names = []
-
-        def _candidates(_console, rom_name, _settings, rom_path=None):
-            seen_names.append(rom_name)
-            return [f"url-for-{rom_name}"]
-
+    def test_a_miss_falls_through_to_the_fts_stage(self):
         with TemporaryDirectory() as tmp_dir:
             with (
                 patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch(
-                    "openemux.core.cover_sync._remote_cover_candidates",
-                    side_effect=_candidates,
+                    "openemux.core.cover_sync._staged_cover_candidates",
+                    return_value=[("libretro", "exact", "u1")],
+                ),
+                patch(
+                    "openemux.core.cover_sync._fts_stage_candidates",
+                    return_value=[("openemux", "fts", "fts-url")],
+                ) as fts_mock,
+                patch(
+                    "openemux.core.cover_sync._download_cover", side_effect=[False, True]
+                ),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="snes",
+                    sync_settings={},
+                )
+        self.assertEqual(fts_mock.call_count, 1)
+        self.assertEqual(summary["downloaded"], 1)
+        self.assertEqual(summary["errors"], 0)
+        self.assertEqual(summary["stages"]["fts"], 1)
+
+    def test_an_unavailable_index_degrades_to_a_plain_miss(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch(
+                    "openemux.core.cover_sync._staged_cover_candidates",
+                    return_value=[("libretro", "exact", "u1")],
+                ),
+                patch(
+                    "openemux.core.cover_sync._get_name_index",
+                    return_value=ArtworkNameIndex(db_path="/nonexistent/games.db"),
                 ),
                 patch("openemux.core.cover_sync._download_cover", return_value=False),
             ):
@@ -706,9 +756,8 @@ class FuzzyPassWiringTests(unittest.TestCase):
                     selected_console="snes",
                     sync_settings={},
                 )
-        self.assertEqual(seen_names[0], "Aero Fighters (Sonic Wings) (USA)")
-        self.assertIn("Sonic Wings", seen_names)
         self.assertEqual(summary["errors"], 1)
+        self.assertEqual(summary["missed"][0]["rom_name"], "Aero Fighters (Sonic Wings) (USA)")
 
     def test_the_summary_names_the_roms_that_still_need_artwork(self):
         # errors used to be a bare count, so the UI could say how many failed
@@ -717,9 +766,10 @@ class FuzzyPassWiringTests(unittest.TestCase):
             with (
                 patch("openemux.core.cover_sync.find_local_art", return_value=None),
                 patch(
-                    "openemux.core.cover_sync._remote_cover_candidates",
-                    return_value=["u1"],
+                    "openemux.core.cover_sync._staged_cover_candidates",
+                    return_value=[("libretro", "exact", "u1")],
                 ),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
                 patch("openemux.core.cover_sync._download_cover", return_value=False),
             ):
                 summary = _sync_covers(
@@ -735,23 +785,109 @@ class FuzzyPassWiringTests(unittest.TestCase):
         )
         self.assertEqual(summary["errors"], len(summary["missed"]))
 
-    def test_the_fuzzy_pass_is_capped_and_says_so(self):
-        with TemporaryDirectory() as tmp_dir:
-            with (
-                patch("openemux.core.cover_sync.find_local_art", return_value=None),
-                patch(
-                    "openemux.core.cover_sync._remote_cover_candidates",
-                    side_effect=lambda c, n, s, rom_path=None: [f"{n}-{i}" for i in range(50)],
-                ),
-                patch("openemux.core.cover_sync._download_cover", return_value=False),
-                self.assertLogs("openemux.core.cover_sync", level="INFO") as logs,
-            ):
-                _sync_covers(
-                    library_by_console=self._library(),
-                    covers_dir=tmp_dir,
-                    scope="console",
-                    selected_console="snes",
-                    sync_settings={},
-                )
-        # Truncation is logged, never silent.
-        self.assertTrue(any("fuzzy pass capped" in line for line in logs.output))
+    def test_fts_candidates_come_from_the_resolved_stem_only(self):
+        class _Index:
+            def resolve_name(self, system, rom_name, region_priority=None):
+                return ("Aero Fighters (USA)", "untagged")
+
+        with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+            triples = cover_sync._fts_stage_candidates(
+                "SFC", "Aero Fighters (Sonic Wings) (USA)", {}, already_tried=set()
+            )
+        self.assertTrue(triples)
+        self.assertTrue(all(stage == "fts" for _p, stage, _u in triples))
+        # Only file-based providers, and only URLs for the resolved stem.
+        self.assertTrue(all("Aero%20Fighters%20%28USA%29" in url for _p, _s, url in triples))
+        providers = [p for p, _s, _u in triples]
+        self.assertIn("libretro", providers)
+        self.assertIn("openemux", providers)
+        self.assertNotIn("screenscraper", providers)
+
+    def test_fts_candidates_skip_urls_already_tried(self):
+        class _Index:
+            def resolve_name(self, system, rom_name, region_priority=None):
+                return ("Aero Fighters (USA)", "untagged")
+
+        with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+            first = cover_sync._fts_stage_candidates("SFC", "Aero", {}, already_tried=set())
+            tried = {url for _p, _s, url in first}
+            second = cover_sync._fts_stage_candidates("SFC", "Aero", {}, already_tried=tried)
+        self.assertTrue(first)
+        self.assertEqual(second, [])
+
+
+class StagedCandidateTests(unittest.TestCase):
+    """The per-provider ladder (#175): hash -> exact -> normalized, in order."""
+
+    def test_thumbnail_names_are_sanitized_at_url_build_time(self):
+        # The reported bug: "&" must become "_" in the filename, for both
+        # file-based providers, or every candidate 404s.
+        url = cover_sync._build_cover_url("Sega - Mega Drive - Genesis",
+                                          "Adventures of Batman & Robin, The (USA)")
+        self.assertIn("Batman%20_%20Robin", url)
+        mirror = cover_sync._build_openemux_art_url("Sega - Mega Drive - Genesis",
+                                                    "Adventures of Batman & Robin, The (USA)")
+        self.assertIn("Batman%20_%20Robin", mirror)
+
+    def test_every_reserved_character_is_sanitized(self):
+        for char in '&*/:`<>?\\|"':
+            sanitized = cover_sync._sanitize_thumbnail_name(f"A{char}B")
+            self.assertEqual(sanitized, "A_B", repr(char))
+
+    def test_provider_ladders_run_in_order(self):
+        with patch("openemux.core.cover_sync._resolve_hash_stem",
+                   return_value="Hash Stem (USA)"):
+            triples = cover_sync._staged_cover_candidates(
+                "SFC", "Chrono Trigger", {}, rom_path="/tmp/ct.sfc"
+            )
+        stages = [(p, s) for p, s, _u in triples]
+        # Default chain: libretro then openemux; each runs hash, exact, then
+        # normalized before the next provider starts.
+        self.assertEqual(stages[0], ("libretro", "hash"))
+        libretro_stages = [s for p, s in stages if p == "libretro"]
+        self.assertEqual(libretro_stages[0], "hash")
+        self.assertIn("exact", libretro_stages)
+        self.assertIn("normalized", libretro_stages)
+        first_openemux = next(i for i, (p, _s) in enumerate(stages) if p == "openemux")
+        self.assertTrue(all(p == "libretro" for p, _s in stages[:first_openemux]))
+        self.assertIn("Hash%20Stem%20%28USA%29", triples[0][2])
+
+    def test_hash_stage_is_skipped_without_an_index_hit(self):
+        with patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None):
+            triples = cover_sync._staged_cover_candidates(
+                "SFC", "Chrono Trigger", {}, rom_path="/tmp/ct.sfc"
+            )
+        self.assertTrue(all(s != "hash" for _p, s, _u in triples))
+        self.assertEqual(triples[0][1], "exact")
+
+    def test_rom_hashing_waits_for_a_crc_capable_index(self):
+        # Hashing reads the whole ROM file; without a crc_index table it
+        # must never run at all.
+        class _Index:
+            def has_crc_index(self):
+                return False
+
+        with (
+            patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
+            patch("openemux.core.cover_sync.hasher.compute_crc32") as crc_mock,
+        ):
+            stem = cover_sync._resolve_hash_stem("SFC", "/tmp/ct.sfc", {})
+        self.assertIsNone(stem)
+        self.assertEqual(crc_mock.call_count, 0)
+
+    def test_a_crc_hit_resolves_through_the_index(self):
+        class _Index:
+            def has_crc_index(self):
+                return True
+
+            def resolve_by_crc(self, system, crc):
+                assert system == "Nintendo - Super Nintendo Entertainment System"
+                assert crc == "AABBCCDD"
+                return "Chrono Trigger (USA)"
+
+        with (
+            patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
+            patch("openemux.core.cover_sync.hasher.compute_crc32", return_value="AABBCCDD"),
+        ):
+            stem = cover_sync._resolve_hash_stem("SFC", "/tmp/rom001.md", {})
+        self.assertEqual(stem, "Chrono Trigger (USA)")
