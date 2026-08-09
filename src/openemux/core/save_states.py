@@ -93,6 +93,53 @@ def slot_entries(states_dir, rom_path, max_slot=9):
     return [(slot, by_slot.get(slot)) for slot in range(max_slot + 1)]
 
 
+#: What may follow the stem in a state-family filename: ``.state``,
+#: ``.state<N>``, ``.state.auto``, each optionally with a ``.png`` thumbnail.
+_STATE_FAMILY_RE = re.compile(r"^\.state(?:\d*|\.auto)(?:\.png)?$")
+
+
+def rename_states(states_dir, old_stem, new_stem):
+    """Move every state file keyed on ``old_stem`` to ``new_stem`` (#134).
+
+    Covers slot files, the automatic state and their thumbnails, in the
+    console dir and each immediate per-core subdirectory (the
+    ``sort_savestates_enable`` layout). A move that would overwrite an
+    existing target is skipped and logged -- same refuse-don't-overwrite
+    rule as the ROM rename itself. Returns how many files moved.
+    """
+    directory = Path(states_dir)
+    if old_stem == new_stem or not directory.is_dir():
+        return 0
+    moved = 0
+    scan_dirs = [directory] + [sub for sub in directory.iterdir() if sub.is_dir()]
+    for scan_dir in scan_dirs:
+        for path in sorted(scan_dir.iterdir()):
+            if not path.is_file() or not path.name.startswith(old_stem):
+                continue
+            remainder = path.name[len(old_stem):]
+            # The remainder check is what keeps "Mega Man X2.state" safe
+            # while "Mega Man X" is being renamed.
+            if not _STATE_FAMILY_RE.match(remainder):
+                continue
+            target = path.with_name(f"{new_stem}{remainder}")
+            if target.exists():
+                logger.warning(
+                    "save state rename skipped, target exists: %s -> %s", path, target
+                )
+                continue
+            try:
+                path.rename(target)
+                moved += 1
+            except OSError as exc:
+                logger.warning("save state rename failed: path=%s error=%s", path, exc)
+    if moved:
+        logger.info(
+            "save states renamed: dir=%s old=%s new=%s files=%d",
+            directory, old_stem, new_stem, moved,
+        )
+    return moved
+
+
 def delete_state(state):
     """Remove one state and its screenshot; True when the state file went."""
     removed = False

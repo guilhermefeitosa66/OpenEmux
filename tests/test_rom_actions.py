@@ -122,6 +122,93 @@ class RenameRomTests(unittest.TestCase):
                 self.assertEqual(sorted(zf.namelist()), ["Kirby 2.gb", "readme.txt"])
                 self.assertEqual(zf.read("Kirby 2.gb"), b"rom data")
 
+    def test_states_follow_the_rename(self):
+        # #134 cause 1: states are keyed on the file stem; slot files, the
+        # auto state and thumbnails in the console dir and the per-core
+        # subdirectory all move.
+        with TemporaryDirectory() as tmp:
+            roms_dir = Path(tmp) / "roms"
+            states_dir = Path(tmp) / "states" / "GB"
+            rom = _rom(roms_dir, name="Kirby", suffix=".gb")
+            core_dir = states_dir / "Gambatte"
+            core_dir.mkdir(parents=True)
+            (states_dir / "Kirby.state").write_bytes(b"s0")
+            (states_dir / "Kirby.state1").write_bytes(b"s1")
+            (states_dir / "Kirby.state1.png").write_bytes(b"thumb")
+            (states_dir / "Kirby.state.auto").write_bytes(b"auto")
+            (core_dir / "Kirby.state2").write_bytes(b"s2")
+            # A different game sharing the prefix must not be dragged along.
+            (states_dir / "Kirby 2.state").write_bytes(b"other")
+
+            rename_rom(roms_dir, rom, "Kirby DX", states_dir=states_dir)
+
+            self.assertTrue((states_dir / "Kirby DX.state").exists())
+            self.assertTrue((states_dir / "Kirby DX.state1").exists())
+            self.assertTrue((states_dir / "Kirby DX.state1.png").exists())
+            self.assertTrue((states_dir / "Kirby DX.state.auto").exists())
+            self.assertTrue((core_dir / "Kirby DX.state2").exists())
+            self.assertTrue((states_dir / "Kirby 2.state").exists())
+            self.assertFalse((states_dir / "Kirby.state").exists())
+
+    def test_state_rename_refuses_to_overwrite(self):
+        with TemporaryDirectory() as tmp:
+            roms_dir = Path(tmp) / "roms"
+            states_dir = Path(tmp) / "states" / "GB"
+            states_dir.mkdir(parents=True)
+            rom = _rom(roms_dir, name="Kirby", suffix=".gb")
+            (states_dir / "Kirby.state").write_bytes(b"mine")
+            (states_dir / "Kirby DX.state").write_bytes(b"theirs")
+
+            rename_rom(roms_dir, rom, "Kirby DX", states_dir=states_dir)
+
+            # Both survive: refuse rather than overwrite.
+            self.assertEqual((states_dir / "Kirby.state").read_bytes(), b"mine")
+            self.assertEqual((states_dir / "Kirby DX.state").read_bytes(), b"theirs")
+
+    def test_battery_saves_follow_the_rename(self):
+        # #134 cause 2: the .srm and core-specific companions live next to
+        # the ROM under the same stem.
+        with TemporaryDirectory() as tmp:
+            roms_dir = Path(tmp) / "roms"
+            rom = _rom(roms_dir, console="SFC", name="Chrono Trigger", suffix=".smc")
+            rom_dir = Path(rom["path"]).parent
+            (rom_dir / "Chrono Trigger.srm").write_bytes(b"battery")
+            (rom_dir / "Chrono Trigger.data.szsnes").write_bytes(b"core data")
+            # Another ROM sharing the stem is its own game and stays put...
+            (rom_dir / "Chrono Trigger.sfc").write_bytes(b"other rom")
+            # ...and loose artwork next to the ROM is not a save either.
+            (rom_dir / "Chrono Trigger.png").write_bytes(b"shot")
+
+            renamed = rename_rom(roms_dir, rom, "CT")
+
+            new_dir = Path(renamed["path"]).parent
+            self.assertEqual((new_dir / "CT.srm").read_bytes(), b"battery")
+            self.assertEqual((new_dir / "CT.data.szsnes").read_bytes(), b"core data")
+            self.assertTrue((rom_dir / "Chrono Trigger.sfc").exists())
+            self.assertTrue((rom_dir / "Chrono Trigger.png").exists())
+            self.assertFalse((rom_dir / "Chrono Trigger.srm").exists())
+
+    def test_multi_rom_archive_keeps_its_artwork_and_display_name(self):
+        # #134 cause 3: the card is named after the entry inside, which the
+        # rename cannot touch -- so the artwork must keep that name too.
+        with TemporaryDirectory() as tmp:
+            roms_dir = Path(tmp) / "roms"
+            archive = roms_dir / "GB" / "Pack.zip"
+            archive.parent.mkdir(parents=True)
+            with zipfile.ZipFile(archive, "w") as zf:
+                zf.writestr("One.gb", b"a")
+                zf.writestr("Two.gb", b"b")
+            # The card shows the inner entry's name; art is keyed on it.
+            _art(roms_dir, "GB", "One", COVER_ART, "png")
+            rom = {"name": "One", "path": str(archive), "console": "GB", "rom_id": None}
+
+            renamed = rename_rom(roms_dir, rom, "Best Pack")
+
+            self.assertTrue(Path(renamed["path"]).name == "Best Pack.zip")
+            # Display name unchanged, artwork still reachable under it.
+            self.assertEqual(renamed["name"], "One")
+            self.assertIsNotNone(find_local_art(roms_dir, "GB", "One", COVER_ART))
+
     def test_multi_rom_archive_keeps_its_entries(self):
         with TemporaryDirectory() as tmp:
             roms_dir = Path(tmp) / "roms"

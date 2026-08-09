@@ -2930,7 +2930,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _apply_rename(self, rom, new_name):
         try:
-            renamed = rename_rom(Path(self.roms_path), rom, new_name)
+            renamed = rename_rom(
+                Path(self.roms_path),
+                rom,
+                new_name,
+                states_dir=self.config_manager.get_console_states_dir(rom["console"]),
+            )
         except RomActionError as exc:
             self._toast(self.t("toast.rom.rename_failed", error=str(exc)), timeout=6)
             return
