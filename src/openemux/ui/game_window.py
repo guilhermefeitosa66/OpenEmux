@@ -198,7 +198,10 @@ class GameWindow(Adw.Window):
         self._volume_scale.set_size_request(200, -1)
         self._volume_scale.set_draw_value(True)
         self._volume_scale.set_value_pos(Gtk.PositionType.RIGHT)
-        self._volume_scale.set_format_value_func(lambda _s, v: f"{v:+.1f} dB")
+        # Same reading RetroArch's own OSD gives: amplitude percent + dB.
+        self._volume_scale.set_format_value_func(
+            lambda _s, v: f"{10 ** (v / 20) * 100:.0f}%  {v:+.1f} dB"
+        )
         self._volume_seed_guard = False
         self._volume_scale.set_value(self._runtime.volume_db)
         self._volume_scale.connect("value-changed", self._on_volume_changed)

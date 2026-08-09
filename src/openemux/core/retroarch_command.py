@@ -24,23 +24,36 @@ DEFAULT_NETWORK_CMD_PORT = 55355
 #: RetroArch's own volume step per VOLUME_UP/VOLUME_DOWN command.
 VOLUME_STEP_DB = 0.5
 
-#: One packet per RetroArch frame. RetroArch polls its command socket once
-#: per frame; anything faster overruns the receive buffer and is dropped,
-#: which is why a slider drag did nothing while MUTE -- a single packet in a
-#: single frame -- always landed (issue #125).
-VOLUME_PACING_INTERVAL = 0.016
+#: One packet per RetroArch command-poll. Measured against the vendored
+#: RetroArch 1.22 (issue #125 follow-up): it drains roughly one command
+#: every 3-4 frames, NOT one per frame -- paced at 70 ms every packet
+#: landed, at 40 ms ~10% were lost and at the old 16 ms cadence ~75% were,
+#: which is exactly how "slider to max" stopped far below the top.
+VOLUME_PACING_INTERVAL = 0.075
 
 #: The slider's floor; RetroArch itself goes to -80 but everything below
-#: -40 dB is inaudible in practice. 0 dB is unity gain.
+#: -40 dB is inaudible in practice.
 MIN_VOLUME_DB = -40.0
-MAX_VOLUME_DB = 0.0
+#: RetroArch's own top clamp (+12 dB, its OSD shows 398%); verified by
+#: stepping past it on the vendored build. 0 dB is unity gain.
+MAX_VOLUME_DB = 12.0
+#: What garbage input falls back to: unity gain, never the +12 dB ceiling.
+DEFAULT_VOLUME_DB = 0.0
+
+#: Extra distance walked when the target sits on RetroArch's top clamp.
+#: RetroArch pins at +12 dB, so overshooting is free -- and because the
+#: pin is exact, it re-synchronizes the tracker with the real level after
+#: hotkey volume changes that happen behind the tracker's back. The
+#: slider floor gets no such treatment: -40 dB is not a RetroArch bound
+#: (it clamps at -80), but the floor engages mute in the UI instead.
+SATURATION_MARGIN_DB = 15.0
 
 
 def clamp_volume_db(value):
     try:
         level = float(value)
     except (TypeError, ValueError):
-        return MAX_VOLUME_DB
+        return DEFAULT_VOLUME_DB
     return min(MAX_VOLUME_DB, max(MIN_VOLUME_DB, level))
 
 
@@ -169,6 +182,13 @@ class VolumePacer:
         target = clamp_volume_db(target_db)
         start = None
         with self._lock:
+            if target >= MAX_VOLUME_DB:
+                # Aiming at RetroArch's own clamp: walk extra steps so the
+                # real level is pinned there even if the tracker had
+                # drifted low, and the tracker ends exactly at the truth.
+                self._level = min(
+                    self._level, MAX_VOLUME_DB - SATURATION_MARGIN_DB
+                )
             self._target = target
             if self._worker is None:
                 # Assigned under the lock so a second caller cannot start a
