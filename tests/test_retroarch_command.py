@@ -5,8 +5,10 @@ import unittest
 from unittest.mock import patch
 
 from openemux.core.retroarch_command import (
+    DEFAULT_VOLUME_DB,
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
+    SATURATION_MARGIN_DB,
     RetroArchCommandClient,
     VolumePacer,
     clamp_volume_db,
@@ -17,10 +19,13 @@ from openemux.core.retroarch_command import (
 class ClampTests(unittest.TestCase):
     def test_range_and_garbage(self):
         self.assertEqual(clamp_volume_db(0.0), 0.0)
-        self.assertEqual(clamp_volume_db(5), MAX_VOLUME_DB)
+        # +5 dB is inside RetroArch's real range (it amplifies to +12).
+        self.assertEqual(clamp_volume_db(5), 5.0)
+        self.assertEqual(clamp_volume_db(20), MAX_VOLUME_DB)
         self.assertEqual(clamp_volume_db(-100), MIN_VOLUME_DB)
-        self.assertEqual(clamp_volume_db("nonsense"), MAX_VOLUME_DB)
-        self.assertEqual(clamp_volume_db(None), MAX_VOLUME_DB)
+        # Garbage falls back to unity gain, never to the +12 dB ceiling.
+        self.assertEqual(clamp_volume_db("nonsense"), DEFAULT_VOLUME_DB)
+        self.assertEqual(clamp_volume_db(None), DEFAULT_VOLUME_DB)
 
 
 class VolumeStepTests(unittest.TestCase):
@@ -84,9 +89,9 @@ class PacedDeliveryTests(unittest.TestCase):
             port = server.getsockname()[1]
             client = RetroArchCommandClient(port)
 
-            # Driven with a no-op sleep: the real 16 ms cadence over a full
-            # 40 dB walk would be 1.3 s, uncomfortably close to the timeout
-            # above, and what is under test here is delivery, not timing.
+            # Driven with a no-op sleep: the real 75 ms cadence over a full
+            # walk would take seconds, and what is under test here is
+            # delivery, not timing.
             pacer = VolumePacer(client, level=0.0, sleep=lambda _s: None)
             pacer.set_target(-10.0)
             pacer.join(5)
@@ -95,6 +100,28 @@ class PacedDeliveryTests(unittest.TestCase):
                 data, _addr = server.recvfrom(64)
                 self.assertEqual(data, b"VOLUME_DOWN")
             self.assertEqual(pacer.level, -10.0)
+            client.close()
+
+    def test_a_walk_to_the_top_saturates_past_the_clamp(self):
+        # Aiming at RetroArch's own +12 dB clamp sends extra steps: the
+        # emulator pins there, so the overshoot is free and it re-syncs the
+        # tracker after hotkey changes the tracker never saw (the reported
+        # "slider at max is not RetroArch's max").
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server:
+            server.bind(("127.0.0.1", 0))
+            server.settimeout(2)
+            port = server.getsockname()[1]
+            client = RetroArchCommandClient(port)
+
+            pacer = VolumePacer(client, level=MAX_VOLUME_DB - 1.0, sleep=lambda _s: None)
+            pacer.set_target(MAX_VOLUME_DB)
+            pacer.join(5)
+
+            expected = int(SATURATION_MARGIN_DB / 0.5)
+            for _ in range(expected):
+                data, _addr = server.recvfrom(64)
+                self.assertEqual(data, b"VOLUME_UP")
+            self.assertEqual(pacer.level, MAX_VOLUME_DB)
             client.close()
 
     def test_send_repeated_can_pace_itself(self):

@@ -6,6 +6,7 @@ from threading import Thread
 from pathlib import Path
 import shutil
 
+from openemux.core import feature_flags
 from openemux.core.paths import (
     get_project_root,
     is_running_in_appimage,
@@ -73,7 +74,17 @@ def _configure_gtk_renderer():
         os.environ["GSK_RENDERER"] = "cairo"
 
 
+def _configure_embed_backend():
+    """POC: the RetroArch embed wrapper works by re-parenting X11 windows,
+    so the app itself must be an X11 client -- on a Wayland session this
+    selects XWayland. Only while the flag is on, and never overriding an
+    explicit user choice."""
+    if feature_flags.retroarch_embed_enabled() and not os.environ.get("GDK_BACKEND"):
+        os.environ["GDK_BACKEND"] = "x11"
+
+
 _configure_gtk_renderer()
+_configure_embed_backend()
 migrate_legacy_config_dir()
 configure_startup_logging()
 _ensure_gtk_typelibs()
