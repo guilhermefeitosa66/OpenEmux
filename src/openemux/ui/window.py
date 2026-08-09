@@ -28,6 +28,7 @@ from openemux.core.library_view import (
 )
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
+from openemux.core import feature_flags
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -188,6 +189,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        # POC (env-flagged): the window wrapping the embedded RetroArch.
+        self._game_window = None
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
         self.core_catalog = CoreCatalog(project_root=self.project_root)
@@ -2786,6 +2789,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self._toast(error_msg, timeout=5)
             return
         self.play_history.record_launch(rom["path"])
+        self._maybe_open_game_window(rom)
         self._toast(self.t("states.toast.launching", name=rom["name"], slot=slot))
 
         def _load_when_up():
@@ -3532,6 +3536,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # cleanly was still played, and this is the only point that knows
             # which ROM was asked for.
             self.play_history.record_launch(rom["path"])
+            self._maybe_open_game_window(rom)
         self._sync_runtime_controls()
         if not success and error_msg:
             toast = Adw.Toast(title=error_msg)
@@ -3680,6 +3685,58 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
         return True
+
+    def _maybe_open_game_window(self, rom):
+        """POC (env-flagged): wrap the RetroArch window in an OpenEmux one.
+
+        Only the plain launch paths open it; the input hot-apply relaunch
+        (issue #129) deliberately does not -- the old wrapper closes with
+        its process and the relaunched game runs standalone.
+        """
+        if not feature_flags.retroarch_embed_enabled():
+            return
+        from openemux.ui import game_window
+
+        if not game_window.display_supports_embedding():
+            # Native-Wayland display: reparenting can never work, so the
+            # game simply keeps its own window (same as with the flag off).
+            logger.warning(
+                "retroarch embed: display is not X11; game runs standalone"
+            )
+            return
+        GameWindow = game_window.GameWindow
+
+        if self._game_window is not None:
+            self._game_window.close()
+            self._game_window = None
+        window = GameWindow(
+            application=self.get_application(),
+            runtime_manager=self.runtime_manager,
+            rom=rom,
+            frame_enabled=feature_flags.retroarch_embed_frame_enabled(),
+            on_closed=self._on_game_window_closed,
+            on_open_input_settings=self._open_input_settings_from_game,
+        )
+        window.connect("close-request", self._on_game_window_close_request)
+        self._game_window = window
+        window.present()
+
+    def _on_game_window_closed(self, window):
+        if self._game_window is window:
+            self._game_window = None
+
+    def _open_input_settings_from_game(self, _game_window):
+        # Presented on the library window on purpose: the game window keeps
+        # handing X focus to the emulator, which would fight a dialog shown
+        # on top of it.
+        self.present()
+        self._open_preferences(page="input")
+
+    def _on_game_window_close_request(self, window):
+        # close() only hides a GTK4 window; destroy it once the emission is
+        # over so a closed wrapper does not linger hidden until app exit.
+        GLib.idle_add(window.destroy)
+        return False
 
     def _poll_runtime_state(self):
         result = self.runtime_manager.poll_active()
