@@ -191,6 +191,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
         # POC (env-flagged): the window wrapping the embedded RetroArch.
         self._game_window = None
+        # Covers downloaded by a running sync, waiting for a batched reveal
+        # (issue #187): flushed by size, by time, or when the sync moves on
+        # to another console.
+        self._reveal_pending = []
+        self._reveal_timer = None
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
         self.core_catalog = CoreCatalog(project_root=self.project_root)
@@ -2782,10 +2787,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         window.present()
 
-    def refresh_rom_artwork(self, rom):
+    def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one ROM's card artwork after the manager saved a file."""
         for grid in self._grids.values():
-            grid.refresh_rom_artwork(rom)
+            grid.refresh_rom_artwork(rom, fade=fade)
 
     def launch_rom_at_state(self, rom, slot):
         """Launch a ROM parked on ``slot`` and load that state once it is up.
@@ -3492,6 +3497,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 evt.get("total", 0),
                 self.t(label),
             )
+            # Batched incremental reveal (issue #187): box art that just
+            # landed shows up while the run is still going. Labels wait for
+            # the final reload -- a label alone re-composites the cartridge
+            # anyway when the grid reloads.
+            if (
+                evt.get("result") == "downloaded"
+                and evt.get("rom_path")
+                and evt.get("art_kind") != COVER_ART_TYPE_CARTRIDGE_LABEL
+            ):
+                GLib.idle_add(
+                    self._queue_cover_reveal,
+                    {
+                        "console": evt.get("console"),
+                        "name": evt.get("rom_name"),
+                        "path": evt.get("rom_path"),
+                    },
+                )
 
         def _on_done(summary):
             GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary, on_finished)
@@ -3506,9 +3528,55 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             replace_existing=replace_existing,
         )
 
+    # -- incremental cover reveal (issue #187) ------------------------------
+    #: Flush the pending reveals after this many downloads...
+    COVER_REVEAL_BATCH = 8
+    #: ...or after this long, whichever comes first: visible, intentional
+    #: steps instead of per-file flicker.
+    COVER_REVEAL_FLUSH_MS = 2500
+
+    def _queue_cover_reveal(self, rom):
+        """Collect one downloaded cover for the next batched reveal (UI thread)."""
+        pending = self._reveal_pending
+        console_changed = bool(pending) and pending[-1]["console"] != rom["console"]
+        if console_changed:
+            # The sync moved on: everything gathered for the previous console
+            # is complete, so reveal it now rather than on the next timeout.
+            self._flush_cover_reveal()
+        self._reveal_pending.append(rom)
+        if len(self._reveal_pending) >= self.COVER_REVEAL_BATCH:
+            self._flush_cover_reveal()
+        elif self._reveal_timer is None:
+            self._reveal_timer = GLib.timeout_add(
+                self.COVER_REVEAL_FLUSH_MS, self._flush_cover_reveal_from_timer
+            )
+        return False
+
+    def _flush_cover_reveal_from_timer(self):
+        self._reveal_timer = None
+        self._flush_cover_reveal()
+        return False
+
+    def _flush_cover_reveal(self):
+        if self._reveal_timer is not None:
+            GLib.source_remove(self._reveal_timer)
+            self._reveal_timer = None
+        pending, self._reveal_pending = self._reveal_pending, []
+        for rom in pending:
+            # Only the scope on screen updates mid-run: targeted card
+            # refreshes, never a full grid reload. Everything else waits for
+            # the end-of-run reload, which stays as the consistency backstop.
+            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID) or (
+                self.current_console == rom["console"]
+            ):
+                self.refresh_rom_artwork(rom, fade=True)
+
     def _on_cover_sync_done_ui(self, task_id, summary, on_finished=None):
         self._cover_sync_running = False
         self._cover_sync_cancel = None
+        # Whatever is still queued reveals before the final reload takes
+        # over; a cancelled run's grid then matches exactly what is on disk.
+        self._flush_cover_reveal()
         self._finish_task(task_id)
         # Covers already downloaded are kept -- each is an independent file, so
         # a stopped run leaves useful work rather than a half-written state.

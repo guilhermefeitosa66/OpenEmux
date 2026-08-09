@@ -616,6 +616,9 @@ class RomItem(Gtk.Box):
             if hasattr(self, "_placeholder_widget"):
                 self._set_cover_widget(self.cover_image)
                 del self._placeholder_widget
+            if getattr(self, "_fade_next_apply", False):
+                self._fade_next_apply = False
+                self._animate_cover_reveal()
         except Exception:
             logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
@@ -958,8 +961,20 @@ class RomItem(Gtk.Box):
             self.context_services.win.open_artwork_manager(self.rom, LABEL_ART)
 
 
-    def _refresh_cover_after_change(self):
+    def _refresh_cover_after_change(self, fade=False):
+        # ``fade`` cross-fades the card when the new art lands (issue #187):
+        # what separates covers "filling in" during a sync from glitchy
+        # popping. Off for every other refresh path.
+        self._fade_next_apply = bool(fade)
         fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
+
+    def _animate_cover_reveal(self):
+        self.set_opacity(0.0)
+        target = Adw.PropertyAnimationTarget.new(self, "opacity")
+        animation = Adw.TimedAnimation.new(self, 0.0, 1.0, 280, target)
+        # Held on the card: the animation object must outlive this frame.
+        self._reveal_animation = animation
+        animation.play()
 
     def set_cartridge_frame(self, frame_path):
         """Swap the shell SVG and re-compose the card (per-ROM color change).
@@ -1155,12 +1170,12 @@ class RomGrid(Gtk.FlowBox):
                 item.set_cartridge_frame(self._frame_path_for_rom(item.rom))
                 return
 
-    def refresh_rom_artwork(self, rom):
+    def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one card's artwork after a cover or label file changed."""
         path = str(rom.get("path", ""))
         for item in self._items:
             if str(item.rom.get("path", "")) == path:
-                item._refresh_cover_after_change()
+                item._refresh_cover_after_change(fade=fade)
                 return
 
     # -- layout ------------------------------------------------------------
