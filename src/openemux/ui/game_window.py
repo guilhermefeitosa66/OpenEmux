@@ -54,6 +54,10 @@ FIND_WINDOW_TIMEOUT_TICKS = 100
 #: Grace period between the QUIT command and a hard terminate on close.
 QUIT_GRACE_MS = 1500
 
+#: Ignore repeats of the grabbed fullscreen hotkey inside this window --
+#: X auto-repeat turns a held key into a stream of presses.
+FULLSCREEN_DEBOUNCE_US = 400_000
+
 
 class _GameScreen(Gtk.Widget):
     """Draws the CRT frame (or plain black) and knows where the game goes."""
@@ -105,6 +109,16 @@ class GameWindow(Adw.Window):
         self._embedder = RetroArchWindowEmbedder()
         self._child_xid = None
         self._parent_xid = None
+        # RetroArch's own fullscreen toggle is unbound while embedded (it
+        # would recreate the window), so the wrapper takes over the user's
+        # binding and fullscreens itself instead.
+        profile = runtime_manager.config_manager.get_input_profile(rom.get("console"))
+        keyboard = (profile.get("devices", {}) or {}).get("keyboard", {}) or {}
+        self._fullscreen_key = (
+            (keyboard.get("bindings", {}) or {}).get("fullscreen_toggle") or "f"
+        )
+        self._fullscreen_keycode = None
+        self._fullscreen_toggled_at = 0
         # Set when embedding turns out to be impossible: the wrapper closes
         # itself and must leave the standalone RetroArch window running.
         self._standalone_fallback = False
@@ -159,10 +173,10 @@ class GameWindow(Adw.Window):
             )
         )
 
-        toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(header)
-        toolbar.set_content(self._screen)
-        self.set_content(toolbar)
+        self._toolbar = Adw.ToolbarView()
+        self._toolbar.add_top_bar(header)
+        self._toolbar.set_content(self._screen)
+        self.set_content(self._toolbar)
         self.set_default_size(920, 930 if texture is not None else 740)
 
         self.connect("map", self._on_map)
@@ -194,6 +208,9 @@ class GameWindow(Adw.Window):
         self._mute_button.set_tooltip_text("Mute")
         self._mute_button.add_css_class("flat")
         self._mute_guard = False
+        # Tracks a mute this control engaged itself at the slider floor, so
+        # dragging back up releases it without touching a manual mute.
+        self._auto_muted = False
         self._mute_button.connect("toggled", self._on_mute_toggled)
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -254,6 +271,17 @@ class GameWindow(Adw.Window):
             level = scale.get_value()
         else:
             level = self._runtime.set_master_volume_db(scale.get_value())
+            # The slider floor (-40 dB) is quiet but not silent; reaching
+            # it should read as "off", so the control mutes there and
+            # releases that mute -- only its own -- on the way back up.
+            at_floor = level <= MIN_VOLUME_DB + 1e-6
+            if at_floor and not self._mute_button.get_active():
+                self._auto_muted = True
+                self._mute_button.set_active(True)
+            elif not at_floor and self._auto_muted:
+                self._auto_muted = False
+                if self._mute_button.get_active():
+                    self._mute_button.set_active(False)
         icon = "audio-volume-high-symbolic"
         if level <= -30:
             icon = "audio-volume-low-symbolic"
@@ -314,6 +342,8 @@ class GameWindow(Adw.Window):
             # on every click/activation, and without it RetroArch drops
             # keyboard, hotkeys and (through its focus check) gamepad input.
             self._embedder.ensure_focus(self._child_xid, self._parent_xid)
+            if self._fullscreen_keycode in self._embedder.pressed_grabbed_keycodes():
+                self._toggle_fullscreen()
         return True
 
     def _try_embed(self):
@@ -342,7 +372,22 @@ class GameWindow(Adw.Window):
         self._parent_xid = parent_xid
         self._last_rect = rect
         self._embedder.focus(child_xid)
+        self._fullscreen_keycode = self._embedder.grab_key(
+            parent_xid, self._fullscreen_key
+        )
         logger.info("game window: embedded RetroArch window 0x%x", child_xid)
+
+    def _toggle_fullscreen(self):
+        now = GLib.get_monotonic_time()
+        if now - self._fullscreen_toggled_at < FULLSCREEN_DEBOUNCE_US:
+            return
+        self._fullscreen_toggled_at = now
+        if self.is_fullscreen():
+            self.unfullscreen()
+            self._toolbar.set_reveal_top_bars(True)
+        else:
+            self.fullscreen()
+            self._toolbar.set_reveal_top_bars(False)
 
     def _fall_back_to_standalone(self, reason):
         """Close the wrapper and leave RetroArch running in its own window.

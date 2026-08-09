@@ -3642,6 +3642,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._sync_runtime_controls()
             if not success and launch_error:
                 self._toast(launch_error, timeout=5)
+            if success:
+                # The relaunched RetroArch starts with the embed overrides
+                # (undecorated window); without a wrapper adopting it, it
+                # would float borderless.
+                self._maybe_open_game_window(rom)
             if success and resume_marker is not None:
                 GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
             return False
@@ -3689,9 +3694,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _maybe_open_game_window(self, rom):
         """POC (env-flagged): wrap the RetroArch window in an OpenEmux one.
 
-        Only the plain launch paths open it; the input hot-apply relaunch
-        (issue #129) deliberately does not -- the old wrapper closes with
-        its process and the relaunched game runs standalone.
+        Every launch path opens it, including the input hot-apply relaunch
+        (issue #129): the old wrapper closes with its process, so the new
+        game needs a new wrapper adopting it.
         """
         if not feature_flags.retroarch_embed_enabled():
             return

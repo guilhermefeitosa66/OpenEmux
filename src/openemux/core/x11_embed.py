@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from Xlib import X, Xatom
+    from Xlib import X, XK, Xatom
     from Xlib import display as x11_display
 
     XLIB_AVAILABLE = True
@@ -211,6 +211,56 @@ class RetroArchWindowEmbedder:
         except Exception as exc:
             logger.warning("embed: ensure-focus failed: %s", exc)
             return False
+
+    # -- wrapper hotkeys ----------------------------------------------------
+    def grab_key(self, toplevel_xid, key_name):
+        """Passively grab one key on the wrapper toplevel; the keycode or None.
+
+        Every normal key event goes to the game (X focus sits on the
+        embedded child), so the only way the wrapper can see a hotkey of
+        its own is a passive grab -- grabs on an ancestor fire even while
+        focus is on a descendant, and they die with this display
+        connection, so ``close()`` is also the ungrab.
+        """
+        dpy = self._dpy()
+        if dpy is None:
+            return None
+        try:
+            keysym = XK.string_to_keysym(key_name)
+            if keysym == X.NoSymbol:
+                # Binding names are lowercase ("f11"); keysym names for
+                # function keys are capitalized ("F11"). Same keycode.
+                keysym = XK.string_to_keysym(key_name.upper())
+            keycode = dpy.keysym_to_keycode(keysym) if keysym != X.NoSymbol else 0
+            if not keycode:
+                logger.warning("embed: no keycode for hotkey %r", key_name)
+                return None
+            toplevel = dpy.create_resource_object("window", toplevel_xid)
+            # Caps/Num lock must not disable the hotkey.
+            for modifiers in (0, X.LockMask, X.Mod2Mask, X.LockMask | X.Mod2Mask):
+                toplevel.grab_key(
+                    keycode, modifiers, False, X.GrabModeAsync, X.GrabModeAsync
+                )
+            dpy.sync()
+            return keycode
+        except Exception as exc:
+            logger.warning("embed: grabbing key %r failed: %s", key_name, exc)
+            return None
+
+    def pressed_grabbed_keycodes(self):
+        """Keycodes of grabbed keys pressed since the last call."""
+        dpy = self._dpy()
+        if dpy is None:
+            return []
+        pressed = []
+        try:
+            while dpy.pending_events():
+                event = dpy.next_event()
+                if event.type == X.KeyPress:
+                    pressed.append(event.detail)
+        except Exception as exc:
+            logger.warning("embed: reading grabbed keys failed: %s", exc)
+        return pressed
 
     def release(self, child_xid):
         """Detach the game window before ours goes away.
