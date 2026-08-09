@@ -33,6 +33,7 @@ Everything degrades silently: a missing, corrupt or FTS5-less database
 answers ``None``, never raises -- the index must never fail a sync.
 """
 
+import difflib
 import logging
 import re
 import shutil
@@ -318,6 +319,89 @@ class ArtworkNameIndex:
         if len(ranked) > 1 and ranked[1]["coverage"] >= best["coverage"]:
             return None
         return _pick_region(best["stems"], priority)
+
+
+    # -- manual suggestions (#185) ------------------------------------------
+    def suggest(self, thumb_system, query, limit=12, approximate=False):
+        """Ranked candidate stems for the manual cover picker (#185).
+
+        Standard mode is FTS5 -- every token required, the last one as a
+        prefix, ranked by bm25. Approximate mode is similarity-ranked
+        (stdlib ``difflib``) for typos and heavily tagged stems: seeded by
+        an ORed FTS pass, falling back to a scan of the system's whole name
+        list when even that finds nothing. Only stems present in the index
+        (and therefore in the mirror) are ever returned; any degradation
+        answers an empty list.
+        """
+        if not thumb_system or not (query or "").strip():
+            return []
+        conn = self._connect()
+        if conn is None:
+            return []
+        try:
+            tokens = _tokens(query)
+            if not tokens:
+                return []
+            if not self._fts_available(conn):
+                if approximate:
+                    return self._similarity_scan(conn, thumb_system, query, limit)
+                return []
+            if not approximate:
+                # The numeral swap ("2" <-> "ii") applies here too, so
+                # "Final Fantasy 2" answers on the first query -- the same
+                # broadening the automatic ladder does.
+                for variant in (tokens, _numeral_swapped(tokens)):
+                    if not variant:
+                        continue
+                    match = _fts_query(variant[:-1])
+                    prefix = '"%s"*' % variant[-1].replace('"', '""')
+                    match = f"{match} {prefix}".strip()
+                    rows = self._rows_matching(conn, thumb_system, match, limit)
+                    if rows:
+                        return [row[0] for row in rows]
+                return []
+            rows = self._rows_matching(
+                conn, thumb_system, _fts_query(tokens, joiner=" OR "),
+                max(limit * 4, 32),
+            )
+            stems = [row[0] for row in rows]
+            if not stems:
+                return self._similarity_scan(conn, thumb_system, query, limit)
+            return _rank_by_similarity(stems, query)[:limit]
+        except sqlite3.Error as exc:
+            logger.warning("artwork index suggestions failed: %s", exc)
+            return []
+        finally:
+            conn.close()
+
+    def _similarity_scan(self, conn, thumb_system, query, limit):
+        """Last resort for a fully misspelled query: rank the whole system.
+
+        A system's name list tops out around 13k rows (NES); the quick-ratio
+        prefilter inside the ranking keeps a one-shot manual query cheap.
+        """
+        rows = conn.execute(
+            "SELECT name FROM games WHERE system = ?", (thumb_system,)
+        ).fetchall()
+        return _rank_by_similarity(
+            [row[0] for row in rows], query, floor=0.5
+        )[:limit]
+
+
+def _rank_by_similarity(stems, query, floor=0.0):
+    reference = _strip_tag_groups(query).lower()
+    scored = []
+    for stem in stems:
+        matcher = difflib.SequenceMatcher(
+            None, reference, _strip_tag_groups(stem).lower()
+        )
+        if matcher.real_quick_ratio() < floor:
+            continue
+        ratio = matcher.ratio()
+        if ratio >= floor:
+            scored.append((ratio, stem))
+    scored.sort(key=lambda pair: (-pair[0], pair[1]))
+    return [stem for _ratio, stem in scored]
 
 
 def _pick_region(stems, priority):
