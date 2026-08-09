@@ -892,3 +892,177 @@ class StagedCandidateTests(unittest.TestCase):
         ):
             stem = cover_sync._resolve_hash_stem("SFC", "/tmp/rom001.md", {})
         self.assertEqual(stem, "Chrono Trigger (USA)")
+
+
+class ParallelSyncTests(unittest.TestCase):
+    """#186: bounded fan-out with per-host politeness budgets."""
+
+    @staticmethod
+    def _library(count):
+        return {
+            "SFC": [
+                {"name": f"Game {i:02d}", "path": f"/tmp/g{i}.sfc", "console": "SFC"}
+                for i in range(count)
+            ]
+        }
+
+    def test_downloads_run_in_parallel_but_respect_the_host_budget(self):
+        import threading as _threading
+        import time as _time
+
+        in_flight = {"mirror": 0, "libretro": 0}
+        peaks = {"mirror": 0, "libretro": 0}
+        track_lock = _threading.Lock()
+
+        def _fake_download(url, dest):
+            host = "mirror" if "raw.githubusercontent.com" in url else "libretro"
+            with track_lock:
+                in_flight[host] += 1
+                peaks[host] = max(peaks[host], in_flight[host])
+            _time.sleep(0.02)
+            with track_lock:
+                in_flight[host] -= 1
+            return True
+
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+            return [
+                ("libretro", "exact", f"https://thumbnails.libretro.com/x/{rom_name}.png"),
+                ("openemux", "exact", f"https://raw.githubusercontent.com/x/{rom_name}.webp"),
+            ]
+
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._staged_cover_candidates", side_effect=_staged),
+                patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(8),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={},
+                    max_workers=6,
+                )
+        self.assertEqual(summary["downloaded"], 8)
+        # Third-party host: never more than one request in flight.
+        self.assertEqual(peaks["libretro"], 1)
+
+    def test_the_mirror_takes_real_concurrency(self):
+        import threading as _threading
+        import time as _time
+
+        peak = {"value": 0, "now": 0}
+        track_lock = _threading.Lock()
+
+        def _fake_download(url, dest):
+            with track_lock:
+                peak["now"] += 1
+                peak["value"] = max(peak["value"], peak["now"])
+            _time.sleep(0.03)
+            with track_lock:
+                peak["now"] -= 1
+            return True
+
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+            return [
+                ("openemux", "exact", f"https://raw.githubusercontent.com/x/{rom_name}.webp"),
+            ]
+
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._staged_cover_candidates", side_effect=_staged),
+                patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
+            ):
+                _sync_covers(
+                    library_by_console=self._library(8),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={},
+                    max_workers=6,
+                )
+        self.assertGreater(peak["value"], 1)
+
+    def test_progress_stays_monotonic_with_out_of_order_completions(self):
+        import time as _time
+
+        def _fake_download(url, dest):
+            # Earlier submissions take longer, so completions arrive reversed.
+            index = int(url.rsplit("-", 1)[1].split(".")[0])
+            _time.sleep(0.03 - index * 0.005)
+            return True
+
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+            index = rom_name.split()[-1]
+            return [("openemux", "exact",
+                     f"https://raw.githubusercontent.com/x/g-{int(index)}.webp")]
+
+        events = []
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._staged_cover_candidates", side_effect=_staged),
+                patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
+            ):
+                _sync_covers(
+                    library_by_console=self._library(5),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={},
+                    on_progress=events.append,
+                    max_workers=5,
+                )
+        self.assertEqual([e["processed"] for e in events], [1, 2, 3, 4, 5])
+        self.assertTrue(all(e["total"] == 5 for e in events))
+
+    def test_cancel_mid_run_keeps_completed_files_and_counts(self):
+        import threading as _threading
+
+        done = _threading.Event()
+        calls = {"n": 0}
+
+        def _fake_download(url, dest):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                done.set()  # first download lands, then the user cancels
+            return True
+
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+            return [("openemux", "exact",
+                     f"https://raw.githubusercontent.com/x/{rom_name}.webp")]
+
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._staged_cover_candidates", side_effect=_staged),
+                patch("openemux.core.cover_sync._download_cover", side_effect=_fake_download),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(30),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={},
+                    should_cancel=done.is_set,
+                    max_workers=2,
+                )
+        self.assertTrue(summary["cancelled"])
+        # What completed stays counted; nothing completed is lost.
+        self.assertEqual(summary["downloaded"], summary["total"] - summary["skipped"] - summary["errors"])
+        self.assertLess(summary["total"], 30)
+
+    def test_rotation_balances_the_equivalent_file_hosts(self):
+        with patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None):
+            even = cover_sync._staged_cover_candidates(
+                "SFC", "Chrono Trigger", {}, provider_rotation=0
+            )
+            odd = cover_sync._staged_cover_candidates(
+                "SFC", "Chrono Trigger", {}, provider_rotation=1
+            )
+        self.assertEqual(even[0][0], "libretro")
+        self.assertEqual(odd[0][0], "openemux")
+        # Both rotations cover the same URL set: rotation changes order only.
+        self.assertEqual({u for _p, _s, u in even}, {u for _p, _s, u in odd})
