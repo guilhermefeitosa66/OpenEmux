@@ -739,14 +739,17 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
     so nothing here mutates state outside this ROM's own files.
     """
     name = rom["name"]
+    rom_path = rom.get("path")
     if should_cancel and should_cancel():
-        return {"status": "cancelled", "console": console, "rom_name": name}
+        return {"status": "cancelled", "console": console, "rom_name": name,
+                "rom_path": rom_path}
 
     if not replace_existing and find_local_art(roms_dir_path, console, name, art_dir):
         logger.info(
             "cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind
         )
-        return {"status": "skipped", "console": console, "rom_name": name}
+        return {"status": "skipped", "console": console, "rom_name": name,
+                "rom_path": rom_path}
 
     target = roms_dir_path / console / art_dir / f"{name}.png"
     candidates = _staged_cover_candidates(
@@ -805,13 +808,15 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
 
     if stage is not None:
         return {"status": "downloaded", "console": console, "rom_name": name,
-                "stage": stage}
+                "rom_path": rom_path, "stage": stage}
     if cancelled:
-        return {"status": "cancelled", "console": console, "rom_name": name}
+        return {"status": "cancelled", "console": console, "rom_name": name,
+                "rom_path": rom_path}
     logger.info(
         "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
     )
-    return {"status": "missed", "console": console, "rom_name": name}
+    return {"status": "missed", "console": console, "rom_name": name,
+            "rom_path": rom_path}
 
 
 def _sync_covers(
@@ -931,6 +936,7 @@ def _sync_covers(
                     {
                         "console": result["console"],
                         "rom_name": result["rom_name"],
+                        "rom_path": result.get("rom_path"),
                         "result": status,
                         "processed": total,
                         "total": total_targets,
