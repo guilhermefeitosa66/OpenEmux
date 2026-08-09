@@ -43,4 +43,7 @@ openemux = [
     # License notice for the vendored Adwaita symbolic icons; must ship with
     # the icons themselves.
     "ui/assets/icons/symbolic/LICENSE",
+    # The game-name database (issue #184), consumed by the staged cover
+    # lookup and the cover-picker suggestions.
+    "data/games.db.zip",
 ]

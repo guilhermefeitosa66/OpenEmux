@@ -169,7 +169,8 @@ class CrcResolutionTests(unittest.TestCase):
 
 class DegradationTests(unittest.TestCase):
     def test_a_missing_database_is_silent(self):
-        index = ArtworkNameIndex(db_path="/nonexistent/dir/games.db")
+        index = ArtworkNameIndex(db_path="/nonexistent/dir/games.db",
+                                 shipped_zip="/nonexistent/games.db.zip")
         self.assertFalse(index.available)
         self.assertIsNone(index.resolve_name(SNES, "Chrono Trigger"))
         self.assertIsNone(index.resolve_by_crc(SNES, "AABBCCDD"))
@@ -210,25 +211,23 @@ class DegradationTests(unittest.TestCase):
 class ShippedZipTests(unittest.TestCase):
     def test_the_database_is_extracted_from_the_shipped_zip_once(self):
         with TemporaryDirectory() as tmp:
-            root = Path(tmp) / "project"
-            (root / "tools").mkdir(parents=True)
             inner = Path(tmp) / "games.db"
             _build_db(inner, [("Chrono Trigger (USA)", SNES)])
-            with zipfile.ZipFile(root / "tools" / "games.db.zip", "w") as archive:
+            shipped = Path(tmp) / "games.db.zip"
+            with zipfile.ZipFile(shipped, "w") as archive:
                 archive.write(inner, "games.db")
 
             db_path = Path(tmp) / "cache" / "games.db"
-            index = ArtworkNameIndex(db_path=db_path, project_root=root)
+            index = ArtworkNameIndex(db_path=db_path, shipped_zip=shipped)
             resolved = index.resolve_name(SNES, "Chrono Trigger (USA)")
             self.assertEqual(resolved[0], "Chrono Trigger (USA)")
             self.assertTrue(db_path.exists())
 
     def test_no_zip_and_no_database_degrades_silently(self):
         with TemporaryDirectory() as tmp:
-            root = Path(tmp) / "project"
-            root.mkdir()
             index = ArtworkNameIndex(
-                db_path=Path(tmp) / "cache" / "games.db", project_root=root
+                db_path=Path(tmp) / "cache" / "games.db",
+                shipped_zip=Path(tmp) / "missing.zip",
             )
             self.assertFalse(index.available)
             self.assertIsNone(index.resolve_name(SNES, "Chrono Trigger"))

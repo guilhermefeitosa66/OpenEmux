@@ -43,6 +43,13 @@ run:
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
 
+# Regenerate the game-name database (issue #184) from a local checkout of
+# the artwork mirror. MIRROR/DATS are overridable:
+#   make name-db MIRROR=../openemux-artwork DATS=/path/to/dats
+name-db:
+	$(PYTHON) tools/generate_name_db.py --mirror $(or $(MIRROR),../openemux-artwork) \
+		$(if $(DATS),--dats $(DATS),) --output src/openemux/data/games.db.zip
+
 # Browse the symbolic icons the UI may use (Adwaita only -- see the tool's
 # docstring for why the desktop's other themes are excluded).
 #   make icons              browse everything

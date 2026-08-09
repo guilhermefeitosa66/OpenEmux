@@ -14,7 +14,6 @@ from openemux.core.config import (
     COVER_ART_TYPE_BOXART,
     COVER_ART_TYPE_CARTRIDGE_LABEL,
 )
-from openemux.core.paths import get_project_root
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, find_local_art
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
@@ -465,11 +464,7 @@ _NAME_INDEX = None
 def _get_name_index():
     global _NAME_INDEX
     if _NAME_INDEX is None:
-        try:
-            _NAME_INDEX = ArtworkNameIndex(project_root=get_project_root())
-        except Exception as exc:  # noqa: BLE001 - the index must never fail a sync
-            logger.warning("artwork index unavailable: %s", exc)
-            _NAME_INDEX = ArtworkNameIndex(db_path="/nonexistent/games.db")
+        _NAME_INDEX = ArtworkNameIndex()
     return _NAME_INDEX
 
 
