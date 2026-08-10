@@ -1,0 +1,6 @@
+# Every change in this repository is owned by the maintainer.
+# Pull requests targeting `develop` and `main` require a review from
+# @guilhermefeitosa66 before they can be merged (see the repository ruleset
+# "Protected branches (develop, main)").
+
+* @guilhermefeitosa66
