@@ -1167,10 +1167,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.search_button.set_active(not self.search_button.get_active())
 
-    def _open_preferences(self, page=None):
+    def _open_preferences(self, page=None, console=None):
         self._preferences_dialog = OpenEmuxPreferences(self)
         if page:
             self._preferences_dialog.show_page(page)
+        if console is not None:
+            # Reached from a console's own context menu: the Input page would
+            # otherwise open on whatever the library is showing, which is not
+            # necessarily the console that was right-clicked.
+            self._preferences_dialog.select_input_console(console)
         self._preferences_dialog.present(self)
 
     def _open_welcome(self):
@@ -1775,6 +1780,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         ):
             if submenu is not None:
                 entries.append(submenu)
+        # Next to Core and Shader: the third per-console setting, and the only
+        # one that needs the dialog. The header button reaches the same page,
+        # but only while that console is the one on screen.
+        entries.append(
+            (self.t("context.controller"), "sidebar.controller", "input-gaming-symbolic")
+        )
         entries.append(SEPARATOR)
         entries.append(
             (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
@@ -2162,6 +2173,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("refresh", self._act_sidebar_refresh),
             ("import", self._act_sidebar_import),
             ("sync-covers", self._act_sidebar_sync_covers),
+            ("controller", self._act_sidebar_controller),
             ("open-folder", self._act_sidebar_open_folder),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -2189,6 +2201,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._start_cover_sync(scope="all", selected_console=None)
         else:
             self._start_cover_sync(scope="console", selected_console=console)
+
+    def _act_sidebar_controller(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: controller console=%s", console)
+        self._open_preferences(page="input", console=console)
 
     def _act_sidebar_open_folder(self, _action, _param):
         console = self._sidebar_menu_console

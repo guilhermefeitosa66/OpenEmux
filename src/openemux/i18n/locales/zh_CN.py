@@ -553,6 +553,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "按住 {hotkey} 再按 {fullscreen_key} 切换全屏",
     "context.reveal": "在文件管理器中显示",
     "context.reveal.missing": "“{name}”已不在磁盘上",
+    "context.controller": "手柄设置",
     "context.open_folder": "打开文件夹",
     "context.more_options": "更多选项",
     "context.rescan.console": "重新扫描此主机",

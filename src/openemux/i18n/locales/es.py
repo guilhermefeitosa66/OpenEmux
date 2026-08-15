@@ -553,6 +553,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "Mantén {hotkey} y pulsa {fullscreen_key} para pantalla completa",
     "context.reveal": "Mostrar en el gestor de archivos",
     "context.reveal.missing": "“{name}” ya no está en el disco",
+    "context.controller": "Configuración del mando",
     "context.open_folder": "Abrir carpeta",
     "context.more_options": "Más opciones",
     "context.rescan.console": "Reescanear esta consola",

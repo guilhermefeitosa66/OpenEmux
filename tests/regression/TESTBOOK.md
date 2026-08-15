@@ -379,6 +379,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The gamepad indicator appears in the header; UI navigation and the game respond.
 - **Check:** human only (hardware).
 
+### RT-073 — A console's context menu opens its own controller settings
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, showing a console *other* than the one to be right-clicked.
+- **Steps:**
+  1. Right-click a console in the sidebar (or click its "⋯" button).
+  2. Choose "Controller settings".
+- **Expected:** "Settings" opens on the "Input" page with the **right-clicked** console selected
+  in the console row — not the one the library was showing.
+- **Check:** screenshot of the Input page; the console row must name the console from step 1.
+
 ## Shaders
 
 ### RT-080 — Shader selection round-trips through the store

@@ -553,6 +553,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "{hotkey} を押しながら {fullscreen_key} でフルスクリーン切り替え",
     "context.reveal": "ファイルマネージャーで表示",
     "context.reveal.missing": "「{name}」はディスク上にありません",
+    "context.controller": "コントローラー設定",
     "context.open_folder": "フォルダーを開く",
     "context.more_options": "その他のオプション",
     "context.rescan.console": "このコンソールを再スキャン",

@@ -561,6 +561,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "Hold {hotkey} and press {fullscreen_key} to toggle fullscreen",
     "context.reveal": "Show in file manager",
     "context.reveal.missing": "“{name}” is no longer on disk",
+    "context.controller": "Controller settings",
     "context.open_folder": "Open folder",
     "context.more_options": "More options",
     "context.rescan.console": "Rescan this console",

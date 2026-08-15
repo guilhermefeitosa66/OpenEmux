@@ -553,6 +553,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "Halte {hotkey} und drücke {fullscreen_key} für Vollbild",
     "context.reveal": "Im Dateimanager anzeigen",
     "context.reveal.missing": "„{name}“ liegt nicht mehr auf der Festplatte",
+    "context.controller": "Controller-Einstellungen",
     "context.open_folder": "Ordner öffnen",
     "context.more_options": "Weitere Optionen",
     "context.rescan.console": "Diese Konsole neu einlesen",

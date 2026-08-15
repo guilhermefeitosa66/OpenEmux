@@ -559,6 +559,7 @@ TRANSLATIONS = {
     "tips.fullscreen": "Segure {hotkey} e pressione {fullscreen_key} para tela cheia",
     "context.reveal": "Mostrar no gerenciador de arquivos",
     "context.reveal.missing": "“{name}” não está mais no disco",
+    "context.controller": "Configurações de controle",
     "context.open_folder": "Abrir pasta",
     "context.more_options": "Mais opções",
     "context.rescan.console": "Reescanear este console",

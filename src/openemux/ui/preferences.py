@@ -96,6 +96,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if page is not None:
             self.set_visible_page(page)
 
+    def select_input_console(self, console_id):
+        """Point the Input page at a console, whatever the library is showing.
+
+        The combo defaults to the console on screen; opened from a console's
+        context menu, the console the user right-clicked is the one they mean.
+        Setting it emits notify::selected, which rebuilds the rows.
+        """
+        if console_id in self._console_ids:
+            self._console_combo.set_selected(self._console_ids.index(console_id))
+
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):
         self._stop_gamepad_reader()
