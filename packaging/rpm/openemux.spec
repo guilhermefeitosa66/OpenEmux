@@ -65,6 +65,14 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Sat Aug 15 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.0-1
+- Play inside an OpenEmux game window, with the emulator's controls in its header bar
+- Ship a local database of 60,600 game names, so covers are found without guessing URLs
+- Suggest the right game by name in the cover picker, including for misspelled queries
+- Download covers in parallel and reveal them as they arrive instead of only at the end
+- Keep save states, battery saves and artwork with a ROM when it is renamed
+- Choose System, Light or Dark from Settings, or flip it from the header bar
+
 * Sun Aug 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.10.2-1
 - Grant the Flatpak read access to the RetroArch Flatpak cores dir, so games launch on Flatpak-only setups
 
