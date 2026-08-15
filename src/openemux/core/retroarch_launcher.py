@@ -317,11 +317,11 @@ class RetroArchLauncher:
         states_dir.mkdir(parents=True, exist_ok=True)
         overrides["savestate_directory"] = f'"{states_dir}"'
         overrides["savestate_thumbnail_enable"] = '"true"'
-        # The slot the save/load hotkeys act on: the launch-specific slot (a
-        # "load this save" launch) wins over the configured default.
-        if state_slot is None:
-            state_slot = self.config_manager.get_state_slot()
-        overrides["state_slot"] = f'"{int(state_slot)}"'
+        # The slot the save/load hotkeys start on. A "load this save" launch
+        # names it; every other launch starts at 0 and moves from there with
+        # the slot hotkeys, which is why the setting that used to pin it is
+        # gone (issue #198).
+        overrides["state_slot"] = f'"{int(state_slot or 0)}"'
 
         # The game window needs RetroArch in a plain windowed window it can
         # re-parent -- no fullscreen, no decorations, and no saving back the

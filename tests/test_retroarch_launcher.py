@@ -78,9 +78,6 @@ class _DummyConfig:
     def get_console_states_dir(self, console):
         return self.base_dir / "states" / console
 
-    def get_state_slot(self):
-        return 2
-
     def get_game_window_enabled(self):
         # Off unless a test says otherwise: the embed overrides rewrite how
         # RetroArch's own window behaves, and every other assertion here is
@@ -311,13 +308,14 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_player1_analog_dpad_mode = "1"', lines)
 
     def test_override_owns_the_savestate_directory(self):
-        # Issue #73: states land in OpenEmux's per-console tree, and the
-        # configured save slot is written so the hotkeys act on it.
+        # Issue #73: states land in OpenEmux's per-console tree. A plain
+        # launch starts on slot 0 -- the setting that used to pin a slot is
+        # gone (issue #198), so the hotkeys move it from there.
         lines = self._override_lines(None)
         self.assertTrue(any(line.startswith('savestate_directory = "') for line in lines))
         self.assertTrue(any("/states/GBA" in line for line in lines))
         self.assertIn('savestate_thumbnail_enable = "true"', lines)
-        self.assertIn('state_slot = "2"', lines)
+        self.assertIn('state_slot = "0"', lines)
 
     def _game_window_override_lines(self, enabled, embeddable=True):
         with TemporaryDirectory() as tmp_dir:

@@ -1472,23 +1472,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         lang_group.add(self._language_combo)
         page.add(lang_group)
 
-        # Save states (issue #73 redo): only the slot lives here -- saving and
-        # loading are RetroArch hotkeys, bound on the Input page.
-        states_group = Adw.PreferencesGroup(
-            title=self.t("prefs.group.states"),
-            description=self.t("prefs.states.description"),
-        )
-        self._state_slot_row = Adw.SpinRow.new_with_range(0, self.config.MAX_STATE_SLOT, 1)
-        self._state_slot_row.set_title(self.t("prefs.states.slot"))
-        self._state_slot_row.set_subtitle(self.t("prefs.states.slot.subtitle"))
-        self._state_slot_row.set_value(self.config.get_state_slot())
-        self._state_slot_row.connect(
-            "notify::value",
-            lambda row, _p: self.config.set_state_slot(int(row.get_value())),
-        )
-        states_group.add(self._state_slot_row)
-        page.add(states_group)
-
         interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
         self._tips_row = Adw.SwitchRow(
             title=self.t("settings.system.tips.title"),
