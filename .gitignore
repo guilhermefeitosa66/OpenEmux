@@ -21,6 +21,10 @@ wheels/
 *.egg
 MANIFEST
 
+# Coverage reports (make coverage)
+.coverage
+htmlcov/
+
 # Virtual Environments
 .env
 .venv

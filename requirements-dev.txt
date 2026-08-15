@@ -1,0 +1,3 @@
+# Development-only dependencies — used by `make coverage` and CI, never shipped
+# in any package (the AppImage/deb/rpm/Flatpak builds install requirements.txt).
+coverage

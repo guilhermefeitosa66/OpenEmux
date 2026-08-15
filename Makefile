@@ -4,7 +4,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: all setup venv run test icons clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: all setup setup-dev venv run test coverage icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: appimage appimage-clean deb rpm flatpak checksums packages packages-clean
 
 all: setup
@@ -29,6 +29,10 @@ venv:
 setup:
 	$(PIP) install -r requirements.txt
 
+# Development extras (coverage.py) on top of the runtime dependencies
+setup-dev: setup
+	$(PIP) install -r requirements-dev.txt
+
 lock-deps:
 	$(PIP) freeze > requirements.lock
 
@@ -42,6 +46,19 @@ run:
 # Run the unit test suite
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
+
+# Run the unit test suite under coverage.py and print the report
+# (needs `make setup-dev`; configuration lives in pyproject.toml)
+coverage:
+	PYTHONPATH=src $(PYTHON) -m coverage run -m unittest discover -s tests
+	$(PYTHON) -m coverage report
+
+# Regenerate the game-name database (issue #184) from a local checkout of
+# the artwork mirror. MIRROR/DATS are overridable:
+#   make name-db MIRROR=../openemux-artwork DATS=/path/to/dats
+name-db:
+	$(PYTHON) tools/generate_name_db.py --mirror $(or $(MIRROR),../openemux-artwork) \
+		$(if $(DATS),--dats $(DATS),) --output src/openemux/data/games.db.zip
 
 # Browse the symbolic icons the UI may use (Adwaita only -- see the tool's
 # docstring for why the desktop's other themes are excluded).

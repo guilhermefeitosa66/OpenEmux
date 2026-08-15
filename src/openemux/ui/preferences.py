@@ -15,6 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib
 
+from openemux.core import game_window_support
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -38,6 +39,8 @@ from openemux.core.input_profiles import (
 )
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
+from openemux.core.theme import THEMES
+from openemux.ui import theming
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
@@ -94,6 +97,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         page = self._pages.get(name)
         if page is not None:
             self.set_visible_page(page)
+
+    def select_input_console(self, console_id):
+        """Point the Input page at a console, whatever the library is showing.
+
+        The combo defaults to the console on screen; opened from a console's
+        context menu, the console the user right-clicked is the one they mean.
+        Setting it emits notify::selected, which rebuilds the rows.
+        """
+        if console_id in self._console_ids:
+            self._console_combo.set_selected(self._console_ids.index(console_id))
 
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):
@@ -1247,6 +1260,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.page.video"), icon_name="applications-graphics-symbolic"
         )
 
+        page.add(self._build_game_window_group())
+
         appearance = Adw.PreferencesGroup(title=self.t("prefs.group.appearance"))
         # The cartridge frame is one of the view modes now, so this row mirrors
         # the header's switcher rather than owning a switch of its own.
@@ -1299,6 +1314,41 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._shader_rows = []
         self._rebuild_shader_rows()
         return page
+
+    def _build_game_window_group(self):
+        """Play inside an OpenEmux window, or leave RetroArch its own (#199).
+
+        Sits at the top of the Video page: it decides what the user looks at
+        while playing, which outranks the cover-grid appearance below it.
+        """
+        group = Adw.PreferencesGroup(title=self.t("prefs.group.game_window"))
+        self._game_window_row = Adw.SwitchRow(
+            title=self.t("prefs.game_window.title"),
+            subtitle=self.t("prefs.game_window.subtitle"),
+        )
+        self._game_window_row.set_active(self.config.get_game_window_enabled())
+        if game_window_support.embedding_possible():
+            self._game_window_row.connect("notify::active", self._on_game_window_toggled)
+        else:
+            # Nothing to offer here: no python-xlib, or a session with no X
+            # display at all (a Wayland session without XWayland, the Flatpak
+            # sandbox on Wayland). The row stays visible and says why, rather
+            # than silently disappearing on some machines.
+            self._game_window_row.set_sensitive(False)
+            self._game_window_row.set_subtitle(self.t("prefs.game_window.unavailable"))
+        group.add(self._game_window_row)
+        return group
+
+    def _on_game_window_toggled(self, row, _param):
+        enabled = row.get_active()
+        self.config.set_game_window_enabled(enabled)
+        from openemux.ui.game_window import display_supports_embedding
+
+        if enabled and not display_supports_embedding():
+            # The X11 backend is chosen before GTK starts, so a session that
+            # booted with the setting off is on Wayland for good: the next
+            # game would still open in RetroArch's own window.
+            self._toast(self.t("toast.game_window.restart"), timeout=6)
 
     def _shader_options_for_console(self, console_id):
         show_all = bool(self._show_all_switch.get_active())
@@ -1434,24 +1484,24 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         lang_group.add(self._language_combo)
         page.add(lang_group)
 
-        # Save states (issue #73 redo): only the slot lives here -- saving and
-        # loading are RetroArch hotkeys, bound on the Input page.
-        states_group = Adw.PreferencesGroup(
-            title=self.t("prefs.group.states"),
-            description=self.t("prefs.states.description"),
-        )
-        self._state_slot_row = Adw.SpinRow.new_with_range(0, self.config.MAX_STATE_SLOT, 1)
-        self._state_slot_row.set_title(self.t("prefs.states.slot"))
-        self._state_slot_row.set_subtitle(self.t("prefs.states.slot.subtitle"))
-        self._state_slot_row.set_value(self.config.get_state_slot())
-        self._state_slot_row.connect(
-            "notify::value",
-            lambda row, _p: self.config.set_state_slot(int(row.get_value())),
-        )
-        states_group.add(self._state_slot_row)
-        page.add(states_group)
-
         interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
+
+        # First row of the group: it is the setting that changes the most on
+        # screen. "System" is the default and keeps following the desktop --
+        # the header's toggle only ever picks light or dark.
+        self._themes = list(THEMES)
+        self._theme_combo = Adw.ComboRow(
+            title=self.t("settings.system.theme.title"),
+            subtitle=self.t("settings.system.theme.subtitle"),
+        )
+        self._theme_combo.set_model(
+            Gtk.StringList.new([self.t(f"theme.{name}") for name in self._themes])
+        )
+        current_theme = self.config.get_ui_settings()["theme"]
+        self._theme_combo.set_selected(self._themes.index(current_theme))
+        self._theme_combo.connect("notify::selected", self._on_theme_changed)
+        interface_group.add(self._theme_combo)
+
         self._tips_row = Adw.SwitchRow(
             title=self.t("settings.system.tips.title"),
             subtitle=self.t("settings.system.tips.subtitle"),
@@ -1520,6 +1570,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    def _on_theme_changed(self, row, *_a):
+        idx = row.get_selected()
+        if not (0 <= idx < len(self._themes)):
+            return
+        theme = self.config.set_theme(self._themes[idx])
+        theming.apply_theme(theme)
+        # "System" that lands on the same appearance emits no notify::dark,
+        # so the header icon is refreshed here rather than left to that.
+        self.win._sync_theme_button()
 
     def _on_show_tips_changed(self, row, *_a):
         enabled = row.get_active()

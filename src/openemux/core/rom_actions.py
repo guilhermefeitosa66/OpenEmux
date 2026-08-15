@@ -18,13 +18,13 @@ import gi
 
 from gi.repository import Gio, GLib
 
-from openemux.core import cartridge_render
+from openemux.core import cartridge_render, save_states
 from openemux.core.archives import (
     archive_entries,
     is_archive,
     rename_archive_rom_entry,
 )
-from openemux.core.scraper import rename_local_art
+from openemux.core.scraper import SUPPORTED_COVER_EXTS, rename_local_art
 from openemux.core.systems import get_supported_extensions
 
 logger = logging.getLogger(__name__)
@@ -77,12 +77,64 @@ def delete_rom(roms_dir, rom, trash=_gio_trash, cache_dir=None):
     return True
 
 
-def rename_rom(roms_dir, rom, new_name, cache_dir=None):
+def _rename_sibling_saves(old_path, new_path, console):
+    """Carry the battery saves and other core companions along (#134).
+
+    RetroArch's default ``savefile_directory`` puts the in-game save --
+    ``.srm``, ``.rtc`` and whatever else the core invents, including
+    multi-dotted shapes like ``.data.szsnes`` -- next to the content file
+    under the same stem. Matching on "same stem, not a ROM, not artwork" is
+    safer than a fixed extension list. Another ROM sharing the stem
+    (``Game.sfc`` next to ``Game.smc``) is its own game and stays put, and
+    an existing target is never overwritten.
+    """
+    rom_extensions = {ext.lower() for ext in get_supported_extensions(console)}
+    art_extensions = {f".{ext.lower().lstrip('.')}" for ext in SUPPORTED_COVER_EXTS}
+    prefix = f"{old_path.stem}."
+    moved = 0
+    for sibling in sorted(old_path.parent.iterdir()):
+        if not sibling.is_file() or sibling == old_path or sibling == new_path:
+            continue
+        if not sibling.name.startswith(prefix):
+            continue
+        suffix = sibling.suffix.lower()
+        if suffix in rom_extensions or suffix in art_extensions:
+            continue
+        remainder = sibling.name[len(old_path.stem):]
+        target = new_path.with_name(f"{new_path.stem}{remainder}")
+        if target.exists():
+            logger.warning(
+                "rom_actions sibling save skipped, target exists: %s -> %s",
+                sibling, target,
+            )
+            continue
+        try:
+            sibling.rename(target)
+            moved += 1
+        except OSError as exc:
+            logger.warning(
+                "rom_actions sibling save rename failed: path=%s error=%s", sibling, exc
+            )
+    if moved:
+        logger.info(
+            "rom_actions sibling saves renamed: old=%s new=%s files=%d",
+            old_path.stem, new_path.stem, moved,
+        )
+    return moved
+
+
+def rename_rom(roms_dir, rom, new_name, cache_dir=None, states_dir=None):
     """Rename a ROM and everything keyed on its name.
 
-    The file keeps its extension; artwork and the cartridge composite follow
-    the new name. Returns the updated rom dict (a copy) so the caller can
-    re-index it.
+    The file keeps its extension; artwork, the cartridge composite, the
+    save states under ``states_dir`` and the battery saves next to the file
+    follow the new name (#134). Returns the updated rom dict (a copy) so
+    the caller can re-index it.
+
+    For an archive holding several ROMs the *display name* cannot change --
+    the card is named after the entry inside, which stays as it is -- so
+    everything keyed on the display name deliberately stays put; only the
+    container file and its stem-keyed companions move.
     """
     new_name = sanitize_rom_name(new_name)
     console = rom["console"]
@@ -96,27 +148,38 @@ def rename_rom(roms_dir, rom, new_name, cache_dir=None):
         raise RomActionError(f"{new_path.name} already exists")
 
     # An archive shows the name of the ROM *inside* it, not its own, so
-    # renaming only the container would leave the card unchanged.
+    # renaming only the container would leave the card unchanged. With
+    # several entries there is no single card to follow: the display name
+    # keeps the inner entry's name (#134).
+    display_name = new_name
     if is_archive(old_path):
         extensions = get_supported_extensions(console)
         if len(archive_entries(old_path, extensions)) == 1:
             rename_archive_rom_entry(old_path, new_name, extensions)
+        else:
+            display_name = old_name
 
     if new_path != old_path:
         old_path.rename(new_path)
+        _rename_sibling_saves(old_path, new_path, console)
+        if states_dir is not None:
+            # States are keyed on the content file stem (#73), so they move
+            # with the file, not with the display name.
+            save_states.rename_states(states_dir, old_path.stem, new_path.stem)
 
-    if new_name != old_name:
-        rename_local_art(roms_dir, console, old_name, new_name)
+    if display_name != old_name:
+        rename_local_art(roms_dir, console, old_name, display_name)
         cartridge_render.drop_cached(console, old_name, cache_dir)
 
     logger.info(
-        "rom_actions renamed: console=%s old=%s new=%s path=%s",
+        "rom_actions renamed: console=%s old=%s new=%s display=%s path=%s",
         console,
         old_name,
         new_name,
+        display_name,
         new_path,
     )
     renamed = dict(rom)
-    renamed["name"] = new_name
+    renamed["name"] = display_name
     renamed["path"] = str(new_path)
     return renamed

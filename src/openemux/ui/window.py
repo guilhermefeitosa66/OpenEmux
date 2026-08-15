@@ -28,6 +28,7 @@ from openemux.core.library_view import (
 )
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
+from openemux.core import feature_flags, game_window_support
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -43,6 +44,7 @@ from openemux.core.rom_importer import (
 )
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
+from openemux.core.theme import toggled_theme
 from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
 from openemux.core.scraper import (
     COVER_ART,
@@ -64,6 +66,7 @@ from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
+from openemux.ui import theming
 from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
@@ -172,9 +175,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._cover_sync_running = False
         self._scan_running = False
         self._import_running = False
-        # The volume/mute controls are seeded once per launch, not on every
-        # runtime poll -- see _sync_runtime_controls (issue #125).
-        self._runtime_controls_seeded = False
         # Callbacks that re-apply translated text, registered where each
         # widget is built -- see _translatable.
         self._retranslate = []
@@ -188,6 +188,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        # The window wrapping the embedded RetroArch, while one is running.
+        self._game_window = None
+        # Covers downloaded by a running sync, waiting for a batched reveal
+        # (issue #187): flushed by size, by time, or when the sync moves on
+        # to another console.
+        self._reveal_pending = []
+        self._reveal_timer = None
         self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
         self.core_catalog = CoreCatalog(project_root=self.project_root)
@@ -401,17 +408,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
+        header.pack_end(self._build_theme_button())
+
         header.pack_end(self._build_view_mode_button())
         header.pack_end(self._build_view_mode_segment())
-
-        self.stop_btn = Gtk.Button()
-        self.stop_btn.set_icon_name("media-playback-stop-symbolic")
-        self._translatable(lambda: self.stop_btn.set_tooltip_text(self.t("header.stop")))
-        self.stop_btn.set_sensitive(False)
-        self.stop_btn.connect("clicked", self._on_stop_game_clicked)
-        header.pack_end(self.stop_btn)
-
-        header.pack_end(self._build_volume_button())
 
         # The two settings buttons ride in one box so the narrow breakpoint
         # can drop them together, without fighting the per-scope visibility
@@ -555,83 +555,42 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.view_mode_segment = box
         return box
 
-    def _build_volume_button(self):
-        """Master volume for the running game (issue #69): slider + mute.
+    def _build_theme_button(self):
+        """One click between light and dark (issue #198).
 
-        Lives next to Stop and is only sensitive while a game runs. The
-        slider is absolute dB; the runtime manager walks RetroArch there in
-        0.5 dB UDP steps from the level the launch seeded.
+        The icon shows what the click *gives* you -- a sun while the app is
+        dark, a moon while it is light -- rather than what is on screen, so
+        the button reads as an action instead of a status light. The full
+        three-way choice, "System" included, lives in Preferences > System.
         """
-        from openemux.core.retroarch_command import MAX_VOLUME_DB, MIN_VOLUME_DB
-
-        self.volume_btn = Gtk.MenuButton()
-        self.volume_btn.set_icon_name("audio-volume-high-symbolic")
-        self._translatable(lambda: self.volume_btn.set_tooltip_text(self.t("header.volume")))
-        self.volume_btn.set_sensitive(False)
-
-        # Set while the app itself writes into the scale, so an echo of the
-        # runtime's own level is not mistaken for a user drag (issue #125).
-        self._volume_scale_guard = False
-        self._volume_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
+        self.theme_btn = Gtk.Button()
+        self.theme_btn.connect("clicked", self._on_theme_toggle_clicked)
+        # Under "System" the desktop can flip the appearance while the app is
+        # open, and the icon has to follow it.
+        Adw.StyleManager.get_default().connect(
+            "notify::dark", lambda *_: self._sync_theme_button()
         )
-        self._volume_scale.set_size_request(180, -1)
-        self._volume_scale.set_value(self.config_manager.get_master_volume_db())
-        self._volume_scale.set_draw_value(True)
-        self._volume_scale.set_value_pos(Gtk.PositionType.RIGHT)
-        self._volume_scale.set_format_value_func(lambda _s, v: f"{v:+.1f} dB")
-        self._volume_scale.connect("value-changed", self._on_volume_scale_changed)
+        self._translatable(self._sync_theme_button)
+        self._sync_theme_button()
+        return self.theme_btn
 
-        self._mute_button = Gtk.ToggleButton()
-        self._mute_button.set_icon_name("audio-volume-muted-symbolic")
-        self._translatable(lambda: self._mute_button.set_tooltip_text(self.t("volume.mute")))
-        self._mute_button.add_css_class("flat")
-        self._mute_toggle_guard = False
-        self._mute_button.connect("toggled", self._on_mute_toggled)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.append(self._mute_button)
-        box.append(self._volume_scale)
-
-        popover = Gtk.Popover()
-        popover.set_child(box)
-        self.volume_btn.set_popover(popover)
-        return self.volume_btn
-
-    def _on_volume_scale_changed(self, scale):
-        if self._volume_scale_guard:
-            # The runtime poll echoes the current level back into the scale.
-            # Treating that as a user drag re-entered the whole volume path
-            # and wrote config.yaml once a second, forever (issue #125).
-            level = scale.get_value()
-        else:
-            level = self.runtime_manager.set_master_volume_db(scale.get_value())
-        icon = "audio-volume-high-symbolic"
-        if level <= -30:
-            icon = "audio-volume-low-symbolic"
-        elif level <= -12:
-            icon = "audio-volume-medium-symbolic"
-        if not self._mute_button.get_active():
-            self.volume_btn.set_icon_name(icon)
-
-    def _on_mute_toggled(self, button):
-        if self._mute_toggle_guard:
-            return
-        muted = self.runtime_manager.toggle_mute()
-        if muted != button.get_active():
-            # The command did not go out (game gone mid-toggle): stay honest.
-            self._mute_toggle_guard = True
-            button.set_active(muted)
-            self._mute_toggle_guard = False
-        self.volume_btn.set_icon_name(
-            "audio-volume-muted-symbolic" if muted else "audio-volume-high-symbolic"
+    def _sync_theme_button(self):
+        button = getattr(self, "theme_btn", None)
+        if button is None:
+            return  # a retranslate that ran before the header was built
+        dark = theming.is_dark()
+        button.set_icon_name(
+            "weather-clear-symbolic" if dark else "weather-clear-night-symbolic"
         )
-        if not muted:
-            self._on_volume_scale_changed(self._volume_scale)
+        button.set_tooltip_text(
+            self.t("header.theme.to_light" if dark else "header.theme.to_dark")
+        )
+
+    def _on_theme_toggle_clicked(self, _button):
+        theme = toggled_theme(theming.is_dark())
+        self.config_manager.set_theme(theme)
+        theming.apply_theme(theme)
+        self._sync_theme_button()
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -1136,7 +1095,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
-            ("stop-game", lambda *_: self._on_stop_game_clicked(None), ["<Ctrl>Escape"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1250,10 +1208,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.search_button.set_active(not self.search_button.get_active())
 
-    def _open_preferences(self, page=None):
+    def _open_preferences(self, page=None, console=None):
         self._preferences_dialog = OpenEmuxPreferences(self)
         if page:
             self._preferences_dialog.show_page(page)
+        if console is not None:
+            # Reached from a console's own context menu: the Input page would
+            # otherwise open on whatever the library is showing, which is not
+            # necessarily the console that was right-clicked.
+            self._preferences_dialog.select_input_console(console)
         self._preferences_dialog.present(self)
 
     def _open_welcome(self):
@@ -1286,7 +1249,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("shortcuts.group.general", (
                 ("<Ctrl>f", "shortcuts.search"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
-                ("<Ctrl>Escape", "shortcuts.stop"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),
             ("shortcuts.group.library", (
@@ -1859,6 +1821,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         ):
             if submenu is not None:
                 entries.append(submenu)
+        # Next to Core and Shader: the third per-console setting, and the only
+        # one that needs the dialog. The header button reaches the same page,
+        # but only while that console is the one on screen.
+        entries.append(
+            (self.t("context.controller"), "sidebar.controller", "input-gaming-symbolic")
+        )
         entries.append(SEPARATOR)
         entries.append(
             (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
@@ -2246,6 +2214,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("refresh", self._act_sidebar_refresh),
             ("import", self._act_sidebar_import),
             ("sync-covers", self._act_sidebar_sync_covers),
+            ("controller", self._act_sidebar_controller),
             ("open-folder", self._act_sidebar_open_folder),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -2273,6 +2242,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._start_cover_sync(scope="all", selected_console=None)
         else:
             self._start_cover_sync(scope="console", selected_console=console)
+
+    def _act_sidebar_controller(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: controller console=%s", console)
+        self._open_preferences(page="input", console=console)
 
     def _act_sidebar_open_folder(self, _action, _param):
         console = self._sidebar_menu_console
@@ -2763,10 +2737,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         window.present()
 
-    def refresh_rom_artwork(self, rom):
+    def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one ROM's card artwork after the manager saved a file."""
         for grid in self._grids.values():
-            grid.refresh_rom_artwork(rom)
+            grid.refresh_rom_artwork(rom, fade=fade)
 
     def launch_rom_at_state(self, rom, slot):
         """Launch a ROM parked on ``slot`` and load that state once it is up.
@@ -2780,12 +2754,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         success, error_msg = self.runtime_manager.launch(
             rom["path"], rom["console"], state_slot=slot
         )
-        self._sync_runtime_controls()
         if not success:
             if error_msg:
                 self._toast(error_msg, timeout=5)
             return
         self.play_history.record_launch(rom["path"])
+        self._maybe_open_game_window(rom)
         self._toast(self.t("states.toast.launching", name=rom["name"], slot=slot))
 
         def _load_when_up():
@@ -2905,7 +2879,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _apply_rename(self, rom, new_name):
         try:
-            renamed = rename_rom(Path(self.roms_path), rom, new_name)
+            renamed = rename_rom(
+                Path(self.roms_path),
+                rom,
+                new_name,
+                states_dir=self.config_manager.get_console_states_dir(rom["console"]),
+            )
         except RomActionError as exc:
             self._toast(self.t("toast.rom.rename_failed", error=str(exc)), timeout=6)
             return
@@ -3472,6 +3451,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 evt.get("total", 0),
                 self.t(label),
             )
+            # Batched incremental reveal (issue #187): box art that just
+            # landed shows up while the run is still going. Labels wait for
+            # the final reload -- a label alone re-composites the cartridge
+            # anyway when the grid reloads.
+            if (
+                evt.get("result") == "downloaded"
+                and evt.get("rom_path")
+                and evt.get("art_kind") != COVER_ART_TYPE_CARTRIDGE_LABEL
+            ):
+                GLib.idle_add(
+                    self._queue_cover_reveal,
+                    {
+                        "console": evt.get("console"),
+                        "name": evt.get("rom_name"),
+                        "path": evt.get("rom_path"),
+                    },
+                )
 
         def _on_done(summary):
             GLib.idle_add(self._on_cover_sync_done_ui, task_id, summary, on_finished)
@@ -3486,9 +3482,55 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             replace_existing=replace_existing,
         )
 
+    # -- incremental cover reveal (issue #187) ------------------------------
+    #: Flush the pending reveals after this many downloads...
+    COVER_REVEAL_BATCH = 8
+    #: ...or after this long, whichever comes first: visible, intentional
+    #: steps instead of per-file flicker.
+    COVER_REVEAL_FLUSH_MS = 2500
+
+    def _queue_cover_reveal(self, rom):
+        """Collect one downloaded cover for the next batched reveal (UI thread)."""
+        pending = self._reveal_pending
+        console_changed = bool(pending) and pending[-1]["console"] != rom["console"]
+        if console_changed:
+            # The sync moved on: everything gathered for the previous console
+            # is complete, so reveal it now rather than on the next timeout.
+            self._flush_cover_reveal()
+        self._reveal_pending.append(rom)
+        if len(self._reveal_pending) >= self.COVER_REVEAL_BATCH:
+            self._flush_cover_reveal()
+        elif self._reveal_timer is None:
+            self._reveal_timer = GLib.timeout_add(
+                self.COVER_REVEAL_FLUSH_MS, self._flush_cover_reveal_from_timer
+            )
+        return False
+
+    def _flush_cover_reveal_from_timer(self):
+        self._reveal_timer = None
+        self._flush_cover_reveal()
+        return False
+
+    def _flush_cover_reveal(self):
+        if self._reveal_timer is not None:
+            GLib.source_remove(self._reveal_timer)
+            self._reveal_timer = None
+        pending, self._reveal_pending = self._reveal_pending, []
+        for rom in pending:
+            # Only the scope on screen updates mid-run: targeted card
+            # refreshes, never a full grid reload. Everything else waits for
+            # the end-of-run reload, which stays as the consistency backstop.
+            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID) or (
+                self.current_console == rom["console"]
+            ):
+                self.refresh_rom_artwork(rom, fade=True)
+
     def _on_cover_sync_done_ui(self, task_id, summary, on_finished=None):
         self._cover_sync_running = False
         self._cover_sync_cancel = None
+        # Whatever is still queued reveals before the final reload takes
+        # over; a cancelled run's grid then matches exactly what is on disk.
+        self._flush_cover_reveal()
         self._finish_task(task_id)
         # Covers already downloaded are kept -- each is an independent file, so
         # a stopped run leaves useful work rather than a half-written state.
@@ -3532,7 +3574,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # cleanly was still played, and this is the only point that knows
             # which ROM was asked for.
             self.play_history.record_launch(rom["path"])
-        self._sync_runtime_controls()
+            self._maybe_open_game_window(rom)
         if not success and error_msg:
             toast = Adw.Toast(title=error_msg)
             toast.set_timeout(5)
@@ -3585,14 +3627,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._filter_missing_artwork = enabled
         self.apply_library_filters()
 
-    def _on_stop_game_clicked(self, _button):
-        success, error_msg = self.runtime_manager.stop_active()
-        self._sync_runtime_controls()
-        if not success and error_msg:
-            toast = Adw.Toast(title=error_msg)
-            toast.set_timeout(4)
-            self.toast_overlay.add_toast(toast)
-
     def _relaunch_active_rom(self, resume_marker=None):
         """Stop the running game and start the same ROM again.
 
@@ -3607,7 +3641,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         the gameplay across instead of starting the game over.
         """
         rom, error_msg = self.runtime_manager.relaunch_active()
-        self._sync_runtime_controls()
         if rom is None:
             if error_msg:
                 self._toast(error_msg, timeout=4)
@@ -3634,9 +3667,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self._toast(self.t("toast.relaunch_failed"), timeout=5)
                 return False
             success, launch_error = self.runtime_manager.relaunch_rom(rom)
-            self._sync_runtime_controls()
             if not success and launch_error:
                 self._toast(launch_error, timeout=5)
+            if success:
+                # The relaunched RetroArch starts with the embed overrides
+                # (undecorated window); without a wrapper adopting it, it
+                # would float borderless.
+                self._maybe_open_game_window(rom)
             if success and resume_marker is not None:
                 GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
             return False
@@ -3681,6 +3718,60 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
         return True
 
+    def _maybe_open_game_window(self, rom):
+        """Wrap the RetroArch window in an OpenEmux one (issue #199).
+
+        Every launch path opens it, including the input hot-apply relaunch
+        (issue #129): the old wrapper closes with its process, so the new
+        game needs a new wrapper adopting it.
+        """
+        if not game_window_support.game_window_active(self.config_manager):
+            return
+        from openemux.ui import game_window
+
+        if not game_window.display_supports_embedding():
+            # Last guard, and the only one that asks GTK itself: the session
+            # looked embeddable but the app ended up on a non-X11 display.
+            # The game simply keeps its own window, as with the setting off.
+            logger.warning(
+                "game window: display is not X11; game runs standalone"
+            )
+            return
+        GameWindow = game_window.GameWindow
+
+        if self._game_window is not None:
+            self._game_window.close()
+            self._game_window = None
+        window = GameWindow(
+            application=self.get_application(),
+            runtime_manager=self.runtime_manager,
+            rom=rom,
+            frame_enabled=feature_flags.retroarch_embed_frame_enabled(),
+            locale=self.locale,
+            on_closed=self._on_game_window_closed,
+            on_open_input_settings=self._open_input_settings_from_game,
+        )
+        window.connect("close-request", self._on_game_window_close_request)
+        self._game_window = window
+        window.present()
+
+    def _on_game_window_closed(self, window):
+        if self._game_window is window:
+            self._game_window = None
+
+    def _open_input_settings_from_game(self, _game_window):
+        # Presented on the library window on purpose: the game window keeps
+        # handing X focus to the emulator, which would fight a dialog shown
+        # on top of it.
+        self.present()
+        self._open_preferences(page="input")
+
+    def _on_game_window_close_request(self, window):
+        # close() only hides a GTK4 window; destroy it once the emission is
+        # over so a closed wrapper does not linger hidden until app exit.
+        GLib.idle_add(window.destroy)
+        return False
+
     def _poll_runtime_state(self):
         result = self.runtime_manager.poll_active()
         if result is not None:
@@ -3689,26 +3780,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
-        self._sync_runtime_controls()
         return True
-
-    def _sync_runtime_controls(self):
-        is_running = self.runtime_manager.is_running()
-        self.stop_btn.set_sensitive(is_running)
-        self.volume_btn.set_sensitive(is_running)
-        if is_running and not self._runtime_controls_seeded:
-            # A fresh launch starts unmuted at the persisted level. Seeded
-            # once per launch rather than on every poll: this runs once a
-            # second, and re-pushing the level into the scale re-emitted
-            # value-changed each time. It would also fight the user mid-drag
-            # now that the tracked level walks to its target (issue #125).
-            self._mute_toggle_guard = True
-            self._mute_button.set_active(False)
-            self._mute_toggle_guard = False
-            self._volume_scale_guard = True
-            self._volume_scale.set_value(self.runtime_manager.volume_db)
-            self._volume_scale_guard = False
-        self._runtime_controls_seeded = is_running
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()

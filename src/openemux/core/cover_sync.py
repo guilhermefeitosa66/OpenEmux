@@ -1,13 +1,16 @@
 import logging
 import re
+import threading
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Thread
 
-from openemux.core import embedded_credentials, screenscraper
+from openemux.core import embedded_credentials, hasher, screenscraper
+from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.config import (
     ARTWORK_PROVIDER_KINDS_AVAILABLE,
     COVER_ART_TYPE_BOXART,
@@ -17,6 +20,58 @@ from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, fi
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+# The lookup ladder's stage names (issue #175), as they appear in logs and
+# in the summary tally: content hash, the stem as-is, the normalization
+# ladder, and the last-resort full-text resolution against the local index.
+STAGE_HASH = "hash"
+STAGE_EXACT = "exact"
+STAGE_NORMALIZED = "normalized"
+STAGE_FTS = "fts"
+
+# -- politeness budgets (#186) ---------------------------------------------
+#: Worker pool size for the per-ROM fan-out. Parallelism is across ROMs;
+#: each ROM still walks its own candidate ladder serially.
+SYNC_WORKERS = 6
+
+#: Concurrent in-flight requests allowed per host. Our own mirror is ours
+#: to saturate; third-party hosts keep today's one-at-a-time politeness --
+#: hammering them risks rate-limiting and is exactly what the mirror was
+#: built to avoid.
+HOST_BUDGETS = {
+    "raw.githubusercontent.com": SYNC_WORKERS,
+    "thumbnails.libretro.com": 1,
+    "www.screenscraper.fr": 1,
+    "api.screenscraper.fr": 1,
+}
+DEFAULT_HOST_BUDGET = 1
+
+#: Gate name for ScreenScraper's candidate-building API call, which is a
+#: network request of its own and must respect the same serial budget.
+SCREENSCRAPER_API_GATE = "www.screenscraper.fr"
+
+
+class _HostGates:
+    """Per-host semaphores, created lazily. Thread-safe."""
+
+    def __init__(self, budgets=None, default=DEFAULT_HOST_BUDGET):
+        self._budgets = dict(HOST_BUDGETS if budgets is None else budgets)
+        self._default = default
+        self._gates = {}
+        self._lock = threading.Lock()
+
+    def gate(self, host):
+        host = (host or "").lower()
+        with self._lock:
+            gate = self._gates.get(host)
+            if gate is None:
+                limit = self._budgets.get(host, self._default)
+                gate = threading.BoundedSemaphore(limit)
+                self._gates[host] = gate
+        return gate
+
+    def gate_for_url(self, url):
+        return self.gate(urllib.parse.urlparse(url).hostname)
 
 # Where each artwork type belongs on disk. Cartridge labels are a different
 # asset from box art -- the grid composites labels into a cartridge frame and
@@ -48,11 +103,24 @@ OPENEMUX_ARTWORK_BASE = (
     "https://raw.githubusercontent.com/guilhermefeitosa66/openemux-artwork/main"
 )
 
+# The libretro thumbnail naming convention replaces these characters with
+# ``_`` in filenames; a *display* title like "Batman & Robin" must become
+# "Batman _ Robin" before the URL is formed, or every candidate 404s (#175,
+# diagnosed by mozertdev). Applied at URL build time so every name path --
+# exact, normalized and FTS-resolved -- benefits at once, and so
+# _normalize_rom_name's earlier "_ -> space" rule cannot undo it.
+_THUMBNAIL_SANITIZE = str.maketrans({ch: "_" for ch in '&*/:`<>?\\|"'})
+
+
+def _sanitize_thumbnail_name(game_name):
+    return game_name.translate(_THUMBNAIL_SANITIZE)
+
+
 def _build_cover_url(system, game_name):
     return (
         "https://thumbnails.libretro.com/"
         f"{urllib.parse.quote(system, safe='')}/Named_Boxarts/"
-        f"{urllib.parse.quote(game_name + '.png', safe='')}"
+        f"{urllib.parse.quote(_sanitize_thumbnail_name(game_name) + '.png', safe='')}"
     )
 
 
@@ -225,42 +293,6 @@ def fuzzy_candidate_names(rom_name):
     return candidates
 
 
-#: Ceiling on the last-resort pass. Each fuzzy title re-expands across the
-#: region list, so an uncapped pass would turn one miss into hundreds of
-#: requests. Truncation is logged rather than silent.
-MAX_FUZZY_CANDIDATES = 40
-
-
-def _fuzzy_urls_for(console, rom_name, sync_settings, rom, already_tried):
-    """URLs for the fuzzy titles, minus everything already attempted."""
-    seen = set(already_tried)
-    urls = []
-    truncated = False
-    for fuzzy_name in fuzzy_candidate_names(rom_name):
-        if fuzzy_name == rom_name:
-            continue
-        for url in _remote_cover_candidates(
-            console, fuzzy_name, sync_settings, rom_path=rom.get("path")
-        ):
-            if url in seen:
-                continue
-            seen.add(url)
-            if len(urls) >= MAX_FUZZY_CANDIDATES:
-                truncated = True
-                break
-            urls.append(url)
-        if truncated:
-            break
-    if truncated:
-        logger.info(
-            "cover_sync fuzzy pass capped: console=%s rom=%s cap=%d",
-            console,
-            rom_name,
-            MAX_FUZZY_CANDIDATES,
-        )
-    return urls
-
-
 def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     base_names = []
 
@@ -320,11 +352,14 @@ def _candidate_names(rom_name, matching_mode, region_priority, name_cleanup):
     return candidates
 
 
-def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
+def _libretro_candidates(console, rom_name, sync_settings, rom_path=None, names=None):
     """libretro thumbnails provider (the historical, credential-free source).
 
     Box art only: ``Named_Boxarts`` is all it serves, so a cartridge-label
     pass must not receive box-art URLs that would be saved into ``labels/``.
+
+    ``names`` overrides the generated candidate list -- the staged ladder
+    (#175) uses it to ask for exactly one stage's names at a time.
     """
     if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
         return []
@@ -333,31 +368,34 @@ def _libretro_candidates(console, rom_name, sync_settings, rom_path=None):
     if not system:
         return []
 
-    names = _candidate_names(
-        rom_name=rom_name,
-        matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
-        region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
-        name_cleanup=bool(sync_settings.get("name_cleanup", True)),
-    )
+    if names is None:
+        names = _candidate_names(
+            rom_name=rom_name,
+            matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
+            region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
+            name_cleanup=bool(sync_settings.get("name_cleanup", True)),
+        )
     return [_build_cover_url(system, candidate) for candidate in names]
 
 
 def _build_openemux_art_url(system, game_name):
     # The mirror keeps libretro's directory names with underscores for spaces,
-    # and every file is WebP (see openemux-artwork/README.md).
+    # and every file is WebP (see openemux-artwork/README.md). Filenames carry
+    # the same character substitutions as upstream (#175).
     directory = system.replace(" ", "_")
     return (
         f"{OPENEMUX_ARTWORK_BASE}/"
         f"{urllib.parse.quote(directory, safe='')}/"
-        f"{urllib.parse.quote(game_name + '.webp', safe='')}"
+        f"{urllib.parse.quote(_sanitize_thumbnail_name(game_name) + '.webp', safe='')}"
     )
 
 
-def _openemux_candidates(console, rom_name, sync_settings, rom_path=None):
+def _openemux_candidates(console, rom_name, sync_settings, rom_path=None, names=None):
     """The project's own art mirror (issue #74): libretro naming, WebP files.
 
     Box art only -- the mirror carries no cartridge labels, so a label pass
-    must not receive box-art URLs from it.
+    must not receive box-art URLs from it. ``names`` as in
+    :func:`_libretro_candidates`.
     """
     if _requested_art_kind(sync_settings) != screenscraper.DEFAULT_ART_KIND:
         return []
@@ -366,12 +404,13 @@ def _openemux_candidates(console, rom_name, sync_settings, rom_path=None):
     if not system:
         return []
 
-    names = _candidate_names(
-        rom_name=rom_name,
-        matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
-        region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
-        name_cleanup=bool(sync_settings.get("name_cleanup", True)),
-    )
+    if names is None:
+        names = _candidate_names(
+            rom_name=rom_name,
+            matching_mode=sync_settings.get("matching_mode", "normalized_region_priority"),
+            region_priority=sync_settings.get("region_priority", ["USA", "World", "Europe", "Japan"]),
+            name_cleanup=bool(sync_settings.get("name_cleanup", True)),
+        )
     return [_build_openemux_art_url(system, candidate) for candidate in names]
 
 
@@ -464,21 +503,162 @@ def has_provider_for_kind(sync_settings, art_kind):
     return bool(_ordered_providers(probe))
 
 
-def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
-    """Concatenate candidate URLs from each configured source, in order."""
-    urls = []
+#: The process-wide name index, created lazily; tests patch the factory.
+_NAME_INDEX = None
+
+
+def _get_name_index():
+    global _NAME_INDEX
+    if _NAME_INDEX is None:
+        _NAME_INDEX = ArtworkNameIndex()
+    return _NAME_INDEX
+
+
+def _resolve_hash_stem(console, rom_path, sync_settings):
+    """Stage 1 for the file-based providers: the canonical stem by CRC32.
+
+    Gated on the index actually carrying a ``crc_index`` table, so hashing
+    the ROM file -- the only costly step -- never runs for nothing. One
+    resolution serves every file-based provider (#175: "one index hit fixes
+    both").
+    """
+    if not rom_path:
+        return None
+    try:
+        index = _get_name_index()
+        if not index.has_crc_index():
+            return None
+        thumb_system = get_thumbnail_system(resolve_system_id(console))
+        if not thumb_system:
+            return None
+        return index.resolve_by_crc(thumb_system, hasher.compute_crc32(rom_path))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cover_sync hash stage failed: rom=%s error=%s", rom_path, exc)
+        return None
+
+
+#: The two file-based providers serve the same files under the same stems
+#: (the mirror reproduces upstream filenames), which is what makes them
+#: interchangeable for load balancing (#186, mozertdev's suggestion).
+_EQUIVALENT_PROVIDERS = ("libretro", "openemux")
+
+
+def _staged_cover_candidates(console, rom_name, sync_settings, rom_path=None,
+                             provider_rotation=0, gates=None):
+    """``(provider, stage, url)`` triples: each provider's ladder in order.
+
+    Provider *n* runs hash -> exact -> normalized before provider *n+1*
+    starts (#175). ScreenScraper identifies by content hash through its API
+    whenever the ROM file is available, so its URLs are its hash stage; the
+    file-based providers get a hash stage only when the local index can
+    resolve the CRC, an exact stage with the stem as-is, and the historical
+    normalization ladder after that.
+
+    ``provider_rotation`` load-balances across the two equivalent file
+    hosts (#186): on odd rotations the libretro and openemux blocks trade
+    places, so a parallel sync drains both hosts at once instead of
+    serializing every ROM on the first one. Each ROM still exhausts every
+    provider before being reported as missed. ``gates`` throttles the
+    ScreenScraper candidate lookup, which is a network call of its own.
+    """
+    hash_stem = _resolve_hash_stem(console, rom_path, sync_settings)
+    blocks = []
     for name, provider in _ordered_providers(sync_settings):
-        for url in provider(console, rom_name, sync_settings, rom_path=rom_path):
-            if url not in urls:
-                urls.append(url)
-        logger.debug(
-            "cover_sync provider_candidates: provider=%s console=%s rom=%s total=%d",
-            name,
-            console,
+        block = []
+        if name == "screenscraper":
+            stage = STAGE_HASH if rom_path else STAGE_NORMALIZED
+            if gates is not None:
+                with gates.gate(SCREENSCRAPER_API_GATE):
+                    urls = provider(console, rom_name, sync_settings, rom_path=rom_path)
+            else:
+                urls = provider(console, rom_name, sync_settings, rom_path=rom_path)
+            block.extend((name, stage, url) for url in urls)
+        else:
+            if hash_stem:
+                block.extend((name, STAGE_HASH, url) for url in provider(
+                    console, rom_name, sync_settings, rom_path=rom_path, names=[hash_stem]
+                ))
+            block.extend((name, STAGE_EXACT, url) for url in provider(
+                console, rom_name, sync_settings, rom_path=rom_path, names=[rom_name]
+            ))
+            block.extend((name, STAGE_NORMALIZED, url) for url in provider(
+                console, rom_name, sync_settings, rom_path=rom_path
+            ))
+        blocks.append((name, block))
+
+    if provider_rotation % 2 == 1:
+        names = [name for name, _block in blocks]
+        if all(name in names for name in _EQUIVALENT_PROVIDERS):
+            first, second = (names.index(n) for n in _EQUIVALENT_PROVIDERS)
+            blocks[first], blocks[second] = blocks[second], blocks[first]
+
+    triples = []
+    seen = set()
+    for _name, block in blocks:
+        for provider, stage, url in block:
+            if url not in seen:
+                seen.add(url)
+                triples.append((provider, stage, url))
+    logger.debug(
+        "cover_sync staged candidates: console=%s rom=%s total=%d hash_stem=%s rotation=%d",
+        console,
+        rom_name,
+        len(triples),
+        hash_stem,
+        provider_rotation % 2,
+    )
+    return triples
+
+
+def _fts_stage_candidates(console, rom_name, sync_settings, already_tried):
+    """Stage 4 (#175): resolve the name against the local FTS index, once,
+    after every provider exhausted its ladder -- and only then, because this
+    is the single stage able to match the wrong game.
+
+    Only URLs built from stems known to exist in the mirror are returned;
+    no index, no FTS5 or no acceptable match simply yields nothing.
+    """
+    try:
+        index = _get_name_index()
+        thumb_system = get_thumbnail_system(resolve_system_id(console))
+        if not thumb_system:
+            return []
+        resolved = index.resolve_name(
+            thumb_system,
             rom_name,
-            len(urls),
+            region_priority=sync_settings.get("region_priority"),
         )
-    return urls
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cover_sync fts stage failed: rom=%s error=%s", rom_name, exc)
+        return []
+    if not resolved:
+        return []
+    stem, round_label = resolved
+    logger.info(
+        "cover_sync fts resolved: console=%s rom=%s stem=%s round=%s",
+        console,
+        rom_name,
+        stem,
+        round_label,
+    )
+    triples = []
+    for name, provider in _ordered_providers(sync_settings):
+        if name == "screenscraper":
+            continue  # an API provider gains nothing from a filename stem
+        for url in provider(console, rom_name, sync_settings, names=[stem]):
+            if url not in already_tried:
+                triples.append((name, STAGE_FTS, url))
+    return triples
+
+
+def _remote_cover_candidates(console, rom_name, sync_settings, rom_path=None):
+    """Candidate URLs from each configured source, ladder order preserved."""
+    return [
+        url
+        for _provider, _stage, url in _staged_cover_candidates(
+            console, rom_name, sync_settings, rom_path=rom_path
+        )
+    ]
 
 
 # Content-Type -> file extension, for providers whose URLs do not carry one.
@@ -551,6 +731,94 @@ def _drop_stale_art(roms_dir, console, rom_name, art_dir, keep):
             logger.warning("cover_sync could not remove old art: path=%s error=%s", candidate, exc)
 
 
+def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
+                 should_cancel, replace_existing, rotation, gates):
+    """One ROM's whole lookup, run on a pool worker (#186).
+
+    Returns a result dict; the completion loop owns every shared counter,
+    so nothing here mutates state outside this ROM's own files.
+    """
+    name = rom["name"]
+    rom_path = rom.get("path")
+    if should_cancel and should_cancel():
+        return {"status": "cancelled", "console": console, "rom_name": name,
+                "rom_path": rom_path}
+
+    if not replace_existing and find_local_art(roms_dir_path, console, name, art_dir):
+        logger.info(
+            "cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind
+        )
+        return {"status": "skipped", "console": console, "rom_name": name,
+                "rom_path": rom_path}
+
+    target = roms_dir_path / console / art_dir / f"{name}.png"
+    candidates = _staged_cover_candidates(
+        console, name, sync_settings, rom_path=rom.get("path"),
+        provider_rotation=rotation, gates=gates,
+    )
+    logger.info(
+        "cover_sync candidate_set: console=%s rom=%s candidates=%d",
+        console,
+        name,
+        len(candidates),
+    )
+
+    def _try_candidates(triples):
+        """First candidate that resolves: (stage or None, cancelled)."""
+        for provider, stage, url in triples:
+            if should_cancel and should_cancel():
+                logger.info(
+                    "cover_sync cancelled mid-candidate: console=%s rom=%s", console, name
+                )
+                return None, True
+            with gates.gate_for_url(url):
+                written = _download_cover(url, target)
+            if not written:
+                continue
+            if replace_existing:
+                # Art saved earlier under another extension would still
+                # win the local lookup, so the replaced file has to go.
+                _drop_stale_art(roms_dir_path, console, name, art_dir, keep=written)
+            logger.info(
+                "cover_sync selected candidate: console=%s rom=%s provider=%s stage=%s url=%s",
+                console,
+                name,
+                provider,
+                stage,
+                screenscraper.redact(url),
+            )
+            return stage, False
+        return None, False
+
+    stage, cancelled = _try_candidates(candidates)
+    tried_count = len(candidates)
+
+    if stage is None and not cancelled:
+        # Stage 4 (#175): every provider exhausted its ladder, so resolve
+        # the name once against the local FTS index and try only URLs whose
+        # stems are known to exist in the mirror. Runs last and globally on
+        # purpose -- it is the only stage that can match the wrong game.
+        extra = _fts_stage_candidates(
+            console, name, sync_settings,
+            already_tried={url for _p, _s, url in candidates},
+        )
+        if extra:
+            stage, cancelled = _try_candidates(extra)
+            tried_count += len(extra)
+
+    if stage is not None:
+        return {"status": "downloaded", "console": console, "rom_name": name,
+                "rom_path": rom_path, "stage": stage}
+    if cancelled:
+        return {"status": "cancelled", "console": console, "rom_name": name,
+                "rom_path": rom_path}
+    logger.info(
+        "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
+    )
+    return {"status": "missed", "console": console, "rom_name": name,
+            "rom_path": rom_path}
+
+
 def _sync_covers(
     library_by_console,
     covers_dir,
@@ -560,21 +828,27 @@ def _sync_covers(
     on_progress=None,
     should_cancel=None,
     replace_existing=False,
+    max_workers=None,
 ):
-    """Sync covers, optionally stopping early.
+    """Sync covers on a bounded worker pool, optionally stopping early.
 
     ``replace_existing`` turns off the skip-what-is-already-there rule. A
     library-wide sync leaves existing art alone -- it is a fill-in-the-blanks
     pass -- but syncing one ROM the user just asked for would otherwise do
     nothing at all on the very games whose art is wrong.
 
-    ``should_cancel`` is polled between ROMs and between candidate URLs, so a
-    cancel takes effect within one HTTP request rather than at the end of the
-    run. Whatever was already downloaded stays on disk -- covers are
-    independent files, so a partial run is useful rather than corrupt.
+    ``should_cancel`` is polled per worker between candidate URLs, so a
+    cancel takes effect within roughly one in-flight request per worker.
+    Whatever was already downloaded stays on disk -- covers are independent
+    files, so a partial run is useful rather than corrupt.
+
+    Parallelism (#186) is across ROMs -- each ROM's provider ladder stays
+    serial -- with per-host politeness budgets: the project's own mirror
+    takes real concurrency, third-party hosts keep one request at a time.
+    Progress events fire from the completion loop in submission-independent
+    arrival order, with a ``processed`` counter that only ever grows.
     """
     sync_settings = sync_settings or {}
-    cancelled = False
     roms_dir_path = Path(covers_dir)
     consoles = (
         [selected_console]
@@ -596,119 +870,74 @@ def _sync_covers(
         art_dir,
     )
 
+    work = [
+        (console, rom)
+        for console in consoles
+        for rom in library_by_console.get(console, [])
+    ]
+    total_targets = len(work)
+    workers = max(1, int(max_workers or SYNC_WORKERS))
+    gates = _HostGates()
+
+    cancelled = False
     total = 0
     downloaded = 0
     skipped = 0
     errors = 0
     missed = []
-    total_targets = sum(len(library_by_console.get(console, [])) for console in consoles)
+    # Which ladder stage found each downloaded cover (#175): the sync's own
+    # observability, so reports like mozertdev's are answerable from a log.
+    stage_tally = {STAGE_HASH: 0, STAGE_EXACT: 0, STAGE_NORMALIZED: 0, STAGE_FTS: 0}
 
-    for console in consoles:
-        roms = library_by_console.get(console, [])
-        if cancelled:
-            break
-        for rom in roms:
-            if should_cancel and should_cancel():
-                logger.info("cover_sync cancelled: console=%s processed=%d", console, total)
-                cancelled = True
-                break
-            total += 1
-            name = rom["name"]
-
-            if not replace_existing and find_local_art(roms_dir_path, console, name, art_dir):
-                logger.info("cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind)
-                skipped += 1
-                if on_progress:
-                    on_progress(
-                        {
-                            "console": console,
-                            "rom_name": name,
-                            "processed": total,
-                            "total": total_targets,
-                            "downloaded": downloaded,
-                            "skipped": skipped,
-                            "errors": errors,
-                        }
-                    )
+    with ThreadPoolExecutor(
+        max_workers=workers, thread_name_prefix="openemux-cover-sync"
+    ) as pool:
+        futures = [
+            pool.submit(
+                _process_rom, console, rom, roms_dir_path, art_dir, art_kind,
+                sync_settings, should_cancel, replace_existing, index, gates,
+            )
+            for index, (console, rom) in enumerate(work)
+        ]
+        for future in as_completed(futures):
+            if future.cancelled():
                 continue
-
-            target = roms_dir_path / console / art_dir / f"{name}.png"
-            urls = _remote_cover_candidates(console, name, sync_settings, rom_path=rom.get("path"))
-            logger.info("cover_sync candidate_set: console=%s rom=%s candidates=%d", console, name, len(urls))
-
-            def _try_urls(candidate_urls):
-                """Download the first candidate that resolves.
-
-                Returns (found, cancelled) so the caller keeps owning both
-                counters and the outer loop's control flow.
-                """
-                for url in candidate_urls:
-                    if should_cancel and should_cancel():
-                        logger.info(
-                            "cover_sync cancelled mid-candidate: console=%s rom=%s",
-                            console,
-                            name,
-                        )
-                        return False, True
-                    written = _download_cover(url, target)
-                    if not written:
-                        continue
-                    if replace_existing:
-                        # Art saved earlier under another extension would still
-                        # win the local lookup, so the replaced file has to go.
-                        _drop_stale_art(roms_dir_path, console, name, art_dir, keep=written)
-                    logger.info(
-                        "cover_sync selected candidate: console=%s rom=%s url=%s",
-                        console,
-                        name,
-                        screenscraper.redact(url),
-                    )
-                    return True, False
-                return False, False
-
-            found, cancelled_here = _try_urls(urls)
-            if cancelled_here:
-                cancelled = True
-            tried_count = len(urls)
-
-            if not found and not cancelled:
-                # Every exact name missed. Fall back to the fuzzy titles --
-                # mid-title tags stripped, punctuation dropped, and the
-                # parenthesised alternate title tried in its own right
-                # (issue #127). Deduplicated against what was already
-                # attempted, since most fuzzy names regenerate the same URLs.
-                extra = _fuzzy_urls_for(console, name, sync_settings, rom, urls)
-                if extra:
-                    logger.info(
-                        "cover_sync fuzzy pass: console=%s rom=%s candidates=%d",
-                        console,
-                        name,
-                        len(extra),
-                    )
-                    found, cancelled_here = _try_urls(extra)
-                    if cancelled_here:
-                        cancelled = True
-                    tried_count += len(extra)
-
-            if found:
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - one ROM must not kill the run
+                logger.warning("cover_sync worker failed: error=%s",
+                               screenscraper.redact(exc))
+                result = {"status": "missed", "console": "?", "rom_name": "?"}
+            status = result["status"]
+            if status == "cancelled":
+                if not cancelled:
+                    cancelled = True
+                    logger.info("cover_sync cancelled: processed=%d", total)
+                    # Nothing queued should start; in-flight workers notice
+                    # should_cancel within about one request each.
+                    for pending in futures:
+                        pending.cancel()
+                continue
+            total += 1
+            if status == "downloaded":
                 downloaded += 1
-
-            if cancelled:
-                total -= 1  # this ROM was not actually processed
-                break
-            if not found:
-                logger.info(
-                    "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
-                )
+                stage_tally[result["stage"]] = stage_tally.get(result["stage"], 0) + 1
+            elif status == "skipped":
+                skipped += 1
+            else:
                 errors += 1
                 # Carried through to the summary so the UI can say *which*
-                # ROMs to look at, not just how many failed.
-                missed.append({"console": console, "rom_name": name})
+                # ROMs to look at, not just how many failed (issue #127).
+                missed.append(
+                    {"console": result["console"], "rom_name": result["rom_name"]}
+                )
             if on_progress:
                 on_progress(
                     {
-                        "console": console,
-                        "rom_name": name,
+                        "console": result["console"],
+                        "rom_name": result["rom_name"],
+                        "rom_path": result.get("rom_path"),
+                        "result": status,
                         "processed": total,
                         "total": total_targets,
                         "downloaded": downloaded,
@@ -728,9 +957,11 @@ def _sync_covers(
         # The identities behind `errors`, so the UI can name the ROMs that
         # still need artwork instead of only counting them (issue #127).
         "missed": missed,
+        # Which ladder stage each downloaded cover came from (#175).
+        "stages": stage_tally,
     }
     logger.info(
-        "cover_sync %s: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d",
+        "cover_sync %s: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d stages=%s",
         "cancelled" if cancelled else "finished",
         scope,
         selected_console,
@@ -738,6 +969,7 @@ def _sync_covers(
         downloaded,
         skipped,
         errors,
+        stage_tally,
     )
     return summary
 
@@ -839,6 +1071,7 @@ def _sync_artwork(
         "downloaded": 0,
         "skipped": 0,
         "errors": 0,
+        "stages": {STAGE_HASH: 0, STAGE_EXACT: 0, STAGE_NORMALIZED: 0, STAGE_FTS: 0},
         "passes": [],
     }
     processed_before = 0
@@ -873,6 +1106,8 @@ def _sync_artwork(
         aggregate["passes"].append(summary)
         for key in ("total", "downloaded", "skipped", "errors"):
             aggregate[key] += summary[key]
+        for stage, count in summary.get("stages", {}).items():
+            aggregate["stages"][stage] = aggregate["stages"].get(stage, 0) + count
         processed_before += summary["total"]
         if summary["cancelled"]:
             aggregate["cancelled"] = True

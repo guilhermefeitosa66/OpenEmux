@@ -13,7 +13,9 @@ authors = [{ name = "Guilherme Feitoza" }]
 # PyGObject and pycairo are provided by the GNOME runtime / system packages and
 # are intentionally not listed here so `pip install .` stays buildable offline
 # (Flatpak) and against distro GObject-introspection.
-dependencies = ["PyYAML"]
+# python-xlib backs the game window: it reparents RetroArch's X11 window into
+# an OpenEmux one (issue #199). Missing it costs the game window, not the app.
+dependencies = ["PyYAML", "python-xlib"]
 
 [project.urls]
 Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
@@ -31,6 +33,13 @@ version = { attr = "openemux.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.coverage.run]
+# Measure the whole package, not just the modules the tests happen to import:
+# files under src/openemux that no test touches count as 0%, so the total is
+# an honest number for the entire app (UI included).
+source = ["src/openemux"]
+relative_files = true
+
 [tool.setuptools.package-data]
 # Every non-Python file the app reads at runtime. Only the pip-installed
 # builds (the Flatpak) honor this list -- the deb/rpm/AppImage copy src/
@@ -43,4 +52,7 @@ openemux = [
     # License notice for the vendored Adwaita symbolic icons; must ship with
     # the icons themselves.
     "ui/assets/icons/symbolic/LICENSE",
+    # The game-name database (issue #184), consumed by the staged cover
+    # lookup and the cover-picker suggestions.
+    "data/games.db.zip",
 ]

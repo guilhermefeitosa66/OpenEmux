@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
+from openemux.core import game_window_support
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -316,11 +317,29 @@ class RetroArchLauncher:
         states_dir.mkdir(parents=True, exist_ok=True)
         overrides["savestate_directory"] = f'"{states_dir}"'
         overrides["savestate_thumbnail_enable"] = '"true"'
-        # The slot the save/load hotkeys act on: the launch-specific slot (a
-        # "load this save" launch) wins over the configured default.
-        if state_slot is None:
-            state_slot = self.config_manager.get_state_slot()
-        overrides["state_slot"] = f'"{int(state_slot)}"'
+        # The slot the save/load hotkeys start on. A "load this save" launch
+        # names it; every other launch starts at 0 and moves from there with
+        # the slot hotkeys, which is why the setting that used to pin it is
+        # gone (issue #198).
+        overrides["state_slot"] = f'"{int(state_slot or 0)}"'
+
+        # The game window needs RetroArch in a plain windowed window it can
+        # re-parent -- no fullscreen, no decorations, and no saving back the
+        # position we impose. pause_nonactive off because X keyboard focus
+        # moves between our window and the embedded one, and every such hop
+        # would otherwise pause the game. Keyed off the same answer the UI
+        # uses (issue #199): written without a wrapper to own the window, they
+        # would leave the game floating borderless.
+        if game_window_support.game_window_active(self.config_manager):
+            overrides["video_fullscreen"] = '"false"'
+            overrides["video_windowed_fullscreen"] = '"false"'
+            overrides["video_window_show_decorations"] = '"false"'
+            overrides["video_window_save_positions"] = '"false"'
+            overrides["pause_nonactive"] = '"false"'
+            # The wrapper owns the window: RetroArch toggling fullscreen on
+            # a reparented child recreates/unparents its window and breaks
+            # the embed, so the hotkey is unbound while embedded.
+            overrides["input_toggle_fullscreen"] = '"nul"'
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -390,10 +409,17 @@ class RetroArchLauncher:
             cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")
             log_handle = open(log_path, "w", encoding="utf-8")
+            env = os.environ.copy()
+            # On a Wayland session RetroArch would pick its native wayland
+            # driver, whose window no X client can reparent. Without
+            # WAYLAND_DISPLAY it falls back to X11 and lands on XWayland,
+            # next to the app that main.py already put on the X11 backend.
+            if game_window_support.game_window_active(self.config_manager):
+                env.pop("WAYLAND_DISPLAY", None)
             proc = subprocess.Popen(
                 cmd,
                 cwd=os.getcwd(),
-                env=os.environ.copy(),
+                env=env,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
             )

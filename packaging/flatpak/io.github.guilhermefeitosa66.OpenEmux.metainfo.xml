@@ -82,6 +82,20 @@
   </keywords>
 
   <releases>
+    <release version="1.11.0" date="2026-08-15">
+      <description>
+        <p>Games now play inside OpenEmux, and artwork finds itself.</p>
+        <ul>
+          <li>Play in an OpenEmux game window that hosts the running emulator, with pause, reset, save and load state, volume and input settings in its header bar</li>
+          <li>Ship a local database of 60,600 game names, so cover lookup resolves real titles instead of guessing URLs</li>
+          <li>Ask the cover picker for suggestions by name, including approximate matches for misspelled queries</li>
+          <li>Sync covers in parallel and reveal each one as it lands, instead of only when the whole run finishes</li>
+          <li>Carry save states, battery saves and artwork with a ROM when it is renamed</li>
+          <li>Choose System, Light or Dark in Settings, or flip the theme from the header bar</li>
+          <li>Open a console's controller settings from its context menu in the sidebar</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.10.2" date="2026-08-02">
       <description>
         <p>A fix for the all-Flatpak setup: games launch again.</p>

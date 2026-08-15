@@ -79,11 +79,20 @@ a system `retroarch`, or a configured path — check with `make check-retroarch`
 make test
 # or directly:
 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+
+# with a coverage report (needs `make setup-dev` once):
+make coverage
 ```
 
 The suite is stdlib `unittest`, covers the `core/` modules only (no GTK in
 tests), and mocks the network. Add a `test_<module>.py` alongside any new core
 module.
+
+`make coverage` runs the same suite under [coverage.py](https://coverage.readthedocs.io/)
+(configured in `pyproject.toml`, measuring all of `src/openemux` — untested UI
+modules count as 0%, so the total reflects the whole app). CI does the same and,
+on every push to `develop`, refreshes the README's coverage badge by pushing
+`coverage.json` to the CI-owned `badges` branch.
 
 ## Building the packages
 

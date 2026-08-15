@@ -24,6 +24,7 @@ from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
+from openemux.core.theme import DEFAULT_THEME, normalize_theme
 from openemux.core.update_checker import (
     DEFAULT_API_URL as DEFAULT_UPDATE_API_URL,
     DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
@@ -156,6 +157,10 @@ def normalize_cover_source(value):
 def normalize_cover_art_type(value):
     return value if value in COVER_ART_TYPES else DEFAULT_COVER_ART_TYPE
 
+#: ``runtime.game_window`` when nothing is stored (issue #199): games play
+#: inside an OpenEmux window wherever that is possible.
+DEFAULT_GAME_WINDOW = True
+
 DEFAULT_CONFIG = {
     # Placeholder only: until the user picks a language from the menu, the
     # locale is resolved from the desktop's on every load (see
@@ -173,9 +178,11 @@ DEFAULT_CONFIG = {
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
         "master_volume_db": 0.0,
-        # The slot RetroArch's save/load hotkeys act on (issue #73 redo):
-        # picked in Preferences, written as state_slot at every launch.
-        "state_slot": 0,
+        # Play inside an OpenEmux window instead of RetroArch's own (issue
+        # #199). On by default; off leaves RetroArch to open its own window.
+        # Needs an X11/XWayland session either way -- see
+        # openemux.core.game_window_support.
+        "game_window": DEFAULT_GAME_WINDOW,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
@@ -214,6 +221,8 @@ DEFAULT_CONFIG = {
         "render_cartridge_overlay": True,
         "show_tips": True,
         "gamepad_navigation": True,
+        # Light, dark, or whatever the desktop is doing (issue #198).
+        "theme": DEFAULT_THEME,
     },
     "updates": {
         "check_on_startup": True,
@@ -260,6 +269,24 @@ DEFAULT_CONFIG = {
         }
     },
 }
+
+
+def read_game_window_setting(config_file=DEFAULT_CONFIG_FILE):
+    """Read ``runtime.game_window`` straight off disk, changing nothing.
+
+    ``main.py`` needs the answer before GTK is imported, to decide whether the
+    app must run as an X11 client (issue #199) -- far too early for a
+    ConfigManager, whose constructor creates and migrates the config file on
+    the way. A config that is absent, unreadable or not a mapping simply means
+    the default.
+    """
+    try:
+        with open(config_file, "r", encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle)
+        runtime = (raw or {}).get("runtime") or {}
+        return bool(runtime.get("game_window", DEFAULT_GAME_WINDOW))
+    except Exception:
+        return DEFAULT_GAME_WINDOW
 
 
 def _merge_defaults(defaults, data):
@@ -569,7 +596,14 @@ class ConfigManager:
             "show_tips": bool(ui.get("show_tips", True)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
+            "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
         }
+
+    def set_theme(self, theme):
+        ui = self.config.setdefault("ui", {})
+        ui["theme"] = normalize_theme(theme)
+        self.save_config()
+        return ui["theme"]
 
     def get_update_settings(self):
         updates = self.config.get("updates", {})
@@ -704,24 +738,6 @@ class ConfigManager:
     def get_console_states_dir(self, console):
         return DEFAULT_STATES_DIR / resolve_system_id(console)
 
-    MAX_STATE_SLOT = 9
-
-    def get_state_slot(self):
-        try:
-            slot = int(self.config.get("runtime", {}).get("state_slot", 0))
-        except (TypeError, ValueError):
-            return 0
-        return min(self.MAX_STATE_SLOT, max(0, slot))
-
-    def set_state_slot(self, slot):
-        runtime = self.config.setdefault("runtime", {})
-        try:
-            value = int(slot)
-        except (TypeError, ValueError):
-            value = 0
-        runtime["state_slot"] = min(self.MAX_STATE_SLOT, max(0, value))
-        self.save_config()
-
     def get_network_cmd_port(self):
         try:
             return int(self.config.get("runtime", {}).get("network_cmd_port", 55355))
@@ -738,6 +754,20 @@ class ConfigManager:
 
         runtime = self.config.setdefault("runtime", {})
         runtime["master_volume_db"] = clamp_volume_db(value)
+        self.save_config()
+
+    def get_game_window_enabled(self):
+        """Whether games play inside an OpenEmux window (issue #199).
+
+        The preference on its own -- ask
+        ``game_window_support.game_window_active`` before acting on it, since
+        the session may not be able to host an embedded window at all.
+        """
+        return bool(self.config.get("runtime", {}).get("game_window", DEFAULT_GAME_WINDOW))
+
+    def set_game_window_enabled(self, enabled):
+        runtime = self.config.setdefault("runtime", {})
+        runtime["game_window"] = bool(enabled)
         self.save_config()
 
     # -- global input tuning (issues #154, #155) ---------------------------
