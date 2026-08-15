@@ -6,7 +6,6 @@ from threading import Thread
 from pathlib import Path
 import shutil
 
-from openemux.core import feature_flags
 from openemux.core.paths import (
     get_project_root,
     is_running_in_appimage,
@@ -74,18 +73,40 @@ def _configure_gtk_renderer():
         os.environ["GSK_RENDERER"] = "cairo"
 
 
-def _configure_embed_backend():
-    """POC: the RetroArch embed wrapper works by re-parenting X11 windows,
-    so the app itself must be an X11 client -- on a Wayland session this
-    selects XWayland. Only while the flag is on, and never overriding an
-    explicit user choice."""
-    if feature_flags.retroarch_embed_enabled() and not os.environ.get("GDK_BACKEND"):
-        os.environ["GDK_BACKEND"] = "x11"
+def _configure_game_window_backend():
+    """Run as an X11 client when the game window is on (issue #199).
+
+    The wrapper adopts RetroArch's window by re-parenting it, which only
+    works between two X clients -- on a Wayland session that means putting
+    both on XWayland. Has to happen before the first ``gi`` import, hence a
+    module-level call rather than something the app decides later.
+
+    Three ways out, all of them leaving GTK to pick its own backend: a
+    GDK_BACKEND is already set, which is an explicit choice we do not
+    override; the session cannot host an embed at all (no python-xlib, no X
+    display -- forcing x11 there would leave GTK with no display and the app
+    would not start); or the user turned the game window off.
+    """
+    if os.environ.get("GDK_BACKEND"):
+        return
+    # Imported here rather than at module scope: this runs before the GTK
+    # stack is even importable, so the pre-GTK section stays as small as it
+    # can be.
+    from openemux.core import game_window_support
+    from openemux.core.config import read_game_window_setting
+
+    if not game_window_support.embedding_possible():
+        return
+    if not read_game_window_setting():
+        return
+    os.environ["GDK_BACKEND"] = "x11"
 
 
 _configure_gtk_renderer()
-_configure_embed_backend()
+# Before the backend pick: the setting is read straight off the config file,
+# which a legacy config dir may still be on its way to.
 migrate_legacy_config_dir()
+_configure_game_window_backend()
 configure_startup_logging()
 _ensure_gtk_typelibs()
 
