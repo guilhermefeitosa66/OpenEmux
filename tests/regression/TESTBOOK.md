@@ -316,13 +316,51 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 ### RT-062 — A game launches and plays
 - **Area:** Launch
 - **Mode:** MANUAL
-- **Preconditions:** A working core and ROM for at least one console.
+- **Preconditions:** A working core and ROM for at least one console; "Play in an OpenEmux window"
+  on (the default) and an X11/XWayland session.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Play for ~30 s; quit RetroArch.
-- **Expected:** The game starts fullscreen with sound, responds to input, and returns to OpenEmux
-  cleanly on exit.
-- **Check:** human only (fullscreen capture of the keyboard makes automation unsafe).
+  2. Play for ~30 s; close the game window.
+- **Expected:** The game appears *inside* an OpenEmux window titled with the ROM name, with the
+  header bar carrying pause, reset, save state, load state, controller settings, volume and the
+  RetroArch menu. Sound plays, input responds, and closing the window ends the game and returns
+  to the library cleanly.
+- **Check:** human only (grabbing the keyboard for the emulator makes automation unsafe).
+
+### RT-064 — Turning the game window off gives RetroArch its own window
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. "Settings" → "Video" → turn "Play in an OpenEmux window" off.
+  2. Launch a game.
+- **Expected:** No OpenEmux wrapper appears; RetroArch opens its own decorated window and behaves
+  exactly as it did before the feature existed — its fullscreen hotkey included.
+- **Check:** human only.
+- **Restore:** Turn the switch back on.
+
+### RT-065 — A session that cannot embed says so instead of failing
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a machine with no X display (a pure Wayland session, the Flatpak
+  sandbox), confirm the app still starts and the "Play in an OpenEmux window" switch is
+  unavailable rather than broken.
+- **Expected:** With no X display reachable, embedding reports itself impossible — so the startup
+  code never forces the X11 backend and the launcher never writes the embed overrides.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from unittest import mock
+  from openemux.core import game_window_support as g
+  with mock.patch.dict(os.environ, {}, clear=True):
+      assert not g.embedding_possible(), "claimed embedding is possible with no DISPLAY"
+  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "wayland"}, clear=True):
+      assert not g.embedding_possible(), "ignored an explicit non-X11 backend"
+  print("RT-065 OK")
+  EOF
+  ```
 
 ### RT-063 — In-game hotkeys work
 - **Area:** Launch
