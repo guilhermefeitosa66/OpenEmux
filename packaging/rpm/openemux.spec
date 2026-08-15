@@ -27,6 +27,8 @@ Requires:       python3-cairo
 Requires:       gtk4 >= 4.6
 Requires:       libadwaita >= 1.5
 Requires:       python3-pyyaml
+# The game window reparents RetroArch's X11 window into ours (issue #199).
+Requires:       python3-xlib
 Requires:       librsvg2
 Requires:       adwaita-icon-theme
 Requires:       shared-mime-info

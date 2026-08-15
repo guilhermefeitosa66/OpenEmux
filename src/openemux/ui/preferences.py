@@ -15,6 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib
 
+from openemux.core import game_window_support
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -1247,6 +1248,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.page.video"), icon_name="applications-graphics-symbolic"
         )
 
+        page.add(self._build_game_window_group())
+
         appearance = Adw.PreferencesGroup(title=self.t("prefs.group.appearance"))
         # The cartridge frame is one of the view modes now, so this row mirrors
         # the header's switcher rather than owning a switch of its own.
@@ -1299,6 +1302,41 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._shader_rows = []
         self._rebuild_shader_rows()
         return page
+
+    def _build_game_window_group(self):
+        """Play inside an OpenEmux window, or leave RetroArch its own (#199).
+
+        Sits at the top of the Video page: it decides what the user looks at
+        while playing, which outranks the cover-grid appearance below it.
+        """
+        group = Adw.PreferencesGroup(title=self.t("prefs.group.game_window"))
+        self._game_window_row = Adw.SwitchRow(
+            title=self.t("prefs.game_window.title"),
+            subtitle=self.t("prefs.game_window.subtitle"),
+        )
+        self._game_window_row.set_active(self.config.get_game_window_enabled())
+        if game_window_support.embedding_possible():
+            self._game_window_row.connect("notify::active", self._on_game_window_toggled)
+        else:
+            # Nothing to offer here: no python-xlib, or a session with no X
+            # display at all (a Wayland session without XWayland, the Flatpak
+            # sandbox on Wayland). The row stays visible and says why, rather
+            # than silently disappearing on some machines.
+            self._game_window_row.set_sensitive(False)
+            self._game_window_row.set_subtitle(self.t("prefs.game_window.unavailable"))
+        group.add(self._game_window_row)
+        return group
+
+    def _on_game_window_toggled(self, row, _param):
+        enabled = row.get_active()
+        self.config.set_game_window_enabled(enabled)
+        from openemux.ui.game_window import display_supports_embedding
+
+        if enabled and not display_supports_embedding():
+            # The X11 backend is chosen before GTK starts, so a session that
+            # booted with the setting off is on Wayland for good: the next
+            # game would still open in RetroArch's own window.
+            self._toast(self.t("toast.game_window.restart"), timeout=6)
 
     def _shader_options_for_console(self, console_id):
         show_all = bool(self._show_all_switch.get_active())

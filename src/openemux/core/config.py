@@ -156,6 +156,10 @@ def normalize_cover_source(value):
 def normalize_cover_art_type(value):
     return value if value in COVER_ART_TYPES else DEFAULT_COVER_ART_TYPE
 
+#: ``runtime.game_window`` when nothing is stored (issue #199): games play
+#: inside an OpenEmux window wherever that is possible.
+DEFAULT_GAME_WINDOW = True
+
 DEFAULT_CONFIG = {
     # Placeholder only: until the user picks a language from the menu, the
     # locale is resolved from the desktop's on every load (see
@@ -176,6 +180,11 @@ DEFAULT_CONFIG = {
         # The slot RetroArch's save/load hotkeys act on (issue #73 redo):
         # picked in Preferences, written as state_slot at every launch.
         "state_slot": 0,
+        # Play inside an OpenEmux window instead of RetroArch's own (issue
+        # #199). On by default; off leaves RetroArch to open its own window.
+        # Needs an X11/XWayland session either way -- see
+        # openemux.core.game_window_support.
+        "game_window": DEFAULT_GAME_WINDOW,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
             "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
@@ -260,6 +269,24 @@ DEFAULT_CONFIG = {
         }
     },
 }
+
+
+def read_game_window_setting(config_file=DEFAULT_CONFIG_FILE):
+    """Read ``runtime.game_window`` straight off disk, changing nothing.
+
+    ``main.py`` needs the answer before GTK is imported, to decide whether the
+    app must run as an X11 client (issue #199) -- far too early for a
+    ConfigManager, whose constructor creates and migrates the config file on
+    the way. A config that is absent, unreadable or not a mapping simply means
+    the default.
+    """
+    try:
+        with open(config_file, "r", encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle)
+        runtime = (raw or {}).get("runtime") or {}
+        return bool(runtime.get("game_window", DEFAULT_GAME_WINDOW))
+    except Exception:
+        return DEFAULT_GAME_WINDOW
 
 
 def _merge_defaults(defaults, data):
@@ -738,6 +765,20 @@ class ConfigManager:
 
         runtime = self.config.setdefault("runtime", {})
         runtime["master_volume_db"] = clamp_volume_db(value)
+        self.save_config()
+
+    def get_game_window_enabled(self):
+        """Whether games play inside an OpenEmux window (issue #199).
+
+        The preference on its own -- ask
+        ``game_window_support.game_window_active`` before acting on it, since
+        the session may not be able to host an embedded window at all.
+        """
+        return bool(self.config.get("runtime", {}).get("game_window", DEFAULT_GAME_WINDOW))
+
+    def set_game_window_enabled(self, enabled):
+        runtime = self.config.setdefault("runtime", {})
+        runtime["game_window"] = bool(enabled)
         self.save_config()
 
     # -- global input tuning (issues #154, #155) ---------------------------

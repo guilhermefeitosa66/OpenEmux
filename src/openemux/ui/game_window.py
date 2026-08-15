@@ -1,4 +1,4 @@
-"""The embedded-RetroArch game window (POC, env-flagged).
+"""The embedded-RetroArch game window.
 
 An ``Adw.Window`` that adopts the running RetroArch X11 window as its own
 content: libadwaita headerbar and borders outside, the game inside. With
@@ -9,10 +9,12 @@ fills the content area and the headerbar carries the action buttons.
 The headerbar buttons talk to RetroArch over the UDP network-command
 channel the launcher already enables (``RuntimeManager.send_command``).
 
-POC notes:
-- Strings are English literals, not i18n keys.
-- X keyboard focus is handed to the embedded window so RetroArch receives
-  the keyboard; GTK then paints the headerbar as unfocused while playing.
+Whether a wrapper opens at all is ``runtime.game_window`` plus what the
+session can actually do -- see ``openemux.core.game_window_support``.
+
+Note: X keyboard focus is handed to the embedded window so RetroArch
+receives the keyboard; GTK then paints the headerbar as unfocused while
+playing.
 """
 
 import logging
@@ -25,6 +27,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Graphene, Gtk
 
 from openemux.core import screen_geometry
+from openemux.i18n import tr
 from openemux.core.retroarch_command import (
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
@@ -100,8 +103,11 @@ class _GameScreen(Gtk.Widget):
 
 class GameWindow(Adw.Window):
     def __init__(self, application, runtime_manager, rom, frame_enabled,
-                 on_closed=None, on_open_input_settings=None):
+                 locale="en", on_closed=None, on_open_input_settings=None):
         super().__init__(application=application)
+        # Translated once, at construction: the window lives for one game,
+        # so there is no language switch to follow mid-flight.
+        self._locale = locale
         self._runtime = runtime_manager
         self._proc = runtime_manager.active_process
         # Called exactly once, from whichever close path runs first. The
@@ -143,36 +149,41 @@ class GameWindow(Adw.Window):
             Adw.WindowTitle(title=name, subtitle=rom.get("console", ""))
         )
         self._pause_button = self._action_button(
-            "media-playback-pause-symbolic", "Pause", self._on_pause_clicked
+            "media-playback-pause-symbolic", self._t("game_window.pause"),
+            self._on_pause_clicked
         )
         header.pack_start(self._pause_button)
         header.pack_start(
             self._action_button(
-                "view-refresh-symbolic", "Reset game", self._on_reset_clicked
+                "view-refresh-symbolic", self._t("game_window.reset"),
+                self._on_reset_clicked
             )
         )
         header.pack_start(
             self._action_button(
-                "media-floppy-symbolic", "Save state", self._on_save_state_clicked
+                "media-floppy-symbolic", self._t("game_window.save_state"),
+                self._on_save_state_clicked
             )
         )
         header.pack_start(
             self._action_button(
-                "folder-download-symbolic", "Load state", self._on_load_state_clicked
+                "folder-download-symbolic", self._t("game_window.load_state"),
+                self._on_load_state_clicked
             )
         )
         # Right side, rightmost first: RetroArch menu, volume (mute lives
         # inside its popover, like the library's control), controller settings.
         header.pack_end(
             self._action_button(
-                "open-menu-symbolic", "RetroArch menu", self._on_menu_clicked
+                "open-menu-symbolic", self._t("game_window.menu"),
+                self._on_menu_clicked
             )
         )
         header.pack_end(self._build_volume_button())
         header.pack_end(
             self._action_button(
                 "input-gaming-symbolic",
-                "Controller settings",
+                self._t("game_window.controller_settings"),
                 self._on_input_settings_clicked,
             )
         )
@@ -194,7 +205,7 @@ class GameWindow(Adw.Window):
         walked over UDP by the runtime manager's pacer."""
         self._volume_btn = Gtk.MenuButton()
         self._volume_btn.set_icon_name("audio-volume-high-symbolic")
-        self._volume_btn.set_tooltip_text("Volume")
+        self._volume_btn.set_tooltip_text(self._t("game_window.volume"))
 
         self._volume_scale = Gtk.Scale.new_with_range(
             Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
@@ -215,7 +226,7 @@ class GameWindow(Adw.Window):
 
         self._mute_button = Gtk.ToggleButton()
         self._mute_button.set_icon_name("audio-volume-muted-symbolic")
-        self._mute_button.set_tooltip_text("Mute")
+        self._mute_button.set_tooltip_text(self._t("game_window.mute"))
         self._mute_button.add_css_class("flat")
         self._mute_guard = False
         # Tracks a mute this control engaged itself at the slider floor, so
@@ -236,6 +247,9 @@ class GameWindow(Adw.Window):
         popover.connect("show", self._on_volume_popover_shown)
         self._volume_btn.set_popover(popover)
         return self._volume_btn
+
+    def _t(self, key):
+        return tr(self._locale, key)
 
     @staticmethod
     def _load_frame_texture():

@@ -24,14 +24,16 @@ class EnvBoolTest(unittest.TestCase):
         with mock.patch.dict("os.environ", {"FLAG": "  "}):
             self.assertTrue(feature_flags.env_bool("FLAG", default=True))
 
-    def test_retroarch_embed_flags(self):
-        env = {
-            "OPENEMUX_RETROARCH_EMBED": "true",
-            "OPENEMUX_RETROARCH_EMBED_FRAME": "false",
-        }
-        with mock.patch.dict("os.environ", env):
-            self.assertTrue(feature_flags.retroarch_embed_enabled())
+    def test_retroarch_embed_frame_flag(self):
+        with mock.patch.dict("os.environ", {"OPENEMUX_RETROARCH_EMBED_FRAME": "true"}):
+            self.assertTrue(feature_flags.retroarch_embed_frame_enabled())
+        with mock.patch.dict("os.environ", {}, clear=True):
             self.assertFalse(feature_flags.retroarch_embed_frame_enabled())
+
+    def test_the_game_window_is_no_longer_a_flag(self):
+        # It graduated to runtime.game_window (issue #199); a leftover env var
+        # from an old .env must not switch anything on or off.
+        self.assertFalse(hasattr(feature_flags, "retroarch_embed_enabled"))
 
 
 if __name__ == "__main__":

@@ -13,7 +13,9 @@ authors = [{ name = "Guilherme Feitoza" }]
 # PyGObject and pycairo are provided by the GNOME runtime / system packages and
 # are intentionally not listed here so `pip install .` stays buildable offline
 # (Flatpak) and against distro GObject-introspection.
-dependencies = ["PyYAML"]
+# python-xlib backs the game window: it reparents RetroArch's X11 window into
+# an OpenEmux one (issue #199). Missing it costs the game window, not the app.
+dependencies = ["PyYAML", "python-xlib"]
 
 [project.urls]
 Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"

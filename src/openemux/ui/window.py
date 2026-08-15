@@ -28,7 +28,7 @@ from openemux.core.library_view import (
 )
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
-from openemux.core import feature_flags
+from openemux.core import feature_flags, game_window_support
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -189,7 +189,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
-        # POC (env-flagged): the window wrapping the embedded RetroArch.
+        # The window wrapping the embedded RetroArch, while one is running.
         self._game_window = None
         # Covers downloaded by a running sync, waiting for a batched reveal
         # (issue #187): flushed by size, by time, or when the sync moves on
@@ -3781,21 +3781,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return True
 
     def _maybe_open_game_window(self, rom):
-        """POC (env-flagged): wrap the RetroArch window in an OpenEmux one.
+        """Wrap the RetroArch window in an OpenEmux one (issue #199).
 
         Every launch path opens it, including the input hot-apply relaunch
         (issue #129): the old wrapper closes with its process, so the new
         game needs a new wrapper adopting it.
         """
-        if not feature_flags.retroarch_embed_enabled():
+        if not game_window_support.game_window_active(self.config_manager):
             return
         from openemux.ui import game_window
 
         if not game_window.display_supports_embedding():
-            # Native-Wayland display: reparenting can never work, so the
-            # game simply keeps its own window (same as with the flag off).
+            # Last guard, and the only one that asks GTK itself: the session
+            # looked embeddable but the app ended up on a non-X11 display.
+            # The game simply keeps its own window, as with the setting off.
             logger.warning(
-                "retroarch embed: display is not X11; game runs standalone"
+                "game window: display is not X11; game runs standalone"
             )
             return
         GameWindow = game_window.GameWindow
@@ -3808,6 +3809,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             runtime_manager=self.runtime_manager,
             rom=rom,
             frame_enabled=feature_flags.retroarch_embed_frame_enabled(),
+            locale=self.locale,
             on_closed=self._on_game_window_closed,
             on_open_input_settings=self._open_input_settings_from_game,
         )

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from openemux.core import feature_flags
+from openemux.core import game_window_support
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -323,12 +323,14 @@ class RetroArchLauncher:
             state_slot = self.config_manager.get_state_slot()
         overrides["state_slot"] = f'"{int(state_slot)}"'
 
-        # POC (env-flagged): the embed wrapper needs RetroArch in a plain
-        # windowed window it can re-parent -- no fullscreen, no decorations,
-        # and no saving back the position we impose. pause_nonactive off
-        # because X keyboard focus moves between our window and the embedded
-        # one, and every such hop would otherwise pause the game.
-        if feature_flags.retroarch_embed_enabled():
+        # The game window needs RetroArch in a plain windowed window it can
+        # re-parent -- no fullscreen, no decorations, and no saving back the
+        # position we impose. pause_nonactive off because X keyboard focus
+        # moves between our window and the embedded one, and every such hop
+        # would otherwise pause the game. Keyed off the same answer the UI
+        # uses (issue #199): written without a wrapper to own the window, they
+        # would leave the game floating borderless.
+        if game_window_support.game_window_active(self.config_manager):
             overrides["video_fullscreen"] = '"false"'
             overrides["video_windowed_fullscreen"] = '"false"'
             overrides["video_window_show_decorations"] = '"false"'
@@ -408,12 +410,11 @@ class RetroArchLauncher:
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")
             log_handle = open(log_path, "w", encoding="utf-8")
             env = os.environ.copy()
-            # POC (env-flagged): on a Wayland session RetroArch would pick
-            # its native wayland driver, whose window no X client can
-            # reparent. Without WAYLAND_DISPLAY it falls back to X11 and
-            # lands on XWayland, next to the app that main.py already
-            # forces onto the X11 backend.
-            if feature_flags.retroarch_embed_enabled():
+            # On a Wayland session RetroArch would pick its native wayland
+            # driver, whose window no X client can reparent. Without
+            # WAYLAND_DISPLAY it falls back to X11 and lands on XWayland,
+            # next to the app that main.py already put on the X11 backend.
+            if game_window_support.game_window_active(self.config_manager):
                 env.pop("WAYLAND_DISPLAY", None)
             proc = subprocess.Popen(
                 cmd,
