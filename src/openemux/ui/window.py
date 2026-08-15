@@ -173,9 +173,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._cover_sync_running = False
         self._scan_running = False
         self._import_running = False
-        # The volume/mute controls are seeded once per launch, not on every
-        # runtime poll -- see _sync_runtime_controls (issue #125).
-        self._runtime_controls_seeded = False
         # Callbacks that re-apply translated text, registered where each
         # widget is built -- see _translatable.
         self._retranslate = []
@@ -412,15 +409,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self._build_view_mode_button())
         header.pack_end(self._build_view_mode_segment())
 
-        self.stop_btn = Gtk.Button()
-        self.stop_btn.set_icon_name("media-playback-stop-symbolic")
-        self._translatable(lambda: self.stop_btn.set_tooltip_text(self.t("header.stop")))
-        self.stop_btn.set_sensitive(False)
-        self.stop_btn.connect("clicked", self._on_stop_game_clicked)
-        header.pack_end(self.stop_btn)
-
-        header.pack_end(self._build_volume_button())
-
         # The two settings buttons ride in one box so the narrow breakpoint
         # can drop them together, without fighting the per-scope visibility
         # of the controller one.
@@ -562,100 +550,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._view_segment_buttons[mode] = button
         self.view_mode_segment = box
         return box
-
-    def _build_volume_button(self):
-        """Master volume for the running game (issue #69): slider + mute.
-
-        Lives next to Stop and is only sensitive while a game runs. The
-        slider is absolute dB; the runtime manager walks RetroArch there in
-        0.5 dB UDP steps from the level the launch seeded.
-        """
-        from openemux.core.retroarch_command import (
-            MAX_VOLUME_DB,
-            MIN_VOLUME_DB,
-            VOLUME_SNAP_WINDOW_DB,
-        )
-        self._volume_snap_window_db = VOLUME_SNAP_WINDOW_DB
-
-        self.volume_btn = Gtk.MenuButton()
-        self.volume_btn.set_icon_name("audio-volume-high-symbolic")
-        self._translatable(lambda: self.volume_btn.set_tooltip_text(self.t("header.volume")))
-        self.volume_btn.set_sensitive(False)
-
-        # Set while the app itself writes into the scale, so an echo of the
-        # runtime's own level is not mistaken for a user drag (issue #125).
-        self._volume_scale_guard = False
-        self._volume_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, MIN_VOLUME_DB, MAX_VOLUME_DB, 0.5
-        )
-        self._volume_scale.set_size_request(180, -1)
-        self._volume_scale.set_value(self.config_manager.get_master_volume_db())
-        self._volume_scale.set_draw_value(True)
-        self._volume_scale.set_value_pos(Gtk.PositionType.RIGHT)
-        # Same reading RetroArch's own OSD gives: amplitude percent + dB.
-        self._volume_scale.set_format_value_func(
-            lambda _s, v: f"{10 ** (v / 20) * 100:.0f}%  {v:+.1f} dB"
-        )
-        # The range continues past 100%, so unity gain gets a tick mark,
-        # desktop-volume style; the changed handler snaps drags onto it.
-        self._volume_scale.add_mark(0.0, Gtk.PositionType.BOTTOM, None)
-        self._volume_scale.connect("value-changed", self._on_volume_scale_changed)
-
-        self._mute_button = Gtk.ToggleButton()
-        self._mute_button.set_icon_name("audio-volume-muted-symbolic")
-        self._translatable(lambda: self._mute_button.set_tooltip_text(self.t("volume.mute")))
-        self._mute_button.add_css_class("flat")
-        self._mute_toggle_guard = False
-        self._mute_button.connect("toggled", self._on_mute_toggled)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.append(self._mute_button)
-        box.append(self._volume_scale)
-
-        popover = Gtk.Popover()
-        popover.set_child(box)
-        self.volume_btn.set_popover(popover)
-        return self.volume_btn
-
-    def _on_volume_scale_changed(self, scale):
-        if self._volume_scale_guard:
-            # The runtime poll echoes the current level back into the scale.
-            # Treating that as a user drag re-entered the whole volume path
-            # and wrote config.yaml once a second, forever (issue #125).
-            level = scale.get_value()
-        else:
-            value = scale.get_value()
-            if value != 0.0 and abs(value) <= self._volume_snap_window_db:
-                # Magnetic 100%: re-enters this handler at exactly 0 dB.
-                scale.set_value(0.0)
-                return
-            level = self.runtime_manager.set_master_volume_db(value)
-        icon = "audio-volume-high-symbolic"
-        if level <= -30:
-            icon = "audio-volume-low-symbolic"
-        elif level <= -12:
-            icon = "audio-volume-medium-symbolic"
-        if not self._mute_button.get_active():
-            self.volume_btn.set_icon_name(icon)
-
-    def _on_mute_toggled(self, button):
-        if self._mute_toggle_guard:
-            return
-        muted = self.runtime_manager.toggle_mute()
-        if muted != button.get_active():
-            # The command did not go out (game gone mid-toggle): stay honest.
-            self._mute_toggle_guard = True
-            button.set_active(muted)
-            self._mute_toggle_guard = False
-        self.volume_btn.set_icon_name(
-            "audio-volume-muted-symbolic" if muted else "audio-volume-high-symbolic"
-        )
-        if not muted:
-            self._on_volume_scale_changed(self._volume_scale)
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -1160,7 +1054,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
-            ("stop-game", lambda *_: self._on_stop_game_clicked(None), ["<Ctrl>Escape"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1310,7 +1203,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("shortcuts.group.general", (
                 ("<Ctrl>f", "shortcuts.search"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
-                ("<Ctrl>Escape", "shortcuts.stop"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),
             ("shortcuts.group.library", (
@@ -2804,7 +2696,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         success, error_msg = self.runtime_manager.launch(
             rom["path"], rom["console"], state_slot=slot
         )
-        self._sync_runtime_controls()
         if not success:
             if error_msg:
                 self._toast(error_msg, timeout=5)
@@ -3626,7 +3517,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # which ROM was asked for.
             self.play_history.record_launch(rom["path"])
             self._maybe_open_game_window(rom)
-        self._sync_runtime_controls()
         if not success and error_msg:
             toast = Adw.Toast(title=error_msg)
             toast.set_timeout(5)
@@ -3679,14 +3569,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._filter_missing_artwork = enabled
         self.apply_library_filters()
 
-    def _on_stop_game_clicked(self, _button):
-        success, error_msg = self.runtime_manager.stop_active()
-        self._sync_runtime_controls()
-        if not success and error_msg:
-            toast = Adw.Toast(title=error_msg)
-            toast.set_timeout(4)
-            self.toast_overlay.add_toast(toast)
-
     def _relaunch_active_rom(self, resume_marker=None):
         """Stop the running game and start the same ROM again.
 
@@ -3701,7 +3583,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         the gameplay across instead of starting the game over.
         """
         rom, error_msg = self.runtime_manager.relaunch_active()
-        self._sync_runtime_controls()
         if rom is None:
             if error_msg:
                 self._toast(error_msg, timeout=4)
@@ -3728,7 +3609,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self._toast(self.t("toast.relaunch_failed"), timeout=5)
                 return False
             success, launch_error = self.runtime_manager.relaunch_rom(rom)
-            self._sync_runtime_controls()
             if not success and launch_error:
                 self._toast(launch_error, timeout=5)
             if success:
@@ -3842,26 +3722,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
-        self._sync_runtime_controls()
         return True
-
-    def _sync_runtime_controls(self):
-        is_running = self.runtime_manager.is_running()
-        self.stop_btn.set_sensitive(is_running)
-        self.volume_btn.set_sensitive(is_running)
-        if is_running and not self._runtime_controls_seeded:
-            # A fresh launch starts unmuted at the persisted level. Seeded
-            # once per launch rather than on every poll: this runs once a
-            # second, and re-pushing the level into the scale re-emitted
-            # value-changed each time. It would also fight the user mid-drag
-            # now that the tracked level walks to its target (issue #125).
-            self._mute_toggle_guard = True
-            self._mute_button.set_active(False)
-            self._mute_toggle_guard = False
-            self._volume_scale_guard = True
-            self._volume_scale.set_value(self.runtime_manager.volume_db)
-            self._volume_scale_guard = False
-        self._runtime_controls_seeded = is_running
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()
