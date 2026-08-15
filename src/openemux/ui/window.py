@@ -44,6 +44,7 @@ from openemux.core.rom_importer import (
 )
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
+from openemux.core.theme import toggled_theme
 from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
 from openemux.core.scraper import (
     COVER_ART,
@@ -65,6 +66,7 @@ from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
+from openemux.ui import theming
 from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
@@ -406,6 +408,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
+        header.pack_end(self._build_theme_button())
+
         header.pack_end(self._build_view_mode_button())
         header.pack_end(self._build_view_mode_segment())
 
@@ -550,6 +554,43 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._view_segment_buttons[mode] = button
         self.view_mode_segment = box
         return box
+
+    def _build_theme_button(self):
+        """One click between light and dark (issue #198).
+
+        The icon shows what the click *gives* you -- a sun while the app is
+        dark, a moon while it is light -- rather than what is on screen, so
+        the button reads as an action instead of a status light. The full
+        three-way choice, "System" included, lives in Preferences > System.
+        """
+        self.theme_btn = Gtk.Button()
+        self.theme_btn.connect("clicked", self._on_theme_toggle_clicked)
+        # Under "System" the desktop can flip the appearance while the app is
+        # open, and the icon has to follow it.
+        Adw.StyleManager.get_default().connect(
+            "notify::dark", lambda *_: self._sync_theme_button()
+        )
+        self._translatable(self._sync_theme_button)
+        self._sync_theme_button()
+        return self.theme_btn
+
+    def _sync_theme_button(self):
+        button = getattr(self, "theme_btn", None)
+        if button is None:
+            return  # a retranslate that ran before the header was built
+        dark = theming.is_dark()
+        button.set_icon_name(
+            "weather-clear-symbolic" if dark else "weather-clear-night-symbolic"
+        )
+        button.set_tooltip_text(
+            self.t("header.theme.to_light" if dark else "header.theme.to_dark")
+        )
+
+    def _on_theme_toggle_clicked(self, _button):
+        theme = toggled_theme(theming.is_dark())
+        self.config_manager.set_theme(theme)
+        theming.apply_theme(theme)
+        self._sync_theme_button()
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.

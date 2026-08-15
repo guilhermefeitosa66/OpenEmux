@@ -475,6 +475,33 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-102 — The header toggle switches between light and dark
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App running. Back up the config first (`cp ~/.openemux/config.yaml
+  $SCRATCH/config.bak`).
+- **Steps:**
+  1. Note the current appearance, then click the sun/moon button in the content header bar
+     (left of the search button).
+  2. Open "Settings" → "System" and read the "Theme" row.
+- **Expected:** The whole interface repaints in the other theme and the button's icon flips to
+  offer the way back (sun while dark, moon while light). The "Theme" row reads "Light" or "Dark",
+  matching what is on screen.
+- **Check:** screenshots before and after the click; `grep "theme:" ~/.openemux/config.yaml`
+  reports the same value the row shows.
+- **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
+
+### RT-103 — The chosen theme survives a restart
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**. Back up the config first.
+- **Steps:**
+  1. Set `ui.theme` to `light` in `~/.openemux/config.yaml`.
+  2. Launch the app.
+- **Expected:** The first frame is already light — no dark window that repaints a moment later.
+- **Check:** screenshot of the window right after it appears; the header bar is light.
+- **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
+
 ## Internationalization
 
 ### RT-110 — Switching locale translates the UI
