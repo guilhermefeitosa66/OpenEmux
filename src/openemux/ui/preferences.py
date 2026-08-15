@@ -39,6 +39,8 @@ from openemux.core.input_profiles import (
 )
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
+from openemux.core.theme import THEMES
+from openemux.ui import theming
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
@@ -95,6 +97,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         page = self._pages.get(name)
         if page is not None:
             self.set_visible_page(page)
+
+    def select_input_console(self, console_id):
+        """Point the Input page at a console, whatever the library is showing.
+
+        The combo defaults to the console on screen; opened from a console's
+        context menu, the console the user right-clicked is the one they mean.
+        Setting it emits notify::selected, which rebuilds the rows.
+        """
+        if console_id in self._console_ids:
+            self._console_combo.set_selected(self._console_ids.index(console_id))
 
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):
@@ -1473,6 +1485,23 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         page.add(lang_group)
 
         interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
+
+        # First row of the group: it is the setting that changes the most on
+        # screen. "System" is the default and keeps following the desktop --
+        # the header's toggle only ever picks light or dark.
+        self._themes = list(THEMES)
+        self._theme_combo = Adw.ComboRow(
+            title=self.t("settings.system.theme.title"),
+            subtitle=self.t("settings.system.theme.subtitle"),
+        )
+        self._theme_combo.set_model(
+            Gtk.StringList.new([self.t(f"theme.{name}") for name in self._themes])
+        )
+        current_theme = self.config.get_ui_settings()["theme"]
+        self._theme_combo.set_selected(self._themes.index(current_theme))
+        self._theme_combo.connect("notify::selected", self._on_theme_changed)
+        interface_group.add(self._theme_combo)
+
         self._tips_row = Adw.SwitchRow(
             title=self.t("settings.system.tips.title"),
             subtitle=self.t("settings.system.tips.subtitle"),
@@ -1541,6 +1570,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    def _on_theme_changed(self, row, *_a):
+        idx = row.get_selected()
+        if not (0 <= idx < len(self._themes)):
+            return
+        theme = self.config.set_theme(self._themes[idx])
+        theming.apply_theme(theme)
+        # "System" that lands on the same appearance emits no notify::dark,
+        # so the header icon is refreshed here rather than left to that.
+        self.win._sync_theme_button()
 
     def _on_show_tips_changed(self, row, *_a):
         enabled = row.get_active()

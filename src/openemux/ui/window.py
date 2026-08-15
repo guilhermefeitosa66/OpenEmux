@@ -44,6 +44,7 @@ from openemux.core.rom_importer import (
 )
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
+from openemux.core.theme import toggled_theme
 from openemux.core.update_checker import DEFAULT_DOWNLOAD_URL, check_for_update_async
 from openemux.core.scraper import (
     COVER_ART,
@@ -65,6 +66,7 @@ from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
+from openemux.ui import theming
 from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
@@ -406,6 +408,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
+        header.pack_end(self._build_theme_button())
+
         header.pack_end(self._build_view_mode_button())
         header.pack_end(self._build_view_mode_segment())
 
@@ -550,6 +554,43 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._view_segment_buttons[mode] = button
         self.view_mode_segment = box
         return box
+
+    def _build_theme_button(self):
+        """One click between light and dark (issue #198).
+
+        The icon shows what the click *gives* you -- a sun while the app is
+        dark, a moon while it is light -- rather than what is on screen, so
+        the button reads as an action instead of a status light. The full
+        three-way choice, "System" included, lives in Preferences > System.
+        """
+        self.theme_btn = Gtk.Button()
+        self.theme_btn.connect("clicked", self._on_theme_toggle_clicked)
+        # Under "System" the desktop can flip the appearance while the app is
+        # open, and the icon has to follow it.
+        Adw.StyleManager.get_default().connect(
+            "notify::dark", lambda *_: self._sync_theme_button()
+        )
+        self._translatable(self._sync_theme_button)
+        self._sync_theme_button()
+        return self.theme_btn
+
+    def _sync_theme_button(self):
+        button = getattr(self, "theme_btn", None)
+        if button is None:
+            return  # a retranslate that ran before the header was built
+        dark = theming.is_dark()
+        button.set_icon_name(
+            "weather-clear-symbolic" if dark else "weather-clear-night-symbolic"
+        )
+        button.set_tooltip_text(
+            self.t("header.theme.to_light" if dark else "header.theme.to_dark")
+        )
+
+    def _on_theme_toggle_clicked(self, _button):
+        theme = toggled_theme(theming.is_dark())
+        self.config_manager.set_theme(theme)
+        theming.apply_theme(theme)
+        self._sync_theme_button()
 
     def _build_view_mode_button(self):
         """The layout switcher, in the header where the user browses.
@@ -1167,10 +1208,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.search_button.set_active(not self.search_button.get_active())
 
-    def _open_preferences(self, page=None):
+    def _open_preferences(self, page=None, console=None):
         self._preferences_dialog = OpenEmuxPreferences(self)
         if page:
             self._preferences_dialog.show_page(page)
+        if console is not None:
+            # Reached from a console's own context menu: the Input page would
+            # otherwise open on whatever the library is showing, which is not
+            # necessarily the console that was right-clicked.
+            self._preferences_dialog.select_input_console(console)
         self._preferences_dialog.present(self)
 
     def _open_welcome(self):
@@ -1775,6 +1821,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         ):
             if submenu is not None:
                 entries.append(submenu)
+        # Next to Core and Shader: the third per-console setting, and the only
+        # one that needs the dialog. The header button reaches the same page,
+        # but only while that console is the one on screen.
+        entries.append(
+            (self.t("context.controller"), "sidebar.controller", "input-gaming-symbolic")
+        )
         entries.append(SEPARATOR)
         entries.append(
             (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
@@ -2162,6 +2214,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("refresh", self._act_sidebar_refresh),
             ("import", self._act_sidebar_import),
             ("sync-covers", self._act_sidebar_sync_covers),
+            ("controller", self._act_sidebar_controller),
             ("open-folder", self._act_sidebar_open_folder),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -2189,6 +2242,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._start_cover_sync(scope="all", selected_console=None)
         else:
             self._start_cover_sync(scope="console", selected_console=console)
+
+    def _act_sidebar_controller(self, _action, _param):
+        console = self._sidebar_menu_console
+        logger.info("sidebar context action: controller console=%s", console)
+        self._open_preferences(page="input", console=console)
 
     def _act_sidebar_open_folder(self, _action, _param):
         console = self._sidebar_menu_console

@@ -24,6 +24,7 @@ from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
+from openemux.core.theme import DEFAULT_THEME, normalize_theme
 from openemux.core.update_checker import (
     DEFAULT_API_URL as DEFAULT_UPDATE_API_URL,
     DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
@@ -220,6 +221,8 @@ DEFAULT_CONFIG = {
         "render_cartridge_overlay": True,
         "show_tips": True,
         "gamepad_navigation": True,
+        # Light, dark, or whatever the desktop is doing (issue #198).
+        "theme": DEFAULT_THEME,
     },
     "updates": {
         "check_on_startup": True,
@@ -593,7 +596,14 @@ class ConfigManager:
             "show_tips": bool(ui.get("show_tips", True)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
+            "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
         }
+
+    def set_theme(self, theme):
+        ui = self.config.setdefault("ui", {})
+        ui["theme"] = normalize_theme(theme)
+        self.save_config()
+        return ui["theme"]
 
     def get_update_settings(self):
         updates = self.config.get("updates", {})

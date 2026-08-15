@@ -220,6 +220,11 @@ class OpenEmuxApplication(Adw.Application):
         from openemux.ui.icons import register_bundled_icons
         register_bundled_icons()
 
+        # Before the first window is drawn: setting the scheme afterwards
+        # repaints a window the user is already looking at (issue #198).
+        from openemux.ui.theming import apply_theme
+        apply_theme(self.config_manager.get_ui_settings()["theme"])
+
         if self._bootstrap_running:
             if self._bootstrap_window:
                 self._bootstrap_window.present()
