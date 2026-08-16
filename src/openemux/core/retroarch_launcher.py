@@ -312,6 +312,19 @@ class RetroArchLauncher:
         overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
         overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
 
+        # Nothing this file injects may outlive the launch that asked for it.
+        # RetroArch saves its configuration on exit by default, and by then
+        # the --appendconfig values *are* the configuration: every OpenEmux
+        # launch was quietly writing its own launch-scoped settings into the
+        # user's retroarch.cfg. That is how the game window's borderless
+        # override made every later standalone RetroArch window borderless,
+        # how the fullscreen hotkey ended up permanently unbound ("nul"), and
+        # how OpenEmux's save-state directory became RetroArch's own. Core
+        # options, remaps, saves, states and playlists live in their own
+        # files and are unaffected -- only the global settings this launch
+        # imposes stop being written back.
+        overrides["config_save_on_exit"] = '"false"'
+
         # ...and what makes the QUIT command on that channel actually quit.
         # RetroArch defaults quit_press_twice to true, and the network QUIT
         # goes through the very same "quit key" path as the hotkey: the first
@@ -366,6 +379,16 @@ class RetroArchLauncher:
             # a reparented child recreates/unparents its window and breaks
             # the embed, so the hotkey is unbound while embedded.
             overrides["input_toggle_fullscreen"] = '"nul"'
+        else:
+            # Stated rather than left alone, because earlier versions leaked
+            # the block above into the user's own retroarch.cfg: a game
+            # launched without a wrapper came up borderless and never paused
+            # when it lost focus, and turning the setting off did not fix it.
+            # Writing RetroArch's defaults back heals a config that was
+            # already polluted. (The fullscreen hotkey heals itself: with no
+            # wrapper the input profile's own binding is written above.)
+            overrides["video_window_show_decorations"] = '"true"'
+            overrides["pause_nonactive"] = '"true"'
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)

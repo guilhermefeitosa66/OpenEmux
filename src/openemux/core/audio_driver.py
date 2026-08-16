@@ -25,13 +25,28 @@ answer whenever a PulseAudio socket exists, which covers native PulseAudio and
 PipeWire alike (``pipewire-pulse`` serves the same socket) and exists in every
 RetroArch build we launch, vendored or Flatpak. When no socket is found the
 key is left unwritten: guessing there could only break a working setup.
+
+The socket that matters is the **host's**, not this process's: under Flatpak
+the emulator is spawned on the host, and our own sandbox is granted no audio
+socket to look at. So the Flatpak install asks the host directly (see
+``host_has_pulse_through_flatpak``) instead of concluding "no audio server"
+from its own empty runtime directory.
 """
 
 import logging
 import os
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
 
+from openemux.core.paths import is_running_in_flatpak
+
 logger = logging.getLogger(__name__)
+
+#: How long the host is given to answer "is there a PulseAudio socket?".
+#: One cheap probe per launch; a hung answer must never hold up a game.
+HOST_PROBE_TIMEOUT = 5
 
 #: Written when a PulseAudio-compatible server is reachable. Present in both
 #: the vendored RetroArch and the RetroArch Flatpak, and speaks to PipeWire
@@ -70,9 +85,42 @@ def host_has_pulse():
     return any(path.exists() for path in _pulse_socket_paths())
 
 
+def host_has_pulse_through_flatpak():
+    """Ask the host itself, from inside a Flatpak sandbox.
+
+    Under Flatpak the emulator runs on the *host* (``flatpak-spawn``), so the
+    question is what the host's audio server is -- and the sandbox cannot see
+    it. OpenEmux asks for no audio socket of its own, so no
+    ``XDG_RUNTIME_DIR/pulse/native`` is mounted in here and the local probe
+    always answered "no". The key then went unwritten and RetroArch fell back
+    to whatever its own config said, which is how a Flatpak install ended up
+    running games at the monitor's refresh rate with no sound.
+
+    Best effort: an unavailable relay or a probe that does not answer leaves
+    the decision where it was, rather than guessing a driver.
+    """
+    if not shutil.which("flatpak-spawn"):
+        return False
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    socket_path = shlex.quote(f"{runtime_dir}/pulse/native")
+    try:
+        result = subprocess.run(
+            ["flatpak-spawn", "--host", "sh", "-c", f"test -S {socket_path}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=HOST_PROBE_TIMEOUT,
+        )
+    except Exception as exc:  # noqa: BLE001 - a probe must never break a launch
+        logger.info("could not ask the host about PulseAudio: %s", exc)
+        return False
+    return result.returncode == 0
+
+
 def detect_audio_driver():
     """The driver to write, or ``None`` to leave the key alone."""
     if host_has_pulse():
+        return PULSE_DRIVER
+    if is_running_in_flatpak() and host_has_pulse_through_flatpak():
         return PULSE_DRIVER
     return None
 

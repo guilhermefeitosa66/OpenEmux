@@ -84,6 +84,73 @@ class HostDetectionTests(unittest.TestCase):
             self.assertFalse(host_has_pulse())
 
 
+class FlatpakHostDetectionTests(unittest.TestCase):
+    """Under Flatpak the emulator runs on the host, so the host is asked.
+
+    The sandbox is granted no audio socket of its own, so looking in its own
+    runtime directory always answered "no PulseAudio here" -- the key went
+    unwritten, RetroArch used whatever its config said, and the Flatpak
+    install ran games at the monitor's refresh rate with no sound.
+    """
+
+    def _run_result(self, returncode):
+        result = mock.Mock()
+        result.returncode = returncode
+        return result
+
+    def test_a_host_socket_makes_it_pulse(self):
+        with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
+            with mock.patch(
+                "openemux.core.audio_driver.is_running_in_flatpak", return_value=True
+            ), mock.patch(
+                "openemux.core.audio_driver.shutil.which",
+                return_value="/usr/bin/flatpak-spawn",
+            ), mock.patch(
+                "openemux.core.audio_driver.subprocess.run",
+                return_value=self._run_result(0),
+            ) as run_mock:
+                self.assertEqual(detect_audio_driver(), PULSE_DRIVER)
+            command = run_mock.call_args[0][0]
+            self.assertEqual(command[:4], ["flatpak-spawn", "--host", "sh", "-c"])
+            self.assertIn(f"{tmp}/pulse/native", command[4])
+
+    def test_a_host_without_pulse_keeps_its_silence(self):
+        with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
+            with mock.patch(
+                "openemux.core.audio_driver.is_running_in_flatpak", return_value=True
+            ), mock.patch(
+                "openemux.core.audio_driver.shutil.which",
+                return_value="/usr/bin/flatpak-spawn",
+            ), mock.patch(
+                "openemux.core.audio_driver.subprocess.run",
+                return_value=self._run_result(1),
+            ):
+                self.assertIsNone(detect_audio_driver())
+
+    def test_a_probe_that_fails_never_breaks_the_launch(self):
+        with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
+            with mock.patch(
+                "openemux.core.audio_driver.is_running_in_flatpak", return_value=True
+            ), mock.patch(
+                "openemux.core.audio_driver.shutil.which",
+                return_value="/usr/bin/flatpak-spawn",
+            ), mock.patch(
+                "openemux.core.audio_driver.subprocess.run",
+                side_effect=OSError("no relay"),
+            ):
+                self.assertIsNone(detect_audio_driver())
+
+    def test_outside_a_flatpak_the_host_is_never_asked(self):
+        with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
+            with mock.patch(
+                "openemux.core.audio_driver.is_running_in_flatpak", return_value=False
+            ), mock.patch(
+                "openemux.core.audio_driver.subprocess.run"
+            ) as run_mock:
+                self.assertIsNone(detect_audio_driver())
+            run_mock.assert_not_called()
+
+
 class SettingResolutionTests(unittest.TestCase):
     def test_auto_detects_from_the_host(self):
         with TemporaryDirectory() as tmp:
