@@ -341,10 +341,16 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('pause_nonactive = "false"', lines)
         self.assertIn('input_toggle_fullscreen = "nul"', lines)
 
-    def test_override_leaves_the_window_alone_when_the_setting_is_off(self):
+    def test_override_gives_the_window_its_decorations_when_the_setting_is_off(self):
+        # Stated, not merely omitted: earlier versions leaked the embed
+        # overrides into the user's own retroarch.cfg, so a game launched
+        # without a wrapper still came up borderless and never paused. The
+        # defaults are written back so a polluted config heals itself.
         lines = self._game_window_override_lines(False)
         self.assertNotIn('video_window_show_decorations = "false"', lines)
         self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
+        self.assertIn('video_window_show_decorations = "true"', lines)
+        self.assertIn('pause_nonactive = "true"', lines)
 
     def test_override_leaves_the_window_alone_when_the_session_cannot_embed(self):
         # The setting says yes but nothing can host the embed: writing these
@@ -352,6 +358,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._game_window_override_lines(True, embeddable=False)
         self.assertNotIn('video_window_show_decorations = "false"', lines)
         self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
+        self.assertIn('video_window_show_decorations = "true"', lines)
 
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
@@ -392,6 +399,15 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('network_cmd_enable = "true"', lines)
         self.assertIn('network_cmd_port = "55355"', lines)
         self.assertIn('audio_volume = "-6.0"', lines)
+
+    def test_override_never_lets_itself_be_saved_into_the_users_config(self):
+        # RetroArch saves its configuration on exit, and by then the
+        # --appendconfig values are part of it: without this every launch
+        # wrote OpenEmux's launch-scoped settings into the user's
+        # retroarch.cfg for good -- borderless windows, an unbound fullscreen
+        # hotkey and OpenEmux's save-state directory, all outliving the game.
+        lines = self._override_lines(None)
+        self.assertIn('config_save_on_exit = "false"', lines)
 
     def test_override_makes_a_single_quit_command_quit(self):
         # RetroArch's own default (quit_press_twice) answers the first quit
