@@ -28,6 +28,9 @@ echo "==> verify installed files"
 test -x /usr/bin/openemux
 test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+# PATH-relative Exec would let a ~/.local/bin shadow (AppImage-manager
+# symlink) hijack the menu icon; the packaged entry must be explicit.
+grep -q '^Exec=/usr/bin/openemux$' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 test -f /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 

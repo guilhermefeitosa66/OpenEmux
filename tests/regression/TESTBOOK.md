@@ -334,8 +334,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. "Settings" → "Video" → turn "Play in an OpenEmux window" off.
   2. Launch a game.
-- **Expected:** No OpenEmux wrapper appears; RetroArch opens its own decorated window and behaves
-  exactly as it did before the feature existed — its fullscreen hotkey included.
+- **Expected:** No OpenEmux wrapper appears; RetroArch opens its own decorated window — **with its
+  title bar and borders**, pausing when it loses focus — and behaves exactly as it did before the
+  feature existed, its fullscreen hotkey included. This holds even on a machine where an earlier
+  version already ran with the game window on.
 - **Check:** human only.
 - **Restore:** Turn the switch back on.
 
@@ -408,6 +410,55 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   every launch is configured so a single QUIT command quits (`quit_press_twice = "false"`) and,
   under Flatpak, so the sandbox dies with the process the app holds (`--die-with-parent`).
 - **Check:** suite files `tests/test_runtime_manager.py`, `tests/test_retroarch_launcher.py`.
+
+### RT-069 — A launch never writes into the user's RetroArch config
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM. Know which config the RetroArch you launch uses:
+  `~/.config/retroarch/retroarch.cfg` for a native/vendored one,
+  `~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg` for the Flatpak.
+- **Steps:**
+  1. Note the file's timestamp: `stat -c %y <config>`.
+  2. Launch a game, play briefly, close it.
+  3. Check the timestamp again.
+- **Expected:** Unchanged. Everything OpenEmux imposes for a launch — the window overrides, the
+  command channel, its save-state directory, the audio driver — lasts only for that game;
+  RetroArch does not save it back into the user's own configuration.
+- **Check:** human only; the timestamp must be identical, and
+  `grep -c "openemux" <config>` must not grow.
+
+### RT-150 — A game runs at the right speed, with sound
+<!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
+
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM. Run it on the install being released — what audio
+  server the emulator can reach depends on how it was launched, and the Flatpak is the case that
+  broke.
+- **Steps:**
+  1. Launch a game with a known tempo (a title screen tune).
+  2. Watch and listen for ~20 s.
+- **Expected:** Sound plays and the game runs at its normal speed. Emulation is paced off the
+  audio clock, so a game with no audio device runs at the monitor's refresh rate instead — on a
+  high-refresh display that is several times too fast, which is what the missing audio actually
+  looks like.
+- **Check:** human only; the launch log in `~/.openemux/runtime/retroarch_*.log` must contain
+  `[Audio] Started synchronous audio driver` and no `failed_to_start_audio_driver`.
+
+### RT-151 — The menu icon opens the install that owns it
+- **Area:** Packaging
+- **Mode:** MANUAL
+- **Preconditions:** The `.deb` (or `.rpm`) installed on a machine that also has other OpenEmux
+  copies around — an AppImage integrated by an AppImage manager (GearLever/AppManager symlink in
+  `~/.local/bin`), the Flatpak, an old version anywhere.
+- **Steps:**
+  1. Launch OpenEmux from the desktop menu icon.
+  2. Open "About" and read the version; check the startup log's `startup context` line.
+- **Expected:** The session belongs to the packaged install (`project_root_env=/opt/openemux`,
+  `appimage=None`) and About shows the packaged version — not whatever a `~/.local/bin/openemux`
+  symlink points at. The packaged desktop entry must not resolve `Exec` through `PATH`.
+- **Check:** `grep '^Exec=' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop`
+  prints exactly `Exec=/usr/bin/openemux`; the build scripts assert the same at package time.
 
 ## Input
 

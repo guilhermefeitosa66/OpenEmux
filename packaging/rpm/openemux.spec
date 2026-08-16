@@ -65,6 +65,11 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Sun Aug 16 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.2-1
+- Stop writing per-launch settings into the user's own RetroArch configuration
+- Give a game its decorated window back when the OpenEmux game window is off
+- Find the host's audio server under Flatpak, so games no longer run at the monitor's refresh rate
+
 * Sun Aug 16 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.1-1
 - Closing the game window now really ends the emulator instead of leaving it playing with no window
 - Closing the library window stops a running game with it
