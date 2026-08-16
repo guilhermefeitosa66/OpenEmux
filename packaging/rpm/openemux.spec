@@ -65,6 +65,10 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Sun Aug 16 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.1-1
+- Closing the game window now really ends the emulator instead of leaving it playing with no window
+- Closing the library window stops a running game with it
+
 * Sat Aug 15 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.0-1
 - Play inside an OpenEmux game window, with the emulator's controls in its header bar
 - Ship a local database of 60,600 game names, so covers are found without guessing URLs
