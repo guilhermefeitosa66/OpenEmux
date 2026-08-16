@@ -1,5 +1,7 @@
 import atexit
+import logging
 import threading
+import time
 
 from openemux.core import save_states
 from openemux.core.retroarch_command import (
@@ -20,6 +22,17 @@ VOLUME_PERSIST_DEBOUNCE = 0.75
 #: snapshot never clobbers a state the user saved on purpose.
 HOT_APPLY_STATE_SLOT = 100
 
+#: The escalation a stop walks, and how long each step gets before the next
+#: one. QUIT is the clean shutdown -- RetroArch flushes battery saves and
+#: exits on its own -- so it is worth waiting for; SIGTERM is the polite
+#: signal; SIGKILL is what a hung emulator gets. A game must never survive
+#: the window that launched it, whichever step it takes.
+QUIT_GRACE_SECONDS = 2.0
+TERM_GRACE_SECONDS = 2.0
+STOP_POLL_INTERVAL = 0.05
+
+logger = logging.getLogger(__name__)
+
 
 class RuntimeManager:
     """
@@ -28,8 +41,10 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager):
+    def __init__(self, project_root, config_manager, sleep=time.sleep):
         self.config_manager = config_manager
+        # Injectable so the stop escalation is assertable without real time.
+        self._sleep = sleep
         self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
@@ -94,19 +109,68 @@ class RuntimeManager:
     def is_running(self):
         return bool(self.active_process and self.active_process.poll() is None)
 
-    def stop_active(self):
+    def stop_active(self, block=False):
+        """Quit the running game, escalating until the process is really gone.
+
+        Three steps, each given a grace period: the network QUIT (RetroArch
+        shuts itself down and flushes battery saves), SIGTERM, then SIGKILL.
+        Anything less left games running behind a closed window -- a QUIT that
+        RetroArch answers only on the second press, or a SIGTERM that stops at
+        a sandbox boundary, is a stop button that does nothing, and the user
+        is left hearing a game they cannot see.
+
+        ``block=True`` runs the escalation on the calling thread, which is
+        what the app's own shutdown needs: a daemon thread dies with the
+        process and would leave the game behind on the way out. Everywhere
+        else it walks on its own thread so a closing window is not held up.
+        """
         if not self.active_process:
             return False, "No active game process."
 
-        if self.active_process.poll() is not None:
+        proc = self.active_process
+        if proc.poll() is not None:
             self._clear_active()
             return False, "No active game process."
 
-        try:
-            self.active_process.terminate()
-            return True, None
-        except Exception as exc:
-            return False, f"Failed to stop active game: {exc}"
+        # Sent from here rather than the worker: it is a single datagram, and
+        # a game that honours it is gone before the first grace period is up.
+        self.send_command("QUIT")
+        if block:
+            self._escalate_stop(proc)
+        else:
+            threading.Thread(
+                target=self._escalate_stop,
+                args=(proc,),
+                name="openemux-stop-game",
+                daemon=True,
+            ).start()
+        return True, None
+
+    def _escalate_stop(self, proc):
+        """SIGTERM then SIGKILL, each only if the game is still there."""
+        if self._wait_for_exit(proc, QUIT_GRACE_SECONDS):
+            return True
+        logger.info("game ignored QUIT; terminating the process")
+        self.retroarch_launcher.terminate_process(proc)
+        if self._wait_for_exit(proc, TERM_GRACE_SECONDS):
+            return True
+        logger.warning("game ignored SIGTERM; killing the process")
+        self.retroarch_launcher.kill_process(proc)
+        return self._wait_for_exit(proc, TERM_GRACE_SECONDS)
+
+    def _wait_for_exit(self, proc, timeout):
+        """Poll until the process is gone or ``timeout`` seconds have passed.
+
+        Polling rather than ``proc.wait()`` so the manager keeps working with
+        anything that answers ``poll()``, and so the wait is injectable.
+        """
+        waited = 0.0
+        while waited < timeout:
+            if proc.poll() is not None:
+                return True
+            self._sleep(STOP_POLL_INTERVAL)
+            waited += STOP_POLL_INTERVAL
+        return proc.poll() is not None
 
     # -- live control (issue #69) ------------------------------------------
     def _command_client(self):

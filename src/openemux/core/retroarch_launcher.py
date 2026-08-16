@@ -85,7 +85,22 @@ class RetroArchLauncher:
         if is_running_in_flatpak():
             if not shutil.which("flatpak-spawn"):
                 return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
-            return ["flatpak-spawn", "--host", "flatpak", "run", RETROARCH_FLATPAK_ID], None
+            return [
+                "flatpak-spawn",
+                "--host",
+                "flatpak",
+                "run",
+                # Without --die-with-parent the process handle we keep is
+                # useless as a stop button: flatpak-spawn does forward our
+                # SIGTERM to the host, but it stops at `flatpak run` -- bwrap
+                # lives in its own systemd scope and RetroArch plays on inside
+                # a sandbox nothing can reach. That is how closing the game
+                # window left a game running with no window, audible and only
+                # killable from a process manager. With the flag the sandbox
+                # dies with the process we signalled.
+                "--die-with-parent",
+                RETROARCH_FLATPAK_ID,
+            ], None
 
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
@@ -297,6 +312,17 @@ class RetroArchLauncher:
         overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
         overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
 
+        # ...and what makes the QUIT command on that channel actually quit.
+        # RetroArch defaults quit_press_twice to true, and the network QUIT
+        # goes through the very same "quit key" path as the hotkey: the first
+        # one only arms a two-second "press again to exit" window, so the
+        # command the game window sends when it closes was a no-op and the
+        # game kept playing. Measured against RetroArch 1.22.2: with the
+        # default, a single QUIT datagram leaves the process alive; with this
+        # override it exits cleanly (0), flushing battery saves on the way.
+        # The stock RetroArch config is untouched -- this is per launch.
+        overrides["quit_press_twice"] = '"false"'
+
         # Which audio driver RetroArch is told to use (issue #176). The global
         # retroarch.cfg may name one the RetroArch we launch was not built
         # with -- "pipewire" is the common case, and the vendored build has no
@@ -437,3 +463,53 @@ class RetroArchLauncher:
             return proc, None
         except Exception as exc:
             return None, f"Failed to launch RetroArch: {exc}"
+
+    # -- stopping a launched game ------------------------------------------
+    # Two steps a caller escalates through (see RuntimeManager.stop_active),
+    # here rather than there because what a signal actually reaches depends on
+    # how the process was launched, which is this module's business.
+    def terminate_process(self, proc):
+        """SIGTERM the launched process; True when the signal went out."""
+        try:
+            proc.terminate()
+            return True
+        except Exception as exc:  # noqa: BLE001 - a dead process must not raise
+            logger.warning("failed to terminate RetroArch: %s", exc)
+            return False
+
+    def kill_process(self, proc):
+        """Last resort, for a game that ignored both QUIT and SIGTERM.
+
+        Inside a Flatpak the handle we hold is the ``flatpak-spawn`` relay,
+        and SIGKILL is the one signal it cannot forward -- killing the relay
+        there would only orphan RetroArch for good. The sandbox is stopped on
+        the host instead, and the relay is killed afterwards so nothing is
+        left waiting on it.
+        """
+        killed = False
+        if is_running_in_flatpak():
+            killed = self._host_kill_retroarch()
+        try:
+            proc.kill()
+            return True
+        except Exception as exc:  # noqa: BLE001 - a dead process must not raise
+            logger.warning("failed to kill RetroArch: %s", exc)
+            return killed
+
+    @staticmethod
+    def _host_kill_retroarch():
+        """Stop the RetroArch Flatpak instance from inside our own sandbox."""
+        if not shutil.which("flatpak-spawn"):
+            return False
+        try:
+            subprocess.run(
+                ["flatpak-spawn", "--host", "flatpak", "kill", RETROARCH_FLATPAK_ID],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            logger.info("stopped the RetroArch Flatpak instance on the host")
+            return True
+        except Exception as exc:  # noqa: BLE001 - best effort, never raises
+            logger.warning("failed to stop the RetroArch Flatpak instance: %s", exc)
+            return False

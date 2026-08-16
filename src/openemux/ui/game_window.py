@@ -58,9 +58,6 @@ def display_supports_embedding():
 TICK_INTERVAL_MS = 200
 FIND_WINDOW_TIMEOUT_TICKS = 100
 
-#: Grace period between the QUIT command and a hard terminate on close.
-QUIT_GRACE_MS = 1500
-
 #: Ignore repeats of the grabbed fullscreen hotkey inside this window --
 #: X auto-repeat turns a held key into a stream of presses.
 FULLSCREEN_DEBOUNCE_US = 400_000
@@ -478,7 +475,7 @@ class GameWindow(Adw.Window):
     # to application teardown), so every programmatic close goes through
     # ``_close_and_destroy``; the user's X button goes through close-request.
     # ``_do_cleanup`` is idempotent so the two paths can overlap safely.
-    def _do_cleanup(self):
+    def _do_cleanup(self, block=False):
         if self._closing:
             return
         self._closing = True
@@ -499,17 +496,11 @@ class GameWindow(Adw.Window):
             self._child_xid = None
         proc = self._proc
         if proc is not None and proc.poll() is None:
-            self._runtime.send_command("QUIT")
-
-            def _terminate_if_alive():
-                if proc.poll() is None:
-                    try:
-                        proc.terminate()
-                    except Exception:
-                        pass
-                return False
-
-            GLib.timeout_add(QUIT_GRACE_MS, _terminate_if_alive)
+            # One escalating stop, owned by the runtime manager: QUIT, then
+            # SIGTERM, then SIGKILL, each only if the game is still there.
+            # Closing this window is the user saying "stop playing", and it
+            # has to hold even when the emulator does not cooperate.
+            self._runtime.stop_active(block=block)
         self._embedder.close()
         self._notify_closed()
 
@@ -518,9 +509,19 @@ class GameWindow(Adw.Window):
             callback, self._on_closed = self._on_closed, None
             callback(self)
 
-    def _close_and_destroy(self):
-        self._do_cleanup()
+    def _close_and_destroy(self, block=False):
+        self._do_cleanup(block=block)
         self.destroy()
+
+    def close_now(self, block=False):
+        """Close the wrapper and quit the game inside it, right now.
+
+        For an owner that is going away itself -- the library window closing
+        takes the game with it -- where ``close()`` would only hide this
+        window and leave the teardown to an app exit that is already under
+        way. ``block=True`` waits for the game to actually be gone.
+        """
+        self._close_and_destroy(block=block)
 
     def _on_close_request(self, _window):
         self._do_cleanup()
