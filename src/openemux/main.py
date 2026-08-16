@@ -237,6 +237,16 @@ class OpenEmuxApplication(Adw.Application):
 
         self._present_main_window()
 
+    def do_shutdown(self):
+        # Last line of defence against a game outliving the app. Closing the
+        # library window already stops it; this covers every other way the
+        # app can end (Ctrl+Q, a quit action, the session going away), where
+        # nothing else is left running to notice the process.
+        runtime = getattr(self.main_window, "runtime_manager", None)
+        if runtime is not None and runtime.is_running():
+            runtime.stop_active(block=True)
+        Adw.Application.do_shutdown(self)
+
     def _present_main_window(self):
         if self.main_window:
             self.main_window.present()

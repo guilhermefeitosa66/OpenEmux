@@ -258,6 +258,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
+        self.connect("close-request", self._on_close_stop_game)
 
         self._install_escape_handler()
 
@@ -1183,6 +1184,28 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _on_close_stop_gamepad(self, *_args):
         self.gamepad_navigator.stop()
+        return False
+
+    def _on_close_stop_game(self, *_args):
+        """Closing the library takes the running game with it.
+
+        A game OpenEmux started must never outlive the app: the wrapper
+        window is a window of this app and would keep it alive with no
+        library behind it, and a standalone RetroArch left running is a
+        process only a process manager can reach. The wait is bounded by the
+        stop escalation and normally over in milliseconds -- RetroArch
+        answers the QUIT command -- but it is deliberately synchronous, since
+        after this the app is on its way out and no worker would survive it.
+        """
+        game_window, self._game_window = self._game_window, None
+        if game_window is not None:
+            game_window.close_now(block=True)
+        # Asked again on purpose rather than as an else: a wrapper the user
+        # closed a moment ago has already done its (non-blocking) cleanup, so
+        # a game still shrugging off that stop would ride out on a worker
+        # thread this exit is about to take down with it.
+        if self.runtime_manager.is_running():
+            self.runtime_manager.stop_active(block=True)
         return False
 
     def set_input_capture_active(self, active):

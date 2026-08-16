@@ -372,6 +372,43 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Each hotkey does what the hint bar promises.
 - **Check:** human only.
 
+### RT-066 — Closing the game window ends the emulator process
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM; "Play in an OpenEmux window" on. Run this on the
+  install being released (Flatpak included) — what a stop signal reaches depends on how RetroArch
+  was launched.
+- **Steps:**
+  1. Launch a game and let it run until sound is playing.
+  2. Click the window's "×".
+  3. Wait 5 s, then run `pgrep -af retroarch` in a terminal.
+- **Expected:** The window closes, the sound stops with it, and no RetroArch process is left
+  behind — `pgrep` prints nothing. The library window is still there, with the "finished" toast.
+- **Check:** human only; `pgrep -af retroarch` must print nothing.
+
+### RT-067 — Closing the library takes a running game with it
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** As RT-066.
+- **Steps:**
+  1. Launch a game and let it run.
+  2. Click the "×" on the *library* window (not the game's).
+  3. Wait 5 s, then run `pgrep -af retroarch`.
+- **Expected:** Both windows close, the app exits, the sound stops, and no RetroArch process
+  survives.
+- **Check:** human only; `pgrep -af retroarch` must print nothing.
+
+### RT-068 — A stop escalates until the game is really gone
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: confirm that stopping a game asks RetroArch to quit first, and that a
+  game which ignores that — or the signal after it — is still ended.
+- **Expected:** The stop walks QUIT → SIGTERM → SIGKILL, stopping at the first step that works;
+  every launch is configured so a single QUIT command quits (`quit_press_twice = "false"`) and,
+  under Flatpak, so the sandbox dies with the process the app holds (`--die-with-parent`).
+- **Check:** suite files `tests/test_runtime_manager.py`, `tests/test_retroarch_launcher.py`.
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid
