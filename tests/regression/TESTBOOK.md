@@ -445,6 +445,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only; the launch log in `~/.openemux/runtime/retroarch_*.log` must contain
   `[Audio] Started synchronous audio driver` and no `failed_to_start_audio_driver`.
 
+### RT-151 — The menu icon opens the install that owns it
+- **Area:** Packaging
+- **Mode:** MANUAL
+- **Preconditions:** The `.deb` (or `.rpm`) installed on a machine that also has other OpenEmux
+  copies around — an AppImage integrated by an AppImage manager (GearLever/AppManager symlink in
+  `~/.local/bin`), the Flatpak, an old version anywhere.
+- **Steps:**
+  1. Launch OpenEmux from the desktop menu icon.
+  2. Open "About" and read the version; check the startup log's `startup context` line.
+- **Expected:** The session belongs to the packaged install (`project_root_env=/opt/openemux`,
+  `appimage=None`) and About shows the packaged version — not whatever a `~/.local/bin/openemux`
+  symlink points at. The packaged desktop entry must not resolve `Exec` through `PATH`.
+- **Check:** `grep '^Exec=' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop`
+  prints exactly `Exec=/usr/bin/openemux`; the build scripts assert the same at package time.
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

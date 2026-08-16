@@ -45,6 +45,11 @@ cp "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 
 desktop-file-validate "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
+# The packaged entry must point at /usr/bin explicitly: a PATH-relative Exec
+# resolves through ~/.local/bin, where AppImage managers drop shadowing
+# symlinks, and the menu icon then opens a different (often stale) install.
+grep -q '^Exec=/usr/bin/openemux$' \
+  "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
 
 mkdir -p dist
 DEB="dist/openemux_${VERSION}_amd64.deb"

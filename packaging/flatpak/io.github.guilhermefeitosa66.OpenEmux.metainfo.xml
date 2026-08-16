@@ -82,6 +82,16 @@
   </keywords>
 
   <releases>
+    <release version="1.11.2" date="2026-08-16">
+      <description>
+        <p>A game's settings stay with the game.</p>
+        <ul>
+          <li>Stop writing per-launch settings into the user's own RetroArch configuration, which left borderless windows, an unbound fullscreen hotkey and OpenEmux's save-state directory behind for good</li>
+          <li>Give RetroArch its decorated window back when the OpenEmux game window is off, healing a configuration an earlier version already changed</li>
+          <li>Find the host's audio server on Flatpak installs, so games no longer run at the monitor's refresh rate with no sound</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.1" date="2026-08-16">
       <description>
         <p>Closing a game now really ends it.</p>
