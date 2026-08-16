@@ -1,5 +1,7 @@
 """RuntimeManager's live control of a running game (issues #69, #125)."""
 
+import threading
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -38,18 +40,29 @@ class _DummyConfig:
 
 
 class _FakeProcess:
-    """A process that is alive until told otherwise."""
+    """A process that is alive until told otherwise.
 
-    def __init__(self):
+    ``ignores`` names the steps it survives ("terminate"), which is how a
+    game that has to be escalated on is written down.
+    """
+
+    def __init__(self, ignores=()):
         self.terminated = False
+        self.killed = False
         self.exit_code = None
+        self._ignores = set(ignores)
 
     def poll(self):
         return self.exit_code
 
     def terminate(self):
         self.terminated = True
-        self.exit_code = 0
+        if "terminate" not in self._ignores:
+            self.exit_code = 0
+
+    def kill(self):
+        self.killed = True
+        self.exit_code = -9
 
 
 class _FakeClient:
@@ -70,6 +83,20 @@ class _FakeClient:
         pass
 
 
+class _QuittingClient(_FakeClient):
+    """A client whose QUIT the game actually honours."""
+
+    def __init__(self, process, **kwargs):
+        super().__init__(**kwargs)
+        self.process = process
+
+    def send(self, command):
+        sent = super().send(command)
+        if sent and command == "QUIT":
+            self.process.exit_code = 0
+        return sent
+
+
 class _RecordingSleep:
     def __init__(self):
         self.calls = []
@@ -78,9 +105,9 @@ class _RecordingSleep:
         self.calls.append(seconds)
 
 
-def _manager(tmp_dir, **config_kwargs):
+def _manager(tmp_dir, sleep=None, **config_kwargs):
     config = _DummyConfig(tmp_dir, **config_kwargs)
-    return RuntimeManager(tmp_dir, config), config
+    return RuntimeManager(tmp_dir, config, sleep=sleep or _RecordingSleep()), config
 
 
 class VolumePacerTests(unittest.TestCase):
@@ -246,24 +273,27 @@ class CommandDispatchTests(unittest.TestCase):
             self.assertTrue(manager.send_command("LOAD_STATE"))
             self.assertEqual(client.sent, ["LOAD_STATE"])
 
-    def test_relaunch_terminates_and_hands_back_the_rom(self):
+    def test_relaunch_stops_the_game_and_hands_back_the_rom(self):
         # Issue #129: bindings reach RetroArch only through the
         # --appendconfig file written at spawn, so only a fresh process
         # picks up a remap. RESET (#130) keeps the process and cannot.
         with TemporaryDirectory() as tmp_dir:
             manager, _config = _manager(tmp_dir)
-            client = _FakeClient()
-            manager._command_client_cache = client
             process = _FakeProcess()
+            client = _QuittingClient(process)
+            manager._command_client_cache = client
             manager.active_process = process
             manager.active_rom = {"path": "/roms/x.sfc", "console": "SFC"}
 
             rom, error = manager.relaunch_active()
             self.assertIsNone(error)
-            self.assertTrue(process.terminated)
+            # The clean shutdown first: it flushes battery saves, and a game
+            # that honours it never reaches the signals.
+            self.assertEqual(client.sent, ["QUIT"])
+            self.assertIsNotNone(process.poll())
+            self.assertFalse(process.terminated)
             # Captured before the teardown: _clear_active wipes active_rom.
             self.assertEqual(rom, {"path": "/roms/x.sfc", "console": "SFC"})
-            self.assertEqual(client.sent, [])
 
     def test_relaunch_is_a_no_op_with_no_game_running(self):
         with TemporaryDirectory() as tmp_dir:
@@ -318,6 +348,103 @@ class CommandDispatchTests(unittest.TestCase):
             second = manager._command_client()
             self.assertIsNot(first, second)
             self.assertIsNone(manager._pacer)
+
+
+class StopActiveTests(unittest.TestCase):
+    """A stop has to end the game, whatever the emulator does about it.
+
+    The reported failure: closing the game window sent QUIT (which RetroArch
+    ignored, having answered the first quit with "press again") and then a
+    SIGTERM that never crossed the Flatpak sandbox boundary. The window went
+    away, the game played on, and only a process manager could end it. Every
+    step below therefore has to escalate to the next one.
+    """
+
+    def _running(self, tmp_dir, process, client=None):
+        manager, _config = _manager(tmp_dir)
+        manager.active_process = process
+        manager.active_rom = {"path": "/roms/x.sfc", "console": "SFC"}
+        manager._command_client_cache = client or _FakeClient()
+        return manager
+
+    def test_a_game_that_honours_quit_is_never_signalled(self):
+        with TemporaryDirectory() as tmp_dir:
+            process = _FakeProcess()
+            client = _QuittingClient(process)
+            manager = self._running(tmp_dir, process, client)
+
+            success, error = manager.stop_active(block=True)
+
+            self.assertTrue(success, error)
+            self.assertEqual(client.sent, ["QUIT"])
+            self.assertFalse(process.terminated)
+            self.assertFalse(process.killed)
+
+    def test_a_game_that_ignores_quit_is_terminated(self):
+        with TemporaryDirectory() as tmp_dir:
+            process = _FakeProcess()
+            client = _FakeClient()
+            manager = self._running(tmp_dir, process, client)
+
+            manager.stop_active(block=True)
+
+            self.assertEqual(client.sent, ["QUIT"])
+            self.assertTrue(process.terminated)
+            self.assertFalse(process.killed)
+            self.assertIsNotNone(process.poll())
+
+    def test_a_game_that_ignores_the_signal_too_is_killed(self):
+        with TemporaryDirectory() as tmp_dir:
+            process = _FakeProcess(ignores=("terminate",))
+            manager = self._running(tmp_dir, process)
+
+            manager.stop_active(block=True)
+
+            self.assertTrue(process.terminated)
+            self.assertTrue(process.killed)
+            self.assertIsNotNone(process.poll())
+
+    def test_a_stop_runs_on_its_own_thread_unless_asked_to_block(self):
+        # The window that asks for the stop must not freeze while an
+        # unresponsive game is escalated on.
+        with TemporaryDirectory() as tmp_dir:
+            process = _FakeProcess(ignores=("terminate",))
+            manager = self._running(tmp_dir, process)
+            started = threading.Event()
+            original = manager._escalate_stop
+
+            def _watched(proc):
+                started.set()
+                return original(proc)
+
+            manager._escalate_stop = _watched
+            success, error = manager.stop_active()
+
+            self.assertTrue(success, error)
+            self.assertTrue(started.wait(5))
+            for _ in range(100):
+                if process.killed:
+                    break
+                time.sleep(0.01)
+            self.assertTrue(process.killed)
+
+    def test_stopping_with_no_game_running_reports_it(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            success, error = manager.stop_active()
+            self.assertFalse(success)
+            self.assertTrue(error)
+
+    def test_a_process_that_already_exited_is_cleared(self):
+        with TemporaryDirectory() as tmp_dir:
+            process = _FakeProcess()
+            process.exit_code = 0
+            manager = self._running(tmp_dir, process)
+
+            success, _error = manager.stop_active()
+
+            self.assertFalse(success)
+            self.assertIsNone(manager.active_process)
 
 
 class HotApplyTests(unittest.TestCase):

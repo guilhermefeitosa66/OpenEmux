@@ -393,6 +393,14 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('network_cmd_port = "55355"', lines)
         self.assertIn('audio_volume = "-6.0"', lines)
 
+    def test_override_makes_a_single_quit_command_quit(self):
+        # RetroArch's own default (quit_press_twice) answers the first quit
+        # with "press again to exit", and the network QUIT goes through that
+        # very same path -- so the command the game window sends on close did
+        # nothing and the game played on behind a closed window.
+        lines = self._override_lines(None)
+        self.assertIn('quit_press_twice = "false"', lines)
+
     def _override_lines_with_audio_driver(self, setting):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -459,6 +467,97 @@ class RetroArchLauncherTests(unittest.TestCase):
         # Hotkeys are global: exactly one set, written by port 1.
         self.assertEqual(len([l for l in lines if l.startswith("input_enable_hotkey")]), 1)
         self.assertFalse([l for l in lines if "player2_enable_hotkey" in l])
+
+
+class StoppingAGameTests(unittest.TestCase):
+    """What a stop signal actually reaches, per launch shape."""
+
+    def _launcher(self, tmp_dir):
+        base = Path(tmp_dir)
+        return RetroArchLauncher(
+            base, _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+        )
+
+    def test_the_flatpak_prefix_ties_the_sandbox_to_the_process_we_hold(self):
+        # Without --die-with-parent our SIGTERM stops at the host's
+        # `flatpak run`: bwrap lives on in its own systemd scope and the game
+        # keeps playing inside a sandbox nothing can signal.
+        with TemporaryDirectory() as tmp_dir:
+            launcher = self._launcher(tmp_dir)
+            with patch(
+                "openemux.core.retroarch_launcher.is_running_in_flatpak",
+                return_value=True,
+            ), patch(
+                "openemux.core.retroarch_launcher.shutil.which",
+                return_value="/usr/bin/flatpak-spawn",
+            ):
+                prefix, error = launcher._launch_prefix()
+        self.assertIsNone(error)
+        self.assertEqual(
+            prefix,
+            [
+                "flatpak-spawn",
+                "--host",
+                "flatpak",
+                "run",
+                "--die-with-parent",
+                "org.libretro.RetroArch",
+            ],
+        )
+
+    def test_terminate_signals_the_process(self):
+        with TemporaryDirectory() as tmp_dir:
+            launcher = self._launcher(tmp_dir)
+            proc = Mock()
+            self.assertTrue(launcher.terminate_process(proc))
+            proc.terminate.assert_called_once_with()
+
+    def test_terminate_survives_a_process_that_is_already_gone(self):
+        with TemporaryDirectory() as tmp_dir:
+            launcher = self._launcher(tmp_dir)
+            proc = Mock()
+            proc.terminate.side_effect = OSError("no such process")
+            self.assertFalse(launcher.terminate_process(proc))
+
+    def test_kill_outside_a_flatpak_is_just_the_signal(self):
+        with TemporaryDirectory() as tmp_dir:
+            launcher = self._launcher(tmp_dir)
+            proc = Mock()
+            with patch(
+                "openemux.core.retroarch_launcher.is_running_in_flatpak",
+                return_value=False,
+            ), patch("openemux.core.retroarch_launcher.subprocess.run") as run_mock:
+                self.assertTrue(launcher.kill_process(proc))
+            proc.kill.assert_called_once_with()
+            run_mock.assert_not_called()
+
+    def test_kill_inside_a_flatpak_stops_the_instance_on_the_host(self):
+        # SIGKILL is the one signal flatpak-spawn cannot forward, so killing
+        # the relay alone would orphan RetroArch for good.
+        with TemporaryDirectory() as tmp_dir:
+            launcher = self._launcher(tmp_dir)
+            proc = Mock()
+            with patch(
+                "openemux.core.retroarch_launcher.is_running_in_flatpak",
+                return_value=True,
+            ), patch(
+                "openemux.core.retroarch_launcher.shutil.which",
+                return_value="/usr/bin/flatpak-spawn",
+            ), patch(
+                "openemux.core.retroarch_launcher.subprocess.run"
+            ) as run_mock:
+                self.assertTrue(launcher.kill_process(proc))
+            self.assertEqual(
+                run_mock.call_args[0][0],
+                [
+                    "flatpak-spawn",
+                    "--host",
+                    "flatpak",
+                    "kill",
+                    "org.libretro.RetroArch",
+                ],
+            )
+            proc.kill.assert_called_once_with()
 
 
 if __name__ == "__main__":
