@@ -82,6 +82,15 @@
   </keywords>
 
   <releases>
+    <release version="1.11.1" date="2026-08-16">
+      <description>
+        <p>Closing a game now really ends it.</p>
+        <ul>
+          <li>Closing the game window stops the emulator instead of leaving it running with no window, audible and reachable only from a process manager</li>
+          <li>Closing the library window ends a running game with it, so no game outlives the app</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.0" date="2026-08-15">
       <description>
         <p>Games now play inside OpenEmux, and artwork finds itself.</p>
