@@ -31,6 +31,18 @@ install -Dm755 "$ROOT_DIR/packaging/common/openemux-launcher.sh" "$DESTDIR/usr/b
 install -Dm644 "$ROOT_DIR/packaging/common/openemux.desktop" \
   "$DESTDIR/usr/share/applications/$APP_ID.desktop"
 
+# Absolute Exec/TryExec for the system packages. A PATH-relative "openemux"
+# makes the menu entry run whatever shadows /usr/bin in the user's PATH --
+# an AppImage manager dropping a symlink at ~/.local/bin/openemux is exactly
+# how a freshly installed .deb kept opening a stale AppImage instead of
+# itself. Rewritten here rather than in the source file because the AppImage
+# build installs that same file and needs the relative name (its desktop
+# entry is resolved inside the AppDir).
+sed -i \
+  -e 's|^Exec=.*|Exec=/usr/bin/openemux|' \
+  -e 's|^TryExec=.*|TryExec=/usr/bin/openemux|' \
+  "$DESTDIR/usr/share/applications/$APP_ID.desktop"
+
 # Icons: the themed hicolor entry is what a modern menu uses. Several sizes are
 # installed because menus that do not scale pick the nearest exact match, and
 # /usr/share/pixmaps is the fallback older Cinnamon/MATE/XFCE menus still read.
