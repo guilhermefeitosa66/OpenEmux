@@ -200,6 +200,7 @@ make deb-install           # install the .deb, resolving Depends with apt
 make deb-run               # launch it in this container's session
 make deb-smoke             # launch it, screenshot it, fail if it dies
 make smoke-all             # every format this distro can take
+make help                  # the full list, tailored to this container
 ```
 
 Or without the shell:
@@ -207,6 +208,7 @@ Or without the shell:
 ```bash
 make ubuntu-x11 RUN="deb-install deb-smoke"
 make testenv-matrix                    # all six, every format
+make testenv-matrix SMOKE_SECONDS=12   # shorter runs, less screen time
 ```
 
 `dist/` is bind-mounted read-only, and each container gets its own `$HOME`, so
@@ -217,6 +219,35 @@ Fedora; the AppImage and the Flatpak run everywhere.
 On an X11 host there is no Wayland session to borrow, so the `*-wayland`
 containers start weston nested — a compositor in a window — and the app really
 does speak Wayland to a real compositor.
+
+A smoke run starts the app, screenshots it once its window is up, and requires
+it to still be alive when the clock runs out. It distinguishes the ways that
+can go wrong, because they mean different things: a crash, a *clean* exit
+(these windows sit on your desktop while the matrix runs, and one stray click
+closes the app), and `INCONCLUSIVE` when the nested compositor itself went
+away — that last one proves nothing about the app and wants a rerun. Evidence
+per run lands in the container's home:
+
+```
+~/openemux-testenv/logs/<distro>-<session>-<format>.log
+~/openemux-testenv/shots/<distro>-<session>-<format>.png
+```
+
+Housekeeping, and the knobs worth knowing:
+
+```bash
+make testenv-list                      # what exists
+make testenv-status                    # containers + the artifacts they serve
+make testenv-rm-fedora-wayland         # drop one  (PURGE=1 drops its home too)
+make testenv-rm-all
+
+make ubuntu-x11 UBUNTU_IMAGE=ubuntu:26.04   # test a newer base
+make ubuntu-x11 DIST_DIR=/path/to/dist      # artifacts from another checkout
+```
+
+The last one matters when driving the matrix from a worktree, whose own `dist/`
+is empty. A container remembers which `dist/` it was created against, and
+`testenv-status` says so rather than serving stale artifacts behind your back.
 
 This covers dependency resolution, the launcher, the install layout, GTK and
 libadwaita version differences, and both display backends. It does not cover a
@@ -309,11 +340,15 @@ staff, update your `.env`, and cut a new release — no source change needed.
    `packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml`.
 2. `make packages` and confirm every artifact is green (build **and**
    install-test), and that `dist/SHA256SUMS` covers them all.
-3. Commit, tag `vX.Y.Z`, push `main` and the tag.
-4. `gh release create vX.Y.Z --target main dist/*` — every artifact plus
+3. `make testenv-matrix` — the build containers install-test each artifact on
+   the distro that built it, which is the easy half. This installs and launches
+   all of them on Ubuntu, Debian and Fedora, under X11 and Wayland. See
+   [Testing the packages on other distros](#testing-the-packages-on-other-distros).
+4. Commit, tag `vX.Y.Z`, push `main` and the tag.
+5. `gh release create vX.Y.Z --target main dist/*` — every artifact plus
    `SHA256SUMS`. The README/website download links point at `releases/latest`,
    so they need no per-version edits — only update them when adding a new
    *format*.
-5. Publish the Flatpak to the distribution repo, or `flatpak update` never
+6. Publish the Flatpak to the distribution repo, or `flatpak update` never
    offers the new version:
    `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=vX.Y.Z`
