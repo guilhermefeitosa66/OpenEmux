@@ -17,6 +17,7 @@ artifacts. For user-facing install instructions, see the main
   - [Flatpak](#flatpak)
   - [Build everything](#build-everything)
   - [Checksums](#checksums)
+- [Testing the packages on other distros](#testing-the-packages-on-other-distros)
 - [How the packages are laid out](#how-the-packages-are-laid-out)
 - [Cutting a release](#cutting-a-release)
 
@@ -174,6 +175,56 @@ SHA-256 rather than MD5: MD5 collisions are practical, which makes an MD5
 useless against exactly the tampering a checksum exists to detect. One
 combined file rather than one per artifact keeps verification to a single
 command.
+
+## Testing the packages on other distros
+
+Building a package proves it builds. Whether it *installs and runs* on the
+distros people actually use is a separate question, and
+[`packaging/testenv/`](../packaging/testenv/README.md) answers it: six
+throwaway desktops — Ubuntu, Debian and Fedora, each in an X11 and a Wayland
+flavour — driven by [distrobox]. They share the host's kernel, GPU and display,
+so a full pass costs minutes instead of the hours a VM matrix would.
+
+```bash
+make distrobox-install     # once, if the host does not have distrobox yet
+make packages              # the artifacts under test
+
+make ubuntu-x11            # bring the container up, drop into a shell
+make fedora-wayland        # same, on a nested weston session
+```
+
+Inside the container, one target per format:
+
+```bash
+make deb-install           # install the .deb, resolving Depends with apt
+make deb-run               # launch it in this container's session
+make deb-smoke             # launch it, screenshot it, fail if it dies
+make smoke-all             # every format this distro can take
+```
+
+Or without the shell:
+
+```bash
+make ubuntu-x11 RUN="deb-install deb-smoke"
+make testenv-matrix                    # all six, every format
+```
+
+`dist/` is bind-mounted read-only, and each container gets its own `$HOME`, so
+first-boot bootstrap runs for real and your own library and config are never
+touched. The `.deb` is only offered on Ubuntu and Debian, the `.rpm` only on
+Fedora; the AppImage and the Flatpak run everywhere.
+
+On an X11 host there is no Wayland session to borrow, so the `*-wayland`
+containers start weston nested — a compositor in a window — and the app really
+does speak Wayland to a real compositor.
+
+This covers dependency resolution, the launcher, the install layout, GTK and
+libadwaita version differences, and both display backends. It does not cover a
+real GNOME or KDE session, portals, drivers or kernels; those still want a VM.
+The README in that directory has the details, including the handful of things
+that were surprising enough to write down.
+
+[distrobox]: https://distrobox.it
 
 ## How the packages are laid out
 

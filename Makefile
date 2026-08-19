@@ -6,6 +6,8 @@ PIP := $(VENV)/bin/pip
 
 .PHONY: all setup setup-dev venv run test coverage icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: appimage appimage-clean deb rpm flatpak checksums packages packages-clean
+.PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
+.PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
 
 all: setup
 
@@ -130,6 +132,72 @@ packages-clean: appimage-clean
 		docker image inspect $$img >/dev/null 2>&1 || img=alpine; \
 		docker run --rm -v "$(CURDIR)":/work -w /work $$img rm -rf /work/.flatpak-build-dir; \
 	fi
+
+# --- Test environments (distrobox) ---
+#
+# A container per (distro, session) pair, each one a throwaway desktop where
+# the artifacts in dist/ get installed and launched the way a user would.
+#
+#   make distrobox-install     install distrobox itself (once, needs sudo)
+#   make ubuntu-x11            bring the container up and drop into a shell
+#   make fedora-wayland        same, on a nested weston session
+#
+# Inside, `make deb-install`, `make appimage-run`, `make flatpak-smoke` and
+# friends are served by packaging/testenv/Makefile. To skip the shell and run
+# them straight from here:
+#
+#   make ubuntu-x11 RUN="deb-install deb-smoke"
+#   make testenv-matrix        smoke every format on every distro/session
+#
+# dist/ is bind-mounted read-only, so a test can never eat a release artifact.
+# Build it first with `make packages`. Driving the matrix from a worktree,
+# whose dist/ is empty? Point at the real one: DIST_DIR=/path/to/dist.
+TESTENV := ./packaging/testenv/testenv.sh
+DIST_DIR ?= $(CURDIR)/dist
+export DIST_DIR
+
+# Base images, overridable: `make ubuntu-x11 UBUNTU_IMAGE=ubuntu:26.04`.
+# Ubuntu 24.04 is the floor the .deb targets (libadwaita >= 1.5); Debian's
+# first release clearing it is 13, since bookworm ships libadwaita 1.2 and
+# cannot install the package at all. The .rpm is built on the fc40 floor and
+# install-tested here on a current Fedora.
+UBUNTU_IMAGE ?= ubuntu:24.04
+DEBIAN_IMAGE ?= debian:13
+FEDORA_IMAGE ?= fedora:42
+export UBUNTU_IMAGE DEBIAN_IMAGE FEDORA_IMAGE
+
+# Every scenario worth running, in the order the matrix runs them.
+TESTENVS := ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
+
+distrobox-install:
+	$(TESTENV) install-distrobox
+
+# One target per scenario. With RUN= they are non-interactive, which is what
+# makes the matrix (and a CI job) possible; without it you get a shell.
+$(TESTENVS):
+	@$(TESTENV) $(if $(RUN),run $(subst -, ,$@) $(RUN),up $(subst -, ,$@))
+
+# Every format on every distro and session, installed and smoke-tested.
+# Serial on purpose: they all compete for the same screen. Shorten the runs
+# with SMOKE_SECONDS=12 when the machine is also being used for other work.
+testenv-matrix:
+	@rc=0; for e in $(TESTENVS); do \
+	  printf '\n\033[1;35m=== %s ===\033[0m\n' "$$e"; \
+	  $(MAKE) --no-print-directory $$e RUN="$(if $(SMOKE_SECONDS),SMOKE_SECONDS=$(SMOKE_SECONDS)) smoke-all" || rc=1; \
+	done; exit $$rc
+
+testenv-list:
+	@$(TESTENV) list
+
+testenv-status:
+	@$(TESTENV) status
+
+# make testenv-rm-fedora-wayland      (add PURGE=1 to drop its home too)
+testenv-rm-%:
+	@$(TESTENV) rm $(if $(PURGE),--purge,) $(subst -, ,$*)
+
+testenv-rm-all:
+	@$(TESTENV) rm-all $(if $(PURGE),--purge,)
 
 # Cleaning
 clean:
