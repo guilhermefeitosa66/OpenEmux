@@ -320,11 +320,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   on (the default) and an X11/XWayland session.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Play for ~30 s; close the game window.
-- **Expected:** The game appears *inside* an OpenEmux window titled with the ROM name, with the
-  header bar carrying pause, reset, save state, load state, controller settings, volume and the
-  RetroArch menu. Sound plays, input responds, and closing the window ends the game and returns
-  to the library cleanly.
+  2. Watch the window while the game boots.
+  3. Play for ~30 s; close the game window.
+- **Expected:** While the game is starting, the window shows a spinner and "Starting &lt;game&gt;…"
+  — never a plain black rectangle with no explanation. The game then appears *inside* an OpenEmux
+  window titled with the ROM name, with the header bar carrying pause, reset, save state, load
+  state, controller settings, volume and the RetroArch menu. Sound plays, input responds, and
+  closing the window ends the game and returns to the library cleanly.
 - **Check:** human only (grabbing the keyboard for the emulator makes automation unsafe).
 
 ### RT-064 — Turning the game window off gives RetroArch its own window
@@ -371,7 +373,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. In game, use the hint-bar hotkeys: hold and press `F` (fullscreen toggle), hold and press
      `F1` (RetroArch menu); save and load a state.
-- **Expected:** Each hotkey does what the hint bar promises.
+- **Expected:** Each hotkey does what the hint bar promises. Note that while the game is embedded
+  the *keyboard* fullscreen binding is the one that works: the wrapper grabs it and fullscreens
+  itself, because RetroArch toggling fullscreen on a re-parented window would recreate that window
+  and break the embed. RetroArch's own fullscreen bindings, keyboard and pad alike, are unbound
+  for the duration (see RT-155).
 - **Check:** human only.
 
 ### RT-066 — Closing the game window ends the emulator process
@@ -444,6 +450,92 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   looks like.
 - **Check:** human only; the launch log in `~/.openemux/runtime/retroarch_*.log` must contain
   `[Audio] Started synchronous audio driver` and no `failed_to_start_audio_driver`.
+
+### RT-152 — A session that cannot embed never strips RetroArch's window
+<!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a session that cannot host the game window — GTK on Wayland, or
+  after an embed has already failed once — confirm the launcher writes RetroArch's own window
+  settings back instead of the embed ones.
+- **Expected:** The borderless overrides are only ever written when a wrapper will actually exist.
+  Anything else leaves the game undecorated, unmovable and without its fullscreen hotkey, with no
+  window to hold it (issue #267).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from unittest import mock
+  from openemux.core import game_window_support as g
+
+  g.reset_embed_state()
+  # GTK reported a non-X11 display: capability is unchanged, this launch is not.
+  with mock.patch.dict(os.environ, {"DISPLAY": ":0"}, clear=True):
+      with mock.patch.object(g, "XLIB_AVAILABLE", True):
+          g.set_display_embeddable(False)
+          assert g.embedding_possible(), "the Preferences switch must stay usable"
+          assert not g.embedding_ready(), "launched an embed on a non-X11 display"
+  g.reset_embed_state()
+  # A failed embed latches the rest of the session standalone.
+  with mock.patch.object(g, "embedding_possible", lambda: True):
+      g.mark_embed_unavailable("RetroArch is not an X11 client")
+      assert not g.embedding_ready(), "tried to embed again after a failure"
+  g.reset_embed_state()
+  # GTK takes the first backend that opens, so wayland,x11 means wayland.
+  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "wayland,x11"}, clear=True):
+      with mock.patch.object(g, "XLIB_AVAILABLE", True):
+          assert not g.embedding_possible(), "accepted a backend list that lands on Wayland"
+  print("RT-152 OK")
+  EOF
+  ```
+
+### RT-153 — A failed embed hands the game back a normal window
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** "Play in an OpenEmux window" on, a working core and ROM. The embed has to
+  fail, which on a healthy X11 machine means forcing it: run the app with
+  `RetroArchWindowEmbedder.find_game_window` patched to return `None`.
+- **Steps:**
+  1. Launch a game and watch the OpenEmux game window.
+  2. Wait for it to give up.
+- **Expected:** While it waits, the window shows a spinner and "Starting &lt;game&gt;…" rather than
+  a black rectangle. When it gives up it says so — *"The game window could not take over
+  RetroArch. Reopening the game in its own window."* — and the game comes back in **RetroArch's
+  own decorated window: a title bar, movable, resizable, its fullscreen hotkey working and the
+  game pausing when it loses focus.** The user is never left with an undecorated square that
+  cannot be moved (issue #267). Launching a second game afterwards opens no wrapper at all and is
+  decorated from the start.
+- **Check:** human only. The newest `~/.openemux/runtime/runtime_*.cfg` written after the failure
+  must contain `video_window_show_decorations = "true"` and `pause_nonactive = "true"`, and must
+  **not** contain `video_context_driver = ""`.
+
+### RT-154 — Moving the game window mid-play keeps the game inside it
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session, with the game visibly inside the wrapper.
+- **Steps:**
+  1. Drag the game window around the screen by its header bar, several times, while the game runs.
+  2. If a second monitor is available, drag it onto that one too.
+  3. Keep playing for ~30 s afterwards.
+- **Expected:** The game stays inside the window and keeps running throughout. The wrapper never
+  disappears and no borderless RetroArch window is left behind — that is exactly the failure
+  issue #267 was reported as.
+- **Check:** human only; `~/.openemux/runtime/openemux_startup.log` must contain no
+  `embedding unavailable` line for that session.
+
+### RT-155 — The pad's fullscreen button cannot break the embed
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session, with a gamepad connected and a fullscreen
+  binding mapped to a pad button.
+- **Steps:**
+  1. With the game embedded, press the pad button bound to the fullscreen toggle several times.
+- **Expected:** Nothing happens to the embed: RetroArch does not recreate its window and the game
+  stays inside the OpenEmux window. The keyboard fullscreen binding is the fullscreen path while
+  embedded, and it still works.
+- **Check:** human only; the launch's `runtime_*.cfg` must contain
+  `input_toggle_fullscreen_btn = "nul"`.
 
 ### RT-151 — The menu icon opens the install that owns it
 - **Area:** Packaging

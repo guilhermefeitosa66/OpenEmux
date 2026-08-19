@@ -38,6 +38,18 @@ Silverblue): the OpenEmux sandbox could not see the RetroArch Flatpak's cores
 directory. The report exposed a missing `--filesystem` grant in the manifest
 that broke every Flatpak-on-Flatpak install, fixed in v1.10.2.
 
+### CoverUnited (Reddit)
+
+Reported on Reddit that a game would open inside the OpenEmux window and then
+lose it mid-play, leaving RetroArch as *"a square in the center of the monitor
+without any chance of moving it or anything else, but gaming still going"* —
+the first user-facing sighting of a failure the project had only described
+from the code side. That report became
+[#267](https://github.com/guilhermefeitosa66/OpenEmux/issues/267): the game
+window now says what it is doing while it waits, gives up in seconds instead
+of twenty, and hands the game back a normal decorated window instead of
+stranding it.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
