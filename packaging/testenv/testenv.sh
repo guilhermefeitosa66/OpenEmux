@@ -192,9 +192,20 @@ Build the artifacts first (make packages), or pass DIST_DIR=<path>."
 
 # Provisioning is idempotent and cheap on re-runs; the marker only keeps the
 # common case (a plain `make ubuntu-x11`) from paying an apt round-trip.
+#
+# It is read from inside the container on purpose. The container's home
+# outlives the container -- `testenv-rm` keeps it, and a later create reuses
+# it -- so a marker stored there would report a fresh, empty container as
+# provisioned and leave it without so much as make(1).
+provisioned() {
+	local cm; cm=$(container_manager)
+	[ -n "${cm}" ] || return 1
+	"${cm}" exec "$1" test -e /var/lib/openemux-testenv/provisioned 2>/dev/null
+}
+
 provision_container() {
-	local name=$1 session=$2 home=$3
-	if [ -e "${home}/.openemux-testenv-provisioned" ] && [ "${FORCE_PROVISION:-0}" != "1" ]; then
+	local name=$1 session=$2
+	if [ "${FORCE_PROVISION:-0}" != "1" ] && provisioned "${name}"; then
 		return 0
 	fi
 	info "provisioning ${name} (first run: installs the desktop bits it needs)"
@@ -213,7 +224,6 @@ cmd_up() {
 	local distro=${1:?distro} session=${2:?session} enter=${3:-enter}
 	check_session "${session}"
 	local name="${PREFIX}-${distro}-${session}"
-	local home="${TESTENV_ROOT}/homes/${distro}-${session}"
 
 	require_distrobox
 	if container_exists "${name}"; then
@@ -222,7 +232,7 @@ cmd_up() {
 		create_container "${distro}" "${session}"
 	fi
 	start_and_wait "${name}"
-	provision_container "${name}" "${session}" "${home}"
+	provision_container "${name}" "${session}"
 
 	case "${enter}" in
 		no-enter) info "${name} is ready -- enter it with: make ${distro}-${session}" ;;
