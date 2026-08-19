@@ -151,6 +151,26 @@ class RetroArchWindowEmbedder:
             logger.warning("embed: reparent failed: %s", exc)
             return False
 
+    def is_child_of(self, child_xid, parent_xid):
+        """Is the game window still re-parented under ours? Tri-state.
+
+        ``True``/``False``, or ``None`` when the question cannot be answered
+        -- no display, or the window is gone. The distinction matters: a
+        BadWindow means the game's window was destroyed, which is the game
+        ending, not the embed drifting. Treating "unknown" as "drifted" would
+        re-parent and steal X focus once a second for the rest of the
+        session (issue #267).
+        """
+        dpy = self._dpy()
+        if dpy is None:
+            return None
+        try:
+            child = dpy.create_resource_object("window", child_xid)
+            return int(child.query_tree().parent.id) == int(parent_xid)
+        except Exception as exc:
+            logger.debug("embed: cannot read the game window's parent: %s", exc)
+            return None
+
     def move_resize(self, child_xid, x, y, width, height):
         dpy = self._dpy()
         if dpy is None:

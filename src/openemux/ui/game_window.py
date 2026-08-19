@@ -26,7 +26,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Graphene, Gtk
 
-from openemux.core import screen_geometry
+from openemux.core import game_window_support, retroarch_log, screen_geometry
 from openemux.i18n import tr
 from openemux.core.retroarch_command import (
     MAX_VOLUME_DB,
@@ -61,6 +61,12 @@ FIND_WINDOW_TIMEOUT_TICKS = 100
 #: Ignore repeats of the grabbed fullscreen hotkey inside this window --
 #: X auto-repeat turns a held key into a stream of presses.
 FULLSCREEN_DEBOUNCE_US = 400_000
+
+#: How often, in ticks, the wrapper asks RetroArch's log which display server
+#: it took, and how often it re-checks that the embedded window is still ours.
+#: Both are X/disk round-trips that nothing needs at the 200 ms tick rate.
+LOG_PROBE_INTERVAL_TICKS = 5
+PARENT_CHECK_INTERVAL_TICKS = 5
 
 
 class _GameScreen(Gtk.Widget):
@@ -100,7 +106,8 @@ class _GameScreen(Gtk.Widget):
 
 class GameWindow(Adw.Window):
     def __init__(self, application, runtime_manager, rom, frame_enabled,
-                 locale="en", on_closed=None, on_open_input_settings=None):
+                 locale="en", on_closed=None, on_open_input_settings=None,
+                 on_embed_failed=None):
         super().__init__(application=application)
         # Translated once, at construction: the window lives for one game,
         # so there is no language switch to follow mid-flight.
@@ -113,6 +120,11 @@ class GameWindow(Adw.Window):
         # signal-based owner kept a stale reference for the app's lifetime.
         self._on_closed = on_closed
         self._on_open_input_settings = on_open_input_settings
+        # Called at most once, when the wrapper gives up on adopting the
+        # game. The owner is the one that can put the game back in a normal
+        # decorated window, which is the whole point of issue #267 -- this
+        # window is on its way out by the time it fires.
+        self._on_embed_failed = on_embed_failed
         self._embedder = RetroArchWindowEmbedder()
         self._child_xid = None
         self._parent_xid = None
@@ -134,6 +146,13 @@ class GameWindow(Adw.Window):
         self._tick_id = None
         self._ticks_waited = 0
         self._last_rect = None
+        # RetroArch's own answer about the display server it took, cached:
+        # only a definite "not X11" is actionable, and once the log has said
+        # it there is nothing left to learn from re-reading the file.
+        self._log_verdict = retroarch_log.UNKNOWN
+        # Ticks since the game was adopted; paces the "is it still ours?"
+        # check, kept apart from _ticks_waited, which is the search budget.
+        self._embedded_ticks = 0
 
         name = rom.get("name") or Path(rom.get("path", "Game")).stem
         self.set_title(name)
@@ -185,9 +204,22 @@ class GameWindow(Adw.Window):
             )
         )
 
+        # The game screen with a "starting" overlay on top of it. Until the
+        # reparent lands there is nothing to show but black, and a wrapper
+        # that sits black and then vanishes is exactly what issue #267
+        # describes. The overlay is dropped the moment the game is inside.
+        self._overlay = Gtk.Overlay()
+        self._overlay.set_child(self._screen)
+        self._starting = self._build_starting_indicator(name)
+        # can_target off so clicks fall through to the game area, and
+        # measure off so the spinner can never influence _GameScreen's
+        # allocation -- the embedded X window's rect is computed from it.
+        self._overlay.add_overlay(self._starting)
+        self._overlay.set_measure_overlay(self._starting, False)
+
         self._toolbar = Adw.ToolbarView()
         self._toolbar.add_top_bar(header)
-        self._toolbar.set_content(self._screen)
+        self._toolbar.set_content(self._overlay)
         self.set_content(self._toolbar)
         self.set_default_size(920, 930 if texture is not None else 740)
 
@@ -195,6 +227,37 @@ class GameWindow(Adw.Window):
         self.connect("close-request", self._on_close_request)
 
         self._embedder.snapshot_existing()
+
+    def _build_starting_indicator(self, name):
+        """Spinner and a line of text shown while the game is being adopted.
+
+        ``Gtk.Spinner`` rather than ``Adw.Spinner``: the libadwaita floor is
+        1.5 and the latter arrived in 1.7. It is deprecated in very recent
+        GTK but not removed.
+        """
+        spinner = Gtk.Spinner()
+        spinner.set_size_request(32, 32)
+        spinner.start()
+
+        label = Gtk.Label(label=self._t("game_window.starting").format(name=name))
+        label.add_css_class("dim-label")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_can_target(False)
+        box.append(spinner)
+        box.append(label)
+        self._starting_spinner = spinner
+        return box
+
+    def _hide_starting_indicator(self):
+        """Idempotent: every path out of the wait calls it."""
+        if self._starting is None:
+            return
+        self._starting_spinner.stop()
+        self._starting.set_visible(False)
+        self._starting = None
 
     def _build_volume_button(self):
         """A headerbar volume control mirroring the library's (issue #69):
@@ -354,54 +417,142 @@ class GameWindow(Adw.Window):
         if self._closing:
             self._tick_id = None
             return False
-        if self._proc is None or self._proc.poll() is not None:
+        exit_code = None if self._proc is None else self._proc.poll()
+        if self._proc is None or exit_code is not None:
             # The game ended on its own (RetroArch menu quit, crash): the
             # wrapper window has nothing left to show.
+            self._note_death_before_embed(exit_code)
             self._tick_id = None
             self._close_and_destroy()
             return False
         if self._child_xid is None:
-            self._try_embed()
+            if not self._try_embed():
+                # The wrapper gave up and tore this source down with it.
+                self._tick_id = None
+                return False
         else:
             self._sync_geometry()
             # Reclaimed every tick: the WM hands focus back to our toplevel
             # on every click/activation, and without it RetroArch drops
             # keyboard, hotkeys and (through its focus check) gamepad input.
             self._embedder.ensure_focus(self._child_xid, self._parent_xid)
+            self._reassert_embed()
             if self._fullscreen_keycode in self._embedder.pressed_grabbed_keycodes():
                 self._toggle_fullscreen()
         return True
 
-    def _try_embed(self):
-        if not self._embedder.available:
-            self._fall_back_to_standalone("python-xlib is unavailable")
+    def _note_death_before_embed(self, exit_code):
+        """A game that died before showing a window is an embed failure too.
+
+        Without this the next launch repeats it identically -- same overrides,
+        same wrapper, same nothing. A clean exit is left alone: quitting from
+        the RetroArch menu within the search window is a normal thing to do
+        and says nothing about embedding.
+        """
+        if self._child_xid is not None or exit_code in (None, 0):
             return
-        self._ticks_waited += 1
-        if self._ticks_waited > FIND_WINDOW_TIMEOUT_TICKS:
-            self._fall_back_to_standalone("RetroArch window not found in time")
+        game_window_support.mark_embed_unavailable(
+            f"RetroArch exited ({exit_code}) before its window appeared"
+        )
+        logger.warning(
+            "game window: RetroArch exited with %s before a window appeared; "
+            "later launches this session run standalone",
+            exit_code,
+        )
+
+    def _probe_retroarch_log(self):
+        """Ask RetroArch's log whether it is an X client at all.
+
+        The difference between failing in a second or two and sitting on a
+        black screen for twenty. Cached: only a definite "not X11" changes
+        anything, and re-reading the file after that answer is pure waste.
+        """
+        if self._log_verdict != retroarch_log.UNKNOWN:
+            return self._log_verdict
+        if self._ticks_waited % LOG_PROBE_INTERVAL_TICKS:
+            return self._log_verdict
+        self._log_verdict = retroarch_log.read_verdict(
+            getattr(self._proc, "_openemux_log_path", None)
+        )
+        return self._log_verdict
+
+    def _reassert_embed(self):
+        """Put the game back if something re-parented it away from us.
+
+        Only a definite answer acts. ``None`` means the question could not be
+        asked -- typically the window is already gone -- and re-parenting on
+        that would fight the game's own teardown. The parent is re-read
+        rather than trusted from ``_parent_xid`` so a toplevel that changed
+        underneath us does not read as permanent drift.
+        """
+        self._embedded_ticks += 1
+        if self._embedded_ticks % PARENT_CHECK_INTERVAL_TICKS:
             return
         parent_xid = self._surface_xid()
         if parent_xid is None:
-            self._fall_back_to_standalone("window surface is not X11")
             return
-        child_xid = self._embedder.find_game_window(getattr(self._proc, "pid", None))
-        if child_xid is None:
+        if self._embedder.is_child_of(self._child_xid, parent_xid) is not False:
             return
         rect = self._surface_rect()
         if rect is None:
-            # Not laid out yet; the window is still settling. Next tick.
             return
+        logger.warning(
+            "game window: the game window left our frame; re-adopting 0x%x",
+            self._child_xid,
+        )
+        if self._embedder.embed(self._child_xid, parent_xid, *rect):
+            self._parent_xid = parent_xid
+            self._last_rect = rect
+            self._embedder.focus(self._child_xid)
+            if self._fullscreen_keycode is None:
+                self._fullscreen_keycode = self._embedder.grab_key(
+                    parent_xid, self._fullscreen_key
+                )
+
+    def _try_embed(self):
+        """One attempt at adopting the game. False once the wrapper gave up."""
+        if not self._embedder.available:
+            self._fall_back_to_standalone("python-xlib is unavailable")
+            return False
+        self._ticks_waited += 1
+        # RetroArch says which display server it took as soon as it has
+        # video, and on Wayland no X window will *ever* appear -- waiting out
+        # the full budget for that is twenty seconds of black for nothing.
+        if self._probe_retroarch_log() == retroarch_log.NOT_X11:
+            self._fall_back_to_standalone("RetroArch is not an X11 client")
+            return False
+        if retroarch_log.should_abandon(
+            self._log_verdict, self._ticks_waited, FIND_WINDOW_TIMEOUT_TICKS
+        ):
+            self._fall_back_to_standalone("RetroArch window not found in time")
+            return False
+        parent_xid = self._surface_xid()
+        if parent_xid is None:
+            # Not fatal on its own: the surface can be missing while the
+            # window is still settling, and killing the wrapper the first
+            # time it is asked leaves the game borderless for a condition
+            # that clears itself. The search budget above is the real limit.
+            return True
+        child_xid = self._embedder.find_game_window(getattr(self._proc, "pid", None))
+        if child_xid is None:
+            return True
+        rect = self._surface_rect()
+        if rect is None:
+            # Not laid out yet; the window is still settling. Next tick.
+            return True
         if not self._embedder.embed(child_xid, parent_xid, *rect):
             self._fall_back_to_standalone("reparenting failed")
-            return
+            return False
         self._child_xid = child_xid
         self._parent_xid = parent_xid
         self._last_rect = rect
+        self._hide_starting_indicator()
         self._embedder.focus(child_xid)
         self._fullscreen_keycode = self._embedder.grab_key(
             parent_xid, self._fullscreen_key
         )
         logger.info("game window: embedded RetroArch window 0x%x", child_xid)
+        return True
 
     def _toggle_fullscreen(self):
         now = GLib.get_monotonic_time()
@@ -416,18 +567,29 @@ class GameWindow(Adw.Window):
             self._toolbar.set_reveal_top_bars(False)
 
     def _fall_back_to_standalone(self, reason):
-        """Close the wrapper and leave RetroArch running in its own window.
+        """Close the wrapper and hand the game back to its owner.
 
-        The degraded mode the user asked for: an embed failure (native
-        Wayland, missing tooling, a lost race) must cost the chrome, never
-        the game.
+        An embed failure (native Wayland, missing tooling, a lost race) must
+        cost the chrome, never the game -- but the game was launched with
+        RetroArch's decorations stripped and its fullscreen hotkey unbound,
+        so simply leaving it there strands an unmovable square in the middle
+        of the screen (issue #267). The owner is told, and puts it back in a
+        normal window; this one is finished either way.
         """
+        if self._closing or self._standalone_fallback:
+            return
         logger.warning(
-            "game window: embedding unavailable (%s); RetroArch stays standalone",
+            "game window: embedding unavailable (%s); handing the game back",
             reason,
         )
         self._standalone_fallback = True
+        self._hide_starting_indicator()
         self._close_and_destroy()
+        # After the teardown on purpose: _notify_closed has already cleared
+        # the owner's handle, so it is free to open a new wrapper or relaunch.
+        if self._on_embed_failed is not None:
+            callback, self._on_embed_failed = self._on_embed_failed, None
+            callback(reason)
 
     def _surface_xid(self):
         surface = self.get_surface()
@@ -482,18 +644,23 @@ class GameWindow(Adw.Window):
         if self._tick_id is not None:
             GLib.source_remove(self._tick_id)
             self._tick_id = None
-        if self._standalone_fallback:
-            # The game was never embedded and must keep running in its own
-            # window; closing the wrapper must not quit it.
-            self._embedder.close()
-            self._notify_closed()
-            return
         if self._child_xid is not None:
             # Detached before our X window dies with the GTK window: X
             # destroys children with their parent, and RetroArch aborts on
-            # losing its window instead of exiting cleanly.
+            # losing its window instead of exiting cleanly. Unconditional,
+            # and above the fallback branch on purpose: a fallback can now
+            # happen while a window *is* adopted, and skipping the detach
+            # there would destroy the very game this is trying to save.
             self._embedder.release(self._child_xid)
             self._child_xid = None
+        if self._standalone_fallback:
+            # The embed failed and the owner is putting the game back in a
+            # normal window; stopping it here would race that -- two stop
+            # escalations against one process, each with its own QUIT and
+            # SIGTERM. Detaching above is all this window still owes.
+            self._embedder.close()
+            self._notify_closed()
+            return
         proc = self._proc
         if proc is not None and proc.poll() is None:
             # One escalating stop, owned by the runtime manager: QUIT, then

@@ -1344,10 +1344,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.set_game_window_enabled(enabled)
         from openemux.ui.game_window import display_supports_embedding
 
-        if enabled and not display_supports_embedding():
+        if enabled and (
+            not display_supports_embedding()
+            or game_window_support.embed_unavailable_reason()
+        ):
             # The X11 backend is chosen before GTK starts, so a session that
             # booted with the setting off is on Wayland for good: the next
-            # game would still open in RetroArch's own window.
+            # game would still open in RetroArch's own window. The same is
+            # true after an embed has failed once -- the session is latched
+            # standalone, and switching this back on silently would promise
+            # something this run cannot deliver (issue #267).
             self._toast(self.t("toast.game_window.restart"), timeout=6)
 
     def _shader_options_for_console(self, console_id):

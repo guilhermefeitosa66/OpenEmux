@@ -82,6 +82,17 @@
   </keywords>
 
   <releases>
+    <release version="1.11.3" date="2026-08-19">
+      <description>
+        <p>The game window never strands a game any more.</p>
+        <ul>
+          <li>When the game window cannot take over RetroArch, the game is reopened in its own decorated window instead of being left as an undecorated square that cannot be moved, resized or fullscreened</li>
+          <li>The window now shows what it is doing while the game starts, and gives up in seconds instead of after twenty silent ones</li>
+          <li>RetroArch is kept on X11 while embedding, so the window can actually be adopted on Wayland desktops</li>
+          <li>A gamepad's fullscreen button can no longer break a working embed</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.2" date="2026-08-16">
       <description>
         <p>A game's settings stay with the game.</p>

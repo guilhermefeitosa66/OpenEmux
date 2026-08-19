@@ -64,6 +64,28 @@ DEFAULT_NOTIFICATION_OVERRIDES = {
 }
 
 
+#: Environment variables that point a toolkit at a Wayland compositor. While
+#: embedding, RetroArch has to be an X client or the wrapper can never adopt
+#: its window, and removing these is what actually pins it -- the config
+#: override only stops a saved preference from fighting back (issue #267).
+WAYLAND_ENV_VARS = ("WAYLAND_DISPLAY", "SDL_VIDEODRIVER")
+
+
+def x11_only_env(env):
+    """A copy of ``env`` with every Wayland pointer removed.
+
+    ``WAYLAND_DISPLAY`` goes unconditionally -- its mere presence is what
+    makes RetroArch's wayland context succeed. ``SDL_VIDEODRIVER`` only goes
+    when it names wayland: a user who set it to ``x11`` already agrees with
+    us, and unsetting it would just make SDL guess again.
+    """
+    cleaned = dict(env)
+    cleaned.pop("WAYLAND_DISPLAY", None)
+    if (cleaned.get("SDL_VIDEODRIVER") or "").strip().lower() == "wayland":
+        cleaned.pop("SDL_VIDEODRIVER", None)
+    return cleaned
+
+
 class RetroArchLauncher:
     def __init__(self, project_root, config_manager):
         self.project_root = Path(project_root).expanduser()
@@ -85,7 +107,7 @@ class RetroArchLauncher:
         if is_running_in_flatpak():
             if not shutil.which("flatpak-spawn"):
                 return None, "flatpak-spawn is unavailable; cannot reach RetroArch on the host."
-            return [
+            prefix = [
                 "flatpak-spawn",
                 "--host",
                 "flatpak",
@@ -99,8 +121,16 @@ class RetroArchLauncher:
                 # killable from a process manager. With the flag the sandbox
                 # dies with the process we signalled.
                 "--die-with-parent",
-                RETROARCH_FLATPAK_ID,
-            ], None
+            ]
+            if game_window_support.game_window_active(self.config_manager):
+                # Stripping WAYLAND_DISPLAY from *our* environment does not
+                # reach the sandbox -- `flatpak run` builds its own. Denying
+                # the socket does, and it is what makes the RetroArch
+                # Flatpak's --socket=fallback-x11 actually hand out X11, so
+                # the window we are about to adopt is an X window (#267).
+                prefix.append("--nosocket=wayland")
+            prefix.append(RETROARCH_FLATPAK_ID)
+            return prefix, None
 
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
@@ -377,8 +407,28 @@ class RetroArchLauncher:
             overrides["pause_nonactive"] = '"false"'
             # The wrapper owns the window: RetroArch toggling fullscreen on
             # a reparented child recreates/unparents its window and breaks
-            # the embed, so the hotkey is unbound while embedded.
-            overrides["input_toggle_fullscreen"] = '"nul"'
+            # the embed, so the hotkey is unbound while embedded -- on the
+            # pad as well as the keyboard. Only the keyboard one was unbound
+            # before, and the gamepad binding written from the input profile
+            # (input_toggle_fullscreen_btn) survived: one press of that
+            # button destroyed a working embed (issue #267).
+            for suffix in ("", "_btn", "_axis"):
+                overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
+            # Which backend RetroArch talks to is the whole embed: an X
+            # client can only reparent another X client. Dropping the
+            # Wayland socket from its environment (see launch_process) is
+            # what actually lands it on X11/XWayland, but a retroarch.cfg
+            # that *names* the wayland context would override that. Empty is
+            # RetroArch's own written default and means "probe" -- so this
+            # neutralizes a saved pin without imposing one. Not "x11": that
+            # is not a registered ident (the real one is "x"), and naming a
+            # context a build lacks would leave the game with no video at all.
+            overrides["video_context_driver"] = '""'
+            # Keep RetroArch's output in the log file the launcher opened for
+            # it. With log_to_file on, RetroArch writes to its own file
+            # instead, our runtime log stays empty, and the game window loses
+            # the one early signal that tells it RetroArch is not an X client.
+            overrides["log_to_file"] = '"false"'
         else:
             # Stated rather than left alone, because earlier versions leaked
             # the block above into the user's own retroarch.cfg: a game
@@ -460,11 +510,11 @@ class RetroArchLauncher:
             log_handle = open(log_path, "w", encoding="utf-8")
             env = os.environ.copy()
             # On a Wayland session RetroArch would pick its native wayland
-            # driver, whose window no X client can reparent. Without
-            # WAYLAND_DISPLAY it falls back to X11 and lands on XWayland,
+            # driver, whose window no X client can reparent. Stripped of the
+            # Wayland pointers it falls back to X11 and lands on XWayland,
             # next to the app that main.py already put on the X11 backend.
             if game_window_support.game_window_active(self.config_manager):
-                env.pop("WAYLAND_DISPLAY", None)
+                env = x11_only_env(env)
             proc = subprocess.Popen(
                 cmd,
                 cwd=os.getcwd(),

@@ -65,6 +65,11 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
+* Wed Aug 19 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.3-1
+- Never leave a game borderless and unmovable when the game window cannot adopt it
+- Say what the game window is doing while it waits, and give up in seconds instead of twenty
+- Keep RetroArch on X11 while embedding, so the window can actually be adopted
+- Stop a gamepad's fullscreen button from breaking a working embed
 * Sun Aug 16 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.2-1
 - Stop writing per-launch settings into the user's own RetroArch configuration
 - Give a game its decorated window back when the OpenEmux game window is off
