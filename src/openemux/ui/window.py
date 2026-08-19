@@ -93,9 +93,13 @@ def collection_scope(slug):
 MAX_INPUT_HINTS = 6
 
 #: Relaunch polls for the old process to exit rather than blocking the main
-#: loop on wait(). 200 ms x 15 gives RetroArch ~3 s to go away (issue #129).
+#: loop on wait(). The budget has to outlast the stop escalation it is
+#: waiting on -- QUIT, then SIGTERM, then SIGKILL, two seconds apart -- or a
+#: RetroArch that ignores QUIT is declared un-relaunchable while it is still
+#: being killed. 200 ms x 40 gives it 8 s, comfortably past the ~6 s walk
+#: (issues #129, #267).
 RELAUNCH_POLL_INTERVAL_MS = 200
-RELAUNCH_MAX_POLLS = 15
+RELAUNCH_MAX_POLLS = 40
 
 #: Applying a remap to a running game waits for the scratch save state to hit
 #: the disk before relaunching (issue #129). 200 ms x 25 gives a slow core
@@ -188,8 +192,25 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        # GTK is up by now, so the one authority on whether this process can
+        # host an embed -- the display it actually opened -- can finally be
+        # asked, and published where the launcher will see it before it
+        # writes a single override. Guessing from the environment is what let
+        # a Wayland session get RetroArch's decorations stripped with no
+        # wrapper to hold the window (issues #212, #267).
+        from openemux.ui.game_window import display_supports_embedding
+
+        game_window_support.set_display_embeddable(display_supports_embedding())
+
         # The window wrapping the embedded RetroArch, while one is running.
         self._game_window = None
+        # Said once per session, not once per launch: a user on a session
+        # that cannot embed would otherwise be told off every time they
+        # start a game (issue #212).
+        self._game_window_notice_shown = False
+        # True while a relaunch is walking the stop/start dance, so the
+        # runtime poll does not announce the game as finished mid-relaunch.
+        self._relaunch_in_flight = False
         # Covers downloaded by a running sync, waiting for a batched reveal
         # (issue #187): flushed by size, by time, or when the sync moves on
         # to another console.
@@ -3650,7 +3671,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._filter_missing_artwork = enabled
         self.apply_library_filters()
 
-    def _relaunch_active_rom(self, resume_marker=None):
+    def _relaunch_active_rom(self, resume_marker=None, announce=True):
         """Stop the running game and start the same ROM again.
 
         Not the same thing as Restart (#130): only a fresh process re-reads
@@ -3662,6 +3683,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         ``RuntimeManager.snapshot_active``), the scratch state is loaded back
         once the new process has had time to boot, so the relaunch carries
         the gameplay across instead of starting the game over.
+
+        ``announce=False`` drops the "Relaunching" toast, for a caller that
+        has already explained itself and would only be queueing a second
+        message behind its own (issue #267).
         """
         rom, error_msg = self.runtime_manager.relaunch_active()
         if rom is None:
@@ -3669,7 +3694,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self._toast(error_msg, timeout=4)
             return False
 
-        self._toast(self.t("toast.relaunching"))
+        # Held across the whole dance: the process is about to exit on
+        # purpose, and the runtime poll must not report that as the game
+        # finishing.
+        self._relaunch_in_flight = True
+        if announce:
+            self._toast(self.t("toast.relaunching"))
         remaining = [RELAUNCH_MAX_POLLS]
 
         def _discard_scratch():
@@ -3687,8 +3717,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 remaining[0] -= 1
                 if remaining[0] > 0:
                     return True
+                self._relaunch_in_flight = False
                 self._toast(self.t("toast.relaunch_failed"), timeout=5)
                 return False
+            self._relaunch_in_flight = False
             success, launch_error = self.runtime_manager.relaunch_rom(rom)
             if not success and launch_error:
                 self._toast(launch_error, timeout=5)
@@ -3749,16 +3781,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         game needs a new wrapper adopting it.
         """
         if not game_window_support.game_window_active(self.config_manager):
+            self._notice_game_window_unavailable()
             return
         from openemux.ui import game_window
 
         if not game_window.display_supports_embedding():
             # Last guard, and the only one that asks GTK itself: the session
             # looked embeddable but the app ended up on a non-X11 display.
-            # The game simply keeps its own window, as with the setting off.
-            logger.warning(
-                "game window: display is not X11; game runs standalone"
-            )
+            # Publishing that verdict is what stops the launcher writing the
+            # embed overrides for the *next* launch, which is how a game
+            # ended up borderless with no wrapper to hold it (issue #212).
+            game_window_support.set_display_embeddable(False)
+            self._notice_game_window_unavailable("display is not X11")
             return
         GameWindow = game_window.GameWindow
 
@@ -3773,6 +3807,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             locale=self.locale,
             on_closed=self._on_game_window_closed,
             on_open_input_settings=self._open_input_settings_from_game,
+            on_embed_failed=self._on_game_window_embed_failed,
         )
         window.connect("close-request", self._on_game_window_close_request)
         self._game_window = window
@@ -3781,6 +3816,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_game_window_closed(self, window):
         if self._game_window is window:
             self._game_window = None
+
+    def _notice_game_window_unavailable(self, reason=None):
+        """Say once why the game opened in RetroArch's own window (#212).
+
+        Only when the user actually asked for the game window: turning the
+        setting off is a choice, not something to report back at them.
+        """
+        if not self.config_manager.get_game_window_enabled():
+            return
+        if reason:
+            game_window_support.mark_embed_unavailable(reason)
+        if self._game_window_notice_shown:
+            return
+        self._game_window_notice_shown = True
+        logger.warning(
+            "game window: unavailable (%s); the game runs in its own window",
+            game_window_support.embed_unavailable_reason() or "session cannot embed",
+        )
+        self._toast(self.t("toast.game_window.unavailable"), timeout=6)
+
+    def _on_game_window_embed_failed(self, reason):
+        """The wrapper could not adopt the game; give the game a real window.
+
+        This is issue #267. The game is running right now with RetroArch's
+        decorations stripped and its fullscreen hotkey unbound, because the
+        launcher wrote those for a wrapper that then failed -- an unmovable,
+        unresizable square in the middle of the screen. Latching the failure
+        makes the next override write RetroArch's own defaults back, and
+        relaunching is what actually puts the game in a normal window. The
+        latch is also what keeps this from looping: the relaunch opens no
+        wrapper, so it cannot fail the same way again.
+        """
+        if game_window_support.embed_unavailable_reason():
+            return
+        game_window_support.mark_embed_unavailable(reason)
+        # The notice belongs to launches that never opened a wrapper; this
+        # path explains itself below and must not say it twice.
+        self._game_window_notice_shown = True
+        if not self.runtime_manager.is_running():
+            # Nothing to hand back -- the game died with the wrapper, and
+            # the runtime poll is already reporting that.
+            return
+        self._toast(self.t("toast.game_window.standalone"), timeout=6)
+        self._relaunch_active_rom(announce=False)
 
     def _open_input_settings_from_game(self, _game_window):
         # Presented on the library window on purpose: the game window keeps
@@ -3796,7 +3875,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return False
 
     def _poll_runtime_state(self):
+        # Always polled, even mid-relaunch: this is what closes the log
+        # handle and clears the finished process. Only the announcement is
+        # held back, because a relaunch stops the game on purpose and
+        # "Game finished" would be a lie (issue #267).
         result = self.runtime_manager.poll_active()
+        if result is not None and self._relaunch_in_flight:
+            return True
         if result is not None:
             rom = result.get("rom") or {}
             rom_name = rom.get("path", "Game").split("/")[-1]
