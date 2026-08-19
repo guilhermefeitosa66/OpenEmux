@@ -25,6 +25,12 @@ Artifacts land in `dist/`.
 | `appimage/AppImageBuilder.yml` | The bundle recipe |
 | `appimage/openemux-launcher.sh` | The bundle's entry point (sets its runtime env) |
 | `rpm/openemux.spec` | RPM metadata; installs via `common/stage_tree.sh` |
+| `testenv/` | The distrobox matrix the built artifacts get install-tested in |
+
+Building a package is only half of it. `testenv/` installs and launches the
+finished artifacts on Ubuntu, Debian and Fedora, under X11 and Wayland --
+`make ubuntu-x11`, `make testenv-matrix`. See
+[`testenv/README.md`](testenv/README.md).
 
 `common/` holds `stage_tree.sh` (the `/opt/openemux` install layout),
 `openemux-launcher.sh` (the `/usr/bin/openemux` launcher) and
