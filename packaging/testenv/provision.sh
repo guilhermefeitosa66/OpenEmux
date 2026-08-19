@@ -84,5 +84,9 @@ flatpak --user remote-add --if-not-exists flathub \
 	https://dl.flathub.org/repo/flathub.flatpakrepo || \
 	printf '\033[1;33m==> could not add flathub; flatpak-install will fail\033[0m\n' >&2
 
-touch "${HOME}/.openemux-testenv-provisioned"
+# The marker belongs to the *container*, not to the home: homes outlive the
+# containers that used them (recreate one and the home is still there), and a
+# marker kept there would declare a brand-new, empty container provisioned.
+sudo mkdir -p /var/lib/openemux-testenv
+sudo touch /var/lib/openemux-testenv/provisioned
 info "provisioned"

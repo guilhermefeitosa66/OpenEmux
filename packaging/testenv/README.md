@@ -169,6 +169,12 @@ thing this rig exists to tell apart.
 screenshooter protocol answers `unauthorized` and that half of the matrix
 produces no evidence at all.
 
+**A container's home outlives the container.** `testenv-rm` keeps it and a
+later `create` reuses it, which is the point — but it means the
+"already provisioned" marker cannot live there, or a freshly recreated
+container is declared ready while holding nothing, not even make(1). It is
+kept inside the container instead.
+
 **The AppImage wants `/dev/fuse`.** It is there in a distrobox container, so
 the normal FUSE path is what gets tested. Where it is not, the target falls
 back to extract-and-run and says so, because only the first path is what users
