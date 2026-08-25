@@ -8,6 +8,7 @@ from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
     clamp_volume_db,
+    pick_free_udp_port,
 )
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from openemux.core.systems import resolve_system_id
@@ -54,6 +55,10 @@ class RuntimeManager:
         # audio_volume, which is what keeps the tracker honest.
         self._volume_db = clamp_volume_db(self.config_manager.get_master_volume_db())
         self._command_client_cache = None
+        # The port this launch's channel runs on. Resolved at launch so the
+        # config's "0" (pick a free one) and the override RetroArch reads can
+        # never disagree.
+        self._network_cmd_port = None
         self._pacer = None
         self._persist_lock = threading.Lock()
         self._persist_timer = None
@@ -87,13 +92,15 @@ class RuntimeManager:
         mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
         if mode == "retroarch_wrapper":
+            port = self._resolve_network_cmd_port()
             proc, error_msg = self.retroarch_launcher.launch_process(
-                rom_path, system_id, state_slot=state_slot
+                rom_path, system_id, state_slot=state_slot, network_cmd_port=port
             )
             if not proc:
                 return False, error_msg
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
+            self._network_cmd_port = port
             self.volume_db = self.config_manager.get_master_volume_db()
             self.muted = False
             return True, None
@@ -173,9 +180,24 @@ class RuntimeManager:
         return proc.poll() is not None
 
     # -- live control (issue #69) ------------------------------------------
+    def _resolve_network_cmd_port(self):
+        """The port this launch will use: the pinned one, or a free one.
+
+        RetroArch binds its command socket with the reuse flags set, so a
+        standalone RetroArch on the default 55355 binds it too and the kernel
+        picks which of the two hears each datagram. A port of our own is the
+        only way our commands are guaranteed to reach our own game (#227).
+        """
+        configured = int(self.config_manager.get_network_cmd_port())
+        if configured > 0:
+            return configured
+        return pick_free_udp_port()
+
     def _command_client(self):
         """The command client, reused so the pacer keeps one socket."""
-        port = int(self.config_manager.get_network_cmd_port())
+        port = self._network_cmd_port
+        if port is None:
+            port = self._resolve_network_cmd_port()
         client = self._command_client_cache
         if client is None or client.port != port:
             if client is not None:

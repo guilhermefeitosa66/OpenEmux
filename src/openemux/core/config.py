@@ -173,8 +173,11 @@ DEFAULT_CONFIG = {
     "runtime": {
         "mode": "retroarch_wrapper",
         # RetroArch's UDP command channel (issue #69): written into every
-        # runtime override so the running game can be controlled live.
-        "network_cmd_port": 55355,
+        # runtime override so the running game can be controlled live. 0 picks
+        # a free port per launch, which is the only way to be sure the commands
+        # reach *our* RetroArch and not a standalone one the user is also
+        # running (issue #227). A non-zero value pins the port.
+        "network_cmd_port": 0,
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
         "master_volume_db": 0.0,
@@ -337,6 +340,18 @@ class ConfigManager:
     def _migrate_runtime_config(self, config):
         runtime = config.get("runtime", {})
         runtime.setdefault("mode", "retroarch_wrapper")
+        # 55355 is RetroArch's own default, which is exactly the port a
+        # standalone RetroArch is already listening on -- both bind it and the
+        # kernel decides which one hears us. Nobody chose that number, so it
+        # migrates to "pick a free one per launch" (issue #227). A port the
+        # user actually set is left alone.
+        from openemux.core.retroarch_command import (
+            AUTO_NETWORK_CMD_PORT,
+            DEFAULT_NETWORK_CMD_PORT,
+        )
+
+        if runtime.get("network_cmd_port") == DEFAULT_NETWORK_CMD_PORT:
+            runtime["network_cmd_port"] = AUTO_NETWORK_CMD_PORT
         runtime.setdefault("console_backend", {})
         runtime.setdefault("retroarch", {})
         runtime["retroarch"].setdefault("binary", "vendors/RetroArch-Linux-x86_64.AppImage")
@@ -739,10 +754,11 @@ class ConfigManager:
         return DEFAULT_STATES_DIR / resolve_system_id(console)
 
     def get_network_cmd_port(self):
+        """The pinned command port, or 0 to pick a free one per launch."""
         try:
-            return int(self.config.get("runtime", {}).get("network_cmd_port", 55355))
+            return int(self.config.get("runtime", {}).get("network_cmd_port", 0))
         except (TypeError, ValueError):
-            return 55355
+            return 0
 
     def get_master_volume_db(self):
         from openemux.core.retroarch_command import clamp_volume_db

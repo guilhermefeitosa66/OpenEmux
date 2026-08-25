@@ -446,6 +446,17 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('network_cmd_port = "55355"', lines)
         self.assertIn('audio_volume = "-6.0"', lines)
 
+    def test_the_launch_decides_the_command_port(self):
+        # The port is picked per launch (issue #227) and RetroArch has to be
+        # told the same number the client will send to.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            launcher = RetroArchLauncher(base, cfg)
+            override = launcher._write_runtime_override("GBA", network_cmd_port=54321)
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertIn('network_cmd_port = "54321"', lines)
+
     def test_override_never_lets_itself_be_saved_into_the_users_config(self):
         # RetroArch saves its configuration on exit, and by then the
         # --appendconfig values are part of it: without this every launch

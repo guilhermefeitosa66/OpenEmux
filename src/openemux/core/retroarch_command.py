@@ -21,6 +21,31 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_NETWORK_CMD_PORT = 55355
 
+#: ``network_cmd_port`` set to this means "pick a free one per launch".
+AUTO_NETWORK_CMD_PORT = 0
+
+
+def pick_free_udp_port(host="127.0.0.1"):
+    """A UDP port nothing is listening on, for one launch's command channel.
+
+    RetroArch's own default is 55355, and it binds the socket with the reuse
+    flags set: a standalone RetroArch the user started themselves binds the
+    same port happily, and the kernel then hands each datagram to one of the
+    two by a hash of the sending socket. A whole session's volume, save-state
+    and QUIT commands can land in the wrong emulator, which looks exactly like
+    the controls drifting out of sync (issue #227).
+
+    Falls back to the default port if the probe fails -- a broken channel is
+    still better than refusing to launch.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.bind((host, 0))
+            return int(probe.getsockname()[1])
+    except OSError as exc:
+        logger.warning("could not pick a free command port: %s", exc)
+        return DEFAULT_NETWORK_CMD_PORT
+
 #: RetroArch's own volume step per VOLUME_UP/VOLUME_DOWN command.
 VOLUME_STEP_DB = 0.5
 
