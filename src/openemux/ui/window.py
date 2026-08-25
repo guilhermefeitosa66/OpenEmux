@@ -197,7 +197,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._console_texture_cache = {}
 
         project_root = str(get_project_root())
-        self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        self.runtime_manager = RuntimeManager(
+            project_root, self.config_manager, dispatch=GLib.idle_add
+        )
         # GTK is up by now, so the one authority on whether this process can
         # host an embed -- the display it actually opened -- can finally be
         # asked, and published where the launcher will see it before it

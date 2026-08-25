@@ -2,6 +2,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
 from openemux.core.input_actions import (
     default_gamepad_bindings,
     default_keyboard_bindings,
@@ -399,7 +400,7 @@ class InputProfileManager:
         system_id = resolve_system_id(console)
         normalized = self._normalize_profile(system_id, profile)
         path = self.profile_path(system_id)
-        path.write_text(json.dumps(normalized, indent=2, sort_keys=True), encoding="utf-8")
+        atomic_write_text(path, json.dumps(normalized, indent=2, sort_keys=True))
         return normalized
 
     def reset_console(self, console):

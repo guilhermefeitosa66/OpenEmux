@@ -1,11 +1,13 @@
 import copy
 import shutil
+import threading
 from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
+from openemux.core.atomic_write import atomic_write_text
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
@@ -314,6 +316,9 @@ def _merge_defaults(defaults, data):
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
         self.config_file = config_file
+        # One writer at a time: save_config runs from the GTK main thread, the
+        # volume-persist timer, the bootstrap worker and atexit (issue #208).
+        self._save_lock = threading.RLock()
         self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
         self.shaders = ShaderConfigStore()
         self.cores = CoreConfigStore()
@@ -529,15 +534,27 @@ class ConfigManager:
         return config
 
     def save_config(self, config=None):
-        if config:
-            self.config = config
+        """Persist the config, atomically and one writer at a time.
 
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                yaml.safe_dump(self.config, f)
-        except Exception as e:
-            print(f"Error saving config: {e}")
+        Two things used to go wrong here (issue #208). A crash mid-write left
+        a truncated ``config.yaml`` behind, taking the ROM path, the
+        credentials and the bootstrap state with it -- ``atomic_write_text``
+        answers that. And ``save_config`` is called from four threads (the GTK
+        main thread on every preference change, the volume-persist timer, the
+        bootstrap worker, the atexit flush), so two dumps could interleave
+        into the same file and ``yaml.safe_dump`` could iterate ``self.config``
+        while another thread mutated it. The lock serialises the writers, and
+        the snapshot is taken under it so the dump reads a dict nobody else
+        holds.
+        """
+        with self._save_lock:
+            if config:
+                self.config = config
+            snapshot = copy.deepcopy(self.config)
+            try:
+                atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
+            except Exception as e:
+                print(f"Error saving config: {e}")
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))

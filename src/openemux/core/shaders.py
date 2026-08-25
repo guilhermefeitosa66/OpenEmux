@@ -3,6 +3,7 @@ from pathlib import Path
 
 import yaml
 
+from openemux.core.atomic_write import atomic_write_text
 from openemux.core.paths import get_project_root
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
@@ -138,8 +139,7 @@ class ShaderConfigStore:
             rom_overrides[str(key)] = normalize_shader_id(raw_value)
         payload["rom_overrides"] = rom_overrides
 
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
         return payload
 
     def get_settings(self):

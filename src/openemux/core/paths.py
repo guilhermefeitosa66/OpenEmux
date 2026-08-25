@@ -2,6 +2,8 @@ import os
 import shutil
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
+
 # Pre-rename data dir. The app was renamed Opemux -> OpenEmux; existing installs
 # keep their config, library index, playlists and input profiles under this path.
 LEGACY_CONFIG_DIR_NAME = ".opemux"
@@ -47,7 +49,7 @@ def _repair_legacy_paths_in_config(legacy, current):
     needle = str(legacy)
     if needle not in text:
         return
-    config_file.write_text(text.replace(needle, str(current)), encoding="utf-8")
+    atomic_write_text(config_file, text.replace(needle, str(current)))
 
 
 def is_running_in_appimage():

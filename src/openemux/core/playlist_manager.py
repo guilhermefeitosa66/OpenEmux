@@ -1,7 +1,9 @@
 from pathlib import Path
 import logging
+import threading
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
+from openemux.core.atomic_write import atomic_write_lines
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,9 @@ class PlaylistManager:
         # card rendered, so the parse has to happen once per page, not once
         # per card (issue #217).
         self._favorites_cache = (None, frozenset())
+        # toggle_favorite is a read-modify-write of one file; two of them at
+        # once (a click while a rescan repaths) would lose one edit (#208).
+        self._write_lock = threading.RLock()
 
     def get_playlist_path(self, console):
         system_id = resolve_system_id(console)
@@ -146,33 +151,30 @@ class PlaylistManager:
     def toggle_favorite(self, rom):
         rom_path = str(Path(rom["path"]))
         playlist_path = self.get_favorites_playlist_path()
-        playlist_path.parent.mkdir(parents=True, exist_ok=True)
-        current = self.list_favorite_paths()
-        is_now_favorite = rom_path not in current
-        if is_now_favorite:
-            current.add(rom_path)
-        else:
-            current.discard(rom_path)
+        with self._write_lock:
+            current = self.list_favorite_paths()
+            is_now_favorite = rom_path not in current
+            if is_now_favorite:
+                current.add(rom_path)
+            else:
+                current.discard(rom_path)
 
-        with open(playlist_path, "w", encoding="utf-8") as f:
-            for path in sorted(current):
-                f.write(f"{path}\n")
-        self._drop_favorites_cache()
+            atomic_write_lines(playlist_path, sorted(current))
+            self._drop_favorites_cache()
         return is_now_favorite
 
     def remove_missing_favorites(self):
         playlist_path = self.get_favorites_playlist_path()
-        if not playlist_path.exists():
-            return 0
-        with open(playlist_path, "r", encoding="utf-8") as f:
-            original = [line.strip() for line in f if line.strip()]
-        valid = [path for path in original if Path(path).exists()]
-        removed = len(original) - len(valid)
-        if removed > 0:
-            with open(playlist_path, "w", encoding="utf-8") as f:
-                for path in sorted(set(valid)):
-                    f.write(f"{path}\n")
-            self._drop_favorites_cache()
+        with self._write_lock:
+            if not playlist_path.exists():
+                return 0
+            with open(playlist_path, "r", encoding="utf-8") as f:
+                original = [line.strip() for line in f if line.strip()]
+            valid = [path for path in original if Path(path).exists()]
+            removed = len(original) - len(valid)
+            if removed > 0:
+                atomic_write_lines(playlist_path, sorted(set(valid)))
+                self._drop_favorites_cache()
         return removed
 
     def forget_rom(self, console, rom_path):
@@ -191,27 +193,28 @@ class PlaylistManager:
         old_line = str(Path(old_path))
         new_line = str(Path(new_path)) if new_path else None
         changed = 0
-        for playlist_path in (
-            self.get_playlist_path(console),
-            self.get_favorites_playlist_path(),
-        ):
-            if not playlist_path.exists():
-                continue
-            with open(playlist_path, "r", encoding="utf-8") as f:
-                lines = [line.strip() for line in f if line.strip()]
-            if old_line not in lines:
-                continue
-            updated = []
-            for line in lines:
-                if line != old_line:
-                    updated.append(line)
-                elif new_line:
-                    updated.append(new_line)
-            with open(playlist_path, "w", encoding="utf-8") as f:
-                for line in updated:
-                    f.write(f"{line}\n")
-            self._drop_favorites_cache()
-            changed += 1
+        # Same read-modify-write on the favorites file that toggle_favorite
+        # does, so it takes the same lock (issue #208).
+        with self._write_lock:
+            for playlist_path in (
+                self.get_playlist_path(console),
+                self.get_favorites_playlist_path(),
+            ):
+                if not playlist_path.exists():
+                    continue
+                with open(playlist_path, "r", encoding="utf-8") as f:
+                    lines = [line.strip() for line in f if line.strip()]
+                if old_line not in lines:
+                    continue
+                updated = []
+                for line in lines:
+                    if line != old_line:
+                        updated.append(line)
+                    elif new_line:
+                        updated.append(new_line)
+                atomic_write_lines(playlist_path, updated)
+                self._drop_favorites_cache()
+                changed += 1
         logger.info(
             "playlist reindex: console=%s old=%s new=%s files=%d",
             console,
@@ -226,18 +229,19 @@ class PlaylistManager:
         logger.info("playlist rebuild started: console=%s", system_id)
         roms = self.scanner.scan_console(system_id)
         playlist_path = self.get_playlist_path(system_id)
-        playlist_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(playlist_path, "w", encoding="utf-8") as f:
-            for rom in roms:
-                logger.info(
-                    "playlist add rom: console=%s rom=%s path=%s playlist=%s",
-                    system_id,
-                    rom["name"],
-                    rom["path"],
-                    playlist_path,
-                )
-                f.write(f"{rom['path']}\n")
+        for rom in roms:
+            logger.info(
+                "playlist add rom: console=%s rom=%s path=%s playlist=%s",
+                system_id,
+                rom["name"],
+                rom["path"],
+                playlist_path,
+            )
+        # Written whole, so the main thread reading this playlist while the
+        # rescan worker rebuilds it sees the old list or the new one -- never
+        # the half a truncate-and-append left exposed (issue #208).
+        atomic_write_lines(playlist_path, [rom["path"] for rom in roms])
 
         logger.info("playlist rebuild finished: console=%s total=%d path=%s", system_id, len(roms), playlist_path)
         return roms

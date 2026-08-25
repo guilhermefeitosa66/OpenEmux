@@ -13,6 +13,8 @@ import logging
 import time
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
+
 logger = logging.getLogger(__name__)
 
 #: Written next to config.yaml, like the playlists and input profiles.
@@ -50,9 +52,10 @@ class PlayHistory:
 
     def save(self):
         try:
-            self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, "w", encoding="utf-8") as handle:
-                json.dump(self._entries, handle, indent=2, sort_keys=True)
+            atomic_write_text(
+                self.history_file,
+                json.dumps(self._entries, indent=2, sort_keys=True),
+            )
         except OSError as exc:
             logger.info("play history not saved: %s", exc)
 

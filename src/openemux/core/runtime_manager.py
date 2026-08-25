@@ -42,10 +42,17 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager, sleep=time.sleep):
+    def __init__(self, project_root, config_manager, sleep=time.sleep, dispatch=None):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
         self._sleep = sleep
+        # How a background thread hands work back to the GTK main loop
+        # (``GLib.idle_add``). The debounced volume write used to run on the
+        # Timer thread and mutate the very config dict the main thread was
+        # editing; routed through here it happens where every other config
+        # write happens (issue #208). Without one -- tests, headless -- the
+        # write stays on the calling thread, which is what it always did.
+        self._dispatch = dispatch
         self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
@@ -258,10 +265,31 @@ class RuntimeManager:
             if self._persist_timer is not None:
                 self._persist_timer.cancel()
             self._persist_timer = threading.Timer(
-                VOLUME_PERSIST_DEBOUNCE, self.flush_volume_db
+                VOLUME_PERSIST_DEBOUNCE, self._flush_volume_db_on_main_loop
             )
             self._persist_timer.daemon = True
             self._persist_timer.start()
+
+    def _flush_volume_db_on_main_loop(self):
+        """The debounce timer firing, from its own thread.
+
+        Hands the write to the main loop when there is one so the config is
+        only ever mutated from a single thread. ``flush_volume_db`` itself
+        stays synchronous: atexit calls it after the loop has stopped, and a
+        write posted to a dead main loop would simply never happen.
+        """
+        if self._dispatch is None:
+            self.flush_volume_db()
+            return
+
+        def _write_once():
+            self.flush_volume_db()
+            # False is GLib.SOURCE_REMOVE: flush_volume_db returns True when
+            # it wrote something, and handing that straight to idle_add would
+            # keep the source alive and re-run it forever.
+            return False
+
+        self._dispatch(_write_once)
 
     def flush_volume_db(self):
         """Write any debounced volume level out now."""
