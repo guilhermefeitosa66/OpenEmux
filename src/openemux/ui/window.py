@@ -62,7 +62,13 @@ from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
 from openemux.ui.grid import LIST_MARGIN, RomGrid
-from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
+from openemux.ui.context_menu import (
+    SEPARATOR,
+    Submenu,
+    build_context_popover,
+    present_context_popover,
+    unparent_when_idle,
+)
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
@@ -1811,8 +1817,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ])
             popover.set_parent(lb)
             popover.set_pointing_to(Gdk.Rectangle(x=int(_x), y=int(y), width=1, height=1))
-            popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
-            popover.popup()
+            popover.connect("closed", unparent_when_idle)
+            present_context_popover(popover)
 
         gesture.connect("released", _released)
         listbox.add_controller(gesture)
@@ -1880,7 +1886,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self._sidebar_menu_row = row
         popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
-        popover.popup()
+        present_context_popover(popover)
 
     def _core_submenu_for_console(self, console):
         """The console's default core, from the sidebar.
@@ -2015,7 +2021,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self._sidebar_menu_row = row
         popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
-        popover.popup()
+        present_context_popover(popover)
 
     def _prompt_new_collection(self, on_created=None):
         """Ask for a name, create the collection, then call ``on_created(slug)``."""
@@ -2248,7 +2254,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if button is not None and not row.get_state_flags() & Gtk.StateFlags.PRELIGHT:
             button.set_opacity(0)
             button.set_can_target(False)
-        GLib.idle_add(popover.unparent)
+        unparent_when_idle(popover)
 
     def _ensure_sidebar_action_group(self):
         if getattr(self, "_sidebar_action_group", None) is not None:

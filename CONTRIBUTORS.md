@@ -30,6 +30,17 @@ covering gamepad hotkeys, the master volume control, analog stick defaults,
 artwork gaps, cover-rendering performance, live input remapping, a restart
 action, and one-click access to Preferences.
 
+Came back for **v1.11.2** with a second end-to-end report,
+[#273](https://github.com/guilhermefeitosa66/OpenEmux/issues/273): five defects
+— library loading blocking the interface, a context menu that could be left
+stuck open, control remapping that mixed the old binding with the new one, the
+volume slider drifting away from RetroArch, and the mouse cursor staying hidden
+over the game after a screen lock — plus five feature suggestions, from save
+backup and export to a visual controller map. The plan that came out of it is
+[#274](https://github.com/guilhermefeitosa66/OpenEmux/issues/274). Also
+contributed the game-name database in
+[#188](https://github.com/guilhermefeitosa66/OpenEmux/pull/188).
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
