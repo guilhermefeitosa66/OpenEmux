@@ -364,9 +364,36 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Toggle the favorite state of the present game with `Ctrl+D`.
   2. Read `~/.openemux/playlists/FAVORITES.list`.
 - **Expected:** The unreachable path is still in the file. A favorite whose drive is not mounted is
-  missing, not gone, and only the "Favorites" page's own cleanup may drop it (issue #217).
+  missing, not gone (issue #217).
 - **Check:** suite file `tests/test_playlist_manager.py`
   (`test_a_favorite_on_an_unmounted_drive_survives_a_toggle`).
+
+### RT-044 — Opening "Favorites" without the drive does not delete those favorites
+- **Area:** Favorites
+- **Mode:** AUTO-SUITE
+- **Preconditions:** `FAVORITES.list` contains at least one path on a removable or network drive
+  that is currently **not** mounted.
+- **Steps:**
+  1. Open "Favorites" in the sidebar, go back to "All", and open "Favorites" again — several
+     times.
+  2. Close the app, mount the drive, and start the app again.
+- **Expected:** The favorites on that drive are all back once it is mounted. Visiting the page
+  without the drive never removes them: the page's own cleanup only drops a path whose console
+  folder is present and whose file is not — a deleted ROM, not an unplugged disk (issue #210).
+- **Check:** suite file `tests/test_playlist_manager.py`
+  (`UnreachableFavoritesTests`).
+
+### RT-045 — A ROM deleted from a mounted drive stops being a favorite
+- **Area:** Favorites
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A favorite whose ROM sits in a console folder that is present.
+- **Steps:**
+  1. Delete the ROM file from outside the app.
+  2. Open "Favorites".
+- **Expected:** The favorite is dropped from `FAVORITES.list` — the folder proves the storage is
+  mounted, so the file really is gone. The counterpart to RT-044: the cleanup still cleans up.
+- **Check:** suite file `tests/test_playlist_manager.py`
+  (`test_a_rom_deleted_from_a_mounted_drive_is_pruned`).
 
 ### RT-041 — A collection lists its games
 - **Area:** Favorites

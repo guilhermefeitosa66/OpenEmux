@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -327,3 +328,135 @@ class FavoriteLookupTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnreachableFavoritesTests(unittest.TestCase):
+    """A library on an external drive must survive a boot without it (#210)."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        roms_dir.mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def _favorites(self, manager):
+        text = manager.get_favorites_playlist_path().read_text(encoding="utf-8")
+        return [line for line in text.splitlines() if line]
+
+    def test_a_favorite_on_an_unmounted_drive_is_kept(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            # /media/usb is not there at all: the drive is not plugged in.
+            unmounted = base / "media" / "usb" / "roms" / "PS" / "Final Fantasy VII.chd"
+            manager.toggle_favorite({"path": str(unmounted)})
+
+            removed = manager.remove_missing_favorites()
+
+            self.assertEqual(removed, 0)
+            self.assertEqual(self._favorites(manager), [str(unmounted)])
+
+    def test_a_rom_deleted_from_a_mounted_drive_is_pruned(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            console_dir = base / "roms" / "SFC"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            gone = console_dir / "Deleted.sfc"
+            manager.toggle_favorite({"path": str(gone)})
+
+            removed = manager.remove_missing_favorites()
+
+            self.assertEqual(removed, 1)
+            self.assertEqual(self._favorites(manager), [])
+
+    def test_the_reachable_ones_are_pruned_and_the_unreachable_ones_kept(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            console_dir = base / "roms" / "SFC"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            present = console_dir / "Chrono Trigger.sfc"
+            present.write_bytes(b"rom")
+            deleted = console_dir / "Deleted.sfc"
+            unmounted = base / "media" / "usb" / "roms" / "PS" / "FF7.chd"
+            for path in (present, deleted, unmounted):
+                manager.toggle_favorite({"path": str(path)})
+
+            removed = manager.remove_missing_favorites()
+
+            self.assertEqual(removed, 1)
+            self.assertEqual(
+                sorted(self._favorites(manager)),
+                sorted([str(present), str(unmounted)]),
+            )
+
+    def test_visiting_favorites_repeatedly_never_erodes_the_list(self):
+        # _ensure_favorites_loaded calls this on every visit to the page.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            unmounted = base / "media" / "usb" / "roms" / "PS" / "FF7.chd"
+            manager.toggle_favorite({"path": str(unmounted)})
+
+            for _ in range(5):
+                manager.remove_missing_favorites()
+
+            self.assertEqual(self._favorites(manager), [str(unmounted)])
+
+    def test_starring_a_game_while_a_drive_is_unmounted_keeps_its_favorites(self):
+        # The other half of #210, fixed in #280: toggle_favorite rebuilt the
+        # file from resolved entries, which dropped everything unreachable.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            unmounted = base / "media" / "usb" / "roms" / "PS" / "FF7.chd"
+            manager.toggle_favorite({"path": str(unmounted)})
+
+            console_dir = base / "roms" / "SFC"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            present = console_dir / "Chrono Trigger.sfc"
+            present.write_bytes(b"rom")
+            manager.toggle_favorite({"path": str(present)})
+
+            self.assertEqual(
+                sorted(self._favorites(manager)),
+                sorted([str(present), str(unmounted)]),
+            )
+
+    def test_unstarring_a_game_leaves_the_unreachable_ones_alone(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            console_dir = base / "roms" / "SFC"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            present = console_dir / "Chrono Trigger.sfc"
+            present.write_bytes(b"rom")
+            unmounted = base / "media" / "usb" / "roms" / "PS" / "FF7.chd"
+            manager.toggle_favorite({"path": str(unmounted)})
+            manager.toggle_favorite({"path": str(present)})
+
+            manager.toggle_favorite({"path": str(present)})
+
+            self.assertEqual(self._favorites(manager), [str(unmounted)])
+
+    def test_an_unreadable_drive_is_never_pruned(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            path = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            manager.toggle_favorite({"path": str(path)})
+
+            original_is_dir = Path.is_dir
+
+            def _raising_is_dir(self):
+                if self.name == "SFC":
+                    raise OSError("host is down")
+                return original_is_dir(self)
+
+            with unittest.mock.patch.object(Path, "is_dir", _raising_is_dir):
+                removed = manager.remove_missing_favorites()
+
+            self.assertEqual(removed, 0)
+            self.assertEqual(self._favorites(manager), [str(path)])
