@@ -13,9 +13,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Gdk, GLib
+from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
-from openemux.core import game_window_support
+from openemux.core import game_window_support, save_backup
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -1579,6 +1579,28 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         welcome_group.add(open_welcome_row)
         page.add(welcome_group)
 
+        saves_group = Adw.PreferencesGroup(title=self.t("prefs.group.saves"))
+        export_row = Adw.ActionRow(
+            title=self.t("settings.system.saves.export.title"),
+            subtitle=self.t("settings.system.saves.export.subtitle"),
+        )
+        export_row.set_activatable(True)
+        export_row.add_prefix(Gtk.Image.new_from_icon_name("media-floppy-symbolic"))
+        export_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        export_row.connect("activated", self._on_export_saves)
+        saves_group.add(export_row)
+
+        import_row = Adw.ActionRow(
+            title=self.t("settings.system.saves.import.title"),
+            subtitle=self.t("settings.system.saves.import.subtitle"),
+        )
+        import_row.set_activatable(True)
+        import_row.add_prefix(Gtk.Image.new_from_icon_name("folder-download-symbolic"))
+        import_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        import_row.connect("activated", self._on_import_saves)
+        saves_group.add(import_row)
+        page.add(saves_group)
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1610,6 +1632,89 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    # ----- saves backup (issue #293) --------------------------------------
+    def _saves_filter(self):
+        zip_filter = Gtk.FileFilter()
+        zip_filter.set_name(self.t("saves.dialog.filter"))
+        zip_filter.add_pattern("*.zip")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(zip_filter)
+        return filters, zip_filter
+
+    def _on_export_saves(self, _row):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("saves.export.dialog.title"))
+        dialog.set_modal(True)
+        dialog.set_initial_name(save_backup.default_backup_name())
+        filters, default = self._saves_filter()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.save(self, None, self._on_export_target_chosen)
+
+    def _on_export_target_chosen(self, dialog, result):
+        try:
+            target = dialog.save_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if target is None or not target.get_path():
+            return
+        save_backup.export_saves_async(
+            target.get_path(),
+            self.config.get_states_dir(),
+            self.config.get_roms_path(),
+            on_done=lambda summary: GLib.idle_add(self._on_export_done, summary),
+        )
+
+    def _on_export_done(self, summary):
+        if summary.get("error"):
+            self._toast(self.t("toast.saves.failed", error=summary["error"]))
+            return False
+        self._toast(
+            self.t(
+                "toast.saves.exported",
+                states=summary.get("states", 0),
+                saves=summary.get("saves", 0),
+            )
+        )
+        return False
+
+    def _on_import_saves(self, _row):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("saves.import.dialog.title"))
+        dialog.set_modal(True)
+        filters, default = self._saves_filter()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.open(self, None, self._on_import_source_chosen)
+
+    def _on_import_source_chosen(self, dialog, result):
+        try:
+            source = dialog.open_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if source is None or not source.get_path():
+            return
+        save_backup.import_saves_async(
+            source.get_path(),
+            self.config.get_states_dir(),
+            self.config.get_roms_path(),
+            on_done=lambda outcome: GLib.idle_add(self._on_import_done, outcome),
+        )
+
+    def _on_import_done(self, outcome):
+        errors = outcome.get("errors") or []
+        if errors and not outcome.get("restored"):
+            self._toast(self.t("toast.saves.failed", error=errors[0]["error"]))
+            return False
+        self._toast(
+            self.t(
+                "toast.saves.imported",
+                restored=outcome.get("restored", 0),
+                skipped=outcome.get("skipped", 0),
+            )
+        )
+        return False
 
     def _on_theme_changed(self, row, *_a):
         idx = row.get_selected()

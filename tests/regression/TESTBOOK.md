@@ -980,6 +980,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
 ---
 
+### RT-141 — Saves survive a clean reinstall
+- **Area:** Destructive file operations
+- **Mode:** MANUAL
+- **Preconditions:** A library with at least one save state and one battery save (`.srm` next to
+  the ROM). A throwaway copy of `~/.openemux/states/` and of the ROM folder, taken first.
+- **Steps:**
+  1. Open "Settings" → "System" → "Export saves" and write the file.
+  2. Delete the save state and the `.srm` for one game.
+  3. "Import saves", pick the file just written, and reopen "Load state" for that game.
+  4. Play the game briefly so its save is newer than the backup, then import the same file again.
+- **Expected:** Step 3 brings the state and the battery save back and the game resumes where it
+  was. Step 4 leaves the newer local save alone and reports it as kept, not restored — the default
+  policy keeps whichever side is newer (issue #293).
+- **Check:** suite file `tests/test_save_backup.py`; the human confirms the game resumes and the
+  toast counts match.
+- **Restore:** The throwaway copies taken in Preconditions.
+
 ## Retired
 
 *None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*
