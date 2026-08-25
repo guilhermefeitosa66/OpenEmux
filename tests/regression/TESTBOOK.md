@@ -359,6 +359,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Cards show artwork, not the "missing artwork" placeholder.
 - **Check:** Screenshot; no placeholder tiles visible.
 
+### RT-054 — Leaving a page stops its covers from bothering the next one
+- **Area:** Covers
+- **Mode:** MANUAL
+- **Preconditions:** Two consoles with many games whose covers are not yet on disk, so a page
+  visit starts real cover work.
+- **Steps:**
+  1. Open the first console, and before its covers finish appearing switch to the second.
+  2. Switch back and forth a few times, then scroll the page you land on.
+- **Expected:** The page in front stays responsive throughout; covers keep filling in on whichever
+  page is on screen. No freeze, and the log gains no `Gtk-CRITICAL` (issue #291).
+- **Check:** human only for the responsiveness; the launch log must contain no `Gtk-CRITICAL` and
+  no `Traceback`.
+
 ### RT-053 — A cover sync reads each ROM once
 - **Area:** Covers
 - **Mode:** AUTO-SUITE
