@@ -257,6 +257,9 @@ DEFAULT_CONFIG = {
     "library": {
         "playlists_dir": str(DEFAULT_PLAYLISTS_DIR),
         "auto_scan_on_first_open": True,
+        # How an imported ROM gets into the library: a copy, or a symbolic
+        # link to where it already lives (issue #298).
+        "import_mode": "copy",
         "migration": {"version": 0},
     },
     "setup": {
@@ -498,6 +501,7 @@ class ConfigManager:
         library = config.get("library", {})
         library.setdefault("playlists_dir", str(DEFAULT_PLAYLISTS_DIR))
         library.setdefault("auto_scan_on_first_open", True)
+        library.setdefault("import_mode", "copy")
         library.setdefault("migration", {})
         library["migration"].setdefault("version", 0)
         config["library"] = library
@@ -814,6 +818,22 @@ class ConfigManager:
 
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
+
+    def get_import_mode(self):
+        """``copy`` or ``link`` -- how an import puts a ROM in the library."""
+        from openemux.core.rom_importer import normalize_import_mode
+
+        return normalize_import_mode(
+            self.config.get("library", {}).get("import_mode", "copy")
+        )
+
+    def set_import_mode(self, mode):
+        from openemux.core.rom_importer import normalize_import_mode
+
+        library = self.config.setdefault("library", {})
+        library["import_mode"] = normalize_import_mode(mode)
+        self.save_config()
+        return library["import_mode"]
 
     def get_controls_profile(self, console):
         canonical = resolve_system_id(console)

@@ -15,7 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
-from openemux.core import core_options, game_window_support, save_backup
+from openemux.core import core_options, game_window_support, rom_importer, save_backup
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -142,6 +142,24 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         open_btn.connect("clicked", lambda _b: self.win._open_roms_folder())
         self._roms_path_row.add_suffix(open_btn)
         folder_group.add(self._roms_path_row)
+
+        # Copy or link (issue #298). A link keeps one copy of a collection
+        # that other applications also read, and costs nothing on a drive
+        # that cannot hold a second one.
+        self._import_modes = [rom_importer.IMPORT_COPY, rom_importer.IMPORT_LINK]
+        self._import_mode_row = Adw.ComboRow(
+            title=self.t("settings.library.import_mode.title"),
+            subtitle=self.t("settings.library.import_mode.subtitle"),
+        )
+        self._import_mode_row.set_model(
+            Gtk.StringList.new([self.t(f"import_mode.{m}") for m in self._import_modes])
+        )
+        current_mode = self.config.get_import_mode()
+        self._import_mode_row.set_selected(
+            self._import_modes.index(current_mode) if current_mode in self._import_modes else 0
+        )
+        self._import_mode_row.connect("notify::selected", self._on_import_mode_changed)
+        folder_group.add(self._import_mode_row)
         page.add(folder_group)
 
         maint_group = Adw.PreferencesGroup(title=self.t("prefs.group.maintenance"))
@@ -1562,6 +1580,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self.win._warn_missing_bios_for_core(console_id, chosen)
         # The new core has its own options, or none at all.
         self._refresh_core_options()
+
+    def _on_import_mode_changed(self, row, *_a):
+        idx = row.get_selected()
+        if 0 <= idx < len(self._import_modes):
+            self.config.set_import_mode(self._import_modes[idx])
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):

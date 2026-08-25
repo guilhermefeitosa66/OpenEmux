@@ -1,13 +1,16 @@
+import os
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from openemux.core.rom_importer import (
     collect_ambiguous_extensions,
     detect_console,
     import_roms,
 )
+from openemux.core.scanner import RomScanner
 
 
 class DetectConsoleTests(unittest.TestCase):
@@ -245,3 +248,82 @@ class ForcedConsoleTests(unittest.TestCase):
 
             self.assertTrue((base / "roms" / "SATURN" / "Disc.cue").exists())
             self.assertFalse((base / "roms" / "SATURN" / "Disc.zip").exists())
+
+
+class LinkImportTests(unittest.TestCase):
+    """Importing as a link, for a collection that must not be duplicated (#298)."""
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.roms = base / "roms"
+        self.source_dir = base / "elsewhere"
+        self.source_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _rom(self, name="Game.sfc", payload=b"rom-data"):
+        path = self.source_dir / name
+        path.write_bytes(payload)
+        return path
+
+    def test_the_library_entry_is_a_link_to_the_original(self):
+        rom = self._rom()
+        result = import_roms([rom], self.roms, mode="link")
+        dest = Path(result["imported"][0])
+        self.assertTrue(dest.is_symlink())
+        self.assertEqual(dest.resolve(), rom.resolve())
+        self.assertTrue(rom.exists(), "the original must stay where it was")
+
+    def test_the_scanner_finds_a_linked_rom(self):
+        # A symlinked *file* is an ordinary file to the scanner; a symlinked
+        # directory is a different question, and #228's.
+        rom = self._rom()
+        import_roms([rom], self.roms, mode="link")
+        found = RomScanner(self.roms).scan_console("SFC")
+        self.assertEqual([entry["name"] for entry in found], ["Game"])
+
+    def test_the_link_is_absolute(self):
+        # A relative link would break the moment either side moved.
+        rom = self._rom()
+        result = import_roms([rom], self.roms, mode="link")
+        self.assertTrue(Path(os.readlink(result["imported"][0])).is_absolute())
+
+    def test_copy_is_still_the_default(self):
+        rom = self._rom()
+        result = import_roms([rom], self.roms)
+        self.assertFalse(Path(result["imported"][0]).is_symlink())
+
+    def test_an_unknown_mode_falls_back_to_copying(self):
+        rom = self._rom()
+        result = import_roms([rom], self.roms, mode="teleport")
+        self.assertFalse(Path(result["imported"][0]).is_symlink())
+
+    def test_an_archive_a_core_reads_natively_is_linked_whole(self):
+        # For those consoles the zip *is* the content, so the link points at
+        # it exactly as it would at a bare ROM.
+        archive = self.source_dir / "game.zip"
+        with zipfile.ZipFile(archive, "w") as handle:
+            handle.writestr("Game.nes", b"rom-data")
+        result = import_roms([archive], self.roms, mode="link")
+        dest = Path(result["imported"][0])
+        self.assertTrue(dest.is_symlink())
+        self.assertEqual(dest.resolve(), archive.resolve())
+
+    def test_an_archive_a_core_cannot_read_is_still_extracted(self):
+        # There is nothing for a link to point at once the core needs real
+        # files, so link mode extracts like copy mode does.
+        archive = self.source_dir / "disc.zip"
+        with zipfile.ZipFile(archive, "w") as handle:
+            handle.writestr("Disc.iso", b"disc-data")
+        result = import_roms([archive], self.roms, mode="link", forced_console="PS")
+        dest = Path(result["imported"][0])
+        self.assertTrue(dest.exists())
+        self.assertFalse(dest.is_symlink())
+        self.assertEqual(result["extracted"], [str(archive)])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
