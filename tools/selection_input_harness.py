@@ -1,16 +1,35 @@
 #!/usr/bin/env python3
-"""Real-input regression harness for the grid selection behaviors.
+"""Real-input regression harness for the grid.
 
 Runs the production RomGrid inside a ScrolledWindow on a nested X server and
 drives it with XTest-synthesized pointer/keyboard events -- the only way to
 exercise the GTK gesture stack (claims, propagation, FlowBox activation) that
-unit tests cannot reach.
+unit tests cannot reach. Nothing in ``tests/`` can: without a display,
+constructing any GTK widget segfaults the interpreter, so the suite never
+builds a RomGrid at all.
+
+Covered here, and nowhere else:
+
+* selection by pointer -- Ctrl-click, Shift-range, click-to-clear, launch;
+* selection by keyboard -- Shift+arrow ranges and where they re-root;
+* the rubber band, including that it selects exactly the cards it was drawn
+  over rather than merely the right *number* of them;
+* one live card per ROM, resolvable from the wrapper and from inside the card;
+* filtering -- the window hides the child wrapper, and the grid has to agree
+  about what is visible and drop the selection of what is not;
+* focus memory across leaving and re-entering the grid;
+* per-ROM refresh (artwork and cartridge frame) finding the right card;
+* one context menu open at a time, whoever opened it (issue #275).
+
+The last five exist because each is implemented against "one live widget per
+ROM, forever, in a stable list" -- the invariant a virtualized grid would
+delete (issue #219). This is the net that migration has to keep green.
 
 Usage:
     Xephyr :7 -screen 900x650 &
     DISPLAY=:7 GDK_BACKEND=x11 PYTHONPATH=src python3 tools/selection_input_harness.py
     HARNESS_CARDS=4 (default 12) picks the library size; 4 leaves empty page
-    space so the click-on-empty checks run.
+    space so the click-on-empty and band-geometry checks run.
 
 Exit code 0 when every check passes.
 """
@@ -27,6 +46,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Graphene
 
+from openemux.ui import context_menu
 from openemux.ui.grid import RomGrid, RomItem
 from openemux.ui.navigation import NavigationController
 
@@ -152,11 +172,33 @@ class Harness(Adw.Application):
                 bounds.origin.y + bounds.size.height / 2)
 
 
+def on_main(fn):
+    """Run ``fn`` on the GTK main loop and hand its value back."""
+    done = threading.Event()
+    out = {}
+
+    def run():
+        try:
+            out["v"] = fn()
+        except Exception as exc:  # noqa: BLE001 - reported as a failed check
+            out["v"] = f"EXC {exc!r}"
+        done.set()
+        return False
+
+    GLib.idle_add(run)
+    done.wait(5)
+    return out.get("v")
+
+
 def scenario(app, driver, results):
     def snap(label):
         selected = sum(1 for i in app.grid._items if i.selected)
         results.append((label, selected))
         print(f"CHECK {label}: selected={selected}", flush=True)
+
+    def record(label, value):
+        results.append((label, value))
+        print(f"CHECK {label}: {value}", flush=True)
 
     time.sleep(1.5)  # let the window map and cards lay out
     centers = {}
@@ -213,17 +255,6 @@ def scenario(app, driver, results):
     snap("shift-after-plain")
 
     # --- keyboard: Shift+arrows range from the focused card ---------------
-    def on_main(fn):
-        done = threading.Event()
-        out = {}
-        def run():
-            out["v"] = fn()
-            done.set()
-            return False
-        GLib.idle_add(run)
-        done.wait(5)
-        return out.get("v")
-
     if empty_y is not None and empty_y < collect.h - 25:
         driver.click(collect.w / 2, empty_y)  # clear; the anchor goes stale
         def kb(keyval, shift=False, ctrl=False):
@@ -246,6 +277,121 @@ def scenario(app, driver, results):
         snap("kb-shift-left-reroot")    # {0,1}
     else:
         print("SKIP keyboard checks: page is full", flush=True)
+
+    # --- the four things a virtualized grid would have to re-earn --------
+    # Each of these is implemented today against "one live widget per ROM,
+    # forever, in a stable list" (issue #219). Recycling deletes that
+    # invariant, and none of them had any coverage at all.
+
+    # A. One card per ROM, reachable from a widget inside it.
+    def one_card_per_rom():
+        paths = [item.rom["path"] for item in app.grid._items]
+        if len(paths) != len(set(paths)) or len(paths) != len(ROMS):
+            return "cards do not match the library"
+        item = app.grid._items[0]
+        # Both directions of the walk: from the wrapper the pointer and the
+        # keyboard land on, and from a widget inside the card. The title
+        # label is always in the tree; the cover is swapped for a placeholder
+        # when there is no artwork.
+        from_wrapper = RomGrid.item_for_widget(item.get_parent())
+        from_inside = RomGrid.item_for_widget(item.name_label)
+        if from_wrapper is not item:
+            return f"from the wrapper: {from_wrapper!r}"
+        if from_inside is not item:
+            return f"from inside: {from_inside!r}"
+        return "ok"
+
+    record("one-card-per-rom", on_main(one_card_per_rom))
+
+    # B. Filtering. The window hides the child *wrapper*; the grid has to
+    # agree about what is visible and drop the selection of what is not.
+    def filter_to(prefix):
+        child = app.grid.get_first_child()
+        while child is not None:
+            inner = child.get_child()
+            if inner is not None and hasattr(inner, "rom"):
+                child.set_visible(inner.rom["name"].startswith(prefix))
+            child = child.get_next_sibling()
+        app.grid.sync_visible_selection()
+        return len(app.grid._visible_items())
+
+    on_main(lambda: app.grid.select_all())
+    record("filter-visible-count", on_main(lambda: filter_to("Game 00")))
+    snap("filter-drops-hidden-selection")
+    record("filter-restore-count", on_main(lambda: filter_to("Game")))
+
+    # C. Focus memory. Restoring focus must land on the card that had it.
+    def focus_round_trip():
+        item = app.grid._items[1]
+        item.get_parent().grab_focus()
+        app.scroll.grab_focus()          # focus leaves the grid
+        app.grid.focus_restore()
+        focused = app.window.get_focus()
+        return "ok" if RomGrid.item_for_widget(focused) is item else f"landed on {focused!r}"
+
+    record("focus-restore", on_main(focus_round_trip))
+
+    # D. Per-ROM refresh. "Find the widget for this ROM and change it" is
+    # exactly what stops existing when items are recycled.
+    def per_rom_refresh():
+        rom = ROMS[2]
+        app.grid._items[2].has_artwork = None
+        app.grid.refresh_rom_artwork(rom)
+        app.grid.refresh_rom_frame(rom)
+        return "ok"
+
+    record("per-rom-refresh", on_main(per_rom_refresh))
+
+    # E. The band selects exactly what it was drawn over. A reimplementation
+    # that works from indices rather than rectangles passes a count check and
+    # fails this one.
+    if empty_y is not None and empty_y < collect.h - 25:
+        on_main(lambda: app.grid.clear_selection())
+        bx0, by0 = collect.w - 40, centers[0][1] + 120
+        bx1, by1 = centers[0][0] - 60, centers[0][1] - 60
+        driver.drag(bx0, by0, bx1, by1)
+
+        def band_matches_geometry():
+            ok, gb = app.grid.compute_bounds(app.window)
+            if not ok:
+                return "grid has no bounds"
+            left, right = sorted((bx0 - gb.origin.x, bx1 - gb.origin.x))
+            top, bottom = sorted((by0 - gb.origin.y, by1 - gb.origin.y))
+            wrong = []
+            for item in app.grid._items:
+                ok, b = item.compute_bounds(app.grid)
+                if not ok:
+                    continue
+                inside = (
+                    b.origin.x < right
+                    and left < b.origin.x + b.size.width
+                    and b.origin.y < bottom
+                    and top < b.origin.y + b.size.height
+                )
+                if inside != item.selected:
+                    wrong.append(item.rom["name"])
+            return "ok" if not wrong else f"disagreed on {wrong}"
+
+        record("band-matches-geometry", on_main(band_matches_geometry))
+    else:
+        print("SKIP band-matches-geometry: page is full", flush=True)
+
+    # F. One context menu at a time, whoever opened it (issue #275).
+    def two_menus():
+        app.grid._items[0]._show_context_menu()
+        first = app.grid._items[0]._context_popover
+        app.grid._items[1]._show_context_menu()
+        second = app.grid._items[1]._context_popover
+        open_ones = sum(
+            1 for item in app.grid._items if item._context_popover is not None
+            and item._context_popover.get_visible()
+        )
+        context_menu.dismiss_context_popover()
+        if first is None or second is None:
+            return "a menu did not open"
+        return open_ones
+
+    record("one-menu-at-a-time", on_main(two_menus))
 
     time.sleep(0.5)
     GLib.idle_add(app.quit)
@@ -272,13 +418,21 @@ def main():
         "kb-shift-right-2": 3,
         "kb-plain-left": 3,
         "kb-shift-left-reroot": 2,
+        "one-card-per-rom": "ok",
+        "filter-visible-count": 1,
+        "filter-drops-hidden-selection": 1,
+        "filter-restore-count": N_CARDS,
+        "focus-restore": "ok",
+        "per-rom-refresh": "ok",
+        "band-matches-geometry": "ok",
+        "one-menu-at-a-time": 1,
     }
     launches = [d for k, d in EVENTS if k == "LAUNCH"]
     failures = []
     for label, count in results:
         want = expected[label]
         ok = want(count) if callable(want) else count == want
-        print(f"{'PASS' if ok else 'FAIL'} {label}: selected={count}")
+        print(f"{'PASS' if ok else 'FAIL'} {label}: {count}")
         if not ok:
             failures.append(label)
     if "Game 00" in launches:
