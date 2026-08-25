@@ -2,7 +2,6 @@ from pathlib import Path
 import logging
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
-from openemux.core.hasher import compute_rom_id
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -238,17 +237,10 @@ class PlaylistManager:
         return path.stem
 
     def _rom_entry(self, path, console, name=None):
-        rom_id = None
-        try:
-            rom_id = compute_rom_id(str(path))
-        except Exception:
-            rom_id = None
-
         return {
             "name": name or path.stem,
             "path": str(path),
             "console": console,
-            "rom_id": rom_id,
         }
 
     def _console_from_rom_path(self, path):

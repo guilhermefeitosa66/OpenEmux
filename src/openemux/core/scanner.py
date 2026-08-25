@@ -7,7 +7,6 @@ from openemux.core.archives import (
     archive_rom_name,
     loads_archives_natively,
 )
-from openemux.core.hasher import compute_rom_id
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -58,17 +57,11 @@ class RomScanner:
                 rom_name = archive_rom_name(file, extensions)
                 if rom_name is None:
                     continue
-                rom_id = None
-                try:
-                    rom_id = compute_rom_id(str(file))
-                except Exception:
-                    rom_id = None
                 logger.info("scan_roms found archived rom: console=%s rom=%s path=%s", system_id, rom_name, file)
                 roms.append({
                     "name": rom_name,
                     "path": str(file),
                     "console": system_id,
-                    "rom_id": rom_id,
                 })
                 continue
 
@@ -76,18 +69,11 @@ class RomScanner:
                 if file.suffix.lower() == ".bin" and file.resolve() in cue_referenced_bins:
                     logger.info("scan_roms hidden helper track: console=%s path=%s", system_id, file)
                     continue
-                rom_id = None
-                try:
-                    rom_id = compute_rom_id(str(file))
-                except Exception:
-                    # Keep scanning even if hashing fails for one file.
-                    rom_id = None
                 logger.info("scan_roms found rom: console=%s rom=%s path=%s", system_id, file.stem, file)
                 roms.append({
                     "name": file.stem,
                     "path": str(file),
                     "console": system_id,
-                    "rom_id": rom_id,
                 })
 
         sorted_roms = sorted(roms, key=lambda x: x["name"])

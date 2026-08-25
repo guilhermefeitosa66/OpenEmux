@@ -93,7 +93,9 @@ class ArchiveScannerTests(unittest.TestCase):
         self.assertEqual(roms[0]["name"], "Super Mario Bros")
         self.assertEqual(roms[0]["path"], str(archive))
         self.assertEqual(roms[0]["console"], "FC")
-        self.assertIsNotNone(roms[0]["rom_id"])
+        # No rom_id: nothing ever read it, and producing it meant a full-file
+        # CRC32 of every ROM on every scan and every playlist load (issue #216).
+        self.assertNotIn("rom_id", roms[0])
 
     def test_zip_without_matching_rom_is_skipped(self):
         with TemporaryDirectory() as tmp_dir:
