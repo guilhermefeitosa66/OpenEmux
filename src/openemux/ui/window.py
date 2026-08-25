@@ -1405,7 +1405,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for apply in self._retranslate:
             apply()
         self._render_tip()
-        self.refresh_library(preferred_view=visible)
+        # Every label in the stack and the sidebar has to be built again.
+        self.refresh_library(preferred_view=visible, force=True)
         self._toast(self.t("toast.language.updated", language=language_name))
 
     def _update_window_title(self, console_id):
@@ -2110,6 +2111,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             scope = collection_scope(slug)
             page = self._console_pages.pop(scope, None)
             self._console_loaded.pop(scope, None)
+            self._page_signatures.pop(scope, None)
             if page is not None:
                 self.content_stack.remove(page)
             self._rebuild_console_sidebar(self.visible_consoles)
@@ -2315,17 +2317,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
 
-    def refresh_library(self, preferred_view=None):
+    def refresh_library(self, preferred_view=None, force=False):
+        """Rediscover the library and rebuild whatever the change affects.
+
+        A rescan or an import usually finds the same consoles it found before,
+        and tearing the whole stack and sidebar down for that meant every page
+        was thrown away and rebuilt -- twice at startup, since the launch
+        builds the library and the startup scan finishes seconds later and
+        does it again (#230). When the visible set has not moved, the pages
+        stay and only their contents are invalidated; ``force`` is for the
+        language change, where every label has to be built again.
+        """
         previous_visible = self.content_stack.get_visible_child_name() if hasattr(self, "content_stack") else None
+        # Discovery fills _initial_roms, so the reset has to come first or the
+        # snapshots it just took are thrown away and every page re-reads its
+        # playlist on the first visit.
+        self._initial_roms = {}
+        discovered = self._discover_visible_consoles()
+        if (
+            not force
+            and getattr(self, "_console_pages", None)
+            and discovered == getattr(self, "visible_consoles", None)
+        ):
+            self.visible_consoles = discovered
+            self._console_loaded = {}
+            # The pages are still the right pages; their contents may not be.
+            self._page_signatures = {}
+            self._sync_sidebar_footer()
+            target = preferred_view or previous_visible or self.current_console
+            if target in self._console_pages:
+                self.current_console = target
+                self._ensure_console_loaded(target)
+                self.content_stack.set_visible_child_name(target)
+                self._update_window_title(target)
+            return
+
         while child := self.content_stack.get_first_child():
             self.content_stack.remove(child)
 
         self._grids = {}
         self._console_pages = {}
         self._console_loaded = {}
-        self._initial_roms = {}
+        self._page_signatures = {}
 
-        self.visible_consoles = self._discover_visible_consoles()
+        self.visible_consoles = discovered
         self._sync_sidebar_footer()
         self._rebuild_console_sidebar(self.visible_consoles)
 
@@ -2638,13 +2673,47 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._render_console_page(ALL_CONSOLES_ID, all_roms)
         self._console_loaded[ALL_CONSOLES_ID] = True
 
+    def _page_signature(self, roms, display_settings):
+        """Everything a rebuilt page would be built from.
+
+        Two renders with the same signature produce the same widgets, so the
+        second one is pure cost: a page switch used to tear down every card
+        and build it again, losing the scroll position on the way (#230).
+        Artwork, favourite stars and cartridge colours are refreshed on the
+        card itself and are deliberately not in here.
+        """
+        return (
+            tuple(rom.get("path", "") for rom in roms),
+            tuple(rom.get("name", "") for rom in roms),
+            display_settings["sort_order"],
+            display_settings["view_mode"],
+            display_settings.get("zoom"),
+            self.locale,
+        )
+
     def _render_console_page(self, console, roms):
         page = self._console_pages[console]
         scroll = page.scroll
-        page.header.set_visible(False)
         # Each page follows its own scope's layout, not the one on screen now.
         display_settings = self.config_manager.get_display_settings(console)
         roms = self._sorted_roms(roms, order=display_settings["sort_order"])
+        signature = self._page_signature(roms, display_settings)
+        if (
+            self._page_signatures.get(console) == signature
+            and scroll.get_child() is not None
+        ):
+            # Nothing about this page changed, so the cards it already has are
+            # the cards it would be given. Keeping them keeps the scroll
+            # position too -- the rebuild used to send every page switch back
+            # to the top.
+            grid = self._grids.get(console)
+            if grid is not None:
+                self._apply_filters_to(grid)
+            if console == self.current_console:
+                self._update_window_title(console)
+            return
+        self._page_signatures[console] = signature
+        page.header.set_visible(False)
         if not roms:
             if console == FAVORITES_ID:
                 status = Adw.StatusPage(
@@ -3652,7 +3721,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         visible = self.content_stack.get_visible_child_name()
         if not visible or visible not in self._grids:
             return
-        grid = self._grids[visible]
+        self._apply_filters_to(self._grids[visible])
+
+    def _apply_filters_to(self, grid):
+        """The same decision, for a page that is not the visible one yet.
+
+        A page whose rebuild was skipped keeps the visibility its cards had
+        when it was last on screen, so it has to be re-filtered before it is
+        shown again (#230).
+        """
         query = self.search_entry.get_text().lower()
         only_missing = self._filter_missing_artwork
 
