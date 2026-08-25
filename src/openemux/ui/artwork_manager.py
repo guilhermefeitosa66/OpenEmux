@@ -24,6 +24,7 @@ from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
 from openemux.core import artwork_search
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core import cover_cache
 from openemux.core.hasher import compute_crc32
 from openemux.core.library_view import ZOOM_LEVELS, scale_spacing
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, save_local_art
@@ -162,20 +163,36 @@ class _SearchTab(Gtk.Box):
             art_kind=self.art_kind,
             dest_dir=dest,
             rom_path=rom.get("path") if by_hash else None,
-            on_result=lambda cand, s=seq: GLib.idle_add(self._add_result, s, cand),
+            on_result=lambda cand, s=seq: self._decode_result(s, cand),
             should_cancel=lambda s=seq: s != self._search_seq or self.manager.closed,
             on_done=lambda results, s=seq: GLib.idle_add(self._search_done, s, len(results)),
         )
 
-    def _add_result(self, seq, candidate):
+    def _decode_result(self, seq, candidate):
+        """Decode on the search thread, then hand the pixbuf to the UI.
+
+        ``on_result`` already runs on a worker, and a burst of full-size box
+        art decoded back-to-back inside an idle callback is exactly the load
+        the library grid was moved off the main thread to avoid (issue #231).
+        The shared cover cache does the decode and the scaling, so a result
+        the grid has already shown costs nothing.
+        """
+        if seq != self._search_seq or self.manager.closed:
+            return
+        width, height = cover_size_for_console(self.manager.rom.get("console"), _RESULT_ZOOM)
+        pixbuf = cover_cache.load_cover(candidate.path, width, height)
+        if pixbuf is None:
+            return
+        GLib.idle_add(self._add_result, seq, candidate, pixbuf, width, height)
+
+    def _add_result(self, seq, candidate, pixbuf, width, height):
         if seq != self._search_seq:
             return False
         try:
-            texture = Gdk.Texture.new_from_filename(str(candidate.path))
+            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
         except GLib.Error:
             return False
 
-        width, height = cover_size_for_console(self.manager.rom.get("console"), _RESULT_ZOOM)
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("rom-card")
 
@@ -292,7 +309,7 @@ class _SearchTab(Gtk.Box):
             console=rom["console"],
             query=self.name_entry.get_text().strip() or rom["name"],
             dest_dir=dest,
-            on_result=lambda cand, s=seq: GLib.idle_add(self._add_result, s, cand),
+            on_result=lambda cand, s=seq: self._decode_result(s, cand),
             should_cancel=lambda s=seq: s != self._search_seq or self.manager.closed,
             on_done=lambda mode, results, s=seq: GLib.idle_add(
                 self._suggestions_done, s, mode, len(results)

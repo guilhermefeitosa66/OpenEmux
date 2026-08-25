@@ -94,5 +94,50 @@ class CartridgeColorStoreTests(unittest.TestCase):
         self.assertEqual(self.store.get_effective_color(ROM, "SFC"), DEFAULT_COLOR_ID)
 
 
+class ColorStoreCachingTests(unittest.TestCase):
+    """The file is parsed once per write, not once per card (issue #231)."""
+
+    def _store(self, tmp_dir):
+        return CartridgeColorStore(Path(tmp_dir) / "cartridges.yaml")
+
+    def test_repeated_lookups_read_the_file_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+
+            reads = []
+            real_read_text = Path.read_text
+
+            def spy(self, *args, **kwargs):
+                if self.name == "cartridges.yaml":
+                    reads.append(self.name)
+                return real_read_text(self, *args, **kwargs)
+
+            Path.read_text = spy
+            try:
+                for _ in range(100):  # a page of cards, two lookups each
+                    store.get_effective_color("/roms/SFC/Game.sfc", "SFC")
+            finally:
+                Path.read_text = real_read_text
+            self.assertEqual(len(reads), 1, reads)
+
+    def test_a_write_is_seen_by_the_next_lookup(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            self.assertEqual(store.get_console_color("SFC"), "red")
+            store.set_console_color("SFC", "blue")
+            self.assertEqual(store.get_console_color("SFC"), "blue")
+
+    def test_a_caller_cannot_edit_the_cache(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            data = store.load()
+            data["console_defaults"]["SFC"] = "blue"
+            self.assertEqual(store.get_console_color("SFC"), "red")
+
+
 if __name__ == "__main__":
     unittest.main()
+

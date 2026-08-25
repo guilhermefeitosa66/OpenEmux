@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 from openemux.i18n.locales import de, en, es, fr, ja, pt_BR, zh_CN
 
@@ -105,17 +106,38 @@ def detect_system_locale(environ=None):
     return DEFAULT_LOCALE
 
 
-def merged_translations(locale):
-    selected = normalize_locale(locale)
+@lru_cache(maxsize=None)
+def _merged_table(selected):
+    """The locale's table over English, built once per locale.
+
+    The tables are module constants, so the merge can only ever produce the
+    same dict. Rebuilding it per lookup copied 2x591 entries every time, and
+    the hot callers are per ROM card and per progress event (issue #231).
+    """
     base = dict(LOCALE_TRANSLATIONS["en"])
     if selected != "en":
         base.update(LOCALE_TRANSLATIONS.get(selected, {}))
     return base
 
 
+def merged_translations(locale):
+    """A caller-owned copy of the locale's table."""
+    return dict(_merged_table(normalize_locale(locale)))
+
+
+def reset_translation_cache():
+    """Forget the merged tables.
+
+    The catalogs are module constants and the cache assumes it: anything that
+    edits ``LOCALE_TRANSLATIONS`` at runtime -- which in practice is only a
+    test simulating a locale that lacks a key -- has to call this afterwards.
+    """
+    _merged_table.cache_clear()
+
+
 def tr(locale, key, **kwargs):
     selected = normalize_locale(locale)
-    merged = merged_translations(selected)
+    merged = _merged_table(selected)
     text = merged.get(key, LOCALE_TRANSLATIONS["en"].get(key, key))
     if kwargs:
         return text.format(**kwargs)

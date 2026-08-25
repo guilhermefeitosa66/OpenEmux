@@ -26,7 +26,6 @@ by default**: the user configures their own credentials in Preferences, and when
 anything is missing or fails we return no candidates so the caller falls back to
 libretro. Nothing in here ever raises into the sync loop.
 """
-import hashlib
 import json
 import logging
 import threading
@@ -35,7 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from openemux.core.hasher import compute_crc32
+from openemux.core.hasher import rom_digests
 from openemux.core.systems import resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -194,11 +193,7 @@ def region_priority_for(region_priority=None):
 def compute_md5(rom_path, chunk_size=65536):
     """MD5 of a ROM file as an uppercase hex string, or None if unreadable."""
     try:
-        digest = hashlib.md5()  # nosec B324 - content fingerprint, not security
-        with open(rom_path, "rb") as handle:
-            while chunk := handle.read(chunk_size):
-                digest.update(chunk)
-        return digest.hexdigest().upper()
+        return rom_digests(rom_path, chunk_size)[1]
     except OSError as exc:
         logger.debug("screenscraper md5 unavailable: error=%s", exc)
         return None
@@ -207,7 +202,7 @@ def compute_md5(rom_path, chunk_size=65536):
 def compute_crc(rom_path):
     """CRC32 of a ROM file as an uppercase hex string, or None if unreadable."""
     try:
-        return compute_crc32(rom_path)
+        return rom_digests(rom_path)[0]
     except OSError as exc:
         logger.debug("screenscraper crc unavailable: error=%s", exc)
         return None

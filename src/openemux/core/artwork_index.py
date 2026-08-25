@@ -200,9 +200,19 @@ class ArtworkNameIndex:
 
     def has_crc_index(self):
         """Whether stage 1 can work at all -- callers gate the (costly) ROM
-        hashing on this, so a database without the table costs nothing."""
+        hashing on this, so a database without the table costs nothing.
+
+        Asked once per ROM of a sync run and answered by opening a fresh
+        sqlite connection every time, which is the whole cost of a question
+        whose answer is fixed for the life of the database file (#231).
+        """
+        # _crc_table_present already remembers the answer; what was paid per
+        # ROM is the connection opened to ask it again.
+        if self._has_crc_table is not None:
+            return self._has_crc_table
         conn = self._connect()
         if conn is None:
+            # Not remembered: the database may still be downloading.
             return False
         try:
             return self._crc_table_present(conn)
