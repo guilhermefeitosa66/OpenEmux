@@ -1128,19 +1128,49 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._capture_sequence_index = 0
         self._start_capture(self._capture_sequence_actions[0], sequence_mode=True)
 
+    def _actions_holding(self, action, value):
+        """What else is on ``value`` and has to let go of it.
+
+        ``enable_hotkey`` is the exception in both directions: it ships on the
+        same token as Select on purpose (issue #124), because a hotkey that
+        only fires while a modifier is held *is* a shared button. Every other
+        collision is real -- the user pointed a button at a new command, and
+        the old one cannot keep it (issue #281).
+        """
+        if not value:
+            return []
+        return [
+            other
+            for other, other_value in self._bindings_buffer.items()
+            if other != action
+            and other_value == value
+            and "enable_hotkey" not in (other, action)
+        ]
+
     def _set_binding(self, action, value):
         value = (value or "").strip().lower()
-        if value:
-            for other_action, other_value in list(self._bindings_buffer.items()):
-                if other_action == action:
-                    continue
-                if other_value == value:
-                    self._bindings_buffer[other_action] = ""
-                    if other_action in self._input_buttons:
-                        self._input_buttons[other_action].set_label(self._binding_display(""))
+        released = self._actions_holding(action, value)
+        for other_action in released:
+            self._bindings_buffer[other_action] = ""
+            if other_action in self._input_buttons:
+                self._input_buttons[other_action].set_label(self._binding_display(""))
         self._bindings_buffer[action] = value
         if action in self._input_buttons:
             self._input_buttons[action].set_label(self._binding_display(value))
+        # Say what was taken away. The row going blank on its own read as a
+        # glitch, and the value came back on the next visit anyway; now it
+        # really is released, so the message is the whole story. Not during
+        # map-all: one toast per button is noise, not information.
+        if released and not self._capture_sequence_mode:
+            self._toast(
+                self.t(
+                    "toast.input_released",
+                    binding=self._binding_display(value),
+                    actions=", ".join(
+                        self._input_action_label(other) for other in released
+                    ),
+                )
+            )
 
     @staticmethod
     def _normalize_key(keyval):
@@ -1225,7 +1255,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         else:
             profile["active_device"] = device_id
         self.config.save_input_profile(console_id, profile)
-        self._loaded_profile = profile
+        # Read the rows back from what was actually stored. The buffer is what
+        # the user asked for; the profile is what the store kept, and the two
+        # used to be allowed to disagree silently until the dialog was
+        # reopened (issue #281).
+        self._refresh_bindings()
         self._toast(self.t("toast.input_saved", console=console_id))
         # A remap saved mid-game reaches the running game through the
         # state-carrying relaunch (#129) -- but only when the profile being

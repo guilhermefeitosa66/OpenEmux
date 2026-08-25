@@ -677,6 +677,37 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   be sending the keys).
 - **Restore:** Remap the action back.
 
+### RT-074 — Remapping onto a taken button releases the old command
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** App running with a gamepad connected; a GBA game in the library.
+- **Steps:**
+  1. Open "Settings" (`Ctrl+,`) → "Input", pick "GBA" and the gamepad device.
+  2. Remap "B" to the pad's X button — the one "Save state" already holds.
+  3. Read the toast, and read the "Save state" row.
+  4. Press "Save", then close and reopen "Settings".
+- **Expected:** The toast names what was released ("Button 2 released from Save state"), the
+  "Save state" row reads unbound, and **it is still unbound after reopening** — the value does not
+  come back on its own (issue #281).
+- **Check:** suite files `tests/test_input_actions.py`, `tests/test_preferences.py`; the human
+  confirms the toast and the round trip.
+- **Restore:** Remap "B" back to its own button and "Save state" back to the pad's X button.
+
+### RT-075 — No button fires two commands at once
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-074 done, so "B" sits on the button "Save state" used to hold.
+- **Steps:**
+  1. Launch the GBA game and press that button during play.
+  2. Inspect the launch override in `~/.openemux/runtime/`.
+- **Expected:** The button plays B and does nothing else. The override binds exactly one action to
+  that token, and every libretro button the console does not use — `x`, `y` on a GBA — is written
+  as `"nul"` rather than left out, so RetroArch's own pad autoconfig cannot fill it back in.
+- **Check:** suite file `tests/test_input_actions.py`
+  (`test_only_one_action_ends_up_on_the_remapped_button`,
+  `test_a_button_the_console_does_not_use_is_bound_to_nothing`); with a real launch,
+  `grep -c '\"2\"' ~/.openemux/runtime/runtime_*.cfg` counts one binding.
+
 ### RT-072 — A gamepad is detected and drives the UI
 - **Area:** Input
 - **Mode:** MANUAL

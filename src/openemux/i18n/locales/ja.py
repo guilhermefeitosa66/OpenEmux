@@ -203,6 +203,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "ゲームの状態を保存できませんでした。変更は次回起動時に反映されます。",
     "toast.finished": "{name} が終了しました (コード {code})",
     "toast.input_saved": "{console} の入力割り当てを保存しました",
+    "toast.input_released": "{binding} を {actions} から解除しました",
     "toast.input_reset": "{console} の入力割り当てをリセットしました",
     "toast.shaders.defaults_restored": "シェーダーを初期設定に戻しました",
     "settings.title": "設定",

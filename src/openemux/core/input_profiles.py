@@ -131,13 +131,16 @@ def normalize_turbo_settings(value):
 
 
 def clear_unreachable_gamepad_buttons(bindings):
-    """Blank pad bindings pointing at a button the hardware does not have.
+    """Drop pad bindings pointing at a button the hardware does not have.
 
     Profiles written before version 3 bound the hotkeys to buttons 11-15
     (issue #124). Since ``enable_hotkey`` gates every other hotkey in
     RetroArch, one unreachable modifier silently disabled the whole set.
-    Blanking the token is enough: ``normalize_bindings`` refills it from the
-    current defaults on the same pass, so the repair needs no manual reset.
+    Dropping the action is enough: ``normalize_bindings`` refills anything
+    *absent* from the current defaults on the same pass, so the repair needs
+    no manual reset. It has to be a drop rather than a blank -- an action
+    left present with an empty value now means "the user released this"
+    (issue #281), which is exactly what must not be assumed here.
 
     Only bare button indices are considered -- axis (``+2``) and hat
     (``h0up``) tokens are a different namespace and never out of range.
@@ -148,7 +151,6 @@ def clear_unreachable_gamepad_buttons(bindings):
     for action, value in bindings.items():
         token = str(value).strip()
         if token.isdigit() and int(token) >= FIRST_UNREACHABLE_GAMEPAD_BUTTON:
-            cleaned[action] = ""
             continue
         cleaned[action] = value
     return cleaned

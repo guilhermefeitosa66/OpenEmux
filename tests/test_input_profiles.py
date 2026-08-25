@@ -587,12 +587,15 @@ class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
                 saved["devices"]["gamepad_p1"]["bindings"]["save_state"], "11"
             )
 
-    def test_helper_only_clears_out_of_range_button_indices(self):
+    def test_helper_only_drops_out_of_range_button_indices(self):
         cleared = clear_unreachable_gamepad_buttons(
             {"a": "10", "b": "11", "l2": "+2", "up": "h0up", "x": ""}
         )
         self.assertEqual(cleared["a"], "10")
-        self.assertEqual(cleared["b"], "")
+        # Dropped, not blanked: an action present with an empty value now
+        # means the user released it, and normalize_bindings would leave it
+        # unbound instead of repairing it (issue #281).
+        self.assertNotIn("b", cleared)
         self.assertEqual(cleared["l2"], "+2")
         self.assertEqual(cleared["up"], "h0up")
 

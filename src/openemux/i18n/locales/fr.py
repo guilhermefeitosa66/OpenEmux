@@ -203,6 +203,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Impossible de sauvegarder l’état du jeu — les modifications s’appliqueront au prochain démarrage.",
     "toast.finished": "{name} terminé (code {code})",
     "toast.input_saved": "Configuration des commandes enregistrée pour {console}",
+    "toast.input_released": "{binding} libéré de {actions}",
     "toast.input_reset": "Configuration des commandes réinitialisée pour {console}",
     "toast.shaders.defaults_restored": "Shaders réinitialisés aux valeurs par défaut",
     "settings.title": "Paramètres",

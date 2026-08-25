@@ -203,6 +203,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Der Spielstand konnte nicht gesichert werden – Änderungen greifen beim nächsten Start.",
     "toast.finished": "{name} beendet (Code {code})",
     "toast.input_saved": "Tastenbelegung für {console} gespeichert",
+    "toast.input_released": "{binding} von {actions} gelöst",
     "toast.input_reset": "Tastenbelegung für {console} zurückgesetzt",
     "toast.shaders.defaults_restored": "Shader auf Standardwerte zurückgesetzt",
     "settings.title": "Einstellungen",
