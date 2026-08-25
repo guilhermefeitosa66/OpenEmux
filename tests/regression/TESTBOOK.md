@@ -145,6 +145,87 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_rom_importer.py`; `ls -l` shows the entry as `->` the source.
 - **Restore:** Set the mode back to "Copy the file"; the original was never touched.
 
+### RT-016 — Importing a multi-disc archive keeps every disc
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: import a PlayStation `.zip` holding `Disc 1/` and `Disc 2/`, each
+  with its own `track01.bin` and `.cue`, then open the console page.
+- **Expected:** Both discs are in the library, each `.cue` beside its own tracks. The entries used
+  to flatten onto one filename: disc 1 was written, disc 2 was reported as imported anyway, and
+  the library offered a disc 2 holding disc 1's data (issue #229).
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil, zipfile
+  from pathlib import Path
+  from openemux.core.rom_importer import import_roms
+  from openemux.core.scanner import RomScanner
+
+  base = Path(os.environ["SCRATCH"]) / "rt016"
+  shutil.rmtree(base, ignore_errors=True)
+  (base / "roms").mkdir(parents=True)
+  src = base / "FF7.zip"
+  cue = 'FILE "track01.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n'
+  with zipfile.ZipFile(src, "w") as z:
+      z.writestr("Disc 1/track01.bin", b"disc-one")
+      z.writestr("Disc 1/FF7.cue", cue)
+      z.writestr("Disc 2/track01.bin", b"disc-two")
+      z.writestr("Disc 2/FF7.cue", cue)
+
+  result = import_roms([src], base / "roms", forced_console="PS")
+  assert len(result["imported"]) == 4, result["imported"]
+  assert (base / "roms/PS/Disc 1/track01.bin").read_bytes() == b"disc-one"
+  assert (base / "roms/PS/Disc 2/track01.bin").read_bytes() == b"disc-two"
+  found = RomScanner(base / "roms").scan_console("PS")
+  assert len(found) == 2, [r["path"] for r in found]
+  print("RT-016 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-017 — An interrupted import never leaves a half-extracted ROM
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: fill the disk (or pull the drive) halfway through importing a large
+  archive, then import the same archive again with room to spare.
+- **Expected:** Nothing is left at the ROM's final name after the failed import, and the second
+  import writes the complete file. A truncated ROM at the final path used to be skipped as
+  "already there" by every later import, forever (issue #229).
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil, zipfile
+  from pathlib import Path
+  from unittest.mock import patch
+  from openemux.core.archives import extract_archive
+
+  base = Path(os.environ["SCRATCH"]) / "rt017"
+  shutil.rmtree(base, ignore_errors=True)
+  dest = base / "out"
+  dest.mkdir(parents=True)
+  src = base / "Disc.zip"
+  with zipfile.ZipFile(src, "w") as z:
+      z.writestr("Disc.bin", b"x" * 65536)
+
+  with patch("openemux.core.atomic_write.os.replace", side_effect=OSError("disk full")):
+      assert extract_archive(src, dest) == []
+  assert list(dest.iterdir()) == [], list(dest.iterdir())
+
+  extracted = extract_archive(src, dest)
+  assert (dest / "Disc.bin").read_bytes() == b"x" * 65536
+  assert extracted == [dest / "Disc.bin"]
+
+  # And a truncated file left by an older version is repaired, not blessed.
+  (dest / "Disc.bin").write_bytes(b"x" * 100)
+  extract_archive(src, dest)
+  assert (dest / "Disc.bin").read_bytes() == b"x" * 65536
+  print("RT-017 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
 ### RT-013 — Rename carries save states, battery saves and artwork
 - **Area:** Library
 - **Mode:** AUTO-SUITE
