@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,14 @@ class PlayHistory:
         try:
             with open(self.history_file, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as exc:
-            logger.info("play history unreadable, starting empty: %s", exc)
-            return {}
-        if not isinstance(data, dict):
+            # "Recently played" is rebuilt by playing again, but only the
+            # file knows what was played before -- keep it (issue #209).
+            quarantine_state_file(self.history_file, exc)
             return {}
         entries = {}
         for path, entry in data.items():

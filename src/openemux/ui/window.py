@@ -56,6 +56,7 @@ from openemux.core.scraper import (
 )
 from openemux.core.scanner import RomScanner
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
+from openemux.core.state_recovery import quarantined_files, reset_quarantine_log
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
@@ -1282,6 +1283,28 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         """
         if self.config_manager.get_show_welcome_on_startup():
             GLib.idle_add(self._open_welcome)
+
+    def maybe_report_recovered_state(self):
+        """Tell the user when a state file was set aside on the way in.
+
+        The stores keep an unreadable file as ``<name>.broken-<timestamp>``
+        and fall back to defaults (issue #209). Without this the app would
+        still just look like it had forgotten everything -- which is exactly
+        the experience the quarantine exists to end.
+        """
+        recovered = quarantined_files()
+        if not recovered:
+            return
+        reset_quarantine_log()
+        if len(recovered) == 1:
+            text = self.t(
+                "toast.state_recovered.one", name=Path(recovered[0]["kept_as"]).name
+            )
+        else:
+            text = self.t("toast.state_recovered.many", count=len(recovered))
+        # Longer than a normal toast: it is the only notice the user gets,
+        # and the welcome tour may be painting over the window right now.
+        GLib.idle_add(self._toast, text, 10)
 
     def _show_about(self):
         about = Adw.AboutDialog()

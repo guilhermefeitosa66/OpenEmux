@@ -537,6 +537,8 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "Initial setup incomplete (step: {step})",
     "toast.path_invalid": "Invalid ROMs folder selected",
     "toast.path_updated": "ROMs folder updated: {path}",
+    "toast.state_recovered.one": "A settings file could not be read; it was kept as \"{name}\" and defaults are in use",
+    "toast.state_recovered.many": "{count} settings files could not be read; they were kept beside the originals and defaults are in use",
 
     # ROM import
     "header.import": "Import ROMs",

@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +117,12 @@ class AchievementsStore:
             return {}
         try:
             data = json.loads(self.config_file.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
+            return data
         except (OSError, ValueError) as exc:
-            logger.warning("retroachievements: unreadable store: %s", exc)
+            quarantine_state_file(self.config_file, exc)
             return {}
-        return data if isinstance(data, dict) else {}
 
     def save(self, data):
         # Owner-only from the moment it exists: the temporary file the atomic

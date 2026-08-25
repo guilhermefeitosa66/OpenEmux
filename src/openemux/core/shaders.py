@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.paths import get_project_root
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
@@ -94,27 +95,32 @@ class ShaderConfigStore:
 
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+
+            data = copy.deepcopy(DEFAULT_SHADER_CONFIG)
+            data["version"] = int(raw.get("version", 1))
+            data["show_all_shaders"] = bool(raw.get("show_all_shaders", False))
+            overrides = {}
+            for key, value in (raw.get("console_overrides") or {}).items():
+                canonical = resolve_system_id(key)
+                if canonical not in SYSTEM_IDS:
+                    continue
+                overrides[canonical] = normalize_shader_id(value)
+            data["console_overrides"] = overrides
+
+            rom_overrides = {}
+            for key, value in (raw.get("rom_overrides") or {}).items():
+                if not key:
+                    continue
+                rom_overrides[str(key)] = normalize_shader_id(value)
+            data["rom_overrides"] = rom_overrides
+            return data
+        except Exception as exc:
+            # Every per-console and per-ROM shader pick lives in this file;
+            # falling back to defaults and saving would erase them (#209).
+            quarantine_state_file(self.config_file, exc)
             return copy.deepcopy(DEFAULT_SHADER_CONFIG)
-
-        data = copy.deepcopy(DEFAULT_SHADER_CONFIG)
-        data["version"] = int(raw.get("version", 1))
-        data["show_all_shaders"] = bool(raw.get("show_all_shaders", False))
-        overrides = {}
-        for key, value in (raw.get("console_overrides") or {}).items():
-            canonical = resolve_system_id(key)
-            if canonical not in SYSTEM_IDS:
-                continue
-            overrides[canonical] = normalize_shader_id(value)
-        data["console_overrides"] = overrides
-
-        rom_overrides = {}
-        for key, value in (raw.get("rom_overrides") or {}).items():
-            if not key:
-                continue
-            rom_overrides[str(key)] = normalize_shader_id(value)
-        data["rom_overrides"] = rom_overrides
-        return data
 
     def save(self, settings):
         payload = dict(DEFAULT_SHADER_CONFIG)

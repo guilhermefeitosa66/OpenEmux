@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
 
@@ -214,10 +215,14 @@ class CoreOptionsStore:
             return {}
         try:
             data = json.loads(self.config_file.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
+            return data
         except (OSError, ValueError) as exc:
-            logger.warning("core_options: unreadable store: %s", exc)
+            # The next set_for_console would write "{}" over every tuned
+            # option in the file. Keep it instead (issue #209).
+            quarantine_state_file(self.config_file, exc)
             return {}
-        return data if isinstance(data, dict) else {}
 
     def save(self, data):
         atomic_write_text(self.config_file, json.dumps(data, indent=2, sort_keys=True))

@@ -1,4 +1,5 @@
 import copy
+import logging
 import shutil
 import threading
 from datetime import datetime
@@ -8,6 +9,7 @@ import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
@@ -34,6 +36,8 @@ from openemux.core.update_checker import (
     DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
     DEFAULT_TIMEOUT as DEFAULT_UPDATE_TIMEOUT,
 )
+
+logger = logging.getLogger(__name__)
 
 # Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
 DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
@@ -332,19 +336,34 @@ class ConfigManager:
         self.config = self.load_config()
 
     def load_config(self):
+        """Read ``config.yaml``, keeping it if it cannot be read.
+
+        A YAML syntax error or a file that parses to something that is not a
+        mapping used to end in ``create_default_config()``, which writes the
+        defaults straight over the broken file: the ROM path, the credentials,
+        the locale and the per-console cores destroyed by the recovery rather
+        than by whatever damaged the file. The unreadable file is set aside as
+        ``config.yaml.broken-<timestamp>`` first, so it can still be opened
+        and read back (issue #209).
+        """
         if not self.config_file.exists():
             return self.create_default_config()
 
         try:
             with open(self.config_file, "r", encoding="utf-8") as f:
                 raw = yaml.safe_load(f) or {}
-                config = _merge_defaults(DEFAULT_CONFIG, raw)
-                config = self._migrate_runtime_config(config)
-                if config != raw:
-                    self.save_config(config)
-                return config
+            if not isinstance(raw, dict):
+                # A scalar or a list: _merge_defaults would raise on it, and
+                # there is nothing here to merge. Corrupt, not empty.
+                raise ValueError(f"config.yaml is not a mapping: {type(raw).__name__}")
+            config = _merge_defaults(DEFAULT_CONFIG, raw)
+            config = self._migrate_runtime_config(config)
+            if config != raw:
+                self.save_config(config)
+            return config
         except Exception as e:
-            print(f"Error loading config: {e}")
+            logger.error("config unreadable: %s", e)
+            quarantine_state_file(self.config_file, e)
             return self.create_default_config()
 
     def create_default_config(self):
@@ -554,7 +573,7 @@ class ConfigManager:
             try:
                 atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
             except Exception as e:
-                print(f"Error saving config: {e}")
+                logger.error("config not saved: %s", e)
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))

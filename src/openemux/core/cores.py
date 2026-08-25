@@ -21,6 +21,7 @@ from pathlib import Path
 import yaml
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.paths import get_real_home
 from openemux.core.systems import (
     get_runtime_core_candidates,
@@ -191,16 +192,22 @@ class CoreConfigStore:
             return copy.deepcopy(DEFAULT_CORES_CONFIG)
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+            data = copy.deepcopy(DEFAULT_CORES_CONFIG)
+            data["version"] = int(raw.get("version", 1))
+            overrides = {}
+            for key, value in (raw.get("rom_overrides") or {}).items():
+                if key and value:
+                    overrides[str(key)] = str(value)
+            data["rom_overrides"] = overrides
+            return data
+        except Exception as exc:
+            # Defaults here mean "no per-ROM core pinned anywhere", and the
+            # next set_rom_core would write that emptiness back over the
+            # user's pins. Keep the file (issue #209).
+            quarantine_state_file(self.config_file, exc)
             return copy.deepcopy(DEFAULT_CORES_CONFIG)
-        data = copy.deepcopy(DEFAULT_CORES_CONFIG)
-        data["version"] = int(raw.get("version", 1))
-        overrides = {}
-        for key, value in (raw.get("rom_overrides") or {}).items():
-            if key and value:
-                overrides[str(key)] = str(value)
-        data["rom_overrides"] = overrides
-        return data
 
     def save(self, data):
         payload = copy.deepcopy(DEFAULT_CORES_CONFIG)

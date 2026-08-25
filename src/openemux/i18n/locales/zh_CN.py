@@ -535,6 +535,8 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "首次设置未完成（步骤：{step}）",
     "toast.path_invalid": "所选的 ROM 文件夹无效",
     "toast.path_updated": "ROM 文件夹已更新：{path}",
+    "toast.state_recovered.one": "无法读取一个设置文件；已将其保留为“{name}”，正在使用默认值",
+    "toast.state_recovered.many": "无法读取 {count} 个设置文件；已将它们保留在原文件旁边，正在使用默认值",
     "header.import": "导入 ROM",
     "header.sync_covers": "同步封面",
     "header.view_mode": "视图模式",

@@ -1072,7 +1072,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
 ## Data safety
 
-### RT-150 — An interrupted save never damages the file it was replacing
+### RT-160 — An interrupted save never damages the file it was replacing
 - **Area:** Data safety
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (works on a copy).
@@ -1102,12 +1102,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   leftovers = [p.name for p in scratch.iterdir() if p.name.endswith(".tmp")]
   assert leftovers == [], f"temporary files left behind: {leftovers}"
   assert ConfigManager(config_file=config_file).get_roms_path().name == "roms"
-  print("RT-150 OK")
+  print("RT-160 OK")
   EOF
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
-### RT-151 — A rescan never shows a half-written playlist
+### RT-161 — A rescan never shows a half-written playlist
 - **Area:** Data safety
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (works on a copy).
@@ -1156,12 +1156,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
   assert seen == [first], f"a reader saw a partial playlist: {seen}"
   assert playlist.read_text(encoding="utf-8") == "/roms/c.sfc\n"
-  print("RT-151 OK")
+  print("RT-161 OK")
   EOF
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
-### RT-152 — Two favorite toggles at once do not lose one of them
+### RT-162 — Two favorite toggles at once do not lose one of them
 - **Area:** Data safety
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
@@ -1170,6 +1170,87 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Every star is in the list. The favorites file is a read-modify-write, and two of
   them running at once used to drop one edit (issue #208).
 - **Check:** suite files `tests/test_atomic_write.py`, `tests/test_playlist_manager.py`.
+
+
+### RT-163 — An unreadable settings file is kept, not overwritten
+- **Area:** Data safety
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (works on a copy).
+- **Steps:** As a QA person: hand-edit `config.yaml` into invalid YAML, start the app, then look
+  in `~/.openemux/` for the file you broke.
+- **Expected:** The app comes up on defaults, and the broken file is still there as
+  `config.yaml.broken-<timestamp>` — it is not replaced by the defaults it fell back to (issue
+  #209). Same for a file that parses but is not a mapping.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from pathlib import Path
+  from openemux.core.config import ConfigManager
+
+  scratch = Path(os.environ["SCRATCH"]) / "rt153"
+  scratch.mkdir(parents=True, exist_ok=True)
+  for name, body in (("broken.yaml", "roms_path: [unclosed\n"), ("scalar.yaml", "just a string\n")):
+      target = scratch / name
+      target.write_text(body, encoding="utf-8")
+      ConfigManager(config_file=target)
+      kept = sorted(scratch.glob(f"{name}.broken-*"))
+      assert len(kept) == 1, f"{name} was not kept: {kept}"
+      assert kept[0].read_text(encoding="utf-8") == body, f"{name} was not kept intact"
+  print("RT-163 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-164 — A broken collections index does not orphan the collections
+- **Area:** Data safety
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (works on a copy).
+- **Steps:** As a QA person: break `playlists/collections/collections.yaml`, open the app, and
+  create a new collection.
+- **Expected:** The existing collections are still in the sidebar, with their games — the index is
+  rebuilt from the `<slug>.list` files that are still on disk, and only the display name is lost
+  (it falls back to the slug read as words). Creating a new one does not wipe the others.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from pathlib import Path
+  from openemux.core.collections import CollectionManager
+
+  scratch = Path(os.environ["SCRATCH"]) / "rt154"
+  scratch.mkdir(parents=True, exist_ok=True)
+  manager = CollectionManager(scratch)
+  manager.create("Best of SNES")
+  manager.add("best-of-snes", ["/roms/a.sfc"])
+  manager.index_path.write_text("collections: [oops\n", encoding="utf-8")
+
+  manager.create("Shooters")
+  slugs = sorted(entry["slug"] for entry in manager.list_collections())
+  assert slugs == ["best-of-snes", "shooters"], slugs
+  assert manager.paths("best-of-snes") == ["/roms/a.sfc"]
+  assert sorted(scratch.glob("collections.yaml.broken-*")), "the broken index was not kept"
+  print("RT-164 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-165 — The user is told when a settings file was set aside
+- **Area:** Data safety
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**. Back up the file first (`cp ~/.openemux/play_history.json
+  $SCRATCH/play_history.bak`).
+- **Steps:**
+  1. Truncate `~/.openemux/play_history.json` mid-object (e.g. `printf '{"a.sfc": {"last_played":
+     1,' > ~/.openemux/play_history.json`).
+  2. Launch the app and watch the bottom of the window for the first few seconds.
+- **Expected:** A toast reads *A settings file could not be read; it was kept as
+  "play_history.json.broken-<timestamp>" and defaults are in use*. The named file exists in
+  `~/.openemux/` and holds what was truncated.
+- **Check:** screenshot of the toast; `ls ~/.openemux/play_history.json.broken-*` lists exactly
+  one file.
+- **Restore:** `cp $SCRATCH/play_history.bak ~/.openemux/play_history.json && rm -f
+  ~/.openemux/play_history.json.broken-*` with the app closed.
 
 
 ## Retired
