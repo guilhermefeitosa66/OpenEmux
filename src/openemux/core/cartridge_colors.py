@@ -17,6 +17,7 @@ from pathlib import Path
 
 import yaml
 
+from openemux.core.atomic_write import atomic_write_text
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
 DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
@@ -163,8 +164,7 @@ class CartridgeColorStore:
             for key, color in ((settings or {}).get("rom_overrides") or {}).items()
             if key and normalize_color_id(color) != DEFAULT_COLOR_ID
         }
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
         # Our own writes are the one case the stamp cannot be trusted for: a
         # rewrite of the same length inside one filesystem clock tick.
         self._cache = (None, None)

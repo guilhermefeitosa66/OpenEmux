@@ -21,6 +21,8 @@ import logging
 import os
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -218,10 +220,7 @@ class CoreOptionsStore:
         return data if isinstance(data, dict) else {}
 
     def save(self, data):
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(
-            json.dumps(data, indent=2, sort_keys=True), encoding="utf-8"
-        )
+        atomic_write_text(self.config_file, json.dumps(data, indent=2, sort_keys=True))
         return data
 
     def get_for_console(self, console, core_filename):

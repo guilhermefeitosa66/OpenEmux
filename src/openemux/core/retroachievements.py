@@ -14,11 +14,12 @@ Widget-free, one test file: the repo's core-module convention.
 
 import json
 import logging
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+from openemux.core.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -121,14 +122,14 @@ class AchievementsStore:
         return data if isinstance(data, dict) else {}
 
     def save(self, data):
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(
-            json.dumps(data, indent=2, sort_keys=True), encoding="utf-8"
+        # Owner-only from the moment it exists: the temporary file the atomic
+        # write renames into place is created 0600 and never widened, so the
+        # token is never briefly world-readable.
+        atomic_write_text(
+            self.config_file,
+            json.dumps(data, indent=2, sort_keys=True),
+            mode=0o600,
         )
-        try:
-            os.chmod(self.config_file, 0o600)
-        except OSError as exc:  # pragma: no cover - filesystem dependent
-            logger.warning("retroachievements: cannot restrict the store: %s", exc)
         return data
 
     # -- account -----------------------------------------------------------

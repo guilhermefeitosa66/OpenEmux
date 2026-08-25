@@ -16,6 +16,8 @@ from pathlib import Path
 
 import yaml
 
+from openemux.core.atomic_write import atomic_write_lines, atomic_write_text
+
 logger = logging.getLogger(__name__)
 
 INDEX_FILENAME = "collections.yaml"
@@ -64,9 +66,11 @@ class CollectionManager:
         return result
 
     def _save_index(self, collections):
-        self.collections_dir.mkdir(parents=True, exist_ok=True)
         payload = {"version": 1, "collections": collections}
-        self.index_path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
+        atomic_write_text(
+            self.index_path,
+            yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
+        )
 
     # -- queries -----------------------------------------------------------
     def list_collections(self):
@@ -162,10 +166,7 @@ class CollectionManager:
             list_file.unlink()
 
     def _write_paths(self, slug, paths):
-        self.collections_dir.mkdir(parents=True, exist_ok=True)
-        with open(self._list_file(slug), "w", encoding="utf-8") as handle:
-            for path in paths:
-                handle.write(f"{path}\n")
+        atomic_write_lines(self._list_file(slug), paths)
 
     def add(self, slug, rom_paths):
         """Add ROM paths, skipping duplicates. Returns how many were new."""

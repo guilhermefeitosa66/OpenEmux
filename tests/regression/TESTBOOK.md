@@ -1070,6 +1070,108 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   toast counts match.
 - **Restore:** The throwaway copies taken in Preconditions.
 
+## Data safety
+
+### RT-150 — An interrupted save never damages the file it was replacing
+- **Area:** Data safety
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (works on a copy).
+- **Steps:** As a QA person: pull the power out halfway through a settings save, then start the
+  app again and check the settings are the ones from before the save, not defaults.
+- **Expected:** Every file the app persists is written whole or not at all (issue #208). A save
+  that dies mid-write leaves the previous file byte-for-byte intact and no `.tmp` litter behind.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from pathlib import Path
+  from unittest.mock import patch
+  from openemux.core.config import ConfigManager
+
+  scratch = Path(os.environ["SCRATCH"]) / "rt150"
+  scratch.mkdir(parents=True, exist_ok=True)
+  config_file = scratch / "config.yaml"
+  cm = ConfigManager(config_file=config_file)
+  cm.set_roms_path("/games/roms")
+  before = config_file.read_text(encoding="utf-8")
+
+  with patch("openemux.core.atomic_write.os.replace", side_effect=OSError("power loss")):
+      cm.set_roms_path("/games/elsewhere")
+
+  assert config_file.read_text(encoding="utf-8") == before, "config was damaged mid-write"
+  leftovers = [p.name for p in scratch.iterdir() if p.name.endswith(".tmp")]
+  assert leftovers == [], f"temporary files left behind: {leftovers}"
+  assert ConfigManager(config_file=config_file).get_roms_path().name == "roms"
+  print("RT-150 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-151 — A rescan never shows a half-written playlist
+- **Area:** Data safety
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (works on a copy).
+- **Steps:** As a QA person: start a rescan of a large console and browse that console while it
+  runs.
+- **Expected:** The playlist file swaps from the old list to the new one in one step. A reader
+  that opens it at the worst possible moment sees one complete list, never a truncated one.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from pathlib import Path
+  from unittest.mock import patch
+  from openemux.core.playlist_manager import PlaylistManager
+
+  scratch = Path(os.environ["SCRATCH"]) / "rt151"
+  scratch.mkdir(parents=True, exist_ok=True)
+
+  class Config:
+      def get_playlists_dir(self):
+          return scratch
+
+  class Scanner:
+      def __init__(self):
+          self.roms = [{"name": "A", "path": "/roms/a.sfc"}, {"name": "B", "path": "/roms/b.sfc"}]
+
+      def scan_console(self, console):
+          return self.roms
+
+  scanner = Scanner()
+  manager = PlaylistManager(Config(), scanner)
+  manager.scan_and_rebuild_playlist("SFC")
+  playlist = scratch / "SFC.list"
+  first = playlist.read_text(encoding="utf-8")
+
+  scanner.roms = [{"name": "C", "path": "/roms/c.sfc"}]
+  seen = []
+  real_replace = os.replace
+
+  def peek(src, dst):
+      seen.append(Path(dst).read_text(encoding="utf-8"))
+      return real_replace(src, dst)
+
+  with patch("openemux.core.atomic_write.os.replace", peek):
+      manager.scan_and_rebuild_playlist("SFC")
+
+  assert seen == [first], f"a reader saw a partial playlist: {seen}"
+  assert playlist.read_text(encoding="utf-8") == "/roms/c.sfc\n"
+  print("RT-151 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-152 — Two favorite toggles at once do not lose one of them
+- **Area:** Data safety
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: star several games in quick succession while a rescan is running,
+  then reopen "Favorites".
+- **Expected:** Every star is in the list. The favorites file is a read-modify-write, and two of
+  them running at once used to drop one edit (issue #208).
+- **Check:** suite files `tests/test_atomic_write.py`, `tests/test_playlist_manager.py`.
+
+
 ## Retired
 
 *None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*
