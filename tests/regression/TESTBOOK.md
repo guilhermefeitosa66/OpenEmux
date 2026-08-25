@@ -214,6 +214,32 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   automated form clicks console A, console B, console A again and compares the first and third
   screenshots pixel for pixel.
 
+### RT-025 — The grid answers real pointer and keyboard input
+- **Area:** Navigation
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
+  `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter, so this is
+  the only coverage the grid's gesture stack has.
+- **Steps:** As a QA person: Ctrl-click and Shift-click cards, drag a rubber band, clear by
+  clicking empty space, range with Shift+arrows, filter the page, leave and come back, open two
+  context menus in a row.
+- **Expected:** Every check passes at each library size — including that the band selects exactly
+  the cards it was drawn over, that a filtered-out card loses its selection, that focus returns to
+  the card that had it, and that only one context menu is ever open.
+- **Check:**
+  ```bash
+  Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
+  XPID=$!
+  sleep 4
+  fail=0
+  for n in 4 12 20; do
+    DISPLAY=:9 GDK_BACKEND=x11 HARNESS_CARDS=$n PYTHONPATH=src \
+      .venv/bin/python tools/selection_input_harness.py >/dev/null 2>&1 || fail=1
+  done
+  kill $XPID
+  [ $fail -eq 0 ] && echo "RT-025 OK — the grid harness passed at 4, 12 and 20 cards"
+  ```
+
 ### RT-021 — Search filters the current scope
 - **Area:** Navigation
 - **Mode:** AUTO-UI
