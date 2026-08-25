@@ -1037,6 +1037,8 @@ class RomGrid(Gtk.FlowBox):
         self._band = None
         self._band_origin = None
         self._band_base = ()
+        # Card rectangles, frozen for the length of a drag (issue #231).
+        self._band_bounds = []
         # One selection model shared by every input method (issue #78); the
         # key detects when the search filter changed the visible set.
         self._selection_model = SelectionModel(0)
@@ -1659,6 +1661,7 @@ class RomGrid(Gtk.FlowBox):
         ) else ()
         self._band_origin = self._to_grid_coords(start_x, start_y)
         self._band = None
+        self._snapshot_band_bounds()
         if not self._band_base:
             # A plain press on empty space clears -- which also makes a plain
             # *click* there clear the selection, the file-manager behavior.
@@ -1681,26 +1684,42 @@ class RomGrid(Gtk.FlowBox):
         self._band = None
         self._band_origin = None
         self._band_base = ()
+        self._band_bounds = []
         # The band bypassed the model; adopt its result so a Shift range or
         # Ctrl toggle right after behaves as if the band had used it.
         self._sync_model_from_view()
         self.queue_draw()
+
+    def _snapshot_band_bounds(self):
+        """Freeze every card's rectangle for the length of one drag.
+
+        Nothing relayouts while the pointer is down, so the bounds cannot
+        move -- and asking GTK for them per card on every drag-update was a
+        compute_bounds call per card per motion event (issue #231).
+        """
+        frozen = []
+        for item in self._items:
+            ok, bounds = item.compute_bounds(self)
+            if not ok:
+                continue
+            frozen.append(
+                (
+                    item,
+                    bounds.get_x(),
+                    bounds.get_y(),
+                    bounds.get_width(),
+                    bounds.get_height(),
+                )
+            )
+        self._band_bounds = frozen
 
     def _items_in_band(self):
         if self._band is None:
             return []
         bx, by, bw, bh = self._band
         hits = []
-        for item in self._items:
-            ok, bounds = item.compute_bounds(self)
-            if not ok:
-                continue
-            if (
-                bounds.get_x() < bx + bw
-                and bx < bounds.get_x() + bounds.get_width()
-                and bounds.get_y() < by + bh
-                and by < bounds.get_y() + bounds.get_height()
-            ):
+        for item, x, y, width, height in self._band_bounds:
+            if x < bx + bw and bx < x + width and y < by + bh and by < y + height:
                 hits.append(item)
         return hits
 

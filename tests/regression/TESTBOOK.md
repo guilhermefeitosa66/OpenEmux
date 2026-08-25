@@ -359,6 +359,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Cards show artwork, not the "missing artwork" placeholder.
 - **Check:** Screenshot; no placeholder tiles visible.
 
+### RT-053 — A cover sync reads each ROM once
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A console with large ROMs (a disc system) missing artwork, and ScreenScraper
+  credentials configured so both stages run.
+- **Steps:**
+  1. Start a cover sync for that console and watch disk activity (`iotop`, or the sync's own
+     progress against file sizes).
+- **Expected:** Each ROM is read once, not once per hashing stage. The name-index stage and the
+  ScreenScraper stage share the digests, and the box-art and label passes do not re-read
+  (issue #231).
+- **Check:** suite file `tests/test_hasher.py` (`test_both_digests_come_from_one_read`).
+
 ### RT-051 — The missing-artwork filter isolates gaps
 - **Area:** Covers
 - **Mode:** AUTO-UI
