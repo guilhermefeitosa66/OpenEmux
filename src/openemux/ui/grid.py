@@ -586,6 +586,8 @@ class RomItem(Gtk.Box):
         GLib.idle_add(self._restore_placeholder)
 
     def _restore_placeholder(self):
+        if self._is_abandoned():
+            return False
         self._set_placeholder()
         return False
 
@@ -597,13 +599,29 @@ class RomItem(Gtk.Box):
 
     def _sync_artwork_state(self):
         """Reflect the resolved artwork state (main thread only)."""
+        if self._is_abandoned():
+            return False
         self.artwork_badge.set_visible(self.has_artwork is False)
         if self.on_artwork_state:
             self.on_artwork_state(self)
         return False
 
+    def _is_abandoned(self):
+        """Has this card left the window while its cover was being fetched?
+
+        Switching playlist replaces the whole grid, and the covers already in
+        flight for the page just left keep finishing and keep scheduling main
+        thread work for cards nobody can see. A few quick switches between
+        large playlists queued hundreds of those, all competing with the page
+        actually on screen (issue #291). The decode itself is not wasted: it
+        lands in the shared cover cache, so coming back is faster.
+        """
+        return self.get_root() is None
+
     def _apply_cover_pixbuf(self, pixbuf, full_resolution):
         """Hand an already-decoded cover to the widget (main thread only)."""
+        if self._is_abandoned():
+            return False
         try:
             if full_resolution:
                 self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
