@@ -21,7 +21,14 @@ from openemux.core.library_view import (
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
 from openemux.core.systems import get_system_display_name
-from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
+from openemux.ui.context_menu import (
+    SEPARATOR,
+    Submenu,
+    build_context_popover,
+    dismiss_context_popover,
+    present_context_popover,
+    unparent_when_idle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -809,9 +816,6 @@ class RomItem(Gtk.Box):
             self.rom.get("path"),
         )
         self._ensure_action_group()
-        if self._context_popover is not None:
-            self._context_popover.popdown()
-            self._context_popover = None
 
         is_favorite = self.is_favorite(self.rom)
         entries = [
@@ -896,7 +900,9 @@ class RomItem(Gtk.Box):
             popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         popover.connect("closed", self._on_context_popover_closed)
         self._context_popover = popover
-        popover.popup()
+        # Through the shared owner, so the keyboard and gamepad paths cannot
+        # stack a second menu on top of one that is already up (issue #275).
+        present_context_popover(popover)
 
     def _on_context_popover_closed(self, popover):
         if self._context_popover is popover:
@@ -904,7 +910,7 @@ class RomItem(Gtk.Box):
         # The pointer may have left the card while the menu was up.
         if not self.has_css_class("rom-card-hover"):
             self.menu_button.set_visible(False)
-        GLib.idle_add(popover.unparent)
+        unparent_when_idle(popover)
 
     def _act_toggle_favorite(self, _action, _param):
         logger.info("rom context action: toggle_favorite rom=%s", self.rom.get("name"))
@@ -1148,6 +1154,10 @@ class RomGrid(Gtk.FlowBox):
         # them, which belongs to the scroller.
         self._band_scroller = None
         self.connect("map", self._watch_viewport)
+        # A page switch replaces the whole grid. A context menu still up is
+        # parented to a card that is about to be disposed, so close it while
+        # its anchor is still alive (issue #275).
+        self.connect("unroot", lambda *_a: dismiss_context_popover())
 
     # -- cartridge shells ----------------------------------------------------
 

@@ -175,6 +175,22 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** Screenshot shows the empty state; log gained no `Traceback`.
 - **Restore:** Press `Escape`.
 
+### RT-023 — Only one context menu is ever open
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** App running with at least two games in the current console.
+- **Steps:**
+  1. Right-click a game card to open its context menu.
+  2. Without dismissing it, move focus to another card with the arrow keys and press the `Menu`
+     key (or `Shift+F10`).
+  3. Click on empty grid space.
+  4. Right-click a card again, and while the menu is open switch console in the sidebar.
+- **Expected:** Step 2 replaces the first menu instead of stacking a second one. After step 3 no
+  menu is left on screen and no `(...)` button stays stuck visible. Step 4 closes the menu with
+  the page switch.
+- **Check:** `tests/test_context_menu.py` (the ownership rule and the guarded unparent); the UI
+  half is the human's, and the launch log must gain no `Gtk-CRITICAL`.
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
