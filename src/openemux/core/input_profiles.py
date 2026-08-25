@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.input_actions import (
     default_gamepad_bindings,
     default_keyboard_bindings,
@@ -387,7 +388,13 @@ class InputProfileManager:
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
+        except Exception as exc:
+            # _normalize_profile fills the defaults and save_profile writes
+            # them back: the console's whole custom binding set, replaced by
+            # a parse error nobody was told about (issue #209).
+            quarantine_state_file(path, exc)
             data = {}
 
         profile = self._normalize_profile(system_id, data)

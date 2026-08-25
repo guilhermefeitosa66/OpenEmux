@@ -255,6 +255,7 @@ class OpenEmuxApplication(Adw.Application):
         self.main_window = OpenEmuxWindow(application=self)
         self.main_window.present()
         self.main_window.maybe_show_welcome()
+        self.main_window.maybe_report_recovered_state()
 
     def request_bootstrap_retry_from_ui(self, parent_window):
         if self._bootstrap_running:

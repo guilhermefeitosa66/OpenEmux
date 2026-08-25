@@ -535,6 +535,8 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "初回セットアップが未完了です（手順: {step}）",
     "toast.path_invalid": "選択した ROM フォルダーが正しくありません",
     "toast.path_updated": "ROM フォルダーを更新しました: {path}",
+    "toast.state_recovered.one": "設定ファイルを読み込めませんでした。「{name}」として保存し、既定値を使用しています",
+    "toast.state_recovered.many": "{count} 個の設定ファイルを読み込めませんでした。元のファイルの隣に保存し、既定値を使用しています",
     "header.import": "ROM をインポート",
     "header.sync_covers": "カバーを同期",
     "header.view_mode": "表示モード",

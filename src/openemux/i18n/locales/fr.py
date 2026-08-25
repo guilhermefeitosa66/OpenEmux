@@ -535,6 +535,8 @@ TRANSLATIONS = {
     "toast.bootstrap.failed": "Configuration initiale incomplète (étape : {step})",
     "toast.path_invalid": "Dossier de ROMs sélectionné non valide",
     "toast.path_updated": "Dossier des ROMs mis à jour : {path}",
+    "toast.state_recovered.one": "Un fichier de configuration n'a pas pu être lu ; il a été conservé sous « {name} » et les valeurs par défaut sont utilisées",
+    "toast.state_recovered.many": "{count} fichiers de configuration n'ont pas pu être lus ; ils ont été conservés à côté des originaux et les valeurs par défaut sont utilisées",
     "header.import": "Importer des ROMs",
     "header.sync_covers": "Synchroniser les jaquettes",
     "header.view_mode": "Mode d’affichage",

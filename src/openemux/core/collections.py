@@ -17,10 +17,16 @@ from pathlib import Path
 import yaml
 
 from openemux.core.atomic_write import atomic_write_lines, atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
 
 INDEX_FILENAME = "collections.yaml"
+
+
+def _name_from_slug(slug):
+    """A readable name for a slug whose display name was lost."""
+    return " ".join(part.capitalize() for part in str(slug).split("-") if part) or str(slug)
 
 
 def slugify(name):
@@ -47,14 +53,33 @@ class CollectionManager:
 
     def _load_index(self):
         if not self.index_path.exists():
-            return []
+            # A missing index is the same loss as an unreadable one: the
+            # <slug>.list files are still there, and returning [] would let
+            # the next mutation write an index that orphans all of them.
+            return self._rebuild_index_from_list_files()
         try:
             raw = yaml.safe_load(self.index_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return []
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+            entries = raw.get("collections", []) or []
+        except Exception as exc:
+            # An empty list here was the worst answer available: every
+            # mutation is load -> mutate -> save, so creating one collection
+            # after a bad read wrote an index holding only that one and
+            # orphaned every existing <slug>.list for good. Keep the broken
+            # index and rebuild what the directory can still prove (#209).
+            quarantine_state_file(self.index_path, exc)
+            rebuilt = self._rebuild_index_from_list_files()
+            if rebuilt:
+                logger.warning(
+                    "collections index rebuilt from the list files: %s",
+                    ", ".join(entry["slug"] for entry in rebuilt),
+                )
+            return rebuilt
+
         result = []
         seen = set()
-        for entry in raw.get("collections", []) or []:
+        for entry in entries:
             if not isinstance(entry, dict):
                 continue
             slug = str(entry.get("slug") or "").strip()
@@ -64,6 +89,23 @@ class CollectionManager:
             seen.add(slug)
             result.append({"slug": slug, "name": name})
         return result
+
+    def _rebuild_index_from_list_files(self):
+        """The collections the ``<slug>.list`` files still on disk prove exist.
+
+        The display name is the one casualty -- only the index knew it -- so
+        the slug is turned back into something readable ("best-of-snes" ->
+        "Best Of Snes"). The user renames it; the games are all still there.
+        """
+        try:
+            list_files = sorted(self.collections_dir.glob("*.list"))
+        except OSError:
+            return []
+        return [
+            {"slug": list_file.stem, "name": _name_from_slug(list_file.stem)}
+            for list_file in list_files
+            if list_file.stem
+        ]
 
     def _save_index(self, collections):
         payload = {"version": 1, "collections": collections}
