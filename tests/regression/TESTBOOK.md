@@ -537,6 +537,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only; the launch's `runtime_*.cfg` must contain
   `input_toggle_fullscreen_btn = "nul"`.
 
+### RT-156 — The mouse cursor stays visible over the embedded game
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session, on a desktop whose screen lock can be
+  triggered (`loginctl lock-session`, or the shortcut the desktop provides).
+- **Steps:**
+  1. With the game embedded, move the pointer over the game area and note the cursor.
+  2. Lock the session, wait a few seconds, unlock it.
+  3. Move the pointer over the game area again.
+  4. Alt+Tab to another window and back, then move the pointer over the game area once more.
+- **Expected:** The cursor is visible over the game in step 1 and stays visible in steps 3 and 4.
+  It never has to be recovered by opening the RetroArch menu.
+- **Check:** human only; `tests/test_x11_embed.py` covers the two moments the wrapper redefines
+  the pointer (every adoption, and the focus-reclaim edge that an unlock produces).
+
 ### RT-151 — The menu icon opens the install that owns it
 - **Area:** Packaging
 - **Mode:** MANUAL
