@@ -126,6 +126,7 @@ TRANSLATIONS = {
     "game_window.load_state": "Spielstand laden",
     "game_window.menu": "RetroArch-Menü",
     "game_window.volume": "Lautstärke",
+    "game_window.volume.settling": "Aktuell bei {level}",
     "game_window.mute": "Stummschalten",
     "game_window.controller_settings": "Controller-Einstellungen",
     "game_window.starting": "{name} wird gestartet…",

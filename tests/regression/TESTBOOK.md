@@ -525,6 +525,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
   `tests/test_config_command_port.py`.
 
+### RT-158 — The volume control says where the game actually is
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session, with audible sound.
+- **Steps:**
+  1. Open the volume popover and drag the slider from the top to the bottom in one move.
+  2. Watch the line under the slider while the audio ramps.
+  3. Wait for it to disappear, then open RetroArch's own menu → "Audio" → "Volume".
+  4. Close the popover and reopen it.
+- **Expected:** While the audio is still ramping, the popover reports the level the game is
+  actually at; the line disappears when the two agree. RetroArch's own reading then matches the
+  slider within one 0.5 dB step, and reopening the popover does not make the slider jump
+  (issue #284).
+- **Check:** human only for the reading; suite files `tests/test_retroarch_command.py`
+  (a lost step is retried, and a walk that ends short leaves the tracker on what landed) and
+  `tests/test_runtime_manager.py` (mute does not flip on a datagram that never left).
+
 ### RT-150 — A game runs at the right speed, with sound
 <!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
 

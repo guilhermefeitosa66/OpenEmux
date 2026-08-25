@@ -128,6 +128,7 @@ TRANSLATIONS = {
     "game_window.load_state": "Load state",
     "game_window.menu": "RetroArch menu",
     "game_window.volume": "Volume",
+    "game_window.volume.settling": "Now at {level}",
     "game_window.mute": "Mute",
     "game_window.controller_settings": "Controller settings",
     "game_window.starting": "Starting {name}…",

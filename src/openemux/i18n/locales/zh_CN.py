@@ -126,6 +126,7 @@ TRANSLATIONS = {
     "game_window.load_state": "读取存档",
     "game_window.menu": "RetroArch 菜单",
     "game_window.volume": "音量",
+    "game_window.volume.settling": "当前 {level}",
     "game_window.mute": "静音",
     "game_window.controller_settings": "手柄设置",
     "game_window.starting": "正在启动 {name}…",
