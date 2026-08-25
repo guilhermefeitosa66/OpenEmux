@@ -15,6 +15,7 @@ Widget-free, one test file: the repo's core-module convention.
 import json
 import logging
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -34,6 +35,14 @@ CHEEVOS_HARDCORE_KEY = "cheevos_hardcore_mode_enable"
 
 class LoginError(Exception):
     """The account could not be signed in. Never carries the password."""
+
+
+def _payload_from_error(error):
+    """The JSON body of a failed response, or ``None`` if there is not one."""
+    try:
+        return json.loads(error.read().decode("utf-8"))
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 def login(username, password, opener=None):
@@ -61,6 +70,16 @@ def login(username, password, opener=None):
     try:
         with open_url(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:  # nosec B310
             payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # Wrong details come back as 401 with the reason in the body, and an
+        # HTTPError is also a response -- so read it rather than telling
+        # someone who mistyped their password that the service is down.
+        payload = _payload_from_error(exc)
+        if payload is None:
+            logger.warning(
+                "retroachievements: login for %s failed with HTTP %s", username, exc.code
+            )
+            raise LoginError("RetroAchievements could not be reached") from exc
     except (OSError, ValueError) as exc:
         # Deliberately not the request: it carries the password.
         logger.warning("retroachievements: login failed for %s: %s", username, type(exc).__name__)

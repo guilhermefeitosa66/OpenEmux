@@ -65,6 +65,46 @@ class LoginTests(unittest.TestCase):
                 "player", "hunter2", opener=_opener({"Success": True})
             )
 
+    def test_wrong_details_come_back_as_401_with_the_reason(self):
+        # Verified against the real service: it answers 401 with the reason in
+        # the body, and an HTTPError is also a response. Reading it is what
+        # keeps "you mistyped your password" from reading as "the service is
+        # down".
+        import urllib.error
+
+        def refuses(_request, timeout=None):
+            raise urllib.error.HTTPError(
+                retroachievements.LOGIN_URL,
+                401,
+                "Unauthorized",
+                {},
+                BytesIO(
+                    json.dumps(
+                        {
+                            "Success": False,
+                            "Code": "invalid_credentials",
+                            "Error": "Invalid user/password combination. Please try again.",
+                        }
+                    ).encode("utf-8")
+                ),
+            )
+
+        with self.assertRaises(LoginError) as caught:
+            retroachievements.login("player", "wrong", opener=refuses)
+        self.assertIn("Invalid user/password combination", str(caught.exception))
+
+    def test_an_error_page_that_is_not_json_falls_back(self):
+        import urllib.error
+
+        def broken(_request, timeout=None):
+            raise urllib.error.HTTPError(
+                retroachievements.LOGIN_URL, 502, "Bad Gateway", {}, BytesIO(b"<html>")
+            )
+
+        with self.assertRaises(LoginError) as caught:
+            retroachievements.login("player", "hunter2", opener=broken)
+        self.assertIn("could not be reached", str(caught.exception))
+
     def test_a_network_failure_says_so_without_the_password(self):
         def broken(_request, timeout=None):
             raise OSError("no route to host")
