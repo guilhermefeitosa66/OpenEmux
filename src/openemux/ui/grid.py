@@ -1,7 +1,7 @@
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
+from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, GObject, Graphene, Pango, Gio
 import logging
 
 from openemux.core import cartridge_render, cover_cache
@@ -1212,7 +1212,24 @@ class RomGrid(Gtk.FlowBox):
         if scroller is None:
             return
         self._hadjustment = scroller.get_hadjustment()
-        self._hadjustment.connect("notify::page-size", lambda *_a: self._retune_columns())
+        # The adjustment outlives the grid -- the page keeps its
+        # ScrolledWindow across re-renders -- and the handler closes over
+        # self, so leaving it connected kept every previous grid alive with
+        # all its cards and decoded textures, each still running the column
+        # maths on every resize (issue #218). Dropped the same way the band
+        # gesture is: the host owns the id, and the new grid replaces it.
+        previous = getattr(scroller, "_openemux_pagesize_handler", None)
+        if previous is not None and GObject.signal_handler_is_connected(
+            self._hadjustment, previous
+        ):
+            self._hadjustment.disconnect(previous)
+        handler = self._hadjustment.connect(
+            "notify::page-size", lambda *_a: self._retune_columns()
+        )
+        # Kept on the scroller, not on the adjustment: the scroller is the
+        # widget that survives the re-render, and PyGObject only guarantees
+        # a stable Python wrapper for something a reference is held to.
+        scroller._openemux_pagesize_handler = handler
         self._attach_band_gesture(scroller)
 
     def _attach_band_gesture(self, scroller):
