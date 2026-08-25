@@ -23,6 +23,7 @@ from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.core_options import CoreOptionsStore
+from openemux.core.retroachievements import AchievementsStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
@@ -320,6 +321,9 @@ class ConfigManager:
         # Per-console core options (issue #296), beside the per-console core
         # and shader choices they sit next to in the UI.
         self.core_options = CoreOptionsStore(DEFAULT_CONFIG_DIR / "core_options.config")
+        # The RetroAchievements account (issue #300). Its own file, owner-only:
+        # it holds a token, and config.yaml is not a credential store.
+        self.achievements = AchievementsStore(DEFAULT_CONFIG_DIR / "cheevos.config")
         self.config = self.load_config()
 
     def load_config(self):
