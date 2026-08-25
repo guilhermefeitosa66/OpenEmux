@@ -164,18 +164,57 @@ class PlaylistManager:
         return is_now_favorite
 
     def remove_missing_favorites(self):
+        """Drop the favorites whose ROM is really gone -- not merely unreachable.
+
+        A favorite is an absolute path, and a library kept on an external or
+        network drive has unreachable paths every single time the app opens
+        without that drive. Deleting them then is not a cleanup, it is data
+        loss the user cannot undo: the files were fine, the drive was not, and
+        this runs on every visit to the Favorites page (issue #210).
+
+        So a path only goes when the directory that would hold it is there and
+        the file is not -- the drive is mounted, the console folder is present,
+        and the ROM has genuinely been deleted from it. An unmounted tree is
+        left exactly as it is, and the favorites come back with the drive.
+        """
         playlist_path = self.get_favorites_playlist_path()
         with self._write_lock:
             if not playlist_path.exists():
                 return 0
             with open(playlist_path, "r", encoding="utf-8") as f:
                 original = [line.strip() for line in f if line.strip()]
-            valid = [path for path in original if Path(path).exists()]
-            removed = len(original) - len(valid)
+            kept = [path for path in original if not self._rom_is_deleted(path)]
+            removed = len(original) - len(kept)
+            unreachable = sum(
+                1 for path in kept if not Path(path).exists()
+            )
             if removed > 0:
-                atomic_write_lines(playlist_path, sorted(set(valid)))
+                atomic_write_lines(playlist_path, sorted(set(kept)))
                 self._drop_favorites_cache()
+        if removed or unreachable:
+            logger.info(
+                "favorites pruned: deleted=%d unreachable_kept=%d",
+                removed,
+                unreachable,
+            )
         return removed
+
+    def _rom_is_deleted(self, rom_path):
+        """True only when the ROM's own directory is there and the file is not.
+
+        The directory is the proof the storage is actually mounted. Without
+        it, "the file is not there" says nothing about whether the file still
+        exists -- only that we cannot see it right now.
+        """
+        path = Path(rom_path)
+        try:
+            if path.exists():
+                return False
+            return path.parent.is_dir()
+        except OSError:
+            # A drive that errors instead of answering is unreachable, not
+            # empty. Never prune on an I/O error.
+            return False
 
     def forget_rom(self, console, rom_path):
         """Drop a ROM from the console playlist and from the favorites.
