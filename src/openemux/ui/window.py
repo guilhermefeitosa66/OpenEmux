@@ -3430,6 +3430,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             on_progress=_on_progress,
             console_overrides=overrides,
             forced_console=forced_console,
+            mode=self.config_manager.get_import_mode(),
         )
 
     def _on_import_done_ui(self, task_id, summary):

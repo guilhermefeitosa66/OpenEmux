@@ -131,6 +131,20 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-015 — Importing as a link leaves the original where it is
+- **Area:** Library
+- **Mode:** MANUAL
+- **Preconditions:** A ROM outside the library folder, on a path you can check afterwards.
+- **Steps:**
+  1. Open "Settings" → "Library" and set "How ROMs are imported" to "Link to the original".
+  2. Import that ROM, then launch it from the library.
+  3. Inspect the library entry: `ls -l ~/games/roms/<CONSOLE>/`.
+  4. Delete the game from the library and check the original again.
+- **Expected:** The library entry is a symlink pointing at the original, the game launches, the
+  original is never copied or moved, and deleting the entry removes only the link (issue #298).
+- **Check:** suite file `tests/test_rom_importer.py`; `ls -l` shows the entry as `->` the source.
+- **Restore:** Set the mode back to "Copy the file"; the original was never touched.
+
 ### RT-013 — Rename carries save states, battery saves and artwork
 - **Area:** Library
 - **Mode:** AUTO-SUITE
