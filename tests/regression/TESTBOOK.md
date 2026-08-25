@@ -866,6 +866,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only.
 - **Restore:** Set the shader back.
 
+### RT-082 — A core setting reaches the core
+- **Area:** Shaders
+- **Mode:** MANUAL
+- **Preconditions:** PPSSPP installed and resolving for "PSP" (or Beetle PSX HW chosen for "PS"),
+  with a game for that console.
+- **Steps:**
+  1. Open "Settings" → "Cores" → "Advanced" and pick a higher "Internal resolution" for that
+     console.
+  2. Launch the game.
+  3. Read the newest `coreopts_*.cfg` in `~/.openemux/runtime/`.
+- **Expected:** The game renders at the higher resolution. The file names the option with the value
+  picked, and the runtime override next to it carries `core_options_path` pointing at that file.
+  Anything the user had configured for that core inside RetroArch is still in the file (issue #296).
+- **Check:** suite files `tests/test_core_options.py`, `tests/test_retroarch_launcher.py`; the
+  human confirms the picture.
+- **Restore:** Put the option back to its first value, which removes it from the store.
+
 ## BIOS
 
 ### RT-090 — The BIOS tab reports per-console status

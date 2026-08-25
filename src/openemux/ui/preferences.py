@@ -15,7 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
-from openemux.core import game_window_support, save_backup
+from openemux.core import core_options, game_window_support, save_backup
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -1483,7 +1483,73 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             row._core_filenames = filenames
             row.connect("notify::selected", self._on_core_changed, console_id)
             group.add(row)
+
+        # Settings the core itself understands, which do not travel in the
+        # config file the launch appends (issue #296). Only for the cores that
+        # have any, so this group is empty on most libraries.
+        self._core_options_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.core_options"),
+            description=self.t("prefs.group.core_options.description"),
+        )
+        page.add(self._core_options_group)
+        self._core_options_rows = []
+        self._refresh_core_options()
         return page
+
+    def _resolved_core_for(self, console_id):
+        """The core this console would launch with right now."""
+        override = self.config.get_console_core_override(console_id)
+        if override:
+            return override
+        cores = self.win.core_catalog.cores_for_console(console_id)
+        return cores[0].filename if cores else None
+
+    def _refresh_core_options(self):
+        """Rebuild the Advanced group for whichever cores are chosen now.
+
+        Rebuilt rather than built once: changing a console's core changes
+        which options it has, and a stale group would offer settings the new
+        core never heard of.
+        """
+        for row in self._core_options_rows:
+            self._core_options_group.remove(row)
+        self._core_options_rows = []
+
+        store = self.config.core_options
+        any_rows = False
+        for console_id in SYSTEM_IDS:
+            core_filename = self._resolved_core_for(console_id)
+            options = core_options.options_for_core(core_filename)
+            if not options:
+                continue
+            chosen = store.get_for_console(console_id, core_filename)
+            for option in options:
+                labels = [core_options.value_label(v) for v in option.values]
+                row = Adw.ComboRow(
+                    title=self.t(option.label_key),
+                    subtitle=f"{console_id} — {get_system_display_name(console_id)}",
+                )
+                row.add_prefix(self.win._build_console_icon(console_id))
+                row.set_model(Gtk.StringList.new(labels))
+                current = chosen.get(option.key, option.default)
+                row.set_selected(
+                    option.values.index(current) if current in option.values else 0
+                )
+                row._core_option = (console_id, core_filename, option)
+                row.connect("notify::selected", self._on_core_option_changed)
+                self._core_options_group.add(row)
+                self._core_options_rows.append(row)
+                any_rows = True
+        self._core_options_group.set_visible(any_rows)
+
+    def _on_core_option_changed(self, row, _param):
+        console_id, core_filename, option = row._core_option
+        idx = row.get_selected()
+        if not (0 <= idx < len(option.values)):
+            return
+        self.config.core_options.set_for_console(
+            console_id, core_filename, option.key, option.values[idx]
+        )
 
     def _on_core_changed(self, row, _param, console_id):
         filenames = getattr(row, "_core_filenames", [])
@@ -1494,6 +1560,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.set_console_core_override(console_id, chosen)
         if chosen:
             self.win._warn_missing_bios_for_core(console_id, chosen)
+        # The new core has its own options, or none at all.
+        self._refresh_core_options()
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):
