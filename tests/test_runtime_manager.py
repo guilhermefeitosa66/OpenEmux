@@ -307,8 +307,9 @@ class CommandDispatchTests(unittest.TestCase):
             manager, _config = _manager(tmp_dir)
             launched = {}
 
-            def _fake_launch(rom_path, console, state_slot=None):
+            def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None):
                 launched["args"] = (rom_path, console)
+                launched["port"] = network_cmd_port
                 return _FakeProcess(), None
 
             manager.retroarch_launcher.launch_process = _fake_launch
@@ -317,6 +318,8 @@ class CommandDispatchTests(unittest.TestCase):
             )
             self.assertTrue(success, error)
             self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
+            # The launch owns the port; RetroArch and the client must agree.
+            self.assertTrue(launched["port"] > 0)
 
     def test_relaunch_rom_refuses_without_a_rom(self):
         with TemporaryDirectory() as tmp_dir:
@@ -528,5 +531,33 @@ class HotApplyTests(unittest.TestCase):
             self.assertIsNone(manager.snapshot_active())
 
 
+class CommandPortTests(unittest.TestCase):
+    """Each launch owns its command port (issue #227)."""
+
+    def test_a_pinned_port_is_honoured(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 54321
+            self.assertEqual(manager._resolve_network_cmd_port(), 54321)
+
+    def test_zero_means_pick_a_free_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 0
+            port = manager._resolve_network_cmd_port()
+            self.assertGreater(port, 0)
+            self.assertNotEqual(port, 0)
+
+    def test_the_client_talks_to_the_port_the_launch_chose(self):
+        # Not to whatever the config says now: the running RetroArch was told
+        # one number, and the client has to keep using it.
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 0
+            manager._network_cmd_port = 51234
+            self.assertEqual(manager._command_client().port, 51234)
+
+
 if __name__ == "__main__":
     unittest.main()
+

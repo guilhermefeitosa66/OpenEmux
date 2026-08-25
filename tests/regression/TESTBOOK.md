@@ -508,6 +508,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only; the timestamp must be identical, and
   `grep -c "openemux" <config>` must not grow.
 
+### RT-157 — In-game controls reach our game and no other RetroArch
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A standalone RetroArch (any install) running with its network command
+  interface enabled on its default port 55355, playing something audible.
+- **Steps:**
+  1. With that instance running, launch a game from OpenEmux.
+  2. Open the volume popover and drag the slider; press pause and the save-state button.
+  3. Watch the *other* RetroArch.
+- **Expected:** Only the OpenEmux game reacts. The other instance's volume, pause state and save
+  states are untouched (issue #227).
+- **Check:** `grep network_cmd_port ~/.openemux/runtime/runtime_*.cfg` shows a port that is
+  neither 55355 nor the same across two launches;
+  `ss -ulnp | grep <that port>` lists exactly one process. Suite files
+  `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
+  `tests/test_config_command_port.py`.
+
 ### RT-150 — A game runs at the right speed, with sound
 <!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
 

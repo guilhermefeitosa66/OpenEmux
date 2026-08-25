@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from openemux.core.retroarch_command import (
+    DEFAULT_NETWORK_CMD_PORT,
     DEFAULT_VOLUME_DB,
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
@@ -12,6 +13,7 @@ from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
     clamp_volume_db,
+    pick_free_udp_port,
     volume_steps,
 )
 
@@ -138,6 +140,25 @@ class PacedDeliveryTests(unittest.TestCase):
             client.send_repeated("VOLUME_UP", 4)
         self.assertEqual(sleep.call_count, 0)
         client.close()
+
+
+class FreePortTests(unittest.TestCase):
+    """Each launch gets a port of its own (issue #227)."""
+
+    def test_the_picked_port_is_free_and_usable(self):
+        port = pick_free_udp_port()
+        self.assertGreater(port, 0)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.bind(("127.0.0.1", port))  # nothing else holds it
+
+    def test_successive_picks_do_not_collide(self):
+        ports = {pick_free_udp_port() for _ in range(5)}
+        self.assertNotIn(0, ports)
+
+    def test_a_failed_probe_falls_back_to_the_default(self):
+        # A broken channel still beats refusing to launch.
+        with patch("openemux.core.retroarch_command.socket.socket", side_effect=OSError("no")):
+            self.assertEqual(pick_free_udp_port(), DEFAULT_NETWORK_CMD_PORT)
 
 
 if __name__ == "__main__":

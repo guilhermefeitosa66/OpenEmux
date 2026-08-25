@@ -226,7 +226,7 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None):
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
         # Port 1 gets *both* device maps, not just the "active" one.
@@ -339,7 +339,12 @@ class RetroArchLauncher:
         # master volume seeds audio_volume so the level survives launches and
         # the live stepping starts from a known point.
         overrides["network_cmd_enable"] = '"true"'
-        overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
+        # The port is the caller's: it is picked per launch so a standalone
+        # RetroArch cannot share it with us (issue #227), and both sides of
+        # the channel have to agree on the same number.
+        if network_cmd_port is None:
+            network_cmd_port = self.config_manager.get_network_cmd_port()
+        overrides["network_cmd_port"] = f'"{int(network_cmd_port)}"'
         overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
 
         # Nothing this file injects may outlive the launch that asked for it.
@@ -449,7 +454,7 @@ class RetroArchLauncher:
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(override_path)
 
-    def launch_process(self, rom_path, console, state_slot=None):
+    def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
         system_id = resolve_system_id(console)
         launch_prefix, prefix_error = self._launch_prefix()
         if prefix_error:
@@ -488,6 +493,7 @@ class RetroArchLauncher:
             shader_path=shader_path,
             shader_enabled=bool(shader_path),
             state_slot=state_slot,
+            network_cmd_port=network_cmd_port,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
