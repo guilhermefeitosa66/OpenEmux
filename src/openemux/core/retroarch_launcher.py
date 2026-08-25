@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from openemux.core import game_window_support
+from openemux.core import core_options, game_window_support
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -448,11 +448,75 @@ class RetroArchLauncher:
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+
+        # Core options live in their own file, not in the config, so
+        # --appendconfig cannot carry them (issue #296). What it can carry is
+        # the path RetroArch reads them from.
+        options_path = self._write_core_options(
+            console, core_filename, runtime_dir, timestamp
+        )
+        if options_path:
+            overrides["core_options_path"] = f'"{options_path}"'
+
         override_path = runtime_dir / f"runtime_{resolve_system_id(console).lower()}_{timestamp}.cfg"
 
         lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(override_path)
+
+    def _write_core_options(self, console, core_filename, runtime_dir, timestamp):
+        """This launch's core-options file, or ``None`` when there is nothing to say.
+
+        Written only when the user actually chose something: pointing
+        RetroArch at our file replaces the one it would have read, and doing
+        that for a console nobody configured would quietly drop whatever they
+        set inside RetroArch itself. What they set there is carried over
+        anyway -- ours go on top of it, not instead of it.
+        """
+        store = getattr(self.config_manager, "core_options", None)
+        if store is None or not core_filename:
+            return None
+        chosen = store.get_for_console(resolve_system_id(console), core_filename)
+        if not chosen:
+            return None
+        inherited = self._inherited_core_options(core_filename)
+        path = runtime_dir / f"coreopts_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+        try:
+            path.write_text(
+                core_options.render_options_file(chosen, inherited), encoding="utf-8"
+            )
+        except OSError as exc:
+            logger.warning("core options: cannot write %s: %s", path, exc)
+            return None
+        logger.info(
+            "core options written: console=%s core=%s count=%d path=%s",
+            console, core_filename, len(chosen), path,
+        )
+        return str(path)
+
+    def _inherited_core_options(self, core_filename):
+        """What the user already configured for this core inside RetroArch.
+
+        RetroArch files those per core under ``config/<Core Name>/<Core
+        Name>.opt``, and the display name is its own lookup -- but every
+        option a core owns is prefixed with the core's own name, so the file
+        can be recognised by its contents instead.
+        """
+        prefix = core_options.option_prefix(core_filename)
+        if not prefix:
+            return {}
+        config_root = Path.home() / ".config" / "retroarch" / "config"
+        if not config_root.is_dir():
+            return {}
+        try:
+            candidates = sorted(config_root.glob("*/*.opt"))
+        except OSError:
+            return {}
+        for candidate in candidates:
+            values = core_options.read_options_file(candidate)
+            if any(key.startswith(prefix) for key in values):
+                return values
+        return {}
 
     def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
         system_id = resolve_system_id(console)

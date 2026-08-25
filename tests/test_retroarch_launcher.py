@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 from openemux.core import game_window_support
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
+from openemux.core.core_options import CoreOptionsStore
 from openemux.core.retroarch_launcher import RetroArchLauncher, x11_only_env
 
 
@@ -27,6 +28,9 @@ class _DummyConfig:
         # it explicitly.
         self.audio_driver = "inherit"
         self.game_window = False
+        # Per-console core options (issue #296); None means "no store", which
+        # is what every test that predates them expects.
+        self.core_options = None
 
     def get_retroarch_binary(self):
         return self.binary_path
@@ -686,6 +690,54 @@ class StoppingAGameTests(unittest.TestCase):
                 ],
             )
             proc.kill.assert_called_once_with()
+
+
+class CoreOptionsOverrideTests(unittest.TestCase):
+    """Core options travel in their own file, named by the override (#296)."""
+
+    def _launcher(self, base, chosen=None):
+        cfg = _DummyConfig(base, base / "retroarch", base / "mednafen_psx_hw_libretro.so")
+        if chosen is not None:
+            cfg.core_options = CoreOptionsStore(base / "core_options.config")
+            for key, value in chosen.items():
+                cfg.core_options.set_for_console("PS", "mednafen_psx_hw_libretro.so", key, value)
+        return RetroArchLauncher(base, cfg)
+
+    def test_nothing_chosen_writes_no_options_path(self):
+        # Naming our file replaces the one RetroArch would have read, so a
+        # console nobody configured must not get one.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            override = launcher._write_runtime_override(
+                "PS", core_filename="mednafen_psx_hw_libretro.so"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertFalse(any(line.startswith("core_options_path") for line in lines))
+
+    def test_a_choice_is_written_to_a_file_the_override_names(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base, {"beetle_psx_hw_internal_resolution": "4x"})
+            override = launcher._write_runtime_override(
+                "PS", core_filename="mednafen_psx_hw_libretro.so"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+            named = [l for l in lines if l.startswith("core_options_path")]
+            self.assertEqual(len(named), 1, lines)
+            options_path = named[0].split("=", 1)[1].strip().strip('"')
+            written = Path(options_path).read_text(encoding="utf-8")
+        self.assertIn('beetle_psx_hw_internal_resolution = "4x"', written)
+
+    def test_a_console_with_a_different_core_gets_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base, {"beetle_psx_hw_filter": "xBR"})
+            override = launcher._write_runtime_override(
+                "SFC", core_filename="snes9x_libretro.so"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertFalse(any(line.startswith("core_options_path") for line in lines))
 
 
 if __name__ == "__main__":
