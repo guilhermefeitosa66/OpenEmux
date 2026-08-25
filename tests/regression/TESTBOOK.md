@@ -300,6 +300,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ROM's path (`grep -c "<rom filename>" ~/.openemux/playlists/FAVORITES.list`).
 - **Restore:** Step 3 is the restore; verify the count is back to the initial value.
 
+### RT-043 — A favorite on an unreachable drive survives a toggle
+- **Area:** Favorites
+- **Mode:** AUTO-SUITE
+- **Preconditions:** `FAVORITES.list` contains at least one path on a removable or network drive
+  that is currently **not** mounted, plus one game that is present.
+- **Steps:**
+  1. Toggle the favorite state of the present game with `Ctrl+D`.
+  2. Read `~/.openemux/playlists/FAVORITES.list`.
+- **Expected:** The unreachable path is still in the file. A favorite whose drive is not mounted is
+  missing, not gone, and only the "Favorites" page's own cleanup may drop it (issue #217).
+- **Check:** suite file `tests/test_playlist_manager.py`
+  (`test_a_favorite_on_an_unmounted_drive_survives_a_toggle`).
+
 ### RT-041 — A collection lists its games
 - **Area:** Favorites
 - **Mode:** AUTO-UI

@@ -237,3 +237,93 @@ class ZippedRomPlaylistTests(unittest.TestCase):
                 [rom["name"] for rom in manager.load_playlist("GB")], ["Kirby's Dream Land 2"]
             )
             self.assertEqual(manager.list_favorite_paths(), {str(new)})
+
+
+class FavoriteLookupTests(unittest.TestCase):
+    """is_favorite is a per-card call, so it reads paths and nothing else (#217)."""
+
+    def _manager(self, base, favorites=()):
+        roms_dir = base / "roms"
+        (roms_dir / "FC").mkdir(parents=True, exist_ok=True)
+        playlists_dir = base / "playlists"
+        playlists_dir.mkdir(parents=True, exist_ok=True)
+        if favorites:
+            (playlists_dir / "FAVORITES.list").write_text(
+                "".join(f"{path}\n" for path in favorites), encoding="utf-8"
+            )
+        return PlaylistManager(_DummyConfig(playlists_dir, roms_dir), RomScanner(roms_dir))
+
+    def test_a_favorite_is_recognised(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            manager = self._manager(base, favorites=[rom])
+            rom.write_bytes(b"rom-data")
+            self.assertTrue(manager.is_favorite(rom))
+            self.assertFalse(manager.is_favorite(base / "roms" / "FC" / "Other.nes"))
+
+    def test_no_favorites_file_is_no_favorites(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            self.assertFalse(manager.is_favorite(base / "roms" / "FC" / "Mario.nes"))
+            self.assertEqual(manager.list_favorite_paths(), set())
+
+    def test_the_file_is_parsed_once_per_write_not_once_per_card(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            rom.write_bytes(b"rom-data")
+            manager = self._manager(base, favorites=[rom])
+
+            reads = []
+            real_open = open
+
+            def spy(file, *args, **kwargs):
+                if Path(file).name == "FAVORITES.list":
+                    reads.append(str(file))
+                return real_open(file, *args, **kwargs)
+
+            import builtins
+
+            builtins.open = spy
+            try:
+                for _ in range(50):  # a page of cards
+                    manager.is_favorite(rom)
+            finally:
+                builtins.open = real_open
+            self.assertEqual(len(reads), 1, reads)
+
+    def test_a_write_invalidates_the_parse(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            rom.write_bytes(b"rom-data")
+            manager = self._manager(base)
+            self.assertFalse(manager.is_favorite(rom))
+            manager.toggle_favorite({"path": str(rom)})
+            self.assertTrue(manager.is_favorite(rom))
+            manager.toggle_favorite({"path": str(rom)})
+            self.assertFalse(manager.is_favorite(rom))
+
+    def test_a_favorite_on_an_unmounted_drive_survives_a_toggle(self):
+        # Reading raw lines means an unreachable favorite is merely missing.
+        # Resolving them first meant every toggle rewrote the file without it.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            here = base / "roms" / "FC" / "Mario.nes"
+            away = Path("/mnt/external/roms/FC/Chrono Trigger.sfc")
+            manager = self._manager(base, favorites=[away])
+            here.write_bytes(b"rom-data")
+
+            manager.toggle_favorite({"path": str(here)})
+
+            self.assertEqual(
+                manager.list_favorite_paths(), {str(away), str(here)}
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

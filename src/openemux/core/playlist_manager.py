@@ -11,6 +11,11 @@ class PlaylistManager:
     def __init__(self, config_manager, scanner):
         self.config_manager = config_manager
         self.scanner = scanner
+        # The parsed favorites file, keyed on its (mtime_ns, size) -- the key
+        # shape the cover cache already uses. is_favorite() is asked once per
+        # card rendered, so the parse has to happen once per page, not once
+        # per card (issue #217).
+        self._favorites_cache = (None, frozenset())
 
     def get_playlist_path(self, console):
         system_id = resolve_system_id(console)
@@ -92,12 +97,51 @@ class PlaylistManager:
             lines = [line.strip() for line in f]
         return self.entries_for_paths(lines)
 
+    def _favorite_paths(self):
+        """The favorite paths as written, parsed at most once per file write.
+
+        Deliberately *not* entries_for_paths: resolving a favorite stats the
+        file and opens archives to read the inner name, and this is asked once
+        per card rendered. A 200-card page with 20 favorites re-read the file
+        200 times and re-resolved those 20 ROMs 200 times (issue #217).
+
+        Reading the raw lines also means a favorite whose drive is not mounted
+        is still a favorite: it is only missing, and only remove_missing_
+        favorites is allowed to decide it is gone.
+        """
+        playlist_path = self.get_favorites_playlist_path()
+        try:
+            stat = playlist_path.stat()
+        except OSError:
+            self._favorites_cache = (None, frozenset())
+            return self._favorites_cache[1]
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        cached_stamp, cached = self._favorites_cache
+        if cached_stamp == stamp:
+            return cached
+        with open(playlist_path, "r", encoding="utf-8") as f:
+            paths = frozenset(
+                str(Path(line.strip())) for line in f if line.strip()
+            )
+        self._favorites_cache = (stamp, paths)
+        return paths
+
+    def _drop_favorites_cache(self):
+        """Forget the parse after writing the file.
+
+        The (mtime, size) key would catch it on its own, but a coarse-grained
+        filesystem clock and a rewrite of the same length could land inside
+        one tick, and our own writes are the one case we can be exact about.
+        """
+        self._favorites_cache = (None, frozenset())
+
     def list_favorite_paths(self):
-        return {entry["path"] for entry in self.load_favorites_playlist()}
+        """A mutable copy of the favorite paths."""
+        return set(self._favorite_paths())
 
     def is_favorite(self, rom_path):
-        rom_path = str(Path(rom_path))
-        return rom_path in self.list_favorite_paths()
+        # No copy: this is the per-card call.
+        return str(Path(rom_path)) in self._favorite_paths()
 
     def toggle_favorite(self, rom):
         rom_path = str(Path(rom["path"]))
@@ -113,6 +157,7 @@ class PlaylistManager:
         with open(playlist_path, "w", encoding="utf-8") as f:
             for path in sorted(current):
                 f.write(f"{path}\n")
+        self._drop_favorites_cache()
         return is_now_favorite
 
     def remove_missing_favorites(self):
@@ -127,6 +172,7 @@ class PlaylistManager:
             with open(playlist_path, "w", encoding="utf-8") as f:
                 for path in sorted(set(valid)):
                     f.write(f"{path}\n")
+            self._drop_favorites_cache()
         return removed
 
     def forget_rom(self, console, rom_path):
@@ -164,6 +210,7 @@ class PlaylistManager:
             with open(playlist_path, "w", encoding="utf-8") as f:
                 for line in updated:
                     f.write(f"{line}\n")
+            self._drop_favorites_cache()
             changed += 1
         logger.info(
             "playlist reindex: console=%s old=%s new=%s files=%d",
