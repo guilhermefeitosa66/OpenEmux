@@ -126,6 +126,7 @@ TRANSLATIONS = {
     "game_window.load_state": "Charger l’état",
     "game_window.menu": "Menu RetroArch",
     "game_window.volume": "Volume",
+    "game_window.volume.settling": "Actuellement à {level}",
     "game_window.mute": "Couper le son",
     "game_window.controller_settings": "Paramètres de la manette",
     "game_window.starting": "Démarrage de {name}…",

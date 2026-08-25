@@ -126,6 +126,7 @@ TRANSLATIONS = {
     "game_window.load_state": "ステートをロード",
     "game_window.menu": "RetroArch メニュー",
     "game_window.volume": "音量",
+    "game_window.volume.settling": "現在 {level}",
     "game_window.mute": "ミュート",
     "game_window.controller_settings": "コントローラー設定",
     "game_window.starting": "{name} を起動中…",

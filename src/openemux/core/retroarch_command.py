@@ -237,6 +237,13 @@ class VolumePacer:
         if worker is not None:
             worker.join(timeout)
 
+    @property
+    def settling(self):
+        """Is the real level still walking toward the requested one?"""
+        with self._lock:
+            command, _count = volume_steps(self._level, self._target)
+            return command is not None
+
     def _run(self):
         while True:
             with self._lock:
@@ -247,12 +254,19 @@ class VolumePacer:
                 step = VOLUME_STEP_DB if command == "VOLUME_UP" else -VOLUME_STEP_DB
 
             if not self._client.send(command):
-                # The datagram never left. Stop rather than spin: the tracker
-                # stays at what actually landed, so the next drag walks from
-                # the truth instead of compounding the error.
-                with self._lock:
-                    self._worker = None
-                return
+                # One retry: a socket that broke under us is rebuilt by the
+                # client on the next send, and a single lost step used to
+                # abandon the whole walk -- leaving the level stuck halfway
+                # while the slider read the target (issue #284).
+                self._sleep(self._interval)
+                if not self._client.send(command):
+                    # Still nothing. Stop rather than spin: the tracker stays
+                    # at what actually landed, so the next drag walks from the
+                    # truth instead of compounding the error, and the UI
+                    # reconciles to it when the walk ends.
+                    with self._lock:
+                        self._worker = None
+                    return
 
             with self._lock:
                 self._level = clamp_volume_db(self._level + step)

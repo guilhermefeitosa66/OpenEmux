@@ -142,6 +142,49 @@ class PacedDeliveryTests(unittest.TestCase):
         client.close()
 
 
+class SettlingWalkTests(unittest.TestCase):
+    """A step that never left must not abandon the walk (issue #284)."""
+
+    class _Client:
+        def __init__(self, failures=()):
+            self.sent = []
+            self._failures = list(failures)
+
+        def send(self, command):
+            self.sent.append(command)
+            if self._failures and self._failures.pop(0):
+                return False
+            return True
+
+    def _pacer(self, client, level=0.0):
+        return VolumePacer(client, level=level, sleep=lambda _s: None, interval=0)
+
+    def test_a_lost_step_is_retried_and_the_walk_continues(self):
+        client = self._Client(failures=[False, True, False, False])
+        pacer = self._pacer(client)
+        pacer.set_target(-2.0)
+        pacer.join(2)
+        # 4 steps of 0.5 dB, plus the one retry of the step that failed.
+        self.assertEqual(len(client.sent), 5)
+        self.assertAlmostEqual(pacer.level, -2.0)
+
+    def test_a_step_that_fails_twice_stops_the_walk_where_it_landed(self):
+        client = self._Client(failures=[False, True, True])
+        pacer = self._pacer(client)
+        pacer.set_target(-5.0)
+        pacer.join(2)
+        self.assertAlmostEqual(pacer.level, -0.5)
+        # The tracker holds what actually landed, so the UI can reconcile.
+        self.assertTrue(pacer.settling)
+
+    def test_settling_is_false_once_the_level_reaches_the_target(self):
+        pacer = self._pacer(self._Client())
+        self.assertFalse(pacer.settling)
+        pacer.set_target(-3.0)
+        pacer.join(2)
+        self.assertFalse(pacer.settling)
+
+
 class FreePortTests(unittest.TestCase):
     """Each launch gets a port of its own (issue #227)."""
 

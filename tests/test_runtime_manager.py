@@ -531,6 +531,38 @@ class HotApplyTests(unittest.TestCase):
             self.assertIsNone(manager.snapshot_active())
 
 
+class MuteAndSettlingTests(unittest.TestCase):
+    """The write-only half of the audio controls (issue #284)."""
+
+    def test_a_mute_that_never_left_does_not_flip_the_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+
+            dead = _FakeClient(fail_after=0)
+            manager._command_client_cache = dead
+            attempts = []
+            dead.send = lambda command: (attempts.append(command), False)[1]
+
+            self.assertFalse(manager.toggle_mute())
+            # Tried twice before believing it: a send only reports failure
+            # when the datagram never left, so a retry cannot toggle twice.
+            self.assertEqual(attempts, ["MUTE", "MUTE"])
+
+    def test_a_mute_that_landed_flips_the_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+            manager._command_client_cache = _FakeClient()
+            self.assertTrue(manager.toggle_mute())
+            self.assertFalse(manager.toggle_mute())
+
+    def test_settling_is_false_without_a_pacer(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            self.assertFalse(manager.volume_settling)
+
+
 class CommandPortTests(unittest.TestCase):
     """Each launch owns its command port (issue #227)."""
 

@@ -58,6 +58,11 @@ def display_supports_embedding():
 TICK_INTERVAL_MS = 200
 FIND_WINDOW_TIMEOUT_TICKS = 100
 
+#: How often the volume popover re-reads the level the game has reached
+#: while a walk is still in flight (issue #284). Fast enough to read as
+#: movement, slow enough to cost nothing next to a 75 ms packet cadence.
+VOLUME_WATCH_INTERVAL_MS = 150
+
 #: Ignore repeats of the grabbed fullscreen hotkey inside this window --
 #: X auto-repeat turns a held key into a stream of presses.
 FULLSCREEN_DEBOUNCE_US = 400_000
@@ -294,13 +299,28 @@ class GameWindow(Adw.Window):
         self._auto_muted = False
         self._mute_button.connect("toggled", self._on_mute_toggled)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        # RetroArch has no absolute set-volume command, so a drag becomes a
+        # walk of 0.5 dB steps -- seconds of them, for a long one. This says
+        # where the game actually is while that happens, instead of leaving
+        # the slider showing a level it has not reached (issue #284).
+        self._volume_status = Gtk.Label()
+        self._volume_status.add_css_class("dim-label")
+        self._volume_status.add_css_class("caption")
+        self._volume_status.set_halign(Gtk.Align.END)
+        self._volume_status.set_visible(False)
+        self._volume_watch_id = None
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.append(self._mute_button)
+        row.append(self._volume_scale)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.set_margin_top(8)
         box.set_margin_bottom(8)
         box.set_margin_start(10)
         box.set_margin_end(10)
-        box.append(self._mute_button)
-        box.append(self._volume_scale)
+        box.append(row)
+        box.append(self._volume_status)
 
         popover = Gtk.Popover()
         popover.set_child(box)
@@ -360,6 +380,7 @@ class GameWindow(Adw.Window):
                 scale.set_value(0.0)
                 return
             level = self._runtime.set_master_volume_db(value)
+            self._watch_volume_walk()
             # The slider floor (-40 dB) is quiet but not silent; reaching
             # it should read as "off", so the control mutes there and
             # releases that mute -- only its own -- on the way back up.
@@ -394,6 +415,40 @@ class GameWindow(Adw.Window):
         if not muted:
             self._on_volume_changed(self._volume_scale)
 
+    def _volume_reading(self, level):
+        """The same format the slider's own value uses."""
+        return f"{10 ** (level / 20) * 100:.0f}%  {level:+.1f} dB"
+
+    def _watch_volume_walk(self):
+        """Report the real level until it catches up with the slider."""
+        if self._volume_watch_id is not None:
+            return
+        self._volume_watch_id = GLib.timeout_add(
+            VOLUME_WATCH_INTERVAL_MS, self._on_volume_walk_tick
+        )
+
+    def _on_volume_walk_tick(self):
+        if self._closing:
+            self._volume_watch_id = None
+            return False
+        if self._runtime.volume_settling:
+            self._volume_status.set_text(
+                self._t("game_window.volume.settling").format(
+                    level=self._volume_reading(self._runtime.volume_db)
+                )
+            )
+            self._volume_status.set_visible(True)
+            return True
+        # Settled. Normally the two already agree; they do not when a step
+        # never left the socket, and that is the moment to say so rather
+        # than snapping the slider on some later popover open.
+        self._volume_status.set_visible(False)
+        self._volume_seed_guard = True
+        self._volume_scale.set_value(self._runtime.volume_db)
+        self._volume_seed_guard = False
+        self._volume_watch_id = None
+        return False
+
     def _on_volume_popover_shown(self, _popover):
         # Re-seed on open: the level and mute may have moved through the
         # library's own control or a RetroArch hotkey since the last look.
@@ -403,6 +458,10 @@ class GameWindow(Adw.Window):
         self._mute_guard = True
         self._mute_button.set_active(self._runtime.muted)
         self._mute_guard = False
+        if self._runtime.volume_settling:
+            self._watch_volume_walk()
+        else:
+            self._volume_status.set_visible(False)
 
     def _on_input_settings_clicked(self, _button):
         if self._on_open_input_settings is not None:
@@ -644,6 +703,9 @@ class GameWindow(Adw.Window):
         if self._tick_id is not None:
             GLib.source_remove(self._tick_id)
             self._tick_id = None
+        if self._volume_watch_id is not None:
+            GLib.source_remove(self._volume_watch_id)
+            self._volume_watch_id = None
         if self._child_xid is not None:
             # Detached before our X window dies with the GTK window: X
             # destroys children with their parent, and RetroArch aborts on

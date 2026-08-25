@@ -73,6 +73,18 @@ class RuntimeManager:
     # arrive and the tracker has to come from the pacer rather than being
     # optimistically set to the target (issue #125).
     @property
+    def volume_settling(self):
+        """Is the emulator's real level still walking toward the last target?
+
+        RetroArch has no absolute set-volume command, so a drag becomes a
+        walk of 0.5 dB steps paced at one per command-poll -- seconds, for a
+        long drag. The UI asks this so it can say the level is still moving
+        instead of showing a number the game has not reached (issue #284).
+        """
+        pacer = self._pacer
+        return bool(pacer is not None and pacer.settling)
+
+    @property
     def volume_db(self):
         if self._pacer is not None:
             return self._pacer.level
@@ -265,9 +277,18 @@ class RuntimeManager:
         return True
 
     def toggle_mute(self):
-        """Toggle RetroArch's mute; returns the new (locally tracked) state."""
-        if self.send_command("MUTE"):
-            self.muted = not self.muted
+        """Toggle RetroArch's mute; returns the new (locally tracked) state.
+
+        Write-only: the vendored RetroArch answers ``GET_CONFIG_PARAM
+        audio_mute_enable`` with "unsupported", so nothing can correct this
+        tracker afterwards and a single dropped packet would leave the button
+        inverted for the rest of the session. One retry -- a send only reports
+        failure when the datagram never left, so re-sending cannot toggle
+        twice (issue #284).
+        """
+        if not self.send_command("MUTE") and not self.send_command("MUTE"):
+            return self.muted
+        self.muted = not self.muted
         return self.muted
 
     # -- live input apply (issue #129) -------------------------------------
