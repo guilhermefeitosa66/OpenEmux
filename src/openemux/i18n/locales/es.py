@@ -203,6 +203,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "No se pudo guardar el estado del juego: los cambios se aplicarán la próxima vez que se inicie.",
     "toast.finished": "{name} finalizado (código {code})",
     "toast.input_saved": "Asignación de controles guardada para {console}",
+    "toast.input_released": "{binding} liberado de {actions}",
     "toast.input_reset": "Asignación de controles restablecida para {console}",
     "toast.shaders.defaults_restored": "Shaders restablecidos a los valores por defecto",
     "settings.title": "Configuración",

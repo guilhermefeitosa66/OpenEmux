@@ -203,6 +203,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "无法保存游戏状态——更改将在下次启动时生效。",
     "toast.finished": "{name} 已结束（代码 {code}）",
     "toast.input_saved": "已保存 {console} 的按键映射",
+    "toast.input_released": "已从 {actions} 释放 {binding}",
     "toast.input_reset": "已重置 {console} 的按键映射",
     "toast.shaders.defaults_restored": "着色器已恢复默认",
     "settings.title": "设置",

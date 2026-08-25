@@ -205,6 +205,7 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Couldn't snapshot the game — changes apply the next time it starts.",
     "toast.finished": "{name} finished (code {code})",
     "toast.input_saved": "Input mapping saved for {console}",
+    "toast.input_released": "{binding} released from {actions}",
     "toast.input_reset": "Input mapping reset for {console}",
     "toast.shaders.defaults_restored": "Shader defaults restored",
     "settings.title": "Settings",
