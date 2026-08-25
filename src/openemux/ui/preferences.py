@@ -13,9 +13,17 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
+from threading import Thread
+
 from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
-from openemux.core import core_options, game_window_support, rom_importer, save_backup
+from openemux.core import (
+    core_options,
+    game_window_support,
+    retroachievements,
+    rom_importer,
+    save_backup,
+)
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -1692,6 +1700,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         saves_group.add(import_row)
         page.add(saves_group)
 
+        self._achievements_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.achievements"),
+            description=self.t("prefs.group.achievements.description"),
+        )
+        page.add(self._achievements_group)
+        self._achievements_rows = []
+        self._refresh_achievements()
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1723,6 +1739,109 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    # ----- RetroAchievements (issue #300) ---------------------------------
+    def _refresh_achievements(self):
+        """Rebuild the group for whichever state the account is in.
+
+        Signed out it asks for one; signed in it says who, and offers the two
+        switches that only mean anything with an account.
+        """
+        for row in self._achievements_rows:
+            self._achievements_group.remove(row)
+        self._achievements_rows = []
+        store = self.config.achievements
+
+        def add(row):
+            self._achievements_group.add(row)
+            self._achievements_rows.append(row)
+
+        if store.is_signed_in():
+            account = Adw.ActionRow(
+                title=self.t("settings.achievements.signed_in", user=store.get_username()),
+            )
+            sign_out = Gtk.Button(label=self.t("settings.achievements.signout"))
+            sign_out.set_valign(Gtk.Align.CENTER)
+            sign_out.add_css_class("flat")
+            sign_out.connect("clicked", self._on_achievements_sign_out)
+            account.add_suffix(sign_out)
+            add(account)
+
+            enable = Adw.SwitchRow(
+                title=self.t("settings.achievements.enable.title"),
+                subtitle=self.t("settings.achievements.enable.subtitle"),
+            )
+            enable.set_active(store.get_enabled())
+            enable.connect(
+                "notify::active", lambda row, *_a: store.set_enabled(row.get_active())
+            )
+            add(enable)
+
+            hardcore = Adw.SwitchRow(
+                title=self.t("settings.achievements.hardcore.title"),
+                subtitle=self.t("settings.achievements.hardcore.subtitle"),
+            )
+            hardcore.set_active(store.get_hardcore())
+            hardcore.connect(
+                "notify::active", lambda row, *_a: store.set_hardcore(row.get_active())
+            )
+            add(hardcore)
+            return
+
+        self._cheevos_user_row = Adw.EntryRow(
+            title=self.t("settings.achievements.username")
+        )
+        self._cheevos_user_row.set_text(store.get_username())
+        add(self._cheevos_user_row)
+
+        self._cheevos_password_row = Adw.PasswordEntryRow(
+            title=self.t("settings.achievements.password")
+        )
+        add(self._cheevos_password_row)
+
+        sign_in_row = Adw.ActionRow(title=self.t("settings.achievements.signed_out"))
+        self._cheevos_sign_in = Gtk.Button(label=self.t("settings.achievements.signin"))
+        self._cheevos_sign_in.set_valign(Gtk.Align.CENTER)
+        self._cheevos_sign_in.add_css_class("suggested-action")
+        self._cheevos_sign_in.connect("clicked", self._on_achievements_sign_in)
+        sign_in_row.add_suffix(self._cheevos_sign_in)
+        add(sign_in_row)
+
+    def _on_achievements_sign_in(self, _button):
+        username = self._cheevos_user_row.get_text().strip()
+        password = self._cheevos_password_row.get_text()
+        self._cheevos_sign_in.set_sensitive(False)
+
+        def _worker():
+            try:
+                token = retroachievements.login(username, password)
+            except retroachievements.LoginError as exc:
+                GLib.idle_add(self._on_achievements_login_failed, str(exc))
+                return
+            GLib.idle_add(self._on_achievements_login_ok, username, token)
+
+        Thread(target=_worker, daemon=True).start()
+
+    def _on_achievements_login_ok(self, username, token):
+        self.config.achievements.set_account(username, token)
+        # Asking to sign in is asking for achievements; the switch is there to
+        # turn them off again, not a second thing to remember.
+        self.config.achievements.set_enabled(True)
+        self._refresh_achievements()
+        self._toast(self.t("toast.achievements.signed_in", user=username))
+        return False
+
+    def _on_achievements_login_failed(self, message):
+        self._cheevos_sign_in.set_sensitive(True)
+        # The password entry is left alone: retyping it after a typo in the
+        # username is the annoying half.
+        self._toast(self.t("toast.achievements.failed", error=message), timeout=5)
+        return False
+
+    def _on_achievements_sign_out(self, _button):
+        self.config.achievements.sign_out()
+        self._refresh_achievements()
+        self._toast(self.t("toast.achievements.signed_out"))
 
     # ----- saves backup (issue #293) --------------------------------------
     def _saves_filter(self):

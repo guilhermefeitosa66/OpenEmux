@@ -623,6 +623,22 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   (a lost step is retried, and a walk that ends short leaves the tracker on what landed) and
   `tests/test_runtime_manager.py` (mute does not flip on a datagram that never left).
 
+### RT-159 — Achievements unlock while you play
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A RetroAchievements account, and a game that has achievements.
+- **Steps:**
+  1. Open "Settings" → "System" → "RetroAchievements", sign in, and confirm the group now says
+     "Signed in as …".
+  2. Launch the game and play until an achievement would unlock.
+  3. Read the newest `runtime_*.cfg` in `~/.openemux/runtime/` and `~/.openemux/cheevos.config`.
+- **Expected:** RetroArch shows the login and the unlock on screen. The override carries
+  `cheevos_enable`, `cheevos_username` and `cheevos_token`, and `cheevos_password = ""`. The stored
+  file holds the username and a token and **no password**, and is `-rw-------` (issue #300).
+- **Check:** human only for the unlock; suite file `tests/test_retroachievements.py` covers the
+  login exchange and what reaches the override. `stat -c %a ~/.openemux/cheevos.config` is `600`.
+- **Restore:** "Sign out" in the same group.
+
 ### RT-150 — A game runs at the right speed, with sound
 <!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
 

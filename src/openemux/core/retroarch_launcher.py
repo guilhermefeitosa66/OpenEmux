@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from openemux.core import core_options, game_window_support
+from openemux.core import core_options, game_window_support, retroachievements
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -444,6 +444,14 @@ class RetroArchLauncher:
             # wrapper the input profile's own binding is written above.)
             overrides["video_window_show_decorations"] = '"true"'
             overrides["pause_nonactive"] = '"true"'
+
+        # RetroAchievements does its own work inside RetroArch; what it needs
+        # from us is the account (issue #300).
+        overrides.update(
+            retroachievements.runtime_overrides(
+                getattr(self.config_manager, "achievements", None)
+            )
+        )
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
