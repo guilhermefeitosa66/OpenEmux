@@ -199,6 +199,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   matches the console.
 - **Check:** One screenshot per console; header title matches the clicked row.
 
+### RT-024 — Coming back to a page keeps it as it was
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, at least two consoles with more games than fit on screen.
+- **Steps:**
+  1. Open a console and scroll halfway down its grid.
+  2. Switch to another console, then switch back.
+  3. Type a search query, clear it, and switch away and back once more.
+- **Expected:** The page comes back where it was left, scroll position included, without visibly
+  rebuilding (issue #230). No card is missing, and nothing is left hidden by a filter that is no
+  longer active.
+- **Check:** Screenshot the page before leaving and after returning; the two must match. The
+  automated form clicks console A, console B, console A again and compares the first and third
+  screenshots pixel for pixel.
+
 ### RT-021 — Search filters the current scope
 - **Area:** Navigation
 - **Mode:** AUTO-UI
