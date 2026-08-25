@@ -17,7 +17,7 @@ def _rom(roms_dir, console="GB", name="Kirby", suffix=".gb"):
     path = Path(roms_dir) / console / f"{name}{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"rom")
-    return {"name": name, "path": str(path), "console": console, "rom_id": None}
+    return {"name": name, "path": str(path), "console": console}
 
 
 def _art(roms_dir, console, name, kind=COVER_ART, ext="png"):
@@ -112,7 +112,7 @@ class RenameRomTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zf:
                 zf.writestr("Kirby.gb", b"rom data")
                 zf.writestr("readme.txt", b"notes")
-            rom = {"name": "Kirby", "path": str(archive), "console": "GB", "rom_id": None}
+            rom = {"name": "Kirby", "path": str(archive), "console": "GB"}
 
             renamed = rename_rom(roms_dir, rom, "Kirby 2")
 
@@ -200,7 +200,7 @@ class RenameRomTests(unittest.TestCase):
                 zf.writestr("Two.gb", b"b")
             # The card shows the inner entry's name; art is keyed on it.
             _art(roms_dir, "GB", "One", COVER_ART, "png")
-            rom = {"name": "One", "path": str(archive), "console": "GB", "rom_id": None}
+            rom = {"name": "One", "path": str(archive), "console": "GB"}
 
             renamed = rename_rom(roms_dir, rom, "Best Pack")
 

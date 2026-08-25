@@ -140,6 +140,52 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** States, battery saves and artwork follow the new name (issue #134).
 - **Check:** suite files `tests/test_save_states.py`, `tests/test_rom_importer.py`.
 
+### RT-014 — Loading a playlist never reads the ROM files
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** The library has been scanned at least once on this machine.
+- **Steps:** As a QA person: open a console with large ROMs (a disc system) and watch for a
+  freeze while the page builds.
+- **Expected:** The page appears without the app reading gigabytes off the disk first. Loading a
+  playlist resolves names and nothing else — no ROM file is opened (issue #216).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import builtins, tempfile, pathlib
+  from openemux.core.playlist_manager import PlaylistManager
+
+  tmp = pathlib.Path(tempfile.mkdtemp())
+  roms = tmp / "roms" / "FC"
+  roms.mkdir(parents=True)
+  rom = roms / "Game.nes"
+  rom.write_bytes(b"x" * 1024)
+  plists = tmp / "playlists"
+  plists.mkdir()
+  (plists / "FC.list").write_text(f"{rom}\n", encoding="utf-8")
+
+  class Cfg:
+      def get_playlists_dir(self): return plists
+      def get_roms_path(self): return tmp / "roms"
+
+  opened = []
+  real_open = builtins.open
+  def spy(file, *a, **k):
+      if str(file) == str(rom):
+          opened.append(str(file))
+      return real_open(file, *a, **k)
+  builtins.open = spy
+  try:
+      entries = PlaylistManager(Cfg(), None).load_playlist("FC")
+  finally:
+      builtins.open = real_open
+
+  assert len(entries) == 1, entries
+  assert "rom_id" not in entries[0], entries[0]
+  assert not opened, f"the ROM file was read: {opened}"
+  print("RT-014 OK — the playlist loaded without opening any ROM")
+  EOF
+  ```
+
 ## Navigation & search
 
 ### RT-020 — Sidebar navigation switches consoles
