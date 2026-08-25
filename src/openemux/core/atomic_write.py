@@ -39,6 +39,21 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None):
     failed save is worth reporting -- and the temporary file is cleaned up on
     the way out, so a failure never litters the directory.
     """
+    return _replace_atomically(
+        path, lambda handle: handle.write(text), "w", encoding, mode
+    )
+
+
+def _copy_stream(source, handle, chunk_size):
+    while True:
+        chunk = source.read(chunk_size)
+        if not chunk:
+            break
+        handle.write(chunk)
+
+
+def _replace_atomically(path, write_body, open_mode, encoding, mode):
+    """Write through a temporary file and rename it over ``path``."""
     path = Path(path)
     directory = path.parent
     directory.mkdir(parents=True, exist_ok=True)
@@ -53,8 +68,8 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None):
     )
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(handle_fd, "w", encoding=encoding) as handle:
-            handle.write(text)
+        with os.fdopen(handle_fd, open_mode, encoding=encoding) as handle:
+            write_body(handle)
             # flush() only reaches the OS; fsync() is what reaches the disk.
             # Without it the rename can land before the content does, and a
             # power loss leaves an intact name over an empty file.
@@ -68,6 +83,20 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None):
 
     _fsync_directory(directory)
     return path
+
+
+def atomic_write_stream(path, source, chunk_size=1024 * 1024, mode=None):
+    """Copy a readable binary stream into ``path`` atomically.
+
+    The streaming counterpart of :func:`atomic_write_text`, for content too big
+    to hold in memory -- a ROM coming out of an archive. Same guarantee: the
+    final path never holds a partial file, so an interrupted extraction cannot
+    leave a truncated ROM behind for a later import to mistake for a good one
+    (issue #229).
+    """
+    return _replace_atomically(
+        path, lambda handle: _copy_stream(source, handle, chunk_size), "wb", None, mode
+    )
 
 
 def atomic_write_lines(path, lines, encoding="utf-8"):
