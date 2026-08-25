@@ -1156,8 +1156,11 @@ class RomGrid(Gtk.FlowBox):
         self.connect("map", self._watch_viewport)
         # A page switch replaces the whole grid. A context menu still up is
         # parented to a card that is about to be disposed, so close it while
-        # its anchor is still alive (issue #275).
-        self.connect("unroot", lambda *_a: dismiss_context_popover())
+        # its anchor is still alive (issue #275). "unmap" and not "unroot":
+        # GtkWidget's unroot is a vfunc with no signal behind it, and
+        # connecting to a name GObject does not know raises -- which is how
+        # this took the whole grid down with it (issue #286).
+        self.connect("unmap", lambda *_a: dismiss_context_popover())
 
     # -- cartridge shells ----------------------------------------------------
 
