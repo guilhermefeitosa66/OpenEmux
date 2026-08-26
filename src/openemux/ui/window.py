@@ -357,7 +357,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Avoid Gtk.Widget.pick() here: dropdown/popover interactions may trigger
         # compute_point assertions while transient widgets are being recycled.
         target = self.get_focus()
-        logger.info(
+        # DEBUG on purpose: this fires on every mouse press anywhere in the
+        # window, which at INFO buried the log in click traces (issue #221).
+        # It is a debugging aid -- run with the root logger at DEBUG to get it.
+        logger.debug(
             "ui click: button=%s presses=%s target=%s view=%s current_console=%s x=%.1f y=%.1f",
             button,
             n_press,

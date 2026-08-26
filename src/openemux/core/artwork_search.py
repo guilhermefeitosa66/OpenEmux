@@ -11,6 +11,7 @@ Widget-free on purpose: the window drives this from worker threads.
 
 import hashlib
 import logging
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -22,6 +23,18 @@ from openemux.core.scraper import image_format, is_image
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+def artwork_temp_root():
+    """Where each artwork-manager session gets its scratch directory.
+
+    ``$XDG_CACHE_HOME/openemux/artwork-manager``, the same path
+    ``GLib.get_user_cache_dir()`` resolves to, worked out here so the sweep in
+    ``core.housekeeping`` can find it without a GTK import (issue #221).
+    """
+    cache_home = os.environ.get("XDG_CACHE_HOME") or ""
+    base = Path(cache_home) if cache_home.startswith("/") else Path.home() / ".cache"
+    return base / "openemux" / "artwork-manager"
+
 
 #: Stop after this many distinct images per provider: candidate URL lists are
 #: name variants of the same file, so distinct hits beyond a few are unlikely
