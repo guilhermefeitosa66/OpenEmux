@@ -1262,6 +1262,42 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The gamepad indicator appears in the header; UI navigation and the game respond.
 - **Check:** human only (hardware).
 
+### RT-175 — Gamepad navigation survives quitting a game
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: launch a game with the pad, quit it, and keep navigating the library
+  with the same pad. Repeat a few times.
+- **Expected:** The pad keeps working after every quit. It used to stop working for the rest of the
+  session whenever the main thread's "the game ended" poll cleared the process reference between
+  the reader thread's two reads of it, killing the reader with an `AttributeError`. A failing
+  suspend check now reads as "suspended" for that one loop instead of ending the thread.
+- **Check:** suite files `tests/test_runtime_manager.py` (`ClearedMidReadTests`),
+  `tests/test_ui_gamepad.py` (`SuspendGuardTests`).
+
+### RT-176 — A button pressed as a capture opens is not also acted on
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "Input", click a binding row and press a gamepad
+  button the instant the capture opens — within a fifth of a second of the click.
+- **Expected:** The button is bound and nothing else happens. It used to both bind *and* navigate
+  the library underneath, because the reader decided with a suspend flag read up to 200 ms before
+  the event arrived.
+- **Check:** suite file `tests/test_ui_gamepad.py` (`StaleSuspendFlagTests`).
+
+### RT-177 — A second gamepad plugged in next to a working one is picked up
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** Two physical controllers.
+- **Steps:**
+  1. With the app open and one controller already connected and navigating, plug in a second one.
+  2. Navigate the grid with the **second** controller.
+- **Expected:** The second pad steers the UI within about a second. It used to be ignored until the
+  first was unplugged, because the device scan only ran while nothing was open.
+- **Check:** human only (hardware); `tests/test_ui_gamepad.py` (`HotplugScanTests`) covers the
+  scan itself.
+
 ### RT-073 — A console's context menu opens its own controller settings
 - **Area:** Input
 - **Mode:** AUTO-UI

@@ -142,7 +142,19 @@ class RuntimeManager:
         return False, f"Unsupported runtime mode: {mode}"
 
     def is_running(self):
-        return bool(self.active_process and self.active_process.poll() is None)
+        """Is a game up right now?
+
+        The attribute is read **once**. It used to be read twice, and the
+        gamepad reader thread calls this several times a second while the main
+        thread's one-second poll clears it at game exit: a clear landing
+        between the two reads raised ``AttributeError: 'NoneType' object has
+        no attribute 'poll'`` on the reader thread, which ended it -- gamepad
+        navigation silently stopped working for the rest of the session, every
+        time the race hit (issue #223). Same shape in ``poll_active`` and
+        ``stop_active`` below, for the same reason.
+        """
+        proc = self.active_process
+        return bool(proc and proc.poll() is None)
 
     def stop_active(self, block=False):
         """Quit the running game, escalating until the process is really gone.
@@ -159,10 +171,10 @@ class RuntimeManager:
         process and would leave the game behind on the way out. Everywhere
         else it walks on its own thread so a closing window is not held up.
         """
-        if not self.active_process:
+        proc = self.active_process
+        if not proc:
             return False, "No active game process."
 
-        proc = self.active_process
         if proc.poll() is not None:
             self._clear_active()
             return False, "No active game process."
@@ -448,15 +460,16 @@ class RuntimeManager:
         (issue #226). When it looks like that, the reason comes back with the
         result so the caller can show it instead.
         """
-        if not self.active_process:
+        proc = self.active_process
+        if not proc:
             return None
 
-        exit_code = self.active_process.poll()
+        exit_code = proc.poll()
         if exit_code is None:
             return None
 
         rom = self.active_rom
-        log_path = getattr(self.active_process, "_openemux_log_path", None)
+        log_path = getattr(proc, "_openemux_log_path", None)
         ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
 
@@ -484,9 +497,10 @@ class RuntimeManager:
         return bool(exit_code) and ran_for < STARTUP_FAILURE_SECONDS
 
     def _clear_active(self):
-        if self.active_process and hasattr(self.active_process, "_openemux_log_handle"):
+        proc = self.active_process
+        if proc is not None and hasattr(proc, "_openemux_log_handle"):
             try:
-                self.active_process._openemux_log_handle.close()
+                proc._openemux_log_handle.close()
             except Exception:
                 pass
         self.active_process = None
