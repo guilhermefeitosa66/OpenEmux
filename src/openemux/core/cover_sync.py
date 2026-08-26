@@ -643,7 +643,7 @@ def _fts_stage_candidates(console, rom_name, sync_settings, already_tried):
     if not resolved:
         return []
     stem, round_label = resolved
-    logger.info(
+    logger.debug(
         "cover_sync fts resolved: console=%s rom=%s stem=%s round=%s",
         console,
         rom_name,
@@ -734,10 +734,10 @@ def _download_cover(url, dest):
         # Written whole or not at all: a partial file at the final name is
         # indistinguishable from art, and blocks the ROM just the same.
         atomic_write_bytes(dest, data)
-        logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
+        logger.debug("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
         return dest
     except urllib.error.HTTPError:
-        logger.info("cover_sync not_found: url=%s", safe_url)
+        logger.debug("cover_sync not_found: url=%s", safe_url)
         return False
     except Exception as exc:
         logger.warning("cover_sync error: url=%s error=%s", safe_url, screenscraper.redact(exc))
@@ -756,7 +756,7 @@ def _drop_stale_art(roms_dir, console, rom_name, art_dir, keep):
             continue
         try:
             candidate.unlink()
-            logger.info("cover_sync replaced art: console=%s rom=%s old=%s", console, rom_name, candidate)
+            logger.debug("cover_sync replaced art: console=%s rom=%s old=%s", console, rom_name, candidate)
         except OSError as exc:
             logger.warning("cover_sync could not remove old art: path=%s error=%s", candidate, exc)
 
@@ -793,7 +793,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
             logger.warning("cover_sync could not remove junk art: path=%s error=%s", existing, exc)
 
     if existing:
-        logger.info(
+        logger.debug(
             "cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind
         )
         return {"status": "skipped", "console": console, "rom_name": name,
@@ -804,7 +804,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
         console, name, sync_settings, rom_path=rom.get("path"),
         provider_rotation=rotation, gates=gates,
     )
-    logger.info(
+    logger.debug(
         "cover_sync candidate_set: console=%s rom=%s candidates=%d",
         console,
         name,
@@ -827,7 +827,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
                 # Art saved earlier under another extension would still
                 # win the local lookup, so the replaced file has to go.
                 _drop_stale_art(roms_dir_path, console, name, art_dir, keep=written)
-            logger.info(
+            logger.debug(
                 "cover_sync selected candidate: console=%s rom=%s provider=%s stage=%s url=%s",
                 console,
                 name,
@@ -860,7 +860,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
     if cancelled:
         return {"status": "cancelled", "console": console, "rom_name": name,
                 "rom_path": rom_path}
-    logger.info(
+    logger.debug(
         "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
     )
     return {"status": "missed", "console": console, "rom_name": name,

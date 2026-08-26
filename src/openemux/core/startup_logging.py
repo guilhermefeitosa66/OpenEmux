@@ -1,5 +1,6 @@
 import faulthandler
 import logging
+import logging.handlers
 import os
 import sys
 import tempfile
@@ -16,6 +17,23 @@ from pathlib import Path
 #: error ---" traceback on stderr and drops the line -- once per log call, for
 #: every such ROM (issue #214). Escaped is readable and cannot fail.
 LOG_ERRORS = "backslashreplace"
+
+#: How large the startup log is allowed to get before it rolls over, and how
+#: many rolled files are kept -- so at most 8 MB total, forever.
+#:
+#: It used to be a plain append-mode ``FileHandler``, which is to say no
+#: ceiling at all: the file on the development machine passed 260,000 lines
+#: (issue #221). A ceiling is only half of it -- the lines that filled it were
+#: one per ROM per rescan, one per artwork candidate and one per mouse click,
+#: and those now log at DEBUG, where an INFO root logger never sees them.
+LOG_MAX_BYTES = 2 * 1024 * 1024
+LOG_BACKUP_COUNT = 3
+
+#: The file faulthandler was pointed at, kept reachable for the lifetime of the
+#: process. faulthandler writes to it from a signal handler, so it can never be
+#: reopened -- and holding the reference here is also what lets a test hand the
+#: descriptor back before its temp directory goes away.
+_crash_log_handle = None
 
 
 def _reconfigure_stream(stream):
@@ -57,6 +75,19 @@ def append_startup_error(message, exc_text=None, runtime_dir=None):
         return None
 
 
+def _release_crash_log():
+    """Close the previous crash-log handle, once faulthandler has let go."""
+    global _crash_log_handle
+
+    handle, _crash_log_handle = _crash_log_handle, None
+    if handle is None:
+        return
+    try:
+        handle.close()
+    except OSError:  # pragma: no cover - closing a file that is already gone
+        pass
+
+
 def install_crash_handlers(log_path=None):
     """Leave a trace behind when the process dies instead of just vanishing.
 
@@ -67,16 +98,26 @@ def install_crash_handlers(log_path=None):
     way down, which is the difference between a bare "segmentation fault" in
     the terminal and knowing where it happened.
     """
+    global _crash_log_handle
+
     if log_path is not None:
         try:
             # Kept open for the lifetime of the process: faulthandler writes to
             # this descriptor from a signal handler, so it cannot be reopened.
+            # A rollover renames the file this descriptor points at, so a crash
+            # trace written after one lands in openemux_startup.log.1 rather
+            # than in the live file -- still on disk, and the process is dead
+            # by then, so nothing this run logs can push it any further out.
             handle = open(log_path, "a", encoding="utf-8", errors=LOG_ERRORS)
             faulthandler.enable(file=handle, all_threads=True)
+            _release_crash_log()
+            _crash_log_handle = handle
         except OSError:
             faulthandler.enable(all_threads=True)
+            _release_crash_log()
     else:
         faulthandler.enable(all_threads=True)
+        _release_crash_log()
 
     def _log_exception(exc_type, exc_value, exc_tb):
         if issubclass(exc_type, KeyboardInterrupt):
@@ -100,7 +141,13 @@ def configure_startup_logging(runtime_dir=None):
     handlers = [logging.StreamHandler()]
     try:
         handlers.append(
-            logging.FileHandler(log_path, encoding="utf-8", errors=LOG_ERRORS)
+            logging.handlers.RotatingFileHandler(
+                log_path,
+                maxBytes=LOG_MAX_BYTES,
+                backupCount=LOG_BACKUP_COUNT,
+                encoding="utf-8",
+                errors=LOG_ERRORS,
+            )
         )
     except OSError:
         pass

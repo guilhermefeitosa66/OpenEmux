@@ -1682,6 +1682,148 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Restore:** `cp $SCRATCH/play_history.bak ~/.openemux/play_history.json && rm -f
   ~/.openemux/play_history.json.broken-*` with the app closed.
 
+## Disk housekeeping
+
+### RT-170 — Per-launch runtime files are pruned at startup
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: play a few hundred games over a few months, then look at
+     `~/.openemux/runtime`.
+- **Expected:** Only the recent launches are still there. Every file a kept launch wrote
+  (`runtime_*.cfg`, `coreopts_*.cfg`, `retroarch_*.log`, `retroarch_*.cmd`) is kept together, and
+  nothing that is not a per-launch file is touched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, tempfile, time
+  from pathlib import Path
+  from openemux.core.housekeeping import prune_runtime_files
+
+  scratch = Path(tempfile.mkdtemp())
+  def launch(ts, age_days):
+      made = []
+      for name in (f"runtime_sfc_{ts}.cfg", f"coreopts_sfc_{ts}.cfg",
+                   f"retroarch_sfc_{ts}.log", f"retroarch_sfc_{ts}.cmd"):
+          path = scratch / name
+          path.write_text("x", encoding="utf-8")
+          stamp = time.time() - age_days * 86400
+          os.utime(path, (stamp, stamp))
+          made.append(path)
+      return made
+
+  old = launch("20200101120000", 90)
+  new = launch("20200201120000", 90)
+  keep = scratch / "openemux_startup.log"
+  keep.write_text("x", encoding="utf-8")
+
+  removed = prune_runtime_files(scratch, max_age_days=7, keep_launches=1)
+  assert removed == 4, removed
+  assert not any(p.exists() for p in old), "the old launch survived"
+  assert all(p.exists() for p in new), "the kept launch lost a file"
+  assert keep.exists(), "the startup log was pruned"
+  print("RT-170 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-171 — The startup log has a ceiling
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: use the app daily for months, then check the size of
+     `~/.openemux/runtime/openemux_startup.log`.
+- **Expected:** The log rotates instead of growing forever: at most 2 MB live plus three rolled
+  files.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import logging, logging.handlers, tempfile
+  from pathlib import Path
+  from openemux.core import startup_logging
+
+  scratch = Path(tempfile.mkdtemp())
+  startup_logging.configure_startup_logging(runtime_dir=scratch)
+  handler = next(h for h in logging.getLogger().handlers
+                 if isinstance(h, logging.handlers.RotatingFileHandler))
+  assert handler.maxBytes == startup_logging.LOG_MAX_BYTES
+  assert handler.backupCount == startup_logging.LOG_BACKUP_COUNT
+  handler.maxBytes = 1024
+  logging.getLogger().handlers = [handler]
+  log = logging.getLogger("openemux.rt171")
+  for index in range(2000):
+      log.info("a line long enough to force a rollover %d %s", index, "x" * 60)
+
+  written = sorted(scratch.glob("openemux_startup.log*"))
+  assert len(written) <= startup_logging.LOG_BACKUP_COUNT + 1, [p.name for p in written]
+  assert sum(p.stat().st_size for p in written) < 64 * 1024
+  print("RT-171 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-172 — A core download leaves no archive behind
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the first boot to completion, then look at
+  `~/.openemux/runtime/buildbot_cache`.
+- **Expected:** The directory is empty. Each core `.zip` and each shader pack is removed once it
+  has been extracted (and also when extraction fails), rather than left behind — a full core
+  sweep used to leave hundreds of megabytes there.
+- **Check:** `tests/test_retroarch_buildbot_updater.py`, `tests/test_housekeeping.py`.
+
+### RT-173 — Stale artwork temp directories are swept at startup
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: open "Manage artwork" for a ROM, then kill the app instead of closing the
+     window. Relaunch and check `~/.cache/openemux/artwork-manager`.
+- **Expected:** The orphaned session directory is gone. A directory young enough to belong to a
+  live session is left alone.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, tempfile, time
+  from pathlib import Path
+  from openemux.core.housekeeping import sweep_artwork_temp_dirs
+
+  root = Path(tempfile.mkdtemp())
+  stale = root / "deadbeef"
+  stale.mkdir()
+  (stale / "candidate-001.png").write_bytes(b"x")
+  stamp = time.time() - 3 * 86400
+  os.utime(stale, (stamp, stamp))
+  fresh = root / "cafebabe"
+  fresh.mkdir()
+
+  removed = sweep_artwork_temp_dirs(root, max_age_hours=24)
+  assert removed == 1, removed
+  assert not stale.exists(), "the orphaned session directory survived"
+  assert fresh.exists(), "a live session directory was swept"
+  print("RT-173 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-174 — Ordinary use does not flood the startup log
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**.
+- **Steps:**
+  1. Launch the app (`make run`), writing its output to `$SCRATCH/app.log`.
+  2. Wait for the library to appear, then click around the grid and the sidebar a dozen times.
+  3. Close the app.
+- **Expected:** The log carries one summary line per console rescan, and no line per ROM and no
+  line per mouse click. The startup housekeeping reports what it swept.
+- **Check:** `grep -c "ui click" $SCRATCH/app.log` and `grep -c "playlist add rom"
+  $SCRATCH/app.log` both print `0`; `grep -c "playlist rebuild finished" $SCRATCH/app.log` is
+  greater than `0`; `grep "housekeeping" $SCRATCH/app.log` prints at least one line.
+- **Restore:** none.
+
 
 ## Retired
 

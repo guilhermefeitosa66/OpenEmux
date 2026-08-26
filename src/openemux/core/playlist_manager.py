@@ -271,7 +271,10 @@ class PlaylistManager:
         playlist_path = self.get_playlist_path(system_id)
 
         for rom in roms:
-            logger.info(
+            # One line per ROM, on a rescan that runs at every launch: the
+            # single largest contributor to a startup log that reached 260,000
+            # lines (issue #221). The count is in the "finished" line below.
+            logger.debug(
                 "playlist add rom: console=%s rom=%s path=%s playlist=%s",
                 system_id,
                 rom["name"],
