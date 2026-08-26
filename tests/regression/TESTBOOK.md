@@ -399,6 +399,51 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_library_landing.py`.
 - **Restore:** delete the throwaway `HOME`.
 
+### RT-027 — A rescan leaves you in the collection you were browsing
+- **Area:** Navigation
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary collections directory).
+- **Steps:** As a QA person: open a collection, press `F5`, and watch where you end up. Or simply
+  open a collection at launch — the startup scan rescans on every single launch.
+- **Expected:** You stay in the collection, with its scroll position. Collection scopes were never
+  in the set of places a rebuilt library would land, so every rescan threw the user into Favorites
+  (issue #225). A collection deleted since the rescan started still falls back to Favorites, the
+  way a console that is gone does.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil
+  from pathlib import Path
+  from openemux.core.collections import CollectionManager
+  from openemux.ui.window import FAVORITES_ID, OpenEmuxWindow, collection_scope
+
+  base = Path(os.environ["SCRATCH"]) / "rt027"
+  shutil.rmtree(base, ignore_errors=True)
+  manager = CollectionManager(base)
+  manager.create("Hard games")
+  manager.add("hard-games", ["/roms/FC/Contra.nes"])
+  slugs = [c["slug"] for c in manager.list_collections()]
+
+  scope = collection_scope("hard-games")
+  assert OpenEmuxWindow._landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
+  assert OpenEmuxWindow._landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
+  print("RT-027 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-028 — A rescan asked for while one is running still happens
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: import ROMs the moment the app opens, so the import finishes while
+  the automatic startup scan is still running.
+- **Expected:** The new games appear. The post-import rescan was refused and dropped with no retry
+  and no message — the user saw "imported" and then nothing, which reads as a failed import
+  (issue #225). The request is queued and runs when the current scan ends; a queued whole-library
+  rescan absorbs a single-console one, and two different consoles become a whole-library rescan.
+- **Check:** suite file `tests/test_library_landing.py` (`RescanQueueTests`).
+
 ### RT-020 — Sidebar navigation switches consoles
 - **Area:** Navigation
 - **Mode:** AUTO-UI

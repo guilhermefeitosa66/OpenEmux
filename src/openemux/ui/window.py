@@ -187,6 +187,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
+        # A rescan asked for while one was running, to run when it ends (#225).
+        self._rescan_pending = None
         self._import_running = False
         # Callbacks that re-apply translated text, registered where each
         # widget is built -- see _translatable.
@@ -2463,7 +2465,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if target_view is None:
             target_view = previous_visible or self.current_console
 
-        desired = self._landing_view(self.visible_consoles, target_view)
+        desired = self._landing_view(
+            self.visible_consoles,
+            target_view,
+            [c["slug"] for c in self.collection_manager.list_collections()],
+        )
         if desired != LIBRARY_EMPTY_ID:
             row = self._find_console_row(desired)
             if row:
@@ -2481,14 +2487,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._update_window_title(None)
 
     @staticmethod
-    def _landing_view(visible_consoles, target_view):
+    def _landing_view(visible_consoles, target_view, collection_slugs=()):
         """Which page a rebuilt library lands on.
 
         With nothing in it, the onboarding page -- that state's whole reason
         for existing, and unreachable until now (issue #224).
+
+        A collection counts as somewhere to land. It never did: the set tested
+        here held only the consoles and the two virtual views, so a rescan
+        threw the user out of a collection and into Favorites, losing the view
+        and the scroll position -- and the startup scan rescans on every single
+        launch (issue #225).
         """
         if not visible_consoles:
             return LIBRARY_EMPTY_ID
+        if is_collection_scope(target_view):
+            # Only if it still exists: a collection deleted since is no more a
+            # destination than a console that is gone.
+            if collection_slug(target_view) in set(collection_slugs):
+                return target_view
+            return FAVORITES_ID
         if target_view in set(visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}:
             return target_view
         return FAVORITES_ID
@@ -3144,6 +3162,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if not console or console == ALL_CONSOLES_ID:
             return self._rescan_all_consoles(show_toast=show_toast)
         if self._scan_running:
+            self._queue_rescan(console=console, show_toast=show_toast)
             if show_toast:
                 toast = Adw.Toast(title=self.t("toast.scan_running"))
                 toast.set_timeout(3)
@@ -3174,6 +3193,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _rescan_all_consoles(self, show_toast=False):
         if self._scan_running:
+            self._queue_rescan(console=None, show_toast=show_toast)
             if show_toast:
                 toast = Adw.Toast(title=self.t("toast.scan_running"))
                 toast.set_timeout(3)
@@ -3211,8 +3231,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Thread(target=_worker, daemon=True).start()
         return {"started": True}
 
+    def _queue_rescan(self, console, show_toast):
+        """Remember a rescan that could not start, to run when this one ends.
+
+        Two callers hand in ``show_toast=False`` and depend on the rescan
+        actually happening: the one after an import ("new files on disk:
+        rebuild the playlists so they show up") and the one after the ROM
+        folder changes. Imports are gated only by ``_import_running``, so one
+        can finish while the always-on startup scan is still in flight -- and
+        the request was dropped with no retry and no message. The user saw
+        "imported" and then no new games, which reads as a failed import
+        (issue #225).
+        """
+        pending = self._rescan_pending
+        if pending is not None and pending["console"] is None:
+            # A whole-library rescan already queued covers any single console.
+            pending["show_toast"] = pending["show_toast"] or show_toast
+            return
+        if pending is not None and console is not None and pending["console"] != console:
+            # Two different consoles asked: only the whole library covers both.
+            console = None
+        self._rescan_pending = {
+            "console": console,
+            "show_toast": bool(show_toast or (pending or {}).get("show_toast")),
+        }
+        logger.info("rescan queued: console=%s", console or "all")
+
+    def _run_pending_rescan(self):
+        """Start the rescan that was asked for while one was already running."""
+        pending = self._rescan_pending
+        self._rescan_pending = None
+        if pending is None:
+            return False
+        logger.info("rescan queued run: console=%s", pending["console"] or "all")
+        if pending["console"] is None:
+            self._rescan_all_consoles(show_toast=pending["show_toast"])
+        else:
+            self._rescan_single_console(pending["console"], show_toast=pending["show_toast"])
+        return False
+
     def _on_rescan_single_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
+        # After this handler, so its own toast lands first and the queued run
+        # starts against a library that has already been refreshed.
+        GLib.idle_add(self._run_pending_rescan)
         self._update_task(task_id, current=1, total=1)
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view or summary.get("console"))
@@ -3228,6 +3290,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _on_rescan_all_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
+        GLib.idle_add(self._run_pending_rescan)
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
