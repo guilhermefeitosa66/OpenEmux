@@ -9,6 +9,7 @@ artifacts. For user-facing install instructions, see the main
 - [Requirements](#requirements)
 - [Project layout](#project-layout)
 - [Running from source](#running-from-source)
+- [Developing on Windows](#developing-on-windows)
 - [Tests](#tests)
 - [Building the packages](#building-the-packages)
   - [AppImage](#appimage)
@@ -94,6 +95,89 @@ module.
 modules count as 0%, so the total reflects the whole app). CI does the same and,
 on every push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
+
+## Developing on Windows
+
+Development happens on Linux; this environment exists so the Windows port
+(issue #118) can be written and exercised on the platform it targets. It is a
+bootstrap, not the long-term workflow -- once the portable `.zip` exists it
+carries its own GTK4 and Python, and a clean Windows machine with no MSYS2 is
+the better test target.
+
+GTK 4, libadwaita, Python and the GObject bindings all come from MSYS2's
+**MINGW64** environment, which is the only practical source of that stack on
+Windows -- and the same pacman repository the shipped bundle is assembled from,
+so what runs here and what we ship share one ABI.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\setup-dev.ps1
+```
+
+That installs MSYS2 (pinned and SHA256-verified, straight from the
+msys2-installer releases), runs `make install-sys-deps-windows`, downloads the
+vendored RetroArch, and verifies the toolchain. Every step is idempotent, so
+re-running it is safe and cheap. Pass `-SkipVendor` to skip the ~193 MiB
+RetroArch download, and `-Msys2Root D:\msys64` to install elsewhere.
+
+Then work from the development shell:
+
+```
+scripts\windows\dev-shell.cmd
+```
+
+Inside it, `make run`, `make test` and `make coverage` behave exactly as they do
+on Linux. The system `PATH` is deliberately never modified: putting
+`mingw64\bin` on it would shadow system DLLs for every process on the machine,
+so MSYS2 sets the environment up for that one shell instead.
+
+What the setup script deliberately does **not** install, and why:
+
+| Not installed | Why |
+| --- | --- |
+| Docker | Windows artifacts are built in a Linux container, on Linux |
+| Inno Setup | the installer is produced on Linux too |
+| A Windows-native Python | it cannot import MSYS2's PyGObject |
+| A second `make` | MSYS2 supplies it; another on `PATH` is the classic "works in cmd, fails in mingw64" bug |
+
+There is **no venv on Windows**: PyGObject cannot be pip-built under MSYS2, so
+pacman owns the whole dependency set and a venv would only hide it. `make venv`
+and `make setup` are therefore no-ops that verify the pacman-provided stack
+(`scripts/check_gtk_stack.py`) instead of installing anything.
+
+`make install-sys-deps-windows` is the package list, for a developer who already
+has the shell open. Keep it, the list in `setup-dev.ps1`, and this section in
+sync.
+
+### Line endings
+
+`.gitattributes` normalizes the repository to LF, because Git for Windows'
+default `core.autocrlf=true` otherwise puts a `\r` in the shebang of `run.sh`
+and `packaging/**/*.sh` ("bad interpreter") and in Makefile recipes -- which
+breaks the *Linux* builds from a Windows checkout. The files Windows itself runs
+(`*.ps1`, `*.cmd`, `*.bat`, `*.iss`) are the exception and keep CRLF.
+
+### Vendored RetroArch
+
+`scripts/vendor_retroarch.py` fetches the RetroArch build for the current
+platform and verifies it against `vendors/manifest.json`:
+
+```bash
+make vendor-retroarch   # download what this platform needs
+make verify-vendors     # check what is already there, without downloading
+```
+
+The Linux AppImage (10.9 MiB) is committed to git and only verified. The Windows
+build (193 MiB) is gitignored and downloaded on demand. libretro publishes no
+checksums, so the first fetch of a new upstream version records what it saw
+(`--record`) for review and commit; every later run verifies against that and
+fails hard on a mismatch.
+
+### Known-failing tests
+
+The suite still carries Linux-only assumptions -- POSIX file modes, `/usr`
+install prefixes, evdev struct sizes, X11 -- so a handful of tests fail on
+Windows and do not indicate a broken toolchain. Phase 4 of issue #118 covers
+fixing them and running the suite on a `windows-latest` runner.
 
 ## Building the packages
 

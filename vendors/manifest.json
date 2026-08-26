@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "Provenance for everything under vendors/. Managed by scripts/vendor_retroarch.py.",
+    "",
+    "'committed: true' means the artifact lives in git and the script only verifies",
+    "it. 'committed: false' means it is gitignored and fetched on demand -- the",
+    "Windows RetroArch is 193 MiB, which does not belong in git history.",
+    "",
+    "libretro publishes no checksums, so a null sha256 is filled in on first fetch",
+    "(trust on first use). Review and commit the recorded hash: from then on any",
+    "drift in the upstream file is a hard failure instead of a silent swap."
+  ],
+  "manifest_version": 1,
+  "artifacts": {
+    "win64": {
+      "description": "RetroArch portable build for Windows x86_64",
+      "kind": "archive-7z",
+      "version": "1.22.2",
+      "released": "2025-11-17",
+      "url": "https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z",
+      "size": 202509078,
+      "sha256": "b2139b1d0f9d4526dc6b5ce23cbb3efdc766096fa6f2c3df016818b486ac6372",
+      "dest": "vendors/RetroArch-Win64",
+      "entrypoint": "retroarch.exe",
+      "committed": false,
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/libretro/RetroArch"
+    },
+    "linux-x86_64": {
+      "description": "RetroArch AppImage for Linux x86_64",
+      "kind": "file",
+      "version": null,
+      "released": "2026-07-14",
+      "url": null,
+      "size": 10902008,
+      "sha256": "8fe114f59425f3d6912d1adfd20d26989879ee9a11d5366b92b5200134c30028",
+      "dest": "vendors/RetroArch-Linux-x86_64.AppImage",
+      "entrypoint": null,
+      "committed": true,
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/libretro/RetroArch",
+      "_note": [
+        "Version and origin URL were never recorded when this file was vendored;",
+        "commit b6a2fe6 (2026-07-14) says only 'latest nightly'. The buildbot no",
+        "longer serves an AppImage at any nightly/stable Linux path -- it serves",
+        ".7z -- so the original URL cannot be reconstructed. The sha256 above",
+        "pins the committed bytes, which is what makes drift detectable; fill in",
+        "version and url the next time this artifact is refreshed."
+      ]
+    }
+  }
+}
