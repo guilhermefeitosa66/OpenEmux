@@ -299,3 +299,68 @@ class FrameAssetLookupTests(unittest.TestCase):
             self.assertFalse(cartridge_render.rsvg_available())
             self.assertTrue(cartridge_render.has_frame("SFC"))
             self.assertIsNone(cartridge_render.cartridge_frame("SFC"))
+
+
+class DropStaleTests(unittest.TestCase):
+    """``_drop_stale`` must never delete the composite it was told to keep.
+
+    It did, on Windows, for every render: ``keep`` is built by joining with
+    "/" while ``iterdir()`` appends with the OS separator, so the two spell the
+    same file differently ("MD/a.png" vs "MD\a.png") and ``Path.__eq__`` --
+    which compares the normalised *string* -- answered False. Every cartridge
+    was written and then immediately deleted, so the grid received a path to a
+    file that no longer existed and silently fell back to the bare cover art.
+
+    The lesson generalises: ``Path.__eq__`` is not a same-file test on Windows.
+    """
+
+    def _populate(self, directory):
+        keep = directory / "_blank.new123.png"
+        stale = directory / "_blank.old999.png"
+        unrelated = directory / "Zelda.abc.png"
+        other_suffix = directory / "_blank.new123.png.1234.tmp"
+        for path in (keep, stale, unrelated, other_suffix):
+            path.write_bytes(b"png")
+        return keep, stale, unrelated, other_suffix
+
+    def test_keeps_the_target_and_drops_only_its_own_stale_siblings(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            keep, stale, unrelated, other_suffix = self._populate(directory)
+
+            cartridge_render._drop_stale(directory, "_blank", keep)
+
+            self.assertTrue(keep.exists(), "the composite just rendered was deleted")
+            self.assertFalse(stale.exists(), "an outdated composite was left behind")
+            # A different ROM's composite shares the directory, not the stem.
+            self.assertTrue(unrelated.exists())
+            # In-flight temporaries from parallel renders are not .png.
+            self.assertTrue(other_suffix.exists())
+
+    def test_keeps_the_target_when_it_is_spelled_with_a_different_separator(self):
+        # The exact Windows shape of the bug, reproduced explicitly so it is
+        # covered even where "/" and os.sep happen to be the same character.
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            keep, stale, _, _ = self._populate(directory)
+
+            # Same file, spelled the way render_cartridge builds it.
+            respelled = Path(f"{directory.as_posix()}/{keep.name}")
+            self.assertTrue(respelled.samefile(keep))
+
+            cartridge_render._drop_stale(directory, "_blank", respelled)
+
+            self.assertTrue(keep.exists())
+            self.assertFalse(stale.exists())
+
+    def test_a_rendered_cartridge_still_exists_when_the_call_returns(self):
+        # The user-visible invariant: a returned path that is not on disk shows
+        # up as a missing cartridge, not as an error.
+        with TemporaryDirectory() as tmp_dir:
+            frame = cartridge_render.cartridge_frame("MD")
+            if frame is None or not rsvg_available():
+                self.skipTest("librsvg or the MD frame is unavailable")
+            out = render_cartridge(None, frame, "MD", "Any", cache_dir=Path(tmp_dir))
+            self.assertIsNotNone(out)
+            self.assertTrue(out.exists(), f"render_cartridge returned a missing file: {out}")
+            self.assertGreater(out.stat().st_size, 0)

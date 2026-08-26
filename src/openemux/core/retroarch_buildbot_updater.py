@@ -8,12 +8,20 @@ import zipfile
 from pathlib import Path
 
 from openemux.core.paths import get_project_root
+from openemux.core.platform import CORE_SUFFIX
+# Aliased: this class already has a ``bundled_core_dir`` attribute meaning the
+# retroarch-assets directory, and the two must not be confused.
+from openemux.core.platform import bundled_core_dir as platform_bundled_core_dir
 
 logger = logging.getLogger(__name__)
 
 HREF_PATTERN = re.compile(r'href=["\']?([^"\'>\s]+)', re.IGNORECASE)
-CORE_ARCHIVE_PATTERN = re.compile(r".+_libretro\.so\.zip$", re.IGNORECASE)
-CORE_SO_PATTERN = re.compile(r".+_libretro\.so$", re.IGNORECASE)
+# The buildbot serves "<core>_libretro.so.zip" for Linux and
+# "<core>_libretro.dll.zip" for Windows, from platform-specific directories, so
+# the extension is built from the running platform rather than hardcoded.
+_CORE_SUFFIX_RE = re.escape(CORE_SUFFIX)
+CORE_ARCHIVE_PATTERN = re.compile(r".+_libretro" + _CORE_SUFFIX_RE + r"\.zip$", re.IGNORECASE)
+CORE_SO_PATTERN = re.compile(r".+_libretro" + _CORE_SUFFIX_RE + r"$", re.IGNORECASE)
 
 
 class RetroArchBuildbotUpdater:
@@ -34,6 +42,13 @@ class RetroArchBuildbotUpdater:
         configured = self.settings.get("core_dir")
         if configured:
             return Path(configured).expanduser()
+        # Windows downloads into the bundled RetroArch's own cores directory.
+        # It runs portable, and writing to %APPDATA%\RetroArch instead would
+        # modify a RetroArch the user installed themselves -- which issue #118
+        # requires us to leave alone.
+        bundled = platform_bundled_core_dir(get_project_root())
+        if bundled:
+            return bundled
         candidates = [
             Path.home() / ".config" / "retroarch" / "cores",
             Path.home() / ".var" / "app" / "org.libretro.RetroArch" / "config" / "retroarch" / "cores",
@@ -183,7 +198,7 @@ class RetroArchBuildbotUpdater:
                     selected = member
                     break
             if not selected:
-                raise RuntimeError(f"zip has no core .so file: {archive_path}")
+                raise RuntimeError(f"zip has no core {CORE_SUFFIX} file: {archive_path}")
 
             core_bytes = archive.read(selected)
             target_name = os.path.basename(selected) or fallback_core_name
@@ -258,7 +273,7 @@ class RetroArchBuildbotUpdater:
     def _directory_has_cores(self, directory):
         if not directory.exists():
             return False
-        for candidate in directory.rglob("*_libretro.so"):
+        for candidate in directory.rglob(f"*_libretro{CORE_SUFFIX}"):
             if candidate.is_file():
                 return True
         return False

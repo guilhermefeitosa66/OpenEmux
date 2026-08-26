@@ -1361,6 +1361,113 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ~/.openemux/play_history.json.broken-*` with the app closed.
 
 
+## Windows platform
+
+Scenarios for the Windows port (issue #118). The `AUTO-SUITE`/`AUTO-PROBE` ones run on any
+platform -- they assert the platform-dependent resolution, not the host -- so Linux CI covers the
+Windows paths. Anything needing a real Windows desktop is `MANUAL`.
+
+### RT-166 — Core filenames resolve to this platform's extension
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** Core names from the catalogs come back as `.so` on Linux and `.dll` on Windows,
+  and a name with no core extension is returned untouched.
+- **Check:** `tests/test_platform.py`, `tests/test_cores.py`, `tests/test_retroarch_buildbot_updater.py`
+
+### RT-167 — No path written into RetroArch's runtime override contains a backslash
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** Every path-valued key in the generated `.cfg` (`system_directory`,
+  `savestate_directory`, `video_shader`, `core_options_path`) went through `cfg_path()`. RetroArch
+  reads a backslash inside a quoted value as an escape, so `C:\Users\me\.openemux\states` would
+  silently resolve elsewhere and the user's save states would appear to vanish.
+- **Check:** `tests/test_retroarch_launcher_cfg_paths.py`
+
+### RT-168 — The cores URL follows the platform
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Read the default buildbot URL and the core extension together.
+- **Expected:** `windows` pairs with `.dll` and `linux` with `.so`. A mismatch downloads several
+  hundred archives and extracts nothing from any of them.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core.platform import BUILDBOT_OS, CORE_SUFFIX; from openemux.core.config import DEFAULT_CORES_BASE_URL; assert f'/{BUILDBOT_OS}/' in DEFAULT_CORES_BASE_URL; assert (BUILDBOT_OS, CORE_SUFFIX) in {('windows', '.dll'), ('linux', '.so')}; print('RT-168 OK')"`
+
+### RT-169 — A rendered cartridge still exists when the render returns
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** librsvg available.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** `render_cartridge` returns a path to a file that is on disk. The stale-composite
+  sweep keeps the file it was handed, comparing by name -- `Path.__eq__` is not a same-file test
+  on Windows, where `keep` is spelled `MD/a.png` while `iterdir()` yields `MD\a.png`. Regression:
+  every cartridge was deleted right after being written, so the grid showed the bare cover art
+  with no frame around it.
+- **Check:** `tests/test_cartridge_render.py`
+
+### RT-170 — Link import degrades instead of failing without symlink permission
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** With symlinks refused (Windows without Developer Mode) the import falls back to a
+  hard link, and to a copy when the two paths are on different volumes. The import reports no
+  error either way.
+- **Check:** `tests/test_rom_importer.py` (`LinkFallbackTests`)
+
+### RT-171 — Windows picks its language from the OS, not from an unset LANG
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** With no locale environment variables set, the Windows UI language is used. A
+  variable naming a language we do not ship (`LANG=ru_RU`) still yields English rather than being
+  overridden by the OS, and an explicitly passed environment is never mixed with the host's.
+- **Check:** `tests/test_i18n.py`, `tests/test_config_locale.py`
+
+### RT-172 — "Open folder" opens Explorer on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows with at least one console in the sidebar.
+- **Steps:**
+  1. Right-click a console in the sidebar.
+  2. Choose "Open folder".
+- **Expected:** Explorer opens on that console's ROM directory, with no error toast. (GIO answers
+  *No application is registered as handling this file* for a `file://` directory URI on Windows,
+  and there is no `xdg-open`, so both Linux paths fail here.)
+- **Check:** human only.
+
+### RT-173 — The game window is reported unavailable on Windows, with the right reason
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows.
+- **Steps:**
+  1. Open "Preferences" and find the game-window switch.
+- **Expected:** The row is insensitive and reads *Not available on Windows: the game window relies
+  on X11 window embedding.* -- not the Linux wording about X11 or XWayland, which would read as
+  "install an X server and this will work". Launching a game opens RetroArch's own window.
+- **Check:** human only.
+
+### RT-174 — A user's own RetroArch install is left untouched
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** A Windows machine; note whether `%APPDATA%\RetroArch` exists before starting.
+- **Steps:**
+  1. Complete first boot, let the cores download, and launch a game.
+- **Expected:** Cores land in `vendors/RetroArch-Win64/cores`. `%APPDATA%\RetroArch` is not
+  created, and an existing one is unchanged -- the bundled RetroArch runs portable.
+- **Check:** human only.
+
+
 ## Retired
 
 *None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*

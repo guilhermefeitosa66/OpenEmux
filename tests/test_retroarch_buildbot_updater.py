@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from openemux.core.platform import CORE_SUFFIX
 from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
 
 
@@ -50,9 +51,9 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
             listing = (
-                '<a href="mgba_libretro.so.zip">mgba</a>'
+                f'<a href="mgba_libretro{CORE_SUFFIX}.zip">mgba</a>'
                 '<a href="README.txt">readme</a>'
-                '<a href="snes9x_libretro.so.zip">snes9x</a>'
+                f'<a href="snes9x_libretro{CORE_SUFFIX}.zip">snes9x</a>'
             ).encode("utf-8")
             with patch(
                 "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
@@ -61,31 +62,31 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                 manifest = updater.fetch_manifest()
 
         self.assertEqual(len(manifest), 2)
-        self.assertEqual(manifest[0]["filename"], "mgba_libretro.so.zip")
-        self.assertEqual(manifest[1]["filename"], "snes9x_libretro.so.zip")
+        self.assertEqual(manifest[0]["filename"], f"mgba_libretro{CORE_SUFFIX}.zip")
+        self.assertEqual(manifest[1]["filename"], f"snes9x_libretro{CORE_SUFFIX}.zip")
 
     def test_download_all_extracts_core_archive(self):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
             updater.ensure_environment()
 
-            manifest_html = '<a href="mgba_libretro.so.zip">mgba</a>'.encode("utf-8")
+            manifest_html = f'<a href="mgba_libretro{CORE_SUFFIX}.zip">mgba</a>'.encode("utf-8")
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr("mgba_libretro.so", b"core-binary")
+                archive.writestr(f"mgba_libretro{CORE_SUFFIX}", b"core-binary")
             zip_bytes = zip_buffer.getvalue()
 
             def _fake_urlopen(url, timeout=5):
                 if str(url).endswith("/buildbot/"):
                     return _FakeResponse(manifest_html)
-                if str(url).endswith("mgba_libretro.so.zip"):
+                if str(url).endswith(f"mgba_libretro{CORE_SUFFIX}.zip"):
                     return _FakeResponse(zip_bytes)
                 raise AssertionError(f"unexpected url: {url}")
 
             with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_all()
 
-            core_path = updater.core_dir / "mgba_libretro.so"
+            core_path = updater.core_dir / f"mgba_libretro{CORE_SUFFIX}"
             self.assertEqual(summary["downloaded"], 1)
             self.assertEqual(summary["failed"], 0)
             self.assertTrue(core_path.exists())
@@ -126,7 +127,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
             updater.ensure_environment()
-            (updater.core_dir / "mgba_libretro.so").write_bytes(b"core")
+            (updater.core_dir / f"mgba_libretro{CORE_SUFFIX}").write_bytes(b"core")
             (updater.shader_glsl_dir / "crt").mkdir(parents=True, exist_ok=True)
             (updater.shader_glsl_dir / "crt" / "geom.glslp").write_bytes(b"shader")
 

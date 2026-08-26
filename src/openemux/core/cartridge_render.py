@@ -381,8 +381,17 @@ def _cache_key(cover_path, frame_path, width, scale) -> str:
 
 def _drop_stale(directory: Path, stem: str, keep: Path):
     prefix = f"{stem}."
+    # Compared by name, not by Path equality. Both live in ``directory``, so the
+    # name is exact -- and on Windows ``Path.__eq__`` is not a reliable
+    # same-file test: ``keep`` is built by joining with "/" while ``iterdir()``
+    # appends with the OS separator, so the two differ as strings ("MD/a.png"
+    # vs "MD\\a.png") and compare unequal even though ``samefile()`` is True.
+    # That made this function delete the composite it had just been handed to
+    # keep, so every cartridge render produced a path to a file that no longer
+    # existed and the grid silently fell back to the bare cover art.
+    keep_name = keep.name
     for entry in directory.iterdir():
-        if entry == keep or not entry.name.startswith(prefix) or entry.suffix != ".png":
+        if entry.name == keep_name or not entry.name.startswith(prefix) or entry.suffix != ".png":
             continue
         try:
             entry.unlink()

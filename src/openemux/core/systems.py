@@ -1,3 +1,5 @@
+from openemux.core.platform import normalize_core_filename
+
 SYSTEMS = [
     {
         "id": "A2600",
@@ -324,10 +326,17 @@ def get_supported_extensions(value):
 
 
 def get_runtime_core_candidates(value):
+    """Core filenames to try for ``value``, with the extension this platform uses.
+
+    ``SYSTEMS`` above spells every candidate ``.so``. That stays the canonical
+    form and the extension is corrected here, because this is the only reader of
+    those 31 lists -- rewriting them per platform would be the same information
+    stored twice, and one of the copies would drift (issue #118).
+    """
     system = get_system(value)
     if not system:
         return []
-    return list(system.get("runtime_core_candidates", []))
+    return [normalize_core_filename(name) for name in system.get("runtime_core_candidates", [])]
 
 
 def get_thumbnail_system(value):

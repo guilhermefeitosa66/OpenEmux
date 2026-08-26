@@ -26,6 +26,7 @@ from openemux.core.library_view import (
     zoom_percent,
     zoom_step,
 )
+from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
 from openemux.core import feature_flags, game_window_support
@@ -2599,6 +2600,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("context.reveal.missing", name=path.name), timeout=4)
             return
 
+        if IS_WINDOWS:
+            # Explorer's own equivalent of ShowItems. There is no session bus
+            # here, so the D-Bus call below could only ever fail.
+            #
+            # The comma is part of the switch -- `/select,<path>` -- and must be
+            # passed as its own argv element or Explorer opens the parent
+            # instead of selecting. Explorer also exits non-zero on success, so
+            # the return code is deliberately not checked.
+            try:
+                subprocess.Popen(["explorer", "/select,", str(path)])
+                logger.info("reveal in explorer: path=%s", path)
+                return
+            except OSError as exc:
+                logger.info("explorer /select failed (%s); opening parent folder", exc)
+            self._open_path_in_file_manager(path.parent)
+            return
+
         try:
             connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
             connection.call_sync(
@@ -2622,6 +2640,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _open_path_in_file_manager(self, path):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
+        if IS_WINDOWS:
+            # Neither branch below works here: GIO's Windows backend answers
+            # "No application is registered as handling this file" for a
+            # file:// directory URI, and there is no xdg-open -- so without
+            # this the button only ever produced an error toast.
+            try:
+                os.startfile(path)  # noqa: S606 - a directory the user chose
+                return
+            except OSError as exc:
+                self._toast_open_failed(path, exc)
+                return
         try:
             Gio.AppInfo.launch_default_for_uri(path.as_uri(), None)
             return
@@ -2631,9 +2660,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             subprocess.Popen(["xdg-open", str(path)])
             return
         except Exception as exc:
-            toast = Adw.Toast(title=self.t("bios.open_path_failed", path=str(path), error=str(exc)))
-            toast.set_timeout(4)
-            self.toast_overlay.add_toast(toast)
+            self._toast_open_failed(path, exc)
+
+    def _toast_open_failed(self, path, exc):
+        toast = Adw.Toast(title=self.t("bios.open_path_failed", path=str(path), error=str(exc)))
+        toast.set_timeout(4)
+        self.toast_overlay.add_toast(toast)
 
     def _ensure_console_loaded(self, console, force_rescan=False):
         if console == ALL_CONSOLES_ID:

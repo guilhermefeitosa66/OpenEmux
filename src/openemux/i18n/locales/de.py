@@ -149,6 +149,7 @@ TRANSLATIONS = {
     "prefs.game_window.title": "Im OpenEmux-Fenster spielen",
     "prefs.game_window.subtitle": "Das laufende Spiel wird in ein OpenEmux-Fenster übernommen, mit Pause, Spielstand und Lautstärke in der Kopfleiste. Ausgeschaltet öffnet RetroArch sein eigenes Fenster.",
     "prefs.game_window.unavailable": "In dieser Sitzung nicht verfügbar: Das Spielfenster benötigt X11 oder XWayland.",
+    "prefs.game_window.unavailable_windows": "Unter Windows nicht verfügbar: Das Spielfenster benötigt X11-Fenstereinbettung.",
     "toast.game_window.restart": "OpenEmux neu starten, damit das Spielfenster wirksam wird",
     "game_window.pause": "Pause",
     "game_window.reset": "Spiel zurücksetzen",
