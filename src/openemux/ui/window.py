@@ -80,6 +80,8 @@ logger = logging.getLogger(__name__)
 
 ALL_CONSOLES_ID = "__all__"
 FAVORITES_ID = "__favorites__"
+#: The onboarding page a library with nothing in it lands on (issue #224).
+LIBRARY_EMPTY_ID = "library-empty"
 #: A collection's sidebar/scope id is this prefix plus its slug. Keeping them
 #: in the same id space as the consoles lets one selection handler, one page
 #: cache and the controller's console cycling treat them uniformly.
@@ -1753,19 +1755,35 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         img.set_size_request(22, 22)
         return img
 
+    @staticmethod
+    def _sidebar_row_ids(consoles, collection_slugs=()):
+        """The rows the sidebar shows for this library, in order.
+
+        With nothing in the library there are none. Every row here is a view
+        *over* ROMs, so they would all lead to an empty page -- and leaving
+        Favorites behind is what buried the onboarding page: the list selects
+        its first row as soon as it takes focus, so a fresh install landed on
+        "No favorites yet: right-click a game", about a game the user does not
+        have (issue #224). The rows come back with the first import.
+        """
+        if not consoles:
+            return []
+        return [
+            ALL_CONSOLES_ID,
+            FAVORITES_ID,
+            # Collections sit between Favorites and the consoles: user
+            # groupings above the hardware, mixing consoles like All does.
+            *[collection_scope(slug) for slug in collection_slugs],
+            *consoles,
+        ]
+
     def _rebuild_console_sidebar(self, consoles):
         while child := self.console_list.get_first_child():
             self.console_list.remove(child)
 
-        if consoles:
-            self._append_console_sidebar_row(ALL_CONSOLES_ID)
-        self._append_console_sidebar_row(FAVORITES_ID)
-        # Collections sit between Favorites and the consoles: user groupings
-        # above the hardware, mixing consoles like All does.
-        for collection in self.collection_manager.list_collections():
-            self._append_console_sidebar_row(collection_scope(collection["slug"]))
-        for console_id in consoles:
-            self._append_console_sidebar_row(console_id)
+        slugs = [c["slug"] for c in self.collection_manager.list_collections()]
+        for row_id in self._sidebar_row_ids(consoles, slugs):
+            self._append_console_sidebar_row(row_id)
 
     def _append_console_sidebar_row(self, console_id):
         row = Gtk.ListBoxRow()
@@ -2439,16 +2457,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             choose.connect("clicked", lambda _b: self._choose_roms_path())
             actions.append(choose)
             empty.set_child(actions)
-            self.content_stack.add_titled(empty, "library-empty", "Library")
+            self.content_stack.add_titled(empty, LIBRARY_EMPTY_ID, "Library")
 
         target_view = preferred_view
         if target_view is None:
             target_view = previous_visible or self.current_console
 
-        if self.visible_consoles:
-            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}) else None
-            if desired is None:
-                desired = FAVORITES_ID
+        desired = self._landing_view(self.visible_consoles, target_view)
+        if desired != LIBRARY_EMPTY_ID:
             row = self._find_console_row(desired)
             if row:
                 self.console_list.select_row(row)
@@ -2458,15 +2474,24 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                     self.console_list.select_row(first_row)
             return
 
-        row = self._find_console_row(FAVORITES_ID)
-        if row:
-            self.console_list.select_row(row)
-            return
-
+        self.console_list.unselect_all()
         self.current_console = None
         self._set_search_enabled(False)
-        self.content_stack.set_visible_child_name("library-empty")
+        self.content_stack.set_visible_child_name(LIBRARY_EMPTY_ID)
         self._update_window_title(None)
+
+    @staticmethod
+    def _landing_view(visible_consoles, target_view):
+        """Which page a rebuilt library lands on.
+
+        With nothing in it, the onboarding page -- that state's whole reason
+        for existing, and unreachable until now (issue #224).
+        """
+        if not visible_consoles:
+            return LIBRARY_EMPTY_ID
+        if target_view in set(visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}:
+            return target_view
+        return FAVORITES_ID
 
     def _find_console_row(self, console_id):
         row = self.console_list.get_first_child()

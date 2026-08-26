@@ -380,6 +380,25 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
 ## Navigation & search
 
+### RT-026 — A fresh install lands on the onboarding page
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with an empty ROM folder and the bootstrap already
+  marked completed. Never the real home.
+- **Steps:**
+  1. Launch the app against that `HOME`.
+  2. Put a ROM in the library folder and launch it again.
+- **Expected:** Step 1 shows "Your library is empty", the drag-and-drop line and the "Import
+  ROMs…" / "Choose a folder instead" buttons, with an **empty sidebar**. That page could never be
+  reached before: the Favorites row is always first in the list, the list selects its first row as
+  soon as it takes focus, and the user was met with "No favorites yet — right-click a game and
+  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the whole
+  sidebar back ("All", "Favorites", the console) and lands on "Favorites" as usual.
+- **Check:** a screenshot per step; the launch log's last `ui view changed` line reads
+  `visible_view=library-empty` for step 1 and `visible_view=__favorites__` for step 2; suite file
+  `tests/test_library_landing.py`.
+- **Restore:** delete the throwaway `HOME`.
+
 ### RT-020 — Sidebar navigation switches consoles
 - **Area:** Navigation
 - **Mode:** AUTO-UI
