@@ -16,7 +16,16 @@ from openemux.core.config import (
     COVER_ART_TYPE_BOXART,
     COVER_ART_TYPE_CARTRIDGE_LABEL,
 )
-from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, find_local_art
+from openemux.core.atomic_write import atomic_write_bytes
+from openemux.core.scraper import (
+    COVER_ART,
+    LABEL_ART,
+    SUPPORTED_COVER_EXTS,
+    find_local_art,
+    image_format,
+    is_image,
+    is_image_file,
+)
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -669,14 +678,18 @@ _EXT_BY_CONTENT_TYPE = {
 }
 
 
-def _source_extension(url, response):
-    """The downloaded image's own format: URL extension, then Content-Type.
+def _source_extension(url, response, data=None):
+    """The downloaded image's own format: the bytes, the URL, then Content-Type.
 
     Saving a JPEG under ``.png`` loads fine (GdkPixbuf sniffs content) but lies
     on disk; every extension in ``SUPPORTED_COVER_EXTS`` is found by the local
-    lookups, so the honest one costs nothing. Defaults to png when neither
-    signal is usable.
+    lookups, so the honest one costs nothing. The bytes come first when they
+    are available: a server is free to be wrong about its own Content-Type,
+    and the file cannot be.
     """
+    sniffed = image_format(data) if data is not None else None
+    if sniffed:
+        return sniffed
     ext = Path(urllib.parse.urlparse(url).path).suffix.lstrip(".").lower()
     if ext in SUPPORTED_COVER_EXTS:
         return "jpg" if ext == "jpeg" else ext
@@ -690,6 +703,13 @@ def _download_cover(url, dest):
     The path is returned rather than a plain ``True`` because the extension is
     decided here, from the source: a caller replacing existing art has to know
     which file is the new one before it deletes the others.
+
+    Nothing is written unless the bytes are actually an image. A 200 response
+    is not proof of one -- ScreenScraper answers some quota failures with a
+    plain-text body and a 200, and a captive portal answers everything with
+    HTML -- and whatever landed at that path became the ROM's "art" forever
+    after: every later sync skipped the ROM because a file was there, and the
+    only symptom was a blank card and a decode warning (issue #213).
     """
     # Media URLs can come from ScreenScraper, so redact before every log line in
     # case credentials were ever carried in the query string.
@@ -700,10 +720,20 @@ def _download_cover(url, dest):
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
             # The caller's target carries the default .png; keep the source's
-            # real format instead when the URL or the response names one.
-            dest = dest.with_suffix(f".{_source_extension(url, resp)}")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(data)
+            # real format instead -- read from the bytes themselves.
+            extension = _source_extension(url, resp, data=data)
+        if not is_image(data):
+            logger.warning(
+                "cover_sync rejected non-image body: url=%s bytes=%d starts=%r",
+                safe_url,
+                len(data or b""),
+                (data or b"")[:32],
+            )
+            return False
+        dest = dest.with_suffix(f".{extension}")
+        # Written whole or not at all: a partial file at the final name is
+        # indistinguishable from art, and blocks the ROM just the same.
+        atomic_write_bytes(dest, data)
         logger.info("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
         return dest
     except urllib.error.HTTPError:
@@ -744,7 +774,25 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
         return {"status": "cancelled", "console": console, "rom_name": name,
                 "rom_path": rom_path}
 
-    if not replace_existing and find_local_art(roms_dir_path, console, name, art_dir):
+    existing = None if replace_existing else find_local_art(roms_dir_path, console, name, art_dir)
+    if existing and not is_image_file(existing):
+        # An error page saved as a cover by an older version. It is what made
+        # this sticky: any file at that path counted as art, so the ROM was
+        # skipped on every later sync and the user had to find and delete it
+        # by hand (issue #213). Clear it and fetch properly.
+        logger.warning(
+            "cover_sync discarding art that is not an image: console=%s rom=%s path=%s",
+            console,
+            name,
+            existing,
+        )
+        try:
+            Path(existing).unlink()
+            existing = None
+        except OSError as exc:
+            logger.warning("cover_sync could not remove junk art: path=%s error=%s", existing, exc)
+
+    if existing:
         logger.info(
             "cover_sync skip existing: console=%s rom=%s kind=%s", console, name, art_kind
         )

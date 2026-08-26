@@ -620,6 +620,67 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only (network-dependent and slow; logic covered by `tests/test_cover_sync.py`,
   `tests/test_artwork_search.py`, `tests/test_artwork_suggestions.py` via RT-002).
 
+### RT-055 — An error page is never saved as a cover
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: sync covers behind a captive portal, or with a ScreenScraper account
+  that is over its daily quota, then look at the cards and at
+  `~/games/roms/<CONSOLE>/covers/`.
+- **Expected:** Nothing is written for the ROMs that failed — the responses come back with a 200
+  and a plain-text or HTML body, and only the bytes can tell. A 0-byte body and a download cut
+  off after the magic number are rejected the same way, and a failed write leaves nothing at the
+  final name (issue #213).
+- **Check:** suite files `tests/test_scraper.py` (`ImageSniffingTests`),
+  `tests/test_cover_sync.py` (`test_an_error_page_served_with_a_200_is_not_saved_as_a_cover`,
+  `test_a_failed_write_leaves_nothing_at_the_final_name`),
+  `tests/test_artwork_search.py` (`CandidateDownloadTests`).
+
+### RT-056 — Junk art from an older version is cleared by the next sync
+- **Area:** Covers
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: put an HTML file at
+  `~/games/roms/<CONSOLE>/covers/<Game>.png`, then run a normal (fill-in) cover sync for that
+  console.
+- **Expected:** The junk file is deleted and the cover is fetched properly. Any file at that path
+  used to count as art, so the ROM was skipped on every later sync and the only symptom was a
+  blank card — the user had to find and delete each one by hand (issue #213). Real art already
+  there is still left alone.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil
+  from pathlib import Path
+  from unittest.mock import patch
+  from openemux.core import cover_sync
+
+  base = Path(os.environ["SCRATCH"]) / "rt056"
+  shutil.rmtree(base, ignore_errors=True)
+  covers = base / "PS" / "covers"
+  covers.mkdir(parents=True)
+  junk = covers / "Game.png"
+  junk.write_bytes(b"<html>Quota exceeded</html>" * 4)
+  good = covers / "Other.png"
+  good.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 96)
+
+  def run(rom_name):
+      with patch("openemux.core.cover_sync._staged_cover_candidates",
+                 return_value=[("libretro", "primary", "https://cdn.example/a.png")]), \
+           patch("openemux.core.cover_sync._download_cover", side_effect=lambda url, dest: dest):
+          return cover_sync._process_rom(
+              "PS", {"name": rom_name, "path": f"/roms/PS/{rom_name}.cue"}, base,
+              "covers", "boxart", {}, None, False, None, cover_sync._HostGates(),
+          )
+
+  assert run("Game")["status"] == "downloaded", "the junk cover was skipped again"
+  assert not junk.exists(), "the junk cover is still there"  # the stubbed download writes nothing
+  assert run("Other")["status"] == "skipped", "real art must be left alone"
+  print("RT-056 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
 ## Launch & runtime
 
 ### RT-060 — RetroArch is available

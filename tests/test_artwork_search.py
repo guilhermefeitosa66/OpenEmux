@@ -3,6 +3,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 from unittest.mock import patch
 
 from openemux.core import artwork_search
@@ -116,6 +117,48 @@ class SearchDownloadTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             results = self._search(tmp_dir, pairs, payloads)
         self.assertEqual(len(results), artwork_search.MAX_RESULTS_PER_PROVIDER)
+
+
+class CandidateDownloadTests(unittest.TestCase):
+    """A picker tile has to be a real image too (issue #213)."""
+
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 96
+
+    def _response(self, payload, content_type="image/png"):
+        response = mock.MagicMock()
+        response.read.return_value = payload
+        response.headers.get_content_type.return_value = content_type
+        response.__enter__ = lambda s: s
+        response.__exit__ = lambda s, *a: False
+        return response
+
+    def test_an_image_candidate_is_saved_under_its_real_extension(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch(
+                "openemux.core.artwork_search.urllib.request.urlopen",
+                return_value=self._response(self.PNG, "image/jpeg"),
+            ):
+                target, digest = artwork_search._download(
+                    "https://cdn.example/a.jpg", Path(tmp_dir), 1
+                )
+
+            self.assertEqual(target.name, "candidate-001.png")
+            self.assertEqual(target.read_bytes(), self.PNG)
+            self.assertTrue(digest)
+
+    def test_an_error_page_is_not_offered_as_a_candidate(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch(
+                "openemux.core.artwork_search.urllib.request.urlopen",
+                return_value=self._response(b"<html>quota exceeded</html>" * 4),
+            ):
+                target, digest = artwork_search._download(
+                    "https://cdn.example/a.png", Path(tmp_dir), 1
+                )
+
+            self.assertIsNone(target)
+            self.assertIsNone(digest)
+            self.assertEqual(list(Path(tmp_dir).glob("*")), [])
 
 
 if __name__ == "__main__":
