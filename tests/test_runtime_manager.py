@@ -685,5 +685,64 @@ class StartupFailureTests(unittest.TestCase):
         self.assertFalse(RuntimeManager._died_on_startup(1, STARTUP_FAILURE_SECONDS + 0.1))
 
 
+class ClearedMidReadTests(unittest.TestCase):
+    """Reading ``active_process`` twice is what the race needs (#223).
+
+    The reader thread calls ``is_running`` several times a second; the main
+    thread's one-second poll clears ``active_process`` at game exit. The old
+    ``bool(self.active_process and self.active_process.poll() is None)`` reads
+    the attribute once for the truth test and again for the call -- a clear
+    landing between the two raised ``AttributeError: 'NoneType' object has no
+    attribute 'poll'`` on the reader thread, which ended it. Gamepad and
+    keyboard-hint navigation then silently stopped for the rest of the session.
+
+    ``_ClearsWhenTested`` puts the clear exactly there: its ``__bool__`` is the
+    truth test, and it drops the manager's reference as it answers. Snapshot
+    the attribute once and this is a non-event; read it twice and every one of
+    these raises.
+    """
+
+    class _ClearsWhenTested:
+        def __init__(self, manager):
+            self.manager = manager
+            self.terminated = False
+            self.killed = False
+
+        def __bool__(self):
+            self.manager.active_process = None
+            return True
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+    def _armed(self, tmp_dir):
+        manager, _config = _manager(tmp_dir)
+        manager.active_process = self._ClearsWhenTested(manager)
+        return manager
+
+    def test_is_running_survives_a_clear_between_reads(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertTrue(self._armed(tmp_dir).is_running())
+
+    def test_poll_active_survives_the_same_clear(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(self._armed(tmp_dir).poll_active())
+
+    def test_stop_active_survives_the_same_clear(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._armed(tmp_dir)
+            manager._command_client_cache = _FakeClient()
+
+            stopped, error = manager.stop_active(block=True)
+
+        self.assertTrue(stopped, error)
+
+
 if __name__ == "__main__":
     unittest.main()
