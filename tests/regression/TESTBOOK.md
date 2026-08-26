@@ -105,6 +105,36 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `test_a_disabled_updater_is_still_not_a_failure`), `tests/test_first_boot.py`
   (`test_an_empty_listing_does_not_complete_the_step`).
 
+### RT-005 — A crashed bootstrap worker still ends the first-boot screen
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: fill the disk (or make `~/.openemux` unwritable) and launch a fresh
+  install, so the bootstrap dies outside its own step loop.
+- **Expected:** The first-boot window closes, the main window opens, and a toast names the real
+  error ("Initial setup could not run: No space left on device"). The worker used to die
+  silently, `_finish_bootstrap_flow` was never queued, and the window sat there forever — and
+  relaunching just re-presented the same frozen window (issue #215).
+- **Check:** suite file `tests/test_first_boot_window.py` (`GuardedBootstrapWorkerTests`).
+
+### RT-006 — Closing the first-boot window mid-setup asks first
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with `setup.bootstrap.status: pending` (never the real
+  one — first boot seeds the config, the ROM tree and the playlists).
+- **Steps:**
+  1. Launch the app against that `HOME` and wait for "Preparing first-time setup".
+  2. Click the window's close button.
+  3. Choose "Keep setting up", then close again and choose "Quit".
+- **Expected:** Step 2 puts up "Setup is still running" with "Keep setting up" (default) and
+  "Quit" (destructive). "Keep setting up" leaves setup running; "Quit" ends the app, and the next
+  launch picks up from the steps already recorded. When setup finishes on its own the window
+  closes with **no** dialog (issue #215).
+- **Check:** screenshots of the dialog and of the app still running after "Keep setting up"; the
+  rules themselves in `tests/test_first_boot_window.py` (`CloseConfirmationTests`,
+  `ConfirmedQuitTests`, `TerminalEventTests`).
+- **Restore:** delete the throwaway `HOME`.
+
 ## Library & scanning
 
 ### RT-010 — Rescan keeps the library consistent
