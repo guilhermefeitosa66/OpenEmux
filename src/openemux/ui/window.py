@@ -4019,7 +4019,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
             return
-        failed_step = result.get("failed_step", "-")
-        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        failed_step = result.get("failed_step")
+        if failed_step:
+            title = self.t("toast.bootstrap.failed", step=failed_step)
+        else:
+            # No step to name: the run died around the loop rather than inside
+            # it (issue #215). "step: None" told the user nothing; the error
+            # itself is the only thing here worth reading.
+            title = self.t(
+                "toast.bootstrap.crashed",
+                error=result.get("error") or self.t("toast.bootstrap.unknown_error"),
+            )
+        toast = Adw.Toast(title=title)
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
