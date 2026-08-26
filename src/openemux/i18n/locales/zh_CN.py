@@ -233,6 +233,8 @@ TRANSLATIONS = {
     "toast.input_apply.saving": "正在将控制设置应用到运行中的游戏…",
     "toast.input_apply.no_state": "无法保存游戏状态——更改将在下次启动时生效。",
     "toast.finished": "{name} 已结束（代码 {code}）",
+    "toast.launch_failed": "无法启动游戏：{error}",
+    "toast.launch_died": "{name} 立刻就退出了 — {reason}",
     "toast.input_saved": "已保存 {console} 的按键映射",
     "toast.input_released": "已从 {actions} 释放 {binding}",
     "toast.input_reset": "已重置 {console} 的按键映射",

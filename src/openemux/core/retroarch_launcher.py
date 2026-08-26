@@ -1,3 +1,4 @@
+import ctypes
 import os
 import shutil
 import subprocess
@@ -30,6 +31,31 @@ from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+
+#: The AppImage runtime's own "do not mount me" switch.
+APPIMAGE_EXTRACT_AND_RUN = "--appimage-extract-and-run"
+
+
+def appimage_flags(binary_path, libfuse_available=None):
+    """The flags an AppImage needs to run on *this* host, if any.
+
+    ``--appimage-extract-and-run`` unpacks the image to a temp dir instead of
+    mounting it, which is slower but needs no FUSE at all. Only used when
+    ``libfuse.so.2`` is genuinely missing: on a host that has it, mounting is
+    both faster and what the AppImage is built to do (issue #226).
+    """
+    if not str(binary_path).lower().endswith(".appimage"):
+        return []
+    if libfuse_available is None:
+        libfuse_available = RetroArchLauncher.libfuse2_available()
+    if libfuse_available:
+        return []
+    logger.info(
+        "libfuse.so.2 is missing; running the AppImage with --appimage-extract-and-run"
+    )
+    return [APPIMAGE_EXTRACT_AND_RUN]
+
 
 # A RetroArch installed as a Flatpak keeps its cores here; still worth searching.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
@@ -138,7 +164,29 @@ class RetroArchLauncher:
                 "RetroArch binary not found. Set runtime.retroarch.binary "
                 "or add RetroArch AppImage under vendors/."
             )
-        return [retroarch_path], None
+        return [retroarch_path, *appimage_flags(retroarch_path)], None
+
+    @staticmethod
+    def libfuse2_available(loader=None):
+        """Whether the AppImage runtime's ``libfuse.so.2`` can be loaded.
+
+        A type-2 AppImage mounts itself with FUSE 2. Several current
+        distributions ship only FUSE 3 (or nothing), and there the vendored
+        RetroArch AppImage *starts* -- Popen succeeds -- and its runtime exits
+        within a second with ``dlopen(): error loading libfuse.so.2`` written
+        only to the launch log. Every launch died instantly and the app just
+        said "finished (exit code 1)" (issue #226).
+
+        Asked the same way the runtime asks: by name, not by guessing from a
+        package list. libfuse3 does not answer to this name and must not, or
+        we would skip the fallback on a host that needs it.
+        """
+        loader = loader or ctypes.CDLL
+        try:
+            loader("libfuse.so.2")
+            return True
+        except OSError:
+            return False
 
     def _resolve_retroarch_binary(self):
         configured = self.config_manager.get_retroarch_binary()
@@ -527,6 +575,23 @@ class RetroArchLauncher:
         return {}
 
     def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
+        """Start the game, or say why it could not start.
+
+        Everything before the ``Popen`` writes to disk -- the states dir, the
+        runtime dir, the ``--appendconfig`` override, an input profile being
+        normalised on load -- and none of it used to be guarded. A full disk or
+        a read-only home raised out of here into the GTK click handler, where
+        PyGObject prints a traceback and swallows it: the button simply did
+        nothing, with no toast (issue #226). Every failure has to come back as
+        a message, because a message is the only thing the caller can show.
+        """
+        try:
+            return self._launch_process(rom_path, console, state_slot, network_cmd_port)
+        except Exception as exc:
+            logger.exception("retroarch launch failed before starting the process")
+            return None, f"Could not start the game: {exc}"
+
+    def _launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
         system_id = resolve_system_id(console)
         launch_prefix, prefix_error = self._launch_prefix()
         if prefix_error:
@@ -578,6 +643,7 @@ class RetroArchLauncher:
         cmd.extend(extra_flags)
         cmd.append(rom_path)
 
+        log_handle = None
         try:
             runtime_dir = self.config_manager.get_runtime_dir()
             runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -613,6 +679,14 @@ class RetroArchLauncher:
             )
             return proc, None
         except Exception as exc:
+            # Popen raising (the binary vanished, ENOEXEC) left this handle
+            # open: one leaked descriptor per failed launch.
+            if log_handle is not None:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+            logger.warning("retroarch launch failed: error=%s", exc)
             return None, f"Failed to launch RetroArch: {exc}"
 
     # -- stopping a launched game ------------------------------------------

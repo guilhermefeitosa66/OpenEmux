@@ -233,6 +233,8 @@ TRANSLATIONS = {
     "toast.input_apply.saving": "Aplicando los controles al juego en ejecución…",
     "toast.input_apply.no_state": "No se pudo guardar el estado del juego: los cambios se aplicarán la próxima vez que se inicie.",
     "toast.finished": "{name} finalizado (código {code})",
+    "toast.launch_failed": "No se pudo iniciar el juego: {error}",
+    "toast.launch_died": "{name} se cerró de inmediato — {reason}",
     "toast.input_saved": "Asignación de controles guardada para {console}",
     "toast.input_released": "{binding} liberado de {actions}",
     "toast.input_reset": "Asignación de controles restablecida para {console}",

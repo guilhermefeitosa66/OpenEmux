@@ -640,6 +640,47 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite files `tests/test_retroarch_command.py`, `tests/test_retroarch_launcher.py`,
   `tests/test_runtime_manager.py`.
 
+### RT-076 — A launch that cannot happen says why
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make `~/.openemux` read-only (or fill the disk) and click a game.
+- **Expected:** A toast names the error. Everything before the process starts writes to disk — the
+  states dir, the runtime dir, the `--appendconfig` override, an input profile normalised on load
+  — and none of it was guarded, so the error went into the GTK click handler, which prints a
+  traceback and swallows it. The button simply did nothing (issue #226). A failed launch also
+  closes the log file it opened instead of leaking the descriptor.
+- **Check:** suite file `tests/test_retroarch_launcher.py` (`LaunchFailuresAreVisibleTests`).
+
+### RT-077 — A game that dies on startup says what the log said
+- **Area:** Launch
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` whose `runtime.retroarch.binary` points at a script
+  that prints `dlopen(): error loading libfuse.so.2` and exits 1, with a matching core file under
+  `<HOME>/.config/retroarch/cores/`. Never the real home.
+- **Steps:**
+  1. Launch the app against that `HOME`, open the console and start the game.
+  2. Read the toast.
+- **Expected:** *&lt;game&gt; closed straight away — The RetroArch AppImage needs libfuse2, which
+  this system does not have.* A nonzero exit within three seconds is a launch that never started;
+  the old message ("finished (exit code 1)") was indistinguishable from a clean quit, so on a host
+  with no libfuse2 every launch died in silence (issue #226).
+- **Check:** screenshot of the toast; `grep "died on startup" <launch log>`; suite files
+  `tests/test_runtime_manager.py` (`StartupFailureTests`), `tests/test_retroarch_log.py`
+  (`FailureReasonTests`, `ReadFailureReasonTests`).
+- **Restore:** delete the throwaway `HOME`.
+
+### RT-078 — An AppImage runs without FUSE when the host has none
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the app on a distribution that ships no libfuse2 and launch a
+  game against the vendored RetroArch AppImage.
+- **Expected:** The AppImage is started with `--appimage-extract-and-run`, which needs no FUSE, and
+  the game runs. On a host that *has* libfuse2 the flag is not used — extracting the whole image
+  on every launch is only worth paying for when mounting cannot work (issue #226).
+- **Check:** suite file `tests/test_retroarch_launcher.py` (`AppImageFuseFallbackTests`).
+
 ### RT-062 — A game launches and plays
 - **Area:** Launch
 - **Mode:** MANUAL

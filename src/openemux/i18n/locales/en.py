@@ -235,6 +235,8 @@ TRANSLATIONS = {
     "toast.input_apply.saving": "Applying controls to the running game…",
     "toast.input_apply.no_state": "Couldn't snapshot the game — changes apply the next time it starts.",
     "toast.finished": "{name} finished (code {code})",
+    "toast.launch_failed": "Could not start the game: {error}",
+    "toast.launch_died": "{name} closed straight away — {reason}",
     "toast.input_saved": "Input mapping saved for {console}",
     "toast.input_released": "{binding} released from {actions}",
     "toast.input_reset": "Input mapping reset for {console}",
