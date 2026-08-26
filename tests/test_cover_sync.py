@@ -1,4 +1,5 @@
 import re
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -432,6 +433,50 @@ class CoverSyncTests(unittest.TestCase):
             self.assertEqual(result["status"], "skipped")
             download_mock.assert_not_called()
             self.assertEqual(art_path.read_bytes(), _PNG_BYTES)
+
+    def test_a_crashed_sync_still_reports_back(self):
+        # on_done is what clears the caller's "a sync is running" flag; a
+        # worker that dies without firing it wedges the app for the rest of
+        # the session (issue #214).
+        from openemux.core.cover_sync import sync_covers_async
+
+        done = threading.Event()
+        received = {}
+
+        def _on_done(summary):
+            received.update(summary)
+            done.set()
+
+        with patch("openemux.core.cover_sync._sync_covers", side_effect=RuntimeError("boom")):
+            sync_covers_async(
+                library_by_console={},
+                covers_dir=Path("/tmp"),
+                scope="all",
+                selected_console=None,
+                on_done=_on_done,
+            )
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received["crashed"], "boom")
+        self.assertEqual(received["total"], 0)
+        self.assertFalse(received["cancelled"])
+
+    def test_a_crashed_artwork_sync_still_reports_back(self):
+        from openemux.core.cover_sync import sync_artwork_async
+
+        done = threading.Event()
+        received = {}
+
+        def _on_done(summary):
+            received.update(summary)
+            done.set()
+
+        with patch("openemux.core.cover_sync._sync_artwork", side_effect=RuntimeError("boom")):
+            sync_artwork_async(passes=[], covers_dir=Path("/tmp"), on_done=_on_done)
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received["crashed"], "boom")
+        self.assertEqual(received["passes"], [])
 
     def test_cover_sync_reports_progress(self):
         library = {

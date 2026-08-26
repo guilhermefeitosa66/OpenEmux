@@ -1022,6 +1022,27 @@ def _sync_covers(
     return summary
 
 
+def _crashed_summary(scope, selected_console, error):
+    """A sync summary for a run that died, so the caller can still finish.
+
+    Zeroes everywhere and the error in ``crashed``: the UI clears its running
+    flag, closes the task and can say what happened, instead of being left
+    with a banner it can never dismiss.
+    """
+    return {
+        "scope": scope,
+        "selected_console": selected_console,
+        "cancelled": False,
+        "total": 0,
+        "downloaded": 0,
+        "skipped": 0,
+        "errors": 0,
+        "error_roms": [],
+        "stages": {},
+        "crashed": str(error),
+    }
+
+
 def sync_covers_async(
     library_by_console,
     covers_dir,
@@ -1033,15 +1054,24 @@ def sync_covers_async(
     should_cancel=None,
 ):
     def _worker():
-        summary = _sync_covers(
-            library_by_console=library_by_console,
-            covers_dir=covers_dir,
-            scope=scope,
-            selected_console=selected_console,
-            sync_settings=sync_settings,
-            on_progress=on_progress,
-            should_cancel=should_cancel,
-        )
+        summary = None
+        try:
+            summary = _sync_covers(
+                library_by_console=library_by_console,
+                covers_dir=covers_dir,
+                scope=scope,
+                selected_console=selected_console,
+                sync_settings=sync_settings,
+                on_progress=on_progress,
+                should_cancel=should_cancel,
+            )
+        except Exception as exc:
+            # on_done is what clears the caller's "a sync is running" flag.
+            # A worker that dies without firing it wedges the app for the
+            # rest of the session (issue #214), so it always fires -- with a
+            # summary shaped like a real one, carrying the error.
+            logger.exception("cover sync crashed")
+            summary = _crashed_summary(scope, selected_console, exc)
         if on_done:
             on_done(summary)
 
@@ -1185,14 +1215,20 @@ def sync_artwork_async(
     """Run :func:`_sync_artwork` on a background thread (see ``sync_covers_async``)."""
 
     def _worker():
-        summary = _sync_artwork(
-            passes=passes,
-            covers_dir=covers_dir,
-            sync_settings=sync_settings,
-            on_progress=on_progress,
-            should_cancel=should_cancel,
-            replace_existing=replace_existing,
-        )
+        summary = None
+        try:
+            summary = _sync_artwork(
+                passes=passes,
+                covers_dir=covers_dir,
+                sync_settings=sync_settings,
+                on_progress=on_progress,
+                should_cancel=should_cancel,
+                replace_existing=replace_existing,
+            )
+        except Exception as exc:
+            logger.exception("artwork sync crashed")
+            summary = _crashed_summary("all", None, exc)
+            summary["passes"] = []
         if on_done:
             on_done(summary)
 

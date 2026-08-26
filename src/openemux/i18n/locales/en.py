@@ -208,6 +208,8 @@ TRANSLATIONS = {
     "toast.playlist_rebuilt": "Playlist rebuilt for {console}",
     "toast.playlists_rebuilt_all": "Library rebuilt: {roms} ROMs across {consoles} consoles",
     "toast.scan_running": "ROM scan is already running in background",
+    "toast.scan_failed": "The scan could not finish: {error}",
+    "toast.scan_partial": "Some consoles could not be scanned: {consoles}",
     "toast.sync_running": "Cover sync already running",
     "toast.sync_started": "Cover sync started in background",
     "toast.sync_done": "Cover sync done: {downloaded} downloaded, {skipped} skipped, {errors} missed",

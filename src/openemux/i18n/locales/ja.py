@@ -206,6 +206,8 @@ TRANSLATIONS = {
     "toast.playlist_rebuilt": "{console} のプレイリストを再構築しました",
     "toast.playlists_rebuilt_all": "ライブラリを再構築しました: {consoles} 台のコンソールで {roms} 本の ROM",
     "toast.scan_running": "ROM のスキャンはすでにバックグラウンドで実行中です",
+    "toast.scan_failed": "スキャンを完了できませんでした: {error}",
+    "toast.scan_partial": "一部のコンソールをスキャンできませんでした: {consoles}",
     "toast.sync_running": "カバーの同期はすでに実行中です",
     "toast.sync_started": "カバーの同期をバックグラウンドで開始しました",
     "toast.sync_done": "カバーの同期が完了: {downloaded} 件ダウンロード、{skipped} 件スキップ、{errors} 件見つからず",

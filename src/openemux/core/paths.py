@@ -4,6 +4,31 @@ from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
 
+#: How the ``.list`` files encode a ROM path.
+#:
+#: A filename is bytes, not text. Old dumps routinely carry cp437 or Shift-JIS
+#: names, and Python hands those back decoded with ``surrogateescape`` --
+#: ``'bad\udcffname.nes'``. Writing that through a strict UTF-8 encoder raises
+#: ``UnicodeEncodeError: surrogates not allowed`` *mid-file*, which is what
+#: killed the scan worker outright and left scanning disabled for the rest of
+#: the session (issue #214). The same handler on the way back out turns the
+#: bytes into exactly the name the filesystem has, so such a ROM round-trips
+#: and plays like any other.
+PATH_ERRORS = "surrogateescape"
+
+
+def display_text(value):
+    """``value`` rendered as text GTK can actually take.
+
+    GTK strings must be valid UTF-8. A filename carrying a non-UTF-8 byte
+    reaches us as a lone surrogate, and handing that to a label or a tooltip
+    raises ``UnicodeEncodeError`` deep inside PyGObject -- which took the whole
+    console page down with it: selecting the console rendered nothing at all
+    (issue #214). The offending bytes are shown escaped instead. The name stays
+    recognisable, and the path itself is never touched, so the game launches.
+    """
+    return str(value).encode("utf-8", "backslashreplace").decode("utf-8")
+
 # Pre-rename data dir. The app was renamed Opemux -> OpenEmux; existing installs
 # keep their config, library index, playlists and input profiles under this path.
 LEGACY_CONFIG_DIR_NAME = ".opemux"

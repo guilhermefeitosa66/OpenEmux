@@ -208,6 +208,8 @@ TRANSLATIONS = {
     "toast.playlist_rebuilt": "Playlist recriada para {console}",
     "toast.playlists_rebuilt_all": "Biblioteca recriada: {roms} ROMs em {consoles} consoles",
     "toast.scan_running": "Scan de ROMs já está em execução em segundo plano",
+    "toast.scan_failed": "A varredura não pôde terminar: {error}",
+    "toast.scan_partial": "Alguns consoles não puderam ser varridos: {consoles}",
     "toast.sync_running": "Sincronização de capas já está em execução",
     "toast.sync_started": "Sincronização de capas iniciada em segundo plano",
     "toast.sync_done": "Sincronização concluída: {downloaded} baixadas, {skipped} ignoradas, {errors} sem capa",

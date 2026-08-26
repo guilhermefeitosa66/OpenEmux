@@ -36,7 +36,7 @@ from openemux.core.cover_sync import (
 )
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
-from openemux.core.paths import get_project_root
+from openemux.core.paths import display_text, get_project_root
 from openemux.core.rom_importer import (
     IMPORTABLE_EXTENSIONS,
     collect_ambiguous_extensions,
@@ -404,7 +404,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button.set_visible(self._console_scope_id() is not None)
 
     def t(self, key, **kwargs):
-        return tr(self.locale, key, **kwargs)
+        # Escaped on the way out: these strings become GTK labels, tooltips
+        # and toasts, and the ones interpolating a ROM name can carry a lone
+        # surrogate from a non-UTF-8 filename. GTK cannot take one -- it
+        # raises inside PyGObject and takes the whole render with it (#214).
+        return display_text(tr(self.locale, key, **kwargs))
 
     def _setup_window_icon(self):
         images_dir = Path(__file__).parent / "assets" / "images"
@@ -2988,7 +2992,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _rename_rom_from_ui(self, rom):
         entry = Gtk.Entry()
-        entry.set_text(rom["name"])
+        entry.set_text(display_text(rom["name"]))
         entry.set_activates_default(True)
 
         dialog = Adw.AlertDialog(
@@ -3126,8 +3130,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         task_id = self._begin_task("scan", self.t("status.scan.starting"), total=1)
 
         def _worker():
-            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
-            summary = {"console": console, "roms": len(roms)}
+            summary = {"console": console, "roms": 0}
+            try:
+                summary["roms"] = len(
+                    self.playlist_manager.scan_and_rebuild_playlist(console)
+                )
+            except Exception as exc:
+                # _on_rescan_*_done_ui is what clears _scan_running. A worker
+                # that dies without reaching it leaves the flag set for the
+                # rest of the session, and every later scan is refused with
+                # "a scan is already running" (issue #214).
+                logger.exception("rescan crashed: console=%s", console)
+                summary["error"] = str(exc)
             GLib.idle_add(self._on_rescan_single_done_ui, task_id, summary, show_toast, origin_view)
 
         Thread(target=_worker, daemon=True).start()
@@ -3154,7 +3168,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )
 
         def _worker():
-            summary = self.playlist_manager.scan_and_rebuild_all_playlists(on_progress=_on_progress)
+            try:
+                summary = self.playlist_manager.scan_and_rebuild_all_playlists(
+                    on_progress=_on_progress
+                )
+            except Exception as exc:
+                logger.exception("rescan crashed")
+                summary = {
+                    "consoles": {},
+                    "total_consoles": 0,
+                    "total_roms": 0,
+                    "failed": {},
+                    "error": str(exc),
+                }
             GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast, origin_view)
 
         Thread(target=_worker, daemon=True).start()
@@ -3166,6 +3192,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view or summary.get("console"))
         self._on_search_changed(self.search_entry)
+        if summary.get("error"):
+            self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
+            return False
         if show_toast:
             toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=summary.get("console")))
             toast.set_timeout(4)
@@ -3177,6 +3206,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
+        if summary.get("error"):
+            self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
+            return False
+        failed = summary.get("failed") or {}
+        if failed:
+            # The rest of the library did scan; say which consoles did not
+            # instead of reporting a clean run (issue #214).
+            self._toast(
+                self.t("toast.scan_partial", consoles=", ".join(sorted(failed))),
+                timeout=6,
+            )
+            return False
         if show_toast:
             toast = Adw.Toast(
                 title=self.t(

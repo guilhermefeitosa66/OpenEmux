@@ -289,6 +289,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
+### RT-018 — A ROM whose name is not valid UTF-8 scans, shows and keeps working
+- **Area:** Library
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with a library holding a ROM whose filename carries a
+  non-UTF-8 byte (`printf` the name with `\xff` in it) plus one ordinary ROM.
+- **Steps:**
+  1. Launch the app against that `HOME`, open the console page.
+  2. Press `F5`, wait for the rescan, then press `F5` again.
+- **Expected:** Both games are in the grid — the bad one shown with its offending byte escaped
+  (`Contra \udcff (Japan)`) — the header counts 2 games, and the **second** `F5` runs a rescan too.
+  Old dumps carry cp437 and Shift-JIS names; such a name used to raise mid-write, kill the scan
+  worker, and leave `_scan_running` set so every later scan was refused with "a scan is already
+  running" until the app was restarted (issue #214). The launch log gains no `Traceback` and no
+  `--- Logging error ---`.
+- **Check:** two screenshots (grid, and after the second rescan); `grep -c Traceback` and
+  `grep -c "Logging error"` on the launch log are both 0; the console `.list` on disk holds the
+  raw name (`python3 -c "print(open(p,'rb').read())"`); suite file `tests/test_non_utf8_names.py`.
+- **Restore:** delete the throwaway `HOME`.
+
+### RT-019 — A worker that crashes never wedges its feature
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make a rescan, a cover sync or an artwork search fail, then start the
+  same thing again.
+- **Expected:** It starts. The completion callback is what clears the "already running" flag, and
+  a worker that died without firing it left the feature refused for the rest of the session
+  (issue #214) — the rescan behind "a scan is already running", the sync behind a banner that
+  could never be dismissed, the artwork dialog spinning forever.
+- **Check:** suite files `tests/test_cover_sync.py`
+  (`test_a_crashed_sync_still_reports_back`, `test_a_crashed_artwork_sync_still_reports_back`),
+  `tests/test_artwork_search.py` (`CrashedWorkerTests`), `tests/test_non_utf8_names.py`
+  (`test_one_bad_console_does_not_abort_the_whole_rescan`).
+
 ### RT-013 — Rename carries save states, battery saves and artwork
 - **Area:** Library
 - **Mode:** AUTO-SUITE
