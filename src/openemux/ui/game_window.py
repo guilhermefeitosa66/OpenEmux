@@ -67,6 +67,12 @@ VOLUME_WATCH_INTERVAL_MS = 150
 #: X auto-repeat turns a held key into a stream of presses.
 FULLSCREEN_DEBOUNCE_US = 400_000
 
+#: The key the wrapper falls back to when the user's own fullscreen binding
+#: cannot be resolved to an X keycode. RetroArch's toggle is deliberately
+#: unbound while embedded, so without this a user who rebound fullscreen to a
+#: key X cannot name would have no fullscreen key at all (issue #236).
+FULLSCREEN_FALLBACK_KEY = "f"
+
 #: How often, in ticks, the wrapper asks RetroArch's log which display server
 #: it took, and how often it re-checks that the embedded window is still ours.
 #: Both are X/disk round-trips that nothing needs at the 200 ms tick rate.
@@ -139,7 +145,8 @@ class GameWindow(Adw.Window):
         profile = runtime_manager.config_manager.get_input_profile(rom.get("console"))
         keyboard = (profile.get("devices", {}) or {}).get("keyboard", {}) or {}
         self._fullscreen_key = (
-            (keyboard.get("bindings", {}) or {}).get("fullscreen_toggle") or "f"
+            (keyboard.get("bindings", {}) or {}).get("fullscreen_toggle")
+            or FULLSCREEN_FALLBACK_KEY
         )
         self._fullscreen_keycode = None
         self._fullscreen_toggled_at = 0
@@ -565,7 +572,7 @@ class GameWindow(Adw.Window):
             self._embedder.focus(self._child_xid)
             if self._fullscreen_keycode is None:
                 self._fullscreen_keycode = self._embedder.grab_key(
-                    parent_xid, self._fullscreen_key
+                    parent_xid, self._fullscreen_key, FULLSCREEN_FALLBACK_KEY
                 )
 
     def _try_embed(self):
@@ -607,8 +614,11 @@ class GameWindow(Adw.Window):
         self._last_rect = rect
         self._hide_starting_indicator()
         self._embedder.focus(child_xid)
+        # The fallback matters: RetroArch's own toggle is unbound while
+        # embedded, so a binding X cannot name would mean no fullscreen key
+        # at all rather than a differently-shaped one (issue #236).
         self._fullscreen_keycode = self._embedder.grab_key(
-            parent_xid, self._fullscreen_key
+            parent_xid, self._fullscreen_key, FULLSCREEN_FALLBACK_KEY
         )
         logger.info("game window: embedded RetroArch window 0x%x", child_xid)
         return True
