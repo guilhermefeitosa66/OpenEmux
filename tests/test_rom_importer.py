@@ -86,6 +86,24 @@ class ImportRomsTests(unittest.TestCase):
         # Non-ROM files inside a directory are filtered out, not reported.
         self.assertEqual(result["unknown"], [])
 
+    def test_a_symlinked_subdirectory_is_walked_too(self):
+        """Dropping a folder whose contents live elsewhere imported nothing.
+
+        ``rglob`` yields the link and stops there, so the ROMs behind it were
+        never seen (issue #228).
+        """
+        elsewhere = self.root / "storage"
+        elsewhere.mkdir()
+        (elsewhere / "Metroid.sfc").write_bytes(b"rom-data")
+        self._write("a/Zelda.sfc")
+        (self.src / "a" / "linked").symlink_to(elsewhere, target_is_directory=True)
+
+        result = import_roms([self.src], self.roms)
+
+        self.assertTrue((self.roms / "SFC" / "Zelda.sfc").exists())
+        self.assertTrue((self.roms / "SFC" / "Metroid.sfc").exists())
+        self.assertEqual(len(result["imported"]), 2)
+
     def test_identical_duplicate_is_skipped(self):
         rom = self._write("Zelda.sfc", b"same")
         import_roms([rom], self.roms)

@@ -173,6 +173,97 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-178 — ROMs behind a symlinked directory are found
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: keep the big files on another disk and link them into the library —
+  `~/games/roms/PS/discs -> /mnt/storage/ps1` — then rescan.
+- **Expected:** Every ROM behind the link is in the library. It used to scan as empty, with no
+  error and nothing in the log. A link pointing back at one of its own ancestors must not hang the
+  scan either.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import tempfile
+  from pathlib import Path
+  from openemux.core.scanner import RomScanner
+
+  with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      base = root / "roms"
+      elsewhere = root / "storage" / "ps1"
+      elsewhere.mkdir(parents=True)
+      (elsewhere / "Final Fantasy VII.cue").write_bytes(b"cue")
+      (base / "PS").mkdir(parents=True)
+      (base / "PS" / "discs").symlink_to(elsewhere, target_is_directory=True)
+      # A loop back to the console directory: must terminate, not descend forever.
+      (elsewhere / "loop").symlink_to(base / "PS", target_is_directory=True)
+
+      names = [rom["name"] for rom in RomScanner(base).scan_console("PS")]
+      assert names == ["Final Fantasy VII"], names
+  print("RT-178 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-179 — A favourite under a symlinked console directory is displayed
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: make `~/games/roms/SFC` a symlink to another disk, favourite a game
+  under it, and open "Favorites".
+- **Expected:** The game is there. It used to be stored in the favourites file and never shown:
+  the console lookup resolved the path first, which rewrote it to its physical location outside
+  the library root, so the entry was skipped — while the pruning pass kept the line, because the
+  file does exist.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import tempfile
+  from pathlib import Path
+  from openemux.core.playlist_manager import PlaylistManager
+  from openemux.core.scanner import RomScanner
+
+  class Config:
+      def __init__(self, playlists, roms):
+          self._playlists, self._roms = playlists, roms
+      def get_playlists_dir(self): return self._playlists
+      def get_roms_path(self): return self._roms
+
+  with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      base = root / "roms"
+      base.mkdir()
+      elsewhere = root / "storage" / "snes"
+      elsewhere.mkdir(parents=True)
+      (elsewhere / "Super Metroid.sfc").write_bytes(b"rom")
+      (base / "SFC").symlink_to(elsewhere, target_is_directory=True)
+      playlists = root / "playlists"
+      playlists.mkdir()
+
+      manager = PlaylistManager(Config(playlists, base), RomScanner(base))
+      rom = base / "SFC" / "Super Metroid.sfc"
+      assert manager._console_from_rom_path(rom) == "SFC"
+      entries = manager.entries_for_paths([str(rom)])
+      assert [e["name"] for e in entries] == ["Super Metroid"], entries
+      assert entries[0]["console"] == "SFC", entries
+  print("RT-179 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-180 — Importing a folder follows its symlinked subdirectories
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: use "Import ROMs" on a folder that contains a symlink to a directory
+  of games on another disk.
+- **Expected:** The games behind the link are imported along with the rest. They used to be
+  skipped silently.
+- **Check:** suite files `tests/test_rom_importer.py`
+  (`test_a_symlinked_subdirectory_is_walked_too`), `tests/test_dir_walk.py`.
+
 ### RT-012 — Playlist files are well-formed
 - **Area:** Library
 - **Mode:** AUTO-PROBE

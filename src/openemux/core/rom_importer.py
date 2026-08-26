@@ -17,6 +17,7 @@ from openemux.core.archives import (
     is_archive,
     loads_archives_natively,
 )
+from openemux.core.dir_walk import walk_files
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,10 @@ def _expand_paths(paths):
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
-            for child in sorted(path.rglob("*")):
+            # Follows symlinked subdirectories, which rglob does not: dropping
+            # a folder whose contents live on another disk imported nothing
+            # (issue #228).
+            for child in sorted(walk_files(path)):
                 if child.is_file() and _is_importable(child):
                     files.append(child)
         elif path.is_file():
