@@ -1438,6 +1438,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   closes the dialog.
 - **Check:** One screenshot per slide; no missing-image placeholder.
 
+### RT-121 — Arrow keys do not flip slides under the open language list
+- **Area:** Wizard
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, on the first Welcome slide.
+- **Steps:**
+  1. Open "Main Menu" → "Welcome".
+  2. Open the language dropdown on the first slide.
+  3. Press Left and Right a few times, then Escape to close the list.
+  4. With the list closed, press Left and Right again.
+- **Expected:** Step 3 leaves the slide where it is — the page dots do not move. The dialog's key
+  controller runs in the bubble phase and claimed Left/Right unconditionally, and the dropdown's
+  list handles Up/Down but not Left/Right, so the slide changed *behind* the open list during the
+  one interaction that slide exists for (issue #259). Step 4 steps through the slides as usual,
+  including with the dropdown merely focused.
+- **Check:** screenshots of the page dots before and after step 3 (identical) and after step 4
+  (moved); suite file `tests/test_welcome_keys.py`.
+
 ## Help
 
 ### RT-130 — The shortcuts overlay opens
