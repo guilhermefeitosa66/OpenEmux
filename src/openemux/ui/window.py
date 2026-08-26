@@ -3713,7 +3713,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._rescan_single_console(selected_console, show_toast=False)
 
     def on_launch_game(self, rom):
-        success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        try:
+            success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        except Exception as exc:
+            # A click handler is where an exception goes to die quietly:
+            # PyGObject prints the traceback and swallows it, so the button
+            # just does nothing. The toast path is right here (issue #226).
+            logger.exception("launch failed")
+            success, error_msg = False, self.t("toast.launch_failed", error=str(exc))
         if success:
             # Stamped here rather than on exit: a game that fails to close
             # cleanly was still played, and this is the only point that knows
@@ -3994,8 +4001,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if result is not None:
             rom = result.get("rom") or {}
             rom_name = rom.get("path", "Game").split("/")[-1]
-            toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
-            toast.set_timeout(4)
+            reason = result.get("failure_reason")
+            if reason:
+                # It never started. Say so, and say what the log said -- the
+                # exit code alone reads exactly like a clean quit (#226).
+                title = self.t("toast.launch_died", name=rom_name, reason=reason)
+                timeout = 10
+            else:
+                title = self.t("toast.finished", name=rom_name, code=result["exit_code"])
+                timeout = 4
+            toast = Adw.Toast(title=title)
+            toast.set_timeout(timeout)
             self.toast_overlay.add_toast(toast)
         return True
 

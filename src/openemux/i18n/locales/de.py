@@ -233,6 +233,8 @@ TRANSLATIONS = {
     "toast.input_apply.saving": "Steuerung wird auf das laufende Spiel angewendet …",
     "toast.input_apply.no_state": "Der Spielstand konnte nicht gesichert werden – Änderungen greifen beim nächsten Start.",
     "toast.finished": "{name} beendet (Code {code})",
+    "toast.launch_failed": "Das Spiel konnte nicht gestartet werden: {error}",
+    "toast.launch_died": "{name} wurde sofort beendet — {reason}",
     "toast.input_saved": "Tastenbelegung für {console} gespeichert",
     "toast.input_released": "{binding} von {actions} gelöst",
     "toast.input_reset": "Tastenbelegung für {console} zurückgesetzt",
