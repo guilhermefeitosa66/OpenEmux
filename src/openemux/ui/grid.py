@@ -42,6 +42,10 @@ DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
 
 #: Gap between cards, and the grid's padding inside the viewport.
+#: How long after a launch the same card's activation is treated as the
+#: second half of a double-click rather than a new launch (issue #236).
+ACTIVATION_DEBOUNCE_US = 500_000
+
 GRID_SPACING = 24
 GRID_MARGIN = 28
 
@@ -1163,6 +1167,8 @@ class RomGrid(Gtk.FlowBox):
             self.append(item)
             self._prepare_child(item)
 
+        # (path, monotonic microseconds) of the last launch this grid started.
+        self._last_activation = (None, 0)
         self.connect("child-activated", self._on_child_activated)
 
         # Menu key / Shift+F10 opens the focused card's context menu, the
@@ -1423,7 +1429,21 @@ class RomGrid(Gtk.FlowBox):
         # here would fire the game on every Ctrl/Shift+click.
         if self._selection_modifier_held():
             return
+        # Activation is on a single click, so a double-click emits this twice.
+        # The second launch is correctly refused -- but the refusal is an
+        # error toast, so anyone who habitually double-clicks got "a game is
+        # already running" on every launch (issue #236).
+        path = item.rom.get("path")
+        now = GLib.get_monotonic_time()
+        if self._is_repeat_activation(path, now):
+            return
+        self._last_activation = (path, now)
         self.on_launch_callback(item.rom)
+
+    def _is_repeat_activation(self, path, now):
+        """Whether this activation is the second half of a double-click."""
+        last_path, last_at = self._last_activation
+        return last_path == path and (now - last_at) < ACTIVATION_DEBOUNCE_US
 
     def _selection_modifier_held(self):
         """Whether Ctrl or Shift is down right now (selection, not launch)."""

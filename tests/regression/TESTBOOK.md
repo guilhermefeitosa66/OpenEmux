@@ -893,6 +893,48 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-079 — The wrapper's fullscreen key works whatever it is bound to
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: rebind "Toggle fullscreen" to Enter (or Page Up, Delete, keypad +,
+  right Shift), launch a game in the OpenEmux window and press it.
+- **Expected:** The window toggles fullscreen. Bindings are stored in RetroArch's vocabulary and X
+  does not know most of those words, so the grab resolved to nothing and the key did nothing —
+  and RetroArch's own toggle is deliberately unbound while embedded, so that left **no**
+  fullscreen key at all, with one log line to explain it (issue #236). A binding that still cannot
+  be resolved now falls back to "F" instead of to nothing.
+- **Check:** suite file `tests/test_x11_embed.py` (`KeysymResolutionTests` — including
+  `test_every_retroarch_key_name_can_be_resolved`, which walks the whole stored vocabulary against
+  the real Xlib tables), `tests/test_game_window.py` (`FullscreenBindingTests`).
+
+### RT-083 — Double-clicking a game launches it once
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM.
+- **Steps:**
+  1. Double-click a card the way you would in a file manager.
+- **Expected:** The game starts, and **no** "A game is already running" toast appears. Activation
+  is on a single click, so a double-click emitted it twice: the second launch was correctly
+  refused, but the refusal is an error toast, so anyone who habitually double-clicks got an error
+  on every launch (issue #236).
+- **Check:** human only (launching grabs the keyboard for the emulator); the debounce itself in
+  `tests/test_game_window.py` (`DoubleClickTests`).
+
+### RT-084 — Input keeps working after clicking the game window's chrome
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the OpenEmux window.
+- **Steps:**
+  1. Click the header bar (the pause or volume control), then go back to playing.
+- **Expected:** The pad and the keyboard still drive the game. RetroArch gates input on X focus,
+  and the reclaim tick used to skip entirely on sessions whose window manager does not keep
+  `_NET_ACTIVE_WINDOW` current — the game went input-dead after any click on the chrome, silently
+  (issue #236). The fallback now decides from X's own input focus, and the missing property is
+  logged once.
+- **Check:** human only; the decision itself in `tests/test_x11_embed.py`
+  (`FocusReclaimDecisionTests`, `EnsureFocusWithoutActiveWindowTests`).
+
 ### RT-063 — In-game hotkeys work
 - **Area:** Launch
 - **Mode:** MANUAL

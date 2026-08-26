@@ -26,6 +26,66 @@ except ImportError:  # pragma: no cover - exercised only without python-xlib
 #: WM_CLASS values that identify a RetroArch window, lowercased.
 RETROARCH_WM_CLASSES = {"retroarch"}
 
+#: RetroArch's own key vocabulary translated back into X keysym names.
+#:
+#: Input profiles store bindings the way RetroArch writes them, and X does not
+#: know most of those words: ``string_to_keysym`` answers NoSymbol for
+#: ``enter``, ``num1``, ``pageup``, ``kp_plus``, ``backquote``, ``del`` and
+#: ``rshift``, all of which a user can legitimately have bound. This is the
+#: inverse of ``input_actions.RETROARCH_KEY_NAMES``, with the X spelling
+#: chosen where several map onto one token (issue #236).
+X_KEYSYM_NAMES = {
+    # Top-row digits -- RetroArch files these under num*, and the keypad ones
+    # under keypad*.
+    **{f"num{digit}": str(digit) for digit in range(10)},
+    **{f"keypad{digit}": f"KP_{digit}" for digit in range(10)},
+    "equals": "equal",
+    "kp_equals": "KP_Equal",
+    "kp_plus": "KP_Add",
+    "kp_minus": "KP_Subtract",
+    "kp_period": "KP_Decimal",
+    "kp_enter": "KP_Enter",
+    "pageup": "Prior",
+    "pagedown": "Next",
+    "del": "Delete",
+    "enter": "Return",
+    "backquote": "grave",
+    "leftbracket": "bracketleft",
+    "rightbracket": "bracketright",
+    "quote": "apostrophe",
+    "capslock": "Caps_Lock",
+    "numlock": "Num_Lock",
+    "scrolllock": "Scroll_Lock",
+    "print_screen": "Print",
+    # Modifiers: RetroArch names the left-hand one bare and prefixes the right.
+    "shift": "Shift_L",
+    "rshift": "Shift_R",
+    "ctrl": "Control_L",
+    "rctrl": "Control_R",
+    "alt": "Alt_L",
+    "ralt": "Alt_R",
+    "lsuper": "Super_L",
+    "rsuper": "Super_R",
+    "lmeta": "Meta_L",
+    "rmeta": "Meta_R",
+}
+
+
+def _keysym_candidates(key_name):
+    """The X keysym names to try for a stored binding, best first."""
+    name = str(key_name or "").strip()
+    if not name:
+        return []
+    mapped = X_KEYSYM_NAMES.get(name.lower())
+    candidates = [mapped] if mapped else []
+    candidates.append(name)
+    # Binding names are lowercase ("f11"); keysym names for function keys are
+    # capitalized ("F11"). Same keycode.
+    candidates.append(name.upper())
+    seen = set()
+    return [c for c in candidates if not (c in seen or seen.add(c))]
+
+
 #: The glyph the embedded game window's pointer is defined to (XC_left_ptr).
 #: RetroArch defines an invisible cursor on its own window, and X resolves the
 #: pointer from the *innermost* window under it, so the child's cursor wins
@@ -38,6 +98,8 @@ class RetroArchWindowEmbedder:
 
     def __init__(self):
         self._display = None
+        # Logged once per embedder; the reclaim tick runs five times a second.
+        self._warned_no_active_window = False
         # RetroArch windows already on screen before the launch; the
         # WM_CLASS fallback must never grab one of those.
         self._preexisting_xids = set()
@@ -281,10 +343,11 @@ class RetroArchWindowEmbedder:
             active = root.get_full_property(
                 dpy.intern_atom("_NET_ACTIVE_WINDOW"), Xatom.WINDOW
             )
-            if not active or not active.value or int(active.value[0]) != int(toplevel_xid):
-                return False
+            active_xid = int(active.value[0]) if active and active.value else None
             focus = dpy.get_input_focus().focus
             focus_xid = focus if isinstance(focus, int) else focus.id
+            if not self.should_reclaim_focus(active_xid, focus_xid, child_xid, toplevel_xid):
+                return False
             if focus_xid == child_xid:
                 return True
             child = dpy.create_resource_object("window", child_xid)
@@ -300,8 +363,39 @@ class RetroArchWindowEmbedder:
         self.set_child_cursor(child_xid)
         return True
 
+    def should_reclaim_focus(self, active_xid, focus_xid, child_xid, toplevel_xid):
+        """Whether the reclaim tick may take X focus back for the game.
+
+        ``_NET_ACTIVE_WINDOW`` is the honest answer -- it is the window
+        manager saying which toplevel the user is on -- but not every
+        (XWayland) window manager keeps it current, and the old code read a
+        missing property as "not us" and silently did nothing. On such a
+        session the reclaim loop never fired at all and RetroArch went
+        input-dead after any click on the wrapper chrome, with nothing in the
+        log to point at it (issue #236).
+
+        So when the property is absent, X's own input focus decides: if it
+        already sits on our toplevel or on the game, the user is on us and the
+        reclaim is safe. Focus anywhere else still means hands off -- stealing
+        it from another application would be far worse than a missed tick.
+        """
+        if active_xid is not None:
+            return active_xid == int(toplevel_xid)
+        self._warn_missing_active_window()
+        return focus_xid in (int(toplevel_xid), int(child_xid))
+
+    def _warn_missing_active_window(self):
+        """Say it once. A 200 ms tick would otherwise fill the log."""
+        if self._warned_no_active_window:
+            return
+        self._warned_no_active_window = True
+        logger.warning(
+            "embed: the window manager does not publish _NET_ACTIVE_WINDOW; "
+            "falling back to the X input focus to decide when to reclaim it"
+        )
+
     # -- wrapper hotkeys ----------------------------------------------------
-    def grab_key(self, toplevel_xid, key_name):
+    def grab_key(self, toplevel_xid, key_name, fallback_key_name=None):
         """Passively grab one key on the wrapper toplevel; the keycode or None.
 
         Every normal key event goes to the game (X focus sits on the
@@ -314,12 +408,17 @@ class RetroArchWindowEmbedder:
         if dpy is None:
             return None
         try:
-            keysym = XK.string_to_keysym(key_name)
-            if keysym == X.NoSymbol:
-                # Binding names are lowercase ("f11"); keysym names for
-                # function keys are capitalized ("F11"). Same keycode.
-                keysym = XK.string_to_keysym(key_name.upper())
-            keycode = dpy.keysym_to_keycode(keysym) if keysym != X.NoSymbol else 0
+            keycode = self._keycode_for(dpy, key_name)
+            if not keycode and fallback_key_name:
+                # A binding X cannot name is not a reason to have no
+                # fullscreen key at all: RetroArch's own toggle is unbound
+                # while embedded, so this grab is the only one there is.
+                logger.warning(
+                    "embed: no keycode for hotkey %r; falling back to %r",
+                    key_name,
+                    fallback_key_name,
+                )
+                keycode = self._keycode_for(dpy, fallback_key_name)
             if not keycode:
                 logger.warning("embed: no keycode for hotkey %r", key_name)
                 return None
@@ -334,6 +433,26 @@ class RetroArchWindowEmbedder:
         except Exception as exc:
             logger.warning("embed: grabbing key %r failed: %s", key_name, exc)
             return None
+
+    @staticmethod
+    def _keycode_for(dpy, key_name):
+        """The keycode for a stored binding name, or 0.
+
+        Bindings are stored in RetroArch's vocabulary, which is not X's:
+        ``string_to_keysym`` answers NoSymbol for ``enter``, ``num1``,
+        ``pageup``, ``kp_plus``, ``del``, ``rshift`` and every other token in
+        :data:`X_KEYSYM_NAMES`. Passing those straight through is what left a
+        user who rebound fullscreen to one of them with no fullscreen key at
+        all (issue #236).
+        """
+        for candidate in _keysym_candidates(key_name):
+            keysym = XK.string_to_keysym(candidate)
+            if keysym == X.NoSymbol:
+                continue
+            keycode = dpy.keysym_to_keycode(keysym)
+            if keycode:
+                return keycode
+        return 0
 
     def pressed_grabbed_keycodes(self):
         """Keycodes of grabbed keys pressed since the last call."""
