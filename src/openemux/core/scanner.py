@@ -33,6 +33,10 @@ class RomScanner:
             logger.info("scan_roms skipped: console path does not exist console=%s path=%s", system_id, console_path)
             return []
 
+        # Everything per file below logs at DEBUG. A scan runs for all 31
+        # consoles at every launch, so one INFO line per ROM meant the launch
+        # log was mostly a list of the library (issue #221); the count is in
+        # the "finished" line at the bottom.
         roms = []
         extensions = get_supported_extensions(system_id)
         cue_referenced_bins = self._cue_referenced_bins(console_path)
@@ -48,7 +52,7 @@ class RomScanner:
 
             if suffix in ARCHIVE_EXTENSIONS and suffix not in extensions:
                 if not allow_archives:
-                    logger.info(
+                    logger.debug(
                         "scan_roms archive skipped (core needs a real file): console=%s path=%s",
                         system_id,
                         file,
@@ -57,7 +61,7 @@ class RomScanner:
                 rom_name = archive_rom_name(file, extensions)
                 if rom_name is None:
                     continue
-                logger.info("scan_roms found archived rom: console=%s rom=%s path=%s", system_id, rom_name, file)
+                logger.debug("scan_roms found archived rom: console=%s rom=%s path=%s", system_id, rom_name, file)
                 roms.append({
                     "name": rom_name,
                     "path": str(file),
@@ -67,9 +71,9 @@ class RomScanner:
 
             if suffix in extensions:
                 if file.suffix.lower() == ".bin" and file.resolve() in cue_referenced_bins:
-                    logger.info("scan_roms hidden helper track: console=%s path=%s", system_id, file)
+                    logger.debug("scan_roms hidden helper track: console=%s path=%s", system_id, file)
                     continue
-                logger.info("scan_roms found rom: console=%s rom=%s path=%s", system_id, file.stem, file)
+                logger.debug("scan_roms found rom: console=%s rom=%s path=%s", system_id, file.stem, file)
                 roms.append({
                     "name": file.stem,
                     "path": str(file),

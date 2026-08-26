@@ -1853,11 +1853,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Launch the app (`make run`), writing its output to `$SCRATCH/app.log`.
   2. Wait for the library to appear, then click around the grid and the sidebar a dozen times.
   3. Close the app.
-- **Expected:** The log carries one summary line per console rescan, and no line per ROM and no
-  line per mouse click. The startup housekeeping reports what it swept.
-- **Check:** `grep -c "ui click" $SCRATCH/app.log` and `grep -c "playlist add rom"
-  $SCRATCH/app.log` both print `0`; `grep -c "playlist rebuild finished" $SCRATCH/app.log` is
-  greater than `0`; `grep "housekeeping" $SCRATCH/app.log` prints at least one line.
+- **Expected:** The log carries one summary line per console rescan and one per console scan, and
+  no line per ROM and no line per mouse click. The startup housekeeping reports what it swept.
+- **Check:** `grep -c "ui click" $SCRATCH/app.log`, `grep -c "playlist add rom"
+  $SCRATCH/app.log` and `grep -c "scan_roms found rom" $SCRATCH/app.log` all print `0`;
+  `grep -c "playlist rebuild finished" $SCRATCH/app.log` and `grep -c "scan_roms finished"
+  $SCRATCH/app.log` are both greater than `0`; `grep "housekeeping" $SCRATCH/app.log` prints at
+  least one line.
 - **Restore:** none.
 
 
