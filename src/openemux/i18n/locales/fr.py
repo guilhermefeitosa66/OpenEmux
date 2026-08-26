@@ -545,6 +545,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "erreur inconnue",
     "toast.path_invalid": "Dossier de ROMs sélectionné non valide",
     "toast.path_updated": "Dossier des ROMs mis à jour : {path}",
+    "toast.path_not_writable": "Dossier des ROMs défini sur {path}, mais impossible de le créer — vérifiez que le disque est accessible en écriture",
     "toast.state_recovered.one": "Un fichier de configuration n'a pas pu être lu ; il a été conservé sous « {name} » et les valeurs par défaut sont utilisées",
     "toast.state_recovered.many": "{count} fichiers de configuration n'ont pas pu être lus ; ils ont été conservés à côté des originaux et les valeurs par défaut sont utilisées",
     "header.import": "Importer des ROMs",

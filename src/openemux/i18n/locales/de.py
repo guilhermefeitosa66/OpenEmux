@@ -545,6 +545,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "unbekannter Fehler",
     "toast.path_invalid": "Ungültiger ROM-Ordner ausgewählt",
     "toast.path_updated": "ROM-Ordner aktualisiert: {path}",
+    "toast.path_not_writable": "ROM-Ordner auf {path} gesetzt, konnte aber nicht angelegt werden — prüfen Sie, ob der Datenträger beschreibbar ist",
     "toast.state_recovered.one": "Eine Konfigurationsdatei konnte nicht gelesen werden; sie wurde als \"{name}\" aufbewahrt und es gelten die Standardwerte",
     "toast.state_recovered.many": "{count} Konfigurationsdateien konnten nicht gelesen werden; sie wurden neben den Originalen aufbewahrt und es gelten die Standardwerte",
     "header.import": "ROMs importieren",

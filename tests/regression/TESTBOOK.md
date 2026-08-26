@@ -1953,6 +1953,94 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   least one line.
 - **Restore:** none.
 
+## Robustness
+
+### RT-181 — A read-only library does not break the BIOS pages
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: put the library on a read-only mount (or `chmod -w` the console
+  folder), then open "Settings" → "BIOS" and launch a game that needs a BIOS.
+- **Expected:** The page lists every console with its files reported missing, and the pre-launch
+  check says which BIOS is missing. Both used to `mkdir` the directory unguarded on a path they
+  only ever read, so both raised `OSError`.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`UnwritableBiosDirTests`).
+
+### RT-182 — Choosing an unwritable ROMs folder is reported, not a crash
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "ROMs", pick a folder on a read-only disk.
+- **Expected:** A toast says the folder was set but could not be laid out. The layout call used to
+  create 93 directories with nothing caught, and the exception escaped into the GTK main loop from
+  the folder-change handler, taking the rest of it down mid-way. (It also built the same 93
+  directories twice; once, after the migration, is enough.)
+- **Check:** suite file `tests/test_robustness_gaps.py` (`EnsureRomDirectoriesTests`), including
+  `test_the_console_directories_are_created_once_not_twice`.
+
+### RT-183 — An unreadable states subdirectory does not break the states menu
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make one per-core subdirectory under `~/.openemux/states/<console>/`
+  unreadable, then open a game's "Save states" menu and rename the ROM.
+- **Expected:** The states that can be read are listed and renamed; the unreadable folder is
+  skipped. Both used to iterate with no guard, so they raised out of the context menu and the
+  hot-apply poll — including for a directory removed between the `is_dir()` check and the listing.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`UnreadableStatesDirTests`).
+
+### RT-184 — "Open folder" on an unreachable path says so
+- **Area:** Robustness
+- **Mode:** MANUAL
+- **Preconditions:** A ROMs folder on a disk that is not mounted.
+- **Steps:**
+  1. Use "Open folder" (from the console menu, the BIOS page, or "Reveal in Files").
+- **Expected:** An error toast naming the path. The `mkdir` used to sit *above* the `try`, so the
+  failure escaped past every fallback and past the toast — the button silently did nothing.
+- **Check:** human only (needs an unmounted path); the reordering is visible in
+  `ui/window.py:_open_path_in_file_manager`.
+
+### RT-185 — A cache drop never takes another ROM's composite
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: have both "Dr" and "Dr. Mario" in the same console, with cartridge
+  art rendered for each. Rename or delete "Dr".
+- **Expected:** Only "Dr"'s composite goes. The match was `name.startswith("Dr.")`, so
+  `Dr. Mario.<key>.png` matched too — self-healing, since it is re-rendered, but wrong.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`CompositeCacheMatchTests`).
+
+### RT-186 — A ROM name with a newline in it is refused
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: rename a ROM and paste a name that carries a line break.
+- **Expected:** The rename is refused as an invalid name. Playlists are newline-delimited path
+  lists, so it used to serialize as two broken lines and the game silently disappeared from the
+  library.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`RomNameValidationTests`).
+
+### RT-187 — A failed art save leaves the previous cover in place
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: pick new artwork for a ROM that already has a cover, with the disk
+  full (or the source file removed mid-save).
+- **Expected:** The old cover is still there. The save used to delete it *before* copying, so a
+  failed copy left the ROM with no art at all.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`SaveLocalArtOrderTests`).
+
+### RT-188 — Gamepad bitmaps are read with the kernel's own word size
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person on a 32-bit kernel: remap a control and check the binding matches what
+  RetroArch expects.
+- **Expected:** The button numbering matches. `parse_bitmap` defaulted to 64-bit words and its
+  heuristic only ever corrects *upwards*, so on a 32-bit kernel every bit past the first word
+  landed in the wrong place. The default is now `struct.calcsize("l") * 8`.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`BitmapWordSizeTests`).
+
 
 ## Retired
 

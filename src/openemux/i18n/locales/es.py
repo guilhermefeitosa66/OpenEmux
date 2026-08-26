@@ -545,6 +545,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "error desconocido",
     "toast.path_invalid": "La carpeta de ROMs seleccionada no es válida",
     "toast.path_updated": "Carpeta de ROMs actualizada: {path}",
+    "toast.path_not_writable": "Carpeta de ROMs establecida en {path}, pero no se pudo crear — comprueba que el disco permita escritura",
     "toast.state_recovered.one": "No se pudo leer un archivo de configuración; se conservó como \"{name}\" y se están usando los valores predeterminados",
     "toast.state_recovered.many": "No se pudieron leer {count} archivos de configuración; se conservaron junto a los originales y se están usando los valores predeterminados",
     "header.import": "Importar ROMs",
