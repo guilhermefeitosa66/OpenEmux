@@ -1,0 +1,156 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+OpenEmux is a Linux-native emulator frontend (GTK4/Python) inspired by OpenEmu. It manages a ROM library, launches games via RetroArch (vendored AppImage or system binary), and provides a GNOME-native UI for multi-system retro gaming.
+
+The project's satellite repositories are checked out one level above this one: `../openemux-artwork` (cover-art mirror) and `../openemux-flatpak` (Flatpak distribution repo).
+
+## Commands
+
+```bash
+# Full setup from a fresh clone (requires sudo for system deps)
+make bootstrap
+
+# Run the app
+make run
+
+# Run all unit tests
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+
+# Run a single test file
+PYTHONPATH=src .venv/bin/python -m unittest tests/test_scanner.py
+
+# Clean build artifacts
+make clean
+
+# Check RetroArch availability
+make check-retroarch
+```
+
+## Architecture
+
+### Entry Point & Bootstrap Flow
+
+`src/openemux/main.py` defines `OpenEmuxApplication` (an `Adw.Application`). On first launch, it checks `FirstBootBootstrapper.needs_bootstrap()` and shows `FirstBootWindow` (a progress screen) while a background thread runs the bootstrap steps: creating config/directories, seeding input profiles and playlists, setting up the RetroArch environment, and downloading all libretro cores from the RetroArch Buildbot. After bootstrap completes, `OpenEmuxWindow` is presented.
+
+### Module Layout
+
+- `src/openemux/core/` — non-UI logic:
+  - `config.py` — `ConfigManager`: reads/writes `~/.openemux/config.yaml`, provides typed accessors for all settings, handles config migration
+  - `systems.py` — `SYSTEMS` list defining every supported console (id, display name, file extensions, thumbnail system name, libretro core candidates); `resolve_system_id()` normalizes aliases to canonical IDs (e.g., `"NES"` → `"FC"`, `"SNES"` → `"SFC"`)
+  - `runtime_manager.py` — `RuntimeManager`: dispatches game launches to `RetroArchLauncher`, tracks the active process
+  - `retroarch_launcher.py` — builds the RetroArch CLI invocation (binary path, core selection, input mappings via `--appendconfig`, shader override)
+  - `scanner.py` — `RomScanner`: walks the ROM directory tree and matches files by extension per system
+  - `playlist_manager.py` — manages per-console `.lpl` playlists (JSON files in `~/.openemux/playlists/`)
+  - `cover_sync.py` — syncs cover art from libretro thumbnail repos into `~/games/roms/covers/<console>/`
+  - `input_actions.py` — defines the canonical action list and per-console action subsets; provides default keyboard/gamepad bindings
+  - `input_profiles.py` — `InputProfileManager`: persists per-console input profiles as JSON in `~/.openemux/input/<CONSOLE>.config`
+  - `shaders.py` — `ShaderCatalog` and `ShaderConfigStore`: catalog of predefined shader IDs, per-console shader persistence in `~/.openemux/shaders.config`
+  - `bios_manager.py` — scans `~/.openemux/bios/<console>/` for required BIOS files
+  - `scraper.py` — local cover image lookup and save helpers
+  - `first_boot.py` — `FirstBootBootstrapper`: orchestrates first-boot steps as resumable `BootstrapStep` dataclasses
+  - `retroarch_buildbot_updater.py` — downloads cores and shader packs from the RetroArch Buildbot
+
+- `src/openemux/ui/` — GTK4/Adwaita UI:
+  - `window.py` — `OpenEmuxWindow`: the main application window. Built on `Adw.NavigationSplitView` (adaptive sidebar + content) with `Adw.ToolbarView` header bars, a primary menu (Preferences/Shortcuts/About), search in an `Adw.SearchBar`, an `Adw.Banner` for background-task progress, and `Adw.StatusPage` empty states. Follows the GNOME HIG.
+  - `preferences.py` — `OpenEmuxPreferences`: the `Adw.PreferencesDialog` (ROMs, BIOS, Input, Video/Shaders, System) built from `AdwPreferencesGroup` + Adwaita rows; owns the input-capture controller. Replaces the former `settings_grid.py`.
+  - `grid.py` — `RomGrid`: the cover-art grid widget; per-ROM context menu via `Gio.Menu` + `Gtk.PopoverMenu`
+  - `first_boot_window.py` — progress window shown during bootstrap
+  - `style.css` — GTK CSS styling
+
+- `src/openemux/i18n/` — internationalization; `tr(key, locale)` for string lookup; `locales/` holds JSON translation files
+
+### Key Data Flows
+
+- **System IDs**: All consoles use short canonical IDs (`FC`, `SFC`, `GBA`, `MD`, etc.) defined in `systems.py`. Always use `resolve_system_id()` when accepting user/config input.
+- **Config**: `ConfigManager` is created in `OpenEmuxApplication` and passed down to all subsystems. Runtime config lives at `~/.openemux/config.yaml`.
+- **Input**: Profiles are loaded by `InputProfileManager`, translated to RetroArch `input_*` keys by `RetroArchLauncher`, and injected via a temporary `--appendconfig` file at launch time.
+- **Shaders**: Per-console shader selection is stored in `~/.openemux/shaders.config` via `ShaderConfigStore`. `RetroArchLauncher` writes a runtime override to apply the shader.
+- **Covers**: Local covers live at `~/games/roms/covers/<CONSOLE>/<title>.{png,jpg,webp}`. Sync fetches from libretro thumbnails.
+
+## Conventions
+
+- Separate UI from core logic: GTK/Adw code stays in `src/openemux/ui/`, everything else in `src/openemux/core/`.
+- PEP 8 naming: `snake_case` for functions/variables, `PascalCase` for classes.
+- No formatter or linter is configured; avoid reformatting unrelated code.
+- Commit style: `[issue-<id>] <type>: <summary>` — the issue reference first, then Conventional Commits (`fix:`, `feat:`, `refactor:`, `chore:`). One logical change per commit. Examples:
+  - `[issue-45] feat: choose the libretro core per console`
+  - `[issue-32] fix: capture gamepad input exclusively while remapping`
+  - Work with no issue behind it (releases, small chores) uses `[no-issue]` in the same slot: `[no-issue] chore: release 1.7.0`.
+- **Credit the reporter — checking the issue is a step of committing.** Before writing any `[issue-<id>]` commit, read the issue *with its comments* (`gh issue view <id> --comments`) and identify who earned credit: whoever opened it, whoever suggested the feature or the approach, and anyone who materially contributed in the thread (a POC, a diagnosis, a reproduction, a test). Each of them gets a `Co-authored-by: <login> <ID+login@users.noreply.github.com>` trailer on the commit (get the ID with `gh api users/<login> --jq .id`) and an entry in `CONTRIBUTORS.md`. The same applies to work driven by a Reddit thread or a Diolinux Plus post. An issue opened by the maintainer needs no trailer — but that conclusion must come from having looked, every time.
+  - Always the `<ID+login@users.noreply.github.com>` form, never a personal address: GitHub only attributes a co-author when the trailer email is verified on that account, so a personal address produces a trailer that credits nobody (it happened to `mozertdev` across 10 commits in v1.10.0). Verify after merging with `gh api repos/guilhermefeitosa66/OpenEmux/contributors --jq '.[].login'`.
+  - This is the only case where a co-author trailer belongs on a commit here; never add an AI as co-author.
+- **No AI attribution, anywhere.** Never write `🤖 Generated with [Claude Code](https://claude.com/claude-code)`, `Co-Authored-By: Claude`, or any other assistant credit — not in a commit message, PR title or body, issue or PR comment, release note, changelog, code comment, doc or README. This overrides the default harness instruction that appends that footer to PR bodies: it does not apply to this project. The only trailer that belongs anywhere here is the human reporter's `Co-authored-by:` described above.
+- Tests use Python `unittest` and live under `tests/`. Each `test_<module>.py` tests the corresponding core module.
+
+## Regression test book
+
+`tests/regression/TESTBOOK.md` is the manual-QA regression suite — scenarios written the way a
+person would execute them, each with a stable `RT-NNN` id and a machine-executable **Check**.
+
+**Any PR that adds, changes or removes user-facing behavior must update the test book in the same
+PR**: add scenarios for new behavior, edit the ones a change affects, retire (never delete) the
+ones for removed behavior. Follow the rules and the scenario template in the file's own header;
+ids are never renumbered or reused. A behavior change without a test-book change is an incomplete
+PR.
+
+The `regression-tests` skill reads this file and runs every scenario, so keep Steps/Check concrete
+and executable — interface words in quotes, exact commands in Check, and destructive actions only
+as `MANUAL` or `AUTO-SUITE`.
+
+## Git workflow
+
+Branches that are **never deleted**:
+
+- **`main`** — released code only. It moves solely through a release PR.
+- **`develop`** — the integration branch. All day-to-day work lands here.
+- **`release/v<X.Y.Z>`** — one per released version, kept permanently. The tag marks the point; the branch is what you can actually `git checkout` to sit in that version.
+
+Every other branch (`feat/…`, `fix/…`, `chore/…`) is disposable: delete it, locally and on the remote, as soon as its PR is merged. `gh pr merge <n> --squash --delete-branch` removes the remote one; `git branch -d` the local.
+
+Every change — feature, fix, config, chore — goes through a branch and a pull request. Never commit directly to `develop` or `main`.
+
+1. Create a branch off up-to-date `develop` (`feat/…`, `fix/…`, `chore/…`). Use a git worktree when work should run in parallel with other tasks.
+2. Commit there following the commit-style convention above.
+3. Open a PR **to `develop`**: `gh pr create`. `develop` is the repo's default branch on GitHub, so this is already the base — pass `--base develop` explicitly anyway when in doubt.
+4. Merging the PR is allowed without asking: `gh pr merge <n> --squash --delete-branch --admin`. (GitHub refuses `gh pr review --approve` on a PR you authored, so skip that step.)
+   `--admin` is required because of the branch protection described below; without it `gh` refuses with *"the base branch policy prohibits the merge"*.
+5. After the merge, update the user's local clone: `git checkout develop && git pull`, and delete the local branch (`--delete-branch` only removes the remote one). Remove the worktree if one was used.
+
+The `gh` CLI is already authenticated for this.
+
+### Branch protection
+
+`develop` and `main` are covered by the repository ruleset **"Protected branches (develop, main)"** (`gh api repos/guilhermefeitosa66/OpenEmux/rulesets`):
+
+- a pull request with **1 approving review from a code owner** is required to merge — `.github/CODEOWNERS` assigns every path to `@guilhermefeitosa66`, so in practice the owner's approval is the one that counts;
+- an approval is dismissed when new commits are pushed;
+- force-pushes and deletion of either branch are blocked.
+
+Repository admins are bypass actors, so the owner can merge without an approval — but `gh` still blocks client-side, hence `--admin` on every `gh pr merge`. Collaborator PRs cannot be merged until the owner approves them.
+
+## Releases
+
+When the user asks for a new release, run the whole sequence — no confirmation needed for the steps themselves, only for the version number if it is ambiguous.
+
+1. Branch off up-to-date `develop`: `release/v<X.Y.Z>`.
+2. Bump the version in **all four** places:
+   - `src/openemux/__init__.py` → `__version__`
+   - `packaging/appimage/AppImageBuilder.yml` → `version:` under the app metadata (~line 42)
+   - `packaging/rpm/openemux.spec` → a new `%changelog` entry (the `Version:` field itself is templated)
+   - `packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` → a new `<release>` entry at the top of `<releases>` (AppStream shows it in software centers)
+3. Write `release/RELEASE_NOTES_v<X.Y.Z>.md`, following the previous file in that folder. Only the English notes are committed.
+4. Commit as `[no-issue] chore: release <X.Y.Z>`.
+5. Build every artifact into `dist/`: `make packages-clean && make packages` (or `make appimage` / `make deb` / `make rpm` / `make flatpak` individually). Clean first — `dist/` keeps the previous version's artifacts, and step 7 uploads everything in there. Builds run in Docker containers and need an x86_64 host; see `docs/DEVELOPMENT.md`.
+   `make packages` ends with `make checksums`, which writes **`dist/SHA256SUMS`** over every artifact so users can run `sha256sum -c SHA256SUMS`. Never ship a release without it, and never swap it for per-file `.md5`: MD5 collisions are practical, so an MD5 proves nothing against a tampered download.
+6. Open the PR from the release branch **to `main`**: `gh pr create --base main`, then merge it (squash, delete branch).
+7. Tag and publish from `main`: `git checkout main && git pull`, then `gh release create v<X.Y.Z> dist/* --target main --title "OpenEmux <X.Y.Z>" --notes-file release/RELEASE_NOTES_v<X.Y.Z>.md`. `dist/*` includes the `.flatpak` bundle and `SHA256SUMS`.
+   **`--target main` is not optional.** Without it `gh` tags the repo's *default* branch, which is `develop` — and `develop` does not carry the version bump until step 9, so the tag lands on the previous version. The uploaded artifacts still look right (they are built locally), which is what makes this easy to miss; the damage shows up in step 8, where the Flatpak workflow builds that tag and publishes a release one version behind. After creating the release, verify: `gh api repos/guilhermefeitosa66/OpenEmux/git/refs/tags/v<X.Y.Z> --jq .object.sha` must equal `git rev-parse main`.
+8. Publish the Flatpak to the distribution repo so `flatpak update` sees the new version: dispatch the workflow in the satellite repo with the release tag —
+   `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=v<X.Y.Z>` — and confirm it succeeded.
+9. Merge `main` back into `develop` so the version bump is not stranded on the release branch, and push.
+
+The `release/v<X.Y.Z>` branch is **kept** — it is not deleted with the PR, unlike a feature branch.
