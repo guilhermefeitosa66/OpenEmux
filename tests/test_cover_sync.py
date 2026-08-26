@@ -21,6 +21,21 @@ from openemux.core.cover_sync import (
 )
 
 
+#: The smallest bodies that pass the sniffer, padded past MIN_IMAGE_BYTES.
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 96
+_JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 96
+_WEBP_BYTES = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"\x00" * 96
+
+
+def _image_response(payload, content_type):
+    response = mock.MagicMock()
+    response.read.return_value = payload
+    response.headers.get_content_type.return_value = content_type
+    response.__enter__ = lambda s: s
+    response.__exit__ = lambda s, *a: False
+    return response
+
+
 class CoverSyncTests(unittest.TestCase):
     def test_cover_name_normalization_basic(self):
         self.assertEqual(
@@ -270,28 +285,21 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 1)
         self.assertEqual(download_mock.call_args[0][1].parent.name, "labels")
 
-    def test_download_keeps_the_source_extension(self):
+    def test_download_names_the_file_after_the_bytes(self):
         # The default target says .png, but the file on disk must tell the
-        # truth about its own format: URL extension first, Content-Type second,
-        # png only when neither names one (issue #75).
+        # truth about its own format (issue #75). The bytes are the only
+        # signal that cannot be wrong, so they win over the URL and the
+        # Content-Type (issue #213).
         cases = [
-            ("https://cdn.example/art/label.jpg", "text/plain", "Game.jpg"),
-            ("https://cdn.example/art/label.jpeg", "text/plain", "Game.jpg"),
-            ("https://cdn.example/art/label.webp", "text/plain", "Game.webp"),
-            ("https://cdn.example/art/media?id=1", "image/jpeg", "Game.jpg"),
-            ("https://cdn.example/art/media?id=1", "image/webp", "Game.webp"),
-            ("https://cdn.example/art/media?id=1", "application/octet-stream", "Game.png"),
-            ("https://cdn.example/art/label.png", "image/jpeg", "Game.png"),
+            ("https://cdn.example/art/label.jpg", "image/jpeg", _PNG_BYTES, "Game.png"),
+            ("https://cdn.example/art/label.png", "image/png", _JPEG_BYTES, "Game.jpg"),
+            ("https://cdn.example/art/media?id=1", "text/plain", _WEBP_BYTES, "Game.webp"),
         ]
         from openemux.core.cover_sync import _download_cover
 
-        for url, content_type, expected_name in cases:
+        for url, content_type, payload, expected_name in cases:
             with TemporaryDirectory() as tmp_dir:
-                response = mock.MagicMock()
-                response.read.return_value = b"image-bytes"
-                response.headers.get_content_type.return_value = content_type
-                response.__enter__ = lambda s: s
-                response.__exit__ = lambda s, *a: False
+                response = _image_response(payload, content_type)
                 with patch(
                     "openemux.core.cover_sync.urllib.request.urlopen",
                     return_value=response,
@@ -300,6 +308,130 @@ class CoverSyncTests(unittest.TestCase):
                 self.assertTrue(ok, url)
                 written = sorted(p.name for p in (Path(tmp_dir) / "labels").iterdir())
                 self.assertEqual(written, [expected_name], url)
+
+    def test_the_extension_falls_back_to_the_url_then_the_content_type(self):
+        # What _source_extension answers when the bytes are not available --
+        # the path artwork_search still takes before it has read the body.
+        from openemux.core.cover_sync import _source_extension
+
+        cases = [
+            ("https://cdn.example/art/label.jpg", "text/plain", "jpg"),
+            ("https://cdn.example/art/label.jpeg", "text/plain", "jpg"),
+            ("https://cdn.example/art/label.webp", "text/plain", "webp"),
+            ("https://cdn.example/art/media?id=1", "image/jpeg", "jpg"),
+            ("https://cdn.example/art/media?id=1", "image/webp", "webp"),
+            ("https://cdn.example/art/media?id=1", "application/octet-stream", "png"),
+        ]
+        for url, content_type, expected in cases:
+            response = mock.MagicMock()
+            response.headers.get_content_type.return_value = content_type
+            self.assertEqual(_source_extension(url, response), expected, url)
+
+    def test_an_error_page_served_with_a_200_is_not_saved_as_a_cover(self):
+        # ScreenScraper answers some quota failures with a plain-text body and
+        # a 200; a captive portal answers everything with HTML. Whatever
+        # landed at that path became the ROM's art forever (issue #213).
+        from openemux.core.cover_sync import _download_cover
+
+        for payload in (
+            b"<html><body>Quota exceeded, please try again tomorrow</body></html>",
+            b"Erreur : quota de telechargement depasse pour aujourd'hui",
+            b"",
+            b"\x89PNG\r\n\x1a\n",  # a signature and nothing behind it
+        ):
+            with TemporaryDirectory() as tmp_dir:
+                response = _image_response(payload, "image/png")
+                with patch(
+                    "openemux.core.cover_sync.urllib.request.urlopen",
+                    return_value=response,
+                ):
+                    ok = _download_cover(
+                        "https://cdn.example/art/x.png", Path(tmp_dir) / "covers" / "Game.png"
+                    )
+                self.assertFalse(ok, payload[:20])
+                self.assertEqual(list((Path(tmp_dir) / "covers").glob("*")), [], payload[:20])
+
+    def test_a_failed_write_leaves_nothing_at_the_final_name(self):
+        from openemux.core.cover_sync import _download_cover
+
+        with TemporaryDirectory() as tmp_dir:
+            response = _image_response(_PNG_BYTES, "image/png")
+            with patch(
+                "openemux.core.cover_sync.urllib.request.urlopen", return_value=response
+            ):
+                with patch(
+                    "openemux.core.atomic_write.os.replace", side_effect=OSError("disk full")
+                ):
+                    ok = _download_cover(
+                        "https://cdn.example/art/x.png", Path(tmp_dir) / "covers" / "Game.png"
+                    )
+
+            self.assertFalse(ok)
+            self.assertEqual(list((Path(tmp_dir) / "covers").glob("*")), [])
+
+    def test_junk_art_from_an_older_version_is_cleared_and_re_fetched(self):
+        # The sticky half of issue #213: any file at that path counted as
+        # art, so the ROM was skipped on every later fill-in sync and only a
+        # blank card and a decode warning ever said otherwise.
+        from openemux.core.cover_sync import _process_rom
+
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir = Path(tmp_dir)
+            art_path = roms_dir / "PS" / "covers" / "Game.png"
+            art_path.parent.mkdir(parents=True, exist_ok=True)
+            art_path.write_bytes(b"<html>Quota exceeded</html>" * 4)
+
+            with (
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "primary", "https://cdn.example/a.png")]),
+                patch("openemux.core.cover_sync._download_cover",
+                      side_effect=lambda url, dest: dest) as download_mock,
+            ):
+                result = _process_rom(
+                    "PS",
+                    {"name": "Game", "path": "/roms/PS/Game.cue"},
+                    roms_dir,
+                    "covers",
+                    "boxart",
+                    {},
+                    None,
+                    False,
+                    None,
+                    cover_sync._HostGates(),
+                )
+
+            self.assertEqual(result["status"], "downloaded")
+            download_mock.assert_called_once()
+            self.assertFalse(
+                art_path.exists() and art_path.read_bytes().startswith(b"<html>")
+            )
+
+    def test_real_art_already_there_is_still_left_alone(self):
+        from openemux.core.cover_sync import _process_rom
+
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir = Path(tmp_dir)
+            art_path = roms_dir / "PS" / "covers" / "Game.png"
+            art_path.parent.mkdir(parents=True, exist_ok=True)
+            art_path.write_bytes(_PNG_BYTES)
+
+            with patch("openemux.core.cover_sync._download_cover") as download_mock:
+                result = _process_rom(
+                    "PS",
+                    {"name": "Game", "path": "/roms/PS/Game.cue"},
+                    roms_dir,
+                    "covers",
+                    "boxart",
+                    {},
+                    None,
+                    False,
+                    None,
+                    cover_sync._HostGates(),
+                )
+
+            self.assertEqual(result["status"], "skipped")
+            download_mock.assert_not_called()
+            self.assertEqual(art_path.read_bytes(), _PNG_BYTES)
 
     def test_cover_sync_reports_progress(self):
         library = {

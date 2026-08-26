@@ -17,6 +17,8 @@ from pathlib import Path
 from threading import Thread
 
 from openemux.core import cover_sync, screenscraper
+from openemux.core.atomic_write import atomic_write_bytes
+from openemux.core.scraper import image_format, is_image
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -79,11 +81,18 @@ def _download(url, dest_dir, index):
         logger.debug("artwork search download failed: url=%s error=%s",
                      screenscraper.redact(url), screenscraper.redact(exc))
         return None, None
-    if not data:
+    if not is_image(data):
+        # Same junk the sync path rejects (issue #213): here it would show up
+        # as a blank tile the user could pick and make permanent.
+        logger.debug(
+            "artwork search rejected non-image body: url=%s bytes=%d",
+            screenscraper.redact(url),
+            len(data or b""),
+        )
         return None, None
+    ext = image_format(data) or ext
     target = Path(dest_dir) / f"candidate-{index:03d}.{ext}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    atomic_write_bytes(target, data)
     return target, hashlib.sha1(data).hexdigest()  # nosec B324 - dedup, not security
 
 

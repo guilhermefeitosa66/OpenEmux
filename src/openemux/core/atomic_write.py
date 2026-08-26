@@ -85,6 +85,15 @@ def _replace_atomically(path, write_body, open_mode, encoding, mode):
     return path
 
 
+def atomic_write_bytes(path, data, mode=None):
+    """Write ``data`` to ``path`` atomically.
+
+    For content already in memory -- a downloaded cover -- where the final path
+    must never hold a partial file (issue #213).
+    """
+    return _replace_atomically(path, lambda handle: handle.write(data), "wb", None, mode)
+
+
 def atomic_write_stream(path, source, chunk_size=1024 * 1024, mode=None):
     """Copy a readable binary stream into ``path`` atomically.
 
