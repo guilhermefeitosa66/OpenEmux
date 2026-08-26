@@ -37,7 +37,7 @@ from openemux.core.cover_sync import (
 )
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
-from openemux.core.paths import get_project_root
+from openemux.core.paths import display_text, get_project_root
 from openemux.core.rom_importer import (
     IMPORTABLE_EXTENSIONS,
     collect_ambiguous_extensions,
@@ -81,6 +81,8 @@ logger = logging.getLogger(__name__)
 
 ALL_CONSOLES_ID = "__all__"
 FAVORITES_ID = "__favorites__"
+#: The onboarding page a library with nothing in it lands on (issue #224).
+LIBRARY_EMPTY_ID = "library-empty"
 #: A collection's sidebar/scope id is this prefix plus its slug. Keeping them
 #: in the same id space as the consoles lets one selection handler, one page
 #: cache and the controller's console cycling treat them uniformly.
@@ -186,6 +188,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
+        # A rescan asked for while one was running, to run when it ends (#225).
+        self._rescan_pending = None
         self._import_running = False
         # Callbacks that re-apply translated text, registered where each
         # widget is built -- see _translatable.
@@ -405,7 +409,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button.set_visible(self._console_scope_id() is not None)
 
     def t(self, key, **kwargs):
-        return tr(self.locale, key, **kwargs)
+        # Escaped on the way out: these strings become GTK labels, tooltips
+        # and toasts, and the ones interpolating a ROM name can carry a lone
+        # surrogate from a non-UTF-8 filename. GTK cannot take one -- it
+        # raises inside PyGObject and takes the whole render with it (#214).
+        return display_text(tr(self.locale, key, **kwargs))
 
     def _setup_window_icon(self):
         images_dir = Path(__file__).parent / "assets" / "images"
@@ -1750,19 +1758,35 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         img.set_size_request(22, 22)
         return img
 
+    @staticmethod
+    def _sidebar_row_ids(consoles, collection_slugs=()):
+        """The rows the sidebar shows for this library, in order.
+
+        With nothing in the library there are none. Every row here is a view
+        *over* ROMs, so they would all lead to an empty page -- and leaving
+        Favorites behind is what buried the onboarding page: the list selects
+        its first row as soon as it takes focus, so a fresh install landed on
+        "No favorites yet: right-click a game", about a game the user does not
+        have (issue #224). The rows come back with the first import.
+        """
+        if not consoles:
+            return []
+        return [
+            ALL_CONSOLES_ID,
+            FAVORITES_ID,
+            # Collections sit between Favorites and the consoles: user
+            # groupings above the hardware, mixing consoles like All does.
+            *[collection_scope(slug) for slug in collection_slugs],
+            *consoles,
+        ]
+
     def _rebuild_console_sidebar(self, consoles):
         while child := self.console_list.get_first_child():
             self.console_list.remove(child)
 
-        if consoles:
-            self._append_console_sidebar_row(ALL_CONSOLES_ID)
-        self._append_console_sidebar_row(FAVORITES_ID)
-        # Collections sit between Favorites and the consoles: user groupings
-        # above the hardware, mixing consoles like All does.
-        for collection in self.collection_manager.list_collections():
-            self._append_console_sidebar_row(collection_scope(collection["slug"]))
-        for console_id in consoles:
-            self._append_console_sidebar_row(console_id)
+        slugs = [c["slug"] for c in self.collection_manager.list_collections()]
+        for row_id in self._sidebar_row_ids(consoles, slugs):
+            self._append_console_sidebar_row(row_id)
 
     def _append_console_sidebar_row(self, console_id):
         row = Gtk.ListBoxRow()
@@ -2436,16 +2460,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             choose.connect("clicked", lambda _b: self._choose_roms_path())
             actions.append(choose)
             empty.set_child(actions)
-            self.content_stack.add_titled(empty, "library-empty", "Library")
+            self.content_stack.add_titled(empty, LIBRARY_EMPTY_ID, "Library")
 
         target_view = preferred_view
         if target_view is None:
             target_view = previous_visible or self.current_console
 
-        if self.visible_consoles:
-            desired = target_view if target_view in (set(self.visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}) else None
-            if desired is None:
-                desired = FAVORITES_ID
+        desired = self._landing_view(
+            self.visible_consoles,
+            target_view,
+            [c["slug"] for c in self.collection_manager.list_collections()],
+        )
+        if desired != LIBRARY_EMPTY_ID:
             row = self._find_console_row(desired)
             if row:
                 self.console_list.select_row(row)
@@ -2455,15 +2481,36 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                     self.console_list.select_row(first_row)
             return
 
-        row = self._find_console_row(FAVORITES_ID)
-        if row:
-            self.console_list.select_row(row)
-            return
-
+        self.console_list.unselect_all()
         self.current_console = None
         self._set_search_enabled(False)
-        self.content_stack.set_visible_child_name("library-empty")
+        self.content_stack.set_visible_child_name(LIBRARY_EMPTY_ID)
         self._update_window_title(None)
+
+    @staticmethod
+    def _landing_view(visible_consoles, target_view, collection_slugs=()):
+        """Which page a rebuilt library lands on.
+
+        With nothing in it, the onboarding page -- that state's whole reason
+        for existing, and unreachable until now (issue #224).
+
+        A collection counts as somewhere to land. It never did: the set tested
+        here held only the consoles and the two virtual views, so a rescan
+        threw the user out of a collection and into Favorites, losing the view
+        and the scroll position -- and the startup scan rescans on every single
+        launch (issue #225).
+        """
+        if not visible_consoles:
+            return LIBRARY_EMPTY_ID
+        if is_collection_scope(target_view):
+            # Only if it still exists: a collection deleted since is no more a
+            # destination than a console that is gone.
+            if collection_slug(target_view) in set(collection_slugs):
+                return target_view
+            return FAVORITES_ID
+        if target_view in set(visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}:
+            return target_view
+        return FAVORITES_ID
 
     def _find_console_row(self, console_id):
         row = self.console_list.get_first_child()
@@ -3020,7 +3067,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _rename_rom_from_ui(self, rom):
         entry = Gtk.Entry()
-        entry.set_text(rom["name"])
+        entry.set_text(display_text(rom["name"]))
         entry.set_activates_default(True)
 
         dialog = Adw.AlertDialog(
@@ -3147,6 +3194,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if not console or console == ALL_CONSOLES_ID:
             return self._rescan_all_consoles(show_toast=show_toast)
         if self._scan_running:
+            self._queue_rescan(console=console, show_toast=show_toast)
             if show_toast:
                 toast = Adw.Toast(title=self.t("toast.scan_running"))
                 toast.set_timeout(3)
@@ -3158,8 +3206,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         task_id = self._begin_task("scan", self.t("status.scan.starting"), total=1)
 
         def _worker():
-            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
-            summary = {"console": console, "roms": len(roms)}
+            summary = {"console": console, "roms": 0}
+            try:
+                summary["roms"] = len(
+                    self.playlist_manager.scan_and_rebuild_playlist(console)
+                )
+            except Exception as exc:
+                # _on_rescan_*_done_ui is what clears _scan_running. A worker
+                # that dies without reaching it leaves the flag set for the
+                # rest of the session, and every later scan is refused with
+                # "a scan is already running" (issue #214).
+                logger.exception("rescan crashed: console=%s", console)
+                summary["error"] = str(exc)
             GLib.idle_add(self._on_rescan_single_done_ui, task_id, summary, show_toast, origin_view)
 
         Thread(target=_worker, daemon=True).start()
@@ -3167,6 +3225,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _rescan_all_consoles(self, show_toast=False):
         if self._scan_running:
+            self._queue_rescan(console=None, show_toast=show_toast)
             if show_toast:
                 toast = Adw.Toast(title=self.t("toast.scan_running"))
                 toast.set_timeout(3)
@@ -3186,18 +3245,75 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )
 
         def _worker():
-            summary = self.playlist_manager.scan_and_rebuild_all_playlists(on_progress=_on_progress)
+            try:
+                summary = self.playlist_manager.scan_and_rebuild_all_playlists(
+                    on_progress=_on_progress
+                )
+            except Exception as exc:
+                logger.exception("rescan crashed")
+                summary = {
+                    "consoles": {},
+                    "total_consoles": 0,
+                    "total_roms": 0,
+                    "failed": {},
+                    "error": str(exc),
+                }
             GLib.idle_add(self._on_rescan_all_done_ui, task_id, summary, show_toast, origin_view)
 
         Thread(target=_worker, daemon=True).start()
         return {"started": True}
 
+    def _queue_rescan(self, console, show_toast):
+        """Remember a rescan that could not start, to run when this one ends.
+
+        Two callers hand in ``show_toast=False`` and depend on the rescan
+        actually happening: the one after an import ("new files on disk:
+        rebuild the playlists so they show up") and the one after the ROM
+        folder changes. Imports are gated only by ``_import_running``, so one
+        can finish while the always-on startup scan is still in flight -- and
+        the request was dropped with no retry and no message. The user saw
+        "imported" and then no new games, which reads as a failed import
+        (issue #225).
+        """
+        pending = self._rescan_pending
+        if pending is not None and pending["console"] is None:
+            # A whole-library rescan already queued covers any single console.
+            pending["show_toast"] = pending["show_toast"] or show_toast
+            return
+        if pending is not None and console is not None and pending["console"] != console:
+            # Two different consoles asked: only the whole library covers both.
+            console = None
+        self._rescan_pending = {
+            "console": console,
+            "show_toast": bool(show_toast or (pending or {}).get("show_toast")),
+        }
+        logger.info("rescan queued: console=%s", console or "all")
+
+    def _run_pending_rescan(self):
+        """Start the rescan that was asked for while one was already running."""
+        pending = self._rescan_pending
+        self._rescan_pending = None
+        if pending is None:
+            return False
+        logger.info("rescan queued run: console=%s", pending["console"] or "all")
+        if pending["console"] is None:
+            self._rescan_all_consoles(show_toast=pending["show_toast"])
+        else:
+            self._rescan_single_console(pending["console"], show_toast=pending["show_toast"])
+        return False
+
     def _on_rescan_single_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
+        # After this handler, so its own toast lands first and the queued run
+        # starts against a library that has already been refreshed.
+        GLib.idle_add(self._run_pending_rescan)
         self._update_task(task_id, current=1, total=1)
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view or summary.get("console"))
         self._on_search_changed(self.search_entry)
+        if summary.get("error"):
+            self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
+            return False
         if show_toast:
             toast = Adw.Toast(title=self.t("toast.playlist_rebuilt", console=summary.get("console")))
             toast.set_timeout(4)
@@ -3206,9 +3322,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _on_rescan_all_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
+        GLib.idle_add(self._run_pending_rescan)
         self._finish_task(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
+        if summary.get("error"):
+            self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
+            return False
+        failed = summary.get("failed") or {}
+        if failed:
+            # The rest of the library did scan; say which consoles did not
+            # instead of reporting a clean run (issue #214).
+            self._toast(
+                self.t("toast.scan_partial", consoles=", ".join(sorted(failed))),
+                timeout=6,
+            )
+            return False
         if show_toast:
             toast = Adw.Toast(
                 title=self.t(
@@ -3745,7 +3874,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._rescan_single_console(selected_console, show_toast=False)
 
     def on_launch_game(self, rom):
-        success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        try:
+            success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
+        except Exception as exc:
+            # A click handler is where an exception goes to die quietly:
+            # PyGObject prints the traceback and swallows it, so the button
+            # just does nothing. The toast path is right here (issue #226).
+            logger.exception("launch failed")
+            success, error_msg = False, self.t("toast.launch_failed", error=str(exc))
         if success:
             # Stamped here rather than on exit: a game that fails to close
             # cleanly was still played, and this is the only point that knows
@@ -4026,8 +4162,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if result is not None:
             rom = result.get("rom") or {}
             rom_name = rom.get("path", "Game").split("/")[-1]
-            toast = Adw.Toast(title=self.t("toast.finished", name=rom_name, code=result["exit_code"]))
-            toast.set_timeout(4)
+            reason = result.get("failure_reason")
+            if reason:
+                # It never started. Say so, and say what the log said -- the
+                # exit code alone reads exactly like a clean quit (#226).
+                title = self.t("toast.launch_died", name=rom_name, reason=reason)
+                timeout = 10
+            else:
+                title = self.t("toast.finished", name=rom_name, code=result["exit_code"])
+                timeout = 4
+            toast = Adw.Toast(title=title)
+            toast.set_timeout(timeout)
             self.toast_overlay.add_toast(toast)
         return True
 
@@ -4051,7 +4196,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
             return
-        failed_step = result.get("failed_step", "-")
-        toast = Adw.Toast(title=self.t("toast.bootstrap.failed", step=failed_step))
+        failed_step = result.get("failed_step")
+        if failed_step:
+            title = self.t("toast.bootstrap.failed", step=failed_step)
+        else:
+            # No step to name: the run died around the loop rather than inside
+            # it (issue #215). "step: None" told the user nothing; the error
+            # itself is the only thing here worth reading.
+            title = self.t(
+                "toast.bootstrap.crashed",
+                error=result.get("error") or self.t("toast.bootstrap.unknown_error"),
+            )
+        toast = Adw.Toast(title=title)
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)

@@ -7,7 +7,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
-from openemux.core.runtime_manager import HOT_APPLY_STATE_SLOT, RuntimeManager
+from openemux.core.runtime_manager import (
+    HOT_APPLY_STATE_SLOT,
+    STARTUP_FAILURE_SECONDS,
+    RuntimeManager,
+)
 
 
 class _DummyConfig:
@@ -590,6 +594,96 @@ class CommandPortTests(unittest.TestCase):
             self.assertEqual(manager._command_client().port, 51234)
 
 
+class _Clock:
+    """A monotonic clock the test moves by hand."""
+
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
+class StartupFailureTests(unittest.TestCase):
+    """A game that never came up must not read as a game the user quit (#226)."""
+
+    def _running(self, tmp_dir, clock, log_path=None):
+        config = _DummyConfig(tmp_dir)
+        manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), clock=clock)
+        proc = _FakeProcess()
+        if log_path is not None:
+            proc._openemux_log_path = str(log_path)
+        manager.active_process = proc
+        manager.active_rom = {"path": "/roms/PS/game.chd", "console": "PS"}
+        manager._launched_at = clock()
+        return manager, proc
+
+    def test_a_game_still_running_reports_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, _ = self._running(tmp_dir, clock)
+            self.assertIsNone(manager.poll_active())
+
+    def test_an_instant_nonzero_exit_carries_the_reason_from_the_log(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "[INFO] starting\ndlopen(): error loading libfuse.so.2\n", encoding="utf-8"
+            )
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+
+            clock.advance(0.4)
+            proc.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_long_session_that_ends_badly_is_not_a_startup_failure(self):
+        # A game the user played for an hour and that crashed on the way out
+        # is not a launch that failed; the finished toast is the right one.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text("[ERROR] something late\n", encoding="utf-8")
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+
+            clock.advance(3600.0)
+            proc.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertIsNone(result.get("failure_reason"))
+
+    def test_a_clean_instant_exit_is_not_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock)
+            clock.advance(0.2)
+            proc.exit_code = 0
+            result = manager.poll_active()
+
+        self.assertIsNone(result.get("failure_reason"))
+
+    def test_a_startup_failure_with_an_unreadable_log_still_reports_the_exit(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=Path(tmp_dir) / "gone.log")
+            clock.advance(0.1)
+            proc.exit_code = 127
+            result = manager.poll_active()
+
+        self.assertEqual(result["exit_code"], 127)
+        self.assertIsNone(result["failure_reason"])
+
+    def test_the_threshold_is_what_separates_the_two(self):
+        self.assertTrue(RuntimeManager._died_on_startup(1, 0.5))
+        self.assertFalse(RuntimeManager._died_on_startup(0, 0.5))
+        self.assertFalse(RuntimeManager._died_on_startup(1, STARTUP_FAILURE_SECONDS + 0.1))
+
+
 if __name__ == "__main__":
     unittest.main()
-

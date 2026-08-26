@@ -7,7 +7,23 @@ from openemux.core import game_window_support
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.platform import CORE_SUFFIX
-from openemux.core.retroarch_launcher import RetroArchLauncher, x11_only_env
+from openemux.core.retroarch_launcher import (
+    APPIMAGE_EXTRACT_AND_RUN,
+    RetroArchLauncher,
+    appimage_flags,
+    x11_only_env,
+)
+
+
+def _close_log(proc):
+    """Close the launch log the mocked process is holding open.
+
+    In the app ``RuntimeManager._clear_active`` does this when the game ends;
+    a Mock never ends, so the tests have to.
+    """
+    handle = getattr(proc, "_openemux_log_handle", None)
+    if handle is not None and not isinstance(handle, Mock):
+        handle.close()
 
 
 class _DummyConfig:
@@ -171,6 +187,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.cue", "PS")
+                _close_log(proc)
 
             runtime_cfgs = list((base / "runtime").glob("runtime_ps_*.cfg"))
             self.assertTrue(runtime_cfgs)
@@ -196,6 +213,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                _close_log(proc)
                 args, kwargs = popen_mock.call_args
                 cmd = args[0]
             runtime_cfgs = list((base / "runtime").glob("runtime_gba_*.cfg"))
@@ -545,6 +563,118 @@ class RetroArchLauncherTests(unittest.TestCase):
         # Hotkeys are global: exactly one set, written by port 1.
         self.assertEqual(len([l for l in lines if l.startswith("input_enable_hotkey")]), 1)
         self.assertFalse([l for l in lines if "player2_enable_hotkey" in l])
+
+
+class LaunchFailuresAreVisibleTests(unittest.TestCase):
+    """Every launch failure has to come back as a message (issue #226)."""
+
+    def _launcher(self, base):
+        binary = base / "retroarch"
+        core = base / "mgba_libretro.so"
+        binary.write_text("", encoding="utf-8")
+        core.write_text("", encoding="utf-8")
+        return RetroArchLauncher(base, _DummyConfig(base, binary, core))
+
+    def test_an_io_error_before_the_launch_becomes_an_error_message(self):
+        # _write_runtime_override creates directories and writes a file, all
+        # of it outside the old try: a read-only home raised straight into the
+        # GTK click handler, which prints the traceback and swallows it.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            with patch.object(
+                RetroArchLauncher,
+                "_write_runtime_override",
+                side_effect=OSError("Read-only file system"),
+            ):
+                proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+
+        self.assertIsNone(proc)
+        self.assertIn("Read-only file system", error)
+
+    def test_a_failed_popen_closes_the_log_it_opened(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            opened = []
+            real_open = open
+
+            def _tracking_open(*args, **kwargs):
+                handle = real_open(*args, **kwargs)
+                opened.append(handle)
+                return handle
+
+            with patch("openemux.core.retroarch_launcher.open", _tracking_open, create=True):
+                with patch(
+                    "openemux.core.retroarch_launcher.subprocess.Popen",
+                    side_effect=OSError("Exec format error"),
+                ):
+                    proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+
+        self.assertIsNone(proc)
+        self.assertIn("Exec format error", error)
+        self.assertTrue(opened, "the launcher never opened its log")
+        self.assertTrue(
+            all(handle.closed for handle in opened),
+            "a failed launch leaked its log file descriptor",
+        )
+
+
+class AppImageFuseFallbackTests(unittest.TestCase):
+    """An AppImage on a host with no libfuse2 (issue #226)."""
+
+    def test_a_host_without_libfuse2_runs_the_appimage_extracted(self):
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch-Linux-x86_64.AppImage", libfuse_available=False),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_a_host_with_libfuse2_mounts_it_as_usual(self):
+        # Extract-and-run unpacks the whole image on every launch; only worth
+        # paying for when mounting genuinely cannot work.
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch-Linux-x86_64.AppImage", libfuse_available=True),
+            [],
+        )
+
+    def test_a_plain_binary_is_never_given_appimage_flags(self):
+        self.assertEqual(appimage_flags("/usr/bin/retroarch", libfuse_available=False), [])
+
+    def test_the_extension_check_is_case_insensitive(self):
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch.APPIMAGE", libfuse_available=False),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_libfuse3_does_not_count_as_libfuse2(self):
+        # The AppImage runtime dlopens "libfuse.so.2" by that exact name, so
+        # that is what gets asked for. A host with only FUSE 3 must still get
+        # the fallback.
+        def _loader(name):
+            if name == "libfuse.so.2":
+                raise OSError("cannot open shared object file")
+            return object()
+
+        self.assertFalse(RetroArchLauncher.libfuse2_available(loader=_loader))
+
+    def test_a_loadable_libfuse2_is_reported_as_present(self):
+        self.assertTrue(RetroArchLauncher.libfuse2_available(loader=lambda name: object()))
+
+    def test_the_flag_goes_in_front_of_the_core_argument(self):
+        # It is the AppImage runtime's own switch, so it has to sit right
+        # after the binary -- RetroArch never sees it.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.object(RetroArchLauncher, "libfuse2_available", staticmethod(lambda: False)):
+                prefix, error = launcher._launch_prefix()
+
+        self.assertIsNone(error)
+        self.assertEqual(prefix, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
 
 
 class X11OnlyEnvTests(unittest.TestCase):

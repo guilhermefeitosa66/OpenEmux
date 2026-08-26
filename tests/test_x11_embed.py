@@ -2,14 +2,16 @@
 
 Only the parts that can be answered without a real X server: the tri-state
 "is the game still inside our window?" check, whose whole point is that
-"unknown" and "no" mean opposite things (issue #267), and the pointer the
-wrapper defines on the adopted window (issue #276).
+"unknown" and "no" mean opposite things (issue #267), the pointer the wrapper
+defines on the adopted window (issue #276), and the two decisions behind the
+wrapper's hotkey and its focus reclaim (issue #236).
 """
 
 import unittest
 
 from openemux.core import x11_embed
-from openemux.core.x11_embed import RetroArchWindowEmbedder
+from openemux.core.input_actions import RETROARCH_KEY_NAMES
+from openemux.core.x11_embed import RetroArchWindowEmbedder, _keysym_candidates
 
 
 class _FakeWindow:
@@ -256,6 +258,97 @@ class EnsureFocusCursorTests(unittest.TestCase):
     def test_another_application_is_active_so_focus_is_left_alone(self):
         server = _FakeServer(active_xid=0x999, focused_xid=0x999)
         self.assertFalse(_embedder_on(server).ensure_focus(0x400, 0x100))
+        self.assertEqual(server.focus_calls, [])
+
+
+class KeysymResolutionTests(unittest.TestCase):
+    """Bindings are stored in RetroArch's vocabulary, not X's (issue #236)."""
+
+    def test_a_retroarch_token_maps_to_its_x_spelling_first(self):
+        self.assertEqual(_keysym_candidates("enter")[0], "Return")
+        self.assertEqual(_keysym_candidates("pageup")[0], "Prior")
+        self.assertEqual(_keysym_candidates("del")[0], "Delete")
+        self.assertEqual(_keysym_candidates("kp_plus")[0], "KP_Add")
+        self.assertEqual(_keysym_candidates("num1")[0], "1")
+        self.assertEqual(_keysym_candidates("rshift")[0], "Shift_R")
+
+    def test_a_plain_letter_is_left_alone(self):
+        self.assertEqual(_keysym_candidates("f"), ["f", "F"])
+
+    def test_function_keys_still_get_the_capitalized_retry(self):
+        self.assertIn("F11", _keysym_candidates("f11"))
+
+    def test_an_empty_binding_offers_nothing(self):
+        self.assertEqual(_keysym_candidates(""), [])
+        self.assertEqual(_keysym_candidates(None), [])
+
+    def test_every_retroarch_key_name_can_be_resolved(self):
+        # The guarantee that matters: whatever an input profile stores, the
+        # wrapper can grab it. Uses the real Xlib tables, no server needed.
+        from Xlib import X, XK
+
+        unresolvable = [
+            token
+            for token in sorted(set(RETROARCH_KEY_NAMES.values()))
+            if not any(
+                XK.string_to_keysym(candidate) != X.NoSymbol
+                for candidate in _keysym_candidates(token)
+            )
+        ]
+        self.assertEqual(unresolvable, [])
+
+
+class FocusReclaimDecisionTests(unittest.TestCase):
+    """When the reclaim tick may take X focus back for the game (#236)."""
+
+    CHILD = 0x200
+    TOPLEVEL = 0x100
+
+    def _should(self, active_xid, focus_xid):
+        return RetroArchWindowEmbedder().should_reclaim_focus(
+            active_xid, focus_xid, self.CHILD, self.TOPLEVEL
+        )
+
+    def test_our_window_is_the_active_one(self):
+        self.assertTrue(self._should(self.TOPLEVEL, self.TOPLEVEL))
+
+    def test_another_application_is_active_so_hands_off(self):
+        self.assertFalse(self._should(0x999, self.TOPLEVEL))
+
+    def test_no_active_window_property_falls_back_to_the_input_focus(self):
+        # Not every (XWayland) window manager keeps _NET_ACTIVE_WINDOW
+        # current, and reading a missing property as "not us" meant the
+        # reclaim loop never fired at all -- RetroArch went input-dead after
+        # any click on the wrapper chrome.
+        self.assertTrue(self._should(None, self.TOPLEVEL))
+        self.assertTrue(self._should(None, self.CHILD))
+
+    def test_the_fallback_still_refuses_to_steal_from_someone_else(self):
+        self.assertFalse(self._should(None, 0x999))
+
+    def test_the_missing_property_is_logged_once(self):
+        embedder = RetroArchWindowEmbedder()
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING") as logs:
+            embedder.should_reclaim_focus(None, self.TOPLEVEL, self.CHILD, self.TOPLEVEL)
+            embedder.should_reclaim_focus(None, self.TOPLEVEL, self.CHILD, self.TOPLEVEL)
+        # A 200 ms tick would otherwise fill the log with the same line.
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("_NET_ACTIVE_WINDOW", logs.output[0])
+
+
+class EnsureFocusWithoutActiveWindowTests(unittest.TestCase):
+    def test_focus_is_reclaimed_when_the_property_is_missing(self):
+        server = _FakeServer(active_xid=None, focused_xid=0x100)
+        embedder = _embedder_on(server)
+
+        self.assertTrue(embedder.ensure_focus(0x200, 0x100))
+        self.assertEqual(server.focus_calls, [0x200])
+
+    def test_focus_elsewhere_and_no_property_leaves_it_alone(self):
+        server = _FakeServer(active_xid=None, focused_xid=0x999)
+        embedder = _embedder_on(server)
+
+        self.assertFalse(embedder.ensure_focus(0x200, 0x100))
         self.assertEqual(server.focus_calls, [])
 
 

@@ -1,6 +1,8 @@
 import unittest
+import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from openemux.core.first_boot import FirstBootBootstrapper
 
@@ -124,6 +126,79 @@ class FirstBootBootstrapperTests(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(cfg.state["status"], "completed")
+
+
+class OfflineFirstBootTests(unittest.TestCase):
+    """Installing offline from a package that bundles cores must still work."""
+
+    def _bootstrapper(self, tmp_dir):
+        cfg = _FakeConfigManager(tmp_dir)
+        cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = True
+        cfg.config["runtime"]["retroarch"]["updater"]["cores_base_url"] = (
+            "https://example.invalid/buildbot/"
+        )
+        return cfg, FirstBootBootstrapper(cfg)
+
+    def test_offline_falls_back_to_the_bundled_cores(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg, bootstrapper = self._bootstrapper(tmp_dir)
+            bootstrapper.updater.has_local_runtime_assets = lambda: True
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("Network is unreachable"),
+            ):
+                result = bootstrapper.run()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(cfg.state["status"], "completed")
+        self.assertIn("retroarch_download_all_cores", cfg.state["completed_steps"])
+
+    def test_offline_without_bundled_cores_fails_with_the_real_reason(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg, bootstrapper = self._bootstrapper(tmp_dir)
+            bootstrapper.updater.has_local_runtime_assets = lambda: False
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("Network is unreachable"),
+            ):
+                result = bootstrapper.run()
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["failed_step"], "retroarch_download_all_cores")
+        self.assertIn("unreachable", result["error"])
+        # Not recorded as done, so a retry actually retries it.
+        self.assertNotIn("retroarch_download_all_cores", cfg.state["completed_steps"])
+
+    def test_an_empty_listing_does_not_complete_the_step(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg, bootstrapper = self._bootstrapper(tmp_dir)
+            bootstrapper.updater.has_local_runtime_assets = lambda: False
+            bootstrapper.updater.download_shader_packs_if_missing = (
+                lambda on_progress=None: {"total": 0, "downloaded": 0, "failed": 0, "failures": []}
+            )
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                return_value=_FakeListing(b"<html>the layout changed</html>"),
+            ):
+                result = bootstrapper.run()
+
+        self.assertFalse(result["success"])
+        self.assertNotIn("retroarch_download_all_cores", cfg.state["completed_steps"])
+        self.assertIn("listing", result["error"])
+
+
+class _FakeListing:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return self.payload
 
 
 if __name__ == "__main__":

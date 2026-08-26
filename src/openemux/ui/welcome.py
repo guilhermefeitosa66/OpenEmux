@@ -348,12 +348,62 @@ class WelcomeAssistant(Adw.Dialog):
     def _on_key(self, _controller, keyval, _keycode, _state):
         from gi.repository import Gdk
 
+        if not self._arrows_step_slides():
+            return False
         if keyval in (Gdk.KEY_Right, Gdk.KEY_Page_Down):
             self._step(1)
             return True
         if keyval in (Gdk.KEY_Left, Gdk.KEY_Page_Up):
             self._step(-1)
             return True
+        return False
+
+    def _arrows_step_slides(self):
+        """Whether Left/Right belong to the carousel right now.
+
+        Not while a popup is open on top of the dialog. This controller runs
+        in the bubble phase and claimed the arrows unconditionally, and the
+        language dropdown's list handles Up/Down but not Left/Right -- so those
+        bubbled up here and flipped the slide *behind* the open list, during
+        the one interaction the first slide exists for (issue #259).
+
+        Asked of the widget tree rather than of the focus, because a GTK4
+        popover is a native surface of its own: which widget the dialog
+        reports as focused while a dropdown list is up is not something to
+        build on. A mapped popover anywhere under the dialog is unambiguous,
+        and a dropdown that merely *has focus* still leaves the arrows with
+        the carousel.
+        """
+        return not self._is_inside_popover(self.get_focus()) and not (
+            self._find_open_popover(self)
+        )
+
+    @classmethod
+    def _find_open_popover(cls, widget):
+        """The first popover under ``widget`` that is on screen, or None."""
+        child = widget.get_first_child()
+        while child is not None:
+            if isinstance(child, Gtk.Popover) and child.get_mapped():
+                return child
+            found = cls._find_open_popover(child)
+            if found is not None:
+                return found
+            child = child.get_next_sibling()
+        return None
+
+    @staticmethod
+    def _is_inside_popover(widget):
+        """Whether ``widget`` sits inside a popover.
+
+        The same ancestor walk ``ui/navigation.py`` does; stops at the first
+        popover rather than climbing out of the dialog. Covers the sessions
+        where focus *is* reported inside the popup.
+        """
+        node = widget
+        while node is not None:
+            if isinstance(node, Gtk.Popover):
+                return True
+            node = node.get_parent()
         return False
 
     def _on_show_startup_toggled(self, check):

@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 
-from openemux.core import save_states
+from openemux.core import retroarch_log, save_states
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
@@ -32,6 +32,10 @@ QUIT_GRACE_SECONDS = 2.0
 TERM_GRACE_SECONDS = 2.0
 STOP_POLL_INTERVAL = 0.05
 
+#: Under this many seconds, a nonzero exit is a launch that never got off the
+#: ground rather than a game the user quit (issue #226).
+STARTUP_FAILURE_SECONDS = 3.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,10 +46,14 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager, sleep=time.sleep, dispatch=None):
+    def __init__(self, project_root, config_manager, sleep=time.sleep, dispatch=None, clock=time.monotonic):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
         self._sleep = sleep
+        self._clock = clock
+        # When the running game started, so a poll can tell "the user quit"
+        # from "it never came up" (issue #226).
+        self._launched_at = None
         # How a background thread hands work back to the GTK main loop
         # (``GLib.idle_add``). The debounced volume write used to run on the
         # Timer thread and mutate the very config dict the main thread was
@@ -119,6 +127,7 @@ class RuntimeManager:
                 return False, error_msg
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
+            self._launched_at = self._clock()
             self._network_cmd_port = port
             self.volume_db = self.config_manager.get_master_volume_db()
             self.muted = False
@@ -430,6 +439,15 @@ class RuntimeManager:
         return self.send_command("LOAD_STATE")
 
     def poll_active(self):
+        """Has the game ended? ``None`` while it runs, a result once it has.
+
+        A game that exits within a couple of seconds with a nonzero code never
+        got as far as running -- a missing library, a core that would not load.
+        The only account of it is the launch log, and the app used to answer
+        "finished (exit code 1)", which is what a clean quit looks like too
+        (issue #226). When it looks like that, the reason comes back with the
+        result so the caller can show it instead.
+        """
         if not self.active_process:
             return None
 
@@ -438,8 +456,32 @@ class RuntimeManager:
             return None
 
         rom = self.active_rom
+        log_path = getattr(self.active_process, "_openemux_log_path", None)
+        ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
-        return {"exit_code": exit_code, "rom": rom}
+
+        result = {
+            "exit_code": exit_code,
+            "rom": rom,
+            "ran_for": ran_for,
+            "log_path": log_path,
+        }
+        if self._died_on_startup(exit_code, ran_for):
+            reason = retroarch_log.read_failure_reason(log_path)
+            result["failure_reason"] = reason
+            logger.warning(
+                "game died on startup: exit_code=%s ran_for=%.2fs reason=%s log=%s",
+                exit_code,
+                ran_for,
+                reason,
+                log_path,
+            )
+        return result
+
+    @staticmethod
+    def _died_on_startup(exit_code, ran_for):
+        """A nonzero exit this soon is a launch that never started."""
+        return bool(exit_code) and ran_for < STARTUP_FAILURE_SECONDS
 
     def _clear_active(self):
         if self.active_process and hasattr(self.active_process, "_openemux_log_handle"):

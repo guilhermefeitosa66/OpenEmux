@@ -7,6 +7,8 @@ from openemux.core.scraper import (
     LABEL_ART,
     find_local_art,
     find_local_cover,
+    image_format,
+    is_image,
     remove_local_art,
     remove_local_covers,
     save_local_art,
@@ -68,6 +70,45 @@ class ScraperTests(unittest.TestCase):
             self.assertEqual(remove_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART), 1)
             self.assertIsNone(find_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART))
             self.assertIsNotNone(find_local_art(roms_dir, "GBA", "Golden Sun", COVER_ART))
+
+
+class ImageSniffingTests(unittest.TestCase):
+    """What counts as an image, and what is an error page (issue #213)."""
+
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 96
+    JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 96
+    WEBP = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"\x00" * 96
+    GIF = b"GIF89a" + b"\x00" * 96
+
+    def test_it_names_each_supported_format(self):
+        self.assertEqual(image_format(self.PNG), "png")
+        self.assertEqual(image_format(self.JPEG), "jpg")
+        self.assertEqual(image_format(self.WEBP), "webp")
+        self.assertEqual(image_format(self.GIF), "gif")
+
+    def test_an_html_error_page_is_not_an_image(self):
+        self.assertIsNone(image_format(b"<html><body>Quota exceeded</body></html>" * 4))
+
+    def test_a_plain_text_quota_message_is_not_an_image(self):
+        # The documented ScreenScraper behaviour: a 200 with a text body.
+        self.assertIsNone(image_format(b"Quota de telechargement depasse " * 4))
+
+    def test_an_empty_body_is_not_an_image(self):
+        self.assertIsNone(image_format(b""))
+        self.assertIsNone(image_format(None))
+
+    def test_a_signature_with_nothing_behind_it_is_not_an_image(self):
+        # A download cut off after the first bytes: the magic number matches
+        # and the file is still unusable.
+        self.assertIsNone(image_format(b"\x89PNG\r\n\x1a\n"))
+
+    def test_riff_that_is_not_webp_is_rejected(self):
+        wav = b"RIFF" + b"\x00\x00\x00\x00" + b"WAVE" + b"\x00" * 96
+        self.assertIsNone(image_format(wav))
+
+    def test_is_image_agrees_with_image_format(self):
+        self.assertTrue(is_image(self.PNG))
+        self.assertFalse(is_image(b"not an image at all, just some words here"))
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_FILE_MODE = 0o644
 
 
-def atomic_write_text(path, text, encoding="utf-8", mode=None):
+def atomic_write_text(path, text, encoding="utf-8", mode=None, errors=None):
     """Write ``text`` to ``path`` without ever leaving it truncated.
 
     ``mode`` sets the permissions explicitly (a credential store asks for
@@ -40,7 +40,7 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None):
     the way out, so a failure never litters the directory.
     """
     return _replace_atomically(
-        path, lambda handle: handle.write(text), "w", encoding, mode
+        path, lambda handle: handle.write(text), "w", encoding, mode, errors
     )
 
 
@@ -52,7 +52,7 @@ def _copy_stream(source, handle, chunk_size):
         handle.write(chunk)
 
 
-def _replace_atomically(path, write_body, open_mode, encoding, mode):
+def _replace_atomically(path, write_body, open_mode, encoding, mode, errors=None):
     """Write through a temporary file and rename it over ``path``."""
     path = Path(path)
     directory = path.parent
@@ -68,7 +68,7 @@ def _replace_atomically(path, write_body, open_mode, encoding, mode):
     )
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(handle_fd, open_mode, encoding=encoding) as handle:
+        with os.fdopen(handle_fd, open_mode, encoding=encoding, errors=errors) as handle:
             write_body(handle)
             # flush() only reaches the OS; fsync() is what reaches the disk.
             # Without it the rename can land before the content does, and a
@@ -85,6 +85,15 @@ def _replace_atomically(path, write_body, open_mode, encoding, mode):
     return path
 
 
+def atomic_write_bytes(path, data, mode=None):
+    """Write ``data`` to ``path`` atomically.
+
+    For content already in memory -- a downloaded cover -- where the final path
+    must never hold a partial file (issue #213).
+    """
+    return _replace_atomically(path, lambda handle: handle.write(data), "wb", None, mode)
+
+
 def atomic_write_stream(path, source, chunk_size=1024 * 1024, mode=None):
     """Copy a readable binary stream into ``path`` atomically.
 
@@ -99,14 +108,14 @@ def atomic_write_stream(path, source, chunk_size=1024 * 1024, mode=None):
     )
 
 
-def atomic_write_lines(path, lines, encoding="utf-8"):
+def atomic_write_lines(path, lines, encoding="utf-8", errors=None):
     """Write ``lines`` one per line, newline-terminated, atomically.
 
     The shape every ``.list`` file in the app is written in: favorites,
     console playlists, collections.
     """
     body = "".join(f"{line}\n" for line in lines)
-    return atomic_write_text(path, body, encoding=encoding)
+    return atomic_write_text(path, body, encoding=encoding, errors=errors)
 
 
 def _existing_mode(path):

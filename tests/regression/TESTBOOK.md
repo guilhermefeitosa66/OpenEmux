@@ -72,6 +72,69 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests` exits 0 and prints
   `OK`. This one command also settles every `AUTO-SUITE` scenario below.
 
+### RT-003 — First boot without internet uses the bundled cores
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: install the `.deb`/`.rpm`/AppImage on a machine with no network and
+  launch it for the first time.
+- **Expected:** First boot completes on the cores the package already ships. It used to end at
+  "bootstrap failed": the manifest fetch raised straight out of the download step, so the
+  bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
+  fails — but the message names the real reason (`URLError: Network is unreachable`, not
+  "something failed") and the step is **not** recorded as completed, so a retry retries it.
+- **Check:** suite files `tests/test_first_boot.py`
+  (`test_offline_falls_back_to_the_bundled_cores`,
+  `test_offline_without_bundled_cores_fails_with_the_real_reason`),
+  `tests/test_retroarch_buildbot_updater.py`
+  (`test_an_offline_manifest_is_a_counted_failure_not_a_crash`).
+  Run as a probe it would seed the real `~/.openemux` and ROM tree, which is why it stays in the
+  suite: `FirstBootBootstrapper` drives the live config.
+
+### RT-004 — An empty core listing is never recorded as a successful step
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: point `cores_base_url` at a page with no core links (or blank it) and
+  run first boot.
+- **Expected:** The step fails instead of completing. `total == 0` used to read as "nothing to
+  download", the step went into `completed_steps`, and a completed step is never re-run — leaving
+  the user with no cores and no way for the bootstrap to fix it (issue #211).
+- **Check:** suite files `tests/test_retroarch_buildbot_updater.py`
+  (`test_an_empty_core_listing_is_a_failure`, `test_no_configured_url_is_a_failure_too`,
+  `test_a_disabled_updater_is_still_not_a_failure`), `tests/test_first_boot.py`
+  (`test_an_empty_listing_does_not_complete_the_step`).
+
+### RT-005 — A crashed bootstrap worker still ends the first-boot screen
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: fill the disk (or make `~/.openemux` unwritable) and launch a fresh
+  install, so the bootstrap dies outside its own step loop.
+- **Expected:** The first-boot window closes, the main window opens, and a toast names the real
+  error ("Initial setup could not run: No space left on device"). The worker used to die
+  silently, `_finish_bootstrap_flow` was never queued, and the window sat there forever — and
+  relaunching just re-presented the same frozen window (issue #215).
+- **Check:** suite file `tests/test_first_boot_window.py` (`GuardedBootstrapWorkerTests`).
+
+### RT-006 — Closing the first-boot window mid-setup asks first
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with `setup.bootstrap.status: pending` (never the real
+  one — first boot seeds the config, the ROM tree and the playlists).
+- **Steps:**
+  1. Launch the app against that `HOME` and wait for "Preparing first-time setup".
+  2. Click the window's close button.
+  3. Choose "Keep setting up", then close again and choose "Quit".
+- **Expected:** Step 2 puts up "Setup is still running" with "Keep setting up" (default) and
+  "Quit" (destructive). "Keep setting up" leaves setup running; "Quit" ends the app, and the next
+  launch picks up from the steps already recorded. When setup finishes on its own the window
+  closes with **no** dialog (issue #215).
+- **Check:** screenshots of the dialog and of the app still running after "Keep setting up"; the
+  rules themselves in `tests/test_first_boot_window.py` (`CloseConfirmationTests`,
+  `ConfirmedQuitTests`, `TerminalEventTests`).
+- **Restore:** delete the throwaway `HOME`.
+
 ## Library & scanning
 
 ### RT-010 — Rescan keeps the library consistent
@@ -226,6 +289,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
+### RT-018 — A ROM whose name is not valid UTF-8 scans, shows and keeps working
+- **Area:** Library
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with a library holding a ROM whose filename carries a
+  non-UTF-8 byte (`printf` the name with `\xff` in it) plus one ordinary ROM.
+- **Steps:**
+  1. Launch the app against that `HOME`, open the console page.
+  2. Press `F5`, wait for the rescan, then press `F5` again.
+- **Expected:** Both games are in the grid — the bad one shown with its offending byte escaped
+  (`Contra \udcff (Japan)`) — the header counts 2 games, and the **second** `F5` runs a rescan too.
+  Old dumps carry cp437 and Shift-JIS names; such a name used to raise mid-write, kill the scan
+  worker, and leave `_scan_running` set so every later scan was refused with "a scan is already
+  running" until the app was restarted (issue #214). The launch log gains no `Traceback` and no
+  `--- Logging error ---`.
+- **Check:** two screenshots (grid, and after the second rescan); `grep -c Traceback` and
+  `grep -c "Logging error"` on the launch log are both 0; the console `.list` on disk holds the
+  raw name (`python3 -c "print(open(p,'rb').read())"`); suite file `tests/test_non_utf8_names.py`.
+- **Restore:** delete the throwaway `HOME`.
+
+### RT-019 — A worker that crashes never wedges its feature
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make a rescan, a cover sync or an artwork search fail, then start the
+  same thing again.
+- **Expected:** It starts. The completion callback is what clears the "already running" flag, and
+  a worker that died without firing it left the feature refused for the rest of the session
+  (issue #214) — the rescan behind "a scan is already running", the sync behind a banner that
+  could never be dismissed, the artwork dialog spinning forever.
+- **Check:** suite files `tests/test_cover_sync.py`
+  (`test_a_crashed_sync_still_reports_back`, `test_a_crashed_artwork_sync_still_reports_back`),
+  `tests/test_artwork_search.py` (`CrashedWorkerTests`), `tests/test_non_utf8_names.py`
+  (`test_one_bad_console_does_not_abort_the_whole_rescan`).
+
 ### RT-013 — Rename carries save states, battery saves and artwork
 - **Area:** Library
 - **Mode:** AUTO-SUITE
@@ -282,6 +379,70 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 
 ## Navigation & search
+
+### RT-026 — A fresh install lands on the onboarding page
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with an empty ROM folder and the bootstrap already
+  marked completed. Never the real home.
+- **Steps:**
+  1. Launch the app against that `HOME`.
+  2. Put a ROM in the library folder and launch it again.
+- **Expected:** Step 1 shows "Your library is empty", the drag-and-drop line and the "Import
+  ROMs…" / "Choose a folder instead" buttons, with an **empty sidebar**. That page could never be
+  reached before: the Favorites row is always first in the list, the list selects its first row as
+  soon as it takes focus, and the user was met with "No favorites yet — right-click a game and
+  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the whole
+  sidebar back ("All", "Favorites", the console) and lands on "Favorites" as usual.
+- **Check:** a screenshot per step; the launch log's last `ui view changed` line reads
+  `visible_view=library-empty` for step 1 and `visible_view=__favorites__` for step 2; suite file
+  `tests/test_library_landing.py`.
+- **Restore:** delete the throwaway `HOME`.
+
+### RT-027 — A rescan leaves you in the collection you were browsing
+- **Area:** Navigation
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary collections directory).
+- **Steps:** As a QA person: open a collection, press `F5`, and watch where you end up. Or simply
+  open a collection at launch — the startup scan rescans on every single launch.
+- **Expected:** You stay in the collection, with its scroll position. Collection scopes were never
+  in the set of places a rebuilt library would land, so every rescan threw the user into Favorites
+  (issue #225). A collection deleted since the rescan started still falls back to Favorites, the
+  way a console that is gone does.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil
+  from pathlib import Path
+  from openemux.core.collections import CollectionManager
+  from openemux.ui.window import FAVORITES_ID, OpenEmuxWindow, collection_scope
+
+  base = Path(os.environ["SCRATCH"]) / "rt027"
+  shutil.rmtree(base, ignore_errors=True)
+  manager = CollectionManager(base)
+  manager.create("Hard games")
+  manager.add("hard-games", ["/roms/FC/Contra.nes"])
+  slugs = [c["slug"] for c in manager.list_collections()]
+
+  scope = collection_scope("hard-games")
+  assert OpenEmuxWindow._landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
+  assert OpenEmuxWindow._landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
+  print("RT-027 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-028 — A rescan asked for while one is running still happens
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: import ROMs the moment the app opens, so the import finishes while
+  the automatic startup scan is still running.
+- **Expected:** The new games appear. The post-import rescan was refused and dropped with no retry
+  and no message — the user saw "imported" and then nothing, which reads as a failed import
+  (issue #225). The request is queued and runs when the current scan ends; a queued whole-library
+  rescan absorbs a single-console one, and two different consoles become a whole-library rescan.
+- **Check:** suite file `tests/test_library_landing.py` (`RescanQueueTests`).
 
 ### RT-020 — Sidebar navigation switches consoles
 - **Area:** Navigation
@@ -557,6 +718,67 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only (network-dependent and slow; logic covered by `tests/test_cover_sync.py`,
   `tests/test_artwork_search.py`, `tests/test_artwork_suggestions.py` via RT-002).
 
+### RT-055 — An error page is never saved as a cover
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: sync covers behind a captive portal, or with a ScreenScraper account
+  that is over its daily quota, then look at the cards and at
+  `~/games/roms/<CONSOLE>/covers/`.
+- **Expected:** Nothing is written for the ROMs that failed — the responses come back with a 200
+  and a plain-text or HTML body, and only the bytes can tell. A 0-byte body and a download cut
+  off after the magic number are rejected the same way, and a failed write leaves nothing at the
+  final name (issue #213).
+- **Check:** suite files `tests/test_scraper.py` (`ImageSniffingTests`),
+  `tests/test_cover_sync.py` (`test_an_error_page_served_with_a_200_is_not_saved_as_a_cover`,
+  `test_a_failed_write_leaves_nothing_at_the_final_name`),
+  `tests/test_artwork_search.py` (`CandidateDownloadTests`).
+
+### RT-056 — Junk art from an older version is cleared by the next sync
+- **Area:** Covers
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: put an HTML file at
+  `~/games/roms/<CONSOLE>/covers/<Game>.png`, then run a normal (fill-in) cover sync for that
+  console.
+- **Expected:** The junk file is deleted and the cover is fetched properly. Any file at that path
+  used to count as art, so the ROM was skipped on every later sync and the only symptom was a
+  blank card — the user had to find and delete each one by hand (issue #213). Real art already
+  there is still left alone.
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil
+  from pathlib import Path
+  from unittest.mock import patch
+  from openemux.core import cover_sync
+
+  base = Path(os.environ["SCRATCH"]) / "rt056"
+  shutil.rmtree(base, ignore_errors=True)
+  covers = base / "PS" / "covers"
+  covers.mkdir(parents=True)
+  junk = covers / "Game.png"
+  junk.write_bytes(b"<html>Quota exceeded</html>" * 4)
+  good = covers / "Other.png"
+  good.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 96)
+
+  def run(rom_name):
+      with patch("openemux.core.cover_sync._staged_cover_candidates",
+                 return_value=[("libretro", "primary", "https://cdn.example/a.png")]), \
+           patch("openemux.core.cover_sync._download_cover", side_effect=lambda url, dest: dest):
+          return cover_sync._process_rom(
+              "PS", {"name": rom_name, "path": f"/roms/PS/{rom_name}.cue"}, base,
+              "covers", "boxart", {}, None, False, None, cover_sync._HostGates(),
+          )
+
+  assert run("Game")["status"] == "downloaded", "the junk cover was skipped again"
+  assert not junk.exists(), "the junk cover is still there"  # the stubbed download writes nothing
+  assert run("Other")["status"] == "skipped", "real art must be left alone"
+  print("RT-056 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
 ## Launch & runtime
 
 ### RT-060 — RetroArch is available
@@ -576,6 +798,47 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The invocation matches the console's configuration.
 - **Check:** suite files `tests/test_retroarch_command.py`, `tests/test_retroarch_launcher.py`,
   `tests/test_runtime_manager.py`.
+
+### RT-076 — A launch that cannot happen says why
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make `~/.openemux` read-only (or fill the disk) and click a game.
+- **Expected:** A toast names the error. Everything before the process starts writes to disk — the
+  states dir, the runtime dir, the `--appendconfig` override, an input profile normalised on load
+  — and none of it was guarded, so the error went into the GTK click handler, which prints a
+  traceback and swallows it. The button simply did nothing (issue #226). A failed launch also
+  closes the log file it opened instead of leaking the descriptor.
+- **Check:** suite file `tests/test_retroarch_launcher.py` (`LaunchFailuresAreVisibleTests`).
+
+### RT-077 — A game that dies on startup says what the log said
+- **Area:** Launch
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` whose `runtime.retroarch.binary` points at a script
+  that prints `dlopen(): error loading libfuse.so.2` and exits 1, with a matching core file under
+  `<HOME>/.config/retroarch/cores/`. Never the real home.
+- **Steps:**
+  1. Launch the app against that `HOME`, open the console and start the game.
+  2. Read the toast.
+- **Expected:** *&lt;game&gt; closed straight away — The RetroArch AppImage needs libfuse2, which
+  this system does not have.* A nonzero exit within three seconds is a launch that never started;
+  the old message ("finished (exit code 1)") was indistinguishable from a clean quit, so on a host
+  with no libfuse2 every launch died in silence (issue #226).
+- **Check:** screenshot of the toast; `grep "died on startup" <launch log>`; suite files
+  `tests/test_runtime_manager.py` (`StartupFailureTests`), `tests/test_retroarch_log.py`
+  (`FailureReasonTests`, `ReadFailureReasonTests`).
+- **Restore:** delete the throwaway `HOME`.
+
+### RT-078 — An AppImage runs without FUSE when the host has none
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the app on a distribution that ships no libfuse2 and launch a
+  game against the vendored RetroArch AppImage.
+- **Expected:** The AppImage is started with `--appimage-extract-and-run`, which needs no FUSE, and
+  the game runs. On a host that *has* libfuse2 the flag is not used — extracting the whole image
+  on every launch is only worth paying for when mounting cannot work (issue #226).
+- **Check:** suite file `tests/test_retroarch_launcher.py` (`AppImageFuseFallbackTests`).
 
 ### RT-062 — A game launches and plays
 - **Area:** Launch
@@ -629,6 +892,48 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print("RT-065 OK")
   EOF
   ```
+
+### RT-079 — The wrapper's fullscreen key works whatever it is bound to
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: rebind "Toggle fullscreen" to Enter (or Page Up, Delete, keypad +,
+  right Shift), launch a game in the OpenEmux window and press it.
+- **Expected:** The window toggles fullscreen. Bindings are stored in RetroArch's vocabulary and X
+  does not know most of those words, so the grab resolved to nothing and the key did nothing —
+  and RetroArch's own toggle is deliberately unbound while embedded, so that left **no**
+  fullscreen key at all, with one log line to explain it (issue #236). A binding that still cannot
+  be resolved now falls back to "F" instead of to nothing.
+- **Check:** suite file `tests/test_x11_embed.py` (`KeysymResolutionTests` — including
+  `test_every_retroarch_key_name_can_be_resolved`, which walks the whole stored vocabulary against
+  the real Xlib tables), `tests/test_game_window.py` (`FullscreenBindingTests`).
+
+### RT-083 — Double-clicking a game launches it once
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM.
+- **Steps:**
+  1. Double-click a card the way you would in a file manager.
+- **Expected:** The game starts, and **no** "A game is already running" toast appears. Activation
+  is on a single click, so a double-click emitted it twice: the second launch was correctly
+  refused, but the refusal is an error toast, so anyone who habitually double-clicks got an error
+  on every launch (issue #236).
+- **Check:** human only (launching grabs the keyboard for the emulator); the debounce itself in
+  `tests/test_game_window.py` (`DoubleClickTests`).
+
+### RT-084 — Input keeps working after clicking the game window's chrome
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the OpenEmux window.
+- **Steps:**
+  1. Click the header bar (the pause or volume control), then go back to playing.
+- **Expected:** The pad and the keyboard still drive the game. RetroArch gates input on X focus,
+  and the reclaim tick used to skip entirely on sessions whose window manager does not keep
+  `_NET_ACTIVE_WINDOW` current — the game went input-dead after any click on the chrome, silently
+  (issue #236). The fallback now decides from X's own input focus, and the missing property is
+  logged once.
+- **Check:** human only; the decision itself in `tests/test_x11_embed.py`
+  (`FocusReclaimDecisionTests`, `EnsureFocusWithoutActiveWindowTests`).
 
 ### RT-063 — In-game hotkeys work
 - **Area:** Launch
@@ -1132,6 +1437,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Every slide shows its illustration and text; the slideshow cycles; "Get started"
   closes the dialog.
 - **Check:** One screenshot per slide; no missing-image placeholder.
+
+### RT-121 — Arrow keys do not flip slides under the open language list
+- **Area:** Wizard
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, on the first Welcome slide.
+- **Steps:**
+  1. Open "Main Menu" → "Welcome".
+  2. Open the language dropdown on the first slide.
+  3. Press Left and Right a few times, then Escape to close the list.
+  4. With the list closed, press Left and Right again.
+- **Expected:** Step 3 leaves the slide where it is — the page dots do not move. The dialog's key
+  controller runs in the bubble phase and claimed Left/Right unconditionally, and the dropdown's
+  list handles Up/Down but not Left/Right, so the slide changed *behind* the open list during the
+  one interaction that slide exists for (issue #259). Step 4 steps through the slides as usual,
+  including with the dropdown merely focused.
+- **Check:** screenshots of the page dots before and after step 3 (identical) and after step 4
+  (moved); suite file `tests/test_welcome_keys.py`.
 
 ## Help
 

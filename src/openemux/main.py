@@ -296,19 +296,55 @@ class OpenEmuxApplication(Adw.Application):
         )
         self._bootstrap_window.present()
         bootstrapper = FirstBootBootstrapper(self.config_manager)
+        window = self._bootstrap_window
 
         def _emit(evt):
-            GLib.idle_add(self._bootstrap_window.handle_event, evt)
+            GLib.idle_add(self._deliver_bootstrap_event, window, evt)
 
         def _worker():
-            result = bootstrapper.run(on_event=_emit)
+            result = self._run_bootstrap_guarded(bootstrapper, _emit)
             GLib.idle_add(self._finish_bootstrap_flow, result, initial_boot)
 
         Thread(target=_worker, daemon=True).start()
 
+    @staticmethod
+    def _run_bootstrap_guarded(bootstrapper, on_event):
+        """Run the bootstrap and always come back with a result.
+
+        ``FirstBootBootstrapper.run`` guards each step handler, but not the
+        config reads and writes around the loop -- and those touch the disk, so
+        a full disk or an unwritable ``~/.openemux`` raises right past them. The
+        worker thread then died silently: ``_finish_bootstrap_flow`` was never
+        queued, ``_bootstrap_running`` stayed True, and the first-boot window
+        sat there forever with no error and no way out. Relaunching just
+        re-presented the same frozen window (issue #215).
+
+        A crash here is still a failed bootstrap, and a failed bootstrap has a
+        screen. It has to arrive shaped like one.
+        """
+        try:
+            return bootstrapper.run(on_event=on_event)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("bootstrap worker crashed")
+            return {"success": False, "failed_step": None, "error": str(exc)}
+
+    def _deliver_bootstrap_event(self, window, event):
+        """Hand a worker event to the window, if that window is still ours.
+
+        The worker outlives a closed window by design (it is a daemon thread),
+        and reaching through ``self._bootstrap_window`` after the flow ended
+        raised inside the worker -- taking the thread, and the flow, with it.
+        """
+        if window is not None and window is self._bootstrap_window:
+            window.handle_event(event)
+        return False
+
     def _finish_bootstrap_flow(self, result, initial_boot):
         self._bootstrap_running = False
         if self._bootstrap_window:
+            # The window asks for confirmation before closing mid-run; this
+            # close is the run being over, so it must not ask.
+            self._bootstrap_window.finish()
             self._bootstrap_window.close()
             self._bootstrap_window = None
 
