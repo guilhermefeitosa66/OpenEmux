@@ -72,6 +72,39 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests` exits 0 and prints
   `OK`. This one command also settles every `AUTO-SUITE` scenario below.
 
+### RT-003 — First boot without internet uses the bundled cores
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: install the `.deb`/`.rpm`/AppImage on a machine with no network and
+  launch it for the first time.
+- **Expected:** First boot completes on the cores the package already ships. It used to end at
+  "bootstrap failed": the manifest fetch raised straight out of the download step, so the
+  bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
+  fails — but the message names the real reason (`URLError: Network is unreachable`, not
+  "something failed") and the step is **not** recorded as completed, so a retry retries it.
+- **Check:** suite files `tests/test_first_boot.py`
+  (`test_offline_falls_back_to_the_bundled_cores`,
+  `test_offline_without_bundled_cores_fails_with_the_real_reason`),
+  `tests/test_retroarch_buildbot_updater.py`
+  (`test_an_offline_manifest_is_a_counted_failure_not_a_crash`).
+  Run as a probe it would seed the real `~/.openemux` and ROM tree, which is why it stays in the
+  suite: `FirstBootBootstrapper` drives the live config.
+
+### RT-004 — An empty core listing is never recorded as a successful step
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: point `cores_base_url` at a page with no core links (or blank it) and
+  run first boot.
+- **Expected:** The step fails instead of completing. `total == 0` used to read as "nothing to
+  download", the step went into `completed_steps`, and a completed step is never re-run — leaving
+  the user with no cores and no way for the bootstrap to fix it (issue #211).
+- **Check:** suite files `tests/test_retroarch_buildbot_updater.py`
+  (`test_an_empty_core_listing_is_a_failure`, `test_no_configured_url_is_a_failure_too`,
+  `test_a_disabled_updater_is_still_not_a_failure`), `tests/test_first_boot.py`
+  (`test_an_empty_listing_does_not_complete_the_step`).
+
 ## Library & scanning
 
 ### RT-010 — Rescan keeps the library consistent

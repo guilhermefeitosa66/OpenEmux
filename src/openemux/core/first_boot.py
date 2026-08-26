@@ -17,6 +17,20 @@ class BootstrapStep:
     handler: callable
 
 
+def _first_failure_reason(*summaries):
+    """The first real reason out of the download summaries, for the message.
+
+    "Something failed" is not an error a user can act on; "URLError: Network
+    is unreachable" is (issue #211).
+    """
+    for summary in summaries:
+        for failure in summary.get("failures") or []:
+            artifact = failure.get("artifact") or "?"
+            error = failure.get("error") or "unknown error"
+            return f"{artifact}: {error}"
+    return "no details reported"
+
+
 class FirstBootBootstrapper:
     def __init__(self, config_manager):
         self.config_manager = config_manager
@@ -157,13 +171,18 @@ class FirstBootBootstrapper:
         if total_failures > 0 and not self.updater.has_local_runtime_assets():
             raise RuntimeError(
                 "RetroArch asset update failed and no local bundled assets were found. "
-                "Connect to the internet or provide local cores/shaders."
+                "Connect to the internet or provide local cores/shaders. "
+                f"({_first_failure_reason(cores_summary, shaders_summary)})"
             )
 
         warning = None
         if total_failures > 0:
             warning = (
                 "RetroArch update had failures, continuing with local bundled assets."
+            )
+            logger.warning(
+                "first boot fell back to the bundled assets: %s",
+                _first_failure_reason(cores_summary, shaders_summary),
             )
         return {
             "cores": cores_summary,

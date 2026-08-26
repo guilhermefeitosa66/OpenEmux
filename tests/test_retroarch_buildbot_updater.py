@@ -1,5 +1,6 @@
 import io
 import unittest
+import urllib.error
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -90,6 +91,65 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             self.assertEqual(summary["failed"], 0)
             self.assertTrue(core_path.exists())
             self.assertEqual(core_path.read_bytes(), b"core-binary")
+
+    def test_an_offline_manifest_is_a_counted_failure_not_a_crash(self):
+        # The whole point: the bootstrap step above decides whether to fall
+        # back to the bundled cores, and it only gets to decide if this
+        # returns instead of raising (issue #211).
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("Network is unreachable"),
+            ):
+                summary = updater.download_all()
+
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["total"], 0)
+        self.assertEqual(summary["downloaded"], 0)
+        self.assertEqual(summary["failures"][0]["artifact"], "manifest")
+        self.assertIn("unreachable", summary["failures"][0]["error"])
+
+    def test_an_empty_core_listing_is_a_failure(self):
+        # A page whose layout changed under the scraper reads as "no cores to
+        # download", which used to be recorded as a completed step -- and a
+        # completed step is never re-run.
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                return_value=_FakeResponse(b"<html><body>nothing here</body></html>"),
+            ):
+                summary = updater.download_all()
+
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["failures"][0]["artifact"], "listing")
+
+    def test_no_configured_url_is_a_failure_too(self):
+        with TemporaryDirectory() as tmp_dir:
+            config = _FakeConfigManager(tmp_dir)
+            settings = config.get_retroarch_updater_settings()
+            settings["cores_base_url"] = ""
+            config.get_retroarch_updater_settings = lambda: settings
+            updater = RetroArchBuildbotUpdater(config)
+
+            summary = updater.download_all()
+
+        self.assertEqual(summary["failed"], 1)
+        self.assertIn("cores_base_url", summary["failures"][0]["error"])
+
+    def test_a_disabled_updater_is_still_not_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            config = _FakeConfigManager(tmp_dir)
+            settings = config.get_retroarch_updater_settings()
+            settings["enabled"] = False
+            config.get_retroarch_updater_settings = lambda: settings
+            updater = RetroArchBuildbotUpdater(config)
+
+            summary = updater.download_all()
+
+        self.assertEqual(summary["failed"], 0)
+        self.assertTrue(summary["skipped"])
 
     def test_download_shader_packs_extracts_presets(self):
         with TemporaryDirectory() as tmp_dir:
