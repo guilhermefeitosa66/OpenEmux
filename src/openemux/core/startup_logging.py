@@ -8,6 +8,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+#: How log output handles a character its encoder cannot represent.
+#:
+#: The app logs ROM paths, and a filename is bytes: one carrying a non-UTF-8
+#: byte reaches logging as a lone surrogate ('Contra \udcff.nes'). A strict
+#: handler raises inside emit(), and Python answers with a "--- Logging
+#: error ---" traceback on stderr and drops the line -- once per log call, for
+#: every such ROM (issue #214). Escaped is readable and cannot fail.
+LOG_ERRORS = "backslashreplace"
+
+
+def _reconfigure_stream(stream):
+    """Make a stream tolerate un-encodable characters, if it can be told to."""
+    try:
+        stream.reconfigure(errors=LOG_ERRORS)
+    except (AttributeError, ValueError, OSError):  # pragma: no cover - stream dependent
+        pass
+
+
 def get_startup_log_path(runtime_dir=None):
     if runtime_dir:
         base_dir = Path(runtime_dir).expanduser()
@@ -29,7 +47,7 @@ def append_startup_error(message, exc_text=None, runtime_dir=None):
         lines = [f"{timestamp} ERROR {message}"]
         if exc_text:
             lines.append(exc_text.rstrip())
-        with open(log_path, "a", encoding="utf-8") as handle:
+        with open(log_path, "a", encoding="utf-8", errors=LOG_ERRORS) as handle:
             handle.write("\n".join(lines) + "\n")
         return log_path
     except OSError:
@@ -53,7 +71,7 @@ def install_crash_handlers(log_path=None):
         try:
             # Kept open for the lifetime of the process: faulthandler writes to
             # this descriptor from a signal handler, so it cannot be reopened.
-            handle = open(log_path, "a", encoding="utf-8")
+            handle = open(log_path, "a", encoding="utf-8", errors=LOG_ERRORS)
             faulthandler.enable(file=handle, all_threads=True)
         except OSError:
             faulthandler.enable(all_threads=True)
@@ -76,9 +94,14 @@ def install_crash_handlers(log_path=None):
 
 def configure_startup_logging(runtime_dir=None):
     log_path = get_startup_log_path(runtime_dir=runtime_dir)
+    # stderr is what the console handler writes to; a surrogate in a ROM path
+    # would otherwise raise inside its emit() on every line that names one.
+    _reconfigure_stream(sys.stderr)
     handlers = [logging.StreamHandler()]
     try:
-        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+        handlers.append(
+            logging.FileHandler(log_path, encoding="utf-8", errors=LOG_ERRORS)
+        )
     except OSError:
         pass
     logging.basicConfig(

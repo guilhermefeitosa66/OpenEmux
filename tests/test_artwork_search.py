@@ -1,5 +1,6 @@
 """Per-ROM artwork search (issue #77): provider fan-out, download, dedup."""
 
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -159,6 +160,42 @@ class CandidateDownloadTests(unittest.TestCase):
             self.assertIsNone(target)
             self.assertIsNone(digest)
             self.assertEqual(list(Path(tmp_dir).glob("*")), [])
+
+
+class CrashedWorkerTests(unittest.TestCase):
+    """on_done takes the dialog off its spinner, so it always fires (#214)."""
+
+    def test_a_crashed_search_still_calls_back(self):
+        done = threading.Event()
+        received = []
+
+        def _on_done(results):
+            received.append(results)
+            done.set()
+
+        with patch(
+            "openemux.core.artwork_search.search_artwork", side_effect=RuntimeError("boom")
+        ):
+            artwork_search.search_artwork_async(on_done=_on_done)
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received, [[]])
+
+    def test_a_crashed_suggestion_run_still_calls_back(self):
+        done = threading.Event()
+        received = []
+
+        def _on_done(mode, results):
+            received.append((mode, results))
+            done.set()
+
+        with patch(
+            "openemux.core.artwork_search.suggest_artwork", side_effect=RuntimeError("boom")
+        ):
+            artwork_search.suggest_artwork_async(on_done=_on_done)
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received, [(None, [])])
 
 
 if __name__ == "__main__":

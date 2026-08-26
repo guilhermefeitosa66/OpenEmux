@@ -5,6 +5,7 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, GObject, Graphene, Pan
 import logging
 
 from openemux.core import cartridge_render, cover_cache
+from openemux.core.paths import display_text
 from openemux.core.selection import SelectionModel
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
@@ -413,7 +414,9 @@ class RomItem(Gtk.Box):
 
         self.append(self.cover_overlay)
 
-        full_name = rom["name"]
+        # Escaped where GTK can see it: rom["name"] keeps the filesystem's
+        # own bytes for the lookups that need them (issue #214).
+        full_name = display_text(rom["name"])
         # A card only has its own width for the title, so the caption is cut to
         # what fits -- which is a function of the zoom, or a zoomed-out card
         # would be stretched wider by its own label. A row has the whole

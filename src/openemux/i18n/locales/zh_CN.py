@@ -206,6 +206,8 @@ TRANSLATIONS = {
     "toast.playlist_rebuilt": "已为 {console} 重建列表",
     "toast.playlists_rebuilt_all": "游戏库已重建：{consoles} 台主机共 {roms} 个 ROM",
     "toast.scan_running": "ROM 扫描已在后台运行",
+    "toast.scan_failed": "扫描无法完成：{error}",
+    "toast.scan_partial": "有些主机无法扫描：{consoles}",
     "toast.sync_running": "封面同步已在进行中",
     "toast.sync_started": "封面同步已在后台开始",
     "toast.sync_done": "封面同步完成：下载 {downloaded} 个，跳过 {skipped} 个，未找到 {errors} 个",

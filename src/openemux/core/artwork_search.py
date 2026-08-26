@@ -141,7 +141,13 @@ def search_artwork_async(on_done=None, **kwargs):
     """Run :func:`search_artwork` on a background thread."""
 
     def _worker():
-        results = search_artwork(**kwargs)
+        results = []
+        try:
+            results = search_artwork(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            # on_done is what takes the dialog off its spinner; a worker that
+            # dies without firing it leaves it spinning forever (issue #214).
+            logger.exception("artwork search crashed: %s", screenscraper.redact(exc))
         if on_done:
             on_done(results)
 
@@ -207,7 +213,11 @@ def suggest_artwork_async(on_done=None, **kwargs):
     """Run :func:`suggest_artwork` on a background thread."""
 
     def _worker():
-        mode, results = suggest_artwork(**kwargs)
+        mode, results = None, []
+        try:
+            mode, results = suggest_artwork(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("artwork suggestions crashed: %s", screenscraper.redact(exc))
         if on_done:
             on_done(mode, results)
 

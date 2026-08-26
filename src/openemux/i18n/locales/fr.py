@@ -206,6 +206,8 @@ TRANSLATIONS = {
     "toast.playlist_rebuilt": "Liste reconstruite pour {console}",
     "toast.playlists_rebuilt_all": "Bibliothèque reconstruite : {roms} ROMs sur {consoles} consoles",
     "toast.scan_running": "Une analyse des ROMs est déjà en cours en arrière-plan",
+    "toast.scan_failed": "L'analyse n'a pas pu se terminer : {error}",
+    "toast.scan_partial": "Certaines consoles n'ont pas pu être analysées : {consoles}",
     "toast.sync_running": "Une synchronisation des jaquettes est déjà en cours",
     "toast.sync_started": "Synchronisation des jaquettes lancée en arrière-plan",
     "toast.sync_done": "Synchronisation terminée : {downloaded} téléchargées, {skipped} ignorées, {errors} introuvables",
