@@ -44,8 +44,8 @@ class DeleteRomTests(unittest.TestCase):
             rom = _rom(base / "roms")
             cache = base / "cache" / "GB"
             cache.mkdir(parents=True)
-            (cache / "Kirby.abc123.png").write_bytes(b"png")
-            (cache / "Other.abc123.png").write_bytes(b"png")
+            (cache / "Kirby.0123456789ab.png").write_bytes(b"png")
+            (cache / "Other.0123456789ab.png").write_bytes(b"png")
 
             trashed = []
 
@@ -59,8 +59,8 @@ class DeleteRomTests(unittest.TestCase):
             )
 
             self.assertEqual(trashed, [Path(rom["path"])])
-            self.assertFalse((cache / "Kirby.abc123.png").exists())
-            self.assertTrue((cache / "Other.abc123.png").exists())
+            self.assertFalse((cache / "Kirby.0123456789ab.png").exists())
+            self.assertTrue((cache / "Other.0123456789ab.png").exists())
 
     def test_reports_when_the_trash_refuses(self):
         with TemporaryDirectory() as tmp:

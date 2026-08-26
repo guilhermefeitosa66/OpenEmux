@@ -39,6 +39,22 @@ from openemux.core.update_checker import (
 
 logger = logging.getLogger(__name__)
 
+
+def _try_mkdir(directory, failures):
+    """Create ``directory``; record it in ``failures`` if that is not possible.
+
+    The library layout is 93 directories on a path the user chooses, which
+    can be a read-only mount, a full disk, or a drive that went away. None of
+    that is a reason for the app to stop (issue #234).
+    """
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        logger.warning("directory not created: path=%s error=%s", directory, exc)
+        failures.append(directory)
+        return False
+
 # Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
 DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
@@ -1068,23 +1084,47 @@ class ConfigManager:
         self.save_config()
 
     def ensure_rom_directories(self):
+        """Lay out the library: three directories per console, plus its own.
+
+        Returns the paths it could not create. Every call site can carry on
+        without them -- the app shows an empty library rather than failing --
+        and one of them is the "change ROMs folder" handler, where the
+        exception escaped into the GTK main loop and took the window's
+        callback down with it (issue #234). A folder the user picked on an
+        unwritable disk is a thing to report, not to crash on.
+
+        The loop used to run twice, before and after the migration; the
+        migration creates whatever it moves into, so once, after it, is
+        enough.
+        """
         base_path = self.get_roms_path()
-        self.get_playlists_dir().mkdir(parents=True, exist_ok=True)
-        self.get_runtime_dir().mkdir(parents=True, exist_ok=True)
+        failed = []
+        _try_mkdir(self.get_playlists_dir(), failed)
+        _try_mkdir(self.get_runtime_dir(), failed)
+
+        try:
+            self._run_library_migration_if_needed(base_path)
+        except OSError as exc:
+            logger.warning("library migration could not run: error=%s", exc)
+            failed.append(base_path)
 
         for system_id in SYSTEM_IDS:
-            self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_covers_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_bios_dir(system_id).mkdir(parents=True, exist_ok=True)
+            _try_mkdir(self.get_console_dir(system_id), failed)
+            _try_mkdir(self.get_console_covers_dir(system_id), failed)
+            _try_mkdir(self.get_console_bios_dir(system_id), failed)
 
-        self._run_library_migration_if_needed(base_path)
+        try:
+            self.ensure_input_profiles()
+        except OSError as exc:
+            logger.warning("input profiles could not be seeded: error=%s", exc)
 
-        for system_id in SYSTEM_IDS:
-            self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_covers_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_bios_dir(system_id).mkdir(parents=True, exist_ok=True)
-
-        self.ensure_input_profiles()
+        if failed:
+            logger.warning(
+                "library layout incomplete: unwritable=%d first=%s",
+                len(failed),
+                failed[0],
+            )
+        return failed
 
     def _run_library_migration_if_needed(self, base_path):
         migration = self.config.setdefault("library", {}).setdefault("migration", {})
