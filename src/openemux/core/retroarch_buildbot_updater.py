@@ -96,12 +96,41 @@ class RetroArchBuildbotUpdater:
         return artifacts
 
     def download_all(self, on_progress=None):
+        """Download every core the buildbot lists, and report what happened.
+
+        Never raises for a network problem. The bootstrap step above this one
+        decides what a failure means -- on a package that bundles cores it
+        falls back to those and carries on -- and it can only decide if it is
+        told (issue #211). An exception escaping here skipped that decision
+        entirely and marked the whole first boot as failed, so installing
+        offline from a .deb that already ships the cores ended at "bootstrap
+        failed" instead of a working app.
+        """
         if not self.settings.get("enabled", True):
             return {"total": 0, "downloaded": 0, "failed": 0, "failures": [], "skipped": True}
 
         self.ensure_environment()
-        artifacts = self.fetch_manifest()
+        try:
+            artifacts = self.fetch_manifest()
+        except Exception as exc:
+            logger.warning("buildbot manifest unavailable: error=%s", exc)
+            return self._core_download_failure("manifest", str(exc))
+
         total = len(artifacts)
+        if total == 0:
+            # Not "nothing to do": the updater is on, so either the listing
+            # page changed shape under the scraper, the URL is wrong, or there
+            # is no URL at all. Reporting success here recorded the step as
+            # completed -- and a completed step is never re-run, so the user
+            # was left with no cores and no way for the bootstrap to fix it.
+            reason = (
+                "no cores_base_url configured"
+                if not self.settings.get("cores_base_url", "")
+                else "the core listing was empty"
+            )
+            logger.warning("buildbot core listing yielded nothing: reason=%s", reason)
+            return self._core_download_failure("listing", reason)
+
         downloaded = 0
         failed = 0
         failures = []
@@ -138,6 +167,20 @@ class RetroArchBuildbotUpdater:
             failed,
         )
         return summary
+
+    def _core_download_failure(self, artifact, error):
+        """A summary shaped like a real one, carrying a single failure.
+
+        ``failed >= 1`` is the signal the bootstrap step reads to consult the
+        bundled assets, so a whole-phase failure has to arrive counted.
+        """
+        return {
+            "total": 0,
+            "downloaded": 0,
+            "failed": 1,
+            "failures": [{"artifact": artifact, "error": error}],
+            "core_dir": str(self.core_dir),
+        }
 
     def _fetch_text(self, url):
         timeout = max(5, int(self.settings.get("request_timeout_sec", 30)))
