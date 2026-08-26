@@ -4,6 +4,7 @@ import threading
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
 from openemux.core.atomic_write import atomic_write_lines
+from openemux.core.dir_walk import relative_to_base
 from openemux.core.paths import PATH_ERRORS
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
@@ -352,12 +353,18 @@ class PlaylistManager:
         }
 
     def _console_from_rom_path(self, path):
+        """Which console a ROM path belongs to, or ``None``.
+
+        The literal path is tried before the resolved one. Resolving first
+        rewrote a path going through a symlinked console directory to its
+        physical location, which is outside the library root: relative_to
+        raised, this returned None, and entries_for_paths skipped the ROM. The
+        file still existed, so remove_missing_favorites kept the line -- the
+        favourite was stored and never displayed (issue #228).
+        """
         roms_base = self.config_manager.get_roms_path()
-        try:
-            relative = path.resolve().relative_to(roms_base.resolve())
-        except Exception:
-            return None
-        if len(relative.parts) < 2:
+        relative = relative_to_base(path, roms_base)
+        if relative is None or len(relative.parts) < 2:
             return None
         console = resolve_system_id(relative.parts[0])
         return console if console in SYSTEM_IDS else None

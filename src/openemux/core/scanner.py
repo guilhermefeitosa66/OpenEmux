@@ -2,6 +2,7 @@ import logging
 import re
 from pathlib import Path
 
+from openemux.core.dir_walk import walk_files
 from openemux.core.archives import (
     ARCHIVE_EXTENSIONS,
     archive_rom_name,
@@ -43,7 +44,10 @@ class RomScanner:
 
         allow_archives = loads_archives_natively(system_id)
 
-        for file in console_path.rglob("*"):
+        # walk_files, not rglob: rglob does not descend into a symlinked
+        # directory, so "PS/discs -> /mnt/storage/ps1" scanned as empty with
+        # no error and nothing in the log (issue #228).
+        for file in walk_files(console_path):
             if not file.is_file():
                 continue
             if any(part.lower() in ("covers", "bios") for part in file.parts):
@@ -87,8 +91,8 @@ class RomScanner:
 
     def _cue_referenced_bins(self, console_path):
         referenced = set()
-        for cue_file in console_path.rglob("*.cue"):
-            if not cue_file.is_file():
+        for cue_file in walk_files(console_path):
+            if cue_file.suffix.lower() != ".cue" or not cue_file.is_file():
                 continue
             if any(part.lower() in ("covers", "bios") for part in cue_file.parts):
                 continue

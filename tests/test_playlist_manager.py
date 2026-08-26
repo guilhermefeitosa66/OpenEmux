@@ -134,6 +134,64 @@ class PlaylistManagerTests(unittest.TestCase):
         self.assertEqual(loaded[0]["path"], str(valid))
 
 
+class SymlinkedConsoleDirTests(unittest.TestCase):
+    """A favourite under a symlinked console directory has to show up (#228).
+
+    ``_console_from_rom_path`` used to resolve before comparing. With
+    ``roms/SFC`` a link to another disk, resolving rewrites the path to its
+    physical location -- outside the library root -- so ``relative_to`` raised
+    and the entry was skipped. The file still existed, so the pruning pass kept
+    the line: the favourite was stored and never displayed.
+    """
+
+    def _manager(self, tmp_dir):
+        base = Path(tmp_dir)
+        roms_dir = base / "roms"
+        roms_dir.mkdir(parents=True, exist_ok=True)
+        elsewhere = base / "storage" / "snes"
+        elsewhere.mkdir(parents=True, exist_ok=True)
+        (elsewhere / "Super Metroid.sfc").write_bytes(b"rom")
+        (roms_dir / "SFC").symlink_to(elsewhere, target_is_directory=True)
+
+        playlists_dir = base / "playlists"
+        playlists_dir.mkdir(parents=True, exist_ok=True)
+        manager = PlaylistManager(
+            _DummyConfig(playlists_dir, roms_path=roms_dir), RomScanner(roms_dir)
+        )
+        return manager, roms_dir / "SFC" / "Super Metroid.sfc"
+
+    def test_the_console_is_derived_from_the_symlinked_path(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, rom_path = self._manager(tmp_dir)
+            self.assertEqual(manager._console_from_rom_path(rom_path), "SFC")
+
+    def test_a_favourite_under_the_link_resolves_to_an_entry(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, rom_path = self._manager(tmp_dir)
+
+            entries = manager.entries_for_paths([str(rom_path)])
+
+        self.assertEqual([entry["name"] for entry in entries], ["Super Metroid"])
+        self.assertEqual(entries[0]["console"], "SFC")
+
+    def test_a_path_outside_the_library_is_still_rejected(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _rom_path = self._manager(tmp_dir)
+            stray = Path(tmp_dir) / "storage" / "snes" / "Super Metroid.sfc"
+
+            # Reached by its physical path, it is not under the library root
+            # through any console directory -- there is no console to name.
+            self.assertIsNone(manager._console_from_rom_path(stray))
+
+    def test_a_rom_directly_in_the_library_root_has_no_console(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _rom_path = self._manager(tmp_dir)
+            loose = Path(tmp_dir) / "roms" / "loose.sfc"
+            loose.write_bytes(b"rom")
+
+            self.assertIsNone(manager._console_from_rom_path(loose))
+
+
 if __name__ == "__main__":
     unittest.main()
 
