@@ -45,14 +45,18 @@ src/openemux/
   core/     non-UI logic (config, scanner, launcher, cover sync, update check, …)
   ui/       GTK4/Adwaita widgets (window, grid, preferences, …)
   i18n/     translations (tr(key, locale) + locales/*.py)
-tests/      unittest suite, one test_<module>.py per core module
+tests/      unittest suite — the core modules plus the UI logic that imports
+            cleanly headless; needs the GTK4 typelibs, see Tests below
 packaging/
-  build.sh  entry point: `packaging/build.sh {appimage|deb|rpm}`
+  build.sh  entry point: `packaging/build.sh {appimage|deb|rpm|flatpak|windows}`
   docker/   one Dockerfile per target — the build toolchains
   appimage/ AppImage recipe + in-container build script + bundle entry point
   deb/      in-container .deb build/test script
   rpm/      .rpm spec + in-container build/test script
-  common/   shared across .deb/.rpm: install layout, launcher, desktop entry
+  flatpak/  Flatpak manifest + its module manifests + in-container build script
+  windows/  MSYS2 bundle staging, the NSIS installer script, the package lock
+  common/   shared by every format: install layout, launcher, desktop entry,
+            AppStream metainfo, DEP-5 copyright
 docs/       this guide + the GitHub Pages website (index.html)
 ```
 
@@ -149,9 +153,29 @@ make smoke
 make lint
 ```
 
-The suite is stdlib `unittest`, covers the `core/` modules only (no GTK in
-tests), and mocks the network. Add a `test_<module>.py` alongside any new core
-module.
+The suite is stdlib `unittest` and mocks the network. It covers the `core/`
+modules **and** the part of `ui/` that can be exercised without a running app —
+key routing, window sizing, the grid model, the retranslation pass, the context
+menus — so about a fifth of the files import `gi` or a module from
+`openemux.ui`. **The GTK4 and libadwaita typelibs therefore have to be
+installed** (`make install-sys-deps`, or the Fedora equivalents above): without
+them those files fail at import, not at assert, and `make test` is red for a
+reason that has nothing to do with your change.
+
+A *display* is a separate question, and only the tests that construct real
+widgets need one. GTK does not raise when there is none — it **segfaults**,
+taking the run down with no failing test to point at, which is how CI ran red
+for weeks (issue #242). So `tests/gtk_display.py` asks
+`Gdk.Display.get_default()` once and exposes `@needs_display`; a class that
+builds widgets carries that decorator and skips itself on a headless box. CI
+runs the suite under `xvfb-run`, where nothing is skipped — run it the same way
+locally (`xvfb-run make test`) if you want the full set without opening a
+window.
+
+Add a `test_<module>.py` alongside any new core module. One file per module is
+the default, not a rule: `config.py` is covered by a `test_config_<concern>.py`
+family instead, which is the better shape once a module carries several
+independent behaviours.
 
 `make coverage` runs the same suite under [coverage.py](https://coverage.readthedocs.io/)
 (configured in `pyproject.toml`, measuring all of `src/openemux` — untested UI
@@ -657,21 +681,65 @@ staff, update your `.env`, and cut a new release — no source change needed.
 
 ## Cutting a release
 
-1. Bump the version in all four places: `src/openemux/__init__.py`, the
-   `version:` in `packaging/appimage/AppImageBuilder.yml`, a `%changelog` entry
-   in `packaging/rpm/openemux.spec`, and a `<release>` entry in
+`main` holds released code only and is protected by a repository ruleset: no
+direct push, no force-push, and a pull request with a code-owner approval to
+merge. A release is therefore a branch and a PR like anything else — it just
+starts from `develop` and lands on `main`.
+
+1. Branch off up-to-date `develop`: `release/vX.Y.Z`. Unlike a feature branch
+   this one is **kept forever** — the tag marks the point, the branch is what
+   you can `git checkout` to sit in that version.
+2. Bump the version in all four places: `src/openemux/__init__.py` (the single
+   source of truth), the `version:` in `packaging/appimage/AppImageBuilder.yml`,
+   a `%changelog` entry in `packaging/rpm/openemux.spec`, and a `<release>`
+   entry at the top of `<releases>` in
    `packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml`.
-2. `make packages` and confirm every artifact is green (build **and**
-   install-test), and that `dist/SHA256SUMS` covers them all.
-3. `make testenv-matrix` — the build containers install-test each artifact on
+   `tests/test_reproducible_builds.py` checks all four against each other.
+3. Write `release/RELEASE_NOTES_vX.Y.Z.md`, following the previous file in that
+   folder. It is committed, and step 7 publishes the release from it.
+4. Commit as `[no-issue] chore: release X.Y.Z`.
+5. `make packages-clean && make packages`, and confirm every artifact is green
+   (build **and** install-test) and that `dist/SHA256SUMS` covers them all.
+   Clean first: `dist/` still holds the previous version's artifacts and step 7
+   uploads everything in there.
+6. `make testenv-matrix` — the build containers install-test each artifact on
    the distro that built it, which is the easy half. This installs and launches
    all of them on Ubuntu, Debian and Fedora, under X11 and Wayland. See
    [Testing the packages on other distros](#testing-the-packages-on-other-distros).
-4. Commit, tag `vX.Y.Z`, push `main` and the tag.
-5. `gh release create vX.Y.Z --target main dist/*` — every artifact plus
-   `SHA256SUMS`. The README/website download links point at `releases/latest`,
-   so they need no per-version edits — only update them when adding a new
-   *format*.
-6. Publish the Flatpak to the distribution repo, or `flatpak update` never
+7. Open the PR to `main` and merge it:
+
+   ```bash
+   gh pr create --base main --title "Release vX.Y.Z"
+   gh pr merge <n> --squash --admin       # NOT --delete-branch: the branch stays
+   ```
+
+8. Tag and publish **from `main`**:
+
+   ```bash
+   git checkout main && git pull
+   gh release create vX.Y.Z dist/* --target main \
+     --title "OpenEmux X.Y.Z" --notes-file release/RELEASE_NOTES_vX.Y.Z.md
+   ```
+
+   `--target main` is not optional. Without it `gh` tags the repository's
+   *default* branch, which is `develop` — and `develop` does not carry the
+   version bump until step 10, so the tag lands on the previous version while
+   the uploaded artifacts still look right. Verify before moving on:
+
+   ```bash
+   test "$(gh api repos/guilhermefeitosa66/OpenEmux/git/refs/tags/vX.Y.Z --jq .object.sha)" \
+     = "$(git rev-parse main)"
+   ```
+
+   The README/website download links point at `releases/latest`, so they need
+   no per-version edits — only update them when adding a new *format*.
+9. Publish the Flatpak to the distribution repo, or `flatpak update` never
    offers the new version:
-   `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=vX.Y.Z`
+   `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=vX.Y.Z`.
+   That workflow builds the tag from step 8, which is the second place a tag on
+   the wrong commit shows up — as a published Flatpak one version behind.
+10. Merge `main` back into `develop` and push, so the version bump is not
+    stranded on the release branch.
+
+[`CLAUDE.md`](../CLAUDE.md#releases) carries the same sequence for the
+assistant; keep the two in sync.
