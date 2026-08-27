@@ -188,6 +188,26 @@ APPIMAGE_EXTRACT_AND_RUN=1 timeout 60 xvfb-run -a "$BUNDLE" > "$LAUNCH_LOG" 2>&1
 if grep -qE "not found|No module named|ModuleNotFoundError|Traceback" "$LAUNCH_LOG"; then
   echo "ERROR: the bundle failed to start." >&2
   sed -n '1,40p' "$LAUNCH_LOG" >&2
+  # "exec: .../python3: not found" from a shell means one of two things, and
+  # they need different fixes: the file is missing, or its ELF interpreter is.
+  # appimage-builder rewrites every PT_INTERP to a *relative* path, so the
+  # second is the likely one and the answer is which loader the interpreter
+  # wants and whether the AppDir has it at that relative path -- a question the
+  # log used to leave entirely unanswered (issue #119).
+  echo "--- interpreter diagnostics ---" >&2
+  PY_BIN="AppDir/usr/bin/python3"
+  ls -l "$PY_BIN" >&2 || echo "$PY_BIN is missing" >&2
+  if [ -e "$PY_BIN" ]; then
+    WANTED="$(readelf -l "$(readlink -f "$PY_BIN")" 2>/dev/null \
+              | sed -n 's/.*program interpreter: \(.*\)]/\1/p')"
+    echo "PT_INTERP: ${WANTED:-<none>}" >&2
+    for base in AppDir AppDir/runtime/compat; do
+      echo "  $base/$WANTED: $(ls -l "$base/$WANTED" 2>&1)" >&2
+    done
+  fi
+  echo "AppDir/lib*:" >&2
+  ls -ld AppDir/lib AppDir/lib64 AppDir/runtime/compat/lib \
+         AppDir/runtime/compat/lib64 2>&1 >&2 || true
   exit 1
 fi
 # The app logs this once GTK is up and the window is being built; reaching it
