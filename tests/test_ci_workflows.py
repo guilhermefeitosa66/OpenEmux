@@ -6,6 +6,7 @@ year no job ever built a package, so a broken .deb/.rpm/AppImage/Flatpak was
 only discovered on release day, with the release already half-done (issue #241).
 """
 
+import re
 import unittest
 from pathlib import Path
 
@@ -129,6 +130,109 @@ class SmokeScriptTests(unittest.TestCase):
         # Exit 2 without a display: absence of evidence is not evidence that
         # the app starts.
         self.assertIn("return 2", self.text)
+
+
+class SecurityWorkflowTests(unittest.TestCase):
+    """Scanning main only meant develop -- where all the work lands -- was unaudited."""
+
+    def setUp(self):
+        self.data, self.text = _workflow("security.yml")
+
+    def test_it_runs_for_develop_too(self):
+        # PyYAML reads the `on:` key as the boolean True (YAML 1.1).
+        triggers = self.data[True]
+        self.assertIn("develop", triggers["push"]["branches"])
+        self.assertIn("develop", triggers["pull_request"]["branches"])
+        self.assertIn("main", triggers["push"]["branches"])
+
+    def test_it_audits_both_what_ships_and_what_is_installed(self):
+        runs = " ".join(str(s.get("run", "")) for s in self.data["jobs"]["scan"]["steps"])
+        self.assertIn("pip-audit -r requirements.lock", runs)
+        self.assertIn("pip-audit -r requirements-dev.lock", runs)
+
+
+class SupplyChainTests(unittest.TestCase):
+    """A mutable tag and an un-audited install are the same class of hole."""
+
+    ACTION_REF = re.compile(r"uses:\s*(?P<action>[^@\s]+)@(?P<ref>\S+)")
+
+    def _all_uses(self):
+        for path in sorted(WORKFLOW_DIR.glob("*.yml")):
+            for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                match = self.ACTION_REF.search(line)
+                if match:
+                    yield f"{path.name}:{number}", match.group("action"), match.group("ref")
+
+    def test_there_are_actions_to_check(self):
+        self.assertTrue(list(self._all_uses()))
+
+    def test_every_action_is_pinned_to_a_commit(self):
+        # A tag is mutable: whoever can move `v4` runs their own code in the
+        # test job, which holds `contents: write` for the badge push.
+        for where, action, ref in self._all_uses():
+            with self.subTest(action=action, where=where):
+                self.assertRegex(
+                    ref, r"^[0-9a-f]{40}$", f"{action} is pinned to a mutable ref"
+                )
+
+    def test_dependabot_watches_both_ecosystems(self):
+        config = yaml.safe_load((REPO_ROOT / ".github/dependabot.yml").read_text())
+        ecosystems = {entry["package-ecosystem"] for entry in config["updates"]}
+        self.assertEqual(ecosystems, {"github-actions", "pip"})
+
+    def test_the_dev_lock_is_a_superset_of_the_runtime_lock(self):
+        # It is generated *from* the runtime lock, so the shipped pins and the
+        # installed pins can never drift apart.
+        def pins(name):
+            return {
+                line.strip()
+                for line in (REPO_ROOT / name).read_text(encoding="utf-8").splitlines()
+                if line.strip() and not line.startswith("#")
+            }
+
+        runtime = pins("requirements.lock")
+        self.assertTrue(runtime)
+        self.assertLessEqual(runtime, pins("requirements-dev.lock"))
+
+    def test_the_makefile_never_calls_the_venv_pip_script(self):
+        # A console script bakes the absolute path of the interpreter it was
+        # installed against into its shebang, so moving the checkout breaks it
+        # -- which is the state this repo was in: .venv/bin/pip still pointed
+        # at .../pessoal/opemux/.venv and every recipe using it failed with
+        # "bad interpreter".
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("PIP := $(PYTHON) -m pip", makefile)
+        self.assertNotIn("$(VENV)/bin/pip", makefile)
+
+    def test_setup_installs_what_the_audit_reads(self):
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("$(PIP) install -r requirements.lock", makefile)
+        self.assertIn("$(PIP) install -r requirements-dev.lock", makefile)
+
+
+class LintGateTests(unittest.TestCase):
+    """Correctness rules only -- this project has no formatter and keeps none."""
+
+    def setUp(self):
+        self.pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_ruff_is_configured_for_correctness_not_style(self):
+        self.assertIn("[tool.ruff.lint]", self.pyproject)
+        selected = next(
+            line for line in self.pyproject.splitlines() if line.startswith("select =")
+        )
+        for rule in ("F", "E9", "PLE"):
+            self.assertIn(f'"{rule}"', selected)
+        # The formatting families, none of which belong here.
+        for style in ("E1", "E2", "E3", "W", "I", "Q", "COM", "ANN", "D"):
+            self.assertNotIn(f'"{style}"', selected)
+
+    def test_ci_gates_on_it(self):
+        data, _ = _workflow("tests.yml")
+        runs = " ".join(str(s.get("run", "")) for s in data["jobs"]["lint"]["steps"])
+        self.assertIn("ruff check", runs)
 
 
 if __name__ == "__main__":

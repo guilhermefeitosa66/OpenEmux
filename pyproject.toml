@@ -33,6 +33,26 @@ version = { attr = "openemux.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+# Correctness only. This project deliberately has no formatter and that stays:
+# nothing here has an opinion about quotes, line length, import order or
+# whitespace. What it does catch is the class of mistake the suite cannot,
+# because a test has to execute the line to find it -- and the UI modules sit
+# around 10-13% coverage (issue #243).
+target-version = "py310"
+extend-exclude = ["AppDir", "appimage-build", "vendors", "flatpak-repo", "_local"]
+
+[tool.ruff.lint]
+# F     pyflakes: undefined names, unused imports, redefinitions, f-string
+#       mistakes -- the actual bugs.
+# E9    syntax and IO errors.
+# PLE   pylint's error category: real errors only, no style.
+# B0..  a bugbear subset, each one a bug rather than a preference:
+#       B002 ++x, B006 mutable default argument, B012 break/return in finally
+#       swallowing the exception, B017 assertRaises(Exception), B023 a loop
+#       variable captured by a closure, B026 star-arg after keyword.
+select = ["F", "E9", "PLE", "B002", "B006", "B012", "B017", "B023", "B026"]
+
 [tool.coverage.run]
 # Measure the whole package, not just the modules the tests happen to import:
 # files under src/openemux that no test touches count as 0%, so the total is

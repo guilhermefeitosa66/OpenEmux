@@ -1,0 +1,29 @@
+# Without this, an action update or a dependency bump only happens when
+# somebody remembers -- and the actions are the ones that run with
+# `contents: write` in the test job (issue #243).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      # Matches the repository's convention: the issue slot first, then the
+      # conventional-commit type. Chores with no issue behind them use
+      # [no-issue], which is what a dependency bump is.
+      prefix: "[no-issue] chore"
+    labels:
+      - ci-cd
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "[no-issue] chore"
+    labels:
+      - ci-cd

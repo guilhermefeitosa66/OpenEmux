@@ -78,6 +78,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   longer decay in silence (issue #242).
 - **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
+### RT-231 — Unsafe or simply broken code cannot reach develop unremarked
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open `.github/workflows/security.yml`, `.github/dependabot.yml`,
+  `pyproject.toml` and the `Makefile`.
+- **Expected:** The security scan runs for `develop` as well as `main`, on push and on pull
+  request — it used to trigger on `main` only, so every day-to-day change was unaudited for up to
+  a week. `pip-audit` reads both `requirements.lock` (what ships) and `requirements-dev.lock`
+  (what CI and developers install), and `make setup`/`make setup-dev` install those same two
+  files, so the audited set and the installed set are one list. Every action is pinned to a full
+  commit SHA, and Dependabot watches `github-actions` and `pip`. `make lint` runs ruff with
+  correctness rules only and CI gates on it. `$(PIP)` is `$(PYTHON) -m pip`, never the venv's
+  console script, whose baked-in shebang broke every recipe after the checkout was renamed
+  (issue #243).
+- **Check:** suite file `tests/test_ci_workflows.py` (`SecurityWorkflowTests`, `SupplyChainTests`,
+  `LintGateTests`); `make lint` exits 0.
+
 ### RT-002 — The unit suite passes
 - **Area:** Startup
 - **Mode:** AUTO-PROBE

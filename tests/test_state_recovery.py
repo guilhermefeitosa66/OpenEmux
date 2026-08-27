@@ -1,9 +1,7 @@
-import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import yaml
 
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.collections import CollectionManager

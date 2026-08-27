@@ -14,8 +14,6 @@ UI already owns, and it is called right after these.
 import logging
 from pathlib import Path
 
-import gi
-
 from gi.repository import Gio, GLib
 
 from openemux.core import cartridge_render, save_states

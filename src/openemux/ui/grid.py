@@ -1,7 +1,7 @@
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, GObject, Graphene, Pango, Gio
+from gi.repository import Gtk, Adw, Gdk, GLib, GObject, Graphene, Pango, Gio
 import logging
 
 from openemux.core import cartridge_render, cover_cache
