@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 import threading
 import unicodedata
 import urllib.error
@@ -58,6 +59,15 @@ DEFAULT_HOST_BUDGET = 1
 #: Gate name for ScreenScraper's candidate-building API call, which is a
 #: network request of its own and must respect the same serial budget.
 SCREENSCRAPER_API_GATE = "www.screenscraper.fr"
+
+#: Hosts whose downloads owe ScreenScraper's minimum interval, not just its
+#: concurrency budget.
+_SCREENSCRAPER_HOSTS = ("www.screenscraper.fr", "api.screenscraper.fr")
+
+
+def _is_screenscraper_host(url):
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host in _SCREENSCRAPER_HOSTS
 
 
 class _HostGates:
@@ -448,7 +458,7 @@ def _resolve_dev_credentials(sync_settings):
     return embedded_credentials.get_embedded_dev_credentials()
 
 
-def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):
+def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None, quota=None):
     """ScreenScraper provider. Opt-in; returns [] whenever it is unusable."""
     try:
         return screenscraper.lookup_media_urls(
@@ -458,6 +468,7 @@ def _screenscraper_candidates(console, rom_name, sync_settings, rom_path=None):
             rom_path=rom_path,
             art_kind=sync_settings.get("cover_art_type", screenscraper.DEFAULT_ART_KIND),
             region_priority=sync_settings.get("region_priority"),
+            quota=quota,
         )
     except Exception as exc:  # noqa: BLE001 - a source must never break the sync
         logger.warning("cover_sync screenscraper_failed: error=%s", screenscraper.redact(exc))
@@ -553,70 +564,101 @@ _EQUIVALENT_PROVIDERS = ("libretro", "openemux")
 
 
 def _staged_cover_candidates(console, rom_name, sync_settings, rom_path=None,
-                             provider_rotation=0, gates=None):
+                             provider_rotation=0, gates=None, quota=None):
     """``(provider, stage, url)`` triples: each provider's ladder in order.
 
-    Provider *n* runs hash -> exact -> normalized before provider *n+1*
-    starts (#175). ScreenScraper identifies by content hash through its API
-    whenever the ROM file is available, so its URLs are its hash stage; the
-    file-based providers get a hash stage only when the local index can
-    resolve the CRC, an exact stage with the stem as-is, and the historical
-    normalization ladder after that.
+    **A generator, and that is the point.** Provider *n* runs hash -> exact ->
+    normalized before provider *n+1* starts (#175), and building all of it up
+    front made the ladder's order a lie: the ScreenScraper block does a
+    ``jeuInfos`` round trip while it is being *assembled*, so every ROM paid
+    for that call -- one request off the daily quota, and at least a second in
+    the throttle -- even when the very first libretro candidate was about to
+    work. A first sync of a 1000-ROM library spent at least 1000 seconds
+    waiting to be told things it never needed to ask (issue #220).
+
+    Consumed lazily, a provider's block is only built when the ladder actually
+    reaches it, so ScreenScraper is asked about the ROMs libretro missed and no
+    others. The CRC32 of the ROM file, which the file-based hash stage needs,
+    is resolved the same way: once, on first use, and not at all when an
+    earlier provider answers.
 
     ``provider_rotation`` load-balances across the two equivalent file
     hosts (#186): on odd rotations the libretro and openemux blocks trade
     places, so a parallel sync drains both hosts at once instead of
     serializing every ROM on the first one. Each ROM still exhausts every
     provider before being reported as missed. ``gates`` throttles the
-    ScreenScraper candidate lookup, which is a network call of its own.
+    ScreenScraper candidate lookup, which is a network call of its own, and
+    ``quota`` is the run's latch: once the API has said the daily quota is
+    gone, the lookup returns without asking again.
     """
-    hash_stem = _resolve_hash_stem(console, rom_path, sync_settings)
-    blocks = []
-    for name, provider in _ordered_providers(sync_settings):
-        block = []
-        if name == "screenscraper":
-            stage = STAGE_HASH if rom_path else STAGE_NORMALIZED
-            if gates is not None:
-                with gates.gate(SCREENSCRAPER_API_GATE):
-                    urls = provider(console, rom_name, sync_settings, rom_path=rom_path)
-            else:
-                urls = provider(console, rom_name, sync_settings, rom_path=rom_path)
-            block.extend((name, stage, url) for url in urls)
-        else:
-            if hash_stem:
-                block.extend((name, STAGE_HASH, url) for url in provider(
-                    console, rom_name, sync_settings, rom_path=rom_path, names=[hash_stem]
-                ))
-            block.extend((name, STAGE_EXACT, url) for url in provider(
-                console, rom_name, sync_settings, rom_path=rom_path, names=[rom_name]
-            ))
-            block.extend((name, STAGE_NORMALIZED, url) for url in provider(
-                console, rom_name, sync_settings, rom_path=rom_path
-            ))
-        blocks.append((name, block))
-
+    providers = _ordered_providers(sync_settings)
     if provider_rotation % 2 == 1:
-        names = [name for name, _block in blocks]
+        names = [name for name, _provider in providers]
         if all(name in names for name in _EQUIVALENT_PROVIDERS):
             first, second = (names.index(n) for n in _EQUIVALENT_PROVIDERS)
-            blocks[first], blocks[second] = blocks[second], blocks[first]
+            providers[first], providers[second] = providers[second], providers[first]
 
-    triples = []
+    hash_stem = _LazyOnce(lambda: _resolve_hash_stem(console, rom_path, sync_settings))
     seen = set()
-    for _name, block in blocks:
-        for provider, stage, url in block:
-            if url not in seen:
-                seen.add(url)
-                triples.append((provider, stage, url))
-    logger.debug(
-        "cover_sync staged candidates: console=%s rom=%s total=%d hash_stem=%s rotation=%d",
-        console,
-        rom_name,
-        len(triples),
-        hash_stem,
-        provider_rotation % 2,
-    )
-    return triples
+    for name, provider in providers:
+        if name == "screenscraper":
+            block = _screenscraper_block(
+                name, provider, console, rom_name, sync_settings, rom_path, gates, quota
+            )
+        else:
+            block = _file_provider_block(
+                name, provider, console, rom_name, sync_settings, rom_path, hash_stem
+            )
+        for triple in block:
+            if triple[2] in seen:
+                continue
+            seen.add(triple[2])
+            yield triple
+
+
+class _LazyOnce:
+    """Call ``produce`` at most once, on first use, and keep the answer."""
+
+    _MISSING = object()
+
+    def __init__(self, produce):
+        self._produce = produce
+        self._value = self._MISSING
+
+    def get(self):
+        if self._value is self._MISSING:
+            self._value = self._produce()
+        return self._value
+
+
+def _screenscraper_block(name, provider, console, rom_name, sync_settings,
+                         rom_path, gates, quota):
+    """ScreenScraper's whole ladder: the API answers by content hash."""
+    stage = STAGE_HASH if rom_path else STAGE_NORMALIZED
+    if gates is not None:
+        with gates.gate(SCREENSCRAPER_API_GATE):
+            urls = provider(console, rom_name, sync_settings, rom_path=rom_path, quota=quota)
+    else:
+        urls = provider(console, rom_name, sync_settings, rom_path=rom_path, quota=quota)
+    return [(name, stage, url) for url in urls]
+
+
+def _file_provider_block(name, provider, console, rom_name, sync_settings,
+                         rom_path, hash_stem):
+    """A file host's ladder: the canonical stem, the name, then the variants."""
+    block = []
+    stem = hash_stem.get()
+    if stem:
+        block.extend((name, STAGE_HASH, url) for url in provider(
+            console, rom_name, sync_settings, rom_path=rom_path, names=[stem]
+        ))
+    block.extend((name, STAGE_EXACT, url) for url in provider(
+        console, rom_name, sync_settings, rom_path=rom_path, names=[rom_name]
+    ))
+    block.extend((name, STAGE_NORMALIZED, url) for url in provider(
+        console, rom_name, sync_settings, rom_path=rom_path
+    ))
+    return block
 
 
 def _fts_stage_candidates(console, rom_name, sync_settings, already_tried):
@@ -697,12 +739,39 @@ def _source_extension(url, response, data=None):
     return _EXT_BY_CONTENT_TYPE.get(content_type, "png")
 
 
-def _download_cover(url, dest):
+#: Statuses worth one more try: the host is rate-limiting us or having a bad
+#: minute, neither of which means the cover is absent.
+_RETRYABLE_STATUSES = (408, 425, 429, 500, 502, 503, 504)
+
+#: How long to wait before that retry, and the ceiling on a Retry-After the
+#: host asks for. A sync holds this host's gate while it waits, which is the
+#: point -- but a worker must not park on it.
+_RETRY_DELAY_SECONDS = 1.5
+_MAX_RETRY_DELAY_SECONDS = 5.0
+
+
+def _retry_delay(response):
+    """The pause before a retry, honouring a sane ``Retry-After``."""
+    header = getattr(response, "headers", None)
+    raw = header.get("Retry-After") if header is not None else None
+    try:
+        asked = float(raw)
+    except (TypeError, ValueError):
+        return _RETRY_DELAY_SECONDS
+    return max(0.0, min(asked, _MAX_RETRY_DELAY_SECONDS))
+
+
+def _download_cover(url, dest, attempts=2):
     """Download ``url`` and return the file written, or ``False`` on failure.
 
     The path is returned rather than a plain ``True`` because the extension is
     decided here, from the source: a caller replacing existing art has to know
     which file is the new one before it deletes the others.
+
+    Every HTTP error used to be logged as ``not_found`` and dropped, so a 429
+    from ``thumbnails.libretro.com`` -- or a transient 500 -- was recorded as a
+    ROM with no artwork, and the next sync skipped it (issue #220). A 404 is
+    the only status that really means "not there"; the rest get one retry.
 
     Nothing is written unless the bytes are actually an image. A 200 response
     is not proof of one -- ScreenScraper answers some quota failures with a
@@ -736,8 +805,18 @@ def _download_cover(url, dest):
         atomic_write_bytes(dest, data)
         logger.debug("cover_sync downloaded: url=%s target=%s bytes=%d", safe_url, dest, len(data))
         return dest
-    except urllib.error.HTTPError:
-        logger.debug("cover_sync not_found: url=%s", safe_url)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            logger.debug("cover_sync not_found: url=%s", safe_url)
+            return False
+        if exc.code in _RETRYABLE_STATUSES and attempts > 1:
+            delay = _retry_delay(exc)
+            logger.info(
+                "cover_sync retrying: url=%s status=%s in=%.1fs", safe_url, exc.code, delay
+            )
+            time.sleep(delay)
+            return _download_cover(url, dest, attempts=attempts - 1)
+        logger.warning("cover_sync http_error: url=%s status=%s", safe_url, exc.code)
         return False
     except Exception as exc:
         logger.warning("cover_sync error: url=%s error=%s", safe_url, screenscraper.redact(exc))
@@ -762,7 +841,7 @@ def _drop_stale_art(roms_dir, console, rom_name, art_dir, keep):
 
 
 def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
-                 should_cancel, replace_existing, rotation, gates):
+                 should_cancel, replace_existing, rotation, gates, quota=None):
     """One ROM's whole lookup, run on a pool worker (#186).
 
     Returns a result dict; the completion loop owns every shared counter,
@@ -802,14 +881,12 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
     target = roms_dir_path / console / art_dir / f"{name}.png"
     candidates = _staged_cover_candidates(
         console, name, sync_settings, rom_path=rom.get("path"),
-        provider_rotation=rotation, gates=gates,
+        provider_rotation=rotation, gates=gates, quota=quota,
     )
-    logger.debug(
-        "cover_sync candidate_set: console=%s rom=%s candidates=%d",
-        console,
-        name,
-        len(candidates),
-    )
+    # Recorded as they are consumed rather than counted up front: the ladder
+    # is a generator now, so the candidates past the one that won were never
+    # built (issue #220). This is also what the FTS stage has to exclude.
+    tried = []
 
     def _try_candidates(triples):
         """First candidate that resolves: (stage or None, cancelled)."""
@@ -819,7 +896,13 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
                     "cover_sync cancelled mid-candidate: console=%s rom=%s", console, name
                 )
                 return None, True
+            tried.append(url)
             with gates.gate_for_url(url):
+                if _is_screenscraper_host(url):
+                    # Media lives on a ScreenScraper host too, and the host
+                    # gate only bounds concurrency. Without this the image
+                    # fetch skipped the interval the API call just waited out.
+                    screenscraper.throttle()
                 written = _download_cover(url, target)
             if not written:
                 continue
@@ -839,7 +922,6 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
         return None, False
 
     stage, cancelled = _try_candidates(candidates)
-    tried_count = len(candidates)
 
     if stage is None and not cancelled:
         # Stage 4 (#175): every provider exhausted its ladder, so resolve
@@ -847,12 +929,10 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
         # stems are known to exist in the mirror. Runs last and globally on
         # purpose -- it is the only stage that can match the wrong game.
         extra = _fts_stage_candidates(
-            console, name, sync_settings,
-            already_tried={url for _p, _s, url in candidates},
+            console, name, sync_settings, already_tried=set(tried),
         )
         if extra:
             stage, cancelled = _try_candidates(extra)
-            tried_count += len(extra)
 
     if stage is not None:
         return {"status": "downloaded", "console": console, "rom_name": name,
@@ -861,7 +941,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
         return {"status": "cancelled", "console": console, "rom_name": name,
                 "rom_path": rom_path}
     logger.debug(
-        "cover_sync missed: console=%s rom=%s tried=%d", console, name, tried_count
+        "cover_sync missed: console=%s rom=%s tried=%d", console, name, len(tried)
     )
     return {"status": "missed", "console": console, "rom_name": name,
             "rom_path": rom_path}
@@ -926,6 +1006,9 @@ def _sync_covers(
     total_targets = len(work)
     workers = max(1, int(max_workers or SYNC_WORKERS))
     gates = _HostGates()
+    # One per run: the first ROM told the daily quota is gone spares every ROM
+    # after it a request and a second of throttle (issue #220).
+    quota = screenscraper.QuotaLatch()
 
     cancelled = False
     total = 0
@@ -943,7 +1026,7 @@ def _sync_covers(
         futures = [
             pool.submit(
                 _process_rom, console, rom, roms_dir_path, art_dir, art_kind,
-                sync_settings, should_cancel, replace_existing, index, gates,
+                sync_settings, should_cancel, replace_existing, index, gates, quota,
             )
             for index, (console, rom) in enumerate(work)
         ]

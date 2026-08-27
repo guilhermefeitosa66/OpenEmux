@@ -947,6 +947,49 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   (issue #231).
 - **Check:** suite file `tests/test_hasher.py` (`test_both_digests_come_from_one_read`).
 
+### RT-057 — The cover API is asked only about the ROMs the files missed
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** ScreenScraper credentials configured, cover source "libretro, then
+  ScreenScraper", a console whose games libretro mostly has.
+- **Steps:**
+  1. Start a cover sync for that console and watch the log for `screenscraper lookup:` lines.
+- **Expected:** One lookup per ROM libretro *missed*, and none for a ROM libretro served. The
+  candidate ladder used to be built up front, and building the ScreenScraper block is the
+  `jeuInfos` round trip itself — so every ROM spent a request off the daily quota and at least a
+  second in its throttle, even when the first libretro candidate was about to work (issue #220).
+  A first sync of a 1000-ROM library spent at least 1000 seconds waiting for answers it never
+  needed.
+- **Check:** `tests/test_cover_sync.py` (`LazyScreenScraperTests`) — the API is not reached for a
+  ROM libretro serves, is reached for one it misses, and the ROM is not hashed when the first
+  candidate answers.
+
+### RT-058 — A quota refusal stops the run asking again
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** ScreenScraper credentials whose daily quota is exhausted.
+- **Steps:**
+  1. Start a library-wide cover sync.
+- **Expected:** The first ROM logs `screenscraper giving up for this run`, and the sync finishes at
+  file-provider speed instead of crawling. Every quota answer used to cost exactly what a
+  successful one did: a second in the throttle and a request off a quota that was already gone
+  (issue #220). A 429 ("too many at once") is transient and only gives up after a run of them.
+- **Check:** `tests/test_screenscraper.py` (`QuotaLatchTests`) and `tests/test_cover_sync.py`
+  (`test_the_quota_latch_is_shared_by_the_whole_run`).
+
+### RT-059 — A rate-limited cover host is retried, not written off
+- **Area:** Covers
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Sync covers while a cover host is rate-limiting or briefly failing.
+- **Expected:** The ROM is retried once and only counted as missing if the second attempt fails
+  too. Every HTTP status used to be logged as `not_found` and dropped, so a 429 from
+  `thumbnails.libretro.com` — or a transient 500 — was recorded as a ROM with no artwork and the
+  next sync skipped it (issue #220). A 404 is still a plain miss, with no retry.
+- **Check:** `tests/test_cover_sync.py` (`DownloadStatusTests`) — a 404 is not retried, a 429 is
+  retried once, the retry is not endless, and a `Retry-After` is honoured but capped.
+
 ### RT-051 — The missing-artwork filter isolates gaps
 - **Area:** Covers
 - **Mode:** AUTO-UI
