@@ -57,6 +57,27 @@ from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 
 
+def game_window_subtitle(t):
+    """The game-window switch's subtitle, with the Wayland cost spelled out.
+
+    The setting reads as "show the game inside OpenEmux", and on a Wayland
+    session it also decides how the *library* is drawn. The embed is
+    ``XReparentWindow`` between two X clients, so ``main.py`` forces
+    ``GDK_BACKEND=x11`` before GTK is imported, and GTK4 cannot pick a backend
+    per window: the whole UI renders through XWayland for the entire run, not
+    only while a game is up. That costs fractional-scaling sharpness and
+    Wayland-native behaviour for the time the user spends browsing rather than
+    playing, and nothing in the UI used to say so (issue #258).
+
+    A module-level function rather than a method so it can be tested without a
+    display -- constructing the row it feeds segfaults on a headless box.
+    """
+    subtitle = t("prefs.game_window.subtitle")
+    if game_window_support.session_is_wayland():
+        return f"{subtitle} {t('prefs.game_window.subtitle.xwayland')}"
+    return subtitle
+
+
 class OpenEmuxPreferences(Adw.PreferencesDialog):
     """Settings dialog. Instantiated fresh each time it is opened."""
 
@@ -1362,7 +1383,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         group = Adw.PreferencesGroup(title=self.t("prefs.group.game_window"))
         self._game_window_row = Adw.SwitchRow(
             title=self.t("prefs.game_window.title"),
-            subtitle=self.t("prefs.game_window.subtitle"),
+            subtitle=game_window_subtitle(self.t),
         )
         self._game_window_row.set_active(self.config.get_game_window_enabled())
         if game_window_support.embedding_possible():

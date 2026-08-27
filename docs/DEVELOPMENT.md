@@ -10,6 +10,7 @@ artifacts. For user-facing install instructions, see the main
 - [Project layout](#project-layout)
 - [Running from source](#running-from-source)
 - [Running it without taking the screen](#running-it-without-taking-the-screen)
+- [The game window puts the whole app on X11](#the-game-window-puts-the-whole-app-on-x11)
 - [Developing on Windows](#developing-on-windows)
 - [Tests](#tests)
   - [Lint](#lint)
@@ -44,7 +45,7 @@ artifacts. For user-facing install instructions, see the main
 src/openemux/
   core/     non-UI logic (config, scanner, launcher, cover sync, update check, …)
   ui/       GTK4/Adwaita widgets (window, grid, preferences, …)
-  i18n/     translations (tr(key, locale) + locales/*.py)
+  i18n/     translations (tr(locale, key) + one Python module per locale)
 tests/      unittest suite — the core modules plus the UI logic that imports
             cleanly headless; needs the GTK4 typelibs, see Tests below
 packaging/
@@ -135,6 +136,73 @@ on a display nobody is looking at. Its README documents the handful of things
 that were surprising enough to write down — distrobox shares the host's `/tmp`,
 network *and* PID namespace, and each of those is a way for a container to
 reach out and touch the session it is meant to leave alone.
+
+## The game window puts the whole app on X11
+
+OpenEmux has one hard X11 dependency, and it is a setting the user can turn
+off: **Play in an OpenEmux window** (`runtime.game_window`, on by default).
+
+The wrapper adopts RetroArch's own window with `XReparentWindow`
+([`core/x11_embed.py`](../src/openemux/core/x11_embed.py)), which only works
+between two X clients. So `_configure_game_window_backend()` in
+[`main.py`](../src/openemux/main.py) sets `GDK_BACKEND=x11` **before the first
+`gi` import** — it has to be before, because the backend is fixed the moment
+GTK opens the display, and nothing later can change it.
+
+### What that costs on Wayland
+
+GTK4 picks one backend per *process*, not per window. There is no arrangement
+where the game wrapper speaks X11 and the library window speaks Wayland — so
+with the setting on, on a Wayland session, **the entire library UI renders
+through XWayland for the whole run**, whether or not a game is up. That is
+fractional-scaling sharpness and Wayland-native behaviour given up for the
+majority of the time, which the user spends browsing rather than playing.
+
+There is no way to have both, so the trade-off is stated rather than hidden:
+the switch's subtitle gains a sentence about it on a Wayland session
+(`prefs.game_window.subtitle.xwayland`, appended by
+`ui/preferences.game_window_subtitle`). A user who wants a Wayland-native
+library turns the setting off and lets RetroArch open its own window.
+
+The notice asks `game_window_support.session_is_wayland()`, which reads
+`WAYLAND_DISPLAY`/`XDG_SESSION_TYPE` rather than asking GTK what backend it
+opened. Asking GTK is the bug: on the session the notice is *for*,
+`GDK_BACKEND` is already `x11` because the setting is on, so GTK answers "X11"
+and the one person affected never sees it.
+
+### The guards, and the one that is not ours to override
+
+`_configure_game_window_backend()` leaves the backend alone in three cases:
+
+| Case | Why |
+| --- | --- |
+| `GDK_BACKEND` is already set | An explicit choice by the user or their launcher. **We never override it** — including a `wayland` that will then refuse to embed. |
+| `embedding_possible()` is false | No python-xlib, or no `DISPLAY` at all — a Wayland session without XWayland, or the Flatpak sandbox without `--socket=fallback-x11`. Forcing `x11` there leaves GTK with no display and the app does not start. |
+| The setting is off | Nothing to embed into. |
+
+The first row cuts both ways and is deliberate: `GDK_BACKEND=wayland` with the
+game window on is a session that will not embed, and the app says so at launch
+(`toast.game_window.unavailable`) rather than quietly ignoring the variable.
+`embedding_possible()` also reads only the *first* entry of a comma list, since
+that is what GTK does — `wayland,x11` used to pass the check and then put GTK
+on Wayland with the embed overrides already written (issue #212).
+
+At launch time the question is asked again, against the display GTK actually
+opened (`ui/game_window.display_supports_embedding`), with a standalone
+fallback: the pre-GTK guess is never the last word.
+
+### Testing both session types
+
+`make devbox-app` runs on an X server of its own, so it exercises the X11 half
+and nothing else. The Wayland half needs a real compositor —
+`make ubuntu-wayland` and its siblings in the packaging matrix.
+
+The two session types are explicit scenarios in
+[the regression test book](../tests/regression/TESTBOOK.md): `RT-253` (the
+notice appears on Wayland and not on X11) and `RT-256` (an explicit
+`GDK_BACKEND` is never overridden) are probes the suite runner executes;
+`RT-254` and `RT-255` need a real login session of each type and are the
+developer's to run.
 
 ## Tests
 
