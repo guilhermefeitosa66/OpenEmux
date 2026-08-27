@@ -18,21 +18,62 @@ runtime-version: '50'
 sdk: org.gnome.Sdk
 command: openemux
 
+# Sandbox permissions, and why each one is here.
+#
+# Two of these are the widest Flatpak has, and Flathub's linter asks for a
+# justification in the submission. They are written down here rather than left
+# as unremarked lines, because together they mean this sandbox provides
+# essentially no confinement, and anyone reading the manifest is entitled to
+# know that up front (issue #257).
+#
+#   --talk-name=org.freedesktop.Flatpak
+#     Allows `flatpak-spawn --host` with arbitrary commands: unrestricted code
+#     execution outside the sandbox. It is used deliberately and in exactly one
+#     place, core/retroarch_launcher.py's _launch_prefix(), to run
+#     `flatpak run org.libretro.RetroArch`. The permission is architecturally
+#     required by the design: OpenEmux is a front-end for an emulator that
+#     lives in its *own* Flatpak, on the host, and there is no portal for
+#     "start that other app on a ROM". Bundling RetroArch instead would mean
+#     shipping and updating an emulator this project does not maintain.
+#
+#   --filesystem=home
+#     Load-bearing for four separate reasons today, each of which has to be
+#     settled before it can be narrowed to a portal-granted ROM directory:
+#       1. Three file choosers are Gtk.FileChooserDialog, the in-process
+#          widget, which does not go through the portal and so can only reach
+#          what the sandbox can already see (ui/window.py x2,
+#          ui/artwork_manager.py). Porting them to Gtk.FileDialog is tracked
+#          in issue #235 and is the prerequisite for everything below.
+#       2. Config, playlists, input profiles, shaders and BIOS live in
+#          ~/.openemux (core/config.py: DEFAULT_CONFIG_DIR). Without this
+#          grant $HOME becomes ~/.var/app/<app-id>, and every existing install
+#          would silently start from an empty library.
+#       3. The ROM library defaults to ~/games/roms and is user-configurable
+#          to anywhere; covers and cartridge labels are written beside it.
+#       4. RetroArch runs on the *host* and is handed absolute paths -- the
+#          ROM, and the --appendconfig override written under
+#          ~/.openemux/runtime. Those paths have to mean the same thing on
+#          both sides, which they only do while the sandbox sees the real
+#          home.
+#
+# The rest are ordinary and narrow.
 finish-args:
-  # GTK UI
+  # GTK UI. fallback-x11 and ipc are also what the game window needs: it
+  # reparents RetroArch's X11 window into an OpenEmux one via python-xlib.
   - --socket=wayland
   - --socket=fallback-x11
   - --share=ipc
   - --device=dri
-  # Cover-art sync from the libretro thumbnail servers
+  # Cover-art sync from the libretro thumbnail servers, and the update check
   - --share=network
-  # ROM library + cover writing
+  # ROM library, artwork, and ~/.openemux -- see the note above
   - --filesystem=home
   # Read the RetroArch Flatpak's cores dir. --filesystem=home does NOT cover
   # it: Flatpak blacklists ~/.var/app from other apps' sandboxes, so without
   # this explicit grant no core is ever found (issue #179).
   - --filesystem=~/.var/app/org.libretro.RetroArch:ro
-  # Launch the RetroArch Flatpak on the host via flatpak-spawn
+  # Launch the RetroArch Flatpak on the host via flatpak-spawn -- see the note
+  # above
   - --talk-name=org.freedesktop.Flatpak
 
 cleanup:
