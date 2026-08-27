@@ -24,7 +24,7 @@ Artifacts land in `dist/`.
 | `common/` | Everything the `.deb` and `.rpm` share |
 | `appimage/AppImageBuilder.yml` | The bundle recipe |
 | `appimage/openemux-launcher.sh` | The bundle's entry point (sets its runtime env) |
-| `rpm/openemux.spec` | RPM metadata; installs via `common/stage_tree.sh` |
+| `rpm/openemux.spec` | RPM metadata; unpacks a source tarball and installs via `common/stage_tree.sh` |
 | `testenv/` | The distrobox matrix the built artifacts get install-tested in |
 
 Building a package is only half of it. `testenv/` installs and launches the
@@ -61,6 +61,15 @@ plain covers.
 
 **Versions.** `src/openemux/__init__.py` is the single source of truth; the
 AppImage recipe carries its own copy that must be bumped with it.
+
+**The RPM must stand on its own.** `rpm/build.sh` packs a source tarball,
+resolves `Version:` into the copy of the spec it hands to `rpmbuild`, and builds
+with `-ba` — so the `.src.rpm` is self-contained and `rpmbuild --rebuild`,
+`mock` and COPR need no OpenEmux checkout. The build proves it on every run by
+rebuilding its own SRPM in a different `_topdir`, and runs rpmlint over both
+artifacts, failing on the findings that block Fedora review. The spec was
+previously driven with `--define "repo_root /work"` and had no `Source0`, so it
+could only ever be built from this project's own Docker bind mount.
 
 **The ScreenScraper credential.** `embed_screenscraper_credentials.py` rewrites
 `_EMBEDDED_BLOB` in `core/embedded_credentials.py`, and every target must run it
