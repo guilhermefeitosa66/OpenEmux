@@ -19,7 +19,7 @@ PIP := $(VENV)/bin/pip
 RETROARCH_VENDOR := vendors/RetroArch-Linux-x86_64.AppImage
 endif
 
-.PHONY: all setup setup-dev venv run test coverage icons clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: all setup setup-dev venv run test coverage smoke icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch verify-vendors
 .PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
@@ -120,6 +120,13 @@ test:
 coverage:
 	PYTHONPATH=src $(PYTHON) -m coverage run -m unittest discover -s tests
 	$(PYTHON) -m coverage report
+
+# Start the real app, wait for its window and quit -- the check the unit suite
+# cannot make, since it never constructs an Adw.Application (issue #242). Runs
+# against a throwaway HOME, so it never touches ~/.openemux. Needs a display;
+# under `xvfb-run -a` it needs no desktop at all, which is how CI runs it.
+smoke:
+	$(PYTHON) scripts/smoke_start.py
 
 # Regenerate the game-name database (issue #184) from a local checkout of
 # the artwork mirror. MIRROR/DATS are overridable:
