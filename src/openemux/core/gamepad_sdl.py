@@ -337,8 +337,8 @@ class SdlJoystickPump:
     contract the evdev readers have: the UI marshals with ``GLib.idle_add``.
 
     SDL is started when the first listener subscribes and shut down when the
-    last one leaves, so a session with gamepad navigation switched off never
-    initialises it at all.
+    last one leaves, so nothing initialises it until a reader actually starts
+    -- and a headless run of the suite never touches the library.
     """
 
     #: How long to sleep when the queue came up empty. 8 ms is half a frame at
