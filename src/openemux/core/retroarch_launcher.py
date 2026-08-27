@@ -2,7 +2,7 @@ import ctypes
 import os
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
@@ -558,7 +558,7 @@ class RetroArchLauncher:
 
         runtime_dir = self.config_manager.get_runtime_dir()
         runtime_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
         # Core options live in their own file, not in the config, so
         # --appendconfig cannot carry them (issue #296). What it can carry is
@@ -706,7 +706,7 @@ class RetroArchLauncher:
         try:
             runtime_dir = self.config_manager.get_runtime_dir()
             runtime_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
             log_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.log"
             cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")

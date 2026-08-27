@@ -28,6 +28,7 @@ from openemux.core import cover_cache
 from openemux.core.hasher import compute_crc32
 from openemux.core.library_view import ZOOM_LEVELS, scale_spacing
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, save_local_art
+from openemux.ui.file_dialogs import image_filters
 from openemux.ui.grid import GRID_SPACING, FixedSizePicture, cover_size_for_console
 from threading import Thread
 
@@ -640,30 +641,28 @@ class _ImportTab(Gtk.Box):
 
     # -- loading -----------------------------------------------------------
     def _choose_file(self):
-        chooser = Gtk.FileChooserDialog(
-            title=self.manager.t("artwork.import.add"),
-            transient_for=self.manager,
-            modal=True,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        chooser.add_button(self.manager.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        chooser.add_button(self.manager.t("dialog.start"), Gtk.ResponseType.ACCEPT)
-        img_filter = Gtk.FileFilter()
-        img_filter.set_name("Images")
-        for ext in SUPPORTED_COVER_EXTS:
-            img_filter.add_pattern(f"*.{ext}")
-            img_filter.add_pattern(f"*.{ext.upper()}")
-        chooser.add_filter(img_filter)
+        # Gtk.FileDialog goes through the XDG portal where one exists; the
+        # deprecated Gtk.FileChooserDialog it replaces never did, so under
+        # Flatpak this picker could not see anything outside the sandbox
+        # (issue #235).
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.manager.t("artwork.import.add"))
+        dialog.set_accept_label(self.manager.t("dialog.start"))
+        dialog.set_modal(True)
+        filters, default_filter = image_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default_filter)
 
-        def _on_response(dialog, response):
-            if response == Gtk.ResponseType.ACCEPT:
-                selected = dialog.get_file()
-                if selected and selected.get_path():
-                    self.load_file(selected.get_path())
-            dialog.destroy()
+        def _on_chosen(dlg, result):
+            try:
+                selected = dlg.open_finish(result)
+            except GLib.Error:
+                # Dismissed by the user; nothing to report.
+                return
+            if selected is not None and selected.get_path():
+                self.load_file(selected.get_path())
 
-        chooser.connect("response", _on_response)
-        chooser.show()
+        dialog.open(self.manager, None, _on_chosen)
 
     def _on_drop(self, _target, value, _x, _y):
         files = value.get_files() if isinstance(value, Gdk.FileList) else []
