@@ -89,7 +89,17 @@ if [ "$(uname -m)" = "x86_64" ]; then
   test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
 else
   test ! -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
-  command -v retroarch >/dev/null
+  # Not `command -v retroarch`: the dependency is a Recommends, because
+  # RetroArch lives in RPM Fusion rather than in Fedora, and this container has
+  # only Fedora. What must hold is that the package *asks* for it.
+  # Collected first, then matched. `rpm -q ... | grep -q` exits on the first
+  # line and SIGPIPEs rpm, which under `set -o pipefail` makes the pipeline
+  # report failure -- so the check would fail on a package that does declare it.
+  RECOMMENDS="$(rpm -q --recommends openemux)"
+  case "$RECOMMENDS" in
+    *retroarch*) ;;
+    *) echo "the aarch64 package does not recommend retroarch" >&2; exit 1 ;;
+  esac
 fi
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml

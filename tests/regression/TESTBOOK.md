@@ -3817,8 +3817,10 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 - **Steps:**
   1. Run the suite.
 - **Expected:** The arm64 `.deb` requires `retroarch` and not `libfuse2` (there is no AppImage to
-  mount); the aarch64 `.rpm` does the same. A frontend with no emulator behind it and nothing
-  declaring one is an install that goes cleanly and then cannot launch a game.
+  mount). The aarch64 `.rpm` *recommends* it instead, and that difference is deliberate: Ubuntu and
+  Debian package RetroArch, Fedora does not -- it is in RPM Fusion -- so a hard requirement there
+  would make the package refuse to install on a stock system. Either way the app names the
+  distribution, the Flatpak and the setting the first time a launch finds no RetroArch.
 - **Check:** suite file `tests/test_arm_packaging.py`.
 
 ### RT-276 — An ARM package installs and the app starts on real hardware

@@ -85,12 +85,19 @@ Requires:       adwaita-icon-theme
 # skipped it, and the app then installed cleanly and could not launch a
 # single game (issue #248).
 #
-# On aarch64 there is no AppImage, so there is nothing to mount and nothing to
-# launch either: the emulator itself becomes the dependency, from RPM Fusion.
+# On aarch64 there is no AppImage, so there is nothing to mount -- and nothing
+# bundled to launch either. RetroArch becomes the dependency, but a *weak* one,
+# which is the opposite of the reasoning above and for a reason that does not
+# apply to fuse-libs: RetroArch is not in Fedora at all, it is in RPM Fusion.
+# A hard Requires would make this package refuse to install on a stock Fedora
+# -- "nothing provides retroarch" -- where a Recommends installs, pulls it in
+# for the many users who do have RPM Fusion enabled, and leaves the rest with
+# an app that says exactly what to do the first time they launch a game
+# (retroarch_launcher names the distribution, the Flatpak and the setting).
 %ifarch x86_64
 Requires:       fuse-libs
 %else
-Requires:       retroarch
+Recommends:     retroarch
 %endif
 
 %description

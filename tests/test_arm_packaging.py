@@ -58,11 +58,14 @@ class RpmArchitectureTests(unittest.TestCase):
     def test_the_bundled_appimage_dependency_is_per_architecture(self):
         self.assertIn("%ifarch x86_64", self.spec)
         self.assertIn("Requires:       fuse-libs", self.spec)
-        self.assertIn("Requires:       retroarch", self.spec)
+        # Weak on purpose: RetroArch is in RPM Fusion, not in Fedora, so a hard
+        # Requires would make the package refuse to install on a stock system.
+        self.assertIn("Recommends:     retroarch", self.spec)
+        self.assertNotIn("Requires:       retroarch", self.spec)
 
     def test_the_install_test_checks_the_right_thing_per_architecture(self):
         self.assertIn('if [ "$(uname -m)" = "x86_64" ]', self.script)
-        self.assertIn("command -v retroarch", self.script)
+        self.assertIn('RECOMMENDS="$(rpm -q --recommends openemux)"', self.script)
 
 
 class StagingTests(unittest.TestCase):

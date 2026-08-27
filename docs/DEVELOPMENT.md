@@ -642,9 +642,12 @@ repository because it is public.
 
 **No bundled RetroArch.** libretro publishes no ARM build -- the buildbot's
 aarch64 directory holds cores only, and its `stable/<version>/linux/` lists
-`x86/` and `x86_64/` and nothing else. So the ARM packages depend on the
-distribution's `retroarch` (Ubuntu noble arm64, Debian bookworm arm64 and RPM
-Fusion aarch64 all have it), and the launcher resolves in this order:
+`x86/` and `x86_64/` and nothing else. So the ARM packages lean on the
+distribution's `retroarch`: the `.deb` **depends** on it, because Ubuntu noble
+and Debian bookworm both package it for arm64; the `.rpm` only **recommends**
+it, because Fedora does not package RetroArch at all -- it is in RPM Fusion --
+and a hard requirement would make the package refuse to install on a stock
+system. The launcher then resolves in this order:
 
 1. `runtime.retroarch.binary`, if it names something that exists;
 2. that path on `PATH`;
