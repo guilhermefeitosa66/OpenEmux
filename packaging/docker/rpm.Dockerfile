@@ -10,6 +10,9 @@ RUN dnf install -y \
       desktop-file-utils \
       ImageMagick \
       python3 \
+      # appstreamcli: the spec's %check validates the metainfo it installs,
+      # and rpmbuild -ba refuses to start with an unmet BuildRequires.
+      appstream \
       # The build rebuilds its own SRPM (the check that the spec needs no
       # bind mount) and runs rpmlint over both artifacts, so the Fedora-review
       # findings are caught here rather than by a reviewer.

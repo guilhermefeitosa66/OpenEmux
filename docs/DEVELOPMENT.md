@@ -498,7 +498,7 @@ staff, update your `.env`, and cut a new release — no source change needed.
 1. Bump the version in all four places: `src/openemux/__init__.py`, the
    `version:` in `packaging/appimage/AppImageBuilder.yml`, a `%changelog` entry
    in `packaging/rpm/openemux.spec`, and a `<release>` entry in
-   `packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml`.
+   `packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml`.
 2. `make packages` and confirm every artifact is green (build **and**
    install-test), and that `dist/SHA256SUMS` covers them all.
 3. `make testenv-matrix` — the build containers install-test each artifact on

@@ -31,6 +31,14 @@ install -Dm755 "$ROOT_DIR/packaging/common/openemux-launcher.sh" "$DESTDIR/usr/b
 install -Dm644 "$ROOT_DIR/packaging/common/openemux.desktop" \
   "$DESTDIR/usr/share/applications/$APP_ID.desktop"
 
+# AppStream metainfo. Without it GNOME Software and KDE Discover know the app
+# only as a bare desktop entry -- no summary, no screenshots, no release notes
+# and no update notification -- and both rpmlint and lintian flag a desktop
+# application that ships none (issue #253). It used to be installed by the
+# Flatpak module alone, which is why it lived under packaging/flatpak/.
+install -Dm644 "$ROOT_DIR/packaging/common/$APP_ID.metainfo.xml" \
+  "$DESTDIR/usr/share/metainfo/$APP_ID.metainfo.xml"
+
 # Absolute Exec/TryExec for the system packages. A PATH-relative "openemux"
 # makes the menu entry run whatever shadows /usr/bin in the user's PATH --
 # an AppImage manager dropping a symlink at ~/.local/bin/openemux is exactly

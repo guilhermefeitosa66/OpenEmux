@@ -11,6 +11,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       dpkg-dev \
       desktop-file-utils \
+      # appstreamcli, for validating the metainfo the software centre reads.
+      appstream \
       imagemagick \
       fakeroot \
       xz-utils \

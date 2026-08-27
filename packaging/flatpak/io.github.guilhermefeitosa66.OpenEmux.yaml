@@ -55,9 +55,19 @@ modules:
       - rm -rf build dist
       - pip3 install --verbose --exists-action=i --no-index --no-build-isolation
         --prefix=${FLATPAK_DEST} .
-      - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
+      - install -Dm644 packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
         ${FLATPAK_DEST}/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
-      - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.desktop
+      # The same entry every other format installs. The Flatpak used to carry
+      # its own copy, which had drifted: no Version, no GenericName, no
+      # StartupNotify, a different Comment and a different keyword list
+      # (issue #253).
+      - install -Dm644 packaging/common/openemux.desktop
+        ${FLATPAK_DEST}/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+      # TryExec is resolved against the *host* PATH once Flatpak exports the
+      # entry, and no `openemux` binary exists there -- the entry would be
+      # silently hidden from the menu. Inside the sandbox it is redundant:
+      # `command: openemux` is /app/bin/openemux and always present.
+      - sed -i '/^TryExec=/d'
         ${FLATPAK_DEST}/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
       - install -Dm644 packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.png
         ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png

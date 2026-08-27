@@ -21,7 +21,7 @@ Artifacts land in `dist/`.
 | `build.sh` | Host-side entry point: builds the image, runs the target's build script in it |
 | `docker/<target>.Dockerfile` | The build toolchain for one target |
 | `<target>/build.sh` | What runs **inside** the container: build + install-test |
-| `common/` | Everything the `.deb` and `.rpm` share |
+| `common/` | The install layout, the launcher, the desktop entry and the AppStream metainfo — shared by every format |
 | `appimage/AppImageBuilder.yml` | The bundle recipe |
 | `appimage/openemux-launcher.sh` | The bundle's entry point (sets its runtime env) |
 | `rpm/openemux.spec` | RPM metadata; unpacks a source tarball and installs via `common/stage_tree.sh` |
@@ -33,8 +33,10 @@ finished artifacts on Ubuntu, Debian and Fedora, under X11 and Wayland --
 [`testenv/README.md`](testenv/README.md).
 
 `common/` holds `stage_tree.sh` (the `/opt/openemux` install layout),
-`openemux-launcher.sh` (the `/usr/bin/openemux` launcher) and
-`openemux.desktop` (the single desktop entry all three formats install).
+`openemux-launcher.sh` (the `/usr/bin/openemux` launcher), `openemux.desktop`
+(the single desktop entry every format installs) and
+`io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` (the AppStream data every
+format installs to `/usr/share/metainfo/`).
 
 ## Things that are easy to get wrong
 
@@ -61,6 +63,18 @@ plain covers.
 
 **Versions.** `src/openemux/__init__.py` is the single source of truth; the
 AppImage recipe carries its own copy that must be bumped with it.
+
+**AppStream metainfo.** Every format installs
+`common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` to
+`/usr/share/metainfo/`; without it GNOME Software and KDE Discover know the app
+only as a bare desktop entry — no summary, no screenshots, no release notes and
+no update notification — and both rpmlint and lintian flag it. The `.deb`,
+`.rpm` and Flatpak builds run `appstreamcli validate --no-net` over the file
+they install, and `tests/test_appstream_metainfo.py` covers what a validator
+cannot: that every shipped version is in the release history, and that the
+screenshot URLs are pinned to a commit rather than to `main`. They are
+re-indexed by the software centre long after the install, so a screenshot
+refresh that renames a file under `docs/assets/` would blank them for everyone.
 
 **The RPM must stand on its own.** `rpm/build.sh` packs a source tarball,
 resolves `Version:` into the copy of the spec it hands to `rpmbuild`, and builds

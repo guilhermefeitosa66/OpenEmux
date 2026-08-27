@@ -38,22 +38,28 @@
 
   <launchable type="desktop-id">io.github.guilhermefeitosa66.OpenEmux.desktop</launchable>
 
+  <!-- Pinned to a commit, not to main: a software centre re-indexes these
+       URLs long after the user installed, so a screenshot refresh that renames
+       a file under docs/assets/ (it has happened twice) 404s the Flathub
+       linter and blanks the screenshots for everyone already on the app.
+       Re-pin the commit whenever the screenshots are refreshed; the
+       refresh-screenshots skill is what does that. -->
   <screenshots>
     <screenshot type="default">
       <caption>The cover-art library for a console</caption>
-      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/openemux-roms-nes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-roms-nes.png</image>
     </screenshot>
     <screenshot>
       <caption>Browsing another console's games</caption>
-      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/openemux-roms-snes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-roms-snes.png</image>
     </screenshot>
     <screenshot>
       <caption>Playing a game through RetroArch</caption>
-      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/openemux-gameplay-gba.png</image>
+      <image type="source" width="1300" height="860">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-gameplay-gba.png</image>
     </screenshot>
     <screenshot>
       <caption>Preferences</caption>
-      <image>https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/main/docs/assets/openemux-settings.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-settings.png</image>
     </screenshot>
   </screenshots>
 
@@ -193,13 +199,65 @@
         </ul>
       </description>
     </release>
-    <release version="1.8.0" date="2026-07-25">
+    <release version="1.8.0" date="2026-07-24">
       <description>
         <p>ScreenScraper out of the box, cartridge labels, and per-ROM overrides.</p>
         <ul>
           <li>ScreenScraper works with no account: official builds embed a developer credential</li>
           <li>Cartridge labels are scraped into their own folder and composited into the cartridge art</li>
           <li>Per-ROM core and shader overrides from the context menu</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.7.0" date="2026-07-23">
+      <description>
+        <p>The core, the shader, the layout and the grouping, all chosen from the interface.</p>
+        <ul>
+          <li>Choose the shader per ROM from the context menu, over the per-console setting</li>
+          <li>Choose the libretro core per console (Settings) and per ROM (context menu)</li>
+          <li>Configure the library layout (view mode, sort, zoom) per console and per view</li>
+          <li>Group games into custom collections in the sidebar, spanning consoles</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.6.0" date="2026-07-23">
+      <description>
+        <p>Three layouts, six sort orders and a zoom control, one click from the toolbar.</p>
+        <ul>
+          <li>A View Mode selector: cover grid, cartridge grid and a compact list</li>
+          <li>Zoom controls for thumbnails (50%-200%), with Ctrl+plus/minus/0</li>
+          <li>Sort the library by name, recently played, recently added, size or platform</li>
+          <li>Follow the desktop language on first launch instead of defaulting to English</li>
+          <li>Open the primary menu from the gamepad, and steer with the right analog stick</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.5.2" date="2026-07-21">
+      <description>
+        <p>A fix for the AppImage, where no cartridge or cover art rendered at all.</p>
+        <ul>
+          <li>Fix cartridge frames and cover art not rendering in the AppImage</li>
+          <li>Degrade to the plain cover when a cartridge cannot be composited</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.5.1" date="2026-07-21">
+      <description>
+        <p>A fix for the 1.5.0 AppImage, which did not start at all.</p>
+        <ul>
+          <li>Fix the AppImage failing to start with "usr/bin/python3: not found"</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.5.0" date="2026-07-21">
+      <description>
+        <p>The whole library, navigable with a gamepad or the keyboard.</p>
+        <ul>
+          <li>Navigate the whole library with a gamepad, following the RetroArch button convention</li>
+          <li>Full keyboard navigation, with shortcuts for play, rename, delete, favorite, rescan, import and cover sync</li>
+          <li>Show what each control does in the bottom bar, per input device</li>
+          <li>Lay the game grid out like an icon view, with fixed card sizes per console</li>
+          <li>Fix the launcher picking a python3 without PyGObject (pyenv/conda/asdf)</li>
         </ul>
       </description>
     </release>

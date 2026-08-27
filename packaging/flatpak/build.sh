@@ -45,7 +45,8 @@ trap 'rm -rf "$STAGE"' EXIT
 # to the manifest and forgotten here fails the build loudly rather than
 # silently widening what gets copied.
 for item in pyproject.toml README.md LICENSE requirements.lock src \
-            packaging/flatpak packaging/embed_screenscraper_credentials.py; do
+            packaging/common packaging/flatpak \
+            packaging/embed_screenscraper_credentials.py; do
   install -d "$STAGE/$(dirname "$item")"
   cp -a "$item" "$STAGE/$item"
 done
@@ -61,6 +62,16 @@ find "$STAGE/src" \( -name '__pycache__' -o -name '*.egg-info' \) -type d -prune
 
 # The tracked file must have come out of this untouched.
 grep -q '^_EMBEDDED_BLOB = ""$' src/openemux/core/embedded_credentials.py
+
+echo "==> validate the two files Flathub reads before publishing"
+# Neither was checked here: deb/build.sh and rpm/build.sh both run
+# desktop-file-validate, the Flatpak ran nothing at all -- on the app that is
+# heading for Flathub, whose linter reads exactly these two (issue #253).
+# --no-net keeps the build offline; the screenshot URLs are checked by
+# tests/test_appstream_metainfo.py.
+appstreamcli validate --no-net \
+  "$STAGE/packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml"
+desktop-file-validate "$STAGE/packaging/common/openemux.desktop"
 
 flatpak remote-add --user --if-not-exists flathub \
   https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -91,6 +102,18 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
 fi
 test -f "$ICONS_DIR/LICENSE"
 echo "all $PKG_ICONS symbolic icons present"
+
+echo "==> verify the exported desktop entry is not hidden by TryExec"
+# Flatpak exports the entry to the host, where TryExec is resolved against the
+# host PATH -- and no `openemux` binary lives there.
+DESKTOP="$(find .flatpak-build-dir/files/share/applications -name '*.desktop' | head -1)"
+if grep -q '^TryExec=' "$DESKTOP"; then
+  echo "FAIL: the exported desktop entry still carries TryExec" >&2
+  exit 1
+fi
+grep -q '^Exec=openemux$' "$DESKTOP"
+test -f .flatpak-build-dir/files/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
+echo "desktop entry and metainfo in place"
 
 echo "==> verify the build carried no working-tree leftovers"
 # The staging list is the whole defence against `path: ../..` scooping up the

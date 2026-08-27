@@ -85,6 +85,7 @@ echo "==> verify installed files"
 test -x /usr/bin/openemux
 test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 # PATH-relative Exec would let a ~/.local/bin shadow (AppImage-manager
 # symlink) hijack the menu icon; the packaged entry must be explicit.
 grep -q '^Exec=/usr/bin/openemux$' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
@@ -162,6 +163,7 @@ dnf remove -y openemux >/dev/null
 for path in /usr/share/doc/openemux /usr/share/licenses/openemux /usr/bin/openemux \
             /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop \
             /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png \
+            /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml \
             /opt/openemux/vendors /opt/openemux/src/openemux/main.py; do
   if [ -e "$path" ]; then
     echo "FAIL: $path survived the erase" >&2

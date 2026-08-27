@@ -1538,6 +1538,84 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-214 — Every package is visible in the software centre
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the `.deb`, `.rpm` and Flatpak builds run
+  `appstreamcli validate` over the file they install).
+- **Steps:** As a QA person: install the `.deb` on Ubuntu (or the `.rpm` on Fedora), open GNOME
+  Software or KDE Discover and search for "OpenEmux".
+- **Expected:** The app is listed with its name, summary, screenshots and "What's new", and an
+  update to it is offered. `packaging/…/metainfo.xml` existed but only the Flatpak module
+  installed it, so the `.rpm`'s 587-entry file list, the `.deb`'s 607-entry list and the AppImage
+  carried none — the app was invisible in both software centres, and both rpmlint and lintian
+  flag a desktop application that ships no AppStream data (issue #253). The file now lives in
+  `packaging/common/` and every format installs it to `/usr/share/metainfo/`.
+- **Check:** suite file `tests/test_appstream_metainfo.py`, plus:
+  ```bash
+  appstreamcli validate --no-net \
+    packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml && echo "RT-214 OK"
+  ```
+
+### RT-215 — "What's new" has no holes, and the screenshots do not go blank
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: open the app's page in GNOME Software, scroll the version history,
+  and look at the screenshots on a machine that installed months ago.
+- **Expected:** Every shipped version appears in the history, and the screenshots render. The
+  `<release>` list skipped 1.7.0, 1.6.0, 1.5.2, 1.5.1 and 1.5.0, so the history showed a visible
+  jump from 1.8.0 to 1.4.0; and the screenshot URLs pointed at `main`, which AppStream re-indexes
+  long after the install — so a screenshot refresh that renames a file under `docs/assets/` (it
+  has happened twice) 404s the Flathub linter and blanks the screenshots for everyone already on
+  the app (issue #253). The URLs are pinned to a commit now, and each carries `type="source"`
+  with its real width and height.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  import xml.etree.ElementTree as ET
+  from pathlib import Path
+  root = ET.parse("packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml").getroot()
+  declared = {r.get("version") for r in root.find("releases")}
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  shipped = set(re.findall(r"^\* .* - (\S+)-\d+$", spec, re.M))
+  assert not shipped - declared, f"missing from the history: {sorted(shipped - declared)}"
+  for image in root.find("screenshots").iter("image"):
+      assert "/main/" not in image.text, f"{image.text} points at a mutable branch"
+      assert re.search(r"/OpenEmux/[0-9a-f]{40}/", image.text), f"{image.text} is not pinned"
+      assert image.get("type") == "source" and image.get("width") and image.get("height")
+  print("RT-215 OK")
+  EOF
+  ```
+
+### RT-216 — One desktop entry, and the Flatpak's is not hidden by TryExec
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the Flatpak build asserts the same against
+  the exported entry).
+- **Steps:** As a QA person: install the Flatpak and look for "OpenEmux" in the applications menu;
+  compare its entry with the one the `.deb` installs.
+- **Expected:** The entry is there, and it is the same entry. The Flatpak carried its own copy of
+  the desktop file, which had drifted from the shared one — no `Version`, no `GenericName`, no
+  `StartupNotify`, a different `Comment` and a different keyword list (issue #253). It installs
+  the shared entry now, with `TryExec` stripped: Flatpak exports the entry to the host, where
+  `TryExec` is resolved against the host `PATH`, and no `openemux` binary lives there.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  app_id = "io.github.guilhermefeitosa66.OpenEmux"
+  assert not Path(f"packaging/flatpak/{app_id}.desktop").exists(), \
+      "the Flatpak still carries a second desktop entry"
+  manifest = Path(f"packaging/flatpak/{app_id}.yaml").read_text()
+  assert "packaging/common/openemux.desktop" in manifest, \
+      "the Flatpak does not install the shared entry"
+  assert "/^TryExec=/d" in manifest, "the exported entry would be hidden by TryExec"
+  print("RT-216 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid
