@@ -102,9 +102,12 @@ test -d "$BUNDLE/vendors/RetroArch-Win64/cores"
 test -f "$BUNDLE/LICENSE"
 test -f "$BUNDLE/THIRD_PARTY_NOTICES.md"
 # RetroArch is GPLv3 and redistributed unmodified; its licence must ship beside
-# the binary. stage.py fails earlier if it is absent -- this is the last gate.
-ls "$BUNDLE/vendors/RetroArch-Win64/"COPYING* \
-   "$BUNDLE/vendors/RetroArch-Win64/LICENSE"* >/dev/null 2>&1
+# the binary. stage.py fails earlier if it cannot find one -- this is the last
+# gate. One exact name, not a glob over two: `ls COPYING* LICENSE*` fails as a
+# whole when either pattern matches nothing, so it reported a missing licence
+# for a bundle that had one. stage.py writes it as COPYING whatever it was
+# called upstream, precisely so this can be a plain test.
+test -f "$BUNDLE/vendors/RetroArch-Win64/COPYING"
 
 # Nothing in the bundle may point at the machine that built it. An absolute
 # MSYS2 path baked into a config or cache means a file that resolves on a

@@ -49,6 +49,11 @@ PREFIX_PRUNE_DIRS = [
     "share/pkgconfig",
     "lib/cmake",
     "share/vala",
+    # SQLite's loadable-extension *examples* -- .c sources and the .dll built
+    # from each. Nothing in OpenEmux calls load_extension, and their README
+    # spells an absolute C:/msys64 path, which is exactly what the bundle must
+    # never carry: a file that resolves on the build machine and nowhere else.
+    "share/sqlite",
 ]
 
 #: Python's standard library carries things this app never imports. tkinter (and
