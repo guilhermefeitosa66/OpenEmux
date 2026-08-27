@@ -32,7 +32,13 @@ Requires:       python3-xlib
 Requires:       librsvg2
 Requires:       adwaita-icon-theme
 Requires:       shared-mime-info
-Recommends:     fuse-libs
+# Hard, not weak: the vendored RetroArch AppImage is the only emulator this
+# package ships, and its runtime needs libfuse.so.2 to mount itself. As a
+# Recommends it arrived with `dnf install ./x.rpm` and with nothing else --
+# `rpm -ivh`, --setopt=install_weak_deps=False and offline installs all
+# skipped it, and the app then installed cleanly and could not launch a
+# single game (issue #248).
+Requires:       fuse-libs
 
 %description
 OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches

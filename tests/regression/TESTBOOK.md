@@ -911,10 +911,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Launch the app against that `HOME`, open the console and start the game.
   2. Read the toast.
-- **Expected:** *&lt;game&gt; closed straight away — The RetroArch AppImage needs libfuse2, which
-  this system does not have.* A nonzero exit within three seconds is a launch that never started;
-  the old message ("finished (exit code 1)") was indistinguishable from a clean quit, so on a host
-  with no libfuse2 every launch died in silence (issue #226).
+- **Expected:** *&lt;game&gt; closed straight away — The RetroArch AppImage needs FUSE (libfuse2),
+  which this system does not have.* A nonzero exit within three seconds is a launch that never
+  started; the old message ("finished (exit code 1)") was indistinguishable from a clean quit, so
+  on a host with no libfuse2 every launch died in silence (issue #226). The toast appears
+  immediately here: the configured binary is a script, not an AppImage, so there is nothing to
+  unpack and the retry of RT-190 does not apply.
 - **Check:** screenshot of the toast; `grep "died on startup" <launch log>`; suite files
   `tests/test_runtime_manager.py` (`StartupFailureTests`), `tests/test_retroarch_log.py`
   (`FailureReasonTests`, `ReadFailureReasonTests`).
@@ -1276,6 +1278,100 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   symlink points at. The packaged desktop entry must not resolve `Exec` through `PATH`.
 - **Check:** `grep '^Exec=' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop`
   prints exactly `Exec=/usr/bin/openemux`; the build scripts assert the same at package time.
+
+### RT-189 — The AppImage runtime asks the host for no library
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none. The probe reads `dist/*.AppImage` when one has been built, and the
+  build inputs otherwise.
+- **Steps:** As a QA person: on a stock Ubuntu 24.04 or Fedora 40 desktop — neither installs a
+  FUSE 2 library — `chmod +x` the AppImage and double-click it.
+- **Expected:** The app starts. It used to die with `dlopen(): error loading libfuse.so.2` before
+  a line of OpenEmux ran, because appimage-builder embeds AppImageKit's dynamically linked
+  runtime and neither of the two distributions the project targets as its floor ships
+  `libfuse2t64`/`fuse-libs` (issue #248). The bundle now carries type2-runtime's static-pie
+  runtime, with squashfuse and FUSE 3 linked in.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import glob, re, subprocess
+  from pathlib import Path
+  bundles = sorted(glob.glob("dist/*.AppImage"))
+  if bundles:
+      # The runtime is the ELF the payload is appended to: read the header to
+      # find where the sections end, which is where the squashfs begins.
+      raw = Path(bundles[0]).read_bytes()
+      e_shoff = int.from_bytes(raw[0x28:0x30], "little")
+      e_shentsize = int.from_bytes(raw[0x3A:0x3C], "little")
+      e_shnum = int.from_bytes(raw[0x3C:0x3E], "little")
+      runtime = raw[: e_shoff + e_shentsize * e_shnum]
+      assert b"libfuse.so.2" not in runtime, f"{bundles[0]} still wants libfuse.so.2"
+      Path("/tmp/rt189-runtime").write_bytes(runtime)
+      out = subprocess.run(["readelf", "-d", "/tmp/rt189-runtime"],
+                           capture_output=True, text=True).stdout
+      assert "(NEEDED)" not in out, f"the runtime is dynamically linked:\n{out}"
+  else:
+      docker = Path("packaging/docker/appimage.Dockerfile").read_text()
+      build = Path("packaging/appimage/build.sh").read_text()
+      assert re.search(r"type2-runtime/releases/download/\d+/runtime-x86_64", docker), \
+          "the build image does not pin a type2-runtime build"
+      assert "APPIMAGE_RUNTIME_SHA256" in docker, "the pinned runtime is not checksummed"
+      assert "/opt/appimage-runtime-x86_64" in build, \
+          "build.sh does not append the payload to the pinned runtime"
+      # That runtime reads zlib and zstd only; xz would assemble and then
+      # refuse to open itself.
+      assert "-comp zstd" in build, "the payload is not squashed with zstd"
+      assert "libfuse" in build and "(NEEDED)" in build, \
+          "build.sh does not verify the runtime it shipped"
+  print("RT-189 OK")
+  EOF
+  ```
+
+### RT-190 — A game whose AppImage cannot mount is retried unpacked
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person on a host that *has* libfuse2 but cannot mount with it — no
+  `/dev/fuse` (a container), or a `fusermount` that is not setuid: click a game.
+- **Expected:** The game starts. The `libfuse.so.2` probe answers "can this library be loaded",
+  which is not "can this host mount a FUSE filesystem", so such a host passed the probe and every
+  launch still died at the mount with nothing said (issue #248). The launch is now repeated once
+  with `--appimage-extract-and-run`, which needs no FUSE at all, and nothing is reported to the
+  user in between. Exactly one retry: a second failure is reported normally. A native RetroArch is
+  never retried — there is nothing to unpack — and a death the log does not blame on FUSE is
+  reported at once.
+  The game window follows the retry rather than closing on the dead process, so the game is still
+  wrapped and embedding is not written off for the session.
+- **Check:** suite files `tests/test_runtime_manager.py` (`UnpackedRetryTests`),
+  `tests/test_retroarch_launcher.py` (`ForcedExtractRetryTests`),
+  `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`),
+  `tests/test_game_window.py` (`FollowRelaunchTests`).
+
+### RT-191 — The native packages require FUSE rather than suggesting it
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: install the `.rpm` with `rpm -ivh` (or the `.deb` with `dpkg -i`) —
+  neither pulls weak dependencies — and launch a game.
+- **Expected:** The install pulls the FUSE 2 library, and the game runs. The vendored RetroArch
+  AppImage is the only emulator these packages ship and its runtime needs `libfuse.so.2`; as a
+  `Recommends` it arrived only with `dnf install ./x.rpm` / `apt install ./x.deb`, so `rpm -ivh`,
+  `dpkg -i`, `--setopt=install_weak_deps=False` and offline installs produced an app that
+  installed cleanly and could not launch a single game (issue #248).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  assert "Requires:       fuse-libs" in spec, "the .rpm does not require fuse-libs"
+  assert "Recommends:     fuse-libs" not in spec, "fuse-libs is still only recommended"
+  deb = Path("packaging/deb/build.sh").read_text()
+  depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
+  assert "libfuse2t64 | libfuse2" in depends, f"the .deb does not depend on libfuse2: {depends}"
+  assert "Recommends: libfuse2" not in deb, "libfuse2 is still only recommended"
+  print("RT-191 OK")
+  EOF
+  ```
 
 ## Input
 

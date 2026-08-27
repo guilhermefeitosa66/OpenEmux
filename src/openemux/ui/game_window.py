@@ -484,6 +484,8 @@ class GameWindow(Adw.Window):
             self._tick_id = None
             return False
         exit_code = None if self._proc is None else self._proc.poll()
+        if exit_code is not None and self._follow_relaunch():
+            return True
         if self._proc is None or exit_code is not None:
             # The game ended on its own (RetroArch menu quit, crash): the
             # wrapper window has nothing left to show.
@@ -505,6 +507,37 @@ class GameWindow(Adw.Window):
             self._reassert_embed()
             if self._fullscreen_keycode in self._embedder.pressed_grabbed_keycodes():
                 self._toggle_fullscreen()
+        return True
+
+    def _follow_relaunch(self):
+        """Pick up a process the runtime started in place of the dead one.
+
+        A launch that died because the AppImage runtime could not mount
+        itself is retried unpacked, and the user is deliberately told nothing
+        in between (issue #248). The wrapper has to follow that second
+        process: closing on the first one's exit would leave the retried game
+        in its own undecorated window -- and would mark embedding
+        unavailable for the rest of the session on the strength of a launch
+        that never happened.
+
+        Only before the first adoption. A game that was embedded and then
+        exited is a game the user finished; the relaunch paths that follow
+        one (the input hot-apply of issue #129) open a fresh wrapper of their
+        own, and this one has to close as it always did.
+
+        Nothing learned about the dead process carries over, so the search
+        budget and the log verdict start again with it.
+        """
+        if self._child_xid is not None:
+            return False
+        live = getattr(self._runtime, "active_process", None)
+        if live is None or live is self._proc or live.poll() is not None:
+            return False
+        logger.info("game window: the runtime relaunched the game; following it")
+        self._proc = live
+        self._ticks_waited = 0
+        self._embedded_ticks = 0
+        self._log_verdict = retroarch_log.UNKNOWN
         return True
 
     def _note_death_before_embed(self, exit_code):

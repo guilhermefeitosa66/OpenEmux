@@ -10,6 +10,12 @@ echo "==> building openemux ${VERSION} .deb"
 STAGE="$(mktemp -d)"
 DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 
+# libfuse2t64 | libfuse2 is a hard dependency, not a Recommends: the vendored
+# RetroArch AppImage is the only emulator this package ships and its runtime
+# needs libfuse.so.2 to mount itself. `apt install ./x.deb` does pull
+# recommends, but `dpkg -i` and offline installs do not -- and the app then
+# installed cleanly and could not launch a single game (issue #248). The
+# alternative covers both spellings: noble renamed the package to libfuse2t64.
 install -d "$STAGE/DEBIAN"
 INSTALLED_KB="$(du -ks "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" <<EOF
@@ -21,8 +27,7 @@ Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
-Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, adwaita-icon-theme, shared-mime-info
-Recommends: libfuse2t64 | libfuse2
+Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, adwaita-icon-theme, shared-mime-info, libfuse2t64 | libfuse2
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. It bundles a RetroArch AppImage

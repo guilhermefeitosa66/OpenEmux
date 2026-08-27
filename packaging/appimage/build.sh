@@ -10,6 +10,8 @@ trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appima
 
 RECIPE=packaging/appimage/AppImageBuilder.yml
 APPDIR_LIB="$PWD/AppDir/usr/lib/x86_64-linux-gnu"
+# The static-FUSE3 AppImage runtime baked into the build image (see phase 2).
+RUNTIME_SRC=/opt/appimage-runtime-x86_64
 
 echo "==> phase 1: assemble the AppDir (no packaging yet)"
 appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
@@ -51,7 +53,39 @@ test -f "$APPDIR_LIB/girepository-1.0/Rsvg-2.0.typelib" \
   || { echo "ERROR: Rsvg-2.0.typelib missing from the bundle." >&2; exit 1; }
 
 echo "==> phase 2: package the AppImage from the fixed AppDir"
-appimage-builder --recipe "$RECIPE" --skip-script --skip-build --skip-tests
+#
+# Assembled here instead of by `appimage-builder --skip-build`, because the
+# two halves of a type-2 AppImage have to agree on a compressor and those two
+# do not. The runtime this bundle ships is type2-runtime's: static-pie with
+# squashfuse and FUSE 3 linked in, so the image needs no libfuse.so.2 on the
+# user's machine -- which is the whole of issue #248, since neither Ubuntu
+# 24.04 nor Fedora 40 installs one. That runtime reads zlib and zstd only,
+# and appimage-builder hardcodes `mksquashfs -comp xz`; pairing them gives a
+# bundle that assembles perfectly and then refuses to open itself with
+# "Squashfs image uses xz compression, this version supports only zlib,
+# zstd". zstd is also the faster read of the two, which a mounted AppImage
+# pays for on every block it faults in.
+#
+# What follows is all of AppImagePrimer.prime() that is not dead code for
+# this recipe (it has no update-information and no signing key): squash the
+# AppDir, append it to the runtime, mark it executable.
+if [ ! -f "$RUNTIME_SRC" ]; then
+  echo "ERROR: $RUNTIME_SRC missing. Rebuild the image (packaging/docker/appimage.Dockerfile)." >&2
+  exit 1
+fi
+# The same name appimage-builder gave the file, from the same field, so the
+# release artifact keeps its name.
+VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE" | head -1)"
+test -n "$VERSION" || { echo "ERROR: no version: field in $RECIPE." >&2; exit 1; }
+BUNDLE_NAME="OpenEmux-${VERSION}-x86_64.AppImage"
+PAYLOAD="$PWD/AppDir.squashfs"
+rm -f "$PAYLOAD" "$BUNDLE_NAME"
+mksquashfs AppDir "$PAYLOAD" -root-owned -noappend -reproducible \
+  -comp zstd -Xcompression-level 19
+cat "$RUNTIME_SRC" "$PAYLOAD" > "$BUNDLE_NAME"
+rm -f "$PAYLOAD"
+chmod +x "$BUNDLE_NAME"
+echo "packaged $BUNDLE_NAME ($(stat -c %s "$BUNDLE_NAME") bytes)"
 
 mkdir -p dist
 shopt -s nullglob
@@ -64,6 +98,29 @@ done
 # which is exactly how a release shipped that died with
 # "usr/bin/python3: not found" on every machine.
 BUNDLE="$(ls -1 dist/*.AppImage | head -1)"
+
+# The bug this guards against is invisible in the build container -- every
+# check below runs the bundle extracted, so a runtime that cannot mount
+# itself passes them all and only fails on the user's desktop (issue #248).
+# So inspect the runtime itself: it is the first N bytes of the AppImage,
+# where N is the size of the runtime the payload was appended to.
+echo "==> runtime check: $BUNDLE"
+RUNTIME_HEAD="$(mktemp)"
+head -c "$(stat -c %s "$RUNTIME_SRC")" "$BUNDLE" > "$RUNTIME_HEAD"
+if strings -a "$RUNTIME_HEAD" | grep -q 'libfuse\.so\.2'; then
+  echo "ERROR: the AppImage runtime still wants libfuse.so.2." >&2
+  rm -f "$RUNTIME_HEAD"
+  exit 1
+fi
+if readelf -d "$RUNTIME_HEAD" 2>/dev/null | grep -q "(NEEDED)"; then
+  echo "ERROR: the AppImage runtime is dynamically linked:" >&2
+  readelf -d "$RUNTIME_HEAD" | grep "(NEEDED)" >&2
+  rm -f "$RUNTIME_HEAD"
+  exit 1
+fi
+rm -f "$RUNTIME_HEAD"
+echo "runtime OK: statically linked, no libfuse.so.2"
+
 echo "==> launch test: $BUNDLE"
 LAUNCH_LOG="$(mktemp)"
 # No FUSE in the build container, so run from an extraction; xvfb gives GTK a

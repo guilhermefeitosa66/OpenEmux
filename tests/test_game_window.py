@@ -8,7 +8,8 @@ or the other half of a double-click.
 
 import unittest
 
-from openemux.ui.game_window import FULLSCREEN_FALLBACK_KEY
+from openemux.core import retroarch_log
+from openemux.ui.game_window import FULLSCREEN_FALLBACK_KEY, GameWindow
 from openemux.ui.grid import ACTIVATION_DEBOUNCE_US, RomGrid
 
 
@@ -103,6 +104,87 @@ class DoubleClickTests(unittest.TestCase):
 
     def test_the_window_is_half_a_second(self):
         self.assertEqual(ACTIVATION_DEBOUNCE_US, 500_000)
+
+
+class _Proc:
+    def __init__(self, exit_code=None):
+        self.exit_code = exit_code
+
+    def poll(self):
+        return self.exit_code
+
+
+class _Runtime:
+    def __init__(self, active_process=None):
+        self.active_process = active_process
+
+
+class _Wrapper:
+    """Just the attributes ``_follow_relaunch`` reads and writes.
+
+    The suite cannot build GTK widgets, and the decision under test is plain
+    bookkeeping, so it is called unbound against this stand-in.
+    """
+
+    def __init__(self, proc, runtime, child_xid=None):
+        self._proc = proc
+        self._runtime = runtime
+        self._child_xid = child_xid
+        self._ticks_waited = 17
+        self._embedded_ticks = 9
+        self._log_verdict = retroarch_log.NOT_X11
+
+
+class FollowRelaunchTests(unittest.TestCase):
+    """The wrapper follows a process the runtime swapped under it (#248).
+
+    A launch that died because the AppImage could not mount itself is retried
+    unpacked with nothing said to the user. Closing on the first process's
+    exit would strand the retried game in its own undecorated window and mark
+    embedding unavailable for the session over a launch that never happened.
+    """
+
+    def test_a_live_replacement_is_adopted(self):
+        dead, live = _Proc(exit_code=1), _Proc()
+        wrapper = _Wrapper(dead, _Runtime(live))
+
+        self.assertTrue(GameWindow._follow_relaunch(wrapper))
+        self.assertIs(wrapper._proc, live)
+
+    def test_nothing_learned_about_the_dead_process_carries_over(self):
+        dead, live = _Proc(exit_code=1), _Proc()
+        wrapper = _Wrapper(dead, _Runtime(live))
+
+        GameWindow._follow_relaunch(wrapper)
+        self.assertEqual(wrapper._ticks_waited, 0)
+        self.assertEqual(wrapper._embedded_ticks, 0)
+        self.assertEqual(wrapper._log_verdict, retroarch_log.UNKNOWN)
+
+    def test_a_game_that_simply_ended_is_not_followed(self):
+        # The runtime cleared the process: this is a quit, and the wrapper
+        # must close as it always did.
+        dead = _Proc(exit_code=0)
+        wrapper = _Wrapper(dead, _Runtime(None))
+        self.assertFalse(GameWindow._follow_relaunch(wrapper))
+
+    def test_the_same_process_is_not_a_relaunch(self):
+        dead = _Proc(exit_code=1)
+        wrapper = _Wrapper(dead, _Runtime(dead))
+        self.assertFalse(GameWindow._follow_relaunch(wrapper))
+
+    def test_a_game_that_was_embedded_and_ended_is_not_followed(self):
+        # That is a game the user finished. The relaunch paths that follow
+        # one open a fresh wrapper of their own (issue #129).
+        dead, live = _Proc(exit_code=0), _Proc()
+        wrapper = _Wrapper(dead, _Runtime(live), child_xid=0x200)
+        self.assertFalse(GameWindow._follow_relaunch(wrapper))
+        self.assertIs(wrapper._proc, dead)
+
+    def test_a_replacement_that_is_already_dead_is_not_followed(self):
+        dead, stillborn = _Proc(exit_code=1), _Proc(exit_code=1)
+        wrapper = _Wrapper(dead, _Runtime(stillborn))
+        self.assertFalse(GameWindow._follow_relaunch(wrapper))
+        self.assertIs(wrapper._proc, dead)
 
 
 if __name__ == "__main__":

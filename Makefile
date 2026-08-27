@@ -196,7 +196,7 @@ checksums:
 packages: appimage deb rpm flatpak windows checksums
 
 appimage-clean:
-	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
+	rm -rf AppDir AppDir.squashfs appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # The staged bundle tree, but not build/win/msys2-cache: that holds the
 # downloaded MSYS2 packages, they are checksum-verified against packages.lock on
