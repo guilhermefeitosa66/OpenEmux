@@ -74,7 +74,10 @@ fi
 
 IMAGE="openemux-build-$TARGET"
 echo "==> building image $IMAGE"
-docker build -q -t "$IMAGE" -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
+# --pull: without it a stale local image is reused silently, possibly one
+# cached before a security update. The Dockerfiles pin their base by digest, so
+# this only ever re-fetches the same bytes (issue #255).
+docker build --pull -q -t "$IMAGE" -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
 
 # Artifacts are written as root inside the container; hand them back afterwards.
 HOST_UID="${HOST_UID:-$(id -u)}"
@@ -88,11 +91,28 @@ DOCKER_ARGS=(--rm -t -v "$ROOT_DIR:/work" -w /work
 # stays opt-in, so a build without a .env needs nothing here.
 DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
               -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
-# appimage-builder needs to mount squashfs/use FUSE-ish tooling while
-# bundling, and flatpak-builder's bubblewrap sandbox needs the same inside
-# Docker.
-if [ "$TARGET" = "appimage" ] || [ "$TARGET" = "flatpak" ]; then
-  DOCKER_ARGS+=(--privileged)
+# Two builds have to mount a filesystem, and --privileged is how they used to
+# get to: full host root, every capability and every device, in a container
+# that also bind-mounts the repository and carries SCREENSCRAPER_DEVPASSWORD --
+# so any compromised dependency pulled during those builds ran as root on the
+# host machine (issue #255). The real requirement is narrower, and different
+# for each of them; both sets below were established by probing the actual
+# failure, not by guessing.
+if [ "$TARGET" = "appimage" ]; then
+  # appimage-builder mounts squashfs while bundling: SYS_ADMIN for mount(2),
+  # /dev/fuse for the filesystem itself, and an AppArmor exception because the
+  # host's docker-default profile denies mount unconditionally.
+  DOCKER_ARGS+=(--cap-add SYS_ADMIN --device /dev/fuse
+                --security-opt apparmor:unconfined)
+elif [ "$TARGET" = "flatpak" ]; then
+  # flatpak-builder builds every module inside bubblewrap, which needs two
+  # more things: NET_ADMIN to bring up loopback in the network namespace it
+  # unshares (without it: "bwrap: loopback: Failed RTM_NEWADDR"), and seccomp
+  # unconfined because Docker's default profile blocks pivot_root (without it:
+  # "bwrap: pivot_root: Operation not permitted"). SYS_CHROOT is not needed.
+  DOCKER_ARGS+=(--cap-add SYS_ADMIN --cap-add NET_ADMIN --device /dev/fuse
+                --security-opt apparmor:unconfined
+                --security-opt seccomp=unconfined)
 fi
 
 echo "==> running packaging/$TARGET/build.sh in $IMAGE"

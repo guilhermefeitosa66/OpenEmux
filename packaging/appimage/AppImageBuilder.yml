@@ -30,8 +30,13 @@ script:
   - sh packaging/common/assert_sources_only.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages/openemux
   - cp requirements.lock AppDir/usr/lib/openemux/
   - cp README.md LICENSE AppDir/usr/lib/openemux/
-  - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/openemux-pydeps.lock
-  - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/openemux-pydeps.lock
+  # --require-hashes: what lands inside a signed release artifact is fixed by
+  # content, not by whatever PyPI serves for the pinned version. The file is
+  # generated from requirements.lock by packaging/appimage/hash_lock.py and
+  # carries the same sdist hashes the Flatpak manifests already vendor
+  # (issue #255). PyGObject and pycairo are absent on purpose -- the bundle
+  # takes them from the apt packages below.
+  - python3 -m pip install --break-system-packages --no-cache-dir --require-hashes --target AppDir/usr/lib/python3/dist-packages -r packaging/appimage/requirements.hashed.txt
   # appimage-builder requires app_info.exec to be an ELF, so a tiny static
   # binary is the entry point and immediately hands over to openemux-run, which
   # sets up GI_TYPELIB_PATH / gdk-pixbuf / XDG_DATA_DIRS. (AppDir/AppRun is
@@ -53,6 +58,10 @@ AppDir:
     id: io.github.guilhermefeitosa66.OpenEmux
     name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
+    # Kept in step with src/openemux/__init__.py by hand -- it is the one
+    # place the version is duplicated. appimage/build.sh refuses to build when
+    # the two disagree, and tests/test_reproducible_builds.py fails on develop
+    # (issue #255).
     version: "1.11.3"
     exec: usr/bin/openemux-launcher
   runtime:
@@ -67,10 +76,14 @@ AppDir:
   apt:
     arch: amd64
     sources:
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble main universe
-        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble-updates main universe
-        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      # https, for the archive and for the key that authenticates it. Over
+      # plain http anyone on the build network could serve a substituted key
+      # and then substituted debs for libgtk-4-1, python3-gi or librsvg2-2 --
+      # all of which end up inside the signed release artifact (issue #255).
+      - sourceline: deb https://archive.ubuntu.com/ubuntu/ noble main universe
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      - sourceline: deb https://archive.ubuntu.com/ubuntu/ noble-updates main universe
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
     include:
       - python3
       - python3-gi

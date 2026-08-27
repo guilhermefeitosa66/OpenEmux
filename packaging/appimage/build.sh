@@ -13,6 +13,20 @@ APPDIR_LIB="$PWD/AppDir/usr/lib/x86_64-linux-gnu"
 # The static-FUSE3 AppImage runtime baked into the build image (see phase 2).
 RUNTIME_SRC=/opt/appimage-runtime-x86_64
 
+# The recipe is the only place the version is duplicated -- the .deb, .rpm and
+# Flatpak all derive it from src/openemux/__init__.py. A forgotten bump
+# produced OpenEmux-<old>-x86_64.AppImage beside correctly versioned siblings,
+# and it went into dist/, into SHA256SUMS and into the GitHub release with
+# every check passing (issue #255).
+VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
+if ! grep -q "^    version: \"${VERSION}\"$" "$RECIPE"; then
+  echo "FAIL: $RECIPE does not carry version \"${VERSION}\"." >&2
+  echo "src/openemux/__init__.py says ${VERSION}; the recipe says:" >&2
+  grep -n '^    version:' "$RECIPE" >&2
+  exit 1
+fi
+echo "==> building openemux ${VERSION} AppImage"
+
 echo "==> phase 1: assemble the AppDir (no packaging yet)"
 appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
 
