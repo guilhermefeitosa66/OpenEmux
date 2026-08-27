@@ -762,6 +762,7 @@ class SdlNavigator(NavigatorCore):
         super().__init__(*args, **kwargs)
         self._pump = pump or shared_pump()
         self._queue = deque()
+        self._reset_clocks = False
 
     # -- pump listener
     def on_transition(self, pad, token, pressed):
@@ -771,7 +772,12 @@ class SdlNavigator(NavigatorCore):
         self._emit(self._on_connected, name)
 
     def on_disconnected(self):
-        self._queue.clear()
+        # The queue is deliberately *not* cleared: the pump released every held
+        # control before announcing this, and those releases are what stop a
+        # direction repeating. Dropping them would leave the grid scrolling
+        # after the pad was unplugged mid-push. The clocks are cleared anyway,
+        # once the queue has drained, in case the releases never arrived.
+        self._reset_clocks = True
         self._emit(self._on_disconnected)
 
     # -- the loop
@@ -806,6 +812,11 @@ class SdlNavigator(NavigatorCore):
                 while self._queue:
                     token, pressed = self._queue.popleft()
                     self._dispatch(token, pressed, repeat, hold, suspended)
+
+                if self._reset_clocks:
+                    self._reset_clocks = False
+                    repeat.clear()
+                    hold.clear()
 
                 if not suspended:
                     for action in repeat.due_actions():

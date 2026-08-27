@@ -3662,6 +3662,18 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   desk. An unknown value warns and keeps the default rather than leaving the app with no gamepad.
 - **Check:** `PYTHONPATH=src .venv/bin/python -c "from unittest.mock import patch; from openemux.core import gamepad_backend as b; assert b.backend_name({}) == 'evdev'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'sdl2'}) == 'sdl2'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'nope'}) == 'evdev'; print('RT-263 OK')"`
 
+### RT-266 — Unplugging a pad mid-direction stops the scrolling
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A pad removed while a direction is held stops repeating. The release of every held
+  control is what ends an auto-repeat, so a disconnect that discards those releases leaves the grid
+  scrolling on its own with no controller attached.
+- **Check:** suite file `tests/test_gamepad_sdl.py`
+  (`test_unplugging_a_pad_mid_direction_stops_the_repeat`).
+
 ### RT-264 — A controller navigates the UI and can be remapped on Windows
 - **Area:** Windows platform
 - **Mode:** MANUAL

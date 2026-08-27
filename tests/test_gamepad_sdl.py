@@ -491,6 +491,20 @@ class NavigatorTests(unittest.TestCase):
         time.sleep(0.6)
         self.assertEqual(len(self.actions), settled)
 
+    def test_unplugging_a_pad_mid_direction_stops_the_repeat(self):
+        # The pump releases what was held before announcing the disconnect, and
+        # those releases are what stop the auto-repeat. Dropping them left the
+        # grid scrolling on its own after the pad was unplugged mid-push.
+        self._start_with_pad()
+        self.sdl.push(hat_event(11, 0, gs.SDL_HAT_RIGHT))
+        self.assertTrue(wait_for(lambda: self.actions))
+        self.sdl.push(device_event(gs.SDL_JOYDEVICEREMOVED, 11))
+        self.assertTrue(wait_for(lambda: not self.pump.connected_pads()))
+        time.sleep(0.1)
+        settled = len(self.actions)
+        time.sleep(0.6)
+        self.assertEqual(len(self.actions), settled)
+
     def test_a_missing_sdl_ends_the_thread_quietly(self):
         pump = gs.SdlJoystickPump(load=lambda: (_ for _ in ()).throw(
             gs.SdlUnavailable("SDL2.dll not found")))
