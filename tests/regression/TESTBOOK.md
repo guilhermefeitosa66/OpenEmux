@@ -694,12 +694,14 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
   `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter, so this is
   the only coverage the grid's gesture stack has.
-- **Steps:** As a QA person: Ctrl-click and Shift-click cards, drag a rubber band, clear by
-  clicking empty space, range with Shift+arrows, filter the page, leave and come back, open two
-  context menus in a row.
+- **Steps:** As a QA person: Ctrl-click and Shift-click cards, drag a rubber band from empty page
+  space *and* from the gap between two cards, clear by clicking empty space, range with
+  Shift+arrows, filter the page, leave and come back, open two context menus in a row.
 - **Expected:** Every check passes at each library size — including that the band selects exactly
-  the cards it was drawn over, that a filtered-out card loses its selection, that focus returns to
-  the card that had it, and that only one context menu is ever open.
+  the cards it was drawn over, that a band still starts from the gap between two cards (that gap
+  belongs to the grid's item wrapper, and only reaches the band because the wrapper refuses the
+  press), that a filtered-out card loses its selection, that focus returns to the *game* that had
+  it even though the card may have been recycled, and that only one context menu is ever open.
 - **Check:**
   ```bash
   Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
@@ -799,6 +801,39 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   cut off; `F6` still moves focus.
 - **Check:** Screenshot of the collapsed layout.
 - **Restore:** Resize back to the canonical geometry.
+
+### RT-034 — The grid builds a screenful, not a library
+- **Area:** Views
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
+  `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter.
+- **Steps:** As a QA person: open a console with a few dozen games, then open "All consoles" on a
+  library of a few thousand, and watch how long the page takes to appear.
+- **Expected:** Both pages appear at once, and the big one costs no more than the small one: the
+  grid builds only the cards on screen and re-binds them as it scrolls, so the number of live
+  cards is the same on both (issue #219). Before virtualization the page held one live card and
+  one decoded cover texture per ROM, for as long as it existed.
+- **Check:**
+  ```bash
+  Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
+  XPID=$!
+  sleep 4
+  DISPLAY=:9 GDK_BACKEND=x11 PYTHONPATH=src .venv/bin/python tools/grid_virtualization_probe.py
+  kill $XPID
+  ```
+
+### RT-035 — Cached covers are bounded by memory, not by headcount
+- **Area:** Views
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:** As a QA person: browse a large library in the cartridge view at maximum zoom, moving
+  between consoles, and watch the process's memory.
+- **Expected:** Memory settles instead of climbing with every page visited. The cover LRU is
+  capped in **bytes**: counting entries said nothing about how much was held, because the
+  cartridge composite is decoded at full resolution — roughly 1.8 MB an entry at zoom 2.0, so the
+  old 256-entry cap permitted several hundred megabytes.
+- **Check:** `tests/test_cover_cache.py` — the byte-budget eviction, one big cover evicting several
+  small ones, and a cover larger than the whole budget still being kept.
 
 ## Favorites & collections
 

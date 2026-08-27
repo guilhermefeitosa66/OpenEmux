@@ -2,6 +2,7 @@
 
 import threading
 import time
+from contextlib import contextmanager
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,25 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf
 
 from openemux.core import cover_cache
+
+
+@contextmanager
+def _budget(limit):
+    """Run with a small cache bound, and put the real one back."""
+    original = cover_cache.MAX_CACHE_BYTES
+    cover_cache.MAX_CACHE_BYTES = limit
+    cover_cache.cache_clear()
+    try:
+        yield
+    finally:
+        cover_cache.MAX_CACHE_BYTES = original
+        cover_cache.cache_clear()
+
+
+def _bytes_of(width, height):
+    """What a decoded RGBA cover of this size occupies."""
+    pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height)
+    return pixbuf.get_byte_length()
 
 
 def _write_png(path, width=64, height=48, colour=0xFF0000FF):
@@ -90,24 +110,42 @@ class CacheTests(unittest.TestCase):
             self.assertEqual(second.get_width(), 32)
             self.assertIsNot(first, second)
 
-    def test_eviction_respects_the_bound(self):
-        original = cover_cache.MAX_CACHED_COVERS
-        cover_cache.MAX_CACHED_COVERS = 3
-        try:
+    def test_eviction_respects_the_byte_budget(self):
+        """The bound is memory, not a headcount (issue #219).
+
+        Counting entries said nothing about how much was held: the cartridge
+        branch decodes at full resolution, where one entry is megabytes.
+        """
+        # Three of these fit; the fourth has to push the oldest out.
+        budget = 3 * _bytes_of(16, 16)
+        with _budget(budget):
             with TemporaryDirectory() as tmp_dir:
-                covers = [
-                    _write_png(Path(tmp_dir) / f"c{i}.png", 8 + i, 8) for i in range(6)
-                ]
-                for cover in covers:
-                    cover_cache.load_cover(cover)
+                for i in range(6):
+                    cover_cache.load_cover(_write_png(Path(tmp_dir) / f"c{i}.png", 16, 16))
+                self.assertLessEqual(cover_cache.cache_bytes(), budget)
                 self.assertEqual(cover_cache.cache_size(), 3)
-        finally:
-            cover_cache.MAX_CACHED_COVERS = original
+
+    def test_one_big_cover_evicts_several_small_ones(self):
+        """What the entry count could not express: entries differ in size."""
+        with _budget(_bytes_of(64, 64)):
+            with TemporaryDirectory() as tmp_dir:
+                for i in range(4):
+                    cover_cache.load_cover(_write_png(Path(tmp_dir) / f"s{i}.png", 8, 8))
+                self.assertEqual(cover_cache.cache_size(), 4)
+                cover_cache.load_cover(_write_png(Path(tmp_dir) / "big.png", 64, 64))
+                self.assertEqual(cover_cache.cache_size(), 1)
+                self.assertLessEqual(cover_cache.cache_bytes(), _bytes_of(64, 64))
+
+    def test_a_cover_bigger_than_the_whole_budget_is_still_kept(self):
+        """Otherwise the one cover being looked at is the one never cached."""
+        with _budget(_bytes_of(8, 8)):
+            with TemporaryDirectory() as tmp_dir:
+                cover = _write_png(Path(tmp_dir) / "huge.png", 64, 64)
+                first = cover_cache.load_cover(cover)
+                self.assertIs(cover_cache.load_cover(cover), first)
 
     def test_a_reused_entry_survives_eviction(self):
-        original = cover_cache.MAX_CACHED_COVERS
-        cover_cache.MAX_CACHED_COVERS = 2
-        try:
+        with _budget(2 * _bytes_of(10, 10)):
             with TemporaryDirectory() as tmp_dir:
                 a = _write_png(Path(tmp_dir) / "a.png", 8, 8)
                 b = _write_png(Path(tmp_dir) / "b.png", 9, 9)
@@ -117,8 +155,13 @@ class CacheTests(unittest.TestCase):
                 cover_cache.load_cover(a)  # touch: a is now the most recent
                 cover_cache.load_cover(c)  # evicts b, not a
                 self.assertIs(cover_cache.load_cover(a), first_a)
-        finally:
-            cover_cache.MAX_CACHED_COVERS = original
+
+    def test_the_running_total_comes_back_to_zero(self):
+        with TemporaryDirectory() as tmp_dir:
+            cover_cache.load_cover(_write_png(Path(tmp_dir) / "a.png", 32, 32))
+            self.assertGreater(cover_cache.cache_bytes(), 0)
+            cover_cache.cache_clear()
+            self.assertEqual(cover_cache.cache_bytes(), 0)
 
 
 class PoolTests(unittest.TestCase):

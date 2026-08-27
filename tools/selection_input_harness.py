@@ -3,7 +3,7 @@
 
 Runs the production RomGrid inside a ScrolledWindow on a nested X server and
 drives it with XTest-synthesized pointer/keyboard events -- the only way to
-exercise the GTK gesture stack (claims, propagation, FlowBox activation) that
+exercise the GTK gesture stack (claims, propagation, item activation) that
 unit tests cannot reach. Nothing in ``tests/`` can: without a display,
 constructing any GTK widget segfaults the interpreter, so the suite never
 builds a RomGrid at all.
@@ -13,17 +13,21 @@ Covered here, and nowhere else:
 * selection by pointer -- Ctrl-click, Shift-range, click-to-clear, launch;
 * selection by keyboard -- Shift+arrow ranges and where they re-root;
 * the rubber band, including that it selects exactly the cards it was drawn
-  over rather than merely the right *number* of them;
-* one live card per ROM, resolvable from the wrapper and from inside the card;
-* filtering -- the window hides the child wrapper, and the grid has to agree
-  about what is visible and drop the selection of what is not;
+  over rather than merely the right *number* of them, and that it still
+  starts from the gap between two cards -- which belongs to the item wrapper
+  now, and only reaches the band because the wrapper refuses the press;
+* one card per ROM on screen, resolvable from the wrapper and from inside
+  the card, with no card bound to two games at once;
+* filtering -- what the grid reports as visible, and the selection of what is
+  filtered out being dropped;
 * focus memory across leaving and re-entering the grid;
-* per-ROM refresh (artwork and cartridge frame) finding the right card;
+* per-ROM refresh (artwork and cartridge frame) finding the right ROM;
 * one context menu open at a time, whoever opened it (issue #275).
 
-The last five exist because each is implemented against "one live widget per
-ROM, forever, in a stable list" -- the invariant a virtualized grid would
-delete (issue #219). This is the net that migration has to keep green.
+The last five exist because each *was* implemented against "one live widget
+per ROM, forever, in a stable list" -- the invariant virtualization deleted
+(issue #219). This is the net that migration had to keep green, and it is
+what stands guard over the recycling now.
 
 Usage:
     Xephyr :7 -screen 900x650 &
@@ -164,12 +168,22 @@ class Harness(Adw.Application):
         self.nav = NavigationController(win)
 
     def card_center(self, index):
-        """Screen coords of card ``index`` (no WM in the nested X: win at 0,0)."""
-        item = self.grid._items[index]
+        """Screen coords of card ``index`` (no WM in the nested X: win at 0,0).
+
+        Only cards that are on screen have a widget at all, which is the whole
+        point of the grid being virtualized; the scenario picks indices that
+        are inside the first screenful.
+        """
+        item = self.grid.card_at(index)
+        assert item is not None, f"card {index} is not on screen"
         ok, bounds = item.compute_bounds(self.window)
         assert ok
         return (bounds.origin.x + bounds.size.width / 2,
                 bounds.origin.y + bounds.size.height / 2)
+
+    def cards(self):
+        """The cards that exist right now, in visual order."""
+        return [c for c in (self.grid.card_at(i) for i in range(N_CARDS)) if c is not None]
 
 
 def on_main(fn):
@@ -192,7 +206,9 @@ def on_main(fn):
 
 def scenario(app, driver, results):
     def snap(label):
-        selected = sum(1 for i in app.grid._items if i.selected)
+        # Counted on the model, not on the widgets: a selected game that has
+        # scrolled off screen has no card, and still counts.
+        selected = sum(1 for e in app.grid.entries() if e.selected)
         results.append((label, selected))
         print(f"CHECK {label}: selected={selected}", flush=True)
 
@@ -206,12 +222,19 @@ def scenario(app, driver, results):
 
     def collect():
         for i in (0, 1, 3, 5):
-            if i < len(app.grid._items):
+            if app.grid.card_at(i) is not None:
                 centers[i] = app.card_center(i)
         collect.h = app.window.get_height()
         collect.w = app.window.get_width()
-        ok, gb = app.grid.compute_bounds(app.window)
-        collect.grid_bottom = gb.origin.y + gb.size.height if ok else None
+        # Where the cards end, not where the grid does: a GtkGridView is the
+        # scroller's own child and fills the viewport, so its bounds say
+        # nothing about how far down the last row reached.
+        bottoms = []
+        for card in app.cards():
+            ok, b = card.compute_bounds(app.window)
+            if ok:
+                bottoms.append(b.origin.y + b.size.height)
+        collect.grid_bottom = max(bottoms) if bottoms else None
         done.set()
         return False
     GLib.idle_add(collect)
@@ -265,7 +288,7 @@ def scenario(app, driver, results):
                 state |= Gdk.ModifierType.CONTROL_MASK
             return on_main(lambda: app.nav.handle_pane_key(keyval, state))
 
-        on_main(lambda: app.grid._items[0].get_parent().grab_focus())
+        on_main(lambda: app.grid.card_at(0).get_parent().grab_focus())
         time.sleep(0.2)
         kb(Gdk.KEY_Right, shift=True)   # roots at the focused card 0
         snap("kb-shift-right-1")        # {0,1}
@@ -283,12 +306,21 @@ def scenario(app, driver, results):
     # forever, in a stable list" (issue #219). Recycling deletes that
     # invariant, and none of them had any coverage at all.
 
-    # A. One card per ROM, reachable from a widget inside it.
+    # A. The page is the library, every card on screen shows a different
+    # game, and a card resolves from either direction of the walk.
     def one_card_per_rom():
-        paths = [item.rom["path"] for item in app.grid._items]
+        paths = [e.rom["path"] for e in app.grid.entries()]
         if len(paths) != len(set(paths)) or len(paths) != len(ROMS):
-            return "cards do not match the library"
-        item = app.grid._items[0]
+            return "the model does not match the library"
+        cards = app.cards()
+        if not cards:
+            return "no card is on screen"
+        shown = [c.entry for c in cards]
+        if len(shown) != len(set(id(e) for e in shown)):
+            return "two cards are bound to the same game"
+        if any(c.entry is None for c in cards):
+            return "a card on screen is bound to nothing"
+        item = cards[0]
         # Both directions of the walk: from the wrapper the pointer and the
         # keyboard land on, and from a widget inside the card. The title
         # label is always in the tree; the cover is swapped for a placeholder
@@ -303,17 +335,11 @@ def scenario(app, driver, results):
 
     record("one-card-per-rom", on_main(one_card_per_rom))
 
-    # B. Filtering. The window hides the child *wrapper*; the grid has to
+    # B. Filtering. The window hands the grid the query; the grid has to
     # agree about what is visible and drop the selection of what is not.
-    def filter_to(prefix):
-        child = app.grid.get_first_child()
-        while child is not None:
-            inner = child.get_child()
-            if inner is not None and hasattr(inner, "rom"):
-                child.set_visible(inner.rom["name"].startswith(prefix))
-            child = child.get_next_sibling()
-        app.grid.sync_visible_selection()
-        return len(app.grid._visible_items())
+    def filter_to(query):
+        app.grid.set_filter(query)
+        return len(app.grid.visible_entries())
 
     on_main(lambda: app.grid.select_all())
     record("filter-visible-count", on_main(lambda: filter_to("Game 00")))
@@ -322,12 +348,18 @@ def scenario(app, driver, results):
 
     # C. Focus memory. Restoring focus must land on the card that had it.
     def focus_round_trip():
-        item = app.grid._items[1]
+        item = app.grid.card_at(1)
+        entry = item.entry
         item.get_parent().grab_focus()
         app.scroll.grab_focus()          # focus leaves the grid
         app.grid.focus_restore()
         focused = app.window.get_focus()
-        return "ok" if RomGrid.item_for_widget(focused) is item else f"landed on {focused!r}"
+        landed = RomGrid.item_for_widget(focused)
+        # The *game*, not the widget: focus memory has to survive the card
+        # being handed to another ROM, so what it restores is the entry.
+        if landed is not None and landed.entry is entry:
+            return "ok"
+        return f"landed on {landed!r}"
 
     record("focus-restore", on_main(focus_round_trip))
 
@@ -335,9 +367,16 @@ def scenario(app, driver, results):
     # exactly what stops existing when items are recycled.
     def per_rom_refresh():
         rom = ROMS[2]
-        app.grid._items[2].has_artwork = None
-        app.grid.refresh_rom_artwork(rom)
-        app.grid.refresh_rom_frame(rom)
+        found_art = app.grid.refresh_rom_artwork(rom)
+        found_frame = app.grid.refresh_rom_frame(rom)
+        stranger = {"name": "Nope", "path": "/tmp/fake/Nope.sfc", "console": "SFC"}
+        if app.grid.refresh_rom_artwork(stranger):
+            return "refreshed a ROM that is not on the page"
+        # No cartridge frame in this harness's view mode, so refresh_rom_frame
+        # reports nothing to do -- what matters is that the artwork refresh
+        # found its ROM and a stranger found none.
+        if not found_art:
+            return f"artwork refresh did not find the ROM (frame={found_frame})"
         return "ok"
 
     record("per-rom-refresh", on_main(per_rom_refresh))
@@ -345,45 +384,62 @@ def scenario(app, driver, results):
     # E. The band selects exactly what it was drawn over. A reimplementation
     # that works from indices rather than rectangles passes a count check and
     # fails this one.
-    if empty_y is not None and empty_y < collect.h - 25:
-        on_main(lambda: app.grid.clear_selection())
-        bx0, by0 = collect.w - 40, centers[0][1] + 120
-        bx1, by1 = centers[0][0] - 60, centers[0][1] - 60
-        driver.drag(bx0, by0, bx1, by1)
-
-        def band_matches_geometry():
-            ok, gb = app.grid.compute_bounds(app.window)
+    def band_verdict(bx0, by0, bx1, by1):
+        """Did the band catch exactly the cards its rectangle covered?"""
+        ok, gb = app.grid.compute_bounds(app.window)
+        if not ok:
+            return "grid has no bounds"
+        left, right = sorted((bx0 - gb.origin.x, bx1 - gb.origin.x))
+        top, bottom = sorted((by0 - gb.origin.y, by1 - gb.origin.y))
+        wrong = []
+        for item in app.cards():
+            ok, b = item.compute_bounds(app.grid)
             if not ok:
-                return "grid has no bounds"
-            left, right = sorted((bx0 - gb.origin.x, bx1 - gb.origin.x))
-            top, bottom = sorted((by0 - gb.origin.y, by1 - gb.origin.y))
-            wrong = []
-            for item in app.grid._items:
-                ok, b = item.compute_bounds(app.grid)
-                if not ok:
-                    continue
-                inside = (
-                    b.origin.x < right
-                    and left < b.origin.x + b.size.width
-                    and b.origin.y < bottom
-                    and top < b.origin.y + b.size.height
-                )
-                if inside != item.selected:
-                    wrong.append(item.rom["name"])
-            return "ok" if not wrong else f"disagreed on {wrong}"
+                continue
+            inside = (
+                b.origin.x < right
+                and left < b.origin.x + b.size.width
+                and b.origin.y < bottom
+                and top < b.origin.y + b.size.height
+            )
+            if inside != item.selected:
+                wrong.append(item.rom["name"])
+        return "ok" if not wrong else f"disagreed on {wrong}"
 
-        record("band-matches-geometry", on_main(band_matches_geometry))
+    def band_over(bx0, by0, bx1, by1, label):
+        on_main(lambda: app.grid.clear_selection())
+        driver.drag(bx0, by0, bx1, by1)
+        record(label, on_main(lambda: band_verdict(bx0, by0, bx1, by1)))
+
+    if empty_y is not None and empty_y < collect.h - 25:
+        band_over(
+            collect.w - 40, centers[0][1] + 120,
+            centers[0][0] - 60, centers[0][1] - 60,
+            "band-matches-geometry",
+        )
     else:
         print("SKIP band-matches-geometry: page is full", flush=True)
 
+    # E2. A band started in the gap *between* two cards. That gap belongs to
+    # the item wrapper now, and only because the wrapper refuses the press
+    # does it reach the band at all -- so this is the check that a page with
+    # no empty space left still bands. It runs on every page size.
+    gap_x = (centers[0][0] + centers[1][0]) / 2
+    band_over(
+        gap_x, centers[0][1] - 45,
+        centers[1][0] + 12, centers[0][1] + 45,
+        "band-from-card-gap",
+    )
+
     # F. One context menu at a time, whoever opened it (issue #275).
     def two_menus():
-        app.grid._items[0]._show_context_menu()
-        first = app.grid._items[0]._context_popover
-        app.grid._items[1]._show_context_menu()
-        second = app.grid._items[1]._context_popover
+        cards = app.cards()
+        cards[0]._show_context_menu()
+        first = cards[0]._context_popover
+        cards[1]._show_context_menu()
+        second = cards[1]._context_popover
         open_ones = sum(
-            1 for item in app.grid._items if item._context_popover is not None
+            1 for item in cards if item._context_popover is not None
             and item._context_popover.get_visible()
         )
         context_menu.dismiss_context_popover()
@@ -425,6 +481,7 @@ def main():
         "focus-restore": "ok",
         "per-rom-refresh": "ok",
         "band-matches-geometry": "ok",
+        "band-from-card-gap": "ok",
         "one-menu-at-a-time": 1,
     }
     launches = [d for k, d in EVENTS if k == "LAUNCH"]

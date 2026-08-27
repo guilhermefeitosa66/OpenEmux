@@ -8,61 +8,71 @@ from openemux.ui.grid import (
 )
 
 CARD = 216  # a 200px cover plus the card's 8px padding on each side
+CELL = CARD + GRID_SPACING  # a card and the gap that follows it
 
 
-def line_width(columns, card=CARD, spacing=GRID_SPACING):
-    return columns * card + (columns - 1) * spacing
+def cells(columns, card=CARD, spacing=GRID_SPACING):
+    """The width ``columns`` cells occupy: what the grid must be allocated."""
+    return columns * (card + spacing)
 
 
 class ColumnsAndSlackTests(unittest.TestCase):
-    """The grid packs cards to the start by leaving GtkFlowBox no slack.
+    """The grid packs cards to the start by leaving GtkGridView no slack.
 
-    GtkFlowBox always justifies: any width left over on a line is shared out
-    *between* the children. The leftover is handed to the end margin instead,
-    so the flow box is allocated exactly the cards plus their gaps.
+    GtkGridView splits its width evenly between its columns, so a width that
+    does not divide evenly is shared out *inside* the cells and the cards drift
+    apart as the window widens. The leftover is handed to the end margin
+    instead, so the grid is allocated exactly the cells it uses -- one card
+    plus one gap each, with the card centred in it.
     """
 
     def test_slack_is_zero_at_an_exact_fit(self):
         for columns in (1, 2, 3, 5):
             with self.subTest(columns=columns):
-                available = line_width(columns)
                 self.assertEqual(
-                    columns_and_slack(available, CARD, item_count=50),
+                    columns_and_slack(cells(columns), CARD, item_count=50),
                     (columns, 0),
                 )
 
     def test_leftover_becomes_slack(self):
-        available = line_width(3) + 100
+        available = cells(3) + 100
         columns, slack = columns_and_slack(available, CARD, item_count=50)
         self.assertEqual(columns, 3)
         self.assertEqual(slack, 100)
 
     def test_a_column_is_only_taken_when_it_fully_fits(self):
-        # One pixel short of a fourth card: still three columns.
-        available = line_width(4) - 1
-        columns, _ = columns_and_slack(available, CARD, item_count=50)
+        # One pixel short of a fourth cell: still three columns.
+        columns, _ = columns_and_slack(cells(4) - 1, CARD, item_count=50)
         self.assertEqual(columns, 3)
 
     def test_page_with_fewer_cards_than_fit_is_sized_for_what_it_has(self):
         """Two cards in a four-column viewport must not spread across it."""
-        available = line_width(4)
+        available = cells(4)
         columns, slack = columns_and_slack(available, CARD, item_count=2)
         self.assertEqual(columns, 4)
-        self.assertEqual(available - slack, line_width(2))
+        self.assertEqual(available - slack, cells(2))
 
     def test_single_card_page(self):
-        available = line_width(4)
+        available = cells(4)
         _columns, slack = columns_and_slack(available, CARD, item_count=1)
-        self.assertEqual(available - slack, CARD)
+        self.assertEqual(available - slack, cells(1))
 
     def test_empty_page_does_not_produce_a_negative_width(self):
-        _columns, slack = columns_and_slack(line_width(3), CARD, item_count=0)
+        _columns, slack = columns_and_slack(cells(3), CARD, item_count=0)
         self.assertGreaterEqual(slack, 0)
 
     def test_viewport_narrower_than_a_card_keeps_one_column(self):
         columns, slack = columns_and_slack(120, CARD, item_count=10)
         self.assertEqual(columns, 1)
         self.assertEqual(slack, 0)
+
+    def test_a_cell_is_exactly_one_gap_wider_than_its_card(self):
+        """Where the space between two cards comes from, now that GtkGridView
+        has no column spacing of its own: the card is centred in a cell one
+        gap wider, so neighbours sit ``GRID_SPACING`` apart."""
+        columns, slack = columns_and_slack(cells(4), CARD, item_count=50)
+        allocated = cells(4) - slack
+        self.assertEqual(allocated // columns, CARD + GRID_SPACING)
 
     def test_result_is_stable_when_fed_its_own_output(self):
         """Guards the oscillation the end-margin trick could otherwise cause.
@@ -71,7 +81,7 @@ class ColumnsAndSlackTests(unittest.TestCase):
         the viewport width instead. If it were ever fed the reduced width, this
         is the loop that would show up.
         """
-        available = line_width(4) + 137
+        available = cells(4) + 137
         columns, slack = columns_and_slack(available, CARD, item_count=50)
         again = columns_and_slack(available, CARD, item_count=50)
         self.assertEqual((columns, slack), again)

@@ -131,10 +131,12 @@ class PaneKeyTests(unittest.TestCase):
         self.assertEqual(pane_key_command(CTX_GRID, Gdk.KEY_BackSpace), ("focus-sidebar",))
 
     def test_arrows_in_the_grid_move_the_focus(self):
-        """GtkFlowBox does not move focus on arrows, so we route them ourselves.
+        """The arrows are routed here rather than left to the view.
 
         This is the regression that made the ROM list unnavigable: the keys
         reached the card and bubbled back out without anything acting on them.
+        Routing them keeps the keyboard and the gamepad on one table, and
+        keeps Shift/Ctrl+arrow meaning *selection* inside the grid.
         """
         for keyval, action in (
             (Gdk.KEY_Up, "up"),

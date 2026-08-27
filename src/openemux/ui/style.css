@@ -29,20 +29,33 @@
     font-size: 0.95rem;
 }
 
-/* The theme pads every flowboxchild, which would inset the card inside its own
+/* GtkGridView paints the theme's view background, which GtkFlowBox did not.
+   The library page already has one, and the grid is only as wide as the columns
+   its cards fill -- so the theme's panel showed up as a white box ending in the
+   middle of the page. */
+.rom-grid {
+    background: none;
+}
+
+/* The theme pads every item wrapper, which would inset the card inside its own
    cell (measured: 3px on each side) and break the even lattice the grid lays
-   out. The card carries its own padding, so the wrapper needs none. */
-.rom-grid flowboxchild {
+   out. The card carries its own padding, so the wrapper needs none. The cell
+   is deliberately one gap wider than the card, which is where the horizontal
+   spacing between cards comes from. */
+.rom-grid > child {
     padding: 0;
     margin: 0;
     min-width: 0;
     min-height: 0;
 }
 
-/* Keyboard/gamepad focus ring. Drawn on the card, never on the FlowBoxChild:
-   the wrapper can be wider than the card, so a ring on it would float far off
-   the artwork. GTK's own focus ring on the wrapper is suppressed for the same
-   reason. */
+/* Keyboard/gamepad focus ring. Drawn on the card, never on the item wrapper:
+   the wrapper is the whole cell, so a ring on it would float off the artwork.
+   GTK's own focus ring on the wrapper is suppressed for the same reason --
+   for the library grid and for the artwork manager's own flow box. */
+gridview > child:focus,
+gridview > child:focus-within,
+gridview > child:focus-visible,
 flowboxchild:focus,
 flowboxchild:focus-within,
 flowboxchild:focus-visible {
@@ -54,7 +67,7 @@ flowboxchild:focus-visible {
    menu closes, and an ungated :focus-within left that card ringed for good --
    indistinguishable from .rom-card-selected, and not cleared by clicking
    elsewhere, since empty page space takes no focus. */
-.keynav-active flowboxchild:focus-within .rom-card {
+.keynav-active gridview > child:focus-within .rom-card {
     outline: 2px solid @accent_bg_color;
     outline-offset: -2px;
     background-color: alpha(@accent_bg_color, 0.12);

@@ -182,9 +182,10 @@ def pane_key_command(context, keyval, shift=False, ctrl=False):
     The pane crossings: Right out of the sidebar would otherwise walk into the
     header-bar buttons rather than into the games.
 
-    The arrows *inside the grid*: GtkFlowBox does not move focus on arrow
-    keys (GtkListBox does, which is why the sidebar needs no help), so they are
-    routed through the same table the gamepad uses.
+    The arrows *inside the grid*: they are routed through the same table the
+    gamepad uses, so the pad and the keyboard cannot drift apart -- and so a
+    Shift or Ctrl held with them means selection here rather than whatever the
+    view would do with it.
 
     And the selection modifiers (issue #78): Shift+arrows range from the
     anchor, Ctrl+arrows move without selecting, Ctrl+Shift+arrows add the
