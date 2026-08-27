@@ -57,6 +57,11 @@ cp "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 
 desktop-file-validate "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
+# The file GNOME Software and KDE Discover read. Without it the app is invisible
+# in both -- no name, no summary, no screenshots, no update notification
+# (issue #253). --no-net keeps the build offline.
+appstreamcli validate --no-net \
+  "$STAGE/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml"
 # The packaged entry must point at /usr/bin explicitly: a PATH-relative Exec
 # resolves through ~/.local/bin, where AppImage managers drop shadowing
 # symlinks, and the menu icon then opens a different (often stale) install.
@@ -77,6 +82,7 @@ echo "==> verify installed files"
 test -x /usr/bin/openemux
 test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 test -f /usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 test -f /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 

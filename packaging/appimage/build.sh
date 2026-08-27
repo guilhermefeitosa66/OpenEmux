@@ -55,6 +55,13 @@ echo "loaders.cache: $(grep -c '\.so' "$GPB_DIR/2.10.0/loaders.cache") loaders r
 test -f "$APPDIR_LIB/girepository-1.0/Rsvg-2.0.typelib" \
   || { echo "ERROR: Rsvg-2.0.typelib missing from the bundle." >&2; exit 1; }
 
+# AppStream metainfo: what an AppImage integrator (appimaged, AppImageLauncher,
+# GearLever) hands to the software centre when it installs the bundle. Missing
+# from every format but the Flatpak until issue #253; validated by the .deb,
+# .rpm and Flatpak builds, which have appstreamcli.
+test -f AppDir/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml \
+  || { echo "ERROR: AppStream metainfo missing from the bundle." >&2; exit 1; }
+
 echo "==> phase 2: package the AppImage from the fixed AppDir"
 #
 # Assembled here instead of by `appimage-builder --skip-build`, because the

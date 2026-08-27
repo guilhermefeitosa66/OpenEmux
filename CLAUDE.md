@@ -141,7 +141,7 @@ When the user asks for a new release, run the whole sequence — no confirmation
    - `src/openemux/__init__.py` → `__version__`
    - `packaging/appimage/AppImageBuilder.yml` → `version:` under the app metadata (~line 42)
    - `packaging/rpm/openemux.spec` → a new `%changelog` entry (the `Version:` field itself is templated)
-   - `packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` → a new `<release>` entry at the top of `<releases>` (AppStream shows it in software centers)
+   - `packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` → a new `<release>` entry at the top of `<releases>` (AppStream shows it in software centers)
 3. Write `release/RELEASE_NOTES_v<X.Y.Z>.md`, following the previous file in that folder. Only the English notes are committed.
 4. Commit as `[no-issue] chore: release <X.Y.Z>`.
 5. Build every artifact into `dist/`: `make packages-clean && make packages` (or `make appimage` / `make deb` / `make rpm` / `make flatpak` individually). Clean first — `dist/` keeps the previous version's artifacts, and step 7 uploads everything in there. Builds run in Docker containers and need an x86_64 host; see `docs/DEVELOPMENT.md`.

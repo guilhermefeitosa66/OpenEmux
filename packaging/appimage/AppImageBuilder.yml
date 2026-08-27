@@ -35,6 +35,9 @@ script:
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
   - install -Dm644 packaging/common/openemux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+  # AppStream metainfo, so an integrated AppImage is known to the software
+  # centre the same way the native packages are (issue #253).
+  - install -Dm644 packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml AppDir/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
   - install -Dm644 src/openemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 
 AppDir:

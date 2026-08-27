@@ -43,6 +43,8 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  ImageMagick
 BuildRequires:  desktop-file-utils
 BuildRequires:  python3
+# appstreamcli, for validating the metainfo the software centre reads.
+BuildRequires:  appstream
 
 # Targets Fedora 40+ (libadwaita >= 1.5, required by the Adwaita UI).
 Requires:       python3 >= 3.10
@@ -104,11 +106,16 @@ desktop-file-validate \
   %{buildroot}/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 grep -q '^Exec=/usr/bin/openemux$' \
   %{buildroot}/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+# The file the software centre reads. --no-net so the build stays offline; the
+# screenshot URLs are checked by tests/test_appstream_metainfo.py instead.
+appstreamcli validate --no-net \
+  %{buildroot}/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 
 %files
 /opt/openemux
 /usr/bin/openemux
 /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 /usr/share/icons/hicolor/*/apps/io.github.guilhermefeitosa66.OpenEmux.png
 /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 %license LICENSE

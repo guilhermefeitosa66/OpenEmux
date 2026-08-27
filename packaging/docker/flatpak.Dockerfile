@@ -17,6 +17,10 @@ RUN apt-get update \
       # eu-strip: flatpak-builder splits debug symbols out of every compiled
       # module (PyYAML's C extension here) and fails hard without it.
       elfutils \
+      # The two files Flathub's linter reads are validated before the build:
+      # appstreamcli for the metainfo, desktop-file-validate for the entry.
+      appstream \
+      desktop-file-utils \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
