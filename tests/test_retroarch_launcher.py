@@ -677,6 +677,64 @@ class AppImageFuseFallbackTests(unittest.TestCase):
         self.assertEqual(prefix, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
 
 
+class LaunchEnvironmentTests(unittest.TestCase):
+    """What RetroArch's environment says when we run from an AppImage (#249).
+
+    The vendored RetroArch lives inside our AppDir, and appimage-builder's
+    AppRun hooks hand anything under ``$APPDIR`` this bundle's loader path,
+    ``LD_PRELOAD`` and toolkit caches. The launcher is the only place that can
+    hand it the session's environment instead.
+    """
+
+    def _launch_env(self, environ):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.dict(
+                "openemux.core.retroarch_launcher.os.environ", environ, clear=True
+            ):
+                with patch(
+                    "openemux.core.retroarch_launcher.subprocess.Popen"
+                ) as popen_mock:
+                    popen_mock.return_value = Mock()
+                    proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                    _close_log(proc)
+            self.assertIsNone(error)
+            return popen_mock.call_args.kwargs["env"]
+
+    def test_the_bundles_loader_never_reaches_retroarch(self):
+        env = self._launch_env(
+            {
+                "HOME": "/home/u",
+                "APPDIR": "/tmp/.mount_OpenEmXYZ",
+                "LD_LIBRARY_PATH": "/tmp/.mount_OpenEmXYZ/usr/lib",
+                "LD_PRELOAD": "libapprun_hooks.so",
+                "PYTHONHOME": "/tmp/.mount_OpenEmXYZ/usr",
+                "GI_TYPELIB_PATH": "/tmp/.mount_OpenEmXYZ/usr/lib/girepository-1.0",
+                "PATH": "/tmp/.mount_OpenEmXYZ/usr/bin:/usr/bin",
+                "APPRUN_ORIGINAL_PATH": "/home/u/bin:/usr/bin",
+            }
+        )
+        self.assertNotIn("APPDIR", env)
+        self.assertNotIn("LD_LIBRARY_PATH", env)
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertNotIn("PYTHONHOME", env)
+        self.assertNotIn("GI_TYPELIB_PATH", env)
+        self.assertEqual(env["PATH"], "/home/u/bin:/usr/bin")
+        self.assertEqual(env["HOME"], "/home/u")
+
+    def test_a_native_run_hands_the_session_through_untouched(self):
+        env = self._launch_env(
+            {"HOME": "/home/u", "PATH": "/usr/bin", "LD_PRELOAD": "/usr/lib/mangohud.so"}
+        )
+        self.assertEqual(env["LD_PRELOAD"], "/usr/lib/mangohud.so")
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+
 class ForcedExtractRetryTests(unittest.TestCase):
     """The second attempt after an AppImage failed to mount itself (#248).
 

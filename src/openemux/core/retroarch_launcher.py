@@ -7,6 +7,7 @@ from pathlib import Path
 import logging
 
 from openemux.core import core_options, game_window_support, retroachievements
+from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -710,7 +711,13 @@ class RetroArchLauncher:
             cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")
             log_handle = open(log_path, "w", encoding="utf-8")
-            env = os.environ.copy()
+            # The session's environment, not this process's. Running from an
+            # AppImage, everything started under $APPDIR -- and the vendored
+            # RetroArch is -- is handed the bundle's loader path, LD_PRELOAD,
+            # PYTHONHOME and GTK/GI/pixbuf caches, so RetroArch resolved its
+            # libraries against the stack bundled for a GTK4 app rather than
+            # its own (issue #249). Outside an AppImage this is a plain copy.
+            env = host_env(os.environ)
             # On a Wayland session RetroArch would pick its native wayland
             # driver, whose window no X client can reparent. Stripped of the
             # Wayland pointers it falls back to X11 and lands on XWayland,
