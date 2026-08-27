@@ -9,6 +9,7 @@ import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.platform import BUILDBOT_OS, VENDORED_RETROARCH
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
@@ -66,6 +67,13 @@ DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
 # console, so the app can list and manage them instead of RetroArch's default.
 DEFAULT_STATES_DIR = DEFAULT_CONFIG_DIR / "states"
 MIGRATION_VERSION = 2
+
+# The buildbot serves cores per platform: .so under nightly/linux/x86_64 and
+# .dll under nightly/windows/x86_64. One constant rather than the three copies
+# of this literal that used to live in DEFAULT_CONFIG, the migration and the
+# getter -- three copies of a platform-dependent value is three chances to fix
+# only two of them. The info/shader URLs below are platform-neutral.
+DEFAULT_CORES_BASE_URL = f"https://buildbot.libretro.com/nightly/{BUILDBOT_OS}/x86_64/latest/"
 
 # Bumped when a UI default changes in a way that should reach configs written
 # before it. Only the switch to the new default is forced, once: whatever the
@@ -212,7 +220,7 @@ DEFAULT_CONFIG = {
         "game_window": DEFAULT_GAME_WINDOW,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
-            "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
+            "binary": VENDORED_RETROARCH,
             "extra_flags": [],
             # Which audio driver RetroArch is told to use (issue #176).
             # "auto" picks one the host actually offers, because the global
@@ -228,7 +236,7 @@ DEFAULT_CONFIG = {
                 # Flatpak's own updater; OpenEmux must not download cores.
                 "enabled": not is_running_in_flatpak(),
                 "core_dir": None,
-                "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+                "cores_base_url": DEFAULT_CORES_BASE_URL,
                 "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
                 "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
                 "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
@@ -405,7 +413,7 @@ class ConfigManager:
             runtime["network_cmd_port"] = AUTO_NETWORK_CMD_PORT
         runtime.setdefault("console_backend", {})
         runtime.setdefault("retroarch", {})
-        runtime["retroarch"].setdefault("binary", "vendors/RetroArch-Linux-x86_64.AppImage")
+        runtime["retroarch"].setdefault("binary", VENDORED_RETROARCH)
         runtime["retroarch"].setdefault("extra_flags", [])
         runtime["retroarch"].setdefault("cores", {})
         runtime["retroarch"].setdefault("updater", {})
@@ -414,7 +422,7 @@ class ConfigManager:
         runtime["retroarch"]["updater"].setdefault("core_dir", None)
         runtime["retroarch"]["updater"].setdefault(
             "cores_base_url",
-            "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+            DEFAULT_CORES_BASE_URL,
         )
         runtime["retroarch"]["updater"].setdefault(
             "core_info_base_url",
@@ -959,7 +967,7 @@ class ConfigManager:
             "core_dir": updater.get("core_dir"),
             "cores_base_url": updater.get(
                 "cores_base_url",
-                "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
+                DEFAULT_CORES_BASE_URL,
             ),
             "core_info_base_url": updater.get(
                 "core_info_base_url",

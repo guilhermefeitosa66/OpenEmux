@@ -11,6 +11,7 @@ from openemux.core.paths import (
     is_running_in_appimage,
     migrate_legacy_config_dir,
 )
+from openemux.core.platform import IS_WINDOWS
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -27,8 +28,12 @@ def _ensure_gtk_typelibs():
     No-op inside the AppImage and when the system already provides the typelibs.
     Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
     remains the recommended system-wide setup.
+
+    Linux-only. On Windows the typelibs sit inside the MSYS2 prefix (or the
+    shipped bundle, where the launcher sets GI_TYPELIB_PATH), and every path
+    probed below is meaningless.
     """
-    if is_running_in_appimage():
+    if IS_WINDOWS or is_running_in_appimage():
         return
 
     system_dirs = [
@@ -87,6 +92,12 @@ def _configure_game_window_backend():
     display -- forcing x11 there would leave GTK with no display and the app
     would not start); or the user turned the game window off.
     """
+    # Windows has no X server and no reparenting equivalent, so the game
+    # window is off there and RetroArch opens its own. game_window_support
+    # already reaches the same conclusion via the absent DISPLAY; returning
+    # here says so outright and skips importing the X11 machinery to find out.
+    if IS_WINDOWS:
+        return
     if os.environ.get("GDK_BACKEND"):
         return
     # Imported here rather than at module scope: this runs before the GTK
@@ -139,6 +150,11 @@ SYSTEM_INSTALL_PREFIXES = ("/opt/", "/usr/")
 
 
 def _is_packaged_install(project_root):
+    # SYSTEM_INSTALL_PREFIXES are POSIX paths, and the string concat below
+    # assumes a "/" separator, so neither means anything on Windows. There the
+    # bundle launcher says so explicitly instead.
+    if IS_WINDOWS:
+        return bool(os.environ.get("OPENEMUX_PACKAGED"))
     root = f"{Path(project_root).resolve()}/"
     return root.startswith(SYSTEM_INSTALL_PREFIXES)
 
@@ -169,6 +185,12 @@ def _remove_generated_desktop_entry():
 
 
 def _ensure_desktop_integration():
+    # freedesktop .desktop entries mean nothing on Windows, and a Start Menu
+    # shortcut is the installer's job -- an app run from a source checkout has
+    # no business writing one.
+    if IS_WINDOWS:
+        return
+
     project_root = get_project_root()
 
     # A packaged install ships its own desktop file and icon. Writing a

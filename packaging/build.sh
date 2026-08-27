@@ -10,9 +10,9 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|flatpak) ;;
+  appimage|deb|rpm|flatpak|windows) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|flatpak}" >&2
+    echo "usage: $0 {appimage|deb|rpm|flatpak|windows}" >&2
     exit 2
     ;;
 esac
@@ -39,6 +39,17 @@ if [ "$TARGET" = "appimage" ]; then
   ARCH="$(uname -m)"
   if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "amd64" ]; then
     echo "AppImage builds require an x86_64 host (found: $ARCH)." >&2
+    exit 1
+  fi
+fi
+
+if [ "$TARGET" = "windows" ]; then
+  # The bundled RetroArch for Windows is gitignored and fetched on demand (193
+  # MiB), so unlike the Linux AppImage it may simply not be there yet. Said
+  # here rather than 20 minutes later, after the whole GTK stack has downloaded.
+  if [ ! -f vendors/RetroArch-Win64/retroarch.exe ]; then
+    echo "vendors/RetroArch-Win64/retroarch.exe is missing." >&2
+    echo "Run 'make vendor-retroarch' first." >&2
     exit 1
   fi
 fi

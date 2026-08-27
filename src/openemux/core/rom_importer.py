@@ -6,6 +6,7 @@ mirroring the threading pattern used by :mod:`openemux.core.cover_sync`.
 
 import hashlib
 import logging
+import os
 import shutil
 import zipfile
 from pathlib import Path
@@ -124,6 +125,39 @@ def _same_contents(source, dest):
     return _file_digest(source) == _file_digest(dest)
 
 
+def _link_or_equivalent(source, dest):
+    """Link ``dest`` to ``source``, degrading rather than failing.
+
+    The symlink is absolute, and to the file as given: a link relative to the
+    library would break the moment either side moved, and resolving the source
+    would follow a link the user made on purpose somewhere else.
+
+    Windows only lets an unprivileged process create a symlink when Developer
+    Mode is on, so ``symlink_to`` raises there for most users. A hard link is
+    the honest substitute -- same bytes, no second copy, no privilege needed --
+    and it fails in turn when the two paths are on different volumes, which is
+    common for a ROM library on a second drive. Copying is what is left; the
+    user asked not to duplicate, so say which strategy actually ran rather than
+    letting them believe a link was made.
+
+    Returns the strategy used: ``"symlink"``, ``"hardlink"`` or ``"copy"``.
+    """
+    try:
+        dest.symlink_to(source.absolute())
+        return "symlink"
+    except OSError as exc:
+        logger.info("rom_import: symlink unavailable for %s (%s); trying a hard link", dest, exc)
+
+    try:
+        os.link(str(source), str(dest))
+        return "hardlink"
+    except OSError as exc:
+        logger.info("rom_import: hard link unavailable for %s (%s); copying instead", dest, exc)
+
+    shutil.copy2(str(source), str(dest))
+    return "copy"
+
+
 def _unique_destination(dest):
     """Return ``dest`` or a ``name (2).ext`` style sibling that does not exist."""
     if not dest.exists():
@@ -235,11 +269,7 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
             if mode == IMPORT_MOVE:
                 shutil.move(str(source), str(dest))
             elif mode == IMPORT_LINK:
-                # Absolute, and to the file as given: a link relative to the
-                # library would break the moment either side moved, and
-                # resolving the source would follow a link the user made on
-                # purpose somewhere else.
-                dest.symlink_to(source.absolute())
+                _link_or_equivalent(source, dest)
             else:
                 shutil.copy2(str(source), str(dest))
             logger.info("rom_import: imported %s -> %s (%s)", source, dest, mode)

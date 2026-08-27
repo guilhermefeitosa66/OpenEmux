@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from openemux.core import game_window_support
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
+from openemux.core.platform import CORE_SUFFIX
 from openemux.core.retroarch_launcher import (
     APPIMAGE_EXTRACT_AND_RUN,
     RetroArchLauncher,
@@ -120,7 +121,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             binary = base / "vendors" / "RetroArch-Linux-x86_64.AppImage"
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_text("", encoding="utf-8")
-            core = base / "mgba_libretro.so"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
             core.write_text("", encoding="utf-8")
             cfg = _DummyConfig(base, "vendors/RetroArch-Linux-x86_64.AppImage", core)
             launcher = RetroArchLauncher(base, cfg)
@@ -134,8 +135,8 @@ class RetroArchLauncherTests(unittest.TestCase):
             base = Path(tmp_dir)
             cores_dir = base / "cores"
             cores_dir.mkdir()
-            (cores_dir / "snes9x_libretro.so").write_text("", encoding="utf-8")
-            (cores_dir / "bsnes_libretro.so").write_text("", encoding="utf-8")
+            (cores_dir / f"snes9x_libretro{CORE_SUFFIX}").write_text("", encoding="utf-8")
+            (cores_dir / f"bsnes_libretro{CORE_SUFFIX}").write_text("", encoding="utf-8")
 
             cfg = _DummyConfig(base, base / "retroarch", base / "unused.so", core_hints=[])
             launcher = RetroArchLauncher(base, cfg)
@@ -143,20 +144,20 @@ class RetroArchLauncherTests(unittest.TestCase):
             launcher._core_search_dirs = lambda: [str(cores_dir)]
 
             # A per-ROM override wins over the automatic candidate list.
-            cfg.rom_core = "bsnes_libretro.so"
+            cfg.rom_core = f"bsnes_libretro{CORE_SUFFIX}"
             resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
-            self.assertTrue(resolved.endswith("bsnes_libretro.so"))
+            self.assertTrue(resolved.endswith(f"bsnes_libretro{CORE_SUFFIX}"))
 
             # A stale override (core uninstalled) falls back to the candidate.
-            cfg.rom_core = "does_not_exist_libretro.so"
+            cfg.rom_core = f"does_not_exist_libretro{CORE_SUFFIX}"
             resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
-            self.assertTrue(resolved.endswith("snes9x_libretro.so"))
+            self.assertTrue(resolved.endswith(f"snes9x_libretro{CORE_SUFFIX}"))
 
     def test_launch_blocks_when_required_bios_missing(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mednafen_psx_libretro.so"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core)
@@ -174,7 +175,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mednafen_psx_libretro.so"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core)
@@ -200,7 +201,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mgba_libretro.so"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             shader = base / "runtime" / "shaders_glsl" / "handheld" / "dot.glslp"
@@ -230,7 +231,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def _override_lines(self, profile):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.input_profile = profile
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA")
@@ -350,7 +351,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def _game_window_override_lines(self, enabled, embeddable=True):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.game_window = enabled
             launcher = RetroArchLauncher(base, cfg)
             with patch(
@@ -431,7 +432,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA", state_slot=3)
             lines = Path(path).read_text(encoding="utf-8").splitlines()
@@ -473,7 +474,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         # told the same number the client will send to.
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             launcher = RetroArchLauncher(base, cfg)
             override = launcher._write_runtime_override("GBA", network_cmd_port=54321)
             lines = Path(override).read_text(encoding="utf-8").splitlines()
@@ -499,7 +500,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def _override_lines_with_audio_driver(self, setting):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.audio_driver = setting
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA")
@@ -708,7 +709,7 @@ class StoppingAGameTests(unittest.TestCase):
     def _launcher(self, tmp_dir):
         base = Path(tmp_dir)
         return RetroArchLauncher(
-            base, _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            base, _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
         )
 
     def test_the_flatpak_prefix_ties_the_sandbox_to_the_process_we_hold(self):
@@ -745,7 +746,7 @@ class StoppingAGameTests(unittest.TestCase):
         # window the wrapper is about to adopt is an X window (issue #267).
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.game_window = True
             launcher = RetroArchLauncher(base, cfg)
             with patch(
@@ -826,11 +827,11 @@ class CoreOptionsOverrideTests(unittest.TestCase):
     """Core options travel in their own file, named by the override (#296)."""
 
     def _launcher(self, base, chosen=None):
-        cfg = _DummyConfig(base, base / "retroarch", base / "mednafen_psx_hw_libretro.so")
+        cfg = _DummyConfig(base, base / "retroarch", base / f"mednafen_psx_hw_libretro{CORE_SUFFIX}")
         if chosen is not None:
             cfg.core_options = CoreOptionsStore(base / "core_options.config")
             for key, value in chosen.items():
-                cfg.core_options.set_for_console("PS", "mednafen_psx_hw_libretro.so", key, value)
+                cfg.core_options.set_for_console("PS", f"mednafen_psx_hw_libretro{CORE_SUFFIX}", key, value)
         return RetroArchLauncher(base, cfg)
 
     def test_nothing_chosen_writes_no_options_path(self):
@@ -840,7 +841,7 @@ class CoreOptionsOverrideTests(unittest.TestCase):
             base = Path(tmp_dir)
             launcher = self._launcher(base)
             override = launcher._write_runtime_override(
-                "PS", core_filename="mednafen_psx_hw_libretro.so"
+                "PS", core_filename=f"mednafen_psx_hw_libretro{CORE_SUFFIX}"
             )
             lines = Path(override).read_text(encoding="utf-8").splitlines()
         self.assertFalse(any(line.startswith("core_options_path") for line in lines))
@@ -850,7 +851,7 @@ class CoreOptionsOverrideTests(unittest.TestCase):
             base = Path(tmp_dir)
             launcher = self._launcher(base, {"beetle_psx_hw_internal_resolution": "4x"})
             override = launcher._write_runtime_override(
-                "PS", core_filename="mednafen_psx_hw_libretro.so"
+                "PS", core_filename=f"mednafen_psx_hw_libretro{CORE_SUFFIX}"
             )
             lines = Path(override).read_text(encoding="utf-8").splitlines()
             named = [l for l in lines if l.startswith("core_options_path")]
@@ -864,7 +865,7 @@ class CoreOptionsOverrideTests(unittest.TestCase):
             base = Path(tmp_dir)
             launcher = self._launcher(base, {"beetle_psx_hw_filter": "xBR"})
             override = launcher._write_runtime_override(
-                "SFC", core_filename="snes9x_libretro.so"
+                "SFC", core_filename=f"snes9x_libretro{CORE_SUFFIX}"
             )
             lines = Path(override).read_text(encoding="utf-8").splitlines()
         self.assertFalse(any(line.startswith("core_options_path") for line in lines))

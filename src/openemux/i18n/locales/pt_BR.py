@@ -151,6 +151,7 @@ TRANSLATIONS = {
     "prefs.game_window.title": "Jogar em uma janela do OpenEmux",
     "prefs.game_window.subtitle": "O jogo em execução é adotado por uma janela do OpenEmux, com pausa, estado salvo e volume na barra de título. Desligue para o RetroArch abrir a própria janela.",
     "prefs.game_window.unavailable": "Indisponível nesta sessão: a janela do jogo precisa de X11 ou XWayland.",
+    "prefs.game_window.unavailable_windows": "Indisponível no Windows: a janela do jogo depende do encaixe de janelas do X11.",
     "toast.game_window.restart": "Reinicie o OpenEmux para a janela do jogo passar a valer",
     "game_window.pause": "Pausar",
     "game_window.reset": "Reiniciar jogo",

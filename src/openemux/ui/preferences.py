@@ -27,6 +27,7 @@ from openemux.core import (
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
+from openemux.core.platform import IS_WINDOWS
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -1395,7 +1396,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             # sandbox on Wayland). The row stays visible and says why, rather
             # than silently disappearing on some machines.
             self._game_window_row.set_sensitive(False)
-            self._game_window_row.set_subtitle(self.t("prefs.game_window.unavailable"))
+            # "needs X11 or XWayland" is actionable advice on Linux and
+            # misleading on Windows, where it reads as "install an X server and
+            # this will work". It will not: the embed is X11 reparenting, which
+            # has no Windows equivalent, so say that instead (issue #118).
+            reason = (
+                "prefs.game_window.unavailable_windows"
+                if IS_WINDOWS
+                else "prefs.game_window.unavailable"
+            )
+            self._game_window_row.set_subtitle(self.t(reason))
         group.add(self._game_window_row)
         return group
 

@@ -1,5 +1,6 @@
 import os
 import tempfile
+from unittest import mock
 import unittest
 import zipfile
 from pathlib import Path
@@ -340,6 +341,66 @@ class LinkImportTests(unittest.TestCase):
         self.assertTrue(dest.exists())
         self.assertFalse(dest.is_symlink())
         self.assertEqual(result["extracted"], [str(archive)])
+
+
+class LinkFallbackTests(unittest.TestCase):
+    """What link mode does where a symlink cannot be created.
+
+    Windows refuses ``CreateSymbolicLinkW`` to an unprivileged process unless
+    Developer Mode is on, so most Windows users hit this path -- and before
+    issue #118 it surfaced as a bare OSError and a failed import. The failures
+    are simulated rather than provoked, so this runs on every platform,
+    including the Linux machine where symlinks always work and the fallback
+    would otherwise never be executed.
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.source = base / "Game.sfc"
+        self.source.write_bytes(b"rom-data")
+        self.roms = base / "roms"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _import(self):
+        result = import_roms([self.source], self.roms, mode="link", forced_console="SFC")
+        self.assertEqual(result["errors"], [])
+        return Path(result["imported"][0])
+
+    def test_falls_back_to_a_hard_link(self):
+        with mock.patch.object(Path, "symlink_to", side_effect=OSError("no privilege")):
+            dest = self._import()
+
+        self.assertTrue(dest.exists())
+        self.assertFalse(dest.is_symlink())
+        self.assertEqual(dest.read_bytes(), b"rom-data")
+        # A hard link is the same inode, which is what makes it "not a copy".
+        self.assertEqual(dest.stat().st_ino, self.source.stat().st_ino)
+
+    def test_falls_back_to_a_copy_across_volumes(self):
+        # os.link fails with EXDEV when the library is on another drive, which
+        # is exactly where someone puts a ROM collection too big to duplicate.
+        with mock.patch.object(Path, "symlink_to", side_effect=OSError("no privilege")):
+            with mock.patch("openemux.core.rom_importer.os.link", side_effect=OSError("EXDEV")):
+                dest = self._import()
+
+        self.assertTrue(dest.exists())
+        self.assertFalse(dest.is_symlink())
+        self.assertEqual(dest.read_bytes(), b"rom-data")
+        self.assertNotEqual(dest.stat().st_ino, self.source.stat().st_ino)
+
+    def test_the_import_still_succeeds_rather_than_erroring(self):
+        # The regression this guards: an unprivileged Windows user choosing
+        # "link" used to get an import that failed outright.
+        with mock.patch.object(Path, "symlink_to", side_effect=OSError("no privilege")):
+            with mock.patch("openemux.core.rom_importer.os.link", side_effect=OSError("EXDEV")):
+                result = import_roms(
+                    [self.source], self.roms, mode="link", forced_console="SFC"
+                )
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(len(result["imported"]), 1)
 
 
 if __name__ == "__main__":

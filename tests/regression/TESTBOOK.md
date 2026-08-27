@@ -2042,6 +2042,236 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_robustness_gaps.py` (`BitmapWordSizeTests`).
 
 
+## Windows platform
+
+Scenarios for the Windows port (issue #118). The `AUTO-SUITE`/`AUTO-PROBE` ones run on any
+platform -- they assert the platform-dependent resolution, not the host -- so Linux CI covers the
+Windows paths. Anything needing a real Windows desktop is `MANUAL`.
+
+### RT-166 — Core filenames resolve to this platform's extension
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** Core names from the catalogs come back as `.so` on Linux and `.dll` on Windows,
+  and a name with no core extension is returned untouched.
+- **Check:** `tests/test_platform.py`, `tests/test_cores.py`, `tests/test_retroarch_buildbot_updater.py`
+
+### RT-167 — No path written into RetroArch's runtime override contains a backslash
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** Every path-valued key in the generated `.cfg` (`system_directory`,
+  `savestate_directory`, `video_shader`, `core_options_path`) went through `cfg_path()`. RetroArch
+  reads a backslash inside a quoted value as an escape, so `C:\Users\me\.openemux\states` would
+  silently resolve elsewhere and the user's save states would appear to vanish.
+- **Check:** `tests/test_retroarch_launcher_cfg_paths.py`
+
+### RT-168 — The cores URL follows the platform
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Read the default buildbot URL and the core extension together.
+- **Expected:** `windows` pairs with `.dll` and `linux` with `.so`. A mismatch downloads several
+  hundred archives and extracts nothing from any of them.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core.platform import BUILDBOT_OS, CORE_SUFFIX; from openemux.core.config import DEFAULT_CORES_BASE_URL; assert f'/{BUILDBOT_OS}/' in DEFAULT_CORES_BASE_URL; assert (BUILDBOT_OS, CORE_SUFFIX) in {('windows', '.dll'), ('linux', '.so')}; print('RT-168 OK')"`
+
+### RT-169 — A rendered cartridge still exists when the render returns
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** librsvg available.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** `render_cartridge` returns a path to a file that is on disk. The stale-composite
+  sweep keeps the file it was handed, comparing by name -- `Path.__eq__` is not a same-file test
+  on Windows, where `keep` is spelled `MD/a.png` while `iterdir()` yields `MD\a.png`. Regression:
+  every cartridge was deleted right after being written, so the grid showed the bare cover art
+  with no frame around it.
+- **Check:** `tests/test_cartridge_render.py`
+
+### RT-189 — Link import degrades instead of failing without symlink permission
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** With symlinks refused (Windows without Developer Mode) the import falls back to a
+  hard link, and to a copy when the two paths are on different volumes. The import reports no
+  error either way.
+- **Check:** `tests/test_rom_importer.py` (`LinkFallbackTests`)
+
+### RT-190 — Windows picks its language from the OS, not from an unset LANG
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the unit suite.
+- **Expected:** With no locale environment variables set, the Windows UI language is used. A
+  variable naming a language we do not ship (`LANG=ru_RU`) still yields English rather than being
+  overridden by the OS, and an explicitly passed environment is never mixed with the host's.
+- **Check:** `tests/test_i18n.py`, `tests/test_config_locale.py`
+
+### RT-191 — "Open folder" opens Explorer on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows with at least one console in the sidebar.
+- **Steps:**
+  1. Right-click a console in the sidebar.
+  2. Choose "Open folder".
+- **Expected:** Explorer opens on that console's ROM directory, with no error toast. (GIO answers
+  *No application is registered as handling this file* for a `file://` directory URI on Windows,
+  and there is no `xdg-open`, so both Linux paths fail here.)
+- **Check:** human only.
+
+### RT-192 — The game window is reported unavailable on Windows, with the right reason
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows.
+- **Steps:**
+  1. Open "Preferences" and find the game-window switch.
+- **Expected:** The row is insensitive and reads *Not available on Windows: the game window relies
+  on X11 window embedding.* -- not the Linux wording about X11 or XWayland, which would read as
+  "install an X server and this will work". Launching a game opens RetroArch's own window.
+- **Check:** human only.
+
+### RT-193 — A user's own RetroArch install is left untouched
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** A Windows machine; note whether `%APPDATA%\RetroArch` exists before starting.
+- **Steps:**
+  1. Complete first boot, let the cores download, and launch a game.
+- **Expected:** Cores land in `vendors/RetroArch-Win64/cores`. `%APPDATA%\RetroArch` is not
+  created, and an existing one is unchanged -- the bundled RetroArch runs portable.
+- **Check:** human only.
+
+
+### RT-194 — The Windows artifacts build from a clean tree
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A Linux host with Docker and `vendors/RetroArch-Win64` fetched.
+- **Steps:**
+  1. Run the build from a clean staging tree.
+- **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
+  build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
+  caught.
+- **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
+
+### RT-195 — The bundle carries no path from the machine that built it
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-194 has run, so `build/win/OpenEmux` exists.
+- **Steps:**
+  1. Search the staged bundle for the build container's MSYS2 prefix.
+- **Expected:** No match outside `vendors/`. A baked-in `C:\msys64` path is a file that resolves
+  on a developer's machine and nowhere else -- how the OpenSSL CA bundle broke.
+- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux`
+
+### RT-196 — No libretro core ships inside the installer
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-194 has run.
+- **Steps:**
+  1. List the bundled RetroArch's cores directory.
+- **Expected:** It exists and is empty. Cores carry many different licences and are downloaded on
+  first boot precisely so none of them end up in the installer.
+- **Check:** `test -d build/win/OpenEmux/vendors/RetroArch-Win64/cores && [ -z "$(ls -A build/win/OpenEmux/vendors/RetroArch-Win64/cores)" ]`
+
+### RT-197 — RetroArch's licence travels with the binary
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-194 has run.
+- **Steps:**
+  1. Look for RetroArch's own licence text beside `retroarch.exe`.
+- **Expected:** Present. RetroArch is GPLv3 and redistributed unmodified, so its licence must ship
+  with it; `THIRD_PARTY_NOTICES.md` carries the matching source offer.
+- **Check:** `ls build/win/OpenEmux/vendors/RetroArch-Win64/COPYING* build/win/OpenEmux/vendors/RetroArch-Win64/LICENSE* 2>/dev/null | grep -q .`
+
+### RT-198 — The MSYS2 runtime is pinned, not resolved at build time
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Confirm the lock file names every package with a checksum.
+- **Expected:** Every entry has a name, a version and a 64-character SHA-256. MSYS2 is a rolling
+  repository: without the lock the bundle would quietly change from one afternoon to the next and
+  a GTK regression could not be bisected.
+- **Check:** `python3 -c "import json,re,sys; p=json.load(open('packaging/windows/packages.lock'))['packages']; sys.exit(0 if p and all(e.get('name') and e.get('version') and re.fullmatch(r'[0-9a-f]{64}', e.get('sha256','')) for e in p) else 1)"`
+
+### RT-199 — A drifted upstream package fails the build instead of shipping
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A checkout with `packaging/windows/packages.lock`.
+- **Steps:**
+  1. Edit one entry's `sha256` in the lock to a different valid-looking hash.
+  2. Remove that package from `build/win/msys2-cache` and run `make windows`.
+  3. Restore the lock afterwards.
+- **Expected:** The build stops with a checksum mismatch naming the file, the locked hash and the
+  received one. It does not download-and-continue.
+- **Check:** human only.
+
+### RT-200 — Installing needs no administrator prompt
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine with a standard (non-admin) user, and the built
+  `OpenEmux-<version>-setup.exe`.
+- **Steps:**
+  1. Run the installer as that standard user and accept the defaults.
+- **Expected:** No UAC elevation prompt. It installs under `%LOCALAPPDATA%\Programs\OpenEmux`,
+  creates a Start Menu entry, and appears in "Installed apps". SmartScreen may warn that the
+  publisher is unknown -- the installer is unsigned, and that is expected.
+- **Check:** human only.
+
+### RT-201 — First boot works from the installed copy
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** RT-200 done on a machine with no MSYS2 and no Python installed.
+- **Steps:**
+  1. Launch OpenEmux from the Start Menu and let first boot finish.
+- **Expected:** The window opens with no console flashing behind it, and the cores download
+  completes. A failure here is usually HTTPS: the interpreter's built-in CA path points at the
+  build machine, and the launcher overrides it with the bundled bundle.
+- **Check:** human only.
+
+### RT-202 — The app is installed in the desktop's language
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A Windows machine whose display language is not English.
+- **Steps:**
+  1. Launch the installed OpenEmux from the Start Menu, not from a shell.
+- **Expected:** The UI is in the display language. Launching from Explorer is the case that
+  matters: an MSYS2 shell exports `LANG`, so this bug is invisible during development and appears
+  only in the shipped build.
+- **Check:** human only.
+
+### RT-203 — Uninstalling removes the app and keeps the library
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed, first boot completed so cores were downloaded, and at
+  least one ROM imported.
+- **Steps:**
+  1. Uninstall from "Installed apps".
+  2. Look at `%LOCALAPPDATA%\Programs\OpenEmux` and `%USERPROFILE%\.openemux`.
+- **Expected:** The install directory is gone, including the cores downloaded after installation
+  that the installer never tracked. `%USERPROFILE%\.openemux` is untouched: playlists, save
+  states, input profiles and cover art survive.
+- **Check:** human only.
+
+### RT-204 — Installing over an older version replaces it
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A previous OpenEmux version installed.
+- **Steps:**
+  1. Run the newer installer and accept the defaults.
+- **Expected:** It targets the same directory, and "Installed apps" lists one OpenEmux, not two.
+  The app starts: a stale DLL left from the older bundle beside a newer one is an ABI mismatch
+  that crashes at startup, and the installer clears the directories it owns first.
+- **Check:** human only.
+
+
 ## Retired
 
 *None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*

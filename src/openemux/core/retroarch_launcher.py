@@ -27,6 +27,14 @@ from openemux.core.input_profiles import (
     player_for_device,
 )
 from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.platform import (
+    IS_WINDOWS,
+    VENDORED_RETROARCH,
+    bundled_core_dir,
+    cfg_path,
+    popen_kwargs,
+    user_retroarch_dirs,
+)
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 
@@ -62,12 +70,18 @@ RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
 
-DEFAULT_CORE_DIRS = [
-    "/usr/lib/libretro",
-    "/usr/lib64/libretro",
-    "/usr/lib/x86_64-linux-gnu/libretro",
-    "/usr/local/lib/libretro",
-]
+# Distro-packaged core locations. Empty on Windows, which has no equivalent
+# convention -- cores there come from the bundled portable RetroArch.
+DEFAULT_CORE_DIRS = (
+    []
+    if IS_WINDOWS
+    else [
+        "/usr/lib/libretro",
+        "/usr/lib64/libretro",
+        "/usr/lib/x86_64-linux-gnu/libretro",
+        "/usr/local/lib/libretro",
+    ]
+)
 
 # Runtime OSD policy:
 # - Hide startup/runtime noise (content/core/autoconfig/override/remap/etc).
@@ -207,7 +221,10 @@ class RetroArchLauncher:
             return resolved
 
         vendor_candidates = [
-            self.project_root / "vendors" / "RetroArch-Linux-x86_64.AppImage",
+            # The vendored build for this platform comes first: on Windows it
+            # is the portable RetroArch fetched by scripts/vendor_retroarch.py,
+            # on Linux the committed AppImage.
+            self.project_root / VENDORED_RETROARCH,
             self.project_root / "vendors" / "retroarch.AppImage",
             self.project_root / "vendors" / "retroarch-assets" / "bin" / "retroarch",
         ]
@@ -224,6 +241,13 @@ class RetroArchLauncher:
             real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
             self.project_root / "vendors" / "retroarch-assets" / "cores",
         ]
+        # Where the bundled portable RetroArch keeps its cores, and where the
+        # updater downloads them, on Windows.
+        bundled = bundled_core_dir(self.project_root)
+        if bundled:
+            home_dirs.append(bundled)
+        # A RetroArch the user installed themselves: searched, never written to.
+        home_dirs.extend(user_retroarch_dirs())
         return [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
 
     def _resolve_core_name(self, core_filename):
@@ -375,10 +399,10 @@ class RetroArchLauncher:
         required_for_core = get_required_for_core(console, core_filename) if core_filename else []
         if required_for_core:
             bios_dir = self.config_manager.get_console_bios_dir(console)
-            overrides["system_directory"] = f'"{bios_dir}"'
+            overrides["system_directory"] = f'"{cfg_path(bios_dir)}"'
         if shader_enabled and shader_path:
             overrides["video_shader_enable"] = '"true"'
-            overrides["video_shader"] = f'"{shader_path}"'
+            overrides["video_shader"] = f'"{cfg_path(shader_path)}"'
         else:
             overrides["video_shader_enable"] = '"false"'
 
@@ -437,7 +461,7 @@ class RetroArchLauncher:
         # something to show. state_slot seeds "play from this state" launches.
         states_dir = self.config_manager.get_console_states_dir(console)
         states_dir.mkdir(parents=True, exist_ok=True)
-        overrides["savestate_directory"] = f'"{states_dir}"'
+        overrides["savestate_directory"] = f'"{cfg_path(states_dir)}"'
         overrides["savestate_thumbnail_enable"] = '"true"'
         # The slot the save/load hotkeys start on. A "load this save" launch
         # names it; every other launch starts at 0 and moves from there with
@@ -512,7 +536,7 @@ class RetroArchLauncher:
             console, core_filename, runtime_dir, timestamp
         )
         if options_path:
-            overrides["core_options_path"] = f'"{options_path}"'
+            overrides["core_options_path"] = f'"{cfg_path(options_path)}"'
 
         override_path = runtime_dir / f"runtime_{resolve_system_id(console).lower()}_{timestamp}.cfg"
 
@@ -665,6 +689,9 @@ class RetroArchLauncher:
                 env=env,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
+                # CREATE_NO_WINDOW on Windows, nothing on Linux: without it a
+                # console window flashes up behind the game on every launch.
+                **popen_kwargs(),
             )
             # Keep a reference attached to process object to avoid GC closing the file descriptor too early.
             proc._openemux_log_handle = log_handle
@@ -694,7 +721,16 @@ class RetroArchLauncher:
     # here rather than there because what a signal actually reaches depends on
     # how the process was launched, which is this module's business.
     def terminate_process(self, proc):
-        """SIGTERM the launched process; True when the signal went out."""
+        """SIGTERM the launched process; True when the signal went out.
+
+        On Windows ``terminate()`` is ``TerminateProcess``, which is immediate
+        and gives RetroArch no chance to flush a battery save -- there is no
+        SIGTERM to deliver. That is survivable because this is not the first
+        thing tried: ``RuntimeManager.stop_active`` sends the UDP ``QUIT``
+        command first (``network_cmd_enable`` is set in the runtime override),
+        which exits RetroArch cleanly with saves written. This stays the
+        escalation for a game that ignored it.
+        """
         try:
             proc.terminate()
             return True
