@@ -56,6 +56,26 @@ from openemux.core import update_checker
 print("import OK, version", openemux.__version__)
 PY
 
+echo "==> the installed package must be able to decode every cover format"
+# Not an import: the loaders are separate packages, and a missing one shows
+# up only as a blank card and a "cover decode failed" line in the log. WebP
+# is the format the libretro thumbnail sync downloads (issue #251); png/jpeg
+# carry local art and svg is every symbolic icon in the UI.
+OPENEMUX_PROJECT_ROOT=/opt/openemux PYTHONPATH=/opt/openemux/src python3 - <<'LOADERS'
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf
+from openemux.core.scraper import SUPPORTED_COVER_EXTS
+
+names = {f.get_name() for f in GdkPixbuf.Pixbuf.get_formats()}
+# scraper spells JPEG both "jpg" and "jpeg"; gdk-pixbuf calls the loader "jpeg".
+required = {{"jpg": "jpeg"}.get(ext, ext) for ext in SUPPORTED_COVER_EXTS} | {"svg"}
+missing = sorted(required - names)
+if missing:
+    raise SystemExit(f"FAIL: no pixbuf loader for {missing}; declare the dependency")
+print("pixbuf loaders OK:", sorted(required))
+LOADERS
+
 echo "==> launcher must ignore a shadowing python3 without PyGObject"
 mkdir -p /tmp/fakebin
 cat > /tmp/fakebin/python3 <<'FAKE'

@@ -30,6 +30,15 @@ Requires:       python3-pyyaml
 # The game window reparents RetroArch's X11 window into ours (issue #199).
 Requires:       python3-xlib
 Requires:       librsvg2
+# Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
+# decoder for it. On Fedora the loader reaches a machine only as a *weak*
+# dependency of gdk-pixbuf2-modules, so `rpm -ivh`, offline installs and
+# --setopt=install_weak_deps=False all did without it -- and then every synced
+# cover decoded to nothing and the card rendered blank, with one
+# "cover decode failed" line in the log to say why (issue #251). The AppImage
+# has bundled the loader from the start; this is the same dependency,
+# declared rather than inherited from somebody else's Recommends.
+Requires:       webp-pixbuf-loader
 Requires:       adwaita-icon-theme
 Requires:       shared-mime-info
 # Hard, not weak: the vendored RetroArch AppImage is the only emulator this

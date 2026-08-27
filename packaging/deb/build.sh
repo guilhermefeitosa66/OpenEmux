@@ -16,6 +16,13 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # recommends, but `dpkg -i` and offline installs do not -- and the app then
 # installed cleanly and could not launch a single game (issue #248). The
 # alternative covers both spellings: noble renamed the package to libfuse2t64.
+#
+# webp-pixbuf-loader is there for the same reason in a different place: cover
+# art synced from libretro is WebP and gdk-pixbuf has no built-in decoder for
+# it. Nothing else this package depends on pulls the loader -- measured
+# against the released 1.11.3 artifact, `apt install ./openemux_*.deb` on a
+# stock ubuntu:24.04 left gdk-pixbuf with no webp loader at all, so every
+# synced cover decoded to nothing and the card rendered blank (issue #251).
 install -d "$STAGE/DEBIAN"
 INSTALLED_KB="$(du -ks "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" <<EOF
@@ -27,7 +34,7 @@ Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
-Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, adwaita-icon-theme, shared-mime-info, libfuse2t64 | libfuse2
+Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, shared-mime-info, libfuse2t64 | libfuse2
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. It bundles a RetroArch AppImage
@@ -94,6 +101,26 @@ from openemux.ui import window  # exercises the full UI import chain
 from openemux.core import update_checker
 print("import OK, version", openemux.__version__)
 PY
+
+echo "==> the installed package must be able to decode every cover format"
+# Not an import: the loaders are separate packages, and a missing one shows
+# up only as a blank card and a "cover decode failed" line in the log. WebP
+# is the format the libretro thumbnail sync downloads (issue #251); png/jpeg
+# carry local art and svg is every symbolic icon in the UI.
+OPENEMUX_PROJECT_ROOT=/opt/openemux PYTHONPATH=/opt/openemux/src python3 - <<'LOADERS'
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf
+from openemux.core.scraper import SUPPORTED_COVER_EXTS
+
+names = {f.get_name() for f in GdkPixbuf.Pixbuf.get_formats()}
+# scraper spells JPEG both "jpg" and "jpeg"; gdk-pixbuf calls the loader "jpeg".
+required = {{"jpg": "jpeg"}.get(ext, ext) for ext in SUPPORTED_COVER_EXTS} | {"svg"}
+missing = sorted(required - names)
+if missing:
+    raise SystemExit(f"FAIL: no pixbuf loader for {missing}; declare the dependency")
+print("pixbuf loaders OK:", sorted(required))
+LOADERS
 
 echo "==> launcher must ignore a shadowing python3 without PyGObject"
 # Reproduces the pyenv/conda case: a python3 earlier in PATH that cannot import
