@@ -93,9 +93,14 @@ ls "$BUNDLE/vendors/RetroArch-Win64/"COPYING* \
 # Nothing in the bundle may point at the machine that built it. An absolute
 # MSYS2 path baked into a config or cache means a file that resolves on a
 # developer's box and nowhere else -- exactly how the OpenSSL CA bundle broke.
-if grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\\msys64' "$BUNDLE" 2>/dev/null | head -n 5 | grep -q .; then
+# Collected first, then tested. `| grep -q .` exits on the first line and
+# SIGPIPEs the grep still walking the bundle; with `set -o pipefail` the
+# pipeline then reports failure, the `if` takes the else branch, and a bundle
+# that *does* carry the build machine's paths passes the check.
+LEAKED_PATHS="$(grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\\msys64' "$BUNDLE" 2>/dev/null || true)"
+if [ -n "$LEAKED_PATHS" ]; then
   echo "!! files in the bundle reference the build machine's MSYS2 prefix:" >&2
-  grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\\msys64' "$BUNDLE" 2>/dev/null | head -n 20 >&2
+  head -n 20 <<< "$LEAKED_PATHS" >&2
   exit 1
 fi
 
