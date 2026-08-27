@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from openemux.core import platform as pf
+from tests.platform_marks import linux_only
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +44,7 @@ class MachineNamesTests(unittest.TestCase):
 
 
 class VendoredRetroArchTests(unittest.TestCase):
+    @linux_only("the vendored RetroArch is an AppImage only here; Windows gets a .exe")
     def test_the_linux_appimage_is_named_for_the_architecture(self):
         # An x86_64 AppImage on an ARM machine is not a RetroArch that failed
         # to start; it is a file the kernel refuses to execute.
@@ -107,6 +109,7 @@ class CoresUrlTests(unittest.TestCase):
 
 
 class CoreSearchDirTests(unittest.TestCase):
+    @linux_only("/usr/lib/<triplet>/libretro is a Debian layout; Windows has no equivalent")
     def test_the_multiarch_directory_follows_the_architecture(self):
         # /usr/lib/<triplet>/libretro is where Debian and Ubuntu put the
         # packaged cores, and the triplet is the one thing in that list that
