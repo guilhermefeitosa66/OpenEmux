@@ -1651,6 +1651,97 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** the probe stages into `$SCRATCH` only; nothing in the repository is touched.
 
+### RT-218 — The AppImage cannot ship under the wrong version number
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; `make appimage` refuses to build on a
+  mismatch).
+- **Steps:** As a QA person cutting a release: bump `src/openemux/__init__.py`, forget the
+  AppImage recipe, and run `make packages`.
+- **Expected:** The AppImage build stops with the two versions printed. The recipe's `version:`
+  was hard-coded and never compared with anything, while the `.deb`, `.rpm` and Flatpak all derive
+  it from `__init__.py` — so a forgotten bump produced `OpenEmux-<old>-x86_64.AppImage` beside
+  correctly versioned siblings, and it reached `dist/`, `SHA256SUMS` and the GitHub release with
+  every check passing (issue #255).
+- **Check:** suite file `tests/test_reproducible_builds.py`, plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  import re
+  version = re.search(r'"(.*)"', Path("src/openemux/__init__.py").read_text()).group(1)
+  recipe = Path("packaging/appimage/AppImageBuilder.yml").read_text()
+  assert f'version: "{version}"' in recipe, f"the recipe does not say {version}"
+  build = Path("packaging/appimage/build.sh").read_text()
+  assert "does not carry version" in build, "the build does not guard the version"
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  head = next(l for l in spec.split("%changelog", 1)[1].splitlines() if l.startswith("*"))
+  assert head.endswith(f" - {version}-1"), f"the %changelog head is not {version}: {head}"
+  meta = Path("packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml").read_text()
+  assert re.search(r'<release version="([^"]+)"', meta).group(1) == version
+  print("RT-218 OK")
+  EOF
+  ```
+
+### RT-219 — A release artifact is built from pinned, authenticated inputs
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the builds exercise them).
+- **Steps:** As a QA person: build the same commit twice, months apart, and compare what went in.
+- **Expected:** The same base images and the same Python packages. The Dockerfiles used floating
+  tags (`FROM ubuntu:24.04`) and `docker build` ran without `--pull`, so a stale local image was
+  reused silently; the AppImage fetched Ubuntu packages *and the key that authenticates them* over
+  plain HTTP; and its Python dependencies were version-pinned but hash-free (issue #255). Bases
+  are pinned by digest now, the archive and its key are https, and pip installs with
+  `--require-hashes` from a file generated out of `requirements.lock`.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  for dockerfile in sorted(Path("packaging/docker").glob("*.Dockerfile")):
+      for line in dockerfile.read_text().splitlines():
+          if line.startswith("FROM "):
+              assert re.match(r"^FROM \S+:\S+@sha256:[0-9a-f]{64}$", line), \
+                  f"{dockerfile.name}: unpinned base {line}"
+          assert "http://" not in line or line.strip().startswith("#"), \
+              f"{dockerfile.name}: plain HTTP: {line.strip()}"
+  build = Path("packaging/build.sh").read_text()
+  assert "docker build --pull" in build, "a stale base image can still be reused"
+  recipe = Path("packaging/appimage/AppImageBuilder.yml").read_text()
+  assert "http://" not in recipe, "the AppImage still fetches something over plain HTTP"
+  assert "--require-hashes" in recipe, "the bundle's Python deps are not hash-pinned"
+  print("RT-219 OK")
+  EOF
+  ```
+
+### RT-220 — No build runs the container as host root
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; `make appimage` and `make flatpak` prove
+  the narrowed set is enough).
+- **Steps:** As a QA person: run `make appimage` and `make flatpak` and watch `docker inspect` on
+  the running container.
+- **Expected:** Both build normally without `--privileged`. They genuinely need to mount a
+  filesystem — squashfs for appimage-builder, bubblewrap for flatpak-builder — but that is
+  `SYS_ADMIN` plus `/dev/fuse` plus an AppArmor exception for the AppImage, and additionally
+  `NET_ADMIN` (loopback in the unshared network namespace) and a seccomp exception (`pivot_root`)
+  for the Flatpak. Not full host root in a container that also bind-mounts the repository and
+  carries `SCREENSCRAPER_DEVPASSWORD` (issue #255).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  build = Path("packaging/build.sh").read_text()
+  live = [l for l in build.splitlines() if not l.strip().startswith("#")]
+  assert not [l for l in live if "--privileged" in l], "a build still asks for --privileged"
+  for argument in ("--cap-add SYS_ADMIN", "--device /dev/fuse",
+                   "--security-opt apparmor:unconfined", "--cap-add NET_ADMIN",
+                   "--security-opt seccomp=unconfined"):
+      assert argument in build, f"the FUSE builds no longer ask for {argument}"
+  print("RT-220 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

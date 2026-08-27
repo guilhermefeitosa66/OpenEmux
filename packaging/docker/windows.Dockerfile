@@ -20,7 +20,13 @@
 #
 # The GTK stack itself is never *built* here. It is downloaded already compiled
 # for Windows from the MSYS2 repository; see packaging/windows/msys2_packages.py.
-FROM debian:bookworm
+#
+# Pinned by digest, not by tag: `ubuntu:24.04` is a moving target, so two builds
+# of the same commit months apart produced different artifacts and a regression
+# from a base-image update was indistinguishable from a code regression
+# (issue #255). Re-pin deliberately -- `docker manifest inspect debian:bookworm` prints
+# the current digest -- so a base-image change is a commit somebody reviewed.
+FROM debian:bookworm@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443
 
 ENV DEBIAN_FRONTEND=noninteractive
 

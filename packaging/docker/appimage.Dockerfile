@@ -2,7 +2,13 @@
 #
 # Ubuntu 24.04 (noble) matches the apt sources the recipe bundles from, so the
 # libraries pulled into the AppDir are the ones this image can query and test.
-FROM ubuntu:24.04
+#
+# Pinned by digest, not by tag: `ubuntu:24.04` is a moving target, so two builds
+# of the same commit months apart produced different artifacts and a regression
+# from a base-image update was indistinguishable from a code regression
+# (issue #255). Re-pin deliberately -- `docker manifest inspect ubuntu:24.04` prints
+# the current digest -- so a base-image change is a commit somebody reviewed.
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 ENV DEBIAN_FRONTEND=noninteractive
 
