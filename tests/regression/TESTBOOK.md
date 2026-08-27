@@ -1902,6 +1902,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-226 — The Flatpak asks for exactly the permissions it can justify
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the manifest and the code it makes claims about).
+- **Steps:** As a QA person: `flatpak info --show-permissions io.github.guilhermefeitosa66.OpenEmux`
+  after installing the bundle, and read the `finish-args` block in the manifest.
+- **Expected:** Eight permissions, no more, and the two widest carry a written rationale.
+  `--talk-name=org.freedesktop.Flatpak` allows `flatpak-spawn --host` with arbitrary commands —
+  unrestricted code execution outside the sandbox — and with `--filesystem=home` beside it the
+  sandbox confines essentially nothing. Both are architecturally required by the current launch
+  design, but they were unremarked lines in a manifest on an app heading for Flathub, whose linter
+  asks for a justification in the submission (issue #257). Narrowing `--filesystem=home` to a
+  portal-granted ROM directory needs the three `Gtk.FileChooserDialog` call sites ported to
+  `Gtk.FileDialog` first (issue #235), then `~/.openemux`, the ROM path and the absolute paths
+  handed to the host RetroArch.
+- **Check:** suite file `tests/test_flatpak_sandbox.py`, plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  import yaml
+  path = Path("packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml")
+  manifest = yaml.safe_load(path.read_text())
+  args = manifest["finish-args"]
+  assert len(args) == 8, f"the permission set changed: {args}"
+  for wider in ("--filesystem=host", "--socket=session-bus", "--socket=system-bus"):
+      assert wider not in args, f"{wider} was added to the sandbox"
+  text = path.read_text()
+  for term in ("flatpak-spawn", "retroarch_launcher.py", "Gtk.FileChooserDialog",
+               "issue #235", "no confinement"):
+      assert term in text, f"the rationale no longer mentions {term}"
+  print("RT-226 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

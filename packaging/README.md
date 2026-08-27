@@ -72,6 +72,30 @@ refuses to build when the two disagree, and
 `tests/test_reproducible_builds.py` checks all four bump sites against it on
 `develop`.
 
+**The Flatpak sandbox confines almost nothing, on purpose.** Two of its
+`finish-args` are the widest Flatpak has:
+
+- `--talk-name=org.freedesktop.Flatpak` allows `flatpak-spawn --host` with
+  arbitrary commands — unrestricted code execution outside the sandbox. It is
+  used in exactly one place, `core/retroarch_launcher.py`'s `_launch_prefix()`,
+  to run `flatpak run org.libretro.RetroArch`. OpenEmux is a front-end for an
+  emulator that lives in its *own* Flatpak, and there is no portal for "start
+  that other app on a ROM".
+- `--filesystem=home` is load-bearing four times over: three file choosers are
+  `Gtk.FileChooserDialog` (the in-process widget, which does not go through the
+  portal — issue #235), `~/.openemux` holds config/playlists/input/shaders/BIOS,
+  the ROM library defaults to `~/games/roms` and can be anywhere, and RetroArch
+  runs on the host with absolute paths — the ROM and the `--appendconfig`
+  override — that have to mean the same thing on both sides.
+
+Narrowing it to a portal-granted ROM directory needs all four settled, in that
+order; porting the choosers is the prerequisite for the rest. Until then the
+rationale is written down in the manifest, where Flathub's reviewer will look
+for it, and `tests/test_flatpak_sandbox.py` pins the permission set so a new one
+is a deliberate edit rather than a line that slips through — it also fails when
+the last `Gtk.FileChooserDialog` goes, which is the moment to revisit the grant
+rather than leave it out of habit.
+
 **TryExec belongs to the native packages only.** The shared
 `common/openemux.desktop` carries none. `TryExec` is resolved against the user's
 `PATH`, and AppImage integrators (appimaged, AppImageLauncher, GearLever)
