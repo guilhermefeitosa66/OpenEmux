@@ -1,0 +1,162 @@
+#!/usr/bin/python3
+"""Give the container a library and a config, so the app opens on something.
+
+An empty ``~/.openemux`` sends the app to first boot, which downloads every
+libretro core before it will show a window -- minutes of network for a change
+that has nothing to do with bootstrap. And an empty library shows empty states
+and nothing else, so a grid change cannot be looked at.
+
+So: mark the bootstrap done, point the library at a synthetic one, and English
+because that is the language the project's screenshots and issues are written
+in. Every value here is written through ``ConfigManager``, never by hand into
+the YAML, so this cannot drift away from the schema the app actually reads.
+
+    devbox-seed              # synthetic library, throwaway config
+    devbox-seed --wipe       # start over from nothing
+    devbox-seed --tour       # keep the welcome tour on
+
+The shebang is ``/usr/bin/python3`` on purpose: the host's PATH and home come
+through into the container, so a bare ``python3`` can resolve to a pyenv shim
+that has no PyGObject.
+"""
+
+import os
+import shutil
+import sys
+from pathlib import Path
+
+REPO = Path(os.environ.get("DEVBOX_REPO", ""))
+if not (REPO / "src" / "openemux").is_dir():
+    sys.exit(f"devbox-seed: no checkout at {REPO} (DEVBOX_REPO)")
+sys.path.insert(0, str(REPO / "src"))
+
+#: A handful of consoles with content and the rest deliberately empty -- the
+#: checklist wants two distinct consoles *and* the empty state, and a library
+#: that has both is one library, not two.
+#:
+#: The files are zero bytes. Nothing here emulates anything; the names exist so
+#: the scanner, the title cleanup, the name database and cover matching all see
+#: the shape of real No-Intro filenames, including the ones that make matching
+#: interesting: regions, revisions, a subtitle, an article, brackets.
+LIBRARY = {
+    "FC": [
+        "Super Mario Bros. (World).nes",
+        "The Legend of Zelda (USA).nes",
+        "Metroid (USA).nes",
+        "Mega Man 2 (USA).nes",
+        "Castlevania (USA) (Rev 1).nes",
+        "Contra (USA).nes",
+        "Duck Tales (USA).nes",
+        "Kirby's Adventure (USA).nes",
+    ],
+    "SFC": [
+        "Super Mario World (USA).sfc",
+        "The Legend of Zelda - A Link to the Past (USA).sfc",
+        "Super Metroid (Japan, USA).sfc",
+        "Donkey Kong Country (USA) (Rev 2).sfc",
+        "Chrono Trigger (USA).sfc",
+        "Final Fantasy III (USA).sfc",
+        "Super Mario Kart (USA).sfc",
+        "Street Fighter II Turbo (USA).sfc",
+        "Earthbound (USA).sfc",
+    ],
+    "MD": [
+        "Sonic the Hedgehog (USA, Europe).md",
+        "Sonic the Hedgehog 2 (World).md",
+        "Streets of Rage 2 (USA).md",
+        "Gunstar Heroes (USA).md",
+        "Phantasy Star IV (USA).md",
+        "Shinobi III - Return of the Ninja Master (USA).md",
+    ],
+    "GBA": [
+        "Metroid Fusion (USA).gba",
+        "The Legend of Zelda - The Minish Cap (USA).gba",
+        "Golden Sun (USA).gba",
+        "Advance Wars (USA).gba",
+        "Castlevania - Aria of Sorrow (USA).gba",
+    ],
+    "GB": [
+        "Tetris (World) (Rev 1).gb",
+        "Pokemon - Red Version (USA, Europe).gb",
+        "Super Mario Land (World).gb",
+    ],
+    "N64": [
+        "Super Mario 64 (USA).z64",
+        "The Legend of Zelda - Ocarina of Time (USA) (Rev 2).z64",
+        "GoldenEye 007 (USA).z64",
+        "Mario Kart 64 (USA).z64",
+    ],
+    "PS": [
+        "Final Fantasy VII (USA) (Disc 1).chd",
+        "Metal Gear Solid (USA) (Disc 1).chd",
+        "Castlevania - Symphony of the Night (USA).chd",
+    ],
+    # One ROM only: the grid at its smallest is its own layout case, and it is
+    # the one nobody remembers to look at.
+    "SMS": [
+        "Alex Kidd in Miracle World (USA, Europe).sms",
+    ],
+}
+
+
+def build_library(root: Path) -> int:
+    made = 0
+    for console, titles in LIBRARY.items():
+        folder = root / console
+        folder.mkdir(parents=True, exist_ok=True)
+        for title in titles:
+            rom = folder / title
+            if not rom.exists():
+                rom.touch()
+                made += 1
+    return made
+
+
+def main() -> int:
+    home = Path.home()
+    if "--wipe" in sys.argv:
+        shutil.rmtree(home / ".openemux", ignore_errors=True)
+        shutil.rmtree(home / "games", ignore_errors=True)
+        print(f"devbox-seed: wiped {home}/.openemux and {home}/games")
+
+    # A real library, when the container was created with one mounted; the
+    # synthetic one otherwise. Either way the app is told where it is, rather
+    # than the default path being assumed to hold anything.
+    mounted = os.environ.get("DEVBOX_ROMS", "").strip()
+    if mounted and Path(mounted).is_dir():
+        roms = Path(mounted)
+        print(f"devbox-seed: library {roms} (mounted from the host)")
+    else:
+        roms = home / "games" / "roms"
+        created = build_library(roms)
+        total = sum(len(v) for v in LIBRARY.values())
+        print(f"devbox-seed: library {roms} -- {total} placeholder ROMs across "
+              f"{len(LIBRARY)} consoles ({created} new)")
+
+    from openemux.core.config import ConfigManager
+
+    config = ConfigManager()
+    config.config["roms_path"] = str(roms)
+    # Without this the first activation opens FirstBootWindow and pulls every
+    # core off the buildbot. `devbox-app start --first-boot` is how to ask for
+    # that on purpose.
+    config.finish_bootstrap_success()
+    # English, and marked as chosen, or the loader re-resolves the locale from
+    # the container's LANG on every load.
+    config.config["locale"] = "en"
+    config.config["locale_selected_by_user"] = True
+    # The welcome tour opens over the main window on a fresh config, so every
+    # capture of a fresh box would be a capture of the tour. Off unless it is
+    # the thing being looked at: `devbox-seed --tour`.
+    config.set_show_welcome_on_startup("--tour" in sys.argv)
+    # The start-up update check calls the GitHub API. It says nothing about the
+    # change under test and it fails noisily when the network is not there.
+    config.config.setdefault("updates", {})["check_on_startup"] = False
+    config.save_config()
+
+    print(f"devbox-seed: config {home}/.openemux/config.yaml")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

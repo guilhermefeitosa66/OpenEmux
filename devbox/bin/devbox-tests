@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# The unit suite, on a real display.
+#
+#   devbox-tests                       the whole suite
+#   devbox-tests tests/test_grid.py    one file
+#
+# Worth running here even though it also runs on the host, for two reasons.
+#
+# The GTK is not the same GTK. This container tracks the current Ubuntu LTS, so
+# the suite meets a much newer stack than a developer's desktop typically has
+# (GTK 4.22 / libadwaita 1.9 here against 4.14 / 1.5 on Mint 22.3, say) -- and
+# the tests that build real widgets are the ones a version difference reaches.
+#
+# And it runs on a display that is not the developer's. The suite does open
+# windows (tests/gtk_display.py -- without a display GTK segfaults rather than
+# fails, so those tests need a real one), and on the host they flicker across
+# whatever they are working on.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+
+devbox-x start >/dev/null
+require_display
+load_bus
+
+cd "${DEVBOX_REPO}"
+export PYTHONPATH=src
+export GDK_BACKEND=x11
+
+if [ $# -gt 0 ]; then
+	exec "${DEVBOX_PYTHON}" -m unittest "$@"
+fi
+exec "${DEVBOX_PYTHON}" -m unittest discover -s tests

@@ -30,6 +30,8 @@ PIP := $(PYTHON) -m pip
 .PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
 .PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
+.PHONY: devbox devbox-up devbox-app devbox-shot devbox-xdo devbox-res devbox-rec
+.PHONY: devbox-tests devbox-seed devbox-verify devbox-view devbox-status devbox-rm
 
 all: setup
 
@@ -333,6 +335,77 @@ testenv-rm-all:
 	@$(TESTENV) rm-all $(if $(PURGE),--purge,)
 
 # Cleaning
+# --- Devbox: the app on a display nobody is looking at ---
+#
+# One distrobox container on the current Ubuntu LTS, running the app from THIS
+# checkout on an X server of its own. `make run` puts the app on the
+# developer's screen and takes the mouse and keyboard with it; this does not,
+# so the app can be driven and photographed while the machine stays usable.
+#
+#   make devbox              bring it up and drop into a shell
+#   make devbox-app          start the app on the virtual display
+#   make devbox-shot         screenshot it
+#   make devbox-xdo CMD='key ctrl+f'
+#   make devbox-view         watch the session over VNC, when you want to look
+#
+# It is not packaging/testenv/: that matrix installs release artifacts on six
+# distros, and borrows the real display to do it. See devbox/README.md.
+DEVBOX := ./devbox/devbox.sh
+
+# The tools take arguments; these are the pass-throughs.
+ACTION ?= start
+CMD    ?=
+RES    ?=
+OUT    ?=
+
+devbox:
+	@$(DEVBOX) enter
+
+devbox-up:
+	@$(DEVBOX) up
+
+# make devbox-app ACTION=restart|stop|status|log
+devbox-app:
+	@$(DEVBOX) app $(ACTION)
+
+# make devbox-shot OUT=/tmp/grid.png WIN=1
+devbox-shot:
+	@$(DEVBOX) shot $(if $(WIN),--win,) $(OUT)
+
+# make devbox-xdo CMD='key ctrl+f'   (no CMD: show the targeted window)
+devbox-xdo:
+	@$(DEVBOX) xdo $(if $(CMD),$(CMD),win)
+
+# make devbox-res RES=720x900        (no RES: list the modes)
+devbox-res:
+	@$(DEVBOX) res $(RES)
+
+# make devbox-rec CMD=start|stop|status
+devbox-rec:
+	@$(DEVBOX) rec $(if $(CMD),$(CMD),status)
+
+# The unit suite inside the box, where a real display means the GTK-widget
+# tests run instead of skipping. make devbox-tests CMD=tests.test_grid
+devbox-tests:
+	@$(DEVBOX) tests $(CMD)
+
+devbox-seed:
+	@$(DEVBOX) seed $(if $(WIPE),--wipe,)
+
+devbox-verify:
+	@$(DEVBOX) verify
+
+devbox-view:
+	@$(DEVBOX) view
+
+devbox-status:
+	@$(DEVBOX) status
+
+# PURGE=1 also drops the container's home, and with it the throwaway
+# ~/.openemux, the synthetic library and every capture taken so far.
+devbox-rm:
+	@$(DEVBOX) rm $(if $(PURGE),--purge,)
+
 # The VENV guard matters: on Windows VENV is empty, and an unguarded
 # `rm -rf $(VENV)` would expand to a bare `rm -rf` in the repo root.
 clean:

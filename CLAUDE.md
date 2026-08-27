@@ -30,6 +30,52 @@ make clean
 make check-retroarch
 ```
 
+## Running the app: use the devbox, not the developer's screen
+
+`make run` opens OpenEmux on the developer's desktop and takes the mouse and
+keyboard with it. Driving it from there — clicking, typing, resizing,
+screenshotting — makes the machine unusable for as long as the test lasts.
+
+**So do not run the app on the host display.** `devbox/` is a distrobox
+container on the current Ubuntu LTS with an X server of its own (Xvnc on `:77`),
+running the app from this checkout. It is the default way to look at a change:
+
+```bash
+make devbox-up                          # create it (first run: a few minutes)
+make devbox-app                         # start the app on the virtual display
+make devbox-app ACTION=restart          # after editing the source — it is live
+make devbox-shot OUT=/tmp/grid.png      # capture the screen (WIN=1 for the window)
+make devbox-xdo CMD='key ctrl+f'        # drive it from the keyboard
+make devbox-res RES=520x900             # narrow, to check the adaptive layout
+make devbox-tests                       # the suite against a newer GTK/libadwaita
+make devbox-verify                      # is the container able to run the app?
+make devbox-view                        # watch it over VNC, when you want to look
+make devbox                             # a shell inside, tools on PATH
+```
+
+The container has a `$HOME` of its own, so `~/.openemux` in there is throwaway
+and the user's real config and library are never touched. It opens on a
+synthetic library (39 placeholder ROMs across eight consoles, the rest empty on
+purpose) with the bootstrap pre-marked done, the welcome tour off and the
+update check off — `devbox-seed --tour` and `devbox-app start --first-boot` ask
+for the real thing. `make devbox-rm PURGE=1` throws the whole container away.
+
+The checkout is mounted at its real path, so an edit saved on the host is live
+in the container: restart the app, do not rebuild anything.
+
+`devbox/README.md` documents the traps, and they matter — distrobox shares the
+host's `/tmp`, network **and PID namespace**, so a display collision or a
+`pkill` by name reaches the developer's own session. Read it before changing
+anything in `devbox/`.
+
+This is **not** `packaging/testenv/`: that matrix installs the *release
+artifacts* on six distros and borrows the real display to do it, which is what
+makes it unusable while somebody is working. Use it for packaging questions,
+before a release; use the devbox to look at the app.
+
+`make run` is still the right call when the *user* asks to see the app on their
+own screen.
+
 ## Architecture
 
 ### Entry Point & Bootstrap Flow
