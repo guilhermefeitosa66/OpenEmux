@@ -32,9 +32,15 @@ def image_loaders():
     import gi
     gi.require_version("GdkPixbuf", "2.0")
     from gi.repository import GdkPixbuf
+    from openemux.core.scraper import SUPPORTED_COVER_EXTS
     names = {f.get_name() for f in GdkPixbuf.Pixbuf.get_formats()}
-    # png/jpeg carry the box art, svg every symbolic icon in the UI.
-    missing = {"png", "jpeg", "svg"} - names
+    # Every format a cover can arrive in, plus svg for the symbolic icons.
+    # webp is the one the libretro thumbnail sync downloads and the one
+    # gdk-pixbuf has no built-in decoder for, so it is a separate package on
+    # every distribution and the first to go missing (issue #251).
+    required = {{"jpg": "jpeg"}.get(ext, ext) for ext in SUPPORTED_COVER_EXTS}
+    required.add("svg")
+    missing = required - names
     if missing:
         raise RuntimeError(f"missing pixbuf loaders: {sorted(missing)}")
     return f"{len(names)} loaders"
@@ -97,7 +103,7 @@ def ui_imports():
 
 
 print(f"self-check inside {os.environ.get('APPDIR', '?')}")
-check("image loaders (png/jpeg/svg)", image_loaders)
+check("image loaders (png/jpeg/webp/svg)", image_loaders)
 check("Rsvg bindings", rsvg_bindings)
 check("cartridge render (cairo <-> GI)", cartridge_render_works)
 check("bundled symbolic icons", bundled_symbolic_icons)

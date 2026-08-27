@@ -1373,6 +1373,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-209 — Every package can decode the covers it downloads
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the built packages assert the same thing
+  against their own installs).
+- **Steps:** As a QA person: install the `.deb` (`sudo apt install ./openemux_*.deb`) or the
+  `.rpm` on a machine with no image viewer installed, sync cover art, and look at the grid.
+- **Expected:** The covers render. Cover art synced from libretro is WebP and gdk-pixbuf has no
+  built-in decoder for it, so the loader is a separate package on every distribution — and neither
+  native package declared it (issue #251). Measured against the released 1.11.3 artifacts:
+  `apt install ./openemux_1.11.3_amd64.deb` on `ubuntu:24.04` left gdk-pixbuf with no `webp`
+  loader at all, and on `fedora:40` it arrived only as a *weak* dependency of
+  `gdk-pixbuf2-modules`, so `rpm -ivh`, `--setopt=install_weak_deps=False` and offline installs
+  did without it. Every synced cover then decoded to nothing and the card rendered blank, with
+  only a `cover decode failed` line in the log. The AppImage has bundled the loader from the
+  start; the Flatpak gets it from `org.gnome.Platform`.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  assert "Requires:       webp-pixbuf-loader" in spec, "the .rpm does not require the loader"
+  deb = Path("packaging/deb/build.sh").read_text()
+  depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
+  assert "webp-pixbuf-loader" in depends, f"the .deb does not depend on the loader: {depends}"
+  # ...and each build proves it against its own install rather than trusting the line.
+  for build in ("packaging/deb/build.sh", "packaging/rpm/build.sh",
+                "packaging/appimage/selftest.py"):
+      assert "SUPPORTED_COVER_EXTS" in Path(build).read_text(), \
+          f"{build} does not check the loaders against the formats a cover can be"
+  print("RT-209 OK")
+  EOF
+  ```
+
 ### RT-208 — RetroArch is launched with the session's environment, not the bundle's
 - **Area:** Packaging
 - **Mode:** AUTO-SUITE

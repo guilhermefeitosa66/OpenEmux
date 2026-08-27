@@ -37,7 +37,10 @@ GDK_PIXBUF_MODULEDIR="$GPB_DIR/2.10.0/loaders" \
 # runtime GDK_PIXBUF_MODULEDIR ($APPDIR/...) resolves them. Leaving the build
 # path in makes every loader unreachable on the user's machine.
 sed -i "s|$GPB_DIR/2.10.0/loaders/||g" "$tmp_cache"
-for required in svg; do
+# webp as well as svg: the cache is regenerated from the bundled loaders,
+# and a webp loader that failed to be queried is a blank card for every
+# synced cover (issue #251).
+for required in svg webp; do
   if ! grep -q "$required" "$tmp_cache"; then
     echo "ERROR: regenerated loaders.cache is missing the $required loader." >&2
     rm -f "$tmp_cache"
