@@ -229,8 +229,12 @@ cmd_status() {
 		printf 'not created yet -- make devbox-up\n'
 		return 0
 	fi
-	distrobox list | awk -v n="${NAME}" 'NR==1 || index($0, n)'
-	printf '\n'
+	# Asked of the container manager rather than printed from `distrobox list`:
+	# that table carries the image labels and the whole mount list, and one row
+	# of it buries everything below in several screens of text.
+	local cm; cm=$(container_manager)
+	[ -n "${cm}" ] && printf 'state       %s\n\n' \
+		"$("${cm}" ps -a --filter "name=^${NAME}$" --format '{{.Status}}' 2>/dev/null)"
 	inside devbox-x status 2>/dev/null || printf 'session     down\n'
 	inside devbox-app status 2>/dev/null || true
 }
