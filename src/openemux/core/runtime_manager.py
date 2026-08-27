@@ -560,5 +560,19 @@ class RuntimeManager:
                 proc._openemux_log_handle.close()
             except Exception:
                 pass
+        # The command channel talked to the game that just ended, and the next
+        # launch picks a port of its own (issue #227), so the cached client is
+        # already destined for replacement. Closing it here means the UDP
+        # socket does not outlive the game it was for -- which is also what
+        # made the suite report an unclosed socket after its summary, from the
+        # QUIT that stop_active sends (issue #244).
+        client = self._command_client_cache
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+            self._command_client_cache = None
+            self._pacer = None
         self.active_process = None
         self.active_rom = None

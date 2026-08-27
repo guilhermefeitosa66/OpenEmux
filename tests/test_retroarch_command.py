@@ -53,6 +53,10 @@ class CommandClientTests(unittest.TestCase):
             server.settimeout(2)
             port = server.getsockname()[1]
             client = RetroArchCommandClient(port)
+            # The client keeps one reusable UDP socket; without this the test
+            # ends holding it and the run reports an unclosed-socket
+            # ResourceWarning after the summary (issue #244).
+            self.addCleanup(client.close)
 
             self.assertTrue(client.send("MUTE"))
             data, _addr = server.recvfrom(64)
@@ -65,6 +69,7 @@ class CommandClientTests(unittest.TestCase):
 
     def test_empty_command_is_refused(self):
         client = RetroArchCommandClient(1)
+        self.addCleanup(client.close)
         self.assertFalse(client.send(""))
         self.assertFalse(client.send(None))
 

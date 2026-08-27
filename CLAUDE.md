@@ -34,7 +34,9 @@ make check-retroarch
 
 ### Entry Point & Bootstrap Flow
 
-`src/openemux/main.py` defines `OpenEmuxApplication` (an `Adw.Application`). On first launch, it checks `FirstBootBootstrapper.needs_bootstrap()` and shows `FirstBootWindow` (a progress screen) while a background thread runs the bootstrap steps: creating config/directories, seeding input profiles and playlists, setting up the RetroArch environment, and downloading all libretro cores from the RetroArch Buildbot. After bootstrap completes, `OpenEmuxWindow` is presented.
+`src/openemux/app.py` defines `OpenEmuxApplication` (an `Adw.Application`). On first launch, it checks `FirstBootBootstrapper.needs_bootstrap()` and shows `FirstBootWindow` (a progress screen) while a background thread runs the bootstrap steps: creating config/directories, seeding input profiles and playlists, setting up the RetroArch environment, and downloading all libretro cores from the RetroArch Buildbot. After bootstrap completes, `OpenEmuxWindow` is presented.
+
+`src/openemux/main.py` is the entry point (`openemux.main:main`) and holds everything that must happen **before** the GTK stack is imported: the renderer pick, the legacy-config migration, the GDK backend choice, start-up logging and the typelib fallback, all in `prepare_process()`. It is reached through `build_application()`, which runs that preparation and only then imports `openemux.app`. **Importing `main` must stay free of side effects** — `from gi.repository import Gtk` runs `Gtk.init()` and opens the display, and the preparation used to run at import, so merely importing a helper from `main` (as two test files do) migrated the developer's real config directory and hijacked the root logger. `tests/test_import_side_effects.py` guards this.
 
 ### Module Layout
 

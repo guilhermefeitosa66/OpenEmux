@@ -7,7 +7,7 @@ not.
 
 import unittest
 
-from openemux.main import OpenEmuxApplication
+from openemux.app import OpenEmuxApplication
 from openemux.ui.first_boot_window import FirstBootWindow
 
 

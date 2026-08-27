@@ -112,7 +112,7 @@ push to `develop`, refreshes the README's coverage badge by pushing
 `make smoke` runs [`scripts/smoke_start.py`](../scripts/smoke_start.py), which
 is the one check the unit suite cannot make: it constructs the real
 `Adw.Application`, waits for the window to become visible, and reads the
-start-up log back. `main.py` does real work at import time (renderer pick,
+start-up log back. `main.py` does real work before GTK comes up (renderer pick,
 legacy config migration, start-up logging, GTK typelib check) and no test ever
 touches it, so a crash there used to reach release day (issue #242). It runs
 against a throwaway `HOME` with the bootstrap pre-completed, so it never sees

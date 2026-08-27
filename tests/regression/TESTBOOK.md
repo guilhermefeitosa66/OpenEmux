@@ -96,6 +96,43 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_ci_workflows.py` (`SecurityWorkflowTests`, `SupplyChainTests`,
   `LintGateTests`); `make lint` exits 0.
 
+### RT-232 — Running the tests leaves the developer's home directory alone
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: note the size of `~/.openemux/runtime/openemux_startup.log`, run the
+  unit suite, and look at it again.
+- **Expected:** Not one line added, and the run prints no `INFO [openemux...]` lines of its own.
+  `openemux/main.py` used to do its whole pre-GTK preparation at import, and two test files import
+  from it — so running the tests migrated a legacy `~/.opemux` (real user data), read the real
+  config, redirected the root logger into the real start-up log, and replaced `sys.excepthook` and
+  `threading.excepthook` for the test process. About 1,100 log lines per run went to the test
+  output and to that file, among them `screenscraper lookup: … url=…`, which reads as live HTTP
+  traffic (it is not — the suite is offline-safe). The preparation now lives in
+  `prepare_process()`, and the GTK import and the application class in `openemux/app.py`, reached
+  only through `build_application()` — importing `main` costs nothing (issue #244).
+- **Check:** suite file `tests/test_import_side_effects.py`; and
+  `wc -l ~/.openemux/runtime/openemux_startup.log` is unchanged across
+  `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests`.
+
+### RT-233 — The suite reports no leaked file descriptors and no stray output
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the suite with resource warnings turned on and read what comes
+  after the summary.
+- **Expected:** No `ResourceWarning: unclosed`, and nothing printed after `OK`. The command
+  client's UDP socket outlived the game it was for — `stop_active()` sends QUIT, which opens it,
+  and nothing closed it — and `tools/generate_name_db.py` printed its progress, so
+  `games.db.zip written: /tmp/…` surfaced after the summary and read like a file leaked into the
+  tree (it was inside a `TemporaryDirectory`; only the print leaked). Issue #244.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -W always::ResourceWarning \
+    -m unittest discover -s tests 2>&1 | grep -c "ResourceWarning: unclosed" \
+    | grep -qx 0 && echo "RT-233 OK"
+  ```
+
 ### RT-002 — The unit suite passes
 - **Area:** Startup
 - **Mode:** AUTO-PROBE
