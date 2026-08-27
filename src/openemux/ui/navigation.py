@@ -458,10 +458,12 @@ class NavigationController:
         return CTX_OTHER
 
     def _current_grid(self):
-        # The controller exists before the first refresh_library() populates
-        # _grids, and a focus notify can arrive in that window.
-        grids = getattr(self.window, "_grids", None) or {}
-        return grids.get(self.window.current_console)
+        # The controller exists before the first refresh_library() builds any
+        # page, and a focus notify can arrive in that window.
+        pages = getattr(self.window, "pages", None)
+        if pages is None:
+            return None
+        return pages.grid_for(self.window.current_console)
 
     # ----- dispatch --------------------------------------------------------
 
@@ -619,8 +621,8 @@ class NavigationController:
         if item is None:
             return
         self._remember_restore_target()
-        item._show_context_menu()
-        popover = item._context_popover
+        item.show_context_menu()
+        popover = item.context_popover
         self._tracked_popover = popover
         if popover is not None:
             # Put focus on the first entry right away: without it the menu opens
@@ -631,7 +633,7 @@ class NavigationController:
     def _cmd_favorite(self):
         item = self.window._focused_rom_item()
         if item is not None:
-            item._act_toggle_favorite(None, None)
+            item.toggle_favorite()
 
     def _cmd_close_search(self):
         window = self.window

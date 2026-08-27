@@ -869,7 +869,7 @@ class RomItem(Gtk.Box):
         )
 
     def _on_favorite_button_clicked(self, _button):
-        self._act_toggle_favorite(None, None)
+        self.toggle_favorite()
 
     def set_selected(self, selected):
         """Paint the selection. The flag itself lives on the entry."""
@@ -1009,6 +1009,25 @@ class RomItem(Gtk.Box):
             group.add_action(action)
         self.insert_action_group("rom", group)
         self._action_group = group
+
+    def show_context_menu(self, x=None, y=None):
+        """Open this card's context menu.
+
+        Public because the gamepad controller and the grid's own key handler
+        both open it from outside the card; they used to call the underscored
+        name across a module boundary (issue #237).
+        """
+        self._show_context_menu(x, y)
+
+    @property
+    def context_popover(self):
+        """The open context popover, or None. Read by the controller, which
+        moves focus into it once it is up."""
+        return self._context_popover
+
+    def toggle_favorite(self):
+        """Star or unstar this card's ROM, as the context entry would."""
+        self.toggle_favorite()
 
     def _show_context_menu(self, x=None, y=None):
         rom = self.rom
@@ -1803,7 +1822,7 @@ class RomGrid(Gtk.GridView):
         if card is None or card.entry is None:
             return False
         if is_menu_key:
-            card._show_context_menu()
+            card.show_context_menu()
         else:
             self._launch_rom(card.rom)
         return True

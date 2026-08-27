@@ -33,8 +33,8 @@ COPYRIGHT = PROJECT_ROOT / "packaging" / "common" / "copyright"
 
 
 def console_icon_files():
-    """The filenames ui/window.py can ask for, @2x fallbacks included."""
-    text = (PACKAGE_ROOT / "ui" / "window.py").read_text(encoding="utf-8")
+    """The filenames ui/console_icons.py can ask for, @2x fallbacks included."""
+    text = (PACKAGE_ROOT / "ui" / "console_icons.py").read_text(encoding="utf-8")
     block = text.split("CONSOLE_ICON_FILES = {", 1)[1].split("}", 1)[0]
     names = set(re.findall(r'"([^"]+\.png)"', block))
     return names | {
@@ -103,7 +103,7 @@ class NothingShipsThatTheUiNeverDisplaysTests(unittest.TestCase):
 
     def test_every_console_icon_the_ui_asks_for_is_on_disk(self):
         present = {path.name for path in SYSTEMS_DIR.iterdir() if path.is_file()}
-        # The @2x variant is the one window.py prefers; the plain name is only
+        # The @2x variant is the one console_icons.py prefers; the plain name is only
         # a fallback, so a missing fallback is not a defect.
         preferred = {name for name in console_icon_files() if "@2x" in name}
         self.assertEqual(sorted(preferred - present), [])
