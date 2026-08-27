@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.dir_walk import relative_to_base, walk_files
+from tests.platform_marks import posix_only
 
 
 class WalkFilesTests(unittest.TestCase):
@@ -61,6 +62,7 @@ class WalkFilesTests(unittest.TestCase):
 
             self.assertIn("game.nes", self._names(root))
 
+    @posix_only("chmod 0o000 removes read permission from a directory")
     def test_an_unreadable_directory_is_skipped(self):
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

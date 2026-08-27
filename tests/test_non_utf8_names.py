@@ -15,6 +15,7 @@ from openemux.core.collections import CollectionManager
 from openemux.core.paths import display_text
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.scanner import RomScanner
+from tests.platform_marks import posix_only
 
 #: A byte no UTF-8 decoder accepts, which is exactly the point.
 BAD_BYTE = b"\xff"
@@ -46,6 +47,7 @@ class ScanningSurvivesTests(unittest.TestCase):
         (roms / "FC").mkdir(parents=True, exist_ok=True)
         return PlaylistManager(_Config(base / "playlists", roms), RomScanner(roms)), roms
 
+    @posix_only("a filename holding bytes that are not valid UTF-8")
     def test_a_non_utf8_rom_name_is_scanned_and_written(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -63,6 +65,7 @@ class ScanningSurvivesTests(unittest.TestCase):
             ).splitlines()
             self.assertIn(bad_path, lines)
 
+    @posix_only("a filename holding bytes that are not valid UTF-8")
     def test_the_written_name_round_trips_back_to_the_real_file(self):
         # The point of surrogateescape: the line reloads as a path that opens.
         with TemporaryDirectory() as tmp_dir:
@@ -114,6 +117,7 @@ class FavoritesAndCollectionsTests(unittest.TestCase):
         (roms / "FC").mkdir(parents=True, exist_ok=True)
         return PlaylistManager(_Config(base / "playlists", roms), RomScanner(roms)), roms
 
+    @posix_only("a filename holding bytes that are not valid UTF-8")
     def test_a_non_utf8_rom_can_be_favorited(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -124,6 +128,7 @@ class FavoritesAndCollectionsTests(unittest.TestCase):
             self.assertIn(bad_path, manager.list_favorite_paths())
             self.assertTrue(manager.is_favorite(bad_path))
 
+    @posix_only("a filename holding bytes that are not valid UTF-8")
     def test_a_non_utf8_rom_can_go_into_a_collection(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -154,6 +159,7 @@ class DisplayTextTests(unittest.TestCase):
         for value in ("Chrono Trigger", "Pokémon Rojo", "ドラクエ", ""):
             self.assertEqual(display_text(value), value)
 
+    @posix_only("a filename holding bytes that are not valid UTF-8")
     def test_a_real_filename_survives_the_round_trip_to_the_screen(self):
         with TemporaryDirectory() as tmp_dir:
             bad_path = _write_bad_name(Path(tmp_dir))

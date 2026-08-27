@@ -13,6 +13,7 @@ import unittest
 from openemux.core import x11_embed
 from openemux.core.input_actions import RETROARCH_KEY_NAMES
 from openemux.core.x11_embed import RetroArchWindowEmbedder, _keysym_candidates
+from tests.platform_marks import linux_only
 
 
 class _FakeWindow:
@@ -425,6 +426,7 @@ class KeysymResolutionTests(unittest.TestCase):
         self.assertEqual(_keysym_candidates(""), [])
         self.assertEqual(_keysym_candidates(None), [])
 
+    @linux_only("the X keysym tables, from python-xlib")
     def test_every_retroarch_key_name_can_be_resolved(self):
         # The guarantee that matters: whatever an input profile stores, the
         # wrapper can grab it. Uses the real Xlib tables, no server needed.

@@ -3599,6 +3599,18 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   that crashes at startup, and the installer clears the directories it owns first.
 - **Check:** human only.
 
+### RT-267 — The suite runs on Windows, and what it skips there says why
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Check that every platform skip carries a stated reason.
+- **Expected:** Tests skipped off their platform go through `tests/platform_marks.py`, whose reasons
+  name the POSIX or Linux behaviour under test. A bare "skipped on Windows" would make a platform
+  truth indistinguishable from a bug nobody fixed, which is how a Windows port quietly stops being
+  tested.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "import pathlib, re; bad = sorted(p.name for p in pathlib.Path('tests').glob('test_*.py') if p.name != 'test_platform_marks.py' and re.search(r'skip(If|Unless)\s*\(\s*(sys\.platform|os\.name)', p.read_text())); assert not bad, bad; print('RT-267 OK')"`
+
 ### RT-259 — The SDL backend spells a control the same way the evdev one does
 - **Area:** Windows platform
 - **Mode:** AUTO-SUITE

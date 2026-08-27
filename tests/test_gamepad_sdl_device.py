@@ -21,6 +21,11 @@ and needs a person with a controller.
 import time
 import unittest
 
+from tests.platform_marks import IS_LINUX
+
+if not IS_LINUX:  # the virtual pad below is a Linux kernel interface
+    raise unittest.SkipTest("uinput is a Linux kernel interface")
+
 from openemux.core import gamepad_sdl as gs
 from openemux.core.ui_gamepad import action_for_token
 from tests.test_ui_gamepad_device import (

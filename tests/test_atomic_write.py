@@ -15,6 +15,7 @@ from openemux.core.atomic_write import (
 )
 from openemux.core.config import ConfigManager
 from openemux.core.playlist_manager import PlaylistManager
+from tests.platform_marks import posix_only
 
 
 def _mode_of(path):
@@ -44,6 +45,7 @@ class AtomicWriteTextTests(unittest.TestCase):
             atomic_write_text(Path(tmp_dir) / "state.yaml", "a: 1\n")
             self.assertEqual(_leftovers(tmp_dir), [])
 
+    @posix_only("a file mode of 0o644; NTFS has no such bit")
     def test_a_new_file_is_readable_by_the_user_tooling(self):
         # mkstemp opens 0600; a config only root-and-owner can read would be a
         # regression against the plain open() this replaced.
@@ -52,6 +54,7 @@ class AtomicWriteTextTests(unittest.TestCase):
             atomic_write_text(target, "a: 1\n")
             self.assertEqual(_mode_of(target), DEFAULT_FILE_MODE)
 
+    @posix_only("a file mode carried across a replace")
     def test_an_existing_file_keeps_its_permissions(self):
         with TemporaryDirectory() as tmp_dir:
             target = Path(tmp_dir) / "config.yaml"
@@ -60,6 +63,7 @@ class AtomicWriteTextTests(unittest.TestCase):
             atomic_write_text(target, "a: 2\n")
             self.assertEqual(_mode_of(target), 0o600)
 
+    @posix_only("an explicit POSIX file mode")
     def test_an_explicit_mode_wins(self):
         with TemporaryDirectory() as tmp_dir:
             target = Path(tmp_dir) / "cheevos.config"

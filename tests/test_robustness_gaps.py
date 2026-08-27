@@ -18,6 +18,7 @@ from openemux.core.cartridge_render import _is_composite_of
 from openemux.core.gamepad_reader import NATIVE_WORD_BITS, parse_bitmap
 from openemux.core.rom_actions import RomActionError, sanitize_rom_name
 from openemux.core.scraper import COVER_ART, save_local_art
+from tests.platform_marks import posix_only
 
 
 class _ReadOnlyConfig:
@@ -51,6 +52,7 @@ class UnwritableBiosDirTests(unittest.TestCase):
                 # directory cannot be removed.
                 root.chmod(0o755)
 
+    @posix_only("a directory made unwritable with chmod")
     def test_the_bios_page_still_reports_a_status(self):
         with self._read_only_library() as config:
             with self.assertLogs("openemux.core.bios_manager", level="WARNING"):
@@ -63,6 +65,7 @@ class UnwritableBiosDirTests(unittest.TestCase):
             self.assertTrue(all(not entry["present"] for entry in status["required"]))
             self.assertFalse(status["bios_dir"].exists())
 
+    @posix_only("a directory made unwritable with chmod")
     def test_the_pre_launch_check_still_answers(self):
         with self._read_only_library() as config:
             with self.assertLogs("openemux.core.bios_manager", level="WARNING"):
@@ -292,6 +295,7 @@ class EnsureRomDirectoriesTests(unittest.TestCase):
         config.save_config = lambda: None
         return config
 
+    @posix_only("a directory made read-only with chmod")
     def test_a_read_only_parent_is_reported_rather_than_raised(self):
         with TemporaryDirectory() as tmp_dir:
             parent = Path(tmp_dir) / "mount"

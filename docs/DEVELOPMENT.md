@@ -432,12 +432,30 @@ checksums, so the first fetch of a new upstream version records what it saw
 (`--record`) for review and commit; every later run verifies against that and
 fails hard on a mismatch.
 
-### Known-failing tests
+### Tests that do not run on Windows
 
-The suite still carries Linux-only assumptions -- POSIX file modes, `/usr`
-install prefixes, evdev struct sizes, X11 -- so a handful of tests fail on
-Windows and do not indicate a broken toolchain. Phase 4 of issue #118 covers
-fixing them and running the suite on a `windows-latest` runner.
+The whole suite runs on Windows -- `make test` in the development shell, and a
+`windows-latest` job in [`tests.yml`](../.github/workflows/tests.yml) under the
+same MSYS2 stack the bundle ships. About thirty of its ~1800 tests skip there,
+and every one of them is marked with a reason:
+
+```python
+from tests.platform_marks import linux_only, posix_only
+
+@posix_only("0o600 on the file holding the account token")
+def test_the_file_is_owner_only(self):
+```
+
+`posix_only` covers file modes and `chmod`; `linux_only` covers the evdev
+kernel ABI, `/proc`, the FHS install prefixes, AppImages, X11 and the uinput
+device tests. Both are in [`tests/platform_marks.py`](../tests/platform_marks.py).
+
+Skipping these is not lowering the bar -- what they assert *is* a Linux
+behaviour, and asserting it on Windows would only be asserting that Windows is
+Windows. But a mark is a claim, so make it the narrowest one that fits (a
+method, not its class) and say which platform behaviour is at stake. A bare
+"skipped on Windows" leaves the next reader unable to tell a platform truth
+from a bug nobody got around to fixing.
 
 ## Building the packages
 

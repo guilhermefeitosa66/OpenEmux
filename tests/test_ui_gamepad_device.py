@@ -9,11 +9,17 @@ Skipped wherever /dev/uinput is not writable (CI, containers, hosts where the
 user is not in the input group).
 """
 
-import fcntl
 import os
 import struct
 import time
 import unittest
+
+from tests.platform_marks import IS_LINUX
+
+if not IS_LINUX:  # noqa: E402 - the imports below do not exist off Linux
+    raise unittest.SkipTest("uinput and evdev are Linux kernel interfaces")
+
+import fcntl
 
 from openemux.core.gamepad_reader import list_gamepads
 from openemux.core.ui_gamepad import GamepadNavigator

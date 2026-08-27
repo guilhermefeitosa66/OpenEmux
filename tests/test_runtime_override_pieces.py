@@ -19,6 +19,7 @@ from pathlib import Path
 
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from tests.test_retroarch_launcher import _DummyConfig
+from tests.platform_marks import linux_only
 
 
 def _launcher(tmp="/tmp/openemux-test", **config_attrs):
@@ -84,6 +85,7 @@ class TheEmbedPieceTests(unittest.TestCase):
         overrides = launcher._embed_overrides()
         self.assertNotIn("input_toggle_fullscreen", overrides)
 
+    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
     def test_with_a_wrapper_the_window_is_plain_and_undecorated(self):
         launcher, _config = _launcher(game_window=True)
         overrides = launcher._embed_overrides()
@@ -92,10 +94,12 @@ class TheEmbedPieceTests(unittest.TestCase):
         self.assertEqual(overrides["video_window_show_decorations"], '"false"')
         self.assertEqual(overrides["video_window_save_positions"], '"false"')
 
+    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
     def test_with_a_wrapper_focus_hops_do_not_pause_the_game(self):
         launcher, _config = _launcher(game_window=True)
         self.assertEqual(launcher._embed_overrides()["pause_nonactive"], '"false"')
 
+    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
     def test_with_a_wrapper_the_fullscreen_hotkey_is_unbound_on_every_device(self):
         # Only the keyboard one was unbound before, and the gamepad binding
         # from the input profile survived: one press destroyed the embed
@@ -105,6 +109,7 @@ class TheEmbedPieceTests(unittest.TestCase):
         for suffix in ("", "_btn", "_axis"):
             self.assertEqual(overrides[f"input_toggle_fullscreen{suffix}"], '"nul"')
 
+    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
     def test_with_a_wrapper_the_context_driver_is_emptied_not_pinned(self):
         # Empty means "probe". Naming a context the build lacks would leave
         # the game with no video at all.

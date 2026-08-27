@@ -10,6 +10,7 @@ has to see the session instead.
 import unittest
 
 from openemux.core.appimage_env import FALLBACK_PATH, host_env
+from tests.platform_marks import linux_only
 
 #: The environment measured inside the built bundle, trimmed to the names
 #: that matter. Every one of these reached a process started from
@@ -135,6 +136,7 @@ class TheSessionIsRestoredExactlyTests(unittest.TestCase):
 class WithoutARecordTests(unittest.TestCase):
     """An AppRun that stopped keeping the originals still gets a clean child."""
 
+    @linux_only("an AppImage mount, and a PATH joined with ':'")
     def test_with_no_record_at_all_the_appdir_parts_are_swept_out(self):
         # The host half of each list survives; only what points into the
         # mount goes. Losing PATH entirely would be the worse failure.
