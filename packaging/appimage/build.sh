@@ -47,6 +47,61 @@ echo "==> building openemux ${VERSION} AppImage for ${ARCH}"
 echo "==> phase 1: assemble the AppDir (no packaging yet)"
 appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
 
+# appimage-builder rewrites every PT_INTERP to a *relative* path, so the ELF
+# loader is looked up from the working directory -- $APPDIR, or runtime/compat
+# where its exec hooks chdir. It then links the loader into both runtimes
+# itself... on x86_64. On aarch64 it does not: its glibc file list matches
+# `ld-linux-x86-64.so*` and `ld-linux.so.2` and nothing that matches
+# `ld-linux-aarch64.so.1`, so the loader stays under usr/lib, the relative
+# `lib/ld-linux-aarch64.so.1` resolves to nothing, and the bundle dies with
+# "usr/bin/python3: not found" -- a file that is right there (issue #119).
+#
+# Derived rather than hardcoded: read the interpreter the bundled python
+# actually asks for and make that exact relative path resolve from both
+# directories. On x86_64 the recipe's own lib64 links already satisfy it and
+# this finds nothing to do.
+echo "==> ensuring the bundled interpreter's loader resolves"
+PYTHON_BIN="$(readlink -f AppDir/usr/bin/python3)"
+test -f "$PYTHON_BIN" || { echo "ERROR: no bundled python3 in the AppDir." >&2; exit 1; }
+INTERP="$(readelf -l "$PYTHON_BIN" | sed -n 's/.*program interpreter: \(.*\)]/\1/p')"
+test -n "$INTERP" || { echo "ERROR: $PYTHON_BIN declares no ELF interpreter." >&2; exit 1; }
+echo "    interpreter: $INTERP"
+case "$INTERP" in
+  /*)
+    # Absolute: the host's own loader, nothing for us to place.
+    echo "    absolute; nothing to link"
+    ;;
+  *)
+    LOADER="$(find AppDir/usr/lib AppDir/lib AppDir/usr/lib64 AppDir/lib64 \
+                   AppDir/runtime -name "$(basename "$INTERP")" \
+                   \( -type f -o -type l \) -print 2>/dev/null | head -1)"
+    test -n "$LOADER" || {
+      echo "ERROR: $(basename "$INTERP") is nowhere in the AppDir." >&2
+      exit 1
+    }
+    echo "    loader:      $LOADER"
+    for base in AppDir AppDir/runtime/compat; do
+      target="$base/$INTERP"
+      if [ -e "$target" ]; then
+        echo "    ok:          $target"
+        continue
+      fi
+      mkdir -p "$(dirname "$target")"
+      ln -sfn "$(realpath --relative-to="$(dirname "$target")" "$LOADER")" "$target"
+      echo "    linked:      $target -> $(readlink "$target")"
+    done
+    ;;
+esac
+# Both, because openemux-run.sh cds to $APPDIR while the exec hooks cd to
+# runtime/compat, and the bundle has to start either way.
+for base in AppDir AppDir/runtime/compat; do
+  case "$INTERP" in /*) continue ;; esac
+  test -e "$base/$INTERP" || {
+    echo "ERROR: $base/$INTERP still does not resolve." >&2
+    exit 1
+  }
+done
+
 # Regenerate the gdk-pixbuf loaders cache from the *bundled* loaders. The cache
 # written during bundling omits libpixbufloader-svg.so, and without it every
 # symbolic icon in the UI and every SVG asset fails to render.
