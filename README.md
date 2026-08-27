@@ -137,7 +137,7 @@ Every release ships a `SHA256SUMS` file. Download it next to the artifact and ch
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-`OpenEmux-1.9.0-x86_64.AppImage: OK` means the file is intact. Anything else means the download is corrupt or has been tampered with — do not run it.
+A line ending in `: OK` — `OpenEmux-<version>-x86_64.AppImage: OK` — means the file is intact. Anything else means the download is corrupt or has been tampered with — do not run it.
 
 ---
 

@@ -307,10 +307,11 @@ sync.
 ### Line endings
 
 `.gitattributes` normalizes the repository to LF, because Git for Windows'
-default `core.autocrlf=true` otherwise puts a `\r` in the shebang of `run.sh`
-and `packaging/**/*.sh` ("bad interpreter") and in Makefile recipes -- which
-breaks the *Linux* builds from a Windows checkout. The files Windows itself runs
-(`*.ps1`, `*.cmd`, `*.bat`, `*.iss`) are the exception and keep CRLF.
+default `core.autocrlf=true` otherwise puts a `\r` in the shebang of
+`packaging/**/*.sh` and `devbox/*.sh` ("bad interpreter") and in Makefile
+recipes -- which breaks the *Linux* builds from a Windows checkout. The files
+Windows itself runs (`*.ps1`, `*.cmd`, `*.bat`, `*.iss`) are the exception and
+keep CRLF.
 
 ### Vendored RetroArch
 
