@@ -28,4 +28,27 @@ RUN apt-get update \
 RUN python3 -m pip install --break-system-packages --no-cache-dir \
       "packaging<22" "appimage-builder==1.1.0"
 
+# The runtime that carries the finished bundle.
+#
+# Left to itself appimage-builder downloads AppImageKit's "continuous"
+# runtime, which is dynamically linked and dlopens libfuse.so.2 at startup.
+# Ubuntu 24.04 ships FUSE 3 and does not install libfuse2t64; Fedora 40 does
+# not install fuse-libs either -- so on both distributions the project targets
+# as its floor, double-clicking the primary download died with
+# "dlopen(): error loading libfuse.so.2" before a line of OpenEmux ran
+# (issue #248).
+#
+# type2-runtime's runtime is static-pie with squashfuse and FUSE 3 linked in,
+# so it asks the host for no library at all. Pinned to a tagged build (not
+# "continuous") and checksummed, because this binary is the first thing every
+# user of the AppImage executes. packaging/appimage/build.sh appends the
+# squashed AppDir to it by hand: this runtime reads zlib and zstd only, and
+# appimage-builder's own packaging step hardcodes xz, so its phase 2 is not
+# used at all.
+ARG APPIMAGE_RUNTIME_URL=https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+ARG APPIMAGE_RUNTIME_SHA256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+RUN wget -q -O /opt/appimage-runtime-x86_64 "$APPIMAGE_RUNTIME_URL" \
+ && echo "$APPIMAGE_RUNTIME_SHA256  /opt/appimage-runtime-x86_64" | sha256sum -c - \
+ && chmod 0644 /opt/appimage-runtime-x86_64
+
 WORKDIR /work

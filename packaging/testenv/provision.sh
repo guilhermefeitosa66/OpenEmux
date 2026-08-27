@@ -44,8 +44,10 @@ if [ "${FAMILY}" = debian ]; then
 		imagemagick
 		flatpak
 	)
-	# The AppImage runtime needs libfuse2. Noble and trixie renamed it in the
-	# 64-bit time_t transition; older bases still carry the old name.
+	# The *vendored RetroArch* AppImage needs libfuse2 -- OpenEmux's own
+	# bundle carries a static FUSE 3 runtime and no longer asks for it
+	# (issue #248). Noble and trixie renamed the package in the 64-bit
+	# time_t transition; older bases still carry the old name.
 	if apt-cache show libfuse2t64 >/dev/null 2>&1; then
 		pkgs+=(libfuse2t64)
 	else
@@ -63,8 +65,9 @@ else
 		mesa-dri-drivers mesa-vulkan-drivers mesa-libGLES mesa-libEGL mesa-libGL
 		google-noto-sans-fonts abattis-cantarell-fonts adwaita-icon-theme
 		ImageMagick
-		# fuse-libs is the library; `fuse` is what carries the fusermount
-		# binary the AppImage runtime actually execs.
+		# For the vendored RetroArch AppImage (issue #248): fuse-libs is
+		# the library, and `fuse` is what carries the fusermount binary
+		# its runtime actually execs.
 		fuse-libs fuse
 		flatpak
 	)

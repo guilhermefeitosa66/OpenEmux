@@ -119,7 +119,7 @@ checksums:
 packages: appimage deb rpm flatpak checksums
 
 appimage-clean:
-	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
+	rm -rf AppDir AppDir.squashfs appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
 # Remove every packaged artifact
 packages-clean: appimage-clean

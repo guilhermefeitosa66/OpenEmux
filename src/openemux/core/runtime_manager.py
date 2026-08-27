@@ -74,6 +74,10 @@ class RuntimeManager:
         # config's "0" (pick a free one) and the override RetroArch reads can
         # never disagree.
         self._network_cmd_port = None
+        # The last launch as it would have to be repeated, and whether the
+        # unpacked retry has already been spent on it (issue #248).
+        self._launch_request = None
+        self._fuse_retry_done = False
         self._pacer = None
         self._persist_lock = threading.Lock()
         self._persist_timer = None
@@ -111,7 +115,13 @@ class RuntimeManager:
         if self._pacer is not None:
             self._pacer.reset(self._volume_db)
 
-    def launch(self, rom_path, console, state_slot=None):
+    def launch(self, rom_path, console, state_slot=None, force_extract=False):
+        """Start a game. ``force_extract`` is the FUSE retry, not a user option.
+
+        See :meth:`_retry_unpacked`: when the AppImage runtime cannot mount
+        itself the same launch is repeated unpacked, and that repeat comes
+        back through here (issue #248).
+        """
         system_id = resolve_system_id(console)
         if self.is_running():
             return False, "A game is already running. Close it before launching another one."
@@ -121,12 +131,22 @@ class RuntimeManager:
         if mode == "retroarch_wrapper":
             port = self._resolve_network_cmd_port()
             proc, error_msg = self.retroarch_launcher.launch_process(
-                rom_path, system_id, state_slot=state_slot, network_cmd_port=port
+                rom_path, system_id, state_slot=state_slot, network_cmd_port=port,
+                force_extract=force_extract,
             )
             if not proc:
                 return False, error_msg
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
+            # What a retry has to repeat, and whether one is still owed. A
+            # fresh launch re-arms it; the retry itself does not, so a game
+            # that cannot start gets exactly one second attempt.
+            self._launch_request = {
+                "path": rom_path,
+                "console": system_id,
+                "state_slot": state_slot,
+            }
+            self._fuse_retry_done = force_extract
             self._launched_at = self._clock()
             self._network_cmd_port = port
             self.volume_db = self.config_manager.get_master_volume_db()
@@ -480,6 +500,12 @@ class RuntimeManager:
             "log_path": log_path,
         }
         if self._died_on_startup(exit_code, ran_for):
+            # An AppImage that could not mount itself never reached
+            # RetroArch, so this is not a game that failed -- it is a launch
+            # that has not happened yet. Unpacking needs no FUSE at all, so
+            # try that once before telling the user anything (issue #248).
+            if self._retry_unpacked(log_path):
+                return None
             reason = retroarch_log.read_failure_reason(log_path)
             result["failure_reason"] = reason
             logger.warning(
@@ -490,6 +516,37 @@ class RuntimeManager:
                 log_path,
             )
         return result
+
+    def _retry_unpacked(self, log_path):
+        """Relaunch the game that just died, unpacked instead of FUSE-mounted.
+
+        True when a retry actually started, and then the caller must report
+        nothing: from the user's side the game is simply still coming up.
+        False for everything else -- a non-AppImage RetroArch, a death the
+        log does not blame on FUSE, or a retry already spent (issue #248).
+        """
+        if self._fuse_retry_done:
+            return False
+        request = self._launch_request
+        if not request:
+            return False
+        if not self.retroarch_launcher.launches_an_appimage():
+            return False
+        if not retroarch_log.read_is_fuse_failure(log_path):
+            return False
+        logger.warning(
+            "the RetroArch AppImage could not mount itself; retrying unpacked: log=%s",
+            log_path,
+        )
+        started, error = self.launch(
+            request["path"],
+            request["console"],
+            state_slot=request.get("state_slot"),
+            force_extract=True,
+        )
+        if not started:
+            logger.warning("unpacked retry did not start: %s", error)
+        return bool(started)
 
     @staticmethod
     def _died_on_startup(exit_code, ran_for):

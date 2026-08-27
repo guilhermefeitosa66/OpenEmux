@@ -311,7 +311,8 @@ class CommandDispatchTests(unittest.TestCase):
             manager, _config = _manager(tmp_dir)
             launched = {}
 
-            def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None):
+            def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None,
+                             force_extract=False):
                 launched["args"] = (rom_path, console)
                 launched["port"] = network_cmd_port
                 return _FakeProcess(), None
@@ -683,6 +684,156 @@ class StartupFailureTests(unittest.TestCase):
         self.assertTrue(RuntimeManager._died_on_startup(1, 0.5))
         self.assertFalse(RuntimeManager._died_on_startup(0, 0.5))
         self.assertFalse(RuntimeManager._died_on_startup(1, STARTUP_FAILURE_SECONDS + 0.1))
+
+
+class UnpackedRetryTests(unittest.TestCase):
+    """A launch that died mounting gets one unpacked second chance (#248).
+
+    The AppImage runtime failing to mount itself is not a game that failed --
+    it is a launch that never happened. Unpacking needs no FUSE at all, so
+    the same launch is repeated that way before the user is told anything.
+    """
+
+    def _manager(self, tmp_dir, clock, appimage=True):
+        config = _DummyConfig(tmp_dir)
+        manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), clock=clock)
+        manager.retroarch_launcher.launches_an_appimage = lambda: appimage
+        return manager
+
+    def _stub_launcher(self, manager, log_path):
+        """Record every launch and hand back a process with that log."""
+        calls = []
+
+        def _launch(rom_path, console, state_slot=None, network_cmd_port=None,
+                    force_extract=False):
+            calls.append(
+                {
+                    "rom": rom_path,
+                    "console": console,
+                    "state_slot": state_slot,
+                    "force_extract": force_extract,
+                }
+            )
+            proc = _FakeProcess()
+            proc._openemux_log_path = str(log_path)
+            return proc, None
+
+        manager.retroarch_launcher.launch_process = _launch
+        return calls
+
+    @staticmethod
+    def _log(tmp_dir, text):
+        log_path = Path(tmp_dir) / "launch.log"
+        log_path.write_text(text, encoding="utf-8")
+        return log_path
+
+    def test_a_mount_failure_is_retried_unpacked(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS", state_slot=3)
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            # Nothing is reported: as far as the user can tell the game is
+            # still coming up.
+            self.assertIsNone(manager.poll_active())
+
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(calls[0]["force_extract"])
+            self.assertTrue(calls[1]["force_extract"])
+            # ...and it is the same launch, slot included.
+            self.assertEqual(calls[1]["rom"], "/roms/PS/game.chd")
+            self.assertEqual(calls[1]["console"], "PS")
+            self.assertEqual(calls[1]["state_slot"], 3)
+            self.assertTrue(manager.is_running())
+
+    def test_the_second_chance_is_spent_only_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            manager.poll_active()
+
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 2, "the retry looped instead of giving up")
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_fresh_launch_re_arms_the_retry(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            for _ in range(2):
+                manager.launch("/roms/PS/game.chd", "PS")
+                clock.advance(0.4)
+                manager.active_process.exit_code = 1
+                manager.poll_active()
+                manager.stop_active()
+                manager._clear_active()
+
+        # Two user launches, each with its own retry.
+        self.assertEqual([call["force_extract"] for call in calls],
+                         [False, True, False, True])
+
+    def test_a_native_retroarch_is_never_retried(self):
+        # The log of a wrapper script can say anything; there is no AppImage
+        # to unpack, so a second launch would only fail the same way.
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock, appimage=False)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_death_the_log_does_not_blame_on_fuse_is_reported_at_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "[ERROR] Failed to open libretro core\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("libretro core", result["failure_reason"])
+
+    def test_a_game_the_user_played_and_quit_is_never_relaunched(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(3600.0)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(result.get("failure_reason"))
 
 
 class ClearedMidReadTests(unittest.TestCase):

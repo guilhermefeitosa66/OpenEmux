@@ -676,6 +676,66 @@ class AppImageFuseFallbackTests(unittest.TestCase):
         self.assertEqual(prefix, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
 
 
+class ForcedExtractRetryTests(unittest.TestCase):
+    """The second attempt after an AppImage failed to mount itself (#248).
+
+    The ``libfuse.so.2`` probe answers "can this library be loaded", which is
+    not "can this host mount a FUSE filesystem". A machine with the library
+    but no ``/dev/fuse``, or a ``fusermount`` that is not setuid, passes the
+    probe and still dies at the mount -- only visible afterwards, in the log.
+    """
+
+    def test_forcing_overrides_a_libfuse2_that_loads_fine(self):
+        self.assertEqual(
+            appimage_flags(
+                "/opt/RetroArch-Linux-x86_64.AppImage",
+                libfuse_available=True,
+                force=True,
+            ),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_forcing_never_invents_a_flag_for_a_plain_binary(self):
+        self.assertEqual(appimage_flags("/usr/bin/retroarch", force=True), [])
+
+    def test_the_forced_flag_reaches_the_launch_prefix(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.object(RetroArchLauncher, "libfuse2_available", staticmethod(lambda: True)):
+                mounted, _ = launcher._launch_prefix()
+                unpacked, _ = launcher._launch_prefix(force_extract=True)
+
+        self.assertEqual(mounted, [str(binary)])
+        self.assertEqual(unpacked, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
+
+    def test_an_appimage_retroarch_is_recognized_as_retryable(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            self.assertTrue(launcher.launches_an_appimage())
+
+    def test_a_native_retroarch_has_nothing_to_unpack(self):
+        # Nothing to retry: a wrapper script that merely echoes a FUSE line
+        # must not buy a second launch.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            self.assertFalse(launcher.launches_an_appimage())
+
+
 class X11OnlyEnvTests(unittest.TestCase):
     """What RetroArch's environment must not say while the wrapper embeds."""
 

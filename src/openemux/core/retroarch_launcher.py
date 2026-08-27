@@ -37,16 +37,34 @@ logger = logging.getLogger(__name__)
 APPIMAGE_EXTRACT_AND_RUN = "--appimage-extract-and-run"
 
 
-def appimage_flags(binary_path, libfuse_available=None):
+def is_appimage(binary_path):
+    """Is this path a (type-2) AppImage rather than a plain binary?"""
+    return str(binary_path).lower().endswith(".appimage")
+
+
+def appimage_flags(binary_path, libfuse_available=None, force=False):
     """The flags an AppImage needs to run on *this* host, if any.
 
     ``--appimage-extract-and-run`` unpacks the image to a temp dir instead of
     mounting it, which is slower but needs no FUSE at all. Only used when
     ``libfuse.so.2`` is genuinely missing: on a host that has it, mounting is
     both faster and what the AppImage is built to do (issue #226).
+
+    ``force`` is the retry after a launch that died mounting anyway. The
+    ``libfuse.so.2`` probe answers "can this library be loaded", which is not
+    the same question as "can this host mount a FUSE filesystem": a machine
+    with the library but no ``/dev/fuse``, no ``fusermount``, or a
+    ``fusermount`` that is not setuid passes the probe and still fails at the
+    mount. That failure is only visible after the fact, in the launch log,
+    so the retry is the only thing that can act on it (issue #248).
     """
-    if not str(binary_path).lower().endswith(".appimage"):
+    if not is_appimage(binary_path):
         return []
+    if force:
+        logger.info(
+            "retrying the AppImage with --appimage-extract-and-run after a FUSE failure"
+        )
+        return [APPIMAGE_EXTRACT_AND_RUN]
     if libfuse_available is None:
         libfuse_available = RetroArchLauncher.libfuse2_available()
     if libfuse_available:
@@ -122,7 +140,7 @@ class RetroArchLauncher:
         )
         self.core_catalog = CoreCatalog(project_root=self.project_root)
 
-    def _launch_prefix(self):
+    def _launch_prefix(self, force_extract=False):
         """Return (argv_prefix, error).
 
         Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
@@ -164,7 +182,19 @@ class RetroArchLauncher:
                 "RetroArch binary not found. Set runtime.retroarch.binary "
                 "or add RetroArch AppImage under vendors/."
             )
-        return [retroarch_path, *appimage_flags(retroarch_path)], None
+        return [retroarch_path, *appimage_flags(retroarch_path, force=force_extract)], None
+
+    def launches_an_appimage(self):
+        """Would a launch right now go through an AppImage?
+
+        Asked before retrying a failed launch unpacked: outside an AppImage
+        there is nothing to unpack, so a FUSE-looking line in the log (a
+        wrapper script echoing one, say) must not buy a second launch
+        (issue #248).
+        """
+        if is_running_in_flatpak():
+            return False
+        return is_appimage(self._resolve_retroarch_binary() or "")
 
     @staticmethod
     def libfuse2_available(loader=None):
@@ -574,7 +604,8 @@ class RetroArchLauncher:
                 return values
         return {}
 
-    def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
+    def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
+                       force_extract=False):
         """Start the game, or say why it could not start.
 
         Everything before the ``Popen`` writes to disk -- the states dir, the
@@ -586,14 +617,17 @@ class RetroArchLauncher:
         a message, because a message is the only thing the caller can show.
         """
         try:
-            return self._launch_process(rom_path, console, state_slot, network_cmd_port)
+            return self._launch_process(
+                rom_path, console, state_slot, network_cmd_port, force_extract
+            )
         except Exception as exc:
             logger.exception("retroarch launch failed before starting the process")
             return None, f"Could not start the game: {exc}"
 
-    def _launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None):
+    def _launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
+                        force_extract=False):
         system_id = resolve_system_id(console)
-        launch_prefix, prefix_error = self._launch_prefix()
+        launch_prefix, prefix_error = self._launch_prefix(force_extract=force_extract)
         if prefix_error:
             return None, prefix_error
 
