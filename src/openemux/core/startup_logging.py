@@ -8,6 +8,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from openemux.core.paths import store_path
+
 
 #: How log output handles a character its encoder cannot represent.
 #:
@@ -48,7 +50,7 @@ def get_startup_log_path(runtime_dir=None):
     if runtime_dir:
         base_dir = Path(runtime_dir).expanduser()
     else:
-        base_dir = Path.home() / ".openemux" / "runtime"
+        base_dir = store_path("runtime")
     try:
         base_dir.mkdir(parents=True, exist_ok=True)
         return base_dir / "openemux_startup.log"

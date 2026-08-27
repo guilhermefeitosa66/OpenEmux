@@ -18,11 +18,11 @@ from pathlib import Path
 import yaml
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.paths import store_path
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CARTRIDGE_COLORS_FILE = DEFAULT_CONFIG_DIR / "cartridge_colors.config"
+DEFAULT_CARTRIDGE_COLORS_FILE = store_path("cartridge_colors")
 
 #: The shell as authored -- the absence of a color, not a color of its own.
 DEFAULT_COLOR_ID = "default"

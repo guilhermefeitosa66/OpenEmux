@@ -115,6 +115,58 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `wc -l ~/.openemux/runtime/openemux_startup.log` is unchanged across
   `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests`.
 
+### RT-249 — A config directory that is not the real one keeps everything in it
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the unit suite, then look at `~/.openemux/cores.config`,
+  `shaders.config`, `cartridge_colors.config`, `play_history.json` and `input/` for changes.
+- **Expected:** None. `ConfigManager(config_file=...)` looks like it moves the whole of the
+  app's state and did not: input profiles, shaders, per-ROM core overrides, cartridge colours,
+  core options, the RetroAchievements token and the play history each derived `~/.openemux`
+  for themselves, so a manager pointed at a temporary directory still read and wrote the
+  developer's real profile (issue #239). Every store follows the manager's own directory now,
+  and one function answers where that directory is — which is also what makes a future XDG move
+  a single-site change.
+- **Check:** suite file `tests/test_store_paths.py`.
+
+### RT-250 — A release with a regenerated artwork index reaches the user
+- **Area:** Covers & artwork
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: install a version whose `games.db.zip` is newer than the one that
+  first ran, launch, and sync covers for a game the old index could not name.
+- **Expected:** The new index is extracted over the old one and the game resolves. The extraction
+  returned as soon as `~/.openemux/artwork-index/games.db` existed, so the copy from whichever
+  version first ran stayed forever — CRC lookups and FTS results never improved unless the user
+  deleted the file by hand (issue #239). An *older* shipped zip leaves the extracted one alone.
+- **Check:** suite file `tests/test_artwork_index.py` (`AnUpgradedIndexReachesTheUserTests`).
+
+### RT-251 — A full disk during the artwork extraction is not the end of it
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: fill the disk, sync covers, free some space, and sync again.
+- **Expected:** The second sync uses the index. A failed extraction latched "unavailable" for the
+  rest of the process, so one transient — a full disk during the first extraction — lost the
+  index for the whole session; only a database that is *there and unreadable* stays latched, since
+  that will not heal on its own. Nothing is left behind in `artwork-index/` either: the temporary
+  file the extraction writes through used to leak once per failed attempt (issue #239).
+- **Check:** suite file `tests/test_artwork_index.py` (`AFailedExtractionIsNotTheEndOfItTests`).
+
+### RT-252 — The updater's URLs are written down once
+- **Area:** Settings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: launch a fresh install, an install that predates the updater block,
+  and one that sets half of it, and compare the buildbot URLs and timeouts each resolves.
+- **Expected:** The same values from the same place. They used to be spelled out three times —
+  in `DEFAULT_CONFIG`, in the migration's `setdefault` calls, and in the getter's fallbacks — so
+  changing a URL meant changing it in triplicate, and which copy an install used depended on how
+  old its `config.yaml` was (issue #239).
+- **Check:** suite file `tests/test_updater_defaults.py`.
+
+
 ### RT-233 — The suite reports no leaked file descriptors and no stray output
 - **Area:** Startup
 - **Mode:** AUTO-PROBE
@@ -367,9 +419,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
       (root / "SFC" / "game.sfc").write_bytes(b"\0" * 64)
       (root / "SFC" / "notes.txt").write_text("not a rom")
       (root / "GBA" / "game.gba").write_bytes(b"\0" * 64)
-      lib = RomScanner(root).scan_all()
-      assert len(lib["SFC"]) == 1, lib["SFC"]
-      assert len(lib["GBA"]) == 1, lib["GBA"]
+      scanner = RomScanner(root)
+      # scan_console per console, which is what the app does; scan_all had no
+      # caller anywhere and is gone (issue #239).
+      assert len(scanner.scan_console("SFC")) == 1
+      assert len(scanner.scan_console("GBA")) == 1
   print("RT-011 OK")
   EOF
   ```

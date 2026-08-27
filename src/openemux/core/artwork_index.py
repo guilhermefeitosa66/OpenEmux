@@ -42,6 +42,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from openemux.core.paths import store_path
+
 logger = logging.getLogger(__name__)
 
 #: Where the extracted database lives, under the user config dir.
@@ -117,34 +119,68 @@ class ArtworkNameIndex:
 
     def __init__(self, db_path=None, shipped_zip=None):
         if db_path is None:
-            db_path = Path.home() / ".openemux" / INDEX_DIRNAME / DB_FILENAME
+            db_path = store_path("artwork_index") / DB_FILENAME
         self._db_path = Path(db_path)
         self._shipped_zip = Path(shipped_zip) if shipped_zip else DEFAULT_SHIPPED_ZIP
-        self._unavailable = False
+        #: Latched only for a database that is there and cannot be read: a
+        #: corrupt file will not heal, so retrying it once per missed ROM is
+        #: pure cost. An extraction that failed -- a full disk during the
+        #: first one -- is *not* latched: it may well work on the next
+        #: attempt, and latching it lost the index for the rest of the
+        #: process over a transient (issue #239).
+        self._corrupt = False
         self._fts_ok = None
         self._has_crc_table = None
 
     # -- plumbing -----------------------------------------------------------
+    def _needs_extraction(self):
+        """Whether the shipped zip has something the extracted copy has not.
+
+        Not just "is it missing": a release with a regenerated index shipped a
+        newer zip, and the extracted database from the previous version stayed
+        forever -- CRC lookups and FTS results never improved unless the user
+        deleted the file by hand (issue #239).
+        """
+        if not self._db_path.exists():
+            return True
+        try:
+            return self._shipped_zip.stat().st_mtime > self._db_path.stat().st_mtime
+        except OSError:
+            # No shipped zip, or an unreadable one: what is extracted is what
+            # there is.
+            return False
+
     def _ensure_db_file(self):
-        if self._db_path.exists():
+        if not self._needs_extraction():
             return True
         shipped = self._shipped_zip
         if not shipped.exists():
             return False
+        tmp_path = None
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(shipped) as archive:
                 with archive.open(DB_FILENAME) as member, tempfile.NamedTemporaryFile(
                     dir=self._db_path.parent, delete=False
                 ) as tmp:
-                    shutil.copyfileobj(member, tmp)
                     tmp_path = Path(tmp.name)
+                    shutil.copyfileobj(member, tmp)
             tmp_path.replace(self._db_path)
+            tmp_path = None
             logger.info("artwork index extracted: %s -> %s", shipped, self._db_path)
             return True
         except Exception as exc:
             logger.warning("artwork index extraction failed: %s", exc)
             return False
+        finally:
+            # A copyfileobj that raised half way -- a full disk is the likely
+            # one -- used to leave its NamedTemporaryFile behind in
+            # artwork-index/, once per attempt (issue #239).
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
     def _connect(self):
         """A fresh read-only connection, or ``None``.
@@ -153,10 +189,10 @@ class ArtworkNameIndex:
         sync may fan out across worker threads (#186) -- sharing one sqlite
         connection across threads is exactly the bug this avoids.
         """
-        if self._unavailable:
+        if self._corrupt:
             return None
         if not self._ensure_db_file():
-            self._unavailable = True
+            # Nothing to open, and nothing that says it will stay that way.
             return None
         try:
             conn = sqlite3.connect(
@@ -166,7 +202,7 @@ class ArtworkNameIndex:
             return conn
         except Exception as exc:
             logger.warning("artwork index unusable: path=%s error=%s", self._db_path, exc)
-            self._unavailable = True
+            self._corrupt = True
             return None
 
     def _fts_available(self, conn):

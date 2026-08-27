@@ -8,7 +8,7 @@ from openemux.core.archives import (
     archive_rom_name,
     loads_archives_natively,
 )
-from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
+from openemux.core.systems import get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,6 @@ _CUE_FILE_RE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|([^\s]+))', re.IGNORECASE)
 class RomScanner:
     def __init__(self, base_path):
         self.base_path = Path(base_path)
-
-    def scan_all(self):
-        library = {}
-        for console in SYSTEM_IDS:
-            library[console] = self.scan_console(console)
-        return library
 
     def scan_console(self, console):
         system_id = resolve_system_id(console)

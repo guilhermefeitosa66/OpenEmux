@@ -125,8 +125,20 @@ class TheStatedPrerequisiteForNarrowingIsStillTrueTests(unittest.TestCase):
         )
 
     def test_the_app_still_keeps_its_data_under_the_real_home(self):
+        # Asked of the function rather than of the source: one place answers
+        # "where does the app keep its data" now (issue #239), and it is that
+        # answer -- not how config.py spells it -- that makes
+        # --filesystem=home load-bearing. When it stops being $HOME, this
+        # fails, which is the moment to revisit the grant.
+        from pathlib import Path as _Path
+
+        from openemux.core.paths import default_config_dir
+
+        directory = default_config_dir()
+        self.assertEqual(directory.parent, _Path.home())
+        self.assertEqual(directory.name, ".openemux")
         config = (REPO_ROOT / "src/openemux/core/config.py").read_text(encoding="utf-8")
-        self.assertIn('DEFAULT_CONFIG_DIR = Path.home() / ".openemux"', config)
+        self.assertIn("DEFAULT_CONFIG_DIR", config, "the manifest names this symbol")
 
 
 if __name__ == "__main__":

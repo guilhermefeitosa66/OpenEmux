@@ -22,7 +22,7 @@ import yaml
 
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
-from openemux.core.paths import get_real_home
+from openemux.core.paths import get_real_home, store_path
 from openemux.core.platform import CORE_SUFFIX, bundled_core_dir, core_stem, user_retroarch_dirs
 from openemux.core.systems import (
     get_runtime_core_candidates,
@@ -33,8 +33,7 @@ from openemux.core.systems import (
 # the vendored bundle, and the common system locations.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CORES_CONFIG_FILE = DEFAULT_CONFIG_DIR / "cores.config"
+DEFAULT_CORES_CONFIG_FILE = store_path("cores")
 DEFAULT_CORES_CONFIG = {
     "version": 1,
     # Per-ROM core overrides keyed by absolute ROM path. The per-console

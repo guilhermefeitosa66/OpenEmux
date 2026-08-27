@@ -34,13 +34,58 @@ def display_text(value):
 LEGACY_CONFIG_DIR_NAME = ".opemux"
 CONFIG_DIR_NAME = ".openemux"
 
+#: Names of the per-store files that sit beside ``config.yaml``. Every one of
+#: them used to be spelled out as ``Path.home() / ".openemux" / ...`` in the
+#: module that owned it -- nine independent derivations of the same directory
+#: (issue #239). A ``ConfigManager`` pointed elsewhere, as the tests point it,
+#: still read and wrote play history and per-ROM core overrides under the
+#: *real* home; they follow the chosen config dir now.
+STORE_FILENAMES = {
+    "config": "config.yaml",
+    "playlists": "playlists",
+    "input": "input",
+    "runtime": "runtime",
+    "states": "states",
+    "bios": "bios",
+    "shaders": "shaders.config",
+    "cores": "cores.config",
+    "cartridge_colors": "cartridge_colors.config",
+    "core_options": "core_options.config",
+    "achievements": "cheevos.config",
+    "play_history": "play_history.json",
+    "artwork_index": "artwork-index",
+    "cartridge_cache": "cache/cartridges",
+}
+
+
+def default_config_dir():
+    """Where the app keeps its own data.
+
+    The one place that answers it. ``XDG_CONFIG_HOME`` and ``XDG_DATA_HOME``
+    are deliberately *not* consulted yet -- moving an existing install's data
+    is a migration, not a rename -- but when they are, this is the single site
+    that changes, and ``migrate_legacy_config_dir`` above is the pattern.
+    """
+    return Path.home() / CONFIG_DIR_NAME
+
+
+def store_path(name, config_dir=None):
+    """The default path of one store, under ``config_dir`` or the app's own.
+
+    ``name`` is a key of :data:`STORE_FILENAMES`; an unknown one is a typo,
+    and raising beats silently writing to a path nobody meant.
+    """
+    base = Path(config_dir) if config_dir is not None else default_config_dir()
+    return base / STORE_FILENAMES[name]
+
 
 def migrate_legacy_config_dir():
     """One-time migration of the pre-rename ``~/.opemux`` data dir to ``~/.openemux``.
 
     Runs on startup before anything touches the config directory, so an install
     that predates the OpenEmux rename keeps its library, playlists, input
-    profiles and config. Uses ``Path.home()`` to match ``DEFAULT_CONFIG_DIR``.
+    profiles and config. Uses ``Path.home()`` to match
+    :func:`default_config_dir`.
 
     Two steps: (1) move the whole data dir when only the legacy one exists;
     (2) repair absolute paths baked into ``config.yaml`` that still point at the

@@ -24,7 +24,7 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import default_config_dir, get_real_home, store_path, is_running_in_flatpak
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.core_options import CoreOptionsStore
@@ -69,15 +69,17 @@ def _try_mkdir(directory, failures):
         return False
 
 # Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
+# Derived from paths.store_path, which is the one place that knows where the
+# config directory is -- see the note there (issue #239).
+DEFAULT_CONFIG_DIR = default_config_dir()
+DEFAULT_CONFIG_FILE = store_path("config")
 DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
-DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
-DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
-DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
+DEFAULT_PLAYLISTS_DIR = store_path("playlists")
+DEFAULT_INPUT_DIR = store_path("input")
+DEFAULT_RUNTIME_DIR = store_path("runtime")
 # Save states live under OpenEmux's own tree (issue #73), one directory per
 # console, so the app can list and manage them instead of RetroArch's default.
-DEFAULT_STATES_DIR = DEFAULT_CONFIG_DIR / "states"
+DEFAULT_STATES_DIR = store_path("states")
 MIGRATION_VERSION = 2
 
 # The buildbot serves cores per platform: .so under nightly/linux/x86_64 and
@@ -86,6 +88,32 @@ MIGRATION_VERSION = 2
 # getter -- three copies of a platform-dependent value is three chances to fix
 # only two of them. The info/shader URLs below are platform-neutral.
 DEFAULT_CORES_BASE_URL = f"https://buildbot.libretro.com/nightly/{BUILDBOT_OS}/x86_64/latest/"
+
+#: Everything the RetroArch buildbot updater needs, in one place.
+#:
+#: These URLs and timeouts used to be spelled out three times over -- in
+#: DEFAULT_CONFIG, in the setdefault calls of _migrate_runtime_config, and in
+#: the fallbacks of get_retroarch_updater_settings. Changing a URL meant
+#: changing it in triplicate, or the copies drifted apart in silence
+#: (issue #239).
+#:
+#: ``enabled`` is the one value that is not simply a default: a fresh config
+#: turns the updater off inside Flatpak, where core management belongs to the
+#: RetroArch Flatpak's own updater and OpenEmux must not download cores. A
+#: config that already exists keeps whatever it says, and an older one that
+#: predates the key is read as on -- which is what it was.
+UPDATER_DEFAULTS = {
+    "mode": "buildbot_all_cores",
+    "enabled": True,
+    "core_dir": None,
+    "cores_base_url": DEFAULT_CORES_BASE_URL,
+    "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
+    "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
+    "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
+    "request_timeout_sec": 30,
+    "retries": 3,
+    "parallel_downloads": 4,
+}
 
 # Bumped when a UI default changes in a way that should reach configs written
 # before it. Only the switch to the new default is forced, once: whatever the
@@ -243,18 +271,10 @@ DEFAULT_CONFIG = {
             "audio_driver": "auto",
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
-                "mode": "buildbot_all_cores",
+                **UPDATER_DEFAULTS,
                 # In Flatpak, core management is delegated to the RetroArch
                 # Flatpak's own updater; OpenEmux must not download cores.
                 "enabled": not is_running_in_flatpak(),
-                "core_dir": None,
-                "cores_base_url": DEFAULT_CORES_BASE_URL,
-                "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
-                "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-                "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-                "request_timeout_sec": 30,
-                "retries": 3,
-                "parallel_downloads": 4,
             },
         },
     },
@@ -355,21 +375,42 @@ def _merge_defaults(defaults, data):
 
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
-        self.config_file = config_file
+        self.config_file = Path(config_file)
+        # Every store sits beside config.yaml, wherever that is. They used to
+        # default to ~/.openemux independently of it, so a ConfigManager
+        # pointed elsewhere -- as every test points it -- still read and wrote
+        # input profiles, shaders, per-ROM cores, cartridge colours and play
+        # history under the user's real home (issue #239).
+        self.config_dir = self.config_file.parent
         # One writer at a time: save_config runs from the GTK main thread, the
         # volume-persist timer, the bootstrap worker and atexit (issue #208).
         self._save_lock = threading.RLock()
-        self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
-        self.shaders = ShaderConfigStore()
-        self.cores = CoreConfigStore()
-        self.cartridge_colors = CartridgeColorStore()
+        self.input_profiles = InputProfileManager(self.store_path("input"))
+        self.shaders = ShaderConfigStore(self.store_path("shaders"))
+        self.cores = CoreConfigStore(self.store_path("cores"))
+        self.cartridge_colors = CartridgeColorStore(self.store_path("cartridge_colors"))
         # Per-console core options (issue #296), beside the per-console core
         # and shader choices they sit next to in the UI.
-        self.core_options = CoreOptionsStore(DEFAULT_CONFIG_DIR / "core_options.config")
+        self.core_options = CoreOptionsStore(self.store_path("core_options"))
         # The RetroAchievements account (issue #300). Its own file, owner-only:
         # it holds a token, and config.yaml is not a credential store.
-        self.achievements = AchievementsStore(DEFAULT_CONFIG_DIR / "cheevos.config")
+        self.achievements = AchievementsStore(self.store_path("achievements"))
         self.config = self.load_config()
+
+    def store_path(self, name):
+        """The default path of one store, beside this manager's config file.
+
+        ``name`` is a key of :data:`openemux.core.paths.STORE_FILENAMES`.
+        """
+        return store_path(name, config_dir=self.config_dir)
+
+    def get_play_history_file(self):
+        """Where the last-played timestamps live (issue #239).
+
+        On the manager rather than as a module default, so a history opened
+        against a throwaway config directory stays in it.
+        """
+        return self.store_path("play_history")
 
     def load_config(self):
         """Read ``config.yaml``, keeping it if it cannot be read.
@@ -428,29 +469,9 @@ class ConfigManager:
         runtime["retroarch"].setdefault("binary", VENDORED_RETROARCH)
         runtime["retroarch"].setdefault("extra_flags", [])
         runtime["retroarch"].setdefault("cores", {})
-        runtime["retroarch"].setdefault("updater", {})
-        runtime["retroarch"]["updater"].setdefault("mode", "buildbot_all_cores")
-        runtime["retroarch"]["updater"].setdefault("enabled", True)
-        runtime["retroarch"]["updater"].setdefault("core_dir", None)
-        runtime["retroarch"]["updater"].setdefault(
-            "cores_base_url",
-            DEFAULT_CORES_BASE_URL,
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "core_info_base_url",
-            "https://buildbot.libretro.com/assets/frontend/info.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "shader_glsl_url",
-            "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "shader_slang_url",
-            "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault("request_timeout_sec", 30)
-        runtime["retroarch"]["updater"].setdefault("retries", 3)
-        runtime["retroarch"]["updater"].setdefault("parallel_downloads", 4)
+        updater = runtime["retroarch"].setdefault("updater", {})
+        for key, value in UPDATER_DEFAULTS.items():
+            updater.setdefault(key, value)
 
         migrated_backend = {}
         for key, mode in runtime.get("console_backend", {}).items():
@@ -972,31 +993,17 @@ class ConfigManager:
         return self.cores.forget_rom(rom_path)
 
     def get_retroarch_updater_settings(self):
+        """The updater's settings, with :data:`UPDATER_DEFAULTS` behind them."""
         updater = self.config.get("runtime", {}).get("retroarch", {}).get("updater", {})
-        return {
-            "mode": updater.get("mode", "buildbot_all_cores"),
-            "enabled": bool(updater.get("enabled", True)),
-            "core_dir": updater.get("core_dir"),
-            "cores_base_url": updater.get(
-                "cores_base_url",
-                DEFAULT_CORES_BASE_URL,
-            ),
-            "core_info_base_url": updater.get(
-                "core_info_base_url",
-                "https://buildbot.libretro.com/assets/frontend/info.zip",
-            ),
-            "shader_glsl_url": updater.get(
-                "shader_glsl_url",
-                "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-            ),
-            "shader_slang_url": updater.get(
-                "shader_slang_url",
-                "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-            ),
-            "request_timeout_sec": int(updater.get("request_timeout_sec", 30)),
-            "retries": int(updater.get("retries", 3)),
-            "parallel_downloads": int(updater.get("parallel_downloads", 4)),
+        resolved = {
+            key: updater.get(key, value) for key, value in UPDATER_DEFAULTS.items()
         }
+        # The three the caller relies on being the right type: a hand-edited
+        # config can put a string where a number belongs.
+        resolved["enabled"] = bool(resolved["enabled"])
+        for key in ("request_timeout_sec", "retries", "parallel_downloads"):
+            resolved[key] = int(resolved[key])
+        return resolved
 
     def get_shaders_config_file(self):
         return self.shaders.config_file
