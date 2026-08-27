@@ -3599,6 +3599,95 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   that crashes at startup, and the installer clears the directories it owns first.
 - **Check:** human only.
 
+### RT-259 — The SDL backend spells a control the same way the evdev one does
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A button, an axis past the deadzone and a hat direction decode to the same binding
+  tokens on both backends -- `"3"`, `"+1"`/`"-1"`, `"h0up"`. Anything else and a profile written on
+  one platform means a different control on the other, and the whole input stack above the reader
+  would need to know which backend wrote it.
+- **Check:** suite files `tests/test_gamepad_sdl.py`, `tests/test_gamepad_reader.py`.
+
+### RT-260 — A resting analogue trigger is not read as a held control
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** SDL rests a trigger at -32768, well past the deadzone, so a pad opened with the
+  triggers untouched must report nothing. Without this the navigator sees a control held down from
+  the moment the pad is plugged in, and the first real pull reads as a *release*.
+- **Check:** suite file `tests/test_gamepad_sdl.py` (`PadStateTests`, `PumpTests`).
+
+### RT-261 — Navigation and capture do not steal each other's presses
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Two listeners subscribed to the SDL pump both receive every transition. SDL has one
+  event queue per process, and OpenEmux reads it from two places at once -- the navigator and, while
+  remapping, the capture reader -- so polling separately would drop presses at random.
+- **Check:** suite file `tests/test_gamepad_sdl.py` (`PumpTests`).
+
+### RT-262 — The launch tells RetroArch which joypad driver to count with
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** On Windows the launch override carries `input_joypad_driver = "sdl2"`; on Linux it
+  carries no such line. A binding token is an index into whatever the joypad driver counts, and
+  RetroArch's Windows default (xinput) numbers buttons differently from SDL -- so without this a
+  button remapped in OpenEmux binds a different one in the game.
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`test_override_pins_the_joypad_driver_on_windows`,
+  `test_override_leaves_the_joypad_driver_alone_on_linux`).
+
+### RT-263 — The gamepad backend follows the platform, and can be forced
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Ask the factory which backend it would build, with and without the override.
+- **Expected:** Linux builds the evdev reader, Windows the SDL one, and `OPENEMUX_GAMEPAD_BACKEND`
+  overrides either -- which is how the SDL path is exercised against a real controller on a Linux
+  desk. An unknown value warns and keeps the default rather than leaving the app with no gamepad.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from unittest.mock import patch; from openemux.core import gamepad_backend as b; assert b.backend_name({}) == 'evdev'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'sdl2'}) == 'sdl2'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'nope'}) == 'evdev'; print('RT-263 OK')"`
+
+### RT-264 — A controller navigates the UI and can be remapped on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed on Windows 10/11, a physical controller connected, one ROM
+  in the library.
+- **Steps:**
+  1. With the app open, navigate the grid with the D-pad and the left stick; press A to open a
+     game's details and B to come back.
+  2. Open "Settings" (`Ctrl+,`) → "Input", pick the console and the gamepad device, click a binding
+     row and press a button on the pad.
+  3. Launch the game and use the control just bound.
+- **Expected:** The pad navigates the UI, the capture screen shows the button that was pressed, and
+  in the game that same physical button performs that action. This is the round trip the whole SDL
+  backend exists for: the token OpenEmux writes is read back by RetroArch's own SDL driver.
+- **Check:** human only.
+
+### RT-265 — Deleting a ROM on Windows reaches the Recycle Bin, or says so
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows with a throwaway ROM copied into the library.
+- **Steps:**
+  1. Right-click the throwaway ROM and choose "Delete".
+  2. Open the Recycle Bin.
+- **Expected:** The file is in the Recycle Bin and the game is gone from the grid. GLib implements
+  `g_file_trash` on Win32 with `SHFileOperationW`, `wFunc = FO_DELETE` and `fFlags = FOF_ALLOWUNDO`
+  -- so `rom_actions` needs no Windows branch and this is the same call site as on Linux. If the volume has no Recycle Bin the app must say the file could not be
+  moved to the trash and leave it on disk -- never report success and delete nothing, and never
+  delete permanently without saying so.
+- **Check:** human only.
+
 
 ## Retired
 
