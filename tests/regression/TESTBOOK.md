@@ -3686,6 +3686,35 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Check:** suite file `tests/test_gamepad_sdl.py`
   (`test_unplugging_a_pad_mid_direction_stops_the_repeat`).
 
+### RT-268 — The Windows bundle ships RetroArch's licence
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** `vendors/RetroArch-COPYING` is the GPLv3 text, matches the hash recorded in
+  `vendors/manifest.json`, and the Windows staging copies it beside `retroarch.exe`. The upstream
+  archive carries no licence of its own -- only `assets/COPYING`, which is CC-BY-4.0 and covers the
+  assets -- so without this the build refuses to package, and shipping it anyway would be a GPLv3
+  redistribution with no licence text.
+- **Check:** suite file `tests/test_package_data.py` (`VendoredRetroArchLicenceTests`).
+
+### RT-269 — WebP covers and SVG artwork decode on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux freshly installed on Windows 10/11, one ROM in the library, an
+  internet connection.
+- **Steps:**
+  1. Start the app and let it sync cover art.
+  2. Look at the grid, then switch to the cartridge view.
+- **Expected:** Covers appear rather than blank cards, and the cartridge frames render. libretro
+  serves covers as WebP and the frames are SVG; both are gdk-pixbuf *loader* formats, so both
+  depend on `loaders.cache` -- which names its modules by absolute path and is therefore written on
+  first launch, on this machine, not at build time. If it failed, the start-up log says
+  "gdk-pixbuf:" and why.
+- **Check:** human only. The decision-making around writing it is covered by
+  `tests/test_pixbuf_loaders.py`.
+
 ### RT-264 — A controller navigates the UI and can be remapped on Windows
 - **Area:** Windows platform
 - **Mode:** MANUAL

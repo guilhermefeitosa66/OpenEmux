@@ -50,8 +50,13 @@ cp "$BUNDLE/openemux.ico" packaging/windows/openemux.ico
 echo "==> phase 4: cross-compile the launcher"
 # The resource compiler resolves "openemux.ico" relative to the .rc file, which
 # is why the icon was copied next to it above.
+# The quotes are escaped twice on purpose. windres does not hand -D straight to
+# the preprocessor: it builds a command line and runs it through a shell, which
+# eats one level. With a single level the macro expands to a bare 1.11.3 and
+# `VALUE "FileVersion", 1.11.3` is a syntax error -- which is where the Windows
+# build stopped before it ever produced an .exe (issue #118).
 x86_64-w64-mingw32-windres \
-  -DOPENEMUX_VERSION="\"${VERSION}\"" \
+  -DOPENEMUX_VERSION="\\\"${VERSION}\\\"" \
   -DOPENEMUX_VERSION_COMMA="$(echo "$VERSION" | tr '.' ','),0" \
   -I packaging/windows \
   packaging/windows/openemux-launcher.rc \
@@ -78,7 +83,18 @@ test -f "$BUNDLE/lib/girepository-1.0/Adw-1.typelib"
 test -f "$BUNDLE/lib/girepository-1.0/Gtk-4.0.typelib"
 test -f "$BUNDLE/lib/girepository-1.0/Rsvg-2.0.typelib"
 test -f "$BUNDLE/share/glib-2.0/schemas/gschemas.compiled"
-test -f "$BUNDLE/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+# Not loaders.cache: that file holds absolute paths to the loader modules, so
+# one written here would name a directory that does not exist on a user's
+# machine -- and the tool that writes it has to dlopen Windows DLLs, which this
+# Linux host cannot do. What the build can guarantee is that the loaders and
+# the tool are both present; the cache is written on first launch by
+# core/pixbuf_loaders.py (issue #118).
+test -f "$BUNDLE/bin/gdk-pixbuf-query-loaders.exe"
+test -n "$(ls -A "$BUNDLE/lib/gdk-pixbuf-2.0/2.10.0/loaders")"
+# The two formats that are loader-only and that OpenEmux actually needs: SVG
+# for its own artwork, WebP for the covers libretro serves.
+ls "$BUNDLE/lib/gdk-pixbuf-2.0/2.10.0/loaders/"*svg* >/dev/null
+ls "$BUNDLE/lib/gdk-pixbuf-2.0/2.10.0/loaders/"*webp* >/dev/null
 test -f "$BUNDLE/etc/ssl/certs/ca-bundle.crt"
 test -f "$BUNDLE/src/openemux/main.py"
 test -f "$BUNDLE/vendors/RetroArch-Win64/retroarch.exe"
