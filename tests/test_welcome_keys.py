@@ -15,6 +15,8 @@ from gi.repository import Gtk
 
 from openemux.ui.welcome import WelcomeAssistant
 
+from tests.gtk_display import needs_display
+
 
 class _Node:
     """A widget with a parent chain, which is all the walk reads."""
@@ -30,6 +32,7 @@ class _Popover(Gtk.Popover):
     """A real Gtk.Popover, so the isinstance check is the real one."""
 
 
+@needs_display
 class InsidePopoverTests(unittest.TestCase):
     def _inside(self, widget):
         return WelcomeAssistant._is_inside_popover(widget)
@@ -108,6 +111,7 @@ def _popover_holder(popover):
     return _Tree([_Tree([popover])])
 
 
+@needs_display
 class OpenPopoverTests(unittest.TestCase):
     def test_a_dialog_with_no_popup_has_none(self):
         dialog = _DialogStub(children=[_Tree(), _Tree([_Tree()])])
@@ -124,6 +128,7 @@ class OpenPopoverTests(unittest.TestCase):
         self.assertIsNone(dialog._find_open_popover(dialog))
 
 
+@needs_display
 class ArrowOwnershipTests(unittest.TestCase):
     """Whether Left/Right belong to the carousel right now."""
 

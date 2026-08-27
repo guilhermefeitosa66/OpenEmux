@@ -42,6 +42,13 @@ jobs:
       - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
         run: make install-sys-deps
 
+      - name: Install a virtual X server
+        # A handful of tests build real GTK widgets, which needs a display --
+        # without one GDK segfaults instead of failing, taking the whole run
+        # down with no failing test to point at. Under xvfb they run; without
+        # it they skip themselves (tests/gtk_display.py).
+        run: sudo apt-get install -y xvfb
+
       - name: Create virtualenv and install Python dependencies
         run: |
           make venv
@@ -52,7 +59,7 @@ jobs:
         # that drops the total below the floor fails here rather than moving
         # the badge quietly.
         run: |
-          PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
+          xvfb-run -a env PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
           .venv/bin/python -m coverage report
 
       # The README's coverage badge is a shields.io endpoint badge fed by
