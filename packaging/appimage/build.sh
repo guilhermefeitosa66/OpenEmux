@@ -76,6 +76,17 @@ test -f "$APPDIR_LIB/girepository-1.0/Rsvg-2.0.typelib" \
 test -f AppDir/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml \
   || { echo "ERROR: AppStream metainfo missing from the bundle." >&2; exit 1; }
 
+# TryExec is resolved against the user's PATH, and no `openemux` binary lives
+# there for an AppImage. An integrator (appimaged, AppImageLauncher,
+# GearLever) rewrites Exec to the bundle path and leaves TryExec alone, so an
+# entry carrying one is silently hidden from the menu after integration
+# (issue #256). The shared desktop file has none; only stage_tree.sh adds one,
+# for the native packages that do install /usr/bin/openemux.
+if grep -q '^TryExec=' AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop; then
+  echo "ERROR: the bundled desktop entry carries TryExec; integrators would hide it." >&2
+  exit 1
+fi
+
 echo "==> phase 2: package the AppImage from the fixed AppDir"
 #
 # Assembled here instead of by `appimage-builder --skip-build`, because the

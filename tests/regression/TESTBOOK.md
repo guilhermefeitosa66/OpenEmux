@@ -1809,6 +1809,99 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-223 — An integrated AppImage keeps its menu entry
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the AppImage build refuses to package an
+  entry that carries `TryExec`).
+- **Steps:** As a QA person: download the AppImage, integrate it with GearLever (or appimaged, or
+  AppImageLauncher), then open the applications menu and search for "OpenEmux".
+- **Expected:** The entry is there. `TryExec` is resolved against the user's `PATH`, and
+  integrators rewrite `Exec` to the bundle path but leave `TryExec` alone — so
+  `TryExec=openemux`, with no `openemux` binary anywhere in `PATH`, silently hid the integrated
+  entry from the menu (issue #256). The shared desktop file carries no `TryExec` now; the
+  `.deb`/`.rpm` get an absolute `TryExec=/usr/bin/openemux` added at staging time, because they
+  are the ones that install that binary.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  shared = Path("packaging/common/openemux.desktop").read_text()
+  assert "TryExec" not in shared, "the shared entry would be hidden after integration"
+  stage = Path("packaging/common/stage_tree.sh").read_text()
+  assert "TryExec=/usr/bin/openemux" in stage, "the native packages lost their TryExec"
+  appimage = Path("packaging/appimage/build.sh").read_text()
+  assert "carries TryExec" in appimage, "the AppImage build no longer checks"
+  print("RT-223 OK")
+  EOF
+  ```
+
+### RT-224 — The .deb can be verified and read like any other Debian package
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; `make deb` runs `debsums` against its own
+  install).
+- **Steps:** As a QA person: `sudo apt install ./openemux_*.deb`, then run `debsums openemux` and
+  `zless /usr/share/doc/openemux/changelog.Debian.gz`.
+- **Expected:** `debsums` verifies every file, and the changelog lists the release history. The
+  `.deb` had exactly three control members — `control`, `postinst`, `postrm` — because the build
+  hand-writes them and calls `dpkg-deb --build` directly, so nothing generated `md5sums` and
+  `debsums` could not check a single one of the 600+ installed files of a package that ships an
+  executable AppImage (lintian's `no-md5sums-control-file`). There was no changelog either
+  (`debian-changelog-file-missing`); it is rendered from the spec's `%changelog`, so a release
+  documents itself in one place (issue #256).
+- **Check:** suite file `tests/test_desktop_entry.py`, plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re, subprocess, sys
+  from pathlib import Path
+  build = Path("packaging/deb/build.sh").read_text()
+  assert "DEBIAN/md5sums" in build, "the .deb generates no md5sums"
+  assert build.index("DEBIAN/md5sums") < build.index("dpkg-deb --root-owner-group")
+  assert "debsums -s openemux" in build, "the build never proves debsums works"
+  assert "changelog.Debian.gz" in build, "the .deb ships no changelog"
+  rendered = subprocess.run([sys.executable, "packaging/deb/changelog_from_spec.py"],
+                            capture_output=True, text=True, check=True).stdout
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  documented = set(re.findall(r"^\* .* - (\S+)-\d+$", spec, re.M))
+  assert set(re.findall(r"(?m)^openemux \(([^)]+)\)", rendered)) == documented
+  print("RT-224 OK")
+  EOF
+  ```
+
+### RT-225 — No package declares a dependency that indexes nothing
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: right-click a ROM in the file manager and look at "Open With".
+- **Expected:** OpenEmux is not offered, and neither native package pulls `shared-mime-info` to
+  make that so. The entry has no `MimeType=` and no `%f`/`%U` field code — the app cannot open a
+  ROM handed to it — yet both packages declared `shared-mime-info` as a hard dependency and both
+  ran `update-desktop-database`, whose whole purpose is rebuilding the MIME association cache
+  (issue #256). GTK needs the shared MIME database at runtime and already depends on it on both
+  distributions, so dropping the explicit declaration changes nothing for the user. The AppImage
+  still bundles it: `XDG_DATA_DIRS` leads into the AppDir, so GTK looks for the database there.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  entry = Path("packaging/common/openemux.desktop").read_text()
+  has_mimetype = "MimeType=" in entry
+  has_field_code = re.search(r"(?m)^Exec=.*%[fFuU]", entry) is not None
+  deb = Path("packaging/deb/build.sh").read_text()
+  depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  declared = ("shared-mime-info" in depends
+              or re.search(r"(?m)^Requires:\s+shared-mime-info$", spec) is not None)
+  # Either both, or neither: a MimeType without the dependency does not index,
+  # and the dependency without a MimeType has nothing to index.
+  assert (has_mimetype and has_field_code) == declared, \
+      f"MimeType={has_mimetype}, field code={has_field_code}, dependency={declared}"
+  print("RT-225 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

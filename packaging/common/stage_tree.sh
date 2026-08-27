@@ -47,10 +47,19 @@ install -Dm644 "$ROOT_DIR/packaging/common/$APP_ID.metainfo.xml" \
 # itself. Rewritten here rather than in the source file because the AppImage
 # build installs that same file and needs the relative name (its desktop
 # entry is resolved inside the AppDir).
-sed -i \
-  -e 's|^Exec=.*|Exec=/usr/bin/openemux|' \
-  -e 's|^TryExec=.*|TryExec=/usr/bin/openemux|' \
+#
+# TryExec is *added* here rather than rewritten: only the native packages
+# install /usr/bin/openemux, so only they can promise it resolves. The shared
+# file carries none, because TryExec is resolved against the user's PATH and
+# an AppImage integrator (appimaged, AppImageLauncher, GearLever) rewrites
+# Exec to the bundle path and leaves TryExec alone -- so the integrated entry
+# named a binary that does not exist and was silently hidden from the menu
+# (issue #256).
+sed -i 's|^Exec=.*|Exec=/usr/bin/openemux|' \
   "$DESTDIR/usr/share/applications/$APP_ID.desktop"
+grep -q '^TryExec=' "$DESTDIR/usr/share/applications/$APP_ID.desktop" ||
+  sed -i '/^Exec=/a TryExec=/usr/bin/openemux' \
+    "$DESTDIR/usr/share/applications/$APP_ID.desktop"
 
 # Icons: the themed hicolor entry is what a modern menu uses. Several sizes are
 # installed because menus that do not scale pick the nearest exact match, and
