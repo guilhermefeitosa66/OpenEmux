@@ -10,6 +10,7 @@ whether an entry applies.
 from openemux.core import cartridge_colors, cartridge_render
 from openemux.core.library_view import renders_cartridge
 from openemux.ui.context_menu import SEPARATOR, Submenu
+from openemux.ui.scopes import is_collection_scope
 
 
 class RomContextMenuServices:
@@ -66,8 +67,6 @@ class RomContextMenuServices:
 
     def _remove_from_collection_entry(self, rom):
         # Only while viewing a collection: removing here never touches the file.
-        from openemux.ui.window import is_collection_scope
-
         if not is_collection_scope(self.win.current_console):
             return None
         return (

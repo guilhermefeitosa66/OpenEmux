@@ -29,7 +29,7 @@ from openemux.core.library_view import (
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
-from openemux.core import feature_flags, game_window_support
+from openemux.core import game_window_support
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -38,11 +38,6 @@ from openemux.core.cover_sync import (
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.paths import display_text, get_project_root
-from openemux.core.rom_importer import (
-    IMPORTABLE_EXTENSIONS,
-    collect_ambiguous_extensions,
-    import_roms_async,
-)
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
 from openemux.core.theme import toggled_theme
@@ -56,23 +51,37 @@ from openemux.core.scraper import (
     save_local_art,
 )
 from openemux.core.scanner import RomScanner
-from openemux.core.shaders import ShaderCatalog, normalize_shader_id
+from openemux.core.shaders import ShaderCatalog
 from openemux.core.state_recovery import quarantined_files, reset_quarantine_log
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
-from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
+from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
-from openemux.ui.grid import LIST_MARGIN, RomGrid
-from openemux.ui.context_menu import (
-    SEPARATOR,
-    Submenu,
-    build_context_popover,
-    present_context_popover,
-    unparent_when_idle,
-)
+from openemux.ui.grid import RomGrid
+from openemux.ui.game_session import GameSession
+from openemux.ui.import_flow import ImportFlow
+from openemux.ui.library_pages import LibraryPages
+from openemux.ui.retranslate import RetranslateRegistry
+from openemux.ui.console_icons import console_icon
+from openemux.ui.console_sidebar import ConsoleSidebar
 from openemux.ui.file_dialogs import image_filters
+# Re-exported: `from openemux.ui.window import FAVORITES_ID` is what the tests
+# and the test book already say, and the vocabulary is shared, not the
+# window's (issue #237).
+from openemux.ui.scopes import (  # noqa: F401
+    ALL_CONSOLES_ID,
+    COLLECTION_ID_PREFIX,
+    FAVORITES_ID,
+    LIBRARY_EMPTY_ID,
+    collection_scope,
+    collection_slug,
+    is_collection_scope,
+    landing_view,
+    sidebar_row_ids,
+)
 from openemux.ui.rom_context import RomContextMenuServices
+from openemux.ui.task_banner import TaskBanner
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
 from openemux.ui import theming
@@ -80,83 +89,9 @@ from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
 
-ALL_CONSOLES_ID = "__all__"
-FAVORITES_ID = "__favorites__"
-#: The onboarding page a library with nothing in it lands on (issue #224).
-LIBRARY_EMPTY_ID = "library-empty"
-#: A collection's sidebar/scope id is this prefix plus its slug. Keeping them
-#: in the same id space as the consoles lets one selection handler, one page
-#: cache and the controller's console cycling treat them uniformly.
-COLLECTION_ID_PREFIX = "col:"
-
-
-def is_collection_scope(scope):
-    return isinstance(scope, str) and scope.startswith(COLLECTION_ID_PREFIX)
-
-
-def collection_slug(scope):
-    return scope[len(COLLECTION_ID_PREFIX):] if is_collection_scope(scope) else None
-
-
-def collection_scope(slug):
-    return f"{COLLECTION_ID_PREFIX}{slug}"
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 6
 
-#: Relaunch polls for the old process to exit rather than blocking the main
-#: loop on wait(). The budget has to outlast the stop escalation it is
-#: waiting on -- QUIT, then SIGTERM, then SIGKILL, two seconds apart -- or a
-#: RetroArch that ignores QUIT is declared un-relaunchable while it is still
-#: being killed. 200 ms x 40 gives it 8 s, comfortably past the ~6 s walk
-#: (issues #129, #267).
-RELAUNCH_POLL_INTERVAL_MS = 200
-RELAUNCH_MAX_POLLS = 40
-
-#: Applying a remap to a running game waits for the scratch save state to hit
-#: the disk before relaunching (issue #129). 200 ms x 25 gives a slow core
-#: ~5 s to write it; a core without save-state support never does, and the
-#: timeout is what keeps that from becoming a relaunch that loses the game.
-SNAPSHOT_POLL_INTERVAL_MS = 200
-SNAPSHOT_MAX_POLLS = 25
-
-#: How long after a relaunch the scratch state is loaded back, mirroring
-#: launch_rom_at_state's boot allowance; the scratch file is deleted a few
-#: seconds after that, once RetroArch can no longer need it.
-RESUME_LOAD_DELAY_S = 4
-RESUME_DISCARD_DELAY_S = 10
-CONSOLE_ICON_FILES = {
-    "A2600": "atari_2600__atari2600_library@2x.png",
-    "A5200": "atari_5200__atari5200_library@2x.png",
-    "A7800": "atari_7800__atari7800_library@2x.png",
-    "LYNX": "lynx__lynx_library@2x.png",
-    "CV": "colecovision__colecovision_library@2x.png",
-    "FDS": "nintendo_fds__famicom_library@2x.png",
-    "FC": "nintendo_fds__famicom_library@2x.png",
-    "GB": "gameboy__gameboy_library@2x.png",
-    "GBC": "gameboy__gameboy_library@2x.png",
-    "GBA": "gameboy_advance__gba_library@2x.png",
-    "GG": "gamegear__gamegear_library@2x.png",
-    "INTV": "intellivision__intellivision_library@2x.png",
-    "NGP": "neogeopocket__neogeopocket_library@2x.png",
-    "N64": "n64__n64_library@2x.png",
-    "NDS": "nds__nds_library@2x.png",
-    "GC": "gamecube__gamecube_library@2x.png",
-    "O2": "odyssey2__odyssey2_library@2x.png",
-    "SG1000": "sg_1000__sg1000_library@2x.png",
-    "S32X": "sega_32x__32x_na_library@2x.png",
-    "MCD": "sega_cd__segacd_library@2x.png",
-    "MD": "genesis__megadrive_library@2x.png",
-    "SMS": "segamastersystem__sms_library@2x.png",
-    "SATURN": "saturn__saturn_library@2x.png",
-    "PS": "playstation__psx_library@2x.png",
-    "PSP": "psp__psp_library@2x.png",
-    "SFC": "supernes__snes_usa_library@2x.png",
-    "PCE": "pc_engine__pcengine_library@2x.png",
-    "PCECD": "pc_engine_cd__pcenginecd_library@2x.png",
-    "VECTREX": "vectrex__vectrex_library@2x.png",
-    "VB": "virtual_boy__vb_library@2x.png",
-    "WS": "wonderswan__wonderswan_library@2x.png",
-}
 
 
 class OpenEmuxWindow(Adw.ApplicationWindow):
@@ -180,28 +115,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             entries_loader=self.playlist_manager.entries_for_paths,
         )
         self.current_console = None
-        # Read before the header is built: the view-mode button shows both.
-        _ui = self.config_manager.get_ui_settings()
-        self._view_mode = _ui["view_mode"]
-        self._zoom = _ui["zoom"]
-        self._sort_order = _ui["sort_order"]
+        # Every content-stack page, its grid and its load state: one owner
+        # for the four dictionaries that used to move separately (issue #237).
+        self.pages = LibraryPages(self)
         self.play_history = PlayHistory()
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
         self._rescan_pending = None
-        self._import_running = False
+        self.imports = ImportFlow(self)
         # Callbacks that re-apply translated text, registered where each
         # widget is built -- see _translatable.
-        self._retranslate = []
+        self._retranslate = RetranslateRegistry()
         # "Show only ROMs without artwork" (issue #127). Session-only: a way
         # to work through the gaps, not a mode to leave the library in.
         self._filter_missing_artwork = False
-        self._task_seq = 0
-        self._tasks = {}
-        # console_id -> Gdk.Texture (or None when the console ships no asset)
-        self._console_texture_cache = {}
+        # The progress banner's registry. Created before the header bars, so
+        # a task begun during construction is remembered until there is a
+        # banner to draw it on (issue #237).
+        self.tasks = TaskBanner(self.t)
 
         project_root = str(get_project_root())
         self.runtime_manager = RuntimeManager(
@@ -217,15 +150,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         game_window_support.set_display_embeddable(display_supports_embedding())
 
-        # The window wrapping the embedded RetroArch, while one is running.
-        self._game_window = None
-        # Said once per session, not once per launch: a user on a session
-        # that cannot embed would otherwise be told off every time they
-        # start a game (issue #212).
-        self._game_window_notice_shown = False
-        # True while a relaunch is walking the stop/start dance, so the
-        # runtime poll does not announce the game as finished mid-relaunch.
-        self._relaunch_in_flight = False
+        # Launch, the wrapper window, the relaunch dance and the runtime
+        # poll: one collaborator, because they only make sense together
+        # (issue #237).
+        self.game = GameSession(self)
         # Covers downloaded by a running sync, waiting for a batched reveal
         # (issue #187): flushed by size, by time, or when the sync moves on
         # to another console.
@@ -250,7 +178,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.split_view.set_min_sidebar_width(260)
         self.split_view.set_max_sidebar_width(360)
         self.split_view.set_sidebar_width_fraction(0.28)
-        self.split_view.set_sidebar(self._build_sidebar())
+        self.sidebar = ConsoleSidebar(self)
+        # navigation.py steers the list directly, so it keeps a plain name.
+        self.console_list = self.sidebar.list_box
+        self.split_view.set_sidebar(self.sidebar.page)
         self.split_view.set_content(self._build_content())
         self.toast_overlay.set_child(self.split_view)
 
@@ -308,7 +239,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
         self._start_update_check()
-        GLib.timeout_add_seconds(1, self._poll_runtime_state)
+        GLib.timeout_add_seconds(1, self.game.poll)
 
     def _start_update_check(self):
         settings = self.config_manager.get_update_settings()
@@ -497,7 +428,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.import_btn = Gtk.Button()
         self.import_btn.set_icon_name("folder-download-symbolic")
         self._translatable(lambda: self.import_btn.set_tooltip_text(self.t("header.import")))
-        self.import_btn.connect("clicked", self._on_import_clicked)
+        self.import_btn.connect("clicked", self.imports.open_picker)
         header.pack_start(self.import_btn)
 
         self.covers_btn = Gtk.Button()
@@ -526,8 +457,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Progress banner replaces the former custom status bar (HIG feedback).
         self.banner = Adw.Banner()
         self.banner.set_revealed(False)
-        self._banner_cancel_task_id = None
-        self.banner.connect("button-clicked", self._on_banner_button_clicked)
+        self.tasks.attach(self.banner)
         toolbar.add_top_bar(self.banner)
 
         # Kept separate from the progress banner: that one is driven by the task
@@ -542,7 +472,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toolbar.set_content(self.content_stack)
         # Installed on the stack rather than on each grid so that every page —
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
-        self._install_drop_target(self.content_stack)
+        self.imports.install_drop_target(self.content_stack)
 
         toolbar.add_bottom_bar(self._build_selection_bar())
         toolbar.add_bottom_bar(self._build_tip_bar())
@@ -611,9 +541,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.theme_btn.connect("clicked", self._on_theme_toggle_clicked)
         # Under "System" the desktop can flip the appearance while the app is
         # open, and the icon has to follow it.
-        Adw.StyleManager.get_default().connect(
+        #
+        # Adw.StyleManager.get_default() lives as long as the process, so a
+        # handler left connected to it keeps this window alive after it is
+        # closed -- the closure holds `self`. The id is kept and dropped on
+        # close-request (issue #237).
+        self._style_manager = Adw.StyleManager.get_default()
+        self._style_manager_handler = self._style_manager.connect(
             "notify::dark", lambda *_: self._sync_theme_button()
         )
+        self.connect("close-request", self._on_close_disconnect_style_manager)
         self._translatable(self._sync_theme_button)
         self._sync_theme_button()
         return self.theme_btn
@@ -629,6 +566,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         button.set_tooltip_text(
             self.t("header.theme.to_light" if dark else "header.theme.to_dark")
         )
+
+    def _on_close_disconnect_style_manager(self, *_args):
+        """Let go of the process-lifetime style manager on the way out."""
+        handler = getattr(self, "_style_manager_handler", None)
+        if handler is not None:
+            self._style_manager.disconnect(handler)
+            self._style_manager_handler = None
+        return False
 
     def _on_theme_toggle_clicked(self, _button):
         theme = toggled_theme(theming.is_dark())
@@ -656,7 +601,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         global default or carries its own layout. It is rebuilt when the scope
         changes so both stay honest.
         """
-        scope_label = self._console_sidebar_label(self._current_scope())
+        scope_label = self.sidebar.label_for(self._current_scope())
         menu = Gio.Menu()
 
         # The scope banner, and the toggle between global and this page's own.
@@ -713,7 +658,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_out_button = Gtk.Button.new_from_icon_name("zoom-out-symbolic")
         self.zoom_out_button.add_css_class("circular")
         self.zoom_out_button.add_css_class("flat")
-        self._translatable(lambda: self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out")))
+        # Owned by the stepper, not by the window: this whole box is built
+        # again every time the layout menu is repopulated, which is every
+        # sidebar click. Registering unowned left two closures behind per
+        # click, replayed in full on the next language change (issue #237).
+        self._translatable(
+            lambda: self.zoom_out_button.set_tooltip_text(self.t("header.zoom.out")),
+            owner=box,
+        )
         self.zoom_out_button.connect("clicked", lambda _b: self._step_zoom(-1))
 
         self.zoom_label = Gtk.Label()
@@ -723,7 +675,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.zoom_in_button = Gtk.Button.new_from_icon_name("zoom-in-symbolic")
         self.zoom_in_button.add_css_class("circular")
         self.zoom_in_button.add_css_class("flat")
-        self._translatable(lambda: self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in")))
+        self._translatable(
+            lambda: self.zoom_in_button.set_tooltip_text(self.t("header.zoom.in")),
+            owner=box,
+        )
         self.zoom_in_button.connect("clicked", lambda _b: self._step_zoom(1))
 
         for child in (self.zoom_out_button, self.zoom_label, self.zoom_in_button):
@@ -746,7 +701,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         zoom = normalize_zoom(zoom)
         if zoom == self._zoom:
             return
-        self._zoom = zoom
         self._write_scope_display("zoom", zoom)
         self._sync_zoom_controls()
         self._reload_current_page()
@@ -755,6 +709,31 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _current_scope(self):
         """The page whose layout the controls edit: a console, All or Favorites."""
         return self.current_console or ALL_CONSOLES_ID
+
+    # ----- the layout of the page being looked at -------------------------
+    #
+    # Read from the config for the current scope, never stored. These used to
+    # be three fields kept in step by hand with the stateful actions and the
+    # per-scope overrides -- three copies of one fact, and every path that
+    # changed the layout had to remember all three (issue #237). The config is
+    # the owner; the actions are a view of it, synced in one place
+    # (_refresh_scope_settings); nothing else holds a copy.
+
+    @property
+    def _display_settings(self):
+        return self.config_manager.get_display_settings(self._current_scope())
+
+    @property
+    def _view_mode(self):
+        return self._display_settings["view_mode"]
+
+    @property
+    def _zoom(self):
+        return self._display_settings["zoom"]
+
+    @property
+    def _sort_order(self):
+        return self._display_settings["sort_order"]
 
     def _write_scope_display(self, key, value):
         """Persist a layout change against the right level.
@@ -777,17 +756,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _refresh_scope_settings(self):
         """Re-read the layout for the current scope and sync every control."""
-        settings = self.config_manager.get_display_settings(self._current_scope())
-        self._view_mode = settings["view_mode"]
-        self._zoom = settings["zoom"]
-        self._sort_order = settings["sort_order"]
+        settings = self._display_settings
 
         view_action = self.lookup_action("view-mode")
-        if view_action is not None and view_action.get_state().get_string() != self._view_mode:
-            view_action.set_state(GLib.Variant("s", self._view_mode))
+        if view_action is not None and view_action.get_state().get_string() != settings["view_mode"]:
+            view_action.set_state(GLib.Variant("s", settings["view_mode"]))
         sort_action = self.lookup_action("sort-order")
-        if sort_action is not None and sort_action.get_state().get_string() != self._sort_order:
-            sort_action.set_state(GLib.Variant("s", self._sort_order))
+        if sort_action is not None and sort_action.get_state().get_string() != settings["sort_order"]:
+            sort_action.set_state(GLib.Variant("s", settings["sort_order"]))
         follow_action = self.lookup_action("layout-follow-global")
         if follow_action is not None:
             follows = not self.config_manager.has_scope_override(self._current_scope())
@@ -811,7 +787,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._refresh_scope_settings()
         self._reload_current_page()
         key = "toast.layout.global" if follow else "toast.layout.scoped"
-        self._toast(self.t(key, scope=self._console_sidebar_label(scope)), timeout=2)
+        self._toast(self.t(key, scope=self.sidebar.label_for(scope)), timeout=2)
 
     def _on_view_mode_action(self, action, value):
         mode = normalize_view_mode(value.get_string())
@@ -823,7 +799,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         mode = normalize_view_mode(mode)
         if mode == self._view_mode:
             return
-        self._view_mode = mode
         self._write_scope_display("view_mode", mode)
         if hasattr(self, "view_mode_button"):
             self.view_mode_button.set_icon_name(
@@ -843,7 +818,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         order = normalize_sort_order(order)
         if order == self._sort_order:
             return
-        self._sort_order = order
         self._write_scope_display("sort_order", order)
         self._reload_current_page()
         self._toast(self.t("toast.sorted", order=self.t(f"sort_order.{order}")), timeout=2)
@@ -927,10 +901,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if count:
             self.selection_label.set_label(self.t("selection.count", count=count))
         self.selection_bar.set_reveal_child(bool(count))
-        self._update_master_check()
+        self.pages.update_master_check()
 
     def _clear_selection(self):
-        grid = self._grids.get(self.current_console)
+        grid = self.pages.grid_for(self.current_console)
         if grid:
             grid.clear_selection()
         self._on_selection_changed([])
@@ -938,7 +912,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _select_all_visible(self):
         """Ctrl+A / the master checkbox: every ROM the search still shows."""
-        grid = self._grids.get(self.current_console)
+        grid = self.pages.grid_for(self.current_console)
         if grid:
             grid.select_all()
 
@@ -1126,7 +1100,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("about", lambda *_: self._show_about(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
             ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
-            ("import", lambda *_: self._on_import_clicked(None), ["<Ctrl>o"]),
+            ("import", lambda *_: self.imports.open_picker(), ["<Ctrl>o"]),
             ("sync-covers", lambda *_: self._sync_covers_for_current_scope(), ["<Ctrl><Shift>s"]),
             ("delete-rom", lambda *_: self._delete_selected_or_focused(), ["Delete"]),
             ("select-all", lambda *_: self._select_all_visible(), ["<Ctrl>a"]),
@@ -1205,7 +1179,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         item = self._focused_rom_item()
         if item is not None:
             # Through the card so its star badge stays in sync.
-            item._act_toggle_favorite(None, None)
+            item.toggle_favorite()
 
     def _install_escape_handler(self):
         """Escape clears the selection, else steps back from grid to sidebar.
@@ -1240,9 +1214,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         answers the QUIT command -- but it is deliberately synchronous, since
         after this the app is on its way out and no worker would survive it.
         """
-        game_window, self._game_window = self._game_window, None
-        if game_window is not None:
-            game_window.close_now(block=True)
+        self.game.close_now()
         # Asked again on purpose rather than as an else: a wrapper the user
         # closed a moment ago has already done its (non-blocking) cleanup, so
         # a game still shrugging off that stop would ride out on a worker
@@ -1412,36 +1384,20 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         monitor = monitors.get_item(0)
         return self._size_for_monitor(monitor.get_geometry() if monitor else None)
 
-    def _sync_sidebar_footer(self):
-        """Offer playlists only once there are games to put in one.
-
-        On an empty library it was the sidebar's only button, which is most of
-        why people read it as the way to add games.
-        """
-        button = getattr(self, "new_collection_btn", None)
-        if button is not None:
-            button.set_visible(bool(self.visible_consoles))
-
-    def _translatable(self, apply):
+    def _translatable(self, apply, owner=None):
         """Apply translated text now, and again on every language change.
 
-        This used to be a list of set_tooltip_text calls inside
-        _apply_language_change, far from where each widget was built -- so
-        every widget added since had to be remembered there, and one of them
-        was not: the "New collection" button kept the old language until the
-        app restarted. Registering the callback next to the widget is what
-        stops the two drifting apart.
+        Registered next to the widget it belongs to; see
+        :mod:`openemux.ui.retranslate` for why, and for what ``owner`` is for.
         """
-        apply()
-        self._retranslate.append(apply)
+        self._retranslate.add(apply, owner)
 
     def _apply_language_change(self, locale):
         self.config_manager.set_locale(locale)
         self.locale = locale
         language_name = LANGUAGE_META.get(locale, LANGUAGE_META["en"])["native_name"]
         visible = self.content_stack.get_visible_child_name()
-        for apply in self._retranslate:
-            apply()
+        self._retranslate.apply_all()
         self._render_tip()
         # Every label in the stack and the sidebar has to be built again.
         self.refresh_library(preferred_view=visible, force=True)
@@ -1453,13 +1409,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         elif console_id == FAVORITES_ID:
             title = self.t("sidebar.favorites")
         elif is_collection_scope(console_id):
-            title = self._console_sidebar_label(console_id)
+            title = self.sidebar.label_for(console_id)
         elif console_id:
             title = f"{console_id} — {get_system_display_name(console_id)}"
         else:
             title = self.t("app.title")
         subtitle = ""
-        grid = getattr(self, "_grids", {}).get(console_id)
+        grid = self.pages.grid_for(console_id)
         if grid is not None:
             count = 0
             child = grid.get_first_child()
@@ -1519,7 +1475,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         item = list_item.get_item()
         console_id = item.get_string() if item else ""
 
-        icon = self._build_console_icon(console_id)
+        icon = console_icon(console_id)
         row.append(icon)
 
         if console_id == ALL_CONSOLES_ID:
@@ -1550,534 +1506,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         dropdown.set_selected(ids.index(console_id))
 
-    def _begin_task(self, kind, label, total=0, on_cancel=None):
-        """Register a background task. ``on_cancel`` makes it interruptible.
-
-        A cancellable task gets a Cancel button on the progress banner; the
-        callback is expected to signal the worker, not to block waiting for it.
-        """
-        self._task_seq += 1
-        task_id = f"{kind}-{self._task_seq}"
-        self._tasks[task_id] = {
-            "id": task_id,
-            "kind": kind,
-            "label": label,
-            "current": 0,
-            "total": int(total or 0),
-            "pending": True,
-            "on_cancel": on_cancel,
-            "cancelling": False,
-        }
-        self._refresh_banner()
-        return task_id
-
-    def _on_banner_button_clicked(self, _banner):
-        if self._banner_cancel_task_id:
-            self._cancel_task(self._banner_cancel_task_id)
-
-    def _cancel_task(self, task_id):
-        task = self._tasks.get(task_id)
-        if not task or task.get("cancelling") or not task.get("on_cancel"):
-            return
-        # Mark first: the worker stops at its next checkpoint, so the banner has
-        # to show "stopping" rather than pretending it is already done.
-        task["cancelling"] = True
-        logger.info("task cancel requested: id=%s kind=%s", task_id, task["kind"])
-        self._refresh_banner()
-        task["on_cancel"]()
-
-    def _update_task(self, task_id, current=None, total=None, label=None):
-        task = self._tasks.get(task_id)
-        if not task:
-            return
-        if current is not None:
-            task["current"] = int(max(0, current))
-        if total is not None:
-            task["total"] = int(max(0, total))
-        if label is not None:
-            task["label"] = label
-        self._refresh_banner()
-
-    def _finish_task(self, task_id):
-        if task_id in self._tasks:
-            self._tasks.pop(task_id, None)
-        self._refresh_banner()
-
-    def _refresh_banner(self):
-        if not hasattr(self, "banner"):
-            return
-        if not self._tasks:
-            self.banner.set_revealed(False)
-            return
-
-        task = next(iter(self._tasks.values()))
-        pending = max(0, len(self._tasks) - 1)
-        label = task["label"]
-        total = int(task.get("total") or 0)
-        current = int(task.get("current") or 0)
-        if task.get("cancelling"):
-            label = self.t("banner.stopping")
-        else:
-            if total > 0:
-                label = f"{label} ({current}/{total})"
-            if pending:
-                label = f"{label} (+{pending})"
-        self.banner.set_title(label)
-
-        # Offer Cancel only while the task is actually interruptible.
-        if task.get("on_cancel") and not task.get("cancelling"):
-            self.banner.set_button_label(self.t("banner.cancel"))
-            self._banner_cancel_task_id = task["id"]
-        else:
-            self.banner.set_button_label(None)
-            self._banner_cancel_task_id = None
-        self.banner.set_revealed(True)
-
-    def _build_sidebar(self):
-        toolbar = Adw.ToolbarView()
-
-        header = Adw.HeaderBar()
-        self.sidebar_title = Adw.WindowTitle.new(self.t("sidebar.header"), "")
-        self._translatable(lambda: self.sidebar_title.set_title(self.t("sidebar.header")))
-        header.set_title_widget(self.sidebar_title)
-        header.pack_end(self._build_primary_menu())
-        toolbar.add_top_bar(header)
-
-        self.console_list = Gtk.ListBox()
-        self.console_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.console_list.connect("row-selected", self._on_console_selected)
-        self.console_list.add_css_class("navigation-sidebar")
-        self._install_sidebar_empty_area_menu(self.console_list)
-
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_vexpand(True)
-        scroll.set_child(self.console_list)
-        toolbar.set_content(scroll)
-
-        # Two entry points side by side, so neither has to be guessed at.
-        #
-        # "New playlist" alone was being read as "import ROMs here" -- it was
-        # the only button in the sidebar, and the header's import icon was not
-        # being found. Importing now has a labelled button of its own, and the
-        # playlist button is hidden until there is something to put in one:
-        # offering to group games before any game exists is what made it look
-        # like the way to add them.
-        footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        footer_box.set_homogeneous(True)
-        footer_box.set_margin_top(6)
-        footer_box.set_margin_bottom(6)
-        footer_box.set_margin_start(6)
-        footer_box.set_margin_end(6)
-
-        sidebar_import = Gtk.Button()
-        sidebar_import_content = Adw.ButtonContent(icon_name="folder-download-symbolic")
-        self._translatable(
-            lambda: sidebar_import_content.set_label(self.t("sidebar.import"))
-        )
-        sidebar_import.set_child(sidebar_import_content)
-        sidebar_import.add_css_class("flat")
-        sidebar_import.connect("clicked", lambda _b: self._on_import_clicked(None))
-        footer_box.append(sidebar_import)
-
-        self.new_collection_btn = Gtk.Button()
-        new_collection_content = Adw.ButtonContent(icon_name="list-add-symbolic")
-        self._translatable(
-            lambda: new_collection_content.set_label(self.t("collections.new"))
-        )
-        self.new_collection_btn.set_child(new_collection_content)
-        self.new_collection_btn.add_css_class("flat")
-        self.new_collection_btn.connect(
-            "clicked", lambda _b: self._prompt_new_collection()
-        )
-        footer_box.append(self.new_collection_btn)
-
-        footer = Adw.Bin()
-        footer.set_child(footer_box)
-        toolbar.add_bottom_bar(footer)
-
-        page = Adw.NavigationPage.new(toolbar, self.t("sidebar.header"))
-        page.set_tag("sidebar")
-        self._rebuild_console_sidebar([])
-        return page
-
-    def _console_sidebar_label(self, console_id):
-        if console_id == ALL_CONSOLES_ID:
-            return self.t("sidebar.all")
-        if console_id == FAVORITES_ID:
-            return self.t("sidebar.favorites")
-        if is_collection_scope(console_id):
-            return self.collection_manager.get_name(collection_slug(console_id)) or collection_slug(console_id)
-        return f"{console_id} - {get_system_display_name(console_id)}"
-
-    def _console_icon_texture(self, console_id):
-        """Load (once) the console's PNG as a texture, or None if it has no asset.
-
-        Dropdown list factories rebuild their rows on every scroll frame, so the
-        decode has to happen once per console and not once per bind -- reading
-        and decoding the PNG inline made those lists stutter badly.
-        """
-        cache = self._console_texture_cache
-        if console_id in cache:
-            return cache[console_id]
-
-        candidates = []
-        preferred = CONSOLE_ICON_FILES.get(console_id)
-        if preferred:
-            candidates.append(preferred)
-            if preferred.endswith("@2x.png"):
-                candidates.append(preferred.replace("@2x.png", ".png"))
-
-        texture = None
-        for icon_filename in candidates:
-            icon_path = self._asset_path("systems", icon_filename)
-            if not icon_path.exists():
-                continue
-            try:
-                texture = Gdk.Texture.new_from_filename(str(icon_path))
-            except GLib.Error as exc:
-                logger.info("console icon failed to load: %s (%s)", icon_path, exc)
-                continue
-            break
-
-        # Cache misses too, so a console without an asset does not re-stat on
-        # every bind either.
-        cache[console_id] = texture
-        return texture
-
-    def _build_console_icon(self, console_id):
-        if console_id == ALL_CONSOLES_ID:
-            return Gtk.Image.new_from_icon_name("view-grid-symbolic")
-        if console_id == FAVORITES_ID:
-            icon = Gtk.Image.new_from_icon_name("starred-symbolic")
-            icon.add_css_class("favorites-sidebar-icon")
-            return icon
-        if is_collection_scope(console_id):
-            return Gtk.Image.new_from_icon_name("user-bookmarks-symbolic")
-
-        texture = self._console_icon_texture(console_id)
-        if texture is None:
-            return Gtk.Image.new_from_icon_name(get_icon_name(console_id))
-        img = Gtk.Image.new_from_paintable(texture)
-        img.set_size_request(22, 22)
-        return img
-
-    @staticmethod
-    def _sidebar_row_ids(consoles, collection_slugs=()):
-        """The rows the sidebar shows for this library, in order.
-
-        With nothing in the library there are none. Every row here is a view
-        *over* ROMs, so they would all lead to an empty page -- and leaving
-        Favorites behind is what buried the onboarding page: the list selects
-        its first row as soon as it takes focus, so a fresh install landed on
-        "No favorites yet: right-click a game", about a game the user does not
-        have (issue #224). The rows come back with the first import.
-        """
-        if not consoles:
-            return []
-        return [
-            ALL_CONSOLES_ID,
-            FAVORITES_ID,
-            # Collections sit between Favorites and the consoles: user
-            # groupings above the hardware, mixing consoles like All does.
-            *[collection_scope(slug) for slug in collection_slugs],
-            *consoles,
-        ]
-
-    def _rebuild_console_sidebar(self, consoles):
-        while child := self.console_list.get_first_child():
-            self.console_list.remove(child)
-
-        slugs = [c["slug"] for c in self.collection_manager.list_collections()]
-        for row_id in self._sidebar_row_ids(consoles, slugs):
-            self._append_console_sidebar_row(row_id)
-
-    def _append_console_sidebar_row(self, console_id):
-        row = Gtk.ListBoxRow()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-
-        icon_widget = self._build_console_icon(console_id)
-        box.append(icon_widget)
-
-        name = Gtk.Label(label=self._console_sidebar_label(console_id))
-        name.set_halign(Gtk.Align.START)
-        name.set_hexpand(True)
-        box.append(name)
-
-        # All and Favorites are virtual views: no per-console actions apply, so
-        # they get neither the button nor the right-click menu.
-        if console_id not in (ALL_CONSOLES_ID, FAVORITES_ID):
-            menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
-            menu_button.add_css_class("flat")
-            menu_button.add_css_class("sidebar-menu-button")
-            menu_button.set_valign(Gtk.Align.CENTER)
-            menu_button.set_tooltip_text(self.t("context.more_options"))
-            # Keep the button in the layout at all times and only fade it in on
-            # hover: toggling visibility would add/remove its (taller than the
-            # icon) allocation, growing the row and shoving the list below it.
-            # can-target follows opacity so the invisible button catches no clicks.
-            menu_button.set_opacity(0)
-            menu_button.set_can_target(False)
-            menu_button.connect(
-                "clicked", lambda b, cid=console_id, r=row: self._on_sidebar_menu_button(b, r, cid)
-            )
-            box.append(menu_button)
-
-            motion = Gtk.EventControllerMotion()
-            motion.connect("enter", lambda _c, _x, _y, b=menu_button: self._show_sidebar_menu_button(b))
-            motion.connect("leave", lambda _c, b=menu_button, r=row: self._hide_sidebar_menu_button(b, r))
-            row.add_controller(motion)
-            row.menu_button = menu_button
-
-        row.set_child(box)
-        row.id = console_id
-        self._install_sidebar_context_menu(row, console_id)
-        self.console_list.append(row)
-
-    def _show_sidebar_menu_button(self, button):
-        button.set_opacity(1)
-        button.set_can_target(True)
-
-    def _hide_sidebar_menu_button(self, button, row):
-        # Keep it while its own menu is open, so it does not vanish mid-click.
-        if getattr(self, "_sidebar_menu_row", None) is not row:
-            button.set_opacity(0)
-            button.set_can_target(False)
-
-    def _on_sidebar_menu_button(self, button, row, console_id):
-        # Coordinates are relative to the row, which the popover is parented to.
-        ok, bounds = button.compute_bounds(row)
-        x, y = (bounds.get_x(), bounds.get_y() + bounds.get_height()) if ok else (0, 0)
-        self._show_sidebar_menu(row, console_id, x, y)
-
-    def _install_sidebar_empty_area_menu(self, listbox):
-        """Right-clicking empty sidebar space offers New collection…
-
-        The per-row gestures claim their own clicks, so this only fires when the
-        release lands below the last row, where ``get_row_at_y`` finds nothing.
-        """
-        gesture = Gtk.GestureClick()
-        gesture.set_button(Gdk.BUTTON_SECONDARY)
-
-        def _released(g, _n, _x, y, lb=listbox):
-            if lb.get_row_at_y(int(y)) is not None:
-                return
-            g.set_state(Gtk.EventSequenceState.CLAIMED)
-            popover = build_context_popover([
-                (self.t("collections.new"), (lambda: self._prompt_new_collection()), "list-add-symbolic"),
-            ])
-            popover.set_parent(lb)
-            popover.set_pointing_to(Gdk.Rectangle(x=int(_x), y=int(y), width=1, height=1))
-            popover.connect("closed", unparent_when_idle)
-            present_context_popover(popover)
-
-        gesture.connect("released", _released)
-        listbox.add_controller(gesture)
-
-    def _install_sidebar_context_menu(self, row, console_id):
-        # "All" and "Favorites" are virtual views: none of the actions apply.
-        if console_id in (ALL_CONSOLES_ID, FAVORITES_ID):
-            return
-        gesture = Gtk.GestureClick()
-        gesture.set_button(Gdk.BUTTON_SECONDARY)
-        # Popping up on "pressed" makes the matching release close the popover
-        # again, so the menu only stays while the button is held. Wait for the
-        # release, and claim the sequence so the row does not also react.
-        gesture.connect(
-            "released",
-            lambda g, _n, x, y, cid=console_id, r=row: (
-                g.set_state(Gtk.EventSequenceState.CLAIMED),
-                self._show_sidebar_menu(r, cid, x, y),
-            ),
-        )
-        row.add_controller(gesture)
-
-    def _show_sidebar_menu(self, row, console_id, x, y):
-        """Right-click actions for a sidebar console.
-
-        The first three mirror the header-bar buttons; "open folder" is the one
-        thing that only makes sense per console.
-        """
-        if is_collection_scope(console_id):
-            self._show_collection_sidebar_menu(row, console_id, x, y)
-            return
-
-        self._sidebar_menu_console = console_id
-        self._ensure_sidebar_action_group()
-
-        entries = [
-            # Not the header button's wording: there the action is "reload what
-            # is on screen", here it is "rescan this console's folder".
-            (self.t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"),
-            (self.t("header.import"), "sidebar.import", "document-open-symbolic"),
-            (self.t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
-            SEPARATOR,
-            self._layout_submenu_for_console(console_id),
-        ]
-        # Appended one at a time: SEPARATOR *is* None, so a submenu that has
-        # nothing to offer would otherwise draw itself as a divider.
-        for submenu in (
-            self._core_submenu_for_console(console_id),
-            self._shader_submenu_for_console(console_id),
-        ):
-            if submenu is not None:
-                entries.append(submenu)
-        # Next to Core and Shader: the third per-console setting, and the only
-        # one that needs the dialog. The header button reaches the same page,
-        # but only while that console is the one on screen.
-        entries.append(
-            (self.t("context.controller"), "sidebar.controller", "input-gaming-symbolic")
-        )
-        entries.append(SEPARATOR)
-        entries.append(
-            (self.t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
-        )
-        popover = build_context_popover(entries)
-        popover.set_parent(row)
-        popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
-        self._sidebar_menu_row = row
-        popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
-        present_context_popover(popover)
-
-    def _core_submenu_for_console(self, console):
-        """The console's default core, from the sidebar.
-
-        The same setting Preferences > Cores edits, one right-click away from
-        the console it applies to. Returns None when nothing is installed for
-        this system: an empty submenu is worse than no submenu.
-        """
-        cores = self.core_catalog.cores_for_console(console)
-        if not cores:
-            return None
-
-        override = self.config_manager.get_console_core_override(console)
-        automatic = cores[0].display_name
-        entries = [
-            (
-                self.t("context.core.automatic", core=automatic),
-                (lambda c=console: self._set_console_core(c, None)),
-                "emblem-ok-symbolic" if not override else None,
-            ),
-            SEPARATOR,
-        ]
-        for core in cores:
-            entries.append(
-                (
-                    core.display_name,
-                    (lambda c=console, f=core.filename: self._set_console_core(c, f)),
-                    "emblem-ok-symbolic" if override == core.filename else None,
-                )
-            )
-        return Submenu(self.t("context.console.core"), entries, "application-x-executable-symbolic")
-
-    def _set_console_core(self, console, core_filename):
-        self.config_manager.set_console_core_override(console, core_filename)
-        if core_filename:
-            # The same warning Preferences gives: a core whose BIOS is missing
-            # will fail at launch, and that is worth knowing when picking it.
-            self._warn_missing_bios_for_core(console, core_filename)
-        label = (
-            self.core_catalog.display_name_for(core_filename)
-            if core_filename
-            else self.t("context.core.automatic_short")
-        )
-        logger.info("sidebar context action: core console=%s core=%s", console, core_filename)
-        self._toast(self.t("toast.console_core_set", console=console, core=label))
-
-    def _shader_submenu_for_console(self, console):
-        """The console's default shader, from the sidebar."""
-        show_all = bool(
-            self.config_manager.get_shader_settings().get("show_all_shaders", False)
-        )
-        options = self.shader_catalog.get_options(show_all=show_all)
-        if not options:
-            return None
-
-        current = normalize_shader_id(self.config_manager.get_shader_for_console(console))
-        entries = []
-        for shader_id, label in options:
-            entries.append(
-                (
-                    label,
-                    (lambda c=console, s=shader_id: self._set_console_shader(c, s)),
-                    "emblem-ok-symbolic" if shader_id == current else None,
-                )
-            )
-        return Submenu(self.t("context.console.shader"), entries, "applications-graphics-symbolic")
-
-    def _set_console_shader(self, console, shader_id):
-        shader_id = normalize_shader_id(shader_id)
-        self.config_manager.set_shader_for_console(console, shader_id)
-        logger.info("sidebar context action: shader console=%s shader=%s", console, shader_id)
-        self._toast(
-            self.t(
-                "toast.console_shader_set",
-                console=console,
-                shader=self.shader_catalog.label_for_shader(shader_id),
-            )
-        )
-
-    def _layout_submenu_for_console(self, console):
-        """The Layout ▸ shortcut on a sidebar console, mirroring the header menu.
-
-        The fastest route when setting several consoles in a row: it acts on the
-        console clicked, whatever page is on screen.
-        """
-        follows = not self.config_manager.has_scope_override(console)
-        resolved = self.config_manager.get_display_settings(console)
-        entries = [
-            (
-                self.t("layout.use_global"),
-                (lambda c=console: self._sidebar_use_global_layout(c)),
-                "emblem-ok-symbolic" if follows else None,
-            ),
-            SEPARATOR,
-        ]
-        for mode in VIEW_MODES:
-            entries.append(
-                (
-                    self.t(f"view_mode.{mode}"),
-                    (lambda c=console, m=mode: self._sidebar_set_view_mode(c, m)),
-                    "emblem-ok-symbolic" if resolved["view_mode"] == mode else None,
-                )
-            )
-        return Submenu(self.t("layout.menu"), entries, "view-grid-symbolic")
-
-    def _sidebar_set_view_mode(self, console, mode):
-        self.config_manager.set_scope_display(console, "view_mode", normalize_view_mode(mode))
-        self._after_scope_layout_changed(console)
-
-    def _sidebar_use_global_layout(self, console):
-        self.config_manager.clear_scope_override(console)
-        self._after_scope_layout_changed(console)
-
-    def _after_scope_layout_changed(self, console):
-        # Re-render that console's page so the change shows even if it is not the
-        # page on screen, and re-sync the header controls when it is.
-        self._ensure_console_loaded(console)
-        if console == self.current_console:
-            self._refresh_scope_settings()
-
     # ----- collections ----------------------------------------------------
-    def _show_collection_sidebar_menu(self, row, scope, x, y):
-        slug = collection_slug(scope)
-        popover = build_context_popover([
-            (self.t("collections.rename"), (lambda s=slug: self._prompt_rename_collection(s)), "document-edit-symbolic"),
-            SEPARATOR,
-            self._layout_submenu_for_console(scope),
-            SEPARATOR,
-            (self.t("collections.delete"), (lambda s=slug: self._confirm_delete_collection(s)), "user-trash-symbolic"),
-        ])
-        popover.set_parent(row)
-        popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
-        self._sidebar_menu_row = row
-        popover.connect("closed", lambda p, r=row: self._on_sidebar_popover_closed(p, r))
-        present_context_popover(popover)
-
     def _prompt_new_collection(self, on_created=None):
         """Ask for a name, create the collection, then call ``on_created(slug)``."""
         dialog = Adw.AlertDialog(
@@ -2102,9 +1531,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             except ValueError:
                 self._toast(self.t("collections.toast.invalid"), timeout=4)
                 return
-            self._rebuild_console_sidebar(self.visible_consoles)
-            self._reselect_current_row()
-            self._ensure_collection_page(slug)
+            self.sidebar.rebuild(self.visible_consoles)
+            self.sidebar.reselect_current()
+            self.pages.ensure_collection_page(slug)
             self._toast(self.t("collections.toast.created", name=name))
             if on_created is not None:
                 on_created(slug)
@@ -2136,8 +1565,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             except ValueError:
                 self._toast(self.t("collections.toast.invalid"), timeout=4)
                 return
-            self._rebuild_console_sidebar(self.visible_consoles)
-            self._reselect_current_row()
+            self.sidebar.rebuild(self.visible_consoles)
+            self.sidebar.reselect_current()
             if self.current_console == collection_scope(slug):
                 self._update_window_title(self.current_console)
 
@@ -2163,100 +1592,20 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             was_current = self.current_console == collection_scope(slug)
             self.collection_manager.delete(slug)
             scope = collection_scope(slug)
-            page = self._console_pages.pop(scope, None)
-            self._console_loaded.pop(scope, None)
-            self._page_signatures.pop(scope, None)
+            # forget() drops the grid too. Popping the pages and the load
+            # flags but not _grids left the deleted collection's grid
+            # receiving artwork refreshes for a page nobody could reach
+            # (issue #237).
+            page = self.pages.forget(scope)
             if page is not None:
                 self.content_stack.remove(page)
-            self._rebuild_console_sidebar(self.visible_consoles)
+            self.sidebar.rebuild(self.visible_consoles)
             self._toast(self.t("collections.toast.deleted", name=name))
             if was_current:
-                row = self._find_console_row(FAVORITES_ID)
-                if row:
-                    self.console_list.select_row(row)
+                self.sidebar.select(FAVORITES_ID)
 
         dialog.connect("response", _on_response)
         dialog.present(self)
-
-    def _make_library_page(self):
-        """One content-stack page: a pinned list header above the scroll area.
-
-        The header carries the master checkbox of list view (issue #78); it
-        sits outside the ScrolledWindow so it never scrolls away, and stays
-        hidden in the grid view modes.
-        """
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-
-        check = Gtk.CheckButton()
-        check.set_tooltip_text(self.t("selection.master_checkbox"))
-        label = Gtk.Label(label=self.t("selection.select_all"))
-        label.add_css_class("dim-label")
-        label.add_css_class("caption")
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        header.add_css_class("toolbar")
-        header.set_margin_start(LIST_MARGIN)
-        header.set_margin_end(LIST_MARGIN)
-        header.append(check)
-        header.append(label)
-        header.set_visible(False)
-
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_vexpand(True)
-        page.append(header)
-        page.append(scroll)
-        # Empty-space clicks and the rubber band are handled by the grid's
-        # band gesture, which attaches itself to this scroller on map so it
-        # covers the whole page, not just the card rows.
-
-        # Stashed for _render_console_page; the guard breaks the feedback loop
-        # between the master checkbox and the selection it reflects.
-        page.scroll = scroll
-        page.header = header
-        page.master_check = check
-        page.master_guard = [False]
-        check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
-        return page
-
-    def _on_master_check_toggled(self, page):
-        if page.master_guard[0]:
-            return
-        grid = self._grids.get(self.current_console)
-        if grid is None:
-            return
-        if page.master_check.get_active():
-            grid.select_all()
-        else:
-            grid.clear_selection()
-
-    def _update_master_check(self):
-        """Tri-state: none / some (indeterminate) / all visible selected."""
-        page = self._console_pages.get(self.current_console)
-        grid = self._grids.get(self.current_console)
-        if page is None or grid is None or not hasattr(page, "master_check"):
-            return
-        visible = grid.visible_entries()
-        selected = sum(1 for entry in visible if entry.selected)
-        page.master_guard[0] = True
-        page.master_check.set_inconsistent(0 < selected < len(visible))
-        page.master_check.set_active(bool(visible) and selected == len(visible))
-        page.master_guard[0] = False
-
-    def _ensure_collection_page(self, slug):
-        """Add the content-stack page for a collection if it has none yet."""
-        scope = collection_scope(slug)
-        if scope in self._console_pages:
-            return
-        page = self._make_library_page()
-        self._console_pages[scope] = page
-        self._console_loaded[scope] = False
-        self.content_stack.add_titled(page, scope, self._console_sidebar_label(scope))
-
-    def _ensure_collection_loaded(self, slug):
-        scope = collection_scope(slug)
-        self._ensure_collection_page(slug)
-        entries = self.collection_manager.load_entries(slug)
-        self._render_console_page(scope, entries)
-        self._console_loaded[scope] = True
 
     def _target_roms_for(self, rom):
         """The roms an action applies to: the selection if it holds ``rom``."""
@@ -2297,70 +1646,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _after_collection_changed(self, slug):
         scope = collection_scope(slug)
-        if scope in self._console_pages:
-            self._ensure_collection_loaded(slug)
-
-    def _on_sidebar_popover_closed(self, popover, row):
-        if getattr(self, "_sidebar_menu_row", None) is row:
-            self._sidebar_menu_row = None
-        button = getattr(row, "menu_button", None)
-        # The pointer may have left the row while the menu was up; the button
-        # only belongs on the hovered row. Fade it out (never hide it) so the
-        # row keeps its height -- see _append_console_sidebar_row.
-        if button is not None and not row.get_state_flags() & Gtk.StateFlags.PRELIGHT:
-            button.set_opacity(0)
-            button.set_can_target(False)
-        unparent_when_idle(popover)
-
-    def _ensure_sidebar_action_group(self):
-        if getattr(self, "_sidebar_action_group", None) is not None:
-            return
-        group = Gio.SimpleActionGroup()
-        for name, handler in (
-            ("refresh", self._act_sidebar_refresh),
-            ("import", self._act_sidebar_import),
-            ("sync-covers", self._act_sidebar_sync_covers),
-            ("controller", self._act_sidebar_controller),
-            ("open-folder", self._act_sidebar_open_folder),
-        ):
-            action = Gio.SimpleAction.new(name, None)
-            action.connect("activate", handler)
-            group.add_action(action)
-        self.insert_action_group("sidebar", group)
-        self._sidebar_action_group = group
-
-    def _act_sidebar_refresh(self, _action, _param):
-        console = self._sidebar_menu_console
-        logger.info("sidebar context action: refresh console=%s", console)
-        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
-            self._rescan_all_consoles(show_toast=True)
-        else:
-            self._rescan_single_console(console, show_toast=True)
-
-    def _act_sidebar_import(self, _action, _param):
-        logger.info("sidebar context action: import console=%s", self._sidebar_menu_console)
-        self._on_import_clicked(None)
-
-    def _act_sidebar_sync_covers(self, _action, _param):
-        console = self._sidebar_menu_console
-        logger.info("sidebar context action: sync_covers console=%s", console)
-        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
-            self._start_cover_sync(scope="all", selected_console=None)
-        else:
-            self._start_cover_sync(scope="console", selected_console=console)
-
-    def _act_sidebar_controller(self, _action, _param):
-        console = self._sidebar_menu_console
-        logger.info("sidebar context action: controller console=%s", console)
-        self._open_preferences(page="input", console=console)
-
-    def _act_sidebar_open_folder(self, _action, _param):
-        console = self._sidebar_menu_console
-        logger.info("sidebar context action: open_folder console=%s", console)
-        self._open_path_in_file_manager(self.roms_path / console)
-
-    def _asset_path(self, category, filename):
-        return Path(__file__).parent / "assets" / "icons" / category / filename
+        if self.pages.has(scope):
+            self.pages.ensure_collection_loaded(slug)
 
     def _maybe_show_bootstrap_warning(self):
         state = self.config_manager.get_bootstrap_state()
@@ -2390,18 +1677,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         discovered = self._discover_visible_consoles()
         if (
             not force
-            and getattr(self, "_console_pages", None)
+            and self.pages.any_page()
             and discovered == getattr(self, "visible_consoles", None)
         ):
             self.visible_consoles = discovered
-            self._console_loaded = {}
             # The pages are still the right pages; their contents may not be.
-            self._page_signatures = {}
-            self._sync_sidebar_footer()
+            self.pages.invalidate_contents()
+            self.sidebar.sync_footer()
             target = preferred_view or previous_visible or self.current_console
-            if target in self._console_pages:
+            if self.pages.has(target):
                 self.current_console = target
-                self._ensure_console_loaded(target)
+                self.pages.ensure_loaded(target)
                 self.content_stack.set_visible_child_name(target)
                 self._update_window_title(target)
             return
@@ -2409,39 +1695,27 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         while child := self.content_stack.get_first_child():
             self.content_stack.remove(child)
 
-        self._grids = {}
-        self._console_pages = {}
-        self._console_loaded = {}
-        self._page_signatures = {}
+        self.pages.reset()
 
         self.visible_consoles = discovered
-        self._sync_sidebar_footer()
-        self._rebuild_console_sidebar(self.visible_consoles)
+        self.sidebar.sync_footer()
+        self.sidebar.rebuild(self.visible_consoles)
 
         if self.visible_consoles:
-            all_page = self._make_library_page()
-            self._console_pages[ALL_CONSOLES_ID] = all_page
-            self._console_loaded[ALL_CONSOLES_ID] = False
-            self.content_stack.add_titled(all_page, ALL_CONSOLES_ID, self.t("sidebar.all"))
+            self.pages.add(ALL_CONSOLES_ID, self.t("sidebar.all"))
 
-        favorites_page = self._make_library_page()
-        self._console_pages[FAVORITES_ID] = favorites_page
-        self._console_loaded[FAVORITES_ID] = False
-        self.content_stack.add_titled(favorites_page, FAVORITES_ID, self.t("sidebar.favorites"))
+        self.pages.add(FAVORITES_ID, self.t("sidebar.favorites"))
 
         for collection in self.collection_manager.list_collections():
-            self._ensure_collection_page(collection["slug"])
+            self.pages.ensure_collection_page(collection["slug"])
 
         if self.visible_consoles:
             for console in self.visible_consoles:
-                page = self._make_library_page()
+                page = self.pages.add(console, console)
                 placeholder = Gtk.Label(label=self.t("empty.select_console", console=console))
                 placeholder.add_css_class("dim-label")
                 placeholder.set_margin_top(32)
                 page.scroll.set_child(placeholder)
-                self._console_pages[console] = page
-                self._console_loaded[console] = False
-                self.content_stack.add_titled(page, console, console)
 
         if not self.visible_consoles:
             # Drag-and-drop is the fastest way in and used to go unmentioned
@@ -2457,7 +1731,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             import_btn = Gtk.Button(label=self.t("library.empty.action"))
             import_btn.add_css_class("suggested-action")
             import_btn.add_css_class("pill")
-            import_btn.connect("clicked", lambda _b: self._on_import_clicked(None))
+            import_btn.connect("clicked", lambda _b: self.imports.open_picker())
             actions.append(import_btn)
             choose = Gtk.Button(label=self.t("library.empty.choose"))
             choose.add_css_class("pill")
@@ -2470,16 +1744,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if target_view is None:
             target_view = previous_visible or self.current_console
 
-        desired = self._landing_view(
+        desired = landing_view(
             self.visible_consoles,
             target_view,
             [c["slug"] for c in self.collection_manager.list_collections()],
         )
         if desired != LIBRARY_EMPTY_ID:
-            row = self._find_console_row(desired)
-            if row:
-                self.console_list.select_row(row)
-            else:
+            if not self.sidebar.select(desired):
                 first_row = self.console_list.get_row_at_index(0)
                 if first_row:
                     self.console_list.select_row(first_row)
@@ -2490,47 +1761,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.content_stack.set_visible_child_name(LIBRARY_EMPTY_ID)
         self._update_window_title(None)
-
-    @staticmethod
-    def _landing_view(visible_consoles, target_view, collection_slugs=()):
-        """Which page a rebuilt library lands on.
-
-        With nothing in it, the onboarding page -- that state's whole reason
-        for existing, and unreachable until now (issue #224).
-
-        A collection counts as somewhere to land. It never did: the set tested
-        here held only the consoles and the two virtual views, so a rescan
-        threw the user out of a collection and into Favorites, losing the view
-        and the scroll position -- and the startup scan rescans on every single
-        launch (issue #225).
-        """
-        if not visible_consoles:
-            return LIBRARY_EMPTY_ID
-        if is_collection_scope(target_view):
-            # Only if it still exists: a collection deleted since is no more a
-            # destination than a console that is gone.
-            if collection_slug(target_view) in set(collection_slugs):
-                return target_view
-            return FAVORITES_ID
-        if target_view in set(visible_consoles) | {ALL_CONSOLES_ID, FAVORITES_ID}:
-            return target_view
-        return FAVORITES_ID
-
-    def _find_console_row(self, console_id):
-        row = self.console_list.get_first_child()
-        while row:
-            if getattr(row, "id", None) == console_id:
-                return row
-            row = row.get_next_sibling()
-        return None
-
-    def _reselect_current_row(self):
-        """Restore the sidebar highlight after the row list was rebuilt."""
-        if not self.current_console:
-            return
-        row = self._find_console_row(self.current_console)
-        if row is not None:
-            self.console_list.select_row(row)
 
     def _discover_visible_consoles(self):
         visible = []
@@ -2557,13 +1787,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._refresh_scope_settings()
         self._set_search_enabled(True)
         if self.current_console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
+            self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
+            self.pages.ensure_favorites_loaded()
         elif is_collection_scope(self.current_console):
-            self._ensure_collection_loaded(collection_slug(self.current_console))
+            self.pages.ensure_collection_loaded(collection_slug(self.current_console))
         else:
-            self._ensure_console_loaded(self.current_console)
+            self.pages.ensure_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
         self.search_entry.set_text("")
         self._update_window_title(self.current_console)
@@ -2737,172 +1967,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(4)
         self.toast_overlay.add_toast(toast)
 
-    def _ensure_console_loaded(self, console, force_rescan=False):
-        if console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded(force_rescan=force_rescan)
-            return
-        if console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-            return
-        if is_collection_scope(console):
-            self._ensure_collection_loaded(collection_slug(console))
-            return
-        if console not in self._console_pages:
-            return
-
-        created_playlist = False
-        if force_rescan:
-            roms = self.playlist_manager.scan_and_rebuild_playlist(console)
-            created_playlist = True
-        elif not self._console_loaded.get(console) and console in self._initial_roms:
-            roms = self._initial_roms[console]
-        else:
-            if not self.playlist_manager.playlist_exists(console):
-                if self.config_manager.auto_scan_on_first_open():
-                    created_playlist = True
-                    roms = self.playlist_manager.scan_and_rebuild_playlist(console)
-                else:
-                    roms = []
-            else:
-                roms = self.playlist_manager.load_playlist(console)
-
-        self._render_console_page(console, roms)
-        self._console_loaded[console] = True
-
-        if created_playlist and roms and not self._cover_sync_running:
-            self._start_cover_sync(scope="console", selected_console=console)
-
-    def _ensure_favorites_loaded(self):
-        if FAVORITES_ID not in self._console_pages:
-            return
-        self.playlist_manager.remove_missing_favorites()
-        favorites = self.playlist_manager.load_favorites_playlist()
-        self._render_console_page(FAVORITES_ID, favorites)
-        self._console_loaded[FAVORITES_ID] = True
-
-    def _ensure_all_loaded(self, force_rescan=False):
-        if ALL_CONSOLES_ID not in self._console_pages:
-            return
-
-        all_roms = []
-        for console in self.visible_consoles:
-            if force_rescan:
-                roms = self.playlist_manager.scan_and_rebuild_playlist(console)
-                self._console_loaded[console] = True
-            elif not self._console_loaded.get(console) and console in self._initial_roms:
-                roms = self._initial_roms[console]
-            else:
-                roms = self.playlist_manager.load_playlist(console)
-            all_roms.extend(roms)
-
-        # Ordering is _render_console_page's job now: it applies whichever sort
-        # order the user picked, to every page alike.
-        self._render_console_page(ALL_CONSOLES_ID, all_roms)
-        self._console_loaded[ALL_CONSOLES_ID] = True
-
-    def _page_signature(self, roms, display_settings):
-        """Everything a rebuilt page would be built from.
-
-        Two renders with the same signature produce the same widgets, so the
-        second one is pure cost: a page switch used to tear down every card
-        and build it again, losing the scroll position on the way (#230).
-        Artwork, favourite stars and cartridge colours are refreshed on the
-        card itself and are deliberately not in here.
-        """
-        return (
-            tuple(rom.get("path", "") for rom in roms),
-            tuple(rom.get("name", "") for rom in roms),
-            display_settings["sort_order"],
-            display_settings["view_mode"],
-            display_settings.get("zoom"),
-            self.locale,
-        )
-
-    def _render_console_page(self, console, roms):
-        page = self._console_pages[console]
-        scroll = page.scroll
-        # Each page follows its own scope's layout, not the one on screen now.
-        display_settings = self.config_manager.get_display_settings(console)
-        roms = self._sorted_roms(roms, order=display_settings["sort_order"])
-        signature = self._page_signature(roms, display_settings)
-        if (
-            self._page_signatures.get(console) == signature
-            and scroll.get_child() is not None
-        ):
-            # Nothing about this page changed, so the cards it already has are
-            # the cards it would be given. Keeping them keeps the scroll
-            # position too -- the rebuild used to send every page switch back
-            # to the top.
-            grid = self._grids.get(console)
-            if grid is not None:
-                self._apply_filters_to(grid)
-            if console == self.current_console:
-                self._update_window_title(console)
-            return
-        self._page_signatures[console] = signature
-        page.header.set_visible(False)
-        if not roms:
-            if console == FAVORITES_ID:
-                status = Adw.StatusPage(
-                    icon_name="starred-symbolic",
-                    title=self.t("favorites.empty.title"),
-                    description=self.t("favorites.empty.body"),
-                )
-            elif console == ALL_CONSOLES_ID:
-                status = Adw.StatusPage(
-                    icon_name="folder-open-symbolic",
-                    title=self.t("console.empty.title"),
-                    description=self.t("empty.all_indexed"),
-                )
-            elif is_collection_scope(console):
-                status = Adw.StatusPage(
-                    icon_name="user-bookmarks-symbolic",
-                    title=self.t("collections.empty.title"),
-                    description=self.t("collections.empty.body"),
-                )
-            else:
-                status = Adw.StatusPage(
-                    icon_name="applications-games-symbolic",
-                    title=self.t("console.empty.title"),
-                    description=str(self.playlist_manager.get_playlist_path(console)),
-                )
-            scroll.set_child(status)
-            self._grids.pop(console, None)
-            if console == self.current_console:
-                self._update_window_title(console)
-            return
-
-        grid = RomGrid(
-            console,
-            roms,
-            self.on_launch_game,
-            self._toggle_favorite_from_ui,
-            self._reveal_rom_in_files,
-            self._choose_cover_for_rom,
-            self._remove_cover_for_rom,
-            self._is_favorite_rom,
-            self._has_local_cover,
-            self.t,
-            self.roms_path,
-            ui_settings=display_settings,
-            mixed_consoles=console in (ALL_CONSOLES_ID, FAVORITES_ID) or is_collection_scope(console),
-            on_rename_rom=self._rename_rom_from_ui,
-            on_delete_rom=self._confirm_delete_roms,
-            on_selection_changed=self._on_selection_changed,
-            context_services=self._rom_context_services,
-            frame_color_for_rom=self._cartridge_color_for_rom,
-        )
-        self._grids[console] = grid
-        # The page was rebuilt, so whatever was selected on it is gone; the
-        # gamepad selection mode goes with it.
-        self._on_selection_changed([])
-        self.leave_selection_mode(clear=False)
-        # The pinned master-checkbox header belongs to list view only.
-        page.header.set_visible(grid.compact)
-        scroll.set_child(grid)
-        if console == self.current_console:
-            self._update_window_title(console)
-
     def set_rom_core(self, rom, core_filename):
         """Persist a per-ROM core override (``core_filename=None`` clears it)."""
         self.config_manager.set_rom_core(rom["path"], core_filename)
@@ -2947,7 +2011,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         page plus Favorites), so every grid gets a chance to refresh it.
         """
         self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
-        for grid in self._grids.values():
+        for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
 
     def sync_rom_artwork(self, rom, art_kind):
@@ -2985,35 +2049,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one ROM's card artwork after the manager saved a file."""
-        for grid in self._grids.values():
+        for grid in self.pages.grids():
             grid.refresh_rom_artwork(rom, fade=fade)
 
     def launch_rom_at_state(self, rom, slot):
-        """Launch a ROM parked on ``slot`` and load that state once it is up.
-
-        RetroArch has no launch-and-load flag OpenEmux could pass, so this is
-        best effort: the slot is seeded via the runtime override, and the
-        LOAD_STATE command goes out over UDP after the game had a moment to
-        boot. If the game is slower than that, the state is one hotkey away
-        on the already-selected slot.
-        """
-        success, error_msg = self.runtime_manager.launch(
-            rom["path"], rom["console"], state_slot=slot
-        )
-        if not success:
-            if error_msg:
-                self._toast(error_msg, timeout=5)
-            return
-        self.play_history.record_launch(rom["path"])
-        self._maybe_open_game_window(rom)
-        self._toast(self.t("states.toast.launching", name=rom["name"], slot=slot))
-
-        def _load_when_up():
-            if self.runtime_manager.is_running():
-                self.runtime_manager.load_state()
-            return False
-
-        GLib.timeout_add_seconds(4, _load_when_up)
+        """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""
+        self.game.launch_at_state(rom, slot)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
@@ -3028,9 +2069,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
         if self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-        elif FAVORITES_ID in self._grids:
-            self._ensure_favorites_loaded()
+            self.pages.ensure_favorites_loaded()
+        elif self.pages.grid_for(FAVORITES_ID) is not None:
+            self.pages.ensure_favorites_loaded()
         return is_now_favorite
 
     def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
@@ -3194,13 +2235,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         """Re-read the page the user is looking at after the library changed."""
         console = self.current_console
         if console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
+            self.pages.ensure_all_loaded()
         elif console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
+            self.pages.ensure_favorites_loaded()
         elif is_collection_scope(console):
-            self._ensure_collection_loaded(collection_slug(console))
+            self.pages.ensure_collection_loaded(collection_slug(console))
         else:
-            self._ensure_console_loaded(console)
+            self.pages.ensure_loaded(console)
 
     def _scan_current_console(self):
         self._show_scan_roms_dialog()
@@ -3218,7 +2259,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         origin_view = self.content_stack.get_visible_child_name()
         self._scan_running = True
-        task_id = self._begin_task("scan", self.t("status.scan.starting"), total=1)
+        task_id = self.tasks.begin("scan", self.t("status.scan.starting"), total=1)
 
         def _worker():
             summary = {"console": console, "roms": 0}
@@ -3248,11 +2289,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return None
         origin_view = self.content_stack.get_visible_child_name()
         self._scan_running = True
-        task_id = self._begin_task("scan", self.t("status.scan.starting"))
+        task_id = self.tasks.begin("scan", self.t("status.scan.starting"))
 
         def _on_progress(evt):
             GLib.idle_add(
-                self._update_task,
+                self.tasks.update,
                 task_id,
                 evt.get("current", 0),
                 evt.get("total", 0),
@@ -3284,7 +2325,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Two callers hand in ``show_toast=False`` and depend on the rescan
         actually happening: the one after an import ("new files on disk:
         rebuild the playlists so they show up") and the one after the ROM
-        folder changes. Imports are gated only by ``_import_running``, so one
+        folder changes. Imports are gated only by ``ImportFlow.running``, so one
         can finish while the always-on startup scan is still in flight -- and
         the request was dropped with no retry and no message. The user saw
         "imported" and then no new games, which reads as a failed import
@@ -3322,8 +2363,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # After this handler, so its own toast lands first and the queued run
         # starts against a library that has already been refreshed.
         GLib.idle_add(self._run_pending_rescan)
-        self._update_task(task_id, current=1, total=1)
-        self._finish_task(task_id)
+        self.tasks.update(task_id, current=1, total=1)
+        self.tasks.finish(task_id)
         self.refresh_library(preferred_view=origin_view or summary.get("console"))
         self._on_search_changed(self.search_entry)
         if summary.get("error"):
@@ -3338,7 +2379,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_rescan_all_done_ui(self, task_id, summary, show_toast, origin_view):
         self._scan_running = False
         GLib.idle_add(self._run_pending_rescan)
-        self._finish_task(task_id)
+        self.tasks.finish(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
         if summary.get("error"):
@@ -3449,213 +2490,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.set_close_response("cancel")
         return dialog
 
-    # ----- ROM import (header button + drag and drop) -----
-
-    def _install_drop_target(self, widget):
-        drop_target = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
-        drop_target.connect("enter", self._on_drop_enter)
-        drop_target.connect("leave", self._on_drop_leave)
-        drop_target.connect("drop", self._on_drop)
-        widget.add_controller(drop_target)
-
-    def _on_drop_enter(self, _target, _x, _y):
-        self.content_stack.add_css_class("rom-drop-active")
-        self.banner.set_title(self.t("import.drop_hint"))
-        self.banner.set_revealed(True)
-        return Gdk.DragAction.COPY
-
-    def _on_drop_leave(self, _target):
-        self.content_stack.remove_css_class("rom-drop-active")
-        self._refresh_banner()
-
-    def _on_drop(self, _target, value, _x, _y):
-        self.content_stack.remove_css_class("rom-drop-active")
-        self._refresh_banner()
-        paths = [f.get_path() for f in value.get_files() if f.get_path()]
-        if not paths:
-            return False
-        logger.info("rom import: dropped %d path(s)", len(paths))
-        self._begin_import(paths)
-        return True
-
-    def _on_import_clicked(self, _button):
-        dialog = Gtk.FileDialog()
-        dialog.set_title(self.t("import.dialog.title"))
-        dialog.set_modal(True)
-
-        rom_filter = Gtk.FileFilter()
-        rom_filter.set_name(self.t("import.dialog.filter"))
-        for ext in IMPORTABLE_EXTENSIONS:
-            suffix = ext.lstrip(".")
-            rom_filter.add_pattern(f"*.{suffix}")
-            rom_filter.add_pattern(f"*.{suffix.upper()}")
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(rom_filter)
-        dialog.set_filters(filters)
-        dialog.set_default_filter(rom_filter)
-
-        dialog.open_multiple(self, None, self._on_import_files_chosen)
-
-    def _on_import_files_chosen(self, dialog, result):
-        try:
-            files = dialog.open_multiple_finish(result)
-        except GLib.Error:
-            # Dismissed by the user; nothing to report.
-            return
-        if files is None:
-            return
-        paths = []
-        for index in range(files.get_n_items()):
-            path = files.get_item(index).get_path()
-            if path:
-                paths.append(path)
-        if paths:
-            self._begin_import(paths)
-
-    def _begin_import(self, paths):
-        """Resolve ambiguous extensions, then run the import in the background."""
-        if getattr(self, "_import_running", False):
-            self._toast(self.t("import.running"))
-            return
-
-        # In "All" or "Favorites" there is no console context to import into, so
-        # ask outright instead of silently guessing from the file extension.
-        if self.current_console in (None, ALL_CONSOLES_ID, FAVORITES_ID):
-            self._ask_target_console(paths)
-            return
-
-        self._continue_import(paths, forced_console=None)
-
-    def _ask_target_console(self, paths):
-        """Ask which console to import into, defaulting to auto-detection."""
-        dropdown = self._build_console_dropdown(
-            SYSTEM_IDS,
-            default_id=ALL_CONSOLES_ID,
-            include_all=True,
-            all_label_key="import.console.auto",
-        )
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.append(dropdown)
-
-        dialog = Adw.AlertDialog(
-            heading=self.t("import.console.heading"),
-            body=self.t("import.console.body"),
-        )
-        dialog.set_extra_child(box)
-        dialog.add_response("cancel", self.t("dialog.cancel"))
-        dialog.add_response("import", self.t("import.console.confirm"))
-        dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("import")
-        dialog.set_close_response("cancel")
-
-        def _on_response(_dlg, response):
-            if response != "import":
-                return
-            chosen = self._get_console_dropdown_active_id(dropdown)
-            # The "detect automatically" entry reuses the ALL sentinel id.
-            forced = None if chosen == ALL_CONSOLES_ID else chosen
-            self._continue_import(paths, forced_console=forced)
-
-        dialog.connect("response", _on_response)
-        dialog.present(self)
-
-    def _continue_import(self, paths, forced_console):
-        """Run the import, forcing a console or falling back to detection."""
-        if forced_console:
-            # One console for the whole batch: no per-extension question needed.
-            self._run_import(paths, {}, forced_console=forced_console)
-            return
-
-        ambiguous = collect_ambiguous_extensions(paths)
-        self._resolve_ambiguous_then_import(paths, list(ambiguous.items()), {})
-
-    def _resolve_ambiguous_then_import(self, paths, pending, overrides):
-        if not pending:
-            self._run_import(paths, overrides)
-            return
-
-        extension, candidates = pending[0]
-        remaining = pending[1:]
-
-        dialog = Adw.AlertDialog(
-            heading=self.t("import.unknown_console"),
-            body=self.t("import.choose_console.body", extension=extension),
-        )
-        dialog.add_response("cancel", self.t("dialog.cancel"))
-        for console in candidates:
-            dialog.add_response(console, f"{console} — {get_system_display_name(console)}")
-        dialog.set_default_response(candidates[0])
-        dialog.set_close_response("cancel")
-
-        def _on_response(_dlg, response):
-            if response == "cancel":
-                return
-            overrides[extension] = response
-            self._resolve_ambiguous_then_import(paths, remaining, overrides)
-
-        dialog.connect("response", _on_response)
-        dialog.present(self)
-
-    def _run_import(self, paths, overrides, forced_console=None):
-        self._import_running = True
-        task_id = self._begin_task("import", self.t("import.progress.starting"))
-
-        def _on_progress(evt):
-            GLib.idle_add(
-                self._update_task,
-                task_id,
-                evt.get("current", 0),
-                evt.get("total", 0),
-                # The counter is rendered by _refresh_banner; don't repeat it here.
-                self.t("import.progress"),
-            )
-
-        def _on_done(summary):
-            GLib.idle_add(self._on_import_done_ui, task_id, summary)
-
-        import_roms_async(
-            paths=paths,
-            roms_dir=self.roms_path,
-            on_done=_on_done,
-            on_progress=_on_progress,
-            console_overrides=overrides,
-            forced_console=forced_console,
-            mode=self.config_manager.get_import_mode(),
-        )
-
-    def _on_import_done_ui(self, task_id, summary):
-        self._import_running = False
-        self._finish_task(task_id)
-
-        imported = len(summary["imported"])
-        skipped = len(summary["skipped"])
-        unknown = len(summary["unknown"])
-        errors = len(summary["errors"])
-        extracted = len(summary.get("extracted", []))
-        logger.info(
-            "rom import done: imported=%d extracted=%d skipped=%d unknown=%d errors=%d",
-            imported, extracted, skipped, unknown, errors,
-        )
-
-        if imported:
-            message = self.t("import.done", imported=imported, skipped=skipped)
-            if extracted:
-                # Say so explicitly: the user chose a .zip and got loose files.
-                message = f"{message} — {self.t('import.extracted', count=extracted)}"
-            self._toast(message, timeout=6 if extracted else 5)
-            # New files on disk: rebuild the playlists so they show up.
-            self._rescan_all_consoles(show_toast=False)
-            # An import is exactly when the library gained ROMs with no artwork,
-            # so fetch it now instead of leaving a shelf of blank cartridges
-            # until the user remembers to sync by hand.
-            self._start_post_import_artwork_sync(summary["imported"])
-        elif unknown or errors:
-            self._toast(self.t("import.failed", unknown=unknown + errors), timeout=5)
-        else:
-            self._toast(self.t("import.nothing_new"), timeout=4)
-        return False
-
     def _on_sync_covers_clicked(self, _button):
         self._sync_covers_for_current_scope()
 
@@ -3739,7 +2573,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._cover_sync_running = True
         cancel_event = Event()
         self._cover_sync_cancel = cancel_event
-        task_id = self._begin_task(
+        task_id = self.tasks.begin(
             "covers",
             self.t("status.covers.starting"),
             on_cancel=cancel_event.set,
@@ -3756,7 +2590,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 else "status.covers.progress"
             )
             GLib.idle_add(
-                self._update_task,
+                self.tasks.update,
                 task_id,
                 evt.get("processed", 0),
                 evt.get("total", 0),
@@ -3842,7 +2676,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Whatever is still queued reveals before the final reload takes
         # over; a cancelled run's grid then matches exactly what is on disk.
         self._flush_cover_reveal()
-        self._finish_task(task_id)
+        self.tasks.finish(task_id)
         # Covers already downloaded are kept -- each is an independent file, so
         # a stopped run leaves useful work rather than a half-written state.
         done_key = "toast.sync_cancelled" if summary.get("cancelled") else "toast.sync_done"
@@ -3857,52 +2691,36 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
         if self.current_console == ALL_CONSOLES_ID:
-            self._ensure_all_loaded()
+            self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
-        elif self.current_console in self._grids:
-            self._ensure_console_loaded(self.current_console)
+            self.pages.ensure_favorites_loaded()
+        elif self.pages.grid_for(self.current_console) is not None:
+            self.pages.ensure_loaded(self.current_console)
         if on_finished:
             on_finished()
         return False
 
     def _on_refresh_clicked(self, _button):
-        selected_row = self.console_list.get_selected_row()
-        selected_console = getattr(selected_row, "id", None) if selected_row else self.current_console
+        selected_console = self.sidebar.selected_id() or self.current_console
         if selected_console == ALL_CONSOLES_ID:
             self._rescan_all_consoles(show_toast=False)
             return
         if selected_console == FAVORITES_ID:
-            self._ensure_favorites_loaded()
+            self.pages.ensure_favorites_loaded()
             return
         if selected_console in SYSTEM_IDS:
             self._rescan_single_console(selected_console, show_toast=False)
 
     def on_launch_game(self, rom):
-        try:
-            success, error_msg = self.runtime_manager.launch(rom["path"], rom["console"])
-        except Exception as exc:
-            # A click handler is where an exception goes to die quietly:
-            # PyGObject prints the traceback and swallows it, so the button
-            # just does nothing. The toast path is right here (issue #226).
-            logger.exception("launch failed")
-            success, error_msg = False, self.t("toast.launch_failed", error=str(exc))
-        if success:
-            # Stamped here rather than on exit: a game that fails to close
-            # cleanly was still played, and this is the only point that knows
-            # which ROM was asked for.
-            self.play_history.record_launch(rom["path"])
-            self._maybe_open_game_window(rom)
-        if not success and error_msg:
-            toast = Adw.Toast(title=error_msg)
-            toast.set_timeout(5)
-            self.toast_overlay.add_toast(toast)
-        elif success:
-            toast = Adw.Toast(
-                title=self.t("toast.running", name=rom["name"], console=rom["console"])
-            )
-            toast.set_timeout(3)
-            self.toast_overlay.add_toast(toast)
+        self.game.launch(rom)
+
+    def apply_input_changes_to_running_game(self):
+        """Carry a saved remap into the running game (issue #129).
+
+        Called from the preferences dialog, which is why it stays on the
+        window: the session behind it is what does the work.
+        """
+        return self.game.apply_input_changes()
 
     def _on_search_changed(self, _entry):
         self.apply_library_filters()
@@ -3918,9 +2736,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         state settles, which happens after the filter first ran.
         """
         visible = self.content_stack.get_visible_child_name()
-        if not visible or visible not in self._grids:
+        grid = self.pages.grid_for(visible) if visible else None
+        if grid is None:
             return
-        self._apply_filters_to(self._grids[visible])
+        self._apply_filters_to(grid)
 
     def _apply_filters_to(self, grid):
         """The same decision, for a page that is not the visible one yet.
@@ -3944,234 +2763,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         action.set_state(GLib.Variant("b", enabled))
         self._filter_missing_artwork = enabled
         self.apply_library_filters()
-
-    def _relaunch_active_rom(self, resume_marker=None, announce=True):
-        """Stop the running game and start the same ROM again.
-
-        Not the same thing as Restart (#130): only a fresh process re-reads
-        the runtime override, so this is the only way an input remap takes
-        effect (#129). The wait for the old process is polled rather than
-        blocking -- wait() on the main loop would freeze the UI.
-
-        With ``resume_marker`` (a confirmed snapshot from
-        ``RuntimeManager.snapshot_active``), the scratch state is loaded back
-        once the new process has had time to boot, so the relaunch carries
-        the gameplay across instead of starting the game over.
-
-        ``announce=False`` drops the "Relaunching" toast, for a caller that
-        has already explained itself and would only be queueing a second
-        message behind its own (issue #267).
-        """
-        rom, error_msg = self.runtime_manager.relaunch_active()
-        if rom is None:
-            if error_msg:
-                self._toast(error_msg, timeout=4)
-            return False
-
-        # Held across the whole dance: the process is about to exit on
-        # purpose, and the runtime poll must not report that as the game
-        # finishing.
-        self._relaunch_in_flight = True
-        if announce:
-            self._toast(self.t("toast.relaunching"))
-        remaining = [RELAUNCH_MAX_POLLS]
-
-        def _discard_scratch():
-            self.runtime_manager.discard_snapshot(resume_marker)
-            return False
-
-        def _resume_when_up():
-            if self.runtime_manager.is_running():
-                self.runtime_manager.load_state_slot(resume_marker["slot"])
-                GLib.timeout_add_seconds(RESUME_DISCARD_DELAY_S, _discard_scratch)
-            return False
-
-        def _launch_when_free():
-            if self.runtime_manager.is_running():
-                remaining[0] -= 1
-                if remaining[0] > 0:
-                    return True
-                self._relaunch_in_flight = False
-                self._toast(self.t("toast.relaunch_failed"), timeout=5)
-                return False
-            self._relaunch_in_flight = False
-            success, launch_error = self.runtime_manager.relaunch_rom(rom)
-            if not success and launch_error:
-                self._toast(launch_error, timeout=5)
-            if success:
-                # The relaunched RetroArch starts with the embed overrides
-                # (undecorated window); without a wrapper adopting it, it
-                # would float borderless.
-                self._maybe_open_game_window(rom)
-            if success and resume_marker is not None:
-                GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
-            return False
-
-        GLib.timeout_add(RELAUNCH_POLL_INTERVAL_MS, _launch_when_free)
-        return True
-
-    def apply_input_changes_to_running_game(self):
-        """Make a saved remap reach the running game, keeping its progress.
-
-        The whole of issue #129: the process only reads bindings at spawn and
-        the UDP interface has no config or remap verb, so the change is
-        carried across a relaunch -- snapshot to a scratch slot, wait for the
-        file to actually land, relaunch with the regenerated override, load
-        the snapshot back. If the core cannot save states the timeout fires
-        and nothing is relaunched: losing the game to apply a binding is
-        worse than the binding waiting for the next launch.
-        """
-        if not self.runtime_manager.is_running():
-            return False
-        marker = self.runtime_manager.snapshot_active()
-        if marker is None:
-            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
-            return False
-        self._toast(self.t("toast.input_apply.saving"))
-        remaining = [SNAPSHOT_MAX_POLLS]
-
-        def _relaunch_when_saved():
-            if self.runtime_manager.snapshot_ready(marker):
-                self._relaunch_active_rom(resume_marker=marker)
-                return False
-            if not self.runtime_manager.is_running():
-                # The game quit on its own mid-apply; the change simply
-                # applies to the next launch, nothing to report.
-                return False
-            remaining[0] -= 1
-            if remaining[0] > 0:
-                return True
-            self._toast(self.t("toast.input_apply.no_state"), timeout=5)
-            return False
-
-        GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
-        return True
-
-    def _maybe_open_game_window(self, rom):
-        """Wrap the RetroArch window in an OpenEmux one (issue #199).
-
-        Every launch path opens it, including the input hot-apply relaunch
-        (issue #129): the old wrapper closes with its process, so the new
-        game needs a new wrapper adopting it.
-        """
-        if not game_window_support.game_window_active(self.config_manager):
-            self._notice_game_window_unavailable()
-            return
-        from openemux.ui import game_window
-
-        if not game_window.display_supports_embedding():
-            # Last guard, and the only one that asks GTK itself: the session
-            # looked embeddable but the app ended up on a non-X11 display.
-            # Publishing that verdict is what stops the launcher writing the
-            # embed overrides for the *next* launch, which is how a game
-            # ended up borderless with no wrapper to hold it (issue #212).
-            game_window_support.set_display_embeddable(False)
-            self._notice_game_window_unavailable("display is not X11")
-            return
-        GameWindow = game_window.GameWindow
-
-        if self._game_window is not None:
-            self._game_window.close()
-            self._game_window = None
-        window = GameWindow(
-            application=self.get_application(),
-            runtime_manager=self.runtime_manager,
-            rom=rom,
-            frame_enabled=feature_flags.retroarch_embed_frame_enabled(),
-            locale=self.locale,
-            on_closed=self._on_game_window_closed,
-            on_open_input_settings=self._open_input_settings_from_game,
-            on_embed_failed=self._on_game_window_embed_failed,
-        )
-        window.connect("close-request", self._on_game_window_close_request)
-        self._game_window = window
-        window.present()
-
-    def _on_game_window_closed(self, window):
-        if self._game_window is window:
-            self._game_window = None
-
-    def _notice_game_window_unavailable(self, reason=None):
-        """Say once why the game opened in RetroArch's own window (#212).
-
-        Only when the user actually asked for the game window: turning the
-        setting off is a choice, not something to report back at them.
-        """
-        if not self.config_manager.get_game_window_enabled():
-            return
-        if reason:
-            game_window_support.mark_embed_unavailable(reason)
-        if self._game_window_notice_shown:
-            return
-        self._game_window_notice_shown = True
-        logger.warning(
-            "game window: unavailable (%s); the game runs in its own window",
-            game_window_support.embed_unavailable_reason() or "session cannot embed",
-        )
-        self._toast(self.t("toast.game_window.unavailable"), timeout=6)
-
-    def _on_game_window_embed_failed(self, reason):
-        """The wrapper could not adopt the game; give the game a real window.
-
-        This is issue #267. The game is running right now with RetroArch's
-        decorations stripped and its fullscreen hotkey unbound, because the
-        launcher wrote those for a wrapper that then failed -- an unmovable,
-        unresizable square in the middle of the screen. Latching the failure
-        makes the next override write RetroArch's own defaults back, and
-        relaunching is what actually puts the game in a normal window. The
-        latch is also what keeps this from looping: the relaunch opens no
-        wrapper, so it cannot fail the same way again.
-        """
-        if game_window_support.embed_unavailable_reason():
-            return
-        game_window_support.mark_embed_unavailable(reason)
-        # The notice belongs to launches that never opened a wrapper; this
-        # path explains itself below and must not say it twice.
-        self._game_window_notice_shown = True
-        if not self.runtime_manager.is_running():
-            # Nothing to hand back -- the game died with the wrapper, and
-            # the runtime poll is already reporting that.
-            return
-        self._toast(self.t("toast.game_window.standalone"), timeout=6)
-        self._relaunch_active_rom(announce=False)
-
-    def _open_input_settings_from_game(self, _game_window):
-        # Presented on the library window on purpose: the game window keeps
-        # handing X focus to the emulator, which would fight a dialog shown
-        # on top of it.
-        self.present()
-        self._open_preferences(page="input")
-
-    def _on_game_window_close_request(self, window):
-        # close() only hides a GTK4 window; destroy it once the emission is
-        # over so a closed wrapper does not linger hidden until app exit.
-        GLib.idle_add(window.destroy)
-        return False
-
-    def _poll_runtime_state(self):
-        # Always polled, even mid-relaunch: this is what closes the log
-        # handle and clears the finished process. Only the announcement is
-        # held back, because a relaunch stops the game on purpose and
-        # "Game finished" would be a lie (issue #267).
-        result = self.runtime_manager.poll_active()
-        if result is not None and self._relaunch_in_flight:
-            return True
-        if result is not None:
-            rom = result.get("rom") or {}
-            rom_name = rom.get("path", "Game").split("/")[-1]
-            reason = result.get("failure_reason")
-            if reason:
-                # It never started. Say so, and say what the log said -- the
-                # exit code alone reads exactly like a clean quit (#226).
-                title = self.t("toast.launch_died", name=rom_name, reason=reason)
-                timeout = 10
-            else:
-                title = self.t("toast.finished", name=rom_name, code=result["exit_code"])
-                timeout = 4
-            toast = Adw.Toast(title=title)
-            toast.set_timeout(timeout)
-            self.toast_overlay.add_toast(toast)
-        return True
 
     def _trigger_bootstrap_retry(self):
         app = self.get_application()

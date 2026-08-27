@@ -707,7 +707,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   import os, shutil
   from pathlib import Path
   from openemux.core.collections import CollectionManager
-  from openemux.ui.window import FAVORITES_ID, OpenEmuxWindow, collection_scope
+  from openemux.ui.scopes import FAVORITES_ID, collection_scope, landing_view
 
   base = Path(os.environ["SCRATCH"]) / "rt027"
   shutil.rmtree(base, ignore_errors=True)
@@ -717,8 +717,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   slugs = [c["slug"] for c in manager.list_collections()]
 
   scope = collection_scope("hard-games")
-  assert OpenEmuxWindow._landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
-  assert OpenEmuxWindow._landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
+  assert landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
+  assert landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
   print("RT-027 OK")
   EOF
   ```
@@ -2032,7 +2032,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   path that could ever read it: 168 controller illustrations, six Preferences icons (the pages
   use symbolic icon names) and 37 console icons for consoles OpenEmux does not support, regional
   variants it does not use, and OpenEmu's own "Unused console icons" (issue #233). The only
-  reader is `_asset_path(category, filename)`, called with `"systems"` and nothing else.
+  reader is `ui/console_icons.py`'s `asset_path(category, filename)`, called with `"systems"`
+  and nothing else.
 - **Check:** suite file `tests/test_icon_assets.py`, plus:
   ```bash
   PYTHONPATH=src .venv/bin/python - <<'EOF'
@@ -2041,7 +2042,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   icons = Path("src/openemux/ui/assets/icons")
   for gone in ("controllers", "settings"):
       assert not (icons / gone).exists(), f"{gone}/ ships and nothing displays it"
-  block = (Path("src/openemux/ui/window.py").read_text()
+  block = (Path("src/openemux/ui/console_icons.py").read_text()
            .split("CONSOLE_ICON_FILES = {", 1)[1].split("}", 1)[0])
   wanted = set(re.findall(r'"([^"]+\.png)"', block))
   wanted |= {n.replace("@2x.png", ".png") for n in wanted if n.endswith("@2x.png")}
@@ -2979,6 +2980,74 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   $SCRATCH/app.log` are both greater than `0`; `grep "housekeeping" $SCRATCH/app.log` prints at
   least one line.
 - **Restore:** none.
+
+### RT-241 — Deleting a playlist leaves nothing of it behind
+- **Area:** Favorites & collections
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: create a playlist, open it, delete it, then sync covers and watch
+  for anything still being applied to it.
+- **Expected:** The row, the page and the grid all go. The window kept the page cache in four
+  dictionaries keyed by the same scope id and the delete popped three of them, so the deleted
+  playlist's grid stayed in `_grids` and went on receiving `set_rom_cartridge_color`,
+  `refresh_rom_artwork` and the batched cover reveal for a page that had already left the stack
+  (issue #237). `LibraryPages` owns all four and `forget()` is the only way out, so a scope can
+  no longer be half-removed.
+- **Check:** suite file `tests/test_library_pages.py` (`TheRegistryMovesAsOneTests`).
+
+### RT-242 — Browsing the sidebar does not accumulate translation callbacks
+- **Area:** Internationalization
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: click through twenty sidebar rows, then change the language.
+- **Expected:** The language change is as fast as it was on the first click. Every sidebar
+  selection repopulates the layout menu, which rebuilds the zoom stepper, which registered two
+  translation callbacks — so N clicks left 2N registrations behind, all of them replayed on every
+  language change afterwards (issue #237). The stepper's registrations are tied to the stepper,
+  so a rebuild replaces them instead of adding to them.
+- **Check:** suite file `tests/test_retranslate.py`
+  (`OwnedRegistrationsTests.test_rebuilding_a_control_does_not_grow_the_registry`).
+
+### RT-243 — Closing the window lets go of the desktop theme watcher
+- **Area:** Settings
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the window source).
+- **Steps:** As a QA person: open the app, close the window, and confirm the process exits
+  instead of lingering.
+- **Expected:** The theme button follows the desktop under "System", which means listening to
+  `Adw.StyleManager.get_default()` — an object that lives as long as the process. The handler was
+  connected and never disconnected, and its closure holds the window, so a closed window stayed
+  reachable for the rest of the session (issue #237). The handler id is kept and dropped on
+  `close-request`.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  source = Path("src/openemux/ui/window.py").read_text(encoding="utf-8")
+  assert "self._style_manager_handler = self._style_manager.connect(" in source, \
+      "the style-manager handler id is not kept, so it cannot be disconnected"
+  assert 'self.connect("close-request", self._on_close_disconnect_style_manager)' in source, \
+      "nothing disconnects the style manager when the window closes"
+  assert "self._style_manager.disconnect(handler)" in source, \
+      "the close handler does not actually disconnect"
+  print("RT-243 OK")
+  EOF
+  ```
+
+### RT-244 — Every collaborator's call back into the window resolves
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: exercise the sidebar menus, the import flow, the scan and sync
+  prompts, and the layout submenus, and confirm none of them silently does nothing.
+- **Expected:** Every one acts. `OpenEmuxWindow` is a shell plus six collaborators now — the
+  sidebar, the page cache, the import flow, the game session, the task banner and the navigation
+  controller — and each holds the window and calls back into it (issue #237). A collaborator
+  calling a method a rename removed fails inside a signal handler, where PyGObject prints the
+  traceback and swallows it: the menu entry just does nothing. The suite never builds a window,
+  so the names are checked statically instead.
+- **Check:** suite file `tests/test_window_collaborators.py`.
+
 
 ## Robustness
 

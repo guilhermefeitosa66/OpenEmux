@@ -50,6 +50,7 @@ from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.theme import THEMES
 from openemux.ui import theming
+from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
@@ -420,7 +421,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 subtitle=f"{present}/{total}",
             )
             # The row names a console, so show its icon like everywhere else.
-            expander.add_prefix(self.win._build_console_icon(console_id))
+            expander.add_prefix(console_icon(console_id))
             open_btn = Gtk.Button(icon_name="folder-open-symbolic")
             open_btn.add_css_class("flat")
             open_btn.set_valign(Gtk.Align.CENTER)
@@ -471,7 +472,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 box.remove(child)
             item = list_item.get_item()
             console_id = item.get_string() if item else ""
-            box.append(self.win._build_console_icon(console_id))
+            box.append(console_icon(console_id))
             label = Gtk.Label(label=f"{console_id} — {get_system_display_name(console_id)}")
             label.set_halign(Gtk.Align.START)
             label.set_xalign(0)
@@ -1448,7 +1449,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=f"{console_id} — {get_system_display_name(console_id)}"
             )
             # The row names a console, so show its icon here too.
-            row.add_prefix(self.win._build_console_icon(console_id))
+            row.add_prefix(console_icon(console_id))
             row.set_model(Gtk.StringList.new(labels))
             row.set_selected(ids.index(selected) if selected in ids else 0)
             row._shader_ids = ids
@@ -1498,7 +1499,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             if not cores:
                 # Nothing installed: say so rather than offer an empty picker.
                 row = Adw.ActionRow(title=title, subtitle=self.t("settings.cores.none"))
-                row.add_prefix(self.win._build_console_icon(console_id))
+                row.add_prefix(console_icon(console_id))
                 row.set_sensitive(False)
                 group.add(row)
                 continue
@@ -1512,7 +1513,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=title,
                 subtitle=self.t("settings.cores.auto_resolves", core=auto_label),
             )
-            row.add_prefix(self.win._build_console_icon(console_id))
+            row.add_prefix(console_icon(console_id))
             row.set_model(Gtk.StringList.new(labels))
             override = self.config.get_console_core_override(console_id)
             row.set_selected(filenames.index(override) if override in filenames else 0)
@@ -1565,7 +1566,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                     title=self.t(option.label_key),
                     subtitle=f"{console_id} — {get_system_display_name(console_id)}",
                 )
-                row.add_prefix(self.win._build_console_icon(console_id))
+                row.add_prefix(console_icon(console_id))
                 row.set_model(Gtk.StringList.new(labels))
                 current = chosen.get(option.key, option.default)
                 row.set_selected(

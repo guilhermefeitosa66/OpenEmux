@@ -8,18 +8,20 @@ game" -- about a game it does not have (issue #224).
 
 import unittest
 
-from openemux.ui.window import (
+from openemux.ui.window import OpenEmuxWindow
+from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
     LIBRARY_EMPTY_ID,
-    OpenEmuxWindow,
     collection_scope,
+    landing_view,
+    sidebar_row_ids,
 )
 
 
 class SidebarRowsTests(unittest.TestCase):
     def _rows(self, consoles, slugs=()):
-        return OpenEmuxWindow._sidebar_row_ids(consoles, slugs)
+        return sidebar_row_ids(consoles, slugs)
 
     def test_an_empty_library_gets_no_rows_at_all(self):
         self.assertEqual(self._rows([]), [])
@@ -51,7 +53,7 @@ class SidebarRowsTests(unittest.TestCase):
 
 class LandingViewTests(unittest.TestCase):
     def _landing(self, consoles, target):
-        return OpenEmuxWindow._landing_view(consoles, target)
+        return landing_view(consoles, target)
 
     def test_an_empty_library_lands_on_the_onboarding_page(self):
         self.assertEqual(self._landing([], None), LIBRARY_EMPTY_ID)
@@ -85,7 +87,7 @@ class CollectionSurvivesARescanTests(unittest.TestCase):
     """
 
     def _landing(self, target, slugs=("best-of-snes",)):
-        return OpenEmuxWindow._landing_view(["FC", "SFC"], target, slugs)
+        return landing_view(["FC", "SFC"], target, slugs)
 
     def test_a_collection_that_still_exists_is_kept(self):
         scope = collection_scope("best-of-snes")
@@ -102,7 +104,7 @@ class CollectionSurvivesARescanTests(unittest.TestCase):
 
     def test_an_empty_library_still_wins_over_a_collection(self):
         self.assertEqual(
-            OpenEmuxWindow._landing_view([], collection_scope("best-of-snes"), ["best-of-snes"]),
+            landing_view([], collection_scope("best-of-snes"), ["best-of-snes"]),
             LIBRARY_EMPTY_ID,
         )
 
