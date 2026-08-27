@@ -118,7 +118,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Every content-stack page, its grid and its load state: one owner
         # for the four dictionaries that used to move separately (issue #237).
         self.pages = LibraryPages(self)
-        self.play_history = PlayHistory()
+        self.play_history = PlayHistory(self.config_manager.get_play_history_file())
         self.visible_consoles = []
         self._cover_sync_running = False
         self._scan_running = False

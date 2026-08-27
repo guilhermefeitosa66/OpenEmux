@@ -5,11 +5,10 @@ import yaml
 
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
-from openemux.core.paths import get_project_root
+from openemux.core.paths import get_project_root, store_path
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_SHADERS_CONFIG_FILE = DEFAULT_CONFIG_DIR / "shaders.config"
+DEFAULT_SHADERS_CONFIG_FILE = store_path("shaders")
 DISABLED_SHADER_ID = "disabled"
 
 HANDHELD_SHADER_CONSOLES = {"GBA", "GBC", "GB", "NDS"}
@@ -238,7 +237,7 @@ class ShaderConfigStore:
 
 class ShaderCatalog:
     def __init__(self, runtime_dir=None, project_root=None):
-        self.runtime_dir = Path(runtime_dir or (DEFAULT_CONFIG_DIR / "runtime")).expanduser()
+        self.runtime_dir = Path(runtime_dir or store_path("runtime")).expanduser()
         self.project_root = Path(project_root).expanduser() if project_root else get_project_root()
         self._index = None
 

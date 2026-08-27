@@ -1,8 +1,10 @@
+import os
 import sqlite3
 import unittest
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from openemux.core.artwork_index import (
     ArtworkNameIndex,
@@ -231,6 +233,112 @@ class ShippedZipTests(unittest.TestCase):
             )
             self.assertFalse(index.available)
             self.assertIsNone(index.resolve_name(SNES, "Chrono Trigger"))
+
+
+class AnUpgradedIndexReachesTheUserTests(unittest.TestCase):
+    """A release with a regenerated index has to replace the old one (#239).
+
+    ``_ensure_db_file`` returned as soon as the extracted database existed, so
+    the copy from whichever version first ran stayed forever: CRC lookups and
+    FTS results never improved unless the user deleted the file by hand.
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.db_path = self.root / "cache" / "games.db"
+        self.shipped = self.root / "games.db.zip"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _ship(self, rows, mtime):
+        inner = self.root / f"inner-{mtime}.db"
+        _build_db(inner, rows)
+        with zipfile.ZipFile(self.shipped, "w") as archive:
+            archive.write(inner, "games.db")
+        os.utime(self.shipped, (mtime, mtime))
+
+    def _index(self):
+        return ArtworkNameIndex(db_path=self.db_path, shipped_zip=self.shipped)
+
+    def test_a_newer_shipped_zip_replaces_the_extracted_database(self):
+        self._ship([("Chrono Trigger (USA)", SNES)], mtime=1_000_000)
+        self.assertTrue(self._index().available)
+        os.utime(self.db_path, (1_000_000, 1_000_000))
+
+        self._ship([("Chrono Trigger (USA)", SNES), ("Terranigma (Europe)", SNES)],
+                   mtime=2_000_000)
+        resolved = self._index().resolve_name(SNES, "Terranigma (Europe)")
+        self.assertIsNotNone(resolved, "the regenerated index never reached the user")
+        self.assertEqual(resolved[0], "Terranigma (Europe)")
+
+    def test_an_older_shipped_zip_leaves_the_extracted_one_alone(self):
+        self._ship([("Chrono Trigger (USA)", SNES)], mtime=1_000_000)
+        self.assertTrue(self._index().available)
+        os.utime(self.db_path, (3_000_000, 3_000_000))
+        stamp = self.db_path.stat().st_mtime
+
+        self.assertTrue(self._index().available)
+        self.assertEqual(self.db_path.stat().st_mtime, stamp)
+
+
+class AFailedExtractionIsNotTheEndOfItTests(unittest.TestCase):
+    """A transient failure must not lose the index for the whole session."""
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.db_path = self.root / "cache" / "games.db"
+        self.shipped = self.root / "games.db.zip"
+        inner = self.root / "inner.db"
+        _build_db(inner, [("Chrono Trigger (USA)", SNES)])
+        with zipfile.ZipFile(self.shipped, "w") as archive:
+            archive.write(inner, "games.db")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_full_disk_on_the_first_try_is_retried_on_the_second(self):
+        index = ArtworkNameIndex(db_path=self.db_path, shipped_zip=self.shipped)
+        with patch(
+            "openemux.core.artwork_index.shutil.copyfileobj",
+            side_effect=OSError("No space left on device"),
+        ):
+            self.assertFalse(index.available)
+        # Not latched: the disk may well have room now.
+        self.assertTrue(index.available)
+
+    def test_a_failed_extraction_leaves_no_temporary_file_behind(self):
+        index = ArtworkNameIndex(db_path=self.db_path, shipped_zip=self.shipped)
+        with patch(
+            "openemux.core.artwork_index.shutil.copyfileobj",
+            side_effect=OSError("No space left on device"),
+        ):
+            for _ in range(3):
+                index.available
+        leftovers = [p.name for p in self.db_path.parent.iterdir()]
+        self.assertEqual(leftovers, [], f"temp files left in artwork-index/: {leftovers}")
+
+    def test_a_corrupt_database_with_nothing_to_replace_it_is_given_up_on(self):
+        # It will not heal on its own, so retrying it once per missed ROM is
+        # pure cost -- this is the one failure that stays latched.
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.write_bytes(b"not a database")
+        index = ArtworkNameIndex(
+            db_path=self.db_path, shipped_zip=self.root / "missing.zip"
+        )
+        self.assertFalse(index.available)
+        self.assertTrue(index._corrupt)
+
+    def test_a_corrupt_database_is_replaced_when_the_shipped_one_is_newer(self):
+        # Which is the happy consequence of comparing mtimes rather than
+        # asking only whether the file exists.
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.write_bytes(b"not a database")
+        os.utime(self.db_path, (1_000_000, 1_000_000))
+        index = ArtworkNameIndex(db_path=self.db_path, shipped_zip=self.shipped)
+        self.assertTrue(index.available)
 
 
 if __name__ == "__main__":

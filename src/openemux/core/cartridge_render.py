@@ -30,6 +30,8 @@ import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gio, GLib, GdkPixbuf
 
+from openemux.core.paths import store_path
+
 try:
     gi.require_version("Rsvg", "2.0")
     from gi.repository import Rsvg
@@ -54,7 +56,7 @@ BLANK_LABEL_RGB = (0.87, 0.86, 0.83)
 SVG_NS = "http://www.w3.org/2000/svg"
 INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
-DEFAULT_CACHE_DIR = Path.home() / ".openemux" / "cache" / "cartridges"
+DEFAULT_CACHE_DIR = store_path("cartridge_cache")
 
 # The shipped frame assets. They live under ui/ because that is where the app's
 # image assets are kept, but this module is their only reader, so the lookup

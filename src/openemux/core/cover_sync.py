@@ -525,12 +525,22 @@ def has_provider_for_kind(sync_settings, art_kind):
 
 #: The process-wide name index, created lazily; tests patch the factory.
 _NAME_INDEX = None
+_NAME_INDEX_LOCK = threading.Lock()
 
 
 def _get_name_index():
+    """The one shared index, built once however many workers ask for it.
+
+    The check-and-set was unlocked, and a sync fans out across six workers
+    that all reach this on their first missed ROM -- so several instances were
+    built, each extracting and probing the database, and "one shared index"
+    was not actually one (issue #239).
+    """
     global _NAME_INDEX
     if _NAME_INDEX is None:
-        _NAME_INDEX = ArtworkNameIndex()
+        with _NAME_INDEX_LOCK:
+            if _NAME_INDEX is None:
+                _NAME_INDEX = ArtworkNameIndex()
     return _NAME_INDEX
 
 
