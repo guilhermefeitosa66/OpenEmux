@@ -63,5 +63,73 @@ class PackagesWorkflowTests(unittest.TestCase):
         )
 
 
+class TestsWorkflowTests(unittest.TestCase):
+    """One Python version and no smoke test let two failure classes pass green."""
+
+    def setUp(self):
+        self.data, self.text = _workflow("tests.yml")
+
+    def test_the_matrix_covers_every_supported_python(self):
+        # pyproject promises >= 3.10 and the .rpm requires python3 >= 3.10;
+        # CI ran 3.12 alone, so the floor the project advertises was never
+        # exercised and the maintainer's own 3.10 venv broke on code CI liked.
+        pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn('requires-python = ">=3.10"', pyproject)
+        versions = self.data["jobs"]["unittest"]["strategy"]["matrix"]["python-version"]
+        self.assertEqual(versions, ["3.10", "3.11", "3.12", "3.13"])
+
+    def test_one_python_version_failing_does_not_cancel_the_rest(self):
+        self.assertIs(self.data["jobs"]["unittest"]["strategy"]["fail-fast"], False)
+
+    def test_only_one_version_publishes_the_badge(self):
+        # Four jobs force-pushing the same branch would race for no gain.
+        steps = self.data["jobs"]["unittest"]["steps"]
+        badge = next(s for s in steps if "badge" in s["name"].lower())
+        self.assertIn("matrix.python-version == '3.12'", badge["if"])
+
+    def test_the_badge_has_a_band_that_reports_a_problem(self):
+        # The ladder bottomed out at orange, so however far coverage fell the
+        # badge could never say so.
+        self.assertIn("color=red", self.text)
+
+    def test_coverage_has_a_floor(self):
+        pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn("[tool.coverage.report]", pyproject)
+        floor = next(
+            int(line.split("=")[1])
+            for line in pyproject.splitlines()
+            if line.startswith("fail_under")
+        )
+        self.assertGreaterEqual(floor, 50, "the floor is a ratchet; it does not go down")
+
+    def test_something_actually_starts_the_app(self):
+        smoke = self.data["jobs"]["smoke"]
+        run = " ".join(str(step.get("run", "")) for step in smoke["steps"])
+        self.assertIn("xvfb-run", run)
+        self.assertIn("scripts/smoke_start.py", run)
+        self.assertTrue((REPO_ROOT / "scripts/smoke_start.py").exists())
+
+
+class SmokeScriptTests(unittest.TestCase):
+    """The script is CI's only guard on start-up; a few properties are load-bearing."""
+
+    def setUp(self):
+        self.text = (REPO_ROOT / "scripts/smoke_start.py").read_text(encoding="utf-8")
+
+    def test_it_never_writes_to_the_real_config_dir(self):
+        # A smoke test that seeded a bootstrap into the developer's own
+        # ~/.openemux would be worse than no smoke test.
+        self.assertIn('os.environ["HOME"] = str(home)', self.text)
+        self.assertIn("shutil.rmtree(home", self.text)
+
+    def test_it_does_not_download_every_libretro_core(self):
+        self.assertIn("finish_bootstrap_success", self.text)
+
+    def test_it_says_the_check_could_not_be_made_rather_than_passing(self):
+        # Exit 2 without a display: absence of evidence is not evidence that
+        # the app starts.
+        self.assertIn("return 2", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()

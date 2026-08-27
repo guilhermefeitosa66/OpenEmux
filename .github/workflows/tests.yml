@@ -13,12 +13,93 @@ concurrency:
 
 jobs:
   unittest:
-    name: Unit tests
+    name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     permissions:
       # contents: write is only exercised by the badge step below, which
       # force-pushes coverage.json to the unprotected `badges` branch.
       contents: write
+    strategy:
+      # One version failing is information about that version; cancelling the
+      # rest hides which ones are actually affected.
+      fail-fast: false
+      matrix:
+        # pyproject declares requires-python = ">=3.10" and the .rpm requires
+        # python3 >= 3.10, but CI only ever ran 3.12 -- so code that needed
+        # 3.12 passed CI and broke the maintainer's own 3.10 venv, and nothing
+        # covered the newer interpreters the docs promise (Fedora 42, Ubuntu
+        # 25.04, GNOME runtime 50). The suite takes ~30 s (issue #242).
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
+        run: make install-sys-deps
+
+      - name: Install a virtual X server
+        # A handful of tests build real GTK widgets, which needs a display --
+        # without one GDK segfaults instead of failing, taking the whole run
+        # down with no failing test to point at. Under xvfb they run; without
+        # it they skip themselves (tests/gtk_display.py).
+        run: sudo apt-get install -y xvfb
+
+      - name: Create virtualenv and install Python dependencies
+        run: |
+          make venv
+          make setup-dev
+
+      - name: Run unit tests under coverage
+        # `coverage report` enforces fail_under from pyproject.toml, so a PR
+        # that drops the total below the floor fails here rather than moving
+        # the badge quietly.
+        run: |
+          xvfb-run -a env PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
+          .venv/bin/python -m coverage report
+
+      # The README's coverage badge is a shields.io endpoint badge fed by
+      # badges/coverage.json on the `badges` branch. The branch is CI-owned
+      # infrastructure: force-pushed to a single commit on every push to
+      # develop, never merged anywhere.
+      - name: Publish the coverage badge data
+        # One version owns the badge; four jobs force-pushing the same branch
+        # would race for no gain.
+        if: |
+          matrix.python-version == '3.12'
+          && github.event_name == 'push'
+          && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          total=$(.venv/bin/python -m coverage report --format=total)
+          if   [ "$total" -ge 90 ]; then color=brightgreen
+          elif [ "$total" -ge 75 ]; then color=green
+          elif [ "$total" -ge 60 ]; then color=yellowgreen
+          elif [ "$total" -ge 45 ]; then color=yellow
+          elif [ "$total" -ge 30 ]; then color=orange
+          # The ladder used to bottom out at orange, so the badge had no way
+          # to say "this is a problem" however far coverage fell (issue #242).
+          else                          color=red
+          fi
+          dir=$(mktemp -d)
+          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+            "$total" "$color" > "$dir/coverage.json"
+          git -C "$dir" init -q -b badges
+          git -C "$dir" config user.name "github-actions[bot]"
+          git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$dir" add coverage.json
+          git -C "$dir" commit -q -m "coverage: ${total}%"
+          git -C "$dir" push -q --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+
+  smoke:
+    name: Headless start-up
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,39 +112,20 @@ jobs:
       - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
         run: make install-sys-deps
 
+      - name: Install a virtual X server
+        run: sudo apt-get install -y xvfb
+
       - name: Create virtualenv and install Python dependencies
         run: |
           make venv
-          make setup-dev
+          make setup
 
-      - name: Run unit tests under coverage
-        run: |
-          PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
-          .venv/bin/python -m coverage report
-
-      # The README's coverage badge is a shields.io endpoint badge fed by
-      # badges/coverage.json on the `badges` branch. The branch is CI-owned
-      # infrastructure: force-pushed to a single commit on every push to
-      # develop, never merged anywhere.
-      - name: Publish the coverage badge data
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          total=$(.venv/bin/python -m coverage report --format=total)
-          if   [ "$total" -ge 90 ]; then color=brightgreen
-          elif [ "$total" -ge 75 ]; then color=green
-          elif [ "$total" -ge 60 ]; then color=yellowgreen
-          elif [ "$total" -ge 45 ]; then color=yellow
-          else                          color=orange
-          fi
-          dir=$(mktemp -d)
-          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
-            "$total" "$color" > "$dir/coverage.json"
-          git -C "$dir" init -q -b badges
-          git -C "$dir" config user.name "github-actions[bot]"
-          git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$dir" add coverage.json
-          git -C "$dir" commit -q -m "coverage: ${total}%"
-          git -C "$dir" push -q --force \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+      - name: Start the app and wait for its window
+        # `unittest discover` never constructs the Adw.Application or the
+        # window, and main.py does real work at import time, so a crash in
+        # start-up or in window construction used to pass CI and be caught by
+        # hand on release day. RT-001, run headlessly (issue #242).
+        # The script prints the tail of the start-up log itself when it fails:
+        # its throwaway HOME goes away with the process, so a later step would
+        # find nothing to read.
+        run: xvfb-run -a .venv/bin/python scripts/smoke_start.py

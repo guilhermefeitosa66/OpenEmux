@@ -61,6 +61,22 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   crash dialog.
 - **Check:** `wmctrl -l` lists a window titled `OpenEmux` within 25 s, and the launch log contains
   no `Traceback` and no `CRITICAL` (`grep -niE "traceback|critical" $SCRATCH/app.log`).
+  Without a desktop, `make smoke` (or `xvfb-run -a .venv/bin/python scripts/smoke_start.py`) makes
+  the same check headlessly against a throwaway `HOME`; exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. This
+  is what CI runs (issue #242).
+
+### RT-229 — CI runs the suite on every supported Python, starts the app, and holds coverage
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open `.github/workflows/tests.yml` and `pyproject.toml`.
+- **Expected:** The suite runs on 3.10, 3.11, 3.12 and 3.13 — the floor `pyproject.toml` and the
+  `.rpm` both promise, which CI never exercised; one version failing does not cancel the others.
+  A separate job starts the real app under `xvfb-run` and waits for its window, so a crash in
+  application or window construction fails CI instead of surfacing by hand on release day.
+  `coverage report` enforces `fail_under`, and the badge ladder has a red band, so coverage can no
+  longer decay in silence (issue #242).
+- **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
 ### RT-002 — The unit suite passes
 - **Area:** Startup

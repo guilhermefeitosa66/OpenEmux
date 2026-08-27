@@ -86,6 +86,9 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 
 # with a coverage report (needs `make setup-dev` once):
 make coverage
+
+# start the real app, wait for its window, quit (needs a display):
+make smoke
 ```
 
 The suite is stdlib `unittest`, covers the `core/` modules only (no GTK in
@@ -94,9 +97,27 @@ module.
 
 `make coverage` runs the same suite under [coverage.py](https://coverage.readthedocs.io/)
 (configured in `pyproject.toml`, measuring all of `src/openemux` — untested UI
-modules count as 0%, so the total reflects the whole app). CI does the same and,
-on every push to `develop`, refreshes the README's coverage badge by pushing
+modules count as 0%, so the total reflects the whole app). `fail_under` in
+`[tool.coverage.report]` is a **floor, not a target**: raise it as coverage
+rises, never lower it to make a red run pass. CI does the same and, on every
+push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
+
+`make smoke` runs [`scripts/smoke_start.py`](../scripts/smoke_start.py), which
+is the one check the unit suite cannot make: it constructs the real
+`Adw.Application`, waits for the window to become visible, and reads the
+start-up log back. `main.py` does real work at import time (renderer pick,
+legacy config migration, start-up logging, GTK typelib check) and no test ever
+touches it, so a crash there used to reach release day (issue #242). It runs
+against a throwaway `HOME` with the bootstrap pre-completed, so it never sees
+your `~/.openemux` and never downloads a core. Exit codes: `0` pass, `1` fail,
+`2` the check could not be made (no display, no GTK stack) — which is also a
+reason not to ship.
+
+CI runs the suite on **Python 3.10, 3.11, 3.12 and 3.13** — the floor
+`pyproject.toml` declares and the `.rpm` requires — plus the smoke start under
+`xvfb-run`. Package builds are a separate workflow; see
+[Package CI](#package-ci).
 
 ## Developing on Windows
 

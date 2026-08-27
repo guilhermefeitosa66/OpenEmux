@@ -40,6 +40,13 @@ where = ["src"]
 source = ["src/openemux"]
 relative_files = true
 
+[tool.coverage.report]
+# A floor, not a target. Without one, coverage could only ever be reported --
+# a PR that deleted tests, or added a module nothing exercises, stayed green
+# and the badge quietly moved (issue #242). Raise it as coverage rises; never
+# lower it to make a red run pass.
+fail_under = 50
+
 [tool.setuptools.package-data]
 # Every non-Python file the app reads at runtime. Only the pip-installed
 # builds (the Flatpak) honor this list -- the deb/rpm/AppImage copy src/
