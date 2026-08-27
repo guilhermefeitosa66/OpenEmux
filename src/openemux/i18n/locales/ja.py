@@ -148,6 +148,7 @@ TRANSLATIONS = {
     "prefs.group.game_window": "ゲームウィンドウ",
     "prefs.game_window.title": "OpenEmux のウィンドウでプレイ",
     "prefs.game_window.subtitle": "実行中のゲームを OpenEmux のウィンドウに取り込み、一時停止・ステートセーブ・音量をヘッダーバーから操作します。オフにすると RetroArch が自身のウィンドウを開きます。",
+    "prefs.game_window.subtitle.xwayland": "Wayland では、OpenEmux のウィンドウ自体もセッション中ずっと XWayland 上で動作します。",
     "prefs.game_window.unavailable": "このセッションでは利用できません: ゲームウィンドウには X11 または XWayland が必要です。",
     "prefs.game_window.unavailable_windows": "Windows では利用できません: ゲームウィンドウは X11 のウィンドウ埋め込みに依存しています。",
     "toast.game_window.restart": "ゲームウィンドウを有効にするには OpenEmux を再起動してください",

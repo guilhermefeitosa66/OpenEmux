@@ -148,6 +148,7 @@ TRANSLATIONS = {
     "prefs.group.game_window": "游戏窗口",
     "prefs.game_window.title": "在 OpenEmux 窗口中游玩",
     "prefs.game_window.subtitle": "将运行中的游戏接入 OpenEmux 窗口，暂停、即时存档和音量都在标题栏上。关闭后由 RetroArch 打开自己的窗口。",
+    "prefs.game_window.subtitle.xwayland": "在 Wayland 下，这也会让 OpenEmux 窗口本身在整个会话期间通过 XWayland 运行。",
     "prefs.game_window.unavailable": "本次会话不可用：游戏窗口需要 X11 或 XWayland。",
     "prefs.game_window.unavailable_windows": "Windows 上不可用：游戏窗口依赖 X11 窗口嵌入。",
     "toast.game_window.restart": "重启 OpenEmux 后游戏窗口才会生效",

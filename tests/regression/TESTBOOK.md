@@ -1319,6 +1319,93 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-253 — On a Wayland session the switch says the whole app moves to XWayland
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a Wayland session, open "Settings" → "Video" and read the subtitle
+  under "Play in an OpenEmux window".
+- **Expected:** The subtitle carries an extra sentence naming XWayland — the setting decides how
+  the *library* is drawn too, not only the game. It does not appear on an X11 session, where there
+  is nothing to warn about. The question asked is what the compositor is, never what backend GTK
+  opened: with the setting on, `GDK_BACKEND` is already `x11`, so asking GTK would answer "X11"
+  on exactly the session the sentence is for (issue #258).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from unittest import mock
+  from openemux.i18n import tr
+  from openemux.ui.preferences import game_window_subtitle
+  t = lambda key: tr("en", key)
+  note = t("prefs.game_window.subtitle.xwayland")
+  wayland = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0", "GDK_BACKEND": "x11"}
+  with mock.patch.dict(os.environ, wayland, clear=True):
+      assert note in game_window_subtitle(t), "Wayland session is not told about XWayland"
+  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "XDG_SESSION_TYPE": "x11"}, clear=True):
+      assert note not in game_window_subtitle(t), "X11 session shown an irrelevant warning"
+  print("RT-253 OK")
+  EOF
+  ```
+
+### RT-254 — On an X11 session the app is on X11 and the game embeds
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A login session of type `x11` (`echo $XDG_SESSION_TYPE`), a working core and
+  ROM, "Play in an OpenEmux window" on.
+- **Steps:**
+  1. Start the app and launch a game.
+  2. In another terminal, run `xprop -name OpenEmux WM_CLASS` while the app is up.
+- **Expected:** The game appears inside the OpenEmux window as in RT-062. `xprop` answers, because
+  the library window is a native X client — the same thing it would be with the setting off. On
+  this session type the setting costs nothing: it is the Wayland case (RT-255) where it also
+  changes how the library itself is drawn.
+- **Check:** human only (needs a real X11 login session).
+
+### RT-255 — On a Wayland session the game window puts the library on XWayland
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A login session of type `wayland` with XWayland available, a working core and
+  ROM.
+- **Steps:**
+  1. With "Play in an OpenEmux window" **on**, start the app. Run
+     `xlsclients | grep -i openemux` from another terminal.
+  2. Turn the setting off, restart the app, and run the same command.
+- **Expected:** With the setting on, `xlsclients` lists OpenEmux — the whole library UI is an
+  XWayland client for the entire run, not only while a game is up, and the game embeds normally.
+  With it off, `xlsclients` does not list it: the app is a native Wayland client and RetroArch
+  opens its own window. GTK4 fixes one backend per process, so there is no third state where the
+  wrapper is on X11 and the library is native (issue #258).
+- **Check:** human only (needs a real Wayland login session).
+- **Restore:** Turn the setting back on.
+
+### RT-256 — An explicit GDK_BACKEND is never overridden
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start the app with `GDK_BACKEND=wayland` set, with "Play in an
+  OpenEmux window" on.
+- **Expected:** The app respects the variable and stays on Wayland rather than forcing itself to
+  X11 — and, because nothing can be reparented there, reports the embed as impossible instead of
+  writing the overrides and stranding a borderless game. A comma list is judged by its **first**
+  entry, which is the one GTK takes: `wayland,x11` used to pass the check and then put GTK on
+  Wayland with the overrides already written (issue #212).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os
+  from unittest import mock
+  from openemux.core import game_window_support as g
+  for backend in ("wayland", "wayland,x11"):
+      env = {"DISPLAY": ":0", "WAYLAND_DISPLAY": "wayland-0", "GDK_BACKEND": backend}
+      with mock.patch.dict(os.environ, env, clear=True):
+          assert not g.embedding_possible(), f"overrode an explicit GDK_BACKEND={backend}"
+  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "x11,wayland"}, clear=True):
+      assert g.embedding_possible(), "refused a list whose first entry is x11"
+  print("RT-256 OK")
+  EOF
+  ```
+
 ### RT-079 — The wrapper's fullscreen key works whatever it is bound to
 - **Area:** Launch
 - **Mode:** AUTO-SUITE

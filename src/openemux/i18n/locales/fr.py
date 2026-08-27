@@ -148,6 +148,7 @@ TRANSLATIONS = {
     "prefs.group.game_window": "Fenêtre de jeu",
     "prefs.game_window.title": "Jouer dans une fenêtre OpenEmux",
     "prefs.game_window.subtitle": "Le jeu en cours est intégré à une fenêtre OpenEmux, avec pause, sauvegarde d’état et volume dans la barre de titre. Désactivez pour que RetroArch ouvre sa propre fenêtre.",
+    "prefs.game_window.subtitle.xwayland": "Sous Wayland, cela fait aussi passer la fenêtre d’OpenEmux elle-même par XWayland, pour toute la session.",
     "prefs.game_window.unavailable": "Indisponible dans cette session : la fenêtre de jeu nécessite X11 ou XWayland.",
     "prefs.game_window.unavailable_windows": "Indisponible sous Windows : la fenêtre de jeu repose sur l'incorporation de fenêtres X11.",
     "toast.game_window.restart": "Redémarrez OpenEmux pour que la fenêtre de jeu prenne effet",

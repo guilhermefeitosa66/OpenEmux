@@ -149,5 +149,47 @@ class GameWindowActiveTests(_ResetsEmbedState):
             self.assertFalse(game_window_support.game_window_active(_FakeConfig(True)))
 
 
+class SessionIsWaylandTests(unittest.TestCase):
+    """What the compositor is, which is not what backend GTK ended up on.
+
+    The distinction is the whole point: on the session this question is about,
+    ``main.py`` has already forced ``GDK_BACKEND=x11`` -- so asking GTK gives
+    "X11" for a Wayland user, and the XWayland trade-off would never be shown
+    to the one person it affects (issue #258).
+    """
+
+    def test_wayland_display_says_wayland(self):
+        with mock.patch.dict("os.environ", {"WAYLAND_DISPLAY": "wayland-0"}, clear=True):
+            self.assertTrue(game_window_support.session_is_wayland())
+
+    def test_still_wayland_after_the_backend_was_forced_to_x11(self):
+        # Exactly the state the app runs in with the game window on.
+        env = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0", "GDK_BACKEND": "x11"}
+        with mock.patch.dict("os.environ", env, clear=True):
+            self.assertTrue(game_window_support.session_is_wayland())
+
+    def test_session_type_is_the_fallback(self):
+        with mock.patch.dict("os.environ", {"XDG_SESSION_TYPE": "wayland"}, clear=True):
+            self.assertTrue(game_window_support.session_is_wayland())
+
+    def test_session_type_is_case_insensitive(self):
+        with mock.patch.dict("os.environ", {"XDG_SESSION_TYPE": "Wayland"}, clear=True):
+            self.assertTrue(game_window_support.session_is_wayland())
+
+    def test_a_plain_x11_session_is_not_wayland(self):
+        env = {"DISPLAY": ":0", "XDG_SESSION_TYPE": "x11"}
+        with mock.patch.dict("os.environ", env, clear=True):
+            self.assertFalse(game_window_support.session_is_wayland())
+
+    def test_an_empty_wayland_display_does_not_count(self):
+        env = {"WAYLAND_DISPLAY": "  ", "XDG_SESSION_TYPE": "x11"}
+        with mock.patch.dict("os.environ", env, clear=True):
+            self.assertFalse(game_window_support.session_is_wayland())
+
+    def test_nothing_set_at_all(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(game_window_support.session_is_wayland())
+
+
 if __name__ == "__main__":
     unittest.main()
