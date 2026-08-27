@@ -1425,6 +1425,35 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite files `tests/test_appimage_env.py`, `tests/test_retroarch_launcher.py`
   (`LaunchEnvironmentTests`).
 
+### RT-210 — A build never leaves the ScreenScraper credential in the working tree
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: start `make flatpak` with a `.env` holding the ScreenScraper
+  developer credential, kill the build mid-way (`docker kill` the container, or reboot), then run
+  `git status` and `git diff src/openemux/core/embedded_credentials.py`.
+- **Expected:** The working tree is untouched — no modified `embedded_credentials.py`, no
+  leftover `.orig` beside it. The Flatpak build used to rewrite that *tracked* file in place and
+  restore it from an `EXIT` trap, which a `SIGKILL` skips, so the obfuscated developer credential
+  was left one `git commit -a` away from being published (issue #250). Every target now injects
+  into its own staging copy, and `packaging/build.sh` refuses to start at all when the tracked
+  file already carries a blob.
+- **Check:** suite file `tests/test_packaging_credentials.py`, plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  cred = Path("src/openemux/core/embedded_credentials.py")
+  assert '_EMBEDDED_BLOB = ""' in cred.read_text(), "the tracked module carries a credential"
+  assert not Path(str(cred) + ".orig").exists(), "an interrupted build left a .orig behind"
+  flatpak = Path("packaging/flatpak/build.sh").read_text()
+  assert "mktemp -d" in flatpak, "the flatpak build no longer stages its inputs"
+  assert "trap 'mv" not in flatpak, "the tracked file is restored by a trap again"
+  entry = Path("packaging/build.sh").read_text()
+  assert '_EMBEDDED_BLOB = ""' in entry, "the entry point does not refuse a poisoned tree"
+  print("RT-210 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

@@ -75,3 +75,9 @@ release/NOTAS_DE_RELEASE_*.md
 flatpak-repo/
 .flatpak-build-dir/
 .flatpak-builder/
+
+# Backups a build (or an editor) may drop beside a source file. Builds stage
+# their inputs instead of editing the tree, but an untracked *.orig must never
+# become committable by accident -- it is exactly where a baked ScreenScraper
+# credential would sit (issue #250).
+*.orig
