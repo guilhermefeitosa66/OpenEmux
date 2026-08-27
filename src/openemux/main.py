@@ -2,13 +2,13 @@ import os
 import sys
 import logging
 import traceback
-from threading import Thread
 from pathlib import Path
 import shutil
 
 from openemux.core.paths import (
     get_project_root,
     is_running_in_appimage,
+    is_running_in_flatpak,
     migrate_legacy_config_dir,
 )
 from openemux.core.platform import IS_WINDOWS
@@ -113,39 +113,53 @@ def _configure_game_window_backend():
     os.environ["GDK_BACKEND"] = "x11"
 
 
-_configure_gtk_renderer()
-# Before the backend pick: the setting is read straight off the config file,
-# which a legacy config dir may still be on its way to.
-migrate_legacy_config_dir()
-_configure_game_window_backend()
-configure_startup_logging()
-_ensure_gtk_typelibs()
+#: Whether prepare_process() has already run in this process.
+_prepared = False
 
-try:
-    import gi
-    gi.require_version('Gtk', '4.0')
-    gi.require_version('Adw', '1')
-except Exception:
-    append_startup_error(
-        "Failed to import GTK stack (gi/Gtk/Adw). On Debian/Ubuntu/Mint install "
-        "the introspection typelibs: sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1 "
-        "(or run 'make install-sys-deps').",
-        exc_text=traceback.format_exc(),
-    )
-    raise
 
-# Gtk is not referenced here, and is imported anyway: importing it is what
-# runs Gtk.init(), which opens the display. Adw pulls it in too, but leaving
-# that implicit would make the app's initialisation depend on an import inside
-# libadwaita's overrides.
-from gi.repository import Gtk  # noqa: F401
-from gi.repository import Adw, GLib
-from openemux.ui.window import OpenEmuxWindow
-from openemux.ui.first_boot_window import FirstBootWindow
-from openemux.core.config import ConfigManager
-from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.housekeeping import run_startup_housekeeping
-from openemux.core.paths import is_running_in_flatpak
+def prepare_process():
+    """Everything that has to happen before the GTK stack is imported.
+
+    Deliberately *not* run at import time. It used to be five bare calls at
+    module level, so importing anything at all out of ``main`` -- which two
+    test files do -- migrated the developer's real config directory, read
+    their real config, redirected the root logger into a FileHandler on
+    ``~/.openemux/runtime/openemux_startup.log`` and replaced
+    ``sys.excepthook`` and ``threading.excepthook`` for the whole process
+    (issue #244).
+
+    Runs once per process. ``configure_startup_logging`` uses
+    ``force=True``, so a second call would swap the root handlers out and log
+    the start-up context line again -- and calling it after GTK is imported is
+    too late for the two environment variables set here anyway.
+    """
+    global _prepared
+    if _prepared:
+        return
+    _prepared = True
+    _configure_gtk_renderer()
+    # Before the backend pick: the setting is read straight off the config
+    # file, which a legacy config dir may still be on its way to.
+    migrate_legacy_config_dir()
+    _configure_game_window_backend()
+    configure_startup_logging()
+    _ensure_gtk_typelibs()
+
+
+def build_application():
+    """Prepare the process, then hand back the application object.
+
+    The GTK import and the application class live in ``openemux.app``, reached
+    only from here: importing ``gi.repository.Gtk`` runs ``Gtk.init()``, which
+    *opens the display*, so ``GDK_BACKEND`` -- which
+    ``_configure_game_window_backend`` sets -- has to be in the environment
+    before that import rather than after it.
+    """
+    prepare_process()
+    from openemux.app import OpenEmuxApplication
+
+    return OpenEmuxApplication()
+
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
@@ -233,152 +247,18 @@ def _ensure_desktop_integration():
         desktop_target.write_text(desktop_content, encoding="utf-8")
 
 
-class OpenEmuxApplication(Adw.Application):
-    def __init__(self):
-        super().__init__(application_id=APP_ID,
-                         flags=gi.repository.Gio.ApplicationFlags.FLAGS_NONE)
-        self.config_manager = ConfigManager()
-        self._bootstrap_running = False
-        self._bootstrap_window = None
-        self._housekeeping_done = False
-        self.main_window = None
-
-    def do_activate(self):
-        # Register the vendored symbolic icons before any window exists, so
-        # every lookup can fall back to them when the host theme lacks a name.
-        from openemux.ui.icons import register_bundled_icons
-        register_bundled_icons()
-
-        # Before the first window is drawn: setting the scheme afterwards
-        # repaints a window the user is already looking at (issue #198).
-        from openemux.ui.theming import apply_theme
-        apply_theme(self.config_manager.get_ui_settings()["theme"])
-
-        if self._bootstrap_running:
-            if self._bootstrap_window:
-                self._bootstrap_window.present()
-            return
-
-        # Retention for everything the app writes and never reads back: the
-        # per-launch runtime files, the buildbot download cache and the
-        # artwork-manager temp directories (issue #221). Cheap -- a couple of
-        # directory listings -- and best-effort, so it cannot delay or block
-        # the first window. Before the bootstrap check on purpose: a first boot
-        # is exactly when a previous failed one may have left a cache behind.
-        # Once per process: a re-activation must not sweep under a download or
-        # an artwork window this same process still has open.
-        if not self._housekeeping_done:
-            self._housekeeping_done = True
-            run_startup_housekeeping(self.config_manager)
-
-        bootstrapper = FirstBootBootstrapper(self.config_manager)
-        if bootstrapper.needs_bootstrap():
-            self._start_bootstrap_flow(initial_boot=True, parent=None)
-            return
-
-        self._present_main_window()
-
-    def do_shutdown(self):
-        # Last line of defence against a game outliving the app. Closing the
-        # library window already stops it; this covers every other way the
-        # app can end (Ctrl+Q, a quit action, the session going away), where
-        # nothing else is left running to notice the process.
-        runtime = getattr(self.main_window, "runtime_manager", None)
-        if runtime is not None and runtime.is_running():
-            runtime.stop_active(block=True)
-        Adw.Application.do_shutdown(self)
-
-    def _present_main_window(self):
-        if self.main_window:
-            self.main_window.present()
-            return
-        self.config_manager.ensure_rom_directories()
-        self.main_window = OpenEmuxWindow(application=self)
-        self.main_window.present()
-        self.main_window.maybe_show_welcome()
-        self.main_window.maybe_report_recovered_state()
-
-    def request_bootstrap_retry_from_ui(self, parent_window):
-        if self._bootstrap_running:
-            return False
-        self.config_manager.request_bootstrap_retry()
-        self._start_bootstrap_flow(initial_boot=False, parent=parent_window)
-        return True
-
-    def _start_bootstrap_flow(self, initial_boot, parent=None):
-        self._bootstrap_running = True
-        locale = self.config_manager.get_locale()
-        self._bootstrap_window = FirstBootWindow(
-            application=self,
-            locale=locale,
-            parent=parent,
-        )
-        self._bootstrap_window.present()
-        bootstrapper = FirstBootBootstrapper(self.config_manager)
-        window = self._bootstrap_window
-
-        def _emit(evt):
-            GLib.idle_add(self._deliver_bootstrap_event, window, evt)
-
-        def _worker():
-            result = self._run_bootstrap_guarded(bootstrapper, _emit)
-            GLib.idle_add(self._finish_bootstrap_flow, result, initial_boot)
-
-        Thread(target=_worker, daemon=True).start()
-
-    @staticmethod
-    def _run_bootstrap_guarded(bootstrapper, on_event):
-        """Run the bootstrap and always come back with a result.
-
-        ``FirstBootBootstrapper.run`` guards each step handler, but not the
-        config reads and writes around the loop -- and those touch the disk, so
-        a full disk or an unwritable ``~/.openemux`` raises right past them. The
-        worker thread then died silently: ``_finish_bootstrap_flow`` was never
-        queued, ``_bootstrap_running`` stayed True, and the first-boot window
-        sat there forever with no error and no way out. Relaunching just
-        re-presented the same frozen window (issue #215).
-
-        A crash here is still a failed bootstrap, and a failed bootstrap has a
-        screen. It has to arrive shaped like one.
-        """
-        try:
-            return bootstrapper.run(on_event=on_event)
-        except Exception as exc:
-            logging.getLogger(__name__).exception("bootstrap worker crashed")
-            return {"success": False, "failed_step": None, "error": str(exc)}
-
-    def _deliver_bootstrap_event(self, window, event):
-        """Hand a worker event to the window, if that window is still ours.
-
-        The worker outlives a closed window by design (it is a daemon thread),
-        and reaching through ``self._bootstrap_window`` after the flow ended
-        raised inside the worker -- taking the thread, and the flow, with it.
-        """
-        if window is not None and window is self._bootstrap_window:
-            window.handle_event(event)
-        return False
-
-    def _finish_bootstrap_flow(self, result, initial_boot):
-        self._bootstrap_running = False
-        if self._bootstrap_window:
-            # The window asks for confirmation before closing mid-run; this
-            # close is the run being over, so it must not ask.
-            self._bootstrap_window.finish()
-            self._bootstrap_window.close()
-            self._bootstrap_window = None
-
-        if initial_boot:
-            self._present_main_window()
-
-        if self.main_window and hasattr(self.main_window, "on_bootstrap_finished"):
-            self.main_window.on_bootstrap_finished(result)
-        return False
-
 def main():
     try:
+        prepare_process()
+        # GLib on its own, before the application object exists: it pulls in no
+        # GTK and opens no display, so the program name is set before anything
+        # can read it for a window's WM_CLASS. main.py imports nothing from
+        # gi at module level any more.
+        from gi.repository import GLib
+
         GLib.set_prgname(APP_ID)
         _ensure_desktop_integration()
-        app = OpenEmuxApplication()
+        app = build_application()
         return app.run(sys.argv)
     except Exception:
         append_startup_error(

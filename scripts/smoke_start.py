@@ -74,9 +74,11 @@ def _prepare_home():
 
 def _run_app():
     from gi.repository import GLib
-    from openemux.main import OpenEmuxApplication
+    from openemux.main import build_application
 
-    app = OpenEmuxApplication()
+    # The same entry point main() uses: it runs the pre-GTK preparation and
+    # only then imports the GTK stack, which is the order the app depends on.
+    app = build_application()
     state = {"window": False}
 
     def _quit():
