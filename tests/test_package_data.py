@@ -8,6 +8,8 @@ art moved from PNG to SVG and the pattern kept saying ``*.png``.
 """
 
 import fnmatch
+import hashlib
+import json
 import re
 import unittest
 from pathlib import Path
@@ -116,3 +118,46 @@ class PackageDataTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VendoredRetroArchLicenceTests(unittest.TestCase):
+    """RetroArch is GPLv3, and its licence text has to travel with the binary.
+
+    The upstream Windows archive does not carry one: it ships `assets/COPYING`,
+    which is CC-BY-4.0 and covers the assets, and nothing at the top level. So
+    the build stopped dead at its own licence check, which is how the Windows
+    bundle turned out never to have been built anywhere but the maintainer's
+    machine (issue #118). The text is committed instead, from the tag the
+    binary was built from.
+    """
+
+    def _manifest(self):
+        return json.loads(
+            (PROJECT_ROOT / "vendors" / "manifest.json").read_text(encoding="utf-8")
+        )
+
+    def test_the_licence_text_is_committed(self):
+        entry = self._manifest()["retroarch_licence"]
+        licence = PROJECT_ROOT / entry["path"]
+        self.assertTrue(licence.is_file(), f"{entry['path']} is missing")
+        text = licence.read_text(encoding="utf-8")
+        self.assertIn("GNU GENERAL PUBLIC LICENSE", text)
+        self.assertIn("Version 3, 29 June 2007", text)
+
+    def test_the_manifest_records_what_was_shipped(self):
+        entry = self._manifest()["retroarch_licence"]
+        licence = PROJECT_ROOT / entry["path"]
+        digest = hashlib.sha256(licence.read_bytes()).hexdigest()
+        self.assertEqual(
+            digest, entry["sha256"],
+            "vendors/RetroArch-COPYING changed without the manifest following",
+        )
+        # The provenance is the point: a GPLv3 text from nowhere in particular
+        # is not the licence of the binary being shipped.
+        self.assertIn("RetroArch", entry["source"])
+
+    def test_the_windows_bundle_ships_it(self):
+        stage = (PROJECT_ROOT / "packaging/windows/stage.py").read_text(encoding="utf-8")
+        self.assertIn('"RetroArch-COPYING"', stage)
+        build = (PROJECT_ROOT / "packaging/windows/build.sh").read_text(encoding="utf-8")
+        self.assertIn("COPYING", build, "the build no longer gates on the licence")

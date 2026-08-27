@@ -218,16 +218,28 @@ def copy_retroarch(bundle):
     # RetroArch is GPLv3 and is redistributed here unmodified. Its own licence
     # text must travel with the binary; THIRD_PARTY_NOTICES.md carries the
     # matching source offer.
+    #
+    # The upstream archive does not contain it. It ships assets/COPYING, which
+    # is CC-BY-4.0 and covers the *assets*, and nothing at the top level -- so
+    # this used to stop the build dead, and it is why the Windows bundle had
+    # never been built anywhere but the maintainer's own machine (issue #118).
+    # vendors/RetroArch-COPYING is that version's own COPYING, committed and
+    # recorded in vendors/manifest.json. The archive is still checked first, so
+    # an upstream that starts shipping one is used in preference.
     for name in ("COPYING", "COPYING.txt", "LICENSE"):
         candidate = source / name
         if candidate.is_file():
-            shutil.copy2(candidate, target / name)
+            shutil.copy2(candidate, target / "COPYING")
             break
     else:
-        raise SystemExit(
-            "the vendored RetroArch ships no COPYING/LICENSE file; "
-            "GPLv3 redistribution requires shipping its licence text"
-        )
+        vendored = REPO / "vendors" / "RetroArch-COPYING"
+        if not vendored.is_file():
+            raise SystemExit(
+                f"{vendored} is missing, and the vendored RetroArch ships no "
+                "COPYING/LICENSE of its own; GPLv3 redistribution requires "
+                "shipping its licence text"
+            )
+        shutil.copy2(vendored, target / "COPYING")
 
 
 def copy_documents(bundle):
