@@ -14,13 +14,20 @@ script:
   # link the loader is unreachable and every exec of a bundled binary dies with
   # a bare "not found".
   - ln -sfn usr/lib64 AppDir/runtime/compat/lib64
-  - cp -r src AppDir/usr/lib/openemux/
-  - cp -r src/openemux AppDir/usr/lib/python3/dist-packages/
+  # copy_tree.sh, not `cp -r`: the working tree's egg-info directories and
+  # __pycache__ rode into the bundle the same way they rode into the .deb and
+  # the .rpm (issue #254).
+  - sh packaging/common/copy_tree.sh src AppDir/usr/lib/openemux
+  - sh packaging/common/copy_tree.sh src/openemux AppDir/usr/lib/python3/dist-packages
   # Bake the ScreenScraper developer credential into the bundled copies (never
   # the host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/python3/dist-packages/openemux/core/embedded_credentials.py
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/openemux/src/openemux/core/embedded_credentials.py
-  - cp -r vendors AppDir/usr/lib/openemux/
+  - sh packaging/common/copy_tree.sh vendors AppDir/usr/lib/openemux
+  # Before pip runs: everything below this line legitimately writes
+  # bytecode into dist-packages, so this is the moment the app's own
+  # trees can be checked for what the copies left behind.
+  - sh packaging/common/assert_sources_only.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages/openemux
   - cp requirements.lock AppDir/usr/lib/openemux/
   - cp README.md LICENSE AppDir/usr/lib/openemux/
   - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/openemux-pydeps.lock

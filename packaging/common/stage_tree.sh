@@ -13,14 +13,15 @@ APP_ID="io.github.guilhermefeitosa66.OpenEmux"
 LOGO="$ROOT_DIR/src/openemux/ui/assets/images/logo.png"
 
 install -d "$DESTDIR/opt/openemux"
-cp -r "$ROOT_DIR/src" "$DESTDIR/opt/openemux/"
-cp -r "$ROOT_DIR/vendors" "$DESTDIR/opt/openemux/"
+# Sources only: copy_tree.sh leaves the working tree's build state behind. A
+# plain `cp -r` shipped every gitignored artifact the maintainer happened to
+# have -- egg-info directories (one of them from a project name that no longer
+# exists) and __pycache__ (issue #254).
+sh "$ROOT_DIR/packaging/common/copy_tree.sh" "$ROOT_DIR/src" "$DESTDIR/opt/openemux"
+sh "$ROOT_DIR/packaging/common/copy_tree.sh" "$ROOT_DIR/vendors" "$DESTDIR/opt/openemux"
 install -Dm644 "$ROOT_DIR/requirements.lock" "$DESTDIR/opt/openemux/requirements.lock"
 install -Dm644 "$ROOT_DIR/README.md" "$DESTDIR/opt/openemux/README.md"
 install -Dm644 "$ROOT_DIR/LICENSE" "$DESTDIR/opt/openemux/LICENSE"
-
-# Ship only sources, no build/test caches.
-find "$DESTDIR/opt/openemux/src" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
 # Bake the ScreenScraper developer credential into the staged copy (never the
 # host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
@@ -66,3 +67,6 @@ install -Dm644 "$LOGO" "$DESTDIR/usr/share/pixmaps/$APP_ID.png"
 
 install -Dm644 "$ROOT_DIR/LICENSE" \
   "$DESTDIR/usr/share/doc/openemux/copyright"
+
+# Check the result rather than trust the exclude list.
+sh "$ROOT_DIR/packaging/common/assert_sources_only.sh" "$DESTDIR/opt/openemux"
