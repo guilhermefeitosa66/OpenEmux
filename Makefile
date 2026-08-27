@@ -25,7 +25,7 @@ endif
 # form resolves through $(PYTHON) and cannot go stale.
 PIP := $(PYTHON) -m pip
 
-.PHONY: all setup setup-dev venv run test coverage smoke lint icons clean install-sys-deps bootstrap check-retroarch lock-deps
+.PHONY: all setup setup-dev venv run test coverage smoke lint icons name-db clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch verify-vendors
 .PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all

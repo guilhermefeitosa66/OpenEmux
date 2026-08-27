@@ -109,7 +109,7 @@ own screen.
   - `first_boot_window.py` — progress window shown during bootstrap
   - `style.css` — GTK CSS styling
 
-- `src/openemux/i18n/` — internationalization; `tr(key, locale)` for string lookup; `locales/` holds JSON translation files
+- `src/openemux/i18n/` — internationalization; `tr(key, locale)` for string lookup; `locales/` holds one Python module per locale, each a flat `dict` of key to string
 
 ### Key Data Flows
 

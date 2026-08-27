@@ -1,7 +1,7 @@
 # Line endings. Without this, Git for Windows' default core.autocrlf=true
 # rewrites every checkout to CRLF -- which puts a \r in the shebang of
-# run.sh and packaging/**/*.sh ("bad interpreter") and in Makefile recipes,
-# breaking the Linux builds from a Windows checkout. See issue #118.
+# packaging/**/*.sh and devbox/*.sh ("bad interpreter") and in Makefile
+# recipes, breaking the Linux builds from a Windows checkout. See issue #118.
 #
 # Normalize everything to LF in the repository and in the working tree...
 * text=auto eol=lf
