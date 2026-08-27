@@ -330,224 +330,32 @@ class RetroArchLauncher:
         return None
 
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None):
-        profile = self.config_manager.get_input_profile(console)
-        devices = profile.get("devices", {}) or {}
-        # Port 1 gets *both* device maps, not just the "active" one.
-        #
-        # RetroArch keeps keyboard and joypad binds under separate keys --
-        # input_player1_a vs input_player1_a_btn, input_enable_hotkey vs
-        # input_enable_hotkey_btn -- so they never collide and both can be
-        # live at once. Emitting only the active device meant a plugged-in
-        # pad got none of OpenEmux's configuration: not the hotkeys, not the
-        # analog stick axes. It still appeared to work because RetroArch's
-        # own autoconfig maps the buttons, which is what made it so hard to
-        # notice (issue #150).
-        # A pad's D-pad can stand in for the left stick (issue #156).
-        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
+        """Assemble this launch's ``--appendconfig`` file and return its path.
 
-        def _bindings_for(device_id, device, device_type):
-            bindings = device.get("bindings", {})
-            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
-            # pointing the arrows at it too would just be noise (issue #158).
-            if dpad_as_analog and device_type == "gamepad":
-                return with_dpad_as_analog(bindings)
-            return bindings
-
-        overrides = {}
-        for device_id in PLAYER1_DEVICE_IDS:
-            device = devices.get(device_id) or {}
-            device_type = device_type_for(device_id)
-            overrides.update(
-                to_retroarch_overrides(
-                    _bindings_for(device_id, device, device_type),
-                    device_type,
-                    console=console,
-                )
-            )
-        # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
-        for device_id in EXTRA_PORT_DEVICE_IDS:
-            extra = devices.get(device_id) or {}
-            if not extra.get("enabled"):
-                continue
-            extra_type = extra.get("type", "gamepad")
-            overrides.update(
-                to_retroarch_overrides(
-                    _bindings_for(device_id, extra, extra_type),
-                    extra_type,
-                    console=console,
-                    player=player_for_device(device_id),
-                )
-            )
-        # This file is appended to RetroArch's own config, so a stock hotkey
-        # sitting on a key we just bound would still fire alongside ours --
-        # `m` would mute and cycle the shader at the same time (issue #146).
-        overrides.update(conflicting_stock_hotkeys(overrides))
-        # Fold the analog stick onto the D-pad where the console wants it
-        # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
-        # the stick and the D-pad steer without re-remapping.
-        analog_mode = normalize_analog_dpad_mode(
-            profile.get("analog_dpad_mode"), console
-        )
-        overrides["input_player1_analog_dpad_mode"] = f'"{analog_mode}"'
-        for device_id in EXTRA_PORT_DEVICE_IDS:
-            extra = devices.get(device_id) or {}
-            if extra.get("enabled"):
-                player = player_for_device(device_id)
-                overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
-        # Which controller the core is told is in each port (issue #151).
-        # Left out entirely when unset, so the core keeps its own default --
-        # PlayStation boots as a digital pad, and an analog game needs
-        # DualShock chosen here just as it does in RetroArch.
-        controller_type = normalize_controller_type(
-            profile.get("controller_type"), console
-        )
-        if controller_type is not None:
-            overrides["input_libretro_device_p1"] = f'"{controller_type}"'
-            for device_id in EXTRA_PORT_DEVICE_IDS:
-                extra = devices.get(device_id) or {}
-                if extra.get("enabled"):
-                    player = player_for_device(device_id)
-                    overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
-        # Deadzone, sensitivity, rumble, latency (issues #154, #155). Global
-        # rather than per console: a worn stick drifts the same everywhere.
-        # Only values that differ from RetroArch's own defaults are written.
-        overrides.update(
-            input_tuning.to_retroarch_overrides(self.config_manager.get_input_tuning())
-        )
-        # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
-        # itself is a normal binding ("turbo" action) emitted per port above,
-        # so without one bound these just restate the defaults.
-        turbo = normalize_turbo_settings(profile.get("turbo"))
-        overrides["input_turbo_period"] = f'"{turbo["period"]}"'
-        overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
-        overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
-        # Select doubles as the gamepad hotkey modifier (issue #124), so a
-        # *tap* has to still reach the game as Select while a *hold* opens a
-        # hotkey. This is how many frames RetroArch waits before deciding;
-        # without it Select feels unresponsive in games that use it.
-        overrides["input_hotkey_block_delay"] = '"5"'
-        overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
-        required_for_core = get_required_for_core(console, core_filename) if core_filename else []
-        if required_for_core:
-            bios_dir = self.config_manager.get_console_bios_dir(console)
-            overrides["system_directory"] = f'"{cfg_path(bios_dir)}"'
-        if shader_enabled and shader_path:
-            overrides["video_shader_enable"] = '"true"'
-            overrides["video_shader"] = f'"{cfg_path(shader_path)}"'
-        else:
-            overrides["video_shader_enable"] = '"false"'
-
-        # The UDP command channel (issue #69): loopback-only, and what lets
-        # the in-app volume control reach the running game. The persisted
-        # master volume seeds audio_volume so the level survives launches and
-        # the live stepping starts from a known point.
-        overrides["network_cmd_enable"] = '"true"'
-        # The port is the caller's: it is picked per launch so a standalone
-        # RetroArch cannot share it with us (issue #227), and both sides of
-        # the channel have to agree on the same number.
-        if network_cmd_port is None:
-            network_cmd_port = self.config_manager.get_network_cmd_port()
-        overrides["network_cmd_port"] = f'"{int(network_cmd_port)}"'
-        overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
-
-        # Nothing this file injects may outlive the launch that asked for it.
-        # RetroArch saves its configuration on exit by default, and by then
-        # the --appendconfig values *are* the configuration: every OpenEmux
-        # launch was quietly writing its own launch-scoped settings into the
-        # user's retroarch.cfg. That is how the game window's borderless
-        # override made every later standalone RetroArch window borderless,
-        # how the fullscreen hotkey ended up permanently unbound ("nul"), and
-        # how OpenEmux's save-state directory became RetroArch's own. Core
-        # options, remaps, saves, states and playlists live in their own
-        # files and are unaffected -- only the global settings this launch
-        # imposes stop being written back.
-        overrides["config_save_on_exit"] = '"false"'
-
-        # ...and what makes the QUIT command on that channel actually quit.
-        # RetroArch defaults quit_press_twice to true, and the network QUIT
-        # goes through the very same "quit key" path as the hotkey: the first
-        # one only arms a two-second "press again to exit" window, so the
-        # command the game window sends when it closes was a no-op and the
-        # game kept playing. Measured against RetroArch 1.22.2: with the
-        # default, a single QUIT datagram leaves the process alive; with this
-        # override it exits cleanly (0), flushing battery saves on the way.
-        # The stock RetroArch config is untouched -- this is per launch.
-        overrides["quit_press_twice"] = '"false"'
-
-        # Which audio driver RetroArch is told to use (issue #176). The global
-        # retroarch.cfg may name one the RetroArch we launch was not built
-        # with -- "pipewire" is the common case, and the vendored build has no
-        # such driver. RetroArch then falls back to alsa, which fails on a
-        # PipeWire host, and audio never starts. That reads to the user as
-        # *speed*, not silence: emulation is paced off the audio clock, so
-        # without it the game runs at the display's refresh rate.
-        audio_driver = resolve_audio_driver(
-            self.config_manager.get_retroarch_audio_driver()
-        )
-        if audio_driver:
-            overrides["audio_driver"] = f'"{audio_driver}"'
+        Seven concerns, one file. They used to be one 170-line function whose
+        every block carried its own comment explaining which concern it was --
+        which is structure standing in for a name (issue #238). Each is a
+        helper returning a dict now, and this is the thin writer that merges
+        them, in the order a later key should win.
+        """
+        runtime_dir = self.config_manager.get_runtime_dir()
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
         # Save states live in OpenEmux's own per-console tree (issue #73), so
-        # the app can list and manage them; thumbnails give the manager
-        # something to show. state_slot seeds "play from this state" launches.
+        # the app can list and manage them.
         states_dir = self.config_manager.get_console_states_dir(console)
         states_dir.mkdir(parents=True, exist_ok=True)
-        overrides["savestate_directory"] = f'"{cfg_path(states_dir)}"'
-        overrides["savestate_thumbnail_enable"] = '"true"'
-        # The slot the save/load hotkeys start on. A "load this save" launch
-        # names it; every other launch starts at 0 and moves from there with
-        # the slot hotkeys, which is why the setting that used to pin it is
-        # gone (issue #198).
-        overrides["state_slot"] = f'"{int(state_slot or 0)}"'
 
-        # The game window needs RetroArch in a plain windowed window it can
-        # re-parent -- no fullscreen, no decorations, and no saving back the
-        # position we impose. pause_nonactive off because X keyboard focus
-        # moves between our window and the embedded one, and every such hop
-        # would otherwise pause the game. Keyed off the same answer the UI
-        # uses (issue #199): written without a wrapper to own the window, they
-        # would leave the game floating borderless.
-        if game_window_support.game_window_active(self.config_manager):
-            overrides["video_fullscreen"] = '"false"'
-            overrides["video_windowed_fullscreen"] = '"false"'
-            overrides["video_window_show_decorations"] = '"false"'
-            overrides["video_window_save_positions"] = '"false"'
-            overrides["pause_nonactive"] = '"false"'
-            # The wrapper owns the window: RetroArch toggling fullscreen on
-            # a reparented child recreates/unparents its window and breaks
-            # the embed, so the hotkey is unbound while embedded -- on the
-            # pad as well as the keyboard. Only the keyboard one was unbound
-            # before, and the gamepad binding written from the input profile
-            # (input_toggle_fullscreen_btn) survived: one press of that
-            # button destroyed a working embed (issue #267).
-            for suffix in ("", "_btn", "_axis"):
-                overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
-            # Which backend RetroArch talks to is the whole embed: an X
-            # client can only reparent another X client. Dropping the
-            # Wayland socket from its environment (see launch_process) is
-            # what actually lands it on X11/XWayland, but a retroarch.cfg
-            # that *names* the wayland context would override that. Empty is
-            # RetroArch's own written default and means "probe" -- so this
-            # neutralizes a saved pin without imposing one. Not "x11": that
-            # is not a registered ident (the real one is "x"), and naming a
-            # context a build lacks would leave the game with no video at all.
-            overrides["video_context_driver"] = '""'
-            # Keep RetroArch's output in the log file the launcher opened for
-            # it. With log_to_file on, RetroArch writes to its own file
-            # instead, our runtime log stays empty, and the game window loses
-            # the one early signal that tells it RetroArch is not an X client.
-            overrides["log_to_file"] = '"false"'
-        else:
-            # Stated rather than left alone, because earlier versions leaked
-            # the block above into the user's own retroarch.cfg: a game
-            # launched without a wrapper came up borderless and never paused
-            # when it lost focus, and turning the setting off did not fix it.
-            # Writing RetroArch's defaults back heals a config that was
-            # already polluted. (The fullscreen hotkey heals itself: with no
-            # wrapper the input profile's own binding is written above.)
-            overrides["video_window_show_decorations"] = '"true"'
-            overrides["pause_nonactive"] = '"true"'
-
+        overrides = {}
+        overrides.update(self._input_overrides(console))
+        overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
+        overrides.update(self._bios_overrides(console, core_filename))
+        overrides.update(self._shader_overrides(shader_path, shader_enabled))
+        overrides.update(self._session_overrides(network_cmd_port))
+        overrides.update(self._av_overrides())
+        overrides.update(self._savestate_overrides(states_dir, state_slot))
+        overrides.update(self._embed_overrides())
         # RetroAchievements does its own work inside RetroArch; what it needs
         # from us is the account (issue #300).
         overrides.update(
@@ -555,10 +363,6 @@ class RetroArchLauncher:
                 getattr(self.config_manager, "achievements", None)
             )
         )
-
-        runtime_dir = self.config_manager.get_runtime_dir()
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
         # Core options live in their own file, not in the config, so
         # --appendconfig cannot carry them (issue #296). What it can carry is
@@ -574,6 +378,265 @@ class RetroArchLauncher:
         lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(override_path)
+
+    # ----- the pieces of the override file --------------------------------
+
+    def _input_overrides(self, console):
+        """Bindings, hotkeys, analog modes, controller types, tuning, turbo.
+
+        Everything that comes out of the console's input profile, for every
+        port it covers.
+        """
+        profile = self.config_manager.get_input_profile(console)
+        devices = profile.get("devices", {}) or {}
+        # A pad's D-pad can stand in for the left stick (issue #156).
+        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
+
+        def _bindings_for(device, device_type):
+            bindings = device.get("bindings", {})
+            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
+            # pointing the arrows at it too would just be noise (issue #158).
+            if dpad_as_analog and device_type == "gamepad":
+                return with_dpad_as_analog(bindings)
+            return bindings
+
+        def _enabled_extra_ports():
+            for device_id in EXTRA_PORT_DEVICE_IDS:
+                extra = devices.get(device_id) or {}
+                if extra.get("enabled"):
+                    yield device_id, extra
+
+        overrides = {}
+        # Port 1 gets *both* device maps, not just the "active" one.
+        #
+        # RetroArch keeps keyboard and joypad binds under separate keys --
+        # input_player1_a vs input_player1_a_btn, input_enable_hotkey vs
+        # input_enable_hotkey_btn -- so they never collide and both can be
+        # live at once. Emitting only the active device meant a plugged-in
+        # pad got none of OpenEmux's configuration: not the hotkeys, not the
+        # analog stick axes. It still appeared to work because RetroArch's
+        # own autoconfig maps the buttons, which is what made it so hard to
+        # notice (issue #150).
+        for device_id in PLAYER1_DEVICE_IDS:
+            device = devices.get(device_id) or {}
+            device_type = device_type_for(device_id)
+            overrides.update(
+                to_retroarch_overrides(
+                    _bindings_for(device, device_type),
+                    device_type,
+                    console=console,
+                )
+            )
+        # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
+        for device_id, extra in _enabled_extra_ports():
+            extra_type = extra.get("type", "gamepad")
+            overrides.update(
+                to_retroarch_overrides(
+                    _bindings_for(extra, extra_type),
+                    extra_type,
+                    console=console,
+                    player=player_for_device(device_id),
+                )
+            )
+        # This file is appended to RetroArch's own config, so a stock hotkey
+        # sitting on a key we just bound would still fire alongside ours --
+        # `m` would mute and cycle the shader at the same time (issue #146).
+        overrides.update(conflicting_stock_hotkeys(overrides))
+
+        # Fold the analog stick onto the D-pad where the console wants it
+        # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
+        # the stick and the D-pad steer without re-remapping.
+        analog_mode = normalize_analog_dpad_mode(
+            profile.get("analog_dpad_mode"), console
+        )
+        overrides["input_player1_analog_dpad_mode"] = f'"{analog_mode}"'
+        for device_id, _extra in _enabled_extra_ports():
+            player = player_for_device(device_id)
+            overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+
+        # Which controller the core is told is in each port (issue #151).
+        # Left out entirely when unset, so the core keeps its own default --
+        # PlayStation boots as a digital pad, and an analog game needs
+        # DualShock chosen here just as it does in RetroArch.
+        controller_type = normalize_controller_type(
+            profile.get("controller_type"), console
+        )
+        if controller_type is not None:
+            overrides["input_libretro_device_p1"] = f'"{controller_type}"'
+            for device_id, _extra in _enabled_extra_ports():
+                player = player_for_device(device_id)
+                overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
+
+        # Deadzone, sensitivity, rumble, latency (issues #154, #155). Global
+        # rather than per console: a worn stick drifts the same everywhere.
+        # Only values that differ from RetroArch's own defaults are written.
+        overrides.update(
+            input_tuning.to_retroarch_overrides(self.config_manager.get_input_tuning())
+        )
+
+        # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
+        # itself is a normal binding ("turbo" action) emitted per port above,
+        # so without one bound these just restate the defaults.
+        turbo = normalize_turbo_settings(profile.get("turbo"))
+        overrides["input_turbo_period"] = f'"{turbo["period"]}"'
+        overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
+        overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
+
+        # Select doubles as the gamepad hotkey modifier (issue #124), so a
+        # *tap* has to still reach the game as Select while a *hold* opens a
+        # hotkey. This is how many frames RetroArch waits before deciding;
+        # without it Select feels unresponsive in games that use it.
+        overrides["input_hotkey_block_delay"] = '"5"'
+        return overrides
+
+    def _bios_overrides(self, console, core_filename):
+        """Point the core at this console's BIOS folder, if it needs one."""
+        if not core_filename or not get_required_for_core(console, core_filename):
+            return {}
+        bios_dir = self.config_manager.get_console_bios_dir(console)
+        return {"system_directory": f'"{cfg_path(bios_dir)}"'}
+
+    @staticmethod
+    def _shader_overrides(shader_path, shader_enabled):
+        """Turn the console's shader on, or say plainly that there is none."""
+        if shader_enabled and shader_path:
+            return {
+                "video_shader_enable": '"true"',
+                "video_shader": f'"{cfg_path(shader_path)}"',
+            }
+        return {"video_shader_enable": '"false"'}
+
+    def _session_overrides(self, network_cmd_port):
+        """The command channel, the volume, and keeping this launch's own.
+
+        The UDP command channel (issue #69) is loopback-only, and what lets
+        the in-app volume control reach the running game. The persisted
+        master volume seeds audio_volume so the level survives launches and
+        the live stepping starts from a known point.
+        """
+        # The port is the caller's: it is picked per launch so a standalone
+        # RetroArch cannot share it with us (issue #227), and both sides of
+        # the channel have to agree on the same number.
+        if network_cmd_port is None:
+            network_cmd_port = self.config_manager.get_network_cmd_port()
+        return {
+            "network_cmd_enable": '"true"',
+            "network_cmd_port": f'"{int(network_cmd_port)}"',
+            "audio_volume": f'"{self.config_manager.get_master_volume_db():.1f}"',
+            # Nothing this file injects may outlive the launch that asked for
+            # it. RetroArch saves its configuration on exit by default, and by
+            # then the --appendconfig values *are* the configuration: every
+            # OpenEmux launch was quietly writing its own launch-scoped
+            # settings into the user's retroarch.cfg. That is how the game
+            # window's borderless override made every later standalone
+            # RetroArch window borderless, how the fullscreen hotkey ended up
+            # permanently unbound ("nul"), and how OpenEmux's save-state
+            # directory became RetroArch's own. Core options, remaps, saves,
+            # states and playlists live in their own files and are unaffected
+            # -- only the global settings this launch imposes stop being
+            # written back.
+            "config_save_on_exit": '"false"',
+            # ...and what makes the QUIT command on that channel actually
+            # quit. RetroArch defaults quit_press_twice to true, and the
+            # network QUIT goes through the very same "quit key" path as the
+            # hotkey: the first one only arms a two-second "press again to
+            # exit" window, so the command the game window sends when it
+            # closes was a no-op and the game kept playing. Measured against
+            # RetroArch 1.22.2: with the default, a single QUIT datagram
+            # leaves the process alive; with this override it exits cleanly
+            # (0), flushing battery saves on the way. The stock RetroArch
+            # config is untouched -- this is per launch.
+            "quit_press_twice": '"false"',
+        }
+
+    def _av_overrides(self):
+        """Which audio driver RetroArch is told to use (issue #176).
+
+        The global retroarch.cfg may name one the RetroArch we launch was not
+        built with -- "pipewire" is the common case, and the vendored build
+        has no such driver. RetroArch then falls back to alsa, which fails on
+        a PipeWire host, and audio never starts. That reads to the user as
+        *speed*, not silence: emulation is paced off the audio clock, so
+        without it the game runs at the display's refresh rate.
+        """
+        audio_driver = resolve_audio_driver(
+            self.config_manager.get_retroarch_audio_driver()
+        )
+        return {"audio_driver": f'"{audio_driver}"'} if audio_driver else {}
+
+    @staticmethod
+    def _savestate_overrides(states_dir, state_slot):
+        """Park the states in OpenEmux's own tree, on the asked-for slot.
+
+        Thumbnails give the state manager something to show. The slot is the
+        one the save/load hotkeys start on: a "load this save" launch names
+        it; every other launch starts at 0 and moves from there with the slot
+        hotkeys, which is why the setting that used to pin it is gone
+        (issue #198).
+        """
+        return {
+            "savestate_directory": f'"{cfg_path(states_dir)}"',
+            "savestate_thumbnail_enable": '"true"',
+            "state_slot": f'"{int(state_slot or 0)}"',
+        }
+
+    def _embed_overrides(self):
+        """What the game window needs, or what heals a config it polluted.
+
+        Keyed off the same answer the UI uses (issue #199): written without a
+        wrapper to own the window, they would leave the game floating
+        borderless.
+        """
+        if not game_window_support.game_window_active(self.config_manager):
+            # Stated rather than left alone, because earlier versions leaked
+            # the block below into the user's own retroarch.cfg: a game
+            # launched without a wrapper came up borderless and never paused
+            # when it lost focus, and turning the setting off did not fix it.
+            # Writing RetroArch's defaults back heals a config that was
+            # already polluted. (The fullscreen hotkey heals itself: with no
+            # wrapper the input profile's own binding is written above.)
+            return {
+                "video_window_show_decorations": '"true"',
+                "pause_nonactive": '"true"',
+            }
+
+        # The game window needs RetroArch in a plain windowed window it can
+        # re-parent -- no fullscreen, no decorations, and no saving back the
+        # position we impose. pause_nonactive off because X keyboard focus
+        # moves between our window and the embedded one, and every such hop
+        # would otherwise pause the game.
+        overrides = {
+            "video_fullscreen": '"false"',
+            "video_windowed_fullscreen": '"false"',
+            "video_window_show_decorations": '"false"',
+            "video_window_save_positions": '"false"',
+            "pause_nonactive": '"false"',
+            # Which backend RetroArch talks to is the whole embed: an X
+            # client can only reparent another X client. Dropping the
+            # Wayland socket from its environment (see launch_process) is
+            # what actually lands it on X11/XWayland, but a retroarch.cfg
+            # that *names* the wayland context would override that. Empty is
+            # RetroArch's own written default and means "probe" -- so this
+            # neutralizes a saved pin without imposing one. Not "x11": that
+            # is not a registered ident (the real one is "x"), and naming a
+            # context a build lacks would leave the game with no video at all.
+            "video_context_driver": '""',
+            # Keep RetroArch's output in the log file the launcher opened for
+            # it. With log_to_file on, RetroArch writes to its own file
+            # instead, our runtime log stays empty, and the game window loses
+            # the one early signal that tells it RetroArch is not an X client.
+            "log_to_file": '"false"',
+        }
+        # The wrapper owns the window: RetroArch toggling fullscreen on a
+        # reparented child recreates/unparents its window and breaks the
+        # embed, so the hotkey is unbound while embedded -- on the pad as
+        # well as the keyboard. Only the keyboard one was unbound before, and
+        # the gamepad binding written from the input profile
+        # (input_toggle_fullscreen_btn) survived: one press of that button
+        # destroyed a working embed (issue #267).
+        for suffix in ("", "_btn", "_axis"):
+            overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
+        return overrides
 
     def _write_core_options(self, console, core_filename, runtime_dir, timestamp):
         """This launch's core-options file, or ``None`` when there is nothing to say.
