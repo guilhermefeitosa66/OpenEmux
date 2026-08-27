@@ -44,10 +44,10 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk, Graphene
+from gi.repository import Adw, Gdk, GLib, Gtk
 
 from openemux.ui import context_menu
-from openemux.ui.grid import RomGrid, RomItem
+from openemux.ui.grid import RomGrid
 from openemux.ui.navigation import NavigationController
 
 # ---- XTest driver ----------------------------------------------------------

@@ -27,7 +27,6 @@ from openemux.core.platform import CORE_SUFFIX, bundled_core_dir, core_stem, use
 from openemux.core.systems import (
     get_runtime_core_candidates,
     get_thumbnail_system,
-    resolve_system_id,
 )
 
 # Mirrors RetroArchLauncher's search order: user config first, then Flatpak,

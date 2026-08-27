@@ -2,9 +2,13 @@ name: Security
 
 on:
   push:
-    branches: [ main ]
+    # develop as well as main: every day-to-day change lands on develop, so
+    # scanning main alone meant a bandit finding or a vulnerable pin sat
+    # unaudited for up to a week and across a dozen PRs, with no PR-time
+    # feedback anywhere (issue #243).
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   schedule:
     # Weekly scan so newly disclosed dependency CVEs are caught even without a push.
     - cron: '0 6 * * 1'
@@ -14,16 +18,22 @@ concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   scan:
     name: Static analysis & dependency audit
     runs-on: ubuntu-latest
     steps:
+      # Actions are pinned by commit SHA, not by tag. A tag is mutable: whoever
+      # can move `v4` can run their own code in a job that holds `contents:
+      # write` for the badge push. The comment keeps the human-readable version.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
@@ -40,5 +50,13 @@ jobs:
         # needs them to collect metadata for the pinned requirements.
         run: make install-sys-deps
 
-      - name: pip-audit (declared dependencies)
+      - name: pip-audit (what ships)
+        # requirements.lock is what every package installs.
         run: pip-audit -r requirements.lock
+
+      - name: pip-audit (what CI and developers install)
+        # A strict superset of the runtime lock, and what `make setup-dev`
+        # installs -- so the audited set and the installed set are the same
+        # list. They used to differ: CI installed the unpinned requirements.txt
+        # while the audit read the lock, and `coverage` was in neither.
+        run: pip-audit -r requirements-dev.lock

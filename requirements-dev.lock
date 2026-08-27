@@ -1,0 +1,8 @@
+coverage==7.15.4
+pycairo==1.29.0
+PyGObject==3.54.5
+python-xlib==0.33
+PyYAML==6.0.3
+ruff==0.16.4
+six==1.17.0
+tomli==2.4.1

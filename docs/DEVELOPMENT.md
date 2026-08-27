@@ -11,6 +11,9 @@ artifacts. For user-facing install instructions, see the main
 - [Running from source](#running-from-source)
 - [Developing on Windows](#developing-on-windows)
 - [Tests](#tests)
+  - [Lint](#lint)
+  - [Dependencies and the lock files](#dependencies-and-the-lock-files)
+  - [Supply chain](#supply-chain)
 - [Building the packages](#building-the-packages)
   - [AppImage](#appimage)
   - [Debian / Ubuntu (`.deb`)](#debian--ubuntu-deb)
@@ -89,6 +92,9 @@ make coverage
 
 # start the real app, wait for its window, quit (needs a display):
 make smoke
+
+# correctness-only lint (no formatting rules):
+make lint
 ```
 
 The suite is stdlib `unittest`, covers the `core/` modules only (no GTK in
@@ -118,6 +124,55 @@ CI runs the suite on **Python 3.10, 3.11, 3.12 and 3.13** — the floor
 `pyproject.toml` declares and the `.rpm` requires — plus the smoke start under
 `xvfb-run`. Package builds are a separate workflow; see
 [Package CI](#package-ci).
+
+### Lint
+
+`make lint` runs [ruff](https://docs.astral.sh/ruff/) and CI gates on it. It is
+configured for **correctness only** (`[tool.ruff.lint]` in `pyproject.toml`):
+pyflakes (`F`), syntax/IO errors (`E9`), pylint's error category (`PLE`) and a
+handful of bugbear rules that are bugs rather than preferences — a mutable
+default argument, a `return` inside `finally` swallowing the exception, a loop
+variable captured by a closure.
+
+**No formatting rules, deliberately.** This project has no formatter and is not
+getting one: nothing in that list has an opinion about quotes, line length,
+import order or whitespace. What it does catch is the class of mistake a test
+only finds if it happens to execute the line — and the UI modules sit around
+10–13% coverage.
+
+An import that exists for its side effect rather than its name is kept with a
+`# noqa: F401` and a sentence saying why (`main.py` imports `Gtk` because
+importing it is what runs `Gtk.init()`; `x11_embed.py` imports the whole `Xlib`
+set because that block is the probe for whether python-xlib is installed).
+
+### Dependencies and the lock files
+
+| File | What it is | Who reads it |
+| --- | --- | --- |
+| `requirements.txt` | runtime intent, unpinned | `make lock-deps` |
+| `requirements.lock` | resolved runtime pins | every package; `pip-audit`; `make setup` |
+| `requirements-dev.txt` | dev-tool intent (coverage, ruff) | `make lock-deps` |
+| `requirements-dev.lock` | the runtime lock **plus** the dev tools | `pip-audit`; `make setup-dev`; CI |
+
+`make lock-deps` regenerates both, each in its own throwaway venv — never
+against your working venv, which by now holds bandit, pillow, requests,
+CairoSVG and git-filter-repo, none of which belong in a file the packages ship.
+The dev lock is built *from* the runtime lock, so it is always a strict
+superset and the two can never drift.
+
+`make setup` and `make setup-dev` install from the **locks**, not from the
+`.txt` files, so what CI runs is the same list `pip-audit` reads. They used to
+differ — CI installed the unpinned `requirements.txt` while the audit read the
+lock, so a CVE against the version pip actually resolved was invisible, and
+`coverage` was in neither.
+
+### Supply chain
+
+Every GitHub Action is pinned to a **full commit SHA** with the version in a
+trailing comment. A tag is mutable, and the test job holds `contents: write`
+for the coverage-badge push. `.github/dependabot.yml` proposes updates weekly
+for both `github-actions` and `pip`, so a pin moves through a reviewed PR
+rather than by somebody remembering.
 
 ## Developing on Windows
 

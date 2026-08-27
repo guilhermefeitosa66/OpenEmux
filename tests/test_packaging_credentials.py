@@ -79,7 +79,7 @@ class InjectionAlwaysTargetsAStagingCopyTests(unittest.TestCase):
         # The old shape, kept out by name: a copy of the tracked file restored
         # by a trap is what this issue is about.
         self.assertNotIn(
-            f'cp "$CRED_FILE" "${{CRED_FILE}}.orig"',
+            'cp "$CRED_FILE" "${CRED_FILE}.orig"',
             text,
             "the flatpak build is back to editing the tracked file under a trap",
         )

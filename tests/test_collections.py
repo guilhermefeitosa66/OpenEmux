@@ -19,7 +19,7 @@ class CollectionManagerTests(unittest.TestCase):
     def test_create_lists_and_rejects_duplicates(self):
         with TemporaryDirectory() as tmp_dir:
             m = self._manager(tmp_dir)
-            slug = m.create("Fighting")
+            m.create("Fighting")
             self.assertEqual([c["name"] for c in m.list_collections()], ["Fighting"])
             with self.assertRaises(ValueError):
                 m.create("fighting")  # case-insensitive duplicate

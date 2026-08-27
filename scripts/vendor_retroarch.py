@@ -32,7 +32,6 @@ after that verifies against it, and a mismatch is a hard failure.
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -316,7 +315,7 @@ def fetch(name, entry, manifest, record=False, force=False):
                 f"  actual   {actual}\n"
                 f"  The upstream file changed. Do not proceed until you know why."
             )
-        print(f"    sha256 verified")
+        print("    sha256 verified")
     elif record:
         entry["sha256"] = actual
         save_manifest(manifest)

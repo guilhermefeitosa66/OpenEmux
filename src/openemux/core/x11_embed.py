@@ -16,7 +16,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from Xlib import X, XK, Xatom, Xcursorfont
+    # Xcursorfont is unused, and imported anyway: this block is the probe for
+    # whether python-xlib is installed at all, and importing the whole set is
+    # what makes XLIB_AVAILABLE mean "every module this file may reach for".
+    from Xlib import X, XK, Xatom, Xcursorfont  # noqa: F401
     from Xlib import display as x11_display
 
     XLIB_AVAILABLE = True

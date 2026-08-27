@@ -12,6 +12,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        # Only ruff, at the version the dev lock pins -- so a new ruff release
+        # cannot fail CI on code nobody touched, and linting does not drag in
+        # pycairo and PyGObject, which would need the whole GTK toolchain
+        # installed to build from sdist for a job that never imports them.
+        run: |
+          pin=$(grep -iE '^ruff==' requirements-dev.lock)
+          test -n "$pin"
+          python -m pip install "$pin"
+
+      - name: Ruff (correctness rules only)
+        # Undefined names, unused imports, f-string mistakes, shadowing: the
+        # class of defect a test only finds if it happens to execute the line,
+        # and the UI modules sit around 10-13% coverage (issue #243). No
+        # formatting rules -- see [tool.ruff] in pyproject.toml.
+        run: ruff check --output-format=github .
+
   unittest:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -32,10 +61,10 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -102,10 +131,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 

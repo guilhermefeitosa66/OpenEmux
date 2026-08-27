@@ -10,16 +10,22 @@
 ifeq ($(OS),Windows_NT)
 VENV :=
 PYTHON := python
-PIP := python -m pip
 RETROARCH_VENDOR := vendors/RetroArch-Win64/retroarch.exe
 else
 VENV := .venv
 PYTHON := $(VENV)/bin/python3
-PIP := $(VENV)/bin/pip
 RETROARCH_VENDOR := vendors/RetroArch-Linux-x86_64.AppImage
 endif
 
-.PHONY: all setup setup-dev venv run test coverage smoke icons clean install-sys-deps bootstrap check-retroarch lock-deps
+# `python -m pip`, never .venv/bin/pip. A console script carries the absolute
+# path of the interpreter it was installed against baked into its shebang, so
+# renaming or moving the checkout breaks it -- which is the state this repo is
+# in today: .venv/bin/pip still points at .../pessoal/opemux/.venv, and every
+# recipe that used it failed with "bad interpreter" (issue #243). The module
+# form resolves through $(PYTHON) and cannot go stale.
+PIP := $(PYTHON) -m pip
+
+.PHONY: all setup setup-dev venv run test coverage smoke lint icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch verify-vendors
 .PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
@@ -61,7 +67,13 @@ install-sys-deps-windows:
 		mingw-w64-x86_64-python-coverage mingw-w64-x86_64-ca-certificates \
 		mingw-w64-x86_64-SDL2 mingw-w64-x86_64-7zip
 
-# Environment setup. Both are no-ops on Windows: PyGObject cannot be pip-built
+# Environment setup, from the lock files rather than from requirements*.txt.
+# `pip-audit` reads the locks, so installing anything else means CI audits one
+# dependency set and runs on another, and a CVE against the version pip
+# actually resolved goes unseen (issue #243). requirements*.txt stay as the
+# statement of intent that `make lock-deps` resolves.
+#
+# Both are no-ops on Windows: PyGObject cannot be pip-built
 # under MSYS2, so pacman owns the whole dependency set and a venv would only
 # hide it. Verify the imports instead, which is what those steps exist to buy.
 ifeq ($(OS),Windows_NT)
@@ -77,7 +89,7 @@ venv:
 	$(PIP) install --upgrade pip
 
 setup:
-	$(PIP) install -r requirements.txt
+	$(PIP) install -r requirements.lock
 endif
 
 # Fetch the vendored RetroArch for this platform, verified against
@@ -98,11 +110,37 @@ setup-dev: setup
 	@$(PYTHON) -c "import coverage; print('OK: coverage', coverage.__version__)"
 else
 setup-dev: setup
-	$(PIP) install -r requirements-dev.txt
+	$(PIP) install -r requirements-dev.lock
 endif
 
+# Regenerate both lock files, each in its own throwaway venv.
+#
+# It used to be `pip freeze` against the working venv, which by now also holds
+# bandit, pillow, requests, CairoSVG, pip-audit and git-filter-repo: running it
+# would have written 40+ unrelated packages into the file the packages ship and
+# `pip-audit` reads, and the audit would then be auditing the maintainer's
+# desktop (issue #243).
+#
+# requirements.lock is runtime only -- it is copied into every package and the
+# AppImage installs a hashed form of it, so a dev tool in there ships to users.
+# requirements-dev.lock is that same set plus the dev tools, built *from* the
+# runtime lock so it is always a strict superset: CI installs it and audits
+# both, which is what makes "what was audited" and "what was installed" the
+# same list.
 lock-deps:
-	$(PIP) freeze > requirements.lock
+	@set -e; \
+		tmp=$$(mktemp -d); \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		python3 -m venv "$$tmp/run"; \
+		"$$tmp/run/bin/python" -m pip install -q --upgrade pip; \
+		"$$tmp/run/bin/python" -m pip install -q -r requirements.txt; \
+		"$$tmp/run/bin/python" -m pip freeze --exclude pip > requirements.lock; \
+		python3 -m venv "$$tmp/dev"; \
+		"$$tmp/dev/bin/python" -m pip install -q --upgrade pip; \
+		"$$tmp/dev/bin/python" -m pip install -q -r requirements.lock -r requirements-dev.txt; \
+		"$$tmp/dev/bin/python" -m pip freeze --exclude pip > requirements-dev.lock; \
+		echo "==> requirements.lock"; cat requirements.lock; \
+		echo "==> requirements-dev.lock"; cat requirements-dev.lock
 
 
 # Running the app. Sources the gitignored .env first so a ScreenScraper
@@ -114,6 +152,11 @@ run:
 # Run the unit test suite
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
+
+# Correctness-only lint: no formatting opinions, no style rules. See the
+# [tool.ruff] block in pyproject.toml for what is selected and why.
+lint:
+	$(PYTHON) -m ruff check .
 
 # Run the unit test suite under coverage.py and print the report
 # (needs `make setup-dev`; configuration lives in pyproject.toml)

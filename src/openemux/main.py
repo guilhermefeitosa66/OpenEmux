@@ -134,13 +134,18 @@ except Exception:
     )
     raise
 
-from gi.repository import Gtk, Adw, GLib
+# Gtk is not referenced here, and is imported anyway: importing it is what
+# runs Gtk.init(), which opens the display. Adw pulls it in too, but leaving
+# that implicit would make the app's initialisation depend on an import inside
+# libadwaita's overrides.
+from gi.repository import Gtk  # noqa: F401
+from gi.repository import Adw, GLib
 from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
-from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
+from openemux.core.paths import is_running_in_flatpak
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
