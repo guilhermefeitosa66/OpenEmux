@@ -26,7 +26,6 @@ DEVBOX_GEOMETRY=${DEVBOX_GEOMETRY:-1600x1000}
 
 # --- Paths -----------------------------------------------------------------
 
-DEVBOX_KIT=/openemux/devkit
 # The checkout under test, at the same absolute path it has on the host -- the
 # container is created with an env var carrying it. Same path on both sides is
 # deliberate: an edit saved on the host is live in here with no copying and no
