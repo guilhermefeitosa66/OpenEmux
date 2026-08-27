@@ -2112,6 +2112,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   human confirms the picture.
 - **Restore:** Put the option back to its first value, which removes it from the store.
 
+### RT-227 — A shader pack can only write inside the shader folder
+- **Area:** Shaders
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: hand the shader-pack extractor an archive whose member names try to
+  escape — one starting with `../`, one hiding `..` in the middle (`a/../../evil`), and one that is
+  an absolute path — alongside a legitimate preset.
+- **Expected:** The legitimate preset is extracted; every escaping member is skipped and logged,
+  and nothing is written outside the shader directory. The guard only tested for a leading `../`,
+  so an embedded `..` slipped through, and an absolute member name replaced the target directory
+  outright when the two were joined (issue #222).
+- **Check:** suite file `tests/test_retroarch_buildbot_updater.py`
+  (`test_shader_archive_refuses_members_that_escape_the_target`,
+  `test_safe_destination_accepts_only_paths_under_the_target`).
+
 ## BIOS
 
 ### RT-090 — The BIOS tab reports per-console status

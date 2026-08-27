@@ -374,16 +374,40 @@ class RetroArchBuildbotUpdater:
                 raise RuntimeError(f"empty shader archive: {archive_path}")
 
             for member in selected:
-                data = archive.read(member)
                 relative = member
                 if member.startswith(preferred_prefix):
                     relative = member[len(preferred_prefix):]
-                relative_path = Path(relative)
-                if not str(relative_path) or str(relative_path).startswith("../"):
+                destination = self._safe_destination(target_dir, relative)
+                if destination is None:
+                    logger.warning(
+                        "buildbot shader archive: skipping unsafe member: pack=%s member=%s",
+                        pack_name,
+                        member,
+                    )
                     continue
-                destination = target_dir / relative_path
+                data = archive.read(member)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 self._atomic_write_bytes(destination, data)
+
+    @staticmethod
+    def _safe_destination(target_dir, member_name):
+        """Resolve an archive member under target_dir, or None if it escapes.
+
+        Archive member names are attacker-controlled data, so three shapes have
+        to be refused before anything is written (issue #222): an absolute name,
+        which `Path.__truediv__` would let win over `target_dir` entirely; a name
+        with `..` anywhere in it, embedded ones included; and an empty name.
+        """
+        if not member_name:
+            return None
+        relative_path = Path(member_name)
+        if relative_path.is_absolute():
+            return None
+        root = Path(os.path.abspath(target_dir))
+        destination = Path(os.path.abspath(root / relative_path))
+        if destination == root or root not in destination.parents:
+            return None
+        return destination
 
     def _atomic_write_bytes(self, target_path, data):
         target_path.parent.mkdir(parents=True, exist_ok=True)
