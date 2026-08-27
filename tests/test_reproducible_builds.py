@@ -62,6 +62,39 @@ class TheVersionIsTheSameEverywhereTests(unittest.TestCase):
         self.assertEqual(first, __version__)
 
 
+class NoBuildCheckIsDefeatedByASignalTests(unittest.TestCase):
+    """`producer | grep -q` under `set -o pipefail` reports the pipe, not the find.
+
+    ``grep -q`` exits on its first match and SIGPIPEs whatever is still writing
+    into it; ``pipefail`` then makes the whole pipeline a failure. In the .deb
+    build that killed the run outright (exit 141) -- on CI but not on the
+    maintainer's machine, since it depends on how much output was still
+    buffered. In the AppImage and Windows builds it was quieter and worse: the
+    guards read ``if producer | grep -q ...``, so a runtime that *did* want
+    libfuse.so.2, or a bundle that *did* carry the build machine's paths, took
+    the else branch and passed (issues #241, #248).
+    """
+
+    SCRIPTS = sorted((REPO_ROOT / "packaging").glob("*/build.sh")) + [
+        REPO_ROOT / "packaging/build.sh"
+    ]
+
+    def test_there_are_scripts_to_check(self):
+        self.assertGreaterEqual(len(self.SCRIPTS), 5)
+
+    def test_no_producer_is_piped_into_grep_q(self):
+        offenders = []
+        for script in self.SCRIPTS:
+            for number, line in enumerate(
+                script.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if line.lstrip().startswith("#"):
+                    continue
+                if re.search(r"\|\s*grep\s+-[A-Za-z]*q", line):
+                    offenders.append(f"{script.name}:{number}: {line.strip()}")
+        self.assertEqual(offenders, [], "\n".join(offenders))
+
+
 class TheBuildImagesArePinnedTests(unittest.TestCase):
     """A floating tag makes a base-image regression look like a code one."""
 

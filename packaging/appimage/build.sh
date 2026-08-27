@@ -142,14 +142,20 @@ BUNDLE="$(ls -1 dist/*.AppImage | head -1)"
 echo "==> runtime check: $BUNDLE"
 RUNTIME_HEAD="$(mktemp)"
 head -c "$(stat -c %s "$RUNTIME_SRC")" "$BUNDLE" > "$RUNTIME_HEAD"
-if strings -a "$RUNTIME_HEAD" | grep -q 'libfuse\.so\.2'; then
+# Read into variables first. `producer | grep -q` SIGPIPEs the producer on the
+# first match, and `set -o pipefail` then reports the pipeline as failed -- so
+# a runtime that *does* want libfuse.so.2 takes the else branch and the check
+# passes exactly when it should not.
+RUNTIME_STRINGS="$(strings -a "$RUNTIME_HEAD")"
+RUNTIME_DYNAMIC="$(readelf -d "$RUNTIME_HEAD" 2>/dev/null || true)"
+if grep -q 'libfuse\.so\.2' <<< "$RUNTIME_STRINGS"; then
   echo "ERROR: the AppImage runtime still wants libfuse.so.2." >&2
   rm -f "$RUNTIME_HEAD"
   exit 1
 fi
-if readelf -d "$RUNTIME_HEAD" 2>/dev/null | grep -q "(NEEDED)"; then
+if grep -q "(NEEDED)" <<< "$RUNTIME_DYNAMIC"; then
   echo "ERROR: the AppImage runtime is dynamically linked:" >&2
-  readelf -d "$RUNTIME_HEAD" | grep "(NEEDED)" >&2
+  grep "(NEEDED)" <<< "$RUNTIME_DYNAMIC" >&2
   rm -f "$RUNTIME_HEAD"
   exit 1
 fi

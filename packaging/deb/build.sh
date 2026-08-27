@@ -108,19 +108,36 @@ apt-get update -qq
 apt-get install -y "./$DEB"
 
 echo "==> the control members lintian and debsums look for"
-dpkg-deb --ctrl-tarfile "$DEB" | tar -t | sort
-dpkg-deb --ctrl-tarfile "$DEB" | tar -t | grep -q './md5sums'
+# Listed once into a variable, not piped straight into `grep -q` five times.
+# `grep -q` exits on its first match and SIGPIPEs whatever is still writing;
+# under `set -o pipefail` that pipeline is a failure (141), and whether it
+# happens at all depends on how much of the listing is still buffered -- so the
+# build passed on the maintainer's machine and died in CI on the same commit.
+CTRL_MEMBERS="$(dpkg-deb --ctrl-tarfile "$DEB" | tar -t)"
+FSYS_MEMBERS="$(dpkg-deb --fsys-tarfile "$DEB" | tar -t)"
+FSYS_LONG="$(dpkg-deb --fsys-tarfile "$DEB" | tar -tv)"
+sort <<< "$CTRL_MEMBERS"
+
+# Matched against the listing already in memory, with a here-string rather than
+# a pipe. `grep -q` exits on its first match and SIGPIPEs whatever is still
+# writing into it, which under `set -o pipefail` fails the pipeline (141) --
+# and whether it happens depends on how much of the listing was still buffered,
+# so the same commit passed on the maintainer's machine and died in CI.
+require_member() {
+  grep -Fxq "$1" <<< "$2" || { echo "FAIL: $DEB does not carry $1" >&2; exit 1; }
+}
+require_member './md5sums' "$CTRL_MEMBERS"
 # Present is not the same as complete: a file missing from md5sums is a file
 # debsums silently does not verify.
-PACKAGED_FILES="$(dpkg-deb --fsys-tarfile "$DEB" | tar -tv | grep -c '^-')"
+PACKAGED_FILES="$(grep -c '^-' <<< "$FSYS_LONG")"
 MD5SUM_LINES="$(dpkg-deb --ctrl-tarfile "$DEB" | tar -xO ./md5sums | wc -l)"
 if [ "$PACKAGED_FILES" -ne "$MD5SUM_LINES" ]; then
   echo "FAIL: $PACKAGED_FILES files packaged, $MD5SUM_LINES in md5sums" >&2
   exit 1
 fi
 echo "md5sums covers all $PACKAGED_FILES packaged files"
-dpkg-deb --fsys-tarfile "$DEB" | tar -t | grep -q './usr/share/doc/openemux/changelog.Debian.gz'
-dpkg-deb --fsys-tarfile "$DEB" | tar -t | grep -q './usr/share/doc/openemux/copyright'
+require_member './usr/share/doc/openemux/changelog.Debian.gz' "$FSYS_MEMBERS"
+require_member './usr/share/doc/openemux/copyright' "$FSYS_MEMBERS"
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux

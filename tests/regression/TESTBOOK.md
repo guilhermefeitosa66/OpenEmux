@@ -1936,6 +1936,22 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-230 — A package check reports what it found, not what the pipe did
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none (reads the build scripts).
+- **Steps:** As a QA person: grep the packaging scripts for a producer piped straight into
+  `grep -q`.
+- **Expected:** None left. `grep -q` exits on its first match and SIGPIPEs whatever is still
+  writing; under `set -o pipefail` that pipeline reports failure. In `packaging/deb/build.sh` it
+  killed the build after "md5sums covers all 352 packaged files" (exit 141) — on CI but not on the
+  maintainer's machine, because whether it happens depends on how much of the listing is still
+  buffered. In `packaging/appimage/build.sh` it was worse than a crash: the two runtime guards read
+  `if producer | grep -q ...`, so a runtime that *did* want `libfuse.so.2`, or *was* dynamically
+  linked, took the else branch and passed the check (issues #241, #248).
+- **Check:** suite file `tests/test_reproducible_builds.py`
+  (`NoBuildCheckIsDefeatedByASignalTests`).
+
 ### RT-228 — Every package format is built by CI, not first at release time
 - **Area:** Packaging
 - **Mode:** AUTO-SUITE
