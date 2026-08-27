@@ -2233,8 +2233,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         grid = self._grids.get(self.current_console)
         if page is None or grid is None or not hasattr(page, "master_check"):
             return
-        visible = grid._visible_items()
-        selected = sum(1 for item in visible if item.selected)
+        visible = grid.visible_entries()
+        selected = sum(1 for entry in visible if entry.selected)
         page.master_guard[0] = True
         page.master_check.set_inconsistent(0 < selected < len(visible))
         page.master_check.set_active(bool(visible) and selected == len(visible))
@@ -3943,27 +3943,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _apply_filters_to(self, grid):
         """The same decision, for a page that is not the visible one yet.
 
-        A page whose rebuild was skipped keeps the visibility its cards had
-        when it was last on screen, so it has to be re-filtered before it is
-        shown again (#230).
+        A page whose rebuild was skipped keeps the filter it had when it was
+        last on screen, so it has to be re-filtered before it is shown again
+        (#230).
+
+        The grid does the matching. It used to be a walk over the cards,
+        hiding the ones that did not match -- which needs a widget per ROM,
+        the thing virtualization takes away (#219). The window still decides
+        *what* the filter is.
         """
-        query = self.search_entry.get_text().lower()
-        only_missing = self._filter_missing_artwork
-
-        child = grid.get_first_child()
-        while child:
-            inner = child.get_child()
-            if inner is not None and hasattr(inner, "rom"):
-                shown = (not query) or query in inner.rom["name"].lower()
-                if only_missing and getattr(inner, "has_artwork", None) is not False:
-                    # `None` means the fetch has not resolved yet: hide it
-                    # rather than flash it in and out as state arrives.
-                    shown = False
-                child.set_visible(shown)
-            child = child.get_next_sibling()
-
-        # Bypassing this is how selection desyncs from what is on screen.
-        grid.sync_visible_selection()
+        grid.set_filter(
+            self.search_entry.get_text(),
+            only_missing_artwork=self._filter_missing_artwork,
+        )
 
     def _on_missing_artwork_action(self, action, _param):
         enabled = not action.get_state().get_boolean()
