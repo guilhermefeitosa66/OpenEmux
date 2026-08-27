@@ -1454,6 +1454,90 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-211 — The RPM rebuilds outside the project's Docker mount
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; `make rpm` proves the same thing against a
+  real `rpmbuild`).
+- **Steps:** As a QA person on a Fedora box with no OpenEmux checkout: take the `.src.rpm` the
+  build produces and run `rpmbuild --rebuild openemux-*.src.rpm` (or `mock -r fedora-40-x86_64`).
+- **Expected:** It builds. The spec had no `Source0`, no `%prep` and no `%build` — it was driven
+  with `--define "repo_root /work"` and ran the staging script straight out of the project's own
+  bind mount, so `rpmbuild -ba` produced no SRPM at all and every other invocation got a literal
+  `%{repo_root}` path. `mock`, COPR and Fedora review therefore had nothing to start from
+  (issue #252). The spec now unpacks a source tarball, and `packaging/rpm/build.sh` rebuilds its
+  own SRPM in a different `_topdir` on every run, then runs rpmlint over both artifacts and fails
+  on `incoherent-changelog-date`, `no-blank-line-in-changelog` or `dir-or-file-in-usr-share-doc`.
+- **Check:** suite file `tests/test_rpm_spec.py` (which also checks every `%changelog` header
+  against the calendar), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  for section in ("%prep", "%build", "%install", "%check"):
+      assert f"\n{section}\n" in spec, f"the spec has no {section}"
+  assert "Source0:" in spec, "the spec declares no source tarball"
+  assert "repo_root" not in spec, "the spec still reaches into the project's bind mount"
+  build = Path("packaging/rpm/build.sh").read_text()
+  assert "rpmbuild -ba" in build, "the build no longer produces an SRPM"
+  assert "--rebuild" in build, "the build never proves the SRPM stands on its own"
+  print("RT-211 OK")
+  EOF
+  ```
+
+### RT-212 — The RPM's licence is installed where rpm keeps licences
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs; the build asserts the same against its own
+  install).
+- **Steps:** As a QA person: `dnf install ./openemux-*.rpm`, then run
+  `rpm -qf /usr/share/doc/openemux` and `dnf remove openemux`.
+- **Expected:** The licence is at `/usr/share/licenses/openemux/LICENSE`, in a directory the
+  package owns, and `dnf remove` leaves nothing behind. The spec used to declare
+  `%license /usr/share/doc/openemux/copyright` — the Debian layout, and a file in a directory the
+  package did not own: `rpm -qf` reported no owner, the directory survived `dnf remove` and
+  rpmlint raised `dir-or-file-in-usr-share-doc` (issue #252).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  files = spec.split("%files", 1)[1].split("\n%", 1)[0]
+  assert "/usr/share/doc" not in files, "a file is still packaged under /usr/share/doc"
+  assert "%license LICENSE" in spec, "the licence is not declared by name"
+  assert "rm -rf %{buildroot}/usr/share/doc/openemux" in spec, \
+      "the shared staging script's Debian copy is left in the buildroot"
+  build = Path("packaging/rpm/build.sh").read_text()
+  assert "/usr/share/licenses/openemux/LICENSE" in build, \
+      "the build does not check where the licence landed"
+  print("RT-212 OK")
+  EOF
+  ```
+
+### RT-213 — Removing the RPM refreshes both desktop caches; an upgrade does not
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: install the `.rpm`, upgrade it to a newer build, then
+  `dnf remove openemux` and look at the applications menu.
+- **Expected:** The menu entry is gone after the removal, and the upgrade never rebuilds the
+  caches from a half-removed state. `%postun` used to refresh only the icon cache — never
+  `update-desktop-database`, which is what the package's own `shared-mime-info` dependency and
+  `%post` exist for — and neither scriptlet tested `$1`, so `%postun` also fired in the middle of
+  every upgrade (issue #252).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  spec = Path("packaging/rpm/openemux.spec").read_text()
+  postun = spec.split("\n%postun\n", 1)[1].split("\n%changelog", 1)[0]
+  assert "if [ $1 -eq 0 ]; then" in postun, "%postun still runs during an upgrade"
+  for command in ("gtk-update-icon-cache", "update-desktop-database"):
+      assert command in postun, f"%postun does not run {command}"
+  print("RT-213 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

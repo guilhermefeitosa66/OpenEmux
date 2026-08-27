@@ -2,6 +2,13 @@
 # Builds the OpenEmux .rpm and smoke-tests it. Runs *inside* the container
 # defined by packaging/docker/rpm.Dockerfile -- launch it through
 # `packaging/build.sh rpm` (or `make rpm`), not directly on the host.
+#
+# The spec is built from a source tarball, like any other RPM: `%prep` unpacks
+# it and `%install` runs the staging script from there. It used to be driven
+# with `--define "repo_root /work"` and no Source0/%prep at all, which meant no
+# SRPM could be produced and the package could not be rebuilt outside this
+# exact Docker bind mount -- so `mock`, COPR, Fedora review and a maintainer on
+# a real Fedora box all had nowhere to start (issue #252).
 set -euo pipefail
 
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
@@ -9,17 +16,67 @@ echo "==> building openemux ${VERSION} .rpm"
 
 desktop-file-validate packaging/common/openemux.desktop
 
-rpmbuild -bb packaging/rpm/openemux.spec \
-  --define "version ${VERSION}" \
-  --define "repo_root /work" \
-  --define "_topdir /tmp/rpmbuild"
+TOPDIR=/tmp/rpmbuild
+rm -rf "$TOPDIR"
+mkdir -p "$TOPDIR"/{SOURCES,SPECS}
+
+# The build inputs, and only those: an explicit list cannot pick up a `.env`,
+# a `dist/` or a stray build artifact the way a wholesale copy of the tree can.
+echo "==> packing ${TOPDIR}/SOURCES/openemux-${VERSION}.tar.gz"
+tar --create --gzip --file "$TOPDIR/SOURCES/openemux-${VERSION}.tar.gz" \
+    --transform "s,^,openemux-${VERSION}/," \
+    --exclude='__pycache__' --exclude='*.pyc' --exclude='*.egg-info' \
+    LICENSE README.md pyproject.toml requirements.lock packaging src vendors
+
+# `Version:` is templated in the tracked spec so the version lives only in
+# src/openemux/__init__.py. Resolving it into the copy rpmbuild sees is what
+# makes the resulting SRPM self-contained -- a `--define` would not survive
+# into it, and `rpmbuild --rebuild` would then hit an undefined macro.
+sed "s/^Version:.*/Version:        ${VERSION}/" \
+  packaging/rpm/openemux.spec > "$TOPDIR/SPECS/openemux.spec"
+grep -q "^Version:        ${VERSION}$" "$TOPDIR/SPECS/openemux.spec"
+
+rpmbuild -ba "$TOPDIR/SPECS/openemux.spec" --define "_topdir $TOPDIR"
 
 mkdir -p dist
-RPM_PATH="$(find /tmp/rpmbuild/RPMS -name "openemux-${VERSION}-*.rpm" | head -1)"
+RPM_PATH="$(find "$TOPDIR/RPMS" -name "openemux-${VERSION}-*.rpm" | head -1)"
 cp "$RPM_PATH" dist/
 RPM_NAME="$(basename "$RPM_PATH")"
 echo "==> built: dist/${RPM_NAME}"
 rpm -qip "dist/${RPM_NAME}"
+
+echo "==> the SRPM must rebuild with no OpenEmux checkout in sight"
+# The point of Source0/%prep: this is `mock`, COPR and Fedora review in
+# miniature. A different _topdir and a different working directory, so nothing
+# can reach /work by accident.
+SRPM_PATH="$(find "$TOPDIR/SRPMS" -name "openemux-${VERSION}-*.src.rpm" | head -1)"
+if [ -z "$SRPM_PATH" ]; then
+  echo "FAIL: rpmbuild -ba produced no SRPM" >&2
+  exit 1
+fi
+echo "==> rebuilding $(basename "$SRPM_PATH")"
+( cd /tmp && rpmbuild --rebuild --define "_topdir /tmp/rpmbuild-verify" "$SRPM_PATH" )
+test -n "$(find /tmp/rpmbuild-verify/RPMS -name "openemux-${VERSION}-*.rpm" | head -1)"
+echo "the SRPM rebuilds standalone"
+
+echo "==> rpmlint: the Fedora-review blockers must be gone"
+# The whole report is noisy and not all of it is actionable here; these are the
+# findings issue #252 identified, each of which is an error for Fedora review.
+rpmlint "dist/${RPM_NAME}" "$SRPM_PATH" > /tmp/rpmlint.txt 2>&1 || true
+# /opt is where this package deliberately installs -- it ships a vendored
+# RetroArch AppImage and runs from its own project root -- so the ~580
+# dir-or-file-in-opt lines are the design, not findings. Everything else is
+# worth reading, and would be invisible underneath them.
+grep -v 'dir-or-file-in-opt' /tmp/rpmlint.txt | tail -30
+for finding in incoherent-changelog-date no-blank-line-in-changelog \
+               dir-or-file-in-usr-share-doc buildarch-instead-of-exclusivearch-tag; do
+  if grep -q "$finding" /tmp/rpmlint.txt; then
+    echo "FAIL: rpmlint still reports $finding" >&2
+    grep "$finding" /tmp/rpmlint.txt >&2
+    exit 1
+  fi
+done
+echo "no changelog or /usr/share/doc findings"
 
 echo "==> install test (resolves Requires via dnf)"
 dnf install -y "./dist/${RPM_NAME}" >/dev/null
@@ -33,6 +90,14 @@ test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 grep -q '^Exec=/usr/bin/openemux$' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 test -f /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
+
+echo "==> the licence must be installed, and its directory owned"
+# `%license /usr/share/doc/openemux/copyright` listed a file in a directory the
+# package did not own: `rpm -qf` found no owner, `dnf remove` left it behind
+# and rpmlint raised dir-or-file-in-usr-share-doc (issue #252).
+test -f /usr/share/licenses/openemux/LICENSE
+rpm -qf /usr/share/licenses/openemux >/dev/null
+test ! -e /usr/share/doc/openemux
 
 echo "==> verify the vendored symbolic icons all shipped"
 SRC_ICONS="$(find src/openemux/ui/assets/icons/symbolic -name '*.svg' | wc -l)"
@@ -91,6 +156,22 @@ if grep -q "fake python3" /tmp/launch.log; then
   exit 1
 fi
 echo "launcher resolved a working interpreter"
+
+echo "==> the erase must leave no directory of ours orphaned"
+dnf remove -y openemux >/dev/null
+for path in /usr/share/doc/openemux /usr/share/licenses/openemux /usr/bin/openemux \
+            /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop \
+            /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png \
+            /opt/openemux/vendors /opt/openemux/src/openemux/main.py; do
+  if [ -e "$path" ]; then
+    echo "FAIL: $path survived the erase" >&2
+    exit 1
+  fi
+done
+# /opt/openemux itself may survive: this container ran the app as root, which
+# writes __pycache__ next to the sources, and rpm does not remove files it does
+# not own. Every path the package installed is gone.
+echo "erase is clean"
 
 echo "==> ALL RPM CHECKS PASSED"
 chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist 2>/dev/null || true
