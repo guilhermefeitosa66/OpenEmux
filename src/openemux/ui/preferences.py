@@ -46,6 +46,7 @@ from openemux.core.input_profiles import (
     device_type_for,
     player_for_device,
 )
+from openemux.core.input_capture import InputCaptureSession
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.theme import THEMES
@@ -71,13 +72,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # Input-capture state (self-contained; mirrors the old window logic).
         self._input_buttons = {}
         self._input_rows = {}
-        self._bindings_buffer = {}
         self._loaded_profile = None
         self._visible_actions = list(ACTION_ORDER)
-        self._capture_sequence_actions = list(ACTION_ORDER)
-        self._capture_active_action = None
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
+        # The bindings being edited and which action is listening: a plain
+        # state machine, with no widget in it (issue #238).
+        self._capture = InputCaptureSession()
+        self._capture.load({}, ACTION_ORDER)
         self._gamepad_reader = None
 
         self._key_controller = Gtk.EventControllerKey()
@@ -993,12 +993,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._visible_actions = list(visible_actions)
         # Map-all never demands the optional actions (turbo): forcing a user
         # through binding a modifier they may not want defeats the flow.
-        self._capture_sequence_actions = [
-            action for action in visible_actions if action not in OPTIONAL_ACTIONS
-        ]
-        self._bindings_buffer = {
-            action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
-        }
+        self._capture.load(
+            {
+                action: str(bindings.get(action, "")).strip().lower()
+                for action in visible_actions
+            },
+            [action for action in visible_actions if action not in OPTIONAL_ACTIONS],
+        )
         is_extra_port = device_id in EXTRA_PORT_DEVICE_IDS
         self._port_enabled_switch.set_visible(is_extra_port)
         if is_extra_port:
@@ -1016,7 +1017,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             subtitle = self._input_action_subtitle(action)
             if subtitle:
                 row.set_subtitle(subtitle)
-            button = Gtk.Button(label=self._binding_display(self._bindings_buffer.get(action, "")))
+            button = Gtk.Button(label=self._binding_display(self._capture.binding_for(action)))
             button.set_valign(Gtk.Align.CENTER)
             button.set_size_request(150, -1)
             button.connect("clicked", self._on_binding_clicked, action)
@@ -1044,8 +1045,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # very buttons being mapped (B, A, the D-pad) are also the ones that
         # drive the interface, and they would close this dialog mid-capture.
         self._set_exclusive_input(True)
-        self._capture_active_action = action
-        self._capture_sequence_mode = sequence_mode
+        self._capture.start(action, sequence_mode)
         self._set_active_row(action)
 
         is_gamepad = self._current_device() != "keyboard"
@@ -1101,14 +1101,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _on_gamepad_token(self, token):
         # The reader runs on its own thread; capture may have been cancelled
         # between the press and this idle callback.
-        if not self._capture_active_action or self._current_device() == "keyboard":
+        if not self._capture.capturing or self._current_device() == "keyboard":
             return False
         self._gamepad_reader = None
         self._commit_capture(token)
         return False
 
     def _on_gamepad_error(self, reason):
-        if not self._capture_active_action:
+        if not self._capture.capturing:
             return False
         self._gamepad_reader = None
         self._cancel_capture()
@@ -1133,63 +1133,43 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _cancel_capture(self, show_toast=False):
         self._stop_gamepad_reader()
         self._set_exclusive_input(False)
-        if self._capture_active_action in self._input_buttons:
-            action = self._capture_active_action
-            self._input_buttons[action].set_label(
-                self._binding_display(self._bindings_buffer.get(action, ""))
+        cancelled = self._capture.cancel()
+        if cancelled.action in self._input_buttons:
+            self._input_buttons[cancelled.action].set_label(
+                self._binding_display(self._capture.binding_for(cancelled.action))
             )
-        self._capture_active_action = None
-        was_sequence = self._capture_sequence_mode
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
         self._set_active_row(None)
         if hasattr(self, "_bindings_group"):
             self._set_capture_prompt(None)
-        if show_toast and was_sequence:
+        if show_toast and cancelled.was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
     def _start_map_all(self):
-        if not self._capture_sequence_actions:
-            return
         self._cancel_capture()
-        self._capture_sequence_mode = True
-        self._capture_sequence_index = 0
-        self._start_capture(self._capture_sequence_actions[0], sequence_mode=True)
-
-    def _actions_holding(self, action, value):
-        """What else is on ``value`` and has to let go of it.
-
-        ``enable_hotkey`` is the exception in both directions: it ships on the
-        same token as Select on purpose (issue #124), because a hotkey that
-        only fires while a modifier is held *is* a shared button. Every other
-        collision is real -- the user pointed a button at a new command, and
-        the old one cannot keep it (issue #281).
-        """
-        if not value:
-            return []
-        return [
-            other
-            for other, other_value in self._bindings_buffer.items()
-            if other != action
-            and other_value == value
-            and "enable_hotkey" not in (other, action)
-        ]
+        first = self._capture.begin_sequence()
+        if first is None:
+            return
+        self._start_capture(first, sequence_mode=True)
 
     def _set_binding(self, action, value):
-        value = (value or "").strip().lower()
-        released = self._actions_holding(action, value)
+        """Store a binding through the session, then render what it did."""
+        released = self._capture.set_binding(action, value)
+        self._render_binding(action, released)
+        return released
+
+    def _render_binding(self, action, released):
+        """Repaint the rows a stored binding touched, and say what it took."""
         for other_action in released:
-            self._bindings_buffer[other_action] = ""
             if other_action in self._input_buttons:
                 self._input_buttons[other_action].set_label(self._binding_display(""))
-        self._bindings_buffer[action] = value
+        value = self._capture.binding_for(action)
         if action in self._input_buttons:
             self._input_buttons[action].set_label(self._binding_display(value))
         # Say what was taken away. The row going blank on its own read as a
         # glitch, and the value came back on the next visit anyway; now it
         # really is released, so the message is the whole story. Not during
         # map-all: one toast per button is noise, not information.
-        if released and not self._capture_sequence_mode:
+        if released and not self._capture.sequence_mode:
             self._toast(
                 self.t(
                     "toast.input_released",
@@ -1218,30 +1198,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         Shared by keyboard and gamepad capture.
         """
-        action = self._capture_active_action
-        if not action:
+        outcome = self._capture.commit(value)
+        if outcome is None:
             return
-        self._set_binding(action, value)
-        if not self._capture_sequence_mode:
-            self._cancel_capture()
+        self._render_binding(outcome.action, outcome.released)
+        if outcome.next_action is not None:
+            self._start_capture(outcome.next_action, sequence_mode=True)
             return
-        self._capture_sequence_index += 1
-        if self._capture_sequence_index >= len(self._capture_sequence_actions):
-            self._cancel_capture()
+        self._cancel_capture()
+        if outcome.finished:
             self._toast(self.t("input.capture.completed"))
-            return
-        next_action = self._capture_sequence_actions[self._capture_sequence_index]
-        self._start_capture(next_action, sequence_mode=True)
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
-        if not self._capture_active_action:
+        if not self._capture.capturing:
             return False
         key_name = self._normalize_key(keyval)
-        action = self._capture_active_action
+        action = self._capture.active_action
 
         # Escape always aborts, for both device types.
         if key_name == "escape":
-            if self._capture_sequence_mode:
+            if self._capture.sequence_mode:
                 self._cancel_capture(show_toast=True)
             else:
                 self._set_binding(action, "")
@@ -1275,7 +1251,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         valid_actions = get_actions_for_console(console_id)
         existing = device.get("bindings") or {}
         device["bindings"] = {
-            a: self._bindings_buffer.get(a, existing.get(a, "")) for a in valid_actions
+            a: self._capture.bindings.get(a, existing.get(a, "")) for a in valid_actions
         }
         if device_id in EXTRA_PORT_DEVICE_IDS:
             # Ports 2-4 are opt-in and never take over player 1.

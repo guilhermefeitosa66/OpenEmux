@@ -2292,9 +2292,60 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The toast names what was released ("Button 2 released from Save state"), the
   "Save state" row reads unbound, and **it is still unbound after reopening** — the value does not
   come back on its own (issue #281).
-- **Check:** suite files `tests/test_input_actions.py`, `tests/test_preferences.py`; the human
+- **Check:** suite files `tests/test_input_actions.py`, `tests/test_input_capture.py`; the human
   confirms the toast and the round trip.
 - **Restore:** Remap "B" back to its own button and "Save state" back to the pad's X button.
+
+### RT-245 — "Map all" walks every action and Escape stops it where it stands
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open "Settings" → "Input", press "Map all", press a key for the
+  first two actions, then press `Escape`.
+- **Expected:** Each press stores its binding and arms the next action; `Escape` stops the walk,
+  leaves the two that were captured, and says so. The optional actions (the turbo modifier) are
+  never demanded -- forcing a user through binding a modifier they may not want defeats the flow.
+  The machine that does this was inside the dialog, so none of it could be tested without a
+  display (issue #238).
+- **Check:** suite file `tests/test_input_capture.py` (`MapAllTests`).
+
+### RT-246 — A press that lands after a cancel is ignored
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start capturing a gamepad binding and press `Escape` at the same
+  moment as a button on the pad.
+- **Expected:** The binding does not change. The gamepad reader runs on its own thread, so a
+  press can reach the dialog after the capture it belonged to was cancelled; storing it would
+  rebind whatever was armed a moment ago.
+- **Check:** suite file `tests/test_input_capture.py`
+  (`OneCaptureTests.test_a_press_that_arrives_after_a_cancel_is_dropped`).
+
+### RT-247 — The rubber band selects what it touches
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: drag from empty space in the grid across the top edge of a row of
+  cards, and across the gutter between two columns.
+- **Expected:** Every card the rectangle overlaps at all is selected -- grazing a corner is
+  enough, the way a file manager behaves -- and a drag that stays inside the gutter selects
+  nothing. The result is in grid order, not in the order the pointer met them, because that is
+  what the selection model indexes by.
+- **Check:** suite file `tests/test_grid_selection.py` (`WhatABandCatchesTests`).
+
+### RT-248 — A launch without the game window heals a polluted retroarch.cfg
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: turn the game window off in "Settings" → "Video", launch a game,
+  and read the `--appendconfig` file the launcher wrote under `~/.openemux/runtime/`.
+- **Expected:** It states `video_window_show_decorations = "true"` and `pause_nonactive = "true"`
+  rather than saying nothing. Earlier versions leaked the embed block into the user's own
+  `retroarch.cfg`, so a game launched without a wrapper came up borderless and never paused when
+  it lost focus -- and turning the setting off did not fix it. It also leaves the fullscreen
+  hotkey alone, so the input profile's own binding is what wins (issues #199, #267).
+- **Check:** suite file `tests/test_runtime_override_pieces.py` (`TheEmbedPieceTests`).
+
 
 ### RT-075 — No button fires two commands at once
 - **Area:** Input
