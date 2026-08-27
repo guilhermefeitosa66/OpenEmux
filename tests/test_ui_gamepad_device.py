@@ -50,12 +50,17 @@ def uinput_available():
 
 
 class VirtualGamepad:
-    def __init__(self, name=PAD_NAME):
+    def __init__(self, name=PAD_NAME, axes=()):
+        """``axes`` adds full-range ABS codes beside the hat, for a pad with sticks."""
         self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
         for bit in (EV_KEY, EV_ABS, EV_SYN):
             fcntl.ioctl(self.fd, UI_SET_EVBIT, bit)
         for code in BUTTONS:
             fcntl.ioctl(self.fd, UI_SET_KEYBIT, code)
+        for code in axes:
+            fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
+            fcntl.ioctl(self.fd, UI_ABS_SETUP,
+                        struct.pack("H2x6i", code, 0, -32768, 32767, 0, 0, 0))
         for code in (ABS_HAT0X, ABS_HAT0Y):
             fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
             # struct uinput_abs_setup { __u16 code; struct input_absinfo; }

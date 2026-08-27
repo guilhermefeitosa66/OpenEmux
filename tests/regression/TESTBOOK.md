@@ -3607,9 +3607,13 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   1. Run the suite.
 - **Expected:** A button, an axis past the deadzone and a hat direction decode to the same binding
   tokens on both backends -- `"3"`, `"+1"`/`"-1"`, `"h0up"`. Anything else and a profile written on
-  one platform means a different control on the other, and the whole input stack above the reader
-  would need to know which backend wrote it.
-- **Check:** suite files `tests/test_gamepad_sdl.py`, `tests/test_gamepad_reader.py`.
+  one platform means a different control on the other, and `NAV_TOKEN_ACTIONS` -- one fixed map,
+  shared by both -- would act on the wrong buttons. `test_gamepad_sdl_device.py` asserts it against
+  a real kernel device read through real libSDL2 (a uinput pad; skipped where `/dev/uinput` is not
+  writable or libSDL2 is absent), which is the only way to prove the *numbering* rather than the
+  decoding.
+- **Check:** suite files `tests/test_gamepad_sdl.py`, `tests/test_gamepad_sdl_device.py`,
+  `tests/test_gamepad_reader.py`.
 
 ### RT-260 — A resting analogue trigger is not read as a held control
 - **Area:** Windows platform
