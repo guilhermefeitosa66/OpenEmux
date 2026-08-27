@@ -916,7 +916,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   started; the old message ("finished (exit code 1)") was indistinguishable from a clean quit, so
   on a host with no libfuse2 every launch died in silence (issue #226). The toast appears
   immediately here: the configured binary is a script, not an AppImage, so there is nothing to
-  unpack and the retry of RT-190 does not apply.
+  unpack and the retry of RT-206 does not apply.
 - **Check:** screenshot of the toast; `grep "died on startup" <launch log>`; suite files
   `tests/test_runtime_manager.py` (`StartupFailureTests`), `tests/test_retroarch_log.py`
   (`FailureReasonTests`, `ReadFailureReasonTests`).
@@ -1279,7 +1279,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `grep '^Exec=' /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop`
   prints exactly `Exec=/usr/bin/openemux`; the build scripts assert the same at package time.
 
-### RT-189 — The AppImage runtime asks the host for no library
+### RT-205 — The AppImage runtime asks the host for no library
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none. The probe reads `dist/*.AppImage` when one has been built, and the
@@ -1323,11 +1323,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
       assert "-comp zstd" in build, "the payload is not squashed with zstd"
       assert "libfuse" in build and "(NEEDED)" in build, \
           "build.sh does not verify the runtime it shipped"
-  print("RT-189 OK")
+  print("RT-205 OK")
   EOF
   ```
 
-### RT-190 — A game whose AppImage cannot mount is retried unpacked
+### RT-206 — A game whose AppImage cannot mount is retried unpacked
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
@@ -1347,7 +1347,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`),
   `tests/test_game_window.py` (`FollowRelaunchTests`).
 
-### RT-191 — The native packages require FUSE rather than suggesting it
+### RT-207 — The native packages require FUSE rather than suggesting it
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads the packaging inputs).
@@ -1369,9 +1369,27 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
   assert "libfuse2t64 | libfuse2" in depends, f"the .deb does not depend on libfuse2: {depends}"
   assert "Recommends: libfuse2" not in deb, "libfuse2 is still only recommended"
-  print("RT-191 OK")
+  print("RT-207 OK")
   EOF
   ```
+
+### RT-208 — RetroArch is launched with the session's environment, not the bundle's
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run OpenEmux from its AppImage and start a game.
+- **Expected:** RetroArch runs against the host's libraries and the session's `PATH` and
+  `XDG_DATA_DIRS`. The vendored RetroArch AppImage lives *inside* our AppDir, and
+  appimage-builder's AppRun hooks decide by path — so it was handed the bundle's
+  `LD_LIBRARY_PATH`, `LD_PRELOAD=libapprun_hooks.so`, `PYTHONHOME`, `PYTHONPATH`,
+  `GI_TYPELIB_PATH`, `GDK_PIXBUF_MODULE*`, `GSETTINGS_SCHEMA_DIR`, `GTK_PATH` and a
+  `PATH`/`XDG_DATA_DIRS` leading into the mount, and resolved its libraries against the
+  Ubuntu-noble stack bundled for a GTK4 app (issue #249). Measured in the built bundle: 57 bundle
+  variables reached a process started from `vendors/` before the fix, 1 after — and that one
+  (`APPRUN_CWD`) is written by the hook itself. Outside an AppImage nothing is stripped: a native
+  install's `LD_PRELOAD` (mangohud, gamemode) is the user's and reaches the game.
+- **Check:** suite files `tests/test_appimage_env.py`, `tests/test_retroarch_launcher.py`
+  (`LaunchEnvironmentTests`).
 
 ## Input
 
