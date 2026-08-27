@@ -187,5 +187,76 @@ class FollowRelaunchTests(unittest.TestCase):
         self.assertIs(wrapper._proc, dead)
 
 
+class _FallbackStub:
+    """Just what _fall_back_to_standalone reads and calls.
+
+    The method is bound to this the way test_welcome_keys.py binds the
+    Welcome dialog's key rules: the decision is pure, the teardown around it
+    is not, so the two teardown calls are recorded rather than run.
+    """
+
+    _fall_back_to_standalone = GameWindow._fall_back_to_standalone
+
+    def __init__(self, closing=False, already_fallen_back=False, on_embed_failed=None):
+        self._closing = closing
+        self._standalone_fallback = already_fallen_back
+        self._on_embed_failed = on_embed_failed
+        self.torn_down = []
+
+    def _hide_starting_indicator(self):
+        self.torn_down.append("indicator")
+
+    def _close_and_destroy(self):
+        self.torn_down.append("destroy")
+
+
+class StandaloneFallbackTests(unittest.TestCase):
+    """Handing the game back when the wrapper cannot adopt it (issue #267).
+
+    The game was launched with RetroArch's decorations stripped and its
+    fullscreen hotkey unbound, so a wrapper that simply gives up strands an
+    unmovable square in the middle of the screen. The owner has to be told,
+    exactly once.
+    """
+
+    def test_the_owner_is_told_why_and_the_wrapper_tears_itself_down(self):
+        told = []
+        window = _FallbackStub(on_embed_failed=told.append)
+        window._fall_back_to_standalone("no X surface")
+        self.assertEqual(told, ["no X surface"])
+        self.assertEqual(window.torn_down, ["indicator", "destroy"])
+        self.assertTrue(window._standalone_fallback)
+
+    def test_the_callback_is_cleared_so_a_second_failure_cannot_double_report(self):
+        # Two relaunches of the same wrapper would otherwise open two windows.
+        told = []
+        window = _FallbackStub(on_embed_failed=told.append)
+        window._fall_back_to_standalone("first")
+        window._standalone_fallback = False  # even if the latch were reset
+        window._fall_back_to_standalone("second")
+        self.assertEqual(told, ["first"])
+
+    def test_a_wrapper_already_falling_back_does_nothing_more(self):
+        told = []
+        window = _FallbackStub(already_fallen_back=True, on_embed_failed=told.append)
+        window._fall_back_to_standalone("again")
+        self.assertEqual(told, [])
+        self.assertEqual(window.torn_down, [])
+
+    def test_a_wrapper_the_user_is_closing_does_nothing_either(self):
+        # Closing the window is not an embed failure; reporting one would make
+        # the owner relaunch a game the user just quit.
+        told = []
+        window = _FallbackStub(closing=True, on_embed_failed=told.append)
+        window._fall_back_to_standalone("closing")
+        self.assertEqual(told, [])
+        self.assertEqual(window.torn_down, [])
+
+    def test_no_owner_callback_is_survivable(self):
+        window = _FallbackStub(on_embed_failed=None)
+        window._fall_back_to_standalone("nobody listening")
+        self.assertEqual(window.torn_down, ["indicator", "destroy"])
+
+
 if __name__ == "__main__":
     unittest.main()

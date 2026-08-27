@@ -105,7 +105,9 @@ module.
 (configured in `pyproject.toml`, measuring all of `src/openemux` — untested UI
 modules count as 0%, so the total reflects the whole app). `fail_under` in
 `[tool.coverage.report]` is a **floor, not a target**: raise it as coverage
-rises, never lower it to make a red run pass. CI does the same and, on every
+rises, never lower it to make a red run pass. When a PR adds tests that move
+the total, raise the floor to the new total in the same PR — that is what
+keeps it a ratchet rather than a number nobody looks at. CI does the same and, on every
 push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
 

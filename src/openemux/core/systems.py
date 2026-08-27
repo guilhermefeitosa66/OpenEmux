@@ -58,7 +58,7 @@ SYSTEMS = [
     {
         "id": "FC",
         "display_name": "Nintendo (NES) / Famicom",
-        "aliases": ["nes", "NES"],
+        "aliases": ["nes"],
         "extensions": [".nes"],
         "thumbnail_system": "Nintendo - Nintendo Entertainment System",
         "runtime_core_candidates": ["nestopia_libretro.so", "fceumm_libretro.so", "mesen_libretro.so"],
@@ -85,7 +85,7 @@ SYSTEMS = [
     {
         "id": "GBA",
         "display_name": "Game Boy Advance",
-        "aliases": ["gba", "Gba"],
+        "aliases": [],
         "extensions": [".gba"],
         "thumbnail_system": "Nintendo - Game Boy Advance",
         "runtime_core_candidates": ["mgba_libretro.so", "gpsp_libretro.so"],
@@ -229,7 +229,7 @@ SYSTEMS = [
     {
         "id": "SFC",
         "display_name": "Super Nintendo (SNES)",
-        "aliases": ["snes", "SNES"],
+        "aliases": ["snes"],
         "extensions": [".sfc", ".smc"],
         "thumbnail_system": "Nintendo - Super Nintendo Entertainment System",
         "runtime_core_candidates": ["snes9x_libretro.so", "bsnes_libretro.so"],

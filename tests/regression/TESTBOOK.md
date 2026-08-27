@@ -133,6 +133,62 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
     | grep -qx 0 && echo "RT-233 OK"
   ```
 
+### RT-234 — The console table and the BIOS catalog are checked, not just trusted
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: add a console to `core/systems.py` (or a BIOS entry to
+  `core/bios_catalog.py`) with a field missing, a duplicate id, an alias another console already
+  claims, an extension without its dot, or a core name that console never resolves.
+- **Expected:** The suite fails, naming the entry. Neither module had a test file at all, while
+  `resolve_system_id()` is called by the scanner, the playlists, the launcher, the cover sync and
+  the UI — so a malformed entry showed up as a console that quietly had no games, or a BIOS the
+  launch demanded and no core ever needed (issue #245). The familiar names still resolve:
+  `NES`→`FC`, `SNES`→`SFC`, `GBA`→`GBA`.
+- **Check:** suite files `tests/test_systems.py`, `tests/test_bios_catalog.py`.
+
+### RT-235 — A right-click offers exactly the submenus that apply
+- **Area:** Library & scanning
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: right-click a game with no core installed for its console, outside
+  cartridge view and outside a collection; then again with a core installed, in cartridge view, and
+  from inside a collection.
+- **Expected:** "Core" is absent when nothing is installed, "Cartridge color" only in cartridge view
+  and only where the console has more than one shell, "Remove from collection" only while viewing
+  one — and in every submenu the check mark sits on the option actually in force. `ui/rom_context.py`
+  had no test file and sat at 10%, and its load-state submenu indexed `rom["console"]` directly
+  where every sibling guarded it, so a ROM entry missing that key raised `KeyError` out of the
+  right-click (issue #245).
+- **Check:** suite file `tests/test_rom_context.py`.
+
+### RT-236 — The bundled symbolic icons are registered, and the theme choice reaches libadwaita
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person on an icon theme that does not inherit Adwaita (Mint-Y, Papirus,
+  Breeze): launch the app and look at the buttons and menu icons. Then switch "Theme" between
+  "System", "Light" and "Dark" in "Settings".
+- **Expected:** No blank icons — the vendored SVGs fill whatever the host theme lacks, registered
+  once, and a call made before GTK has a display does not consume that one shot. Light and Dark are
+  **forced**, so they hold on a desktop set the other way; System hands the choice back. Neither
+  `ui/icons.py` (0% covered) nor `ui/theming.py` had a test file (issue #245).
+- **Check:** suite files `tests/test_icons.py`, `tests/test_theming.py`.
+
+### RT-237 — A launch that cannot be adopted picks the right window, or hands the game back once
+- **Area:** Launch & runtime
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: launch a game while your own RetroArch is already open, and launch one
+  through a wrapper that forks (an AppImage, `flatpak-spawn`).
+- **Expected:** The wrapper adopts the window belonging to this launch — a `_NET_WM_PID` match wins,
+  a WM_CLASS match covers the forked case, and a RetroArch that was already on screen is never
+  taken. When no window can be adopted at all, the owner is told **exactly once** and the game is
+  handed back; a wrapper the user is closing reports nothing, or the owner would relaunch a game
+  they just quit (issues #245, #267).
+- **Check:** suite files `tests/test_x11_embed.py` (`FindGameWindowTests`), `tests/test_game_window.py`
+  (`StandaloneFallbackTests`).
+
 ### RT-002 — The unit suite passes
 - **Area:** Startup
 - **Mode:** AUTO-PROBE

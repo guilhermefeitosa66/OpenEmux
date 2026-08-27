@@ -3,8 +3,9 @@
 Only the parts that can be answered without a real X server: the tri-state
 "is the game still inside our window?" check, whose whole point is that
 "unknown" and "no" mean opposite things (issue #267), the pointer the wrapper
-defines on the adopted window (issue #276), and the two decisions behind the
-wrapper's hotkey and its focus reclaim (issue #236).
+defines on the adopted window (issue #276), the two decisions behind the
+wrapper's hotkey and its focus reclaim (issue #236), and which window a launch
+decides is *its* RetroArch (issue #245).
 """
 
 import unittest
@@ -172,6 +173,148 @@ def _embedder_on(server):
     embedder._display = server
     embedder._dpy = lambda: embedder._display
     return embedder
+
+
+class _FakeClient:
+    """A toplevel in _NET_CLIENT_LIST, with the two properties the search reads."""
+
+    def __init__(self, xid, pid=None, wm_class=None):
+        self.id = xid
+        self._pid = pid
+        self._wm_class = wm_class
+
+    def get_full_property(self, atom, _type):
+        if atom == "_NET_WM_PID" and self._pid is not None:
+            return _FakeProperty([self._pid])
+        return None
+
+    def get_wm_class(self):
+        return self._wm_class
+
+
+class _FakeClientList:
+    """A display whose _NET_CLIENT_LIST is exactly the windows handed to it."""
+
+    def __init__(self, clients):
+        self._clients = {client.id: client for client in clients}
+        self._order = [client.id for client in clients]
+
+    def screen(self):
+        return _FakeScreen(self)
+
+    @property
+    def root(self):
+        return self
+
+    def get_full_property(self, atom, _type):
+        if atom == "_NET_CLIENT_LIST":
+            return _FakeProperty(list(self._order))
+        return None
+
+    def intern_atom(self, name):
+        return name
+
+    def create_resource_object(self, _kind, xid):
+        client = self._clients.get(xid)
+        if client is None:
+            raise RuntimeError(f"window {xid} is gone")
+        return client
+
+
+def _embedder_over(clients):
+    embedder = RetroArchWindowEmbedder()
+    embedder._display = _FakeClientList(clients)
+    embedder._dpy = lambda: embedder._display
+    return embedder
+
+
+class FindGameWindowTests(unittest.TestCase):
+    """Which toplevel a launch decides is *its* RetroArch.
+
+    Getting this wrong does not look like a bug in the search: the wrapper
+    adopts somebody else's window, or none, and the user sees a game that
+    opened outside its frame.
+    """
+
+    def test_the_pid_match_wins(self):
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=111, wm_class=("retroarch", "RetroArch")),
+            _FakeClient(0x20, pid=222, wm_class=("retroarch", "RetroArch")),
+        ])
+        self.assertEqual(embedder.find_game_window(222), 0x20)
+
+    def test_the_pid_match_wins_even_over_an_earlier_class_match(self):
+        # The class candidate is collected while scanning, so a later PID hit
+        # still has to beat it.
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=999, wm_class=("retroarch", "RetroArch")),
+            _FakeClient(0x20, pid=222, wm_class=("retroarch", "RetroArch")),
+        ])
+        self.assertEqual(embedder.find_game_window(222), 0x20)
+
+    def test_a_forked_launcher_is_found_by_its_class_instead(self):
+        # AppImage wrappers and flatpak-spawn fork, so the Popen PID is not
+        # the window's process and _NET_WM_PID never matches.
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=1, wm_class=("firefox", "Firefox")),
+            _FakeClient(0x20, pid=2, wm_class=("retroarch", "RetroArch")),
+        ])
+        self.assertEqual(embedder.find_game_window(4242), 0x20)
+
+    def test_a_retroarch_that_predates_the_launch_is_never_adopted(self):
+        # Someone's own RetroArch, already open: adopting it would rip their
+        # session into our frame (issue #227 is the same concern for the port).
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=1, wm_class=("retroarch", "RetroArch")),
+        ])
+        embedder.snapshot_existing()
+        self.assertIsNone(embedder.find_game_window(4242))
+
+    def test_the_snapshot_does_not_block_a_pid_match(self):
+        # A pre-existing window that *is* our process is still ours.
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=777, wm_class=("retroarch", "RetroArch")),
+        ])
+        embedder.snapshot_existing()
+        self.assertEqual(embedder.find_game_window(777), 0x10)
+
+    def test_the_first_new_retroarch_window_is_the_one_taken(self):
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=1, wm_class=("retroarch", "RetroArch")),
+            _FakeClient(0x20, pid=2, wm_class=("retroarch", "RetroArch")),
+        ])
+        self.assertEqual(embedder.find_game_window(None), 0x10)
+
+    def test_nothing_matching_is_none_rather_than_a_wrong_window(self):
+        embedder = _embedder_over([
+            _FakeClient(0x10, pid=1, wm_class=("firefox", "Firefox")),
+        ])
+        self.assertIsNone(embedder.find_game_window(4242))
+
+    def test_a_window_with_no_wm_class_is_not_a_candidate(self):
+        embedder = _embedder_over([_FakeClient(0x10, pid=1, wm_class=None)])
+        self.assertIsNone(embedder.find_game_window(4242))
+
+    def test_the_class_match_ignores_case(self):
+        embedder = _embedder_over([_FakeClient(0x10, pid=1, wm_class=("RETROARCH", ""))])
+        self.assertEqual(embedder.find_game_window(4242), 0x10)
+
+    def test_a_window_that_vanishes_mid_scan_does_not_end_the_search(self):
+        # The list is a snapshot; a window can close between reading it and
+        # inspecting it, and that must not cost us the real match.
+        clients = [
+            _FakeClient(0x10, pid=1, wm_class=("retroarch", "RetroArch")),
+            _FakeClient(0x20, pid=222, wm_class=("retroarch", "RetroArch")),
+        ]
+        embedder = _embedder_over(clients)
+        embedder._display._clients.pop(0x10)  # gone, still listed
+        self.assertEqual(embedder.find_game_window(222), 0x20)
+
+    def test_no_display_finds_nothing(self):
+        embedder = RetroArchWindowEmbedder()
+        embedder._dpy = lambda: None
+        self.assertIsNone(embedder.find_game_window(222))
+        embedder.snapshot_existing()  # and does not raise
 
 
 class PointerCursorTests(unittest.TestCase):
