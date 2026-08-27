@@ -33,6 +33,8 @@ finished artifacts on Ubuntu, Debian and Fedora, under X11 and Wayland --
 [`testenv/README.md`](testenv/README.md).
 
 `common/` holds `stage_tree.sh` (the `/opt/openemux` install layout),
+`copy_tree.sh` and `assert_sources_only.sh` (staging sources without the
+working tree's build state, and proving it),
 `openemux-launcher.sh` (the `/usr/bin/openemux` launcher), `openemux.desktop`
 (the single desktop entry every format installs) and
 `io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` (the AppStream data every
@@ -63,6 +65,16 @@ plain covers.
 
 **Versions.** `src/openemux/__init__.py` is the single source of truth; the
 AppImage recipe carries its own copy that must be bumped with it.
+
+**Staging is sources only.** Every format copies through
+`common/copy_tree.sh` and checks the result with `common/assert_sources_only.sh`.
+A plain `cp -r src` shipped whatever the maintainer's tree happened to hold:
+the released `.deb` and `.rpm` both carried `opt/openemux/src/opemux.egg-info/`,
+a directory named after a project name that no longer exists — its
+`top_level.txt` registers a phantom distribution on
+`PYTHONPATH=/opt/openemux/src`, and its `SOURCES.txt` publishes the development
+tree's file inventory. The same list also keeps the 193 MiB Windows RetroArch
+out of a Linux package built after `make vendor-retroarch`.
 
 **AppStream metainfo.** Every format installs
 `common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` to

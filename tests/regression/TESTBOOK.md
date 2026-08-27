@@ -1616,6 +1616,41 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-217 — A package carries the sources, not the maintainer's build state
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (the probe runs the staging helpers; `make deb` / `make rpm` /
+  `make appimage` assert the same thing against their own staged trees).
+- **Steps:** As a QA person: on a machine where the project has been `pip install -e`'d and the
+  test suite has run, build the `.deb` and list it — `dpkg -c dist/openemux_*.deb | grep egg-info`.
+- **Expected:** Nothing. `stage_tree.sh` staged with `cp -r "$ROOT_DIR/src"`, so the released
+  `.deb` and `.rpm` both shipped `opt/openemux/src/opemux.egg-info/` — a stale directory from a
+  typo'd project name that no longer exists in the repository at all — plus
+  `openemux.egg-info/` and whatever `__pycache__` was lying around (issue #254). None of it is
+  tracked. `top_level.txt` registers a phantom distribution on `PYTHONPATH=/opt/openemux/src`
+  that `importlib.metadata` reports as installed, and `SOURCES.txt` publishes the development
+  tree's file inventory.
+- **Check:** suite file `tests/test_packaging_sources.py`, plus a real staging run:
+  ```bash
+  rm -rf "$SCRATCH/rt217" && DESTDIR="$SCRATCH/rt217" ROOT_DIR="$PWD" \
+    sh packaging/common/stage_tree.sh >/dev/null &&
+  PYTHONPATH=src .venv/bin/python - <<EOF
+  import os
+  from pathlib import Path
+  staged = Path(os.environ["SCRATCH"]) / "rt217" / "opt" / "openemux"
+  bad = [str(p) for p in staged.rglob("*")
+         if p.name == "__pycache__" or p.name.endswith((".egg-info", ".pyc"))
+         or p.name == "RetroArch-Win64"]
+  assert not bad, f"build artifacts staged into the package: {bad[:5]}"
+  # ...and nothing the app needs was dropped on the way.
+  assert (staged / "src/openemux/main.py").is_file()
+  assert (staged / "src/openemux/ui/assets/icons/symbolic/LICENSE").is_file()
+  assert (staged / "vendors/RetroArch-Linux-x86_64.AppImage").is_file()
+  print("RT-217 OK")
+  EOF
+  ```
+- **Restore:** the probe stages into `$SCRATCH` only; nothing in the repository is touched.
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

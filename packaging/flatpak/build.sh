@@ -44,21 +44,21 @@ trap 'rm -rf "$STAGE"' EXIT
 # and src/, the install steps need packaging/flatpak/ and LICENSE. A file added
 # to the manifest and forgotten here fails the build loudly rather than
 # silently widening what gets copied.
-for item in pyproject.toml README.md LICENSE requirements.lock src \
+for item in pyproject.toml README.md LICENSE requirements.lock \
             packaging/common packaging/flatpak \
             packaging/embed_screenscraper_credentials.py; do
   install -d "$STAGE/$(dirname "$item")"
   cp -a "$item" "$STAGE/$item"
 done
+# The sources, without the working tree's build state (issue #254).
+sh packaging/common/copy_tree.sh src "$STAGE"
 python3 "$STAGE/packaging/embed_screenscraper_credentials.py" \
   "$STAGE/src/openemux/core/embedded_credentials.py"
 
-# After the injection, which imports the staged package and writes bytecode of
-# its own. setuptools reuses egg-info when it finds one, and __pycache__ of a
-# pre-injection module is exactly the sort of build state a package should not
-# be carrying.
-find "$STAGE/src" \( -name '__pycache__' -o -name '*.egg-info' \) -type d -prune \
-  -exec rm -rf {} + 2>/dev/null || true
+# The injection imports the staged package to reuse its obfuscation, which
+# writes bytecode -- of the *pre-injection* module -- into the staging tree.
+find "$STAGE/src" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+sh packaging/common/assert_sources_only.sh "$STAGE/src"
 
 # The tracked file must have come out of this untouched.
 grep -q '^_EMBEDDED_BLOB = ""$' src/openemux/core/embedded_credentials.py
