@@ -135,7 +135,13 @@ class PackagesWorkflowTests(unittest.TestCase):
         steps = self.data["jobs"]["build"]["steps"]
         upload = [s for s in steps if str(s.get("uses", "")).startswith("actions/upload-artifact")]
         self.assertTrue(upload, "a CI build nobody can download is a build nobody tests")
-        self.assertEqual(upload[0]["with"]["if-no-files-found"], "error")
+        # A *successful* build that produced nothing is a broken job, and must
+        # say so. A failed one legitimately has nothing to hand back, and
+        # turning that into a second error would bury the first.
+        self.assertIn("'error'", str(upload[0]["with"]["if-no-files-found"]))
+        self.assertEqual(upload[0].get("if"), "always()",
+                         "an artifact thrown away on failure is a diagnosis "
+                         "nobody can make")
 
     def test_the_build_goes_through_the_shared_entry_point(self):
         # packaging/build.sh is what a maintainer runs locally, so CI running

@@ -175,15 +175,25 @@ jobs:
         run: ./packaging/build.sh ${{ matrix.target }}
 
       - name: Show what was produced
-        run: ls -lh dist/
+        # always(): a build that fails *after* producing something is the one
+        # worth looking at, and `ls` is the cheapest way to see whether it got
+        # that far (issue #119).
+        if: always()
+        run: ls -lh dist/ || true
 
       - name: Upload the ${{ matrix.target }}
         # So a release candidate can be tested from a CI run instead of a local
         # build. The Flatpak also leaves an ostree repo behind; only the
         # single-file bundle in dist/ is worth carrying.
+        # On failure too: an artifact that built and then failed its own smoke
+        # test is exactly the one somebody needs in their hands to find out
+        # why, and a job that throws it away makes every diagnosis another
+        # twenty-minute round trip.
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openemux-${{ matrix.target }}-${{ matrix.arch }}
           path: dist/
-          if-no-files-found: error
+          # Not an error when the build never got as far as producing one.
+          if-no-files-found: ${{ job.status == 'success' && 'error' || 'ignore' }}
           retention-days: 14
