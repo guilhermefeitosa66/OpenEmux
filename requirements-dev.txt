@@ -10,4 +10,4 @@ coverage[toml]
 # Correctness-only linter (issue #243). Pinned to a minor line: ruff adds rules
 # between releases, and a rule appearing on its own would fail CI on code
 # nobody touched.
-ruff~=0.16.0
+ruff~=0.16.4
