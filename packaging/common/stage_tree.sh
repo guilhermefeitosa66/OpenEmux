@@ -12,13 +12,25 @@ set -eu
 APP_ID="io.github.guilhermefeitosa66.OpenEmux"
 LOGO="$ROOT_DIR/src/openemux/ui/assets/images/logo.png"
 
+# The vendored RetroArch is per-architecture, and a package must carry only its
+# own: an x86_64 AppImage on an ARM machine is not a RetroArch that failed to
+# start, it is a file the kernel refuses to execute (issue #119). libretro
+# publishes no ARM build, so on aarch64 there is usually nothing to carry at
+# all and the launcher falls back to a distro or Flatpak RetroArch.
+BUILD_ARCH="$(uname -m)"
+case "$BUILD_ARCH" in
+  aarch64|arm64) FOREIGN_RETROARCH="RetroArch-Linux-x86_64.AppImage" ;;
+  *)             FOREIGN_RETROARCH="RetroArch-Linux-aarch64.AppImage" ;;
+esac
+
 install -d "$DESTDIR/opt/openemux"
 # Sources only: copy_tree.sh leaves the working tree's build state behind. A
 # plain `cp -r` shipped every gitignored artifact the maintainer happened to
 # have -- egg-info directories (one of them from a project name that no longer
 # exists) and __pycache__ (issue #254).
 sh "$ROOT_DIR/packaging/common/copy_tree.sh" "$ROOT_DIR/src" "$DESTDIR/opt/openemux"
-sh "$ROOT_DIR/packaging/common/copy_tree.sh" "$ROOT_DIR/vendors" "$DESTDIR/opt/openemux"
+sh "$ROOT_DIR/packaging/common/copy_tree.sh" "$ROOT_DIR/vendors" \
+  "$DESTDIR/opt/openemux" "$FOREIGN_RETROARCH"
 install -Dm644 "$ROOT_DIR/requirements.lock" "$DESTDIR/opt/openemux/requirements.lock"
 install -Dm644 "$ROOT_DIR/README.md" "$DESTDIR/opt/openemux/README.md"
 install -Dm644 "$ROOT_DIR/LICENSE" "$DESTDIR/opt/openemux/LICENSE"

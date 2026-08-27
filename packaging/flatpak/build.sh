@@ -82,14 +82,21 @@ flatpak-builder --user --force-clean --disable-rofiles-fuse \
   --repo=flatpak-repo .flatpak-build-dir "$STAGE/$MANIFEST"
 
 mkdir -p dist
-BUNDLE="dist/OpenEmux-${VERSION}.flatpak"
+# The x86_64 bundle keeps the name it has always had -- it is a published
+# release asset and links to it exist -- so only the other architecture is
+# suffixed. Without a suffix the two builds would overwrite each other in
+# dist/, and SHA256SUMS would cover whichever ran last (issue #119).
+case "$(uname -m)" in
+  x86_64) BUNDLE="dist/OpenEmux-${VERSION}.flatpak" ;;
+  *)      BUNDLE="dist/OpenEmux-${VERSION}-$(uname -m).flatpak" ;;
+esac
 flatpak build-bundle flatpak-repo "$BUNDLE" "$APP_ID"
 echo "==> built: $BUNDLE"
 
 echo "==> verify the vendored symbolic icons made it into the build"
 # pip installs them as package data; a pattern regression in pyproject would
 # drop them from the Flatpak only, so count them against the source tree.
-ICONS_DIR="$(find .flatpak-build-dir/files -type d -path '*openemux/ui/assets/icons/symbolic' | head -1)"
+ICONS_DIR="$(find .flatpak-build-dir/files -type d -path '*openemux/ui/assets/icons/symbolic' -print -quit)"
 if [ -z "$ICONS_DIR" ]; then
   echo "FAIL: openemux/ui/assets/icons/symbolic missing from the flatpak build" >&2
   exit 1
@@ -106,7 +113,7 @@ echo "all $PKG_ICONS symbolic icons present"
 echo "==> verify the exported desktop entry is not hidden by TryExec"
 # Flatpak exports the entry to the host, where TryExec is resolved against the
 # host PATH -- and no `openemux` binary lives there.
-DESKTOP="$(find .flatpak-build-dir/files/share/applications -name '*.desktop' | head -1)"
+DESKTOP="$(find .flatpak-build-dir/files/share/applications -name '*.desktop' -print -quit)"
 if grep -q '^TryExec=' "$DESKTOP"; then
   echo "FAIL: the exported desktop entry still carries TryExec" >&2
   exit 1

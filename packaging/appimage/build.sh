@@ -8,10 +8,27 @@ set -euo pipefail
 # leave root-owned files in dist/.
 trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appimage-builder-cache 2>/dev/null || true' EXIT
 
-RECIPE=packaging/appimage/AppImageBuilder.yml
-APPDIR_LIB="$PWD/AppDir/usr/lib/x86_64-linux-gnu"
+# Everything that varies with the architecture, derived from the host. The
+# AppDir is assembled out of foreign-arch debs and the result only runs on the
+# machine type it was built for, so host == target here; packaging/build.sh
+# refuses a mismatch before getting this far (issue #119).
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64)  TRIPLET=x86_64-linux-gnu ;;
+  aarch64) TRIPLET=aarch64-linux-gnu ;;
+  *) echo "unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+
+SOURCE_RECIPE=packaging/appimage/AppImageBuilder.yml
+# One recipe, rendered per architecture: four values differ and ninety lines of
+# package list do not, and two copies of that list is a package added to one of
+# them. On x86_64 the render is byte-identical to the file in git.
+RECIPE="$PWD/build/appimage/AppImageBuilder.${ARCH}.yml"
+python3 packaging/appimage/arch_recipe.py "$SOURCE_RECIPE" --arch "$ARCH" --output "$RECIPE"
+
+APPDIR_LIB="$PWD/AppDir/usr/lib/$TRIPLET"
 # The static-FUSE3 AppImage runtime baked into the build image (see phase 2).
-RUNTIME_SRC=/opt/appimage-runtime-x86_64
+RUNTIME_SRC="/opt/appimage-runtime-$ARCH"
 
 # The recipe is the only place the version is duplicated -- the .deb, .rpm and
 # Flatpak all derive it from src/openemux/__init__.py. A forgotten bump
@@ -19,16 +36,76 @@ RUNTIME_SRC=/opt/appimage-runtime-x86_64
 # and it went into dist/, into SHA256SUMS and into the GitHub release with
 # every check passing (issue #255).
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
-if ! grep -q "^    version: \"${VERSION}\"$" "$RECIPE"; then
-  echo "FAIL: $RECIPE does not carry version \"${VERSION}\"." >&2
+if ! grep -q "^    version: \"${VERSION}\"$" "$SOURCE_RECIPE"; then
+  echo "FAIL: $SOURCE_RECIPE does not carry version \"${VERSION}\"." >&2
   echo "src/openemux/__init__.py says ${VERSION}; the recipe says:" >&2
-  grep -n '^    version:' "$RECIPE" >&2
+  grep -n '^    version:' "$SOURCE_RECIPE" >&2
   exit 1
 fi
-echo "==> building openemux ${VERSION} AppImage"
+echo "==> building openemux ${VERSION} AppImage for ${ARCH}"
 
 echo "==> phase 1: assemble the AppDir (no packaging yet)"
 appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
+
+# appimage-builder rewrites every PT_INTERP to a *relative* path, so the ELF
+# loader is looked up from the working directory -- $APPDIR, or runtime/compat
+# where its exec hooks chdir. It then links the loader into both runtimes
+# itself... on x86_64. On aarch64 it does not: its glibc file list matches
+# `ld-linux-x86-64.so*` and `ld-linux.so.2` and nothing that matches
+# `ld-linux-aarch64.so.1`, so the loader stays under usr/lib, the relative
+# `lib/ld-linux-aarch64.so.1` resolves to nothing, and the bundle dies with
+# "usr/bin/python3: not found" -- a file that is right there (issue #119).
+#
+# Derived rather than hardcoded: read the interpreter the bundled python
+# actually asks for and make that exact relative path resolve from both
+# directories. On x86_64 the recipe's own lib64 links already satisfy it and
+# this finds nothing to do.
+echo "==> ensuring the bundled interpreter's loader resolves"
+PYTHON_BIN="$(readlink -f AppDir/usr/bin/python3)"
+test -f "$PYTHON_BIN" || { echo "ERROR: no bundled python3 in the AppDir." >&2; exit 1; }
+INTERP="$(readelf -l "$PYTHON_BIN" | sed -n 's/.*program interpreter: \(.*\)]/\1/p')"
+test -n "$INTERP" || { echo "ERROR: $PYTHON_BIN declares no ELF interpreter." >&2; exit 1; }
+echo "    interpreter: $INTERP"
+case "$INTERP" in
+  /*)
+    # Absolute: the host's own loader, nothing for us to place.
+    echo "    absolute; nothing to link"
+    ;;
+  *)
+    # -quit, not `| head -1`: head exits on the first line and SIGPIPEs find,
+    # which under `set -o pipefail` fails the pipeline and, under `set -e`,
+    # kills the build -- exit 141, with the diagnostics never printed. The
+    # suite has a guard against this shape for `grep -q`; it covers `head` too
+    # now, because this is where it bit.
+    LOADER="$(find AppDir/usr/lib AppDir/lib AppDir/usr/lib64 AppDir/lib64 \
+                   AppDir/runtime -name "$(basename "$INTERP")" \
+                   \( -type f -o -type l \) -print -quit 2>/dev/null || true)"
+    test -n "$LOADER" || {
+      echo "ERROR: $(basename "$INTERP") is nowhere in the AppDir." >&2
+      exit 1
+    }
+    echo "    loader:      $LOADER"
+    for base in AppDir AppDir/runtime/compat; do
+      target="$base/$INTERP"
+      if [ -e "$target" ]; then
+        echo "    ok:          $target"
+        continue
+      fi
+      mkdir -p "$(dirname "$target")"
+      ln -sfn "$(realpath --relative-to="$(dirname "$target")" "$LOADER")" "$target"
+      echo "    linked:      $target -> $(readlink "$target")"
+    done
+    ;;
+esac
+# Both, because openemux-run.sh cds to $APPDIR while the exec hooks cd to
+# runtime/compat, and the bundle has to start either way.
+for base in AppDir AppDir/runtime/compat; do
+  case "$INTERP" in /*) continue ;; esac
+  test -e "$base/$INTERP" || {
+    echo "ERROR: $base/$INTERP still does not resolve." >&2
+    exit 1
+  }
+done
 
 # Regenerate the gdk-pixbuf loaders cache from the *bundled* loaders. The cache
 # written during bundling omits libpixbufloader-svg.so, and without it every
@@ -36,7 +113,7 @@ appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
 # LD_LIBRARY_PATH points at the bundled libs so the SVG and WebP loaders (which
 # need librsvg/cairo/libxml2/libwebp) can be dlopen-ed while querying.
 GPB_DIR="$APPDIR_LIB/gdk-pixbuf-2.0"
-QUERY_BIN=/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders
+QUERY_BIN="/usr/lib/$TRIPLET/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders"
 if [ ! -d "$GPB_DIR/2.10.0/loaders" ] || [ ! -x "$QUERY_BIN" ]; then
   echo "ERROR: gdk-pixbuf query tool or bundled loaders dir not found." >&2
   exit 1
@@ -44,7 +121,7 @@ fi
 
 echo "==> regenerating gdk-pixbuf loaders.cache from the bundled loaders"
 tmp_cache="$(mktemp)"
-LD_LIBRARY_PATH="$APPDIR_LIB:$PWD/AppDir/lib/x86_64-linux-gnu" \
+LD_LIBRARY_PATH="$APPDIR_LIB:$PWD/AppDir/lib/$TRIPLET" \
 GDK_PIXBUF_MODULEDIR="$GPB_DIR/2.10.0/loaders" \
   "$QUERY_BIN" > "$tmp_cache"
 # Strip the build-time absolute loader dir so entries become bare filenames; at
@@ -110,9 +187,13 @@ if [ ! -f "$RUNTIME_SRC" ]; then
 fi
 # The same name appimage-builder gave the file, from the same field, so the
 # release artifact keeps its name.
-VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE" | head -1)"
+# No `| head -1`: that shape SIGPIPEs its producer, and while sed over a small
+# file survives it, the harmful and the harmless read identically at a glance
+# -- so the suite bans the shape and the first line is taken here instead.
+VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE")"
+VERSION="${VERSION%%$'\n'*}"
 test -n "$VERSION" || { echo "ERROR: no version: field in $RECIPE." >&2; exit 1; }
-BUNDLE_NAME="OpenEmux-${VERSION}-x86_64.AppImage"
+BUNDLE_NAME="OpenEmux-${VERSION}-${ARCH}.AppImage"
 PAYLOAD="$PWD/AppDir.squashfs"
 rm -f "$PAYLOAD" "$BUNDLE_NAME"
 mksquashfs AppDir "$PAYLOAD" -root-owned -noappend -reproducible \
@@ -132,7 +213,11 @@ done
 # bundle can assemble perfectly and still fail to exec its own interpreter --
 # which is exactly how a release shipped that died with
 # "usr/bin/python3: not found" on every machine.
-BUNDLE="$(ls -1 dist/*.AppImage | head -1)"
+# Without a pipe into head, for the reason the suite states: the shape is
+# banned because the harmful and the harmless instances look the same.
+set -- dist/*.AppImage
+BUNDLE="$1"
+test -f "$BUNDLE" || { echo "ERROR: no AppImage in dist/." >&2; exit 1; }
 
 # The bug this guards against is invisible in the build container -- every
 # check below runs the bundle extracted, so a runtime that cannot mount
@@ -171,6 +256,26 @@ APPIMAGE_EXTRACT_AND_RUN=1 timeout 60 xvfb-run -a "$BUNDLE" > "$LAUNCH_LOG" 2>&1
 if grep -qE "not found|No module named|ModuleNotFoundError|Traceback" "$LAUNCH_LOG"; then
   echo "ERROR: the bundle failed to start." >&2
   sed -n '1,40p' "$LAUNCH_LOG" >&2
+  # "exec: .../python3: not found" from a shell means one of two things, and
+  # they need different fixes: the file is missing, or its ELF interpreter is.
+  # appimage-builder rewrites every PT_INTERP to a *relative* path, so the
+  # second is the likely one and the answer is which loader the interpreter
+  # wants and whether the AppDir has it at that relative path -- a question the
+  # log used to leave entirely unanswered (issue #119).
+  echo "--- interpreter diagnostics ---" >&2
+  PY_BIN="AppDir/usr/bin/python3"
+  ls -l "$PY_BIN" >&2 || echo "$PY_BIN is missing" >&2
+  if [ -e "$PY_BIN" ]; then
+    WANTED="$(readelf -l "$(readlink -f "$PY_BIN")" 2>/dev/null \
+              | sed -n 's/.*program interpreter: \(.*\)]/\1/p')"
+    echo "PT_INTERP: ${WANTED:-<none>}" >&2
+    for base in AppDir AppDir/runtime/compat; do
+      echo "  $base/$WANTED: $(ls -l "$base/$WANTED" 2>&1)" >&2
+    done
+  fi
+  echo "AppDir/lib*:" >&2
+  ls -ld AppDir/lib AppDir/lib64 AppDir/runtime/compat/lib \
+         AppDir/runtime/compat/lib64 2>&1 >&2 || true
   exit 1
 fi
 # The app logs this once GTK is up and the window is being built; reaching it

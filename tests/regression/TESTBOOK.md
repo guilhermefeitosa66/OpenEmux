@@ -3745,6 +3745,126 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   delete permanently without saying so.
 - **Check:** human only.
 
+## ARM (aarch64)
+
+Scenarios for the aarch64 Linux builds (issue #119). The `AUTO-SUITE`/`AUTO-PROBE` ones run
+anywhere -- the architecture is faked, which is the only way to cover the ARM side from an x86_64
+desk. Anything needing a real ARM machine is `MANUAL`.
+
+### RT-270 — The cores URL follows the machine, and a stale one is corrected
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The default cores URL names this platform *and* this architecture, and a config
+  carrying another one of OpenEmux's own defaults is corrected to it. A URL the user set is left
+  alone. Without the correction, a library copied from an x86_64 desktop onto a Pi downloads
+  x86_64 cores that fetch perfectly and then never load, with nothing in the UI to say why.
+- **Check:** suite file `tests/test_architecture.py` (`CoresUrlTests`).
+
+### RT-271 — One AppImage recipe, rendered per architecture
+- **Area:** ARM
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Render the recipe for both architectures and compare.
+- **Expected:** The x86_64 render is byte-identical to the file in git; the aarch64 render changes
+  exactly four values -- `AppImage.arch`, `apt.arch`, the library triplet and the apt archive host
+  -- and keeps the whole package list. ARM packages are not on `archive.ubuntu.com` at all, so the
+  host has to become `ports.ubuntu.com`.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "import subprocess, pathlib; R='packaging/appimage/AppImageBuilder.yml'; run=lambda a: subprocess.run(['python3','packaging/appimage/arch_recipe.py',R,'--arch',a],capture_output=True,text=True,check=True).stdout; assert run('x86_64')==pathlib.Path(R).read_text(); arm=run('aarch64'); assert 'arch: aarch64' in arm and 'arch: arm64' in arm and 'aarch64-linux-gnu' in arm and 'ports.ubuntu.com' in arm and 'x86_64' not in arm; print('RT-271 OK')"`
+
+### RT-272 — A missing RetroArch degrades instead of dead-ending
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** With nothing vendored, the launcher takes `retroarch` from `PATH`, then a RetroArch
+  Flatpak, and only then reports an error that names all three ways out. libretro publishes no ARM
+  build, so "nothing vendored" is the normal case on aarch64 rather than an anomaly -- stopping
+  there would ship an install that can never launch a game.
+- **Check:** suite file `tests/test_architecture.py` (`LauncherFallbackChainTests`).
+
+### RT-273 — A console with no core for this architecture says so
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** On x86_64 the "no core" error points at the configuration. On aarch64 it says the
+  buildbot builds fewer cores for this architecture and that the console may have none at all --
+  153 of 217 do exist, and telling somebody to configure a core that was never built for their
+  machine sends them looking for a file they cannot get.
+- **Check:** suite file `tests/test_architecture.py` (`MissingCoreMessageTests`).
+
+### RT-274 — The .deb and .rpm are stamped with the architecture they were built for
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Neither script hardcodes `amd64` or `x86_64`: the `.deb` takes both its
+  `Architecture` field and its filename from `dpkg --print-architecture`, and the `.rpm` declares
+  `ExclusiveArch: x86_64 aarch64`. An arm64 package stamped `amd64` is one apt refuses to install.
+- **Check:** suite file `tests/test_arm_packaging.py`.
+
+### RT-275 — The ARM packages depend on a RetroArch they do not bundle
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The arm64 `.deb` requires `retroarch` and not `libfuse2` (there is no AppImage to
+  mount). The aarch64 `.rpm` *recommends* it instead, and that difference is deliberate: Ubuntu and
+  Debian package RetroArch, Fedora does not -- it is in RPM Fusion -- so a hard requirement there
+  would make the package refuse to install on a stock system. Either way the app names the
+  distribution, the Flatpak and the setting the first time a launch finds no RetroArch.
+- **Check:** suite file `tests/test_arm_packaging.py`.
+
+### RT-278 — The AppImage's bundled interpreter can find its loader
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The AppImage build derives the ELF loader path from the bundled python rather than
+  writing it down. appimage-builder links the loader into both runtimes itself on x86_64 and not on
+  aarch64 -- its glibc file list matches `ld-linux-x86-64.so*` and nothing that matches
+  `ld-linux-aarch64.so.1` -- so on ARM the relative `lib/ld-linux-aarch64.so.1` resolved to nothing
+  and the bundle died with "usr/bin/python3: not found", about a file that was right there. The
+  build fails loudly if the path still does not resolve, rather than packaging a bundle that cannot
+  start.
+- **Check:** suite file `tests/test_arm_packaging.py` (`AppImageArchitectureTests`).
+
+### RT-276 — An ARM package installs and the app starts on real hardware
+- **Area:** ARM
+- **Mode:** MANUAL
+- **Preconditions:** A Raspberry Pi 5, an ARM VM or an ARM cloud desktop running Ubuntu 24.04+ or
+  Fedora 40+ with a GNOME session.
+- **Steps:**
+  1. Install the `arm64` `.deb` (or the `aarch64` `.rpm`) built by CI.
+  2. Launch OpenEmux from the menu and let first boot finish.
+  3. Launch a ROM for a console whose core exists on aarch64.
+- **Expected:** The install pulls `retroarch` as a dependency, first boot creates the config and
+  downloads cores from the **aarch64** buildbot path, and the game runs and returns to OpenEmux
+  cleanly. This is the one thing no amount of emulation proves: `PLATFORM=linux/arm64` builds the
+  package under QEMU but never runs the GTK app or an emulator on ARM silicon.
+- **Check:** human only.
+
+### RT-277 — `flatpak update` reaches ARM users from the remote they already have
+- **Area:** ARM
+- **Mode:** MANUAL
+- **Preconditions:** An ARM machine with the OpenEmux Flatpak remote configured.
+- **Steps:**
+  1. `flatpak update`.
+- **Expected:** The aarch64 build arrives from the same remote. One ostree repo serves several
+  architectures, so this needs the publish workflow in the `openemux-flatpak` satellite repo to
+  have an aarch64 leg pushing into it -- which is why this scenario exists rather than being
+  assumed.
+- **Check:** human only.
+
 
 ## Retired
 

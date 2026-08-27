@@ -82,7 +82,22 @@ class NoBuildCheckIsDefeatedByASignalTests(unittest.TestCase):
     def test_there_are_scripts_to_check(self):
         self.assertGreaterEqual(len(self.SCRIPTS), 5)
 
-    def test_no_producer_is_piped_into_grep_q(self):
+    #: Consumers that stop reading early. Anything long-running piped into one
+    #: gets SIGPIPE, and under `set -o pipefail` that fails the pipeline: the
+    #: check reports a problem the build does not have, or -- with `set -e` --
+    #: kills the build at exit 141 with nothing printed. `head` is here because
+    #: that is exactly what a `find ... | head -1` did to the AppImage build
+    #: (issue #119); `grep -q` because it did it first (issue #241).
+    #:
+    #: A ban on the *shape*, not a claim that every instance is broken -- `sed`
+    #: over a small file survives it. The two read identically at a glance,
+    #: which is the problem, and writing them without the pipe costs a line.
+    EARLY_EXITS = (
+        r"\|\s*grep\s+-[A-Za-z]*q",
+        r"\|\s*head\b",
+    )
+
+    def test_no_producer_is_piped_into_a_consumer_that_stops_early(self):
         offenders = []
         for script in self.SCRIPTS:
             for number, line in enumerate(
@@ -90,8 +105,9 @@ class NoBuildCheckIsDefeatedByASignalTests(unittest.TestCase):
             ):
                 if line.lstrip().startswith("#"):
                     continue
-                if re.search(r"\|\s*grep\s+-[A-Za-z]*q", line):
-                    offenders.append(f"{script.name}:{number}: {line.strip()}")
+                for pattern in self.EARLY_EXITS:
+                    if re.search(pattern, line):
+                        offenders.append(f"{script.name}:{number}: {line.strip()}")
         self.assertEqual(offenders, [], "\n".join(offenders))
 
 
@@ -116,8 +132,18 @@ class TheBuildImagesArePinnedTests(unittest.TestCase):
     def test_the_image_build_always_refetches_its_base(self):
         # Without --pull a stale local image is reused silently -- possibly one
         # cached before a security update.
+        #
+        # Matched on the docker build *invocation* rather than on the two words
+        # being adjacent: --platform now sits between them when a build is
+        # deliberately emulated (issue #119), and an assertion that reads the
+        # command as a whole cannot be broken by inserting another flag.
         build = (REPO_ROOT / "packaging/build.sh").read_text(encoding="utf-8")
-        self.assertIn("docker build --pull", build)
+        invocation = next(
+            (line for line in build.splitlines() if line.startswith("docker build")),
+            None,
+        )
+        self.assertIsNotNone(invocation, "nothing in build.sh builds an image")
+        self.assertIn("--pull", invocation)
 
 
 class NothingIsFetchedOverPlainHttpTests(unittest.TestCase):

@@ -23,6 +23,8 @@ artifacts. For user-facing install instructions, see the main
   - [Fedora (`.rpm`)](#fedora-rpm)
   - [Flatpak](#flatpak)
   - [Windows (portable zip + installer)](#windows-portable-zip--installer)
+  - [Building for ARM without an ARM machine](#building-for-arm-without-an-arm-machine)
+  - [What ARM does not get](#what-arm-does-not-get)
   - [Build everything](#build-everything)
   - [Checksums](#checksums)
   - [Package CI](#package-ci)
@@ -472,7 +474,11 @@ script not only builds but also **install-tests** the result in a clean
 container (dependency resolution via apt/dnf plus a GTK4/Adwaita import smoke
 test), so a green run means the package actually installs and imports.
 
-The AppImage build additionally requires an **x86_64 host**.
+Every Linux artifact is built **for the architecture of the machine building
+it**, on x86_64 and on aarch64. That is not a limitation waiting to be lifted:
+an AppDir is assembled out of one architecture's debs and runs nowhere else,
+and `dpkg` and `rpmbuild` stamp what they are running on. Build ARM on ARM --
+CI has a runner for it, and `PLATFORM=` below emulates one when you do not.
 
 ### AppImage
 
@@ -480,8 +486,17 @@ Universal, runs on any recent distro.
 
 ```bash
 make appimage
-# -> dist/OpenEmux-<version>-x86_64.AppImage
+# -> dist/OpenEmux-<version>-x86_64.AppImage   (or -aarch64 on an ARM host)
 ```
+
+The recipe is written for x86_64 and rendered for the host by
+[`packaging/appimage/arch_recipe.py`](../packaging/appimage/arch_recipe.py):
+four values differ -- `AppImage.arch`, `apt.arch`, the library triplet, and the
+apt archive host (`ports.ubuntu.com` serves ARM, `archive.ubuntu.com` does not
+carry it at all) -- and the ninety-line package list does not. On x86_64 the
+render is byte-identical to the file in git. Every substitution asserts how
+many times it matched, so a recipe edit that moves an anchor fails the build
+rather than quietly producing an x86_64 recipe on an ARM machine.
 
 ### Debian / Ubuntu (`.deb`)
 
@@ -490,7 +505,7 @@ container; `apt` pulls the GTK4/Adwaita dependencies.
 
 ```bash
 make deb
-# -> dist/openemux_<version>_amd64.deb
+# -> dist/openemux_<version>_amd64.deb   (or _arm64 on an ARM host)
 ```
 
 ### Fedora (`.rpm`)
@@ -499,7 +514,7 @@ Targets **Fedora 40 and newer**. Built and tested in a Fedora container.
 
 ```bash
 make rpm
-# -> dist/openemux-<version>-1.fc<NN>.x86_64.rpm
+# -> dist/openemux-<version>-1.fc<NN>.x86_64.rpm   (or .aarch64 on an ARM host)
 ```
 
 Override the build image if needed, e.g. `RPM_BUILD_IMAGE=fedora:42 make rpm`
@@ -522,7 +537,12 @@ manages the cores.
 ```bash
 make flatpak
 # -> dist/OpenEmux-<version>.flatpak  (+ flatpak-repo/)
+# -> dist/OpenEmux-<version>-aarch64.flatpak on an ARM host
 ```
+
+The x86_64 bundle keeps its unsuffixed name because it is a published release
+asset that links point at; only the ARM one is suffixed, so the two do not
+overwrite each other in `dist/`.
 
 ### Windows (portable zip + installer)
 
@@ -599,6 +619,57 @@ to verify, which on first boot means no cores and no cover art: the app installs
 cleanly and then cannot fetch anything. The build's phase-5 check greps the
 staged bundle for exactly that kind of baked-in build-machine path.
 
+### Building for ARM without an ARM machine
+
+`PLATFORM=` runs the whole build inside a QEMU-emulated container. It is slow
+-- an emulated `apt install` is minutes rather than seconds, and the AppImage
+and Flatpak are slower still -- and it exists so a packaging change can be
+tried before it reaches CI, not as a way to produce release artifacts.
+
+```bash
+# once per boot: register the arm64 handler with the kernel
+docker run --rm --privileged tonistiigi/binfmt --install arm64
+
+PLATFORM=linux/arm64 ./packaging/build.sh deb
+PLATFORM=linux/arm64 ./packaging/build.sh rpm
+```
+
+The release builds ARM on ARM instead: the packages workflow schedules those
+jobs onto GitHub's `ubuntu-24.04-arm` runners, which are free for this
+repository because it is public.
+
+### What ARM does not get
+
+**No bundled RetroArch.** libretro publishes no ARM build -- the buildbot's
+aarch64 directory holds cores only, and its `stable/<version>/linux/` lists
+`x86/` and `x86_64/` and nothing else. So the ARM packages lean on the
+distribution's `retroarch`: the `.deb` **depends** on it, because Ubuntu noble
+and Debian bookworm both package it for arm64; the `.rpm` only **recommends**
+it, because Fedora does not package RetroArch at all -- it is in RPM Fusion --
+and a hard requirement would make the package refuse to install on a stock
+system. The launcher then resolves in this order:
+
+1. `runtime.retroarch.binary`, if it names something that exists;
+2. that path on `PATH`;
+3. the vendored AppImage for this architecture;
+4. `retroarch` on `PATH`;
+5. `flatpak run org.libretro.RetroArch`, if that Flatpak is installed;
+6. an error naming all of the above.
+
+Building an ARM RetroArch AppImage is possible and is not done here: the thing
+that would have to be proven is that it *works* -- GL/EGL, audio and gamepad on
+a real ARM desktop -- and until somebody can prove that on hardware, shipping
+one would be shipping a binary nobody has run. The chain above is the position
+issue #119 names to fall back to.
+
+**Fewer cores.** The buildbot builds 153 cores for aarch64 against 217 for
+x86_64, so some consoles have none at all. `core/config.py` points the updater
+at the right architecture's tree and migrates a config that names another
+one -- an ARM install pointed at the x86_64 tree downloads cores that fetch
+perfectly and then never load -- and the launch error says the buildbot may
+simply not build one, rather than telling the user to configure a file they
+cannot get.
+
 ### Build everything
 
 ```bash
@@ -629,8 +700,12 @@ shows up in a pull request instead of on release day (issue #241).
 
 | Trigger | Formats |
 | --- | --- |
-| Pull request touching `packaging/**`, `pyproject.toml`, `requirements*`, `Makefile`, `src/openemux/data/**` | `deb`, `rpm` |
-| Push to `main`, Monday 05:00 UTC, `workflow_dispatch` | all five |
+| Pull request touching `packaging/**`, `pyproject.toml`, `requirements*`, `Makefile`, `src/openemux/data/**` | `deb`, `rpm` — on x86_64 **and** aarch64 |
+| Push to `main`, Monday 05:00 UTC, `workflow_dispatch` | every format, on both architectures (the Windows bundle is x86_64 only) |
+
+The ARM legs run on `ubuntu-24.04-arm`. They are in the pull-request set on
+purpose: nobody builds those by hand, so they are the ones that would regress
+in silence.
 
 Each format's own build script ends with an install smoke test, so a green job
 means the package installed in a clean container of its target distro, not just
@@ -638,8 +713,8 @@ that it compiled. Every run uploads `dist/` as an artifact (kept 14 days), which
 is enough to hand somebody a release candidate without building it locally.
 
 `workflow_dispatch` takes a **Which formats to build** choice (`all`,
-`deb+rpm`, `appimage`, `flatpak`, `windows`) so a single format can be re-run on
-its own:
+`deb+rpm`, `appimage`, `flatpak`, `windows`, `aarch64`) so a single format --
+or every format for ARM alone -- can be re-run on its own:
 
 ```bash
 gh workflow run packages.yml -f targets=flatpak

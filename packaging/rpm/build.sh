@@ -39,7 +39,7 @@ grep -q "^Version:        ${VERSION}$" "$TOPDIR/SPECS/openemux.spec"
 rpmbuild -ba "$TOPDIR/SPECS/openemux.spec" --define "_topdir $TOPDIR"
 
 mkdir -p dist
-RPM_PATH="$(find "$TOPDIR/RPMS" -name "openemux-${VERSION}-*.rpm" | head -1)"
+RPM_PATH="$(find "$TOPDIR/RPMS" -name "openemux-${VERSION}-*.rpm" -print -quit)"
 cp "$RPM_PATH" dist/
 RPM_NAME="$(basename "$RPM_PATH")"
 echo "==> built: dist/${RPM_NAME}"
@@ -49,14 +49,17 @@ echo "==> the SRPM must rebuild with no OpenEmux checkout in sight"
 # The point of Source0/%prep: this is `mock`, COPR and Fedora review in
 # miniature. A different _topdir and a different working directory, so nothing
 # can reach /work by accident.
-SRPM_PATH="$(find "$TOPDIR/SRPMS" -name "openemux-${VERSION}-*.src.rpm" | head -1)"
+SRPM_PATH="$(find "$TOPDIR/SRPMS" -name "openemux-${VERSION}-*.src.rpm" -print -quit)"
 if [ -z "$SRPM_PATH" ]; then
   echo "FAIL: rpmbuild -ba produced no SRPM" >&2
   exit 1
 fi
 echo "==> rebuilding $(basename "$SRPM_PATH")"
 ( cd /tmp && rpmbuild --rebuild --define "_topdir /tmp/rpmbuild-verify" "$SRPM_PATH" )
-test -n "$(find /tmp/rpmbuild-verify/RPMS -name "openemux-${VERSION}-*.rpm" | head -1)"
+# -quit rather than `| head -1`: head exits on the first line and SIGPIPEs
+# find, and that shape kills a build outright the moment it is used outside a
+# command substitution (issue #119).
+test -n "$(find /tmp/rpmbuild-verify/RPMS -name "openemux-${VERSION}-*.rpm" -print -quit)"
 echo "the SRPM rebuilds standalone"
 
 echo "==> rpmlint: the Fedora-review blockers must be gone"
@@ -83,7 +86,24 @@ dnf install -y "./dist/${RPM_NAME}" >/dev/null
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
-test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+# x86_64 bundles the AppImage; aarch64 has none to bundle and depends on the
+# distribution's retroarch instead, which dnf has just resolved (issue #119).
+if [ "$(uname -m)" = "x86_64" ]; then
+  test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+else
+  test ! -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+  # Not `command -v retroarch`: the dependency is a Recommends, because
+  # RetroArch lives in RPM Fusion rather than in Fedora, and this container has
+  # only Fedora. What must hold is that the package *asks* for it.
+  # Collected first, then matched. `rpm -q ... | grep -q` exits on the first
+  # line and SIGPIPEs rpm, which under `set -o pipefail` makes the pipeline
+  # report failure -- so the check would fail on a package that does declare it.
+  RECOMMENDS="$(rpm -q --recommends openemux)"
+  case "$RECOMMENDS" in
+    *retroarch*) ;;
+    *) echo "the aarch64 package does not recommend retroarch" >&2; exit 1 ;;
+  esac
+fi
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 # PATH-relative Exec would let a ~/.local/bin shadow (AppImage-manager
