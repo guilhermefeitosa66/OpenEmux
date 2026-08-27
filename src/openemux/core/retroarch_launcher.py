@@ -349,6 +349,7 @@ class RetroArchLauncher:
 
         overrides = {}
         overrides.update(self._input_overrides(console))
+        overrides.update(self._joypad_driver_overrides())
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         overrides.update(self._bios_overrides(console, core_filename))
         overrides.update(self._shader_overrides(shader_path, shader_enabled))
@@ -548,6 +549,31 @@ class RetroArchLauncher:
             # config is untouched -- this is per launch.
             "quit_press_twice": '"false"',
         }
+
+    @staticmethod
+    def _joypad_driver_overrides():
+        """Pin the joypad driver on Windows so both ends agree on the numbers.
+
+        A binding token is an *index* -- ``"3"`` is "the fourth button as this
+        driver counts them" -- so the driver that produced it and the driver
+        that reads it have to be the same one. On Linux they already are:
+        OpenEmux reads evdev with udev's numbering and RetroArch defaults to
+        its ``udev`` joypad driver.
+
+        On Windows RetroArch defaults to ``xinput``, whose button order is its
+        own, while OpenEmux reads the pad through SDL2 (``gamepad_sdl``). Left
+        alone, a remap captured in OpenEmux would bind a different button in
+        the game. Naming the driver here costs nothing when the numbering
+        happens to agree and is the difference between working and silently
+        wrong when it does not.
+
+        Launch-scoped like every other value in this file: ``--appendconfig``
+        with ``config_save_on_exit = false``, so a user's own RetroArch keeps
+        whatever driver they chose (issue #118).
+        """
+        if not IS_WINDOWS:
+            return {}
+        return {"input_joypad_driver": '"sdl2"'}
 
     def _av_overrides(self):
         """Which audio driver RetroArch is told to use (issue #176).

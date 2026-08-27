@@ -27,14 +27,14 @@ class PackagesWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.data, self.text = _workflow("packages.yml")
 
-    def test_every_linux_format_the_release_ships_is_built(self):
-        # Derived from the tree, not from a list kept here: a fifth format
+    def test_every_format_the_release_ships_is_built(self):
+        # Derived from the tree, not from a list kept here: a sixth format
         # added under packaging/ with no CI job should fail this.
         formats = {
             path.parent.name
             for path in (REPO_ROOT / "packaging").glob("*/build.sh")
-        } - {"windows"}  # needs a 193 MiB vendored RetroArch that is gitignored
-        self.assertEqual(formats, {"appimage", "deb", "rpm", "flatpak"})
+        }
+        self.assertEqual(formats, {"appimage", "deb", "rpm", "flatpak", "windows"})
         for fmt in sorted(formats):
             with self.subTest(format=fmt):
                 self.assertIn(f'"{fmt}"', self.text)
@@ -42,9 +42,29 @@ class PackagesWorkflowTests(unittest.TestCase):
     def test_pull_requests_build_the_two_cheap_formats(self):
         self.assertIn('targets=\'["deb","rpm"]\'', self.text)
 
-    def test_the_scheduled_run_builds_all_four(self):
-        self.assertIn('targets=\'["deb","rpm","appimage","flatpak"]\'', self.text)
+    def test_the_scheduled_run_builds_all_five(self):
+        self.assertIn('targets=\'["deb","rpm","appimage","flatpak","windows"]\'', self.text)
         self.assertIn("schedule", self.text)
+
+    def test_the_windows_build_fetches_its_vendored_retroarch_first(self):
+        # The Windows bundle ships RetroArch, and that binary is a gitignored
+        # 193 MiB download rather than a committed vendor file -- so this is
+        # the one format whose build needs a step before packaging/build.sh.
+        # Without it the build stops at the guard in packaging/build.sh, 20
+        # minutes of Docker later (issue #118).
+        steps = self.data["jobs"]["build"]["steps"]
+        names = [step.get("name", "") for step in steps]
+        fetch = next(
+            (step for step in steps if "vendor-retroarch" in str(step.get("run", ""))),
+            None,
+        )
+        self.assertIsNotNone(fetch, "nothing fetches the vendored RetroArch")
+        self.assertIn("windows", str(fetch.get("if", "")))
+        build = next(
+            index for index, step in enumerate(steps)
+            if "./packaging/build.sh" in str(step.get("run", ""))
+        )
+        self.assertLess(names.index(fetch["name"]), build)
 
     def test_one_broken_format_does_not_hide_the_others(self):
         self.assertIs(self.data["jobs"]["build"]["strategy"]["fail-fast"], False)
@@ -69,6 +89,40 @@ class TestsWorkflowTests(unittest.TestCase):
 
     def setUp(self):
         self.data, self.text = _workflow("tests.yml")
+
+    def test_the_suite_also_runs_on_windows(self):
+        # Path assumptions are invisible on Linux. Before this job the only way
+        # to find one was to build the bundle and run the app by hand, which
+        # happened on release day or not at all (issue #118).
+        job = self.data["jobs"].get("windows")
+        self.assertIsNotNone(job, "nothing runs the suite on Windows")
+        self.assertEqual(job["runs-on"], "windows-latest")
+        self.assertTrue(
+            any("unittest discover" in str(step.get("run", "")) for step in job["steps"]),
+            "the Windows job does not run the suite",
+        )
+
+    def test_the_windows_job_uses_the_stack_the_bundle_ships(self):
+        # Running against some other Python would test a stack no user has:
+        # the bundle is MSYS2's MINGW64 packages, and PyGObject cannot be
+        # pip-built under it anyway.
+        job = self.data["jobs"]["windows"]
+        setup = next(
+            step for step in job["steps"]
+            if str(step.get("uses", "")).startswith("msys2/setup-msys2")
+        )
+        self.assertEqual(setup["with"]["msystem"], "MINGW64")
+        installed = setup["with"]["install"].split()
+        bundle = (REPO_ROOT / "packaging/windows/msys2_packages.py").read_text(
+            encoding="utf-8"
+        )
+        for package in ("mingw-w64-x86_64-python-gobject",
+                        "mingw-w64-x86_64-gtk4",
+                        "mingw-w64-x86_64-libadwaita",
+                        "mingw-w64-x86_64-SDL2"):
+            with self.subTest(package=package):
+                self.assertIn(package, installed)
+                self.assertIn(package, bundle)
 
     def test_the_matrix_covers_every_supported_python(self):
         # pyproject promises >= 3.10 and the .rpm requires python3 >= 3.10;
