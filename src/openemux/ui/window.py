@@ -55,7 +55,7 @@ from openemux.core.shaders import ShaderCatalog
 from openemux.core.state_recovery import quarantined_files, reset_quarantine_log
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
-from openemux.core.systems import SYSTEM_IDS, get_icon_name, get_system_display_name
+from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.ui_gamepad import GamepadNavigator
 from openemux.ui.grid import RomGrid
