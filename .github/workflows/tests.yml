@@ -25,9 +25,14 @@ jobs:
           python-version: '3.12'
 
       - name: Install ruff
-        # From the dev lock, so the linter is the pinned one and a new ruff
-        # release cannot fail CI on code nobody touched.
-        run: python -m pip install -r requirements-dev.lock ruff
+        # Only ruff, at the version the dev lock pins -- so a new ruff release
+        # cannot fail CI on code nobody touched, and linting does not drag in
+        # pycairo and PyGObject, which would need the whole GTK toolchain
+        # installed to build from sdist for a job that never imports them.
+        run: |
+          pin=$(grep -iE '^ruff==' requirements-dev.lock)
+          test -n "$pin"
+          python -m pip install "$pin"
 
       - name: Ruff (correctness rules only)
         # Undefined names, unused imports, f-string mistakes, shadowing: the
