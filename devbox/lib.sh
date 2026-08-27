@@ -111,8 +111,15 @@ require_display() {
 # managing anything in here. That exact mistake left :77 unmanaged -- GTK then
 # ignores resize requests (there is no WM to mediate them) and every capture of
 # a narrow layout came out as the wide one, clipped.
+# Matched on what a *present* property looks like -- it names a window id --
+# and never on xprop's phrasing for an absent one. There are two of those, and
+# the difference is not cosmetic: a server that has hosted a window manager
+# before answers "not found.", while one that never has answers "no such atom
+# on any window", because nothing has interned the atom yet. Testing for the
+# first string alone reported a window manager on every freshly started server,
+# which is precisely the case where there is none.
 wm_running() {
 	local out
 	out=$(xprop -root -display "${DEVBOX_DISPLAY}" _NET_SUPPORTING_WM_CHECK 2>/dev/null) || return 1
-	[ -n "${out}" ] && ! grep -q 'not found' <<<"${out}"
+	grep -qE 'window id # 0x[0-9a-fA-F]+' <<<"${out}"
 }

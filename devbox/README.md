@@ -151,6 +151,14 @@ this is supposed to leave alone:
   layout" capture came out as the wide layout with the right-hand side cut off.
   The question has to be asked of the display: `_NET_SUPPORTING_WM_CHECK`.
 
+**Match `xprop` on the property being *present*, never on its wording for
+absent.** There are two wordings, and which one you get depends on history: a
+server that has hosted a window manager before answers `not found.`, while one
+that never has answers `no such atom on any window`, because nothing has
+interned the atom yet. A check written against the first string alone reports a
+window manager on every freshly started server — exactly the case where there
+is none — so it passed on a reused display and failed on a rebuilt one.
+
 **The host's `PATH` and home come through.** `python3` in here resolves to the
 developer's pyenv shim, which has no PyGObject, so the app dies at `import gi`
 with an error that looks like a broken container. Everything spells out
