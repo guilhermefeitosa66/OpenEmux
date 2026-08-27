@@ -209,6 +209,69 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             # ever read again (issue #221).
             self.assertEqual(list(updater.cache_dir.iterdir()), [])
 
+    def test_shader_archive_refuses_members_that_escape_the_target(self):
+        # Zip-slip: a member name is attacker-controlled data, and the three
+        # shapes below all used to land outside the shader directory (issue
+        # #222).
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            outside = Path(tmp_dir) / "outside.txt"
+            absolute_member = str(Path(tmp_dir) / "absolute.txt").lstrip("/")
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_glsl/handheld/dot.glslp", b"dot")
+                archive.writestr("shaders_glsl/../outside.txt", b"leading")
+                archive.writestr("shaders_glsl/nested/../../../outside.txt", b"embedded")
+                archive.writestr(f"/{absolute_member}", b"absolute")
+            glsl_zip_bytes = zip_buffer.getvalue()
+
+            slang_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(slang_zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_slang/crt/geom.slangp", b"geom")
+            slang_zip_bytes = slang_zip_buffer.getvalue()
+
+            def _fake_urlopen(url, timeout=5):
+                if str(url).endswith("shaders_slang.zip"):
+                    return _FakeResponse(slang_zip_bytes)
+                return _FakeResponse(glsl_zip_bytes)
+
+            with patch(
+                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                side_effect=_fake_urlopen,
+            ):
+                summary = updater.download_shader_packs_if_missing()
+
+            self.assertEqual(summary["failed"], 0)
+            self.assertTrue((updater.shader_glsl_dir / "handheld" / "dot.glslp").exists())
+            self.assertFalse(outside.exists())
+            self.assertFalse((Path(tmp_dir) / "absolute.txt").exists())
+
+    def test_safe_destination_accepts_only_paths_under_the_target(self):
+        with TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "shaders"
+            safe = RetroArchBuildbotUpdater._safe_destination
+
+            self.assertEqual(
+                safe(target, "crt/geom.glslp"), target / "crt" / "geom.glslp"
+            )
+            self.assertEqual(
+                safe(target, "crt/./geom.glslp"), target / "crt" / "geom.glslp"
+            )
+            for hostile in (
+                "",
+                ".",
+                "..",
+                "../evil.glslp",
+                "a/../../evil.glslp",
+                "a/b/../../../evil.glslp",
+                str(Path(tmp_dir) / "evil.glslp"),
+                "/etc/evil.glslp",
+            ):
+                with self.subTest(member=hostile):
+                    self.assertIsNone(safe(target, hostile))
+
     def test_has_local_runtime_assets_uses_runtime_dirs(self):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
