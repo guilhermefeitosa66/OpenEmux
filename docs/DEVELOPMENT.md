@@ -9,6 +9,7 @@ artifacts. For user-facing install instructions, see the main
 - [Requirements](#requirements)
 - [Project layout](#project-layout)
 - [Running from source](#running-from-source)
+- [Running it without taking the screen](#running-it-without-taking-the-screen)
 - [Developing on Windows](#developing-on-windows)
 - [Tests](#tests)
   - [Lint](#lint)
@@ -79,6 +80,57 @@ equivalents (`gtk4`, `libadwaita`, `python3-gobject`, `python3-cairo`,
 
 RetroArch is resolved at launch from `vendors/RetroArch-Linux-x86_64.AppImage`,
 a system `retroarch`, or a configured path — check with `make check-retroarch`.
+
+## Running it without taking the screen
+
+`make run` opens the app on your desktop and takes the mouse and keyboard with
+it. That is what you want when you are the one looking. It is exactly what you
+do not want when something else is driving — an assistant checking a change has
+to click, type, resize and screenshot, and the machine is unusable until it is
+done.
+
+[`devbox/`](../devbox/README.md) is one [distrobox] container on the current
+Ubuntu LTS with an X server of its own (Xvnc, headless), running the app **from
+this checkout**:
+
+```bash
+make devbox-up                          # create it (first run: a few minutes)
+make devbox-app                         # start the app on the virtual display
+make devbox-app ACTION=restart          # after editing the source — it is live
+make devbox-shot OUT=/tmp/grid.png      # capture it (WIN=1 for the window alone)
+make devbox-xdo CMD='key ctrl+f'        # drive it
+make devbox-res RES=520x900             # narrow, for the adaptive layout
+make devbox                             # a shell inside, tools on PATH
+```
+
+Your session is untouched throughout. When you *do* want to watch,
+`make devbox-view` opens a VNC viewer on it.
+
+The container keeps a `$HOME` of its own, so `~/.openemux` in there is
+throwaway and your real config and library are never opened. It opens on a
+synthetic library — placeholder ROMs with real No-Intro names across eight
+consoles, the rest of the consoles empty on purpose — with the bootstrap marked
+done, so the app goes straight to the main window instead of downloading every
+libretro core. `make devbox-app ACTION=start` with `--first-boot`, or
+`DEVBOX_ROMS=~/games/roms` at create time, ask for the real versions of both.
+
+Because it tracks the current LTS rather than the 24.04 the packages target, it
+is also a second stack to run the suite against: GTK 4.22 / libadwaita 1.9 in
+the container against 4.14 / 1.5 on a Mint 22.3 host, for instance.
+
+```bash
+make devbox-tests                       # the whole suite, in there
+make devbox-verify                      # is the container able to run the app?
+make devbox-status
+make devbox-rm PURGE=1                  # throw it away, home and all
+```
+
+This is **not** the packaging matrix below: that installs release artifacts on
+six distros and borrows your real display to do it. The devbox runs the source,
+on a display nobody is looking at. Its README documents the handful of things
+that were surprising enough to write down — distrobox shares the host's `/tmp`,
+network *and* PID namespace, and each of those is a way for a container to
+reach out and touch the session it is meant to leave alone.
 
 ## Tests
 

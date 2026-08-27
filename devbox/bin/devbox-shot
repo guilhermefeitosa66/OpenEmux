@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# Screenshot of the virtual display.
+#
+#   devbox-shot                     whole screen -> ~/devbox-out/shot-NN.png
+#   devbox-shot /tmp/before.png     whole screen, named
+#   devbox-shot --win               just the app window (trims the CSD shadow)
+#   devbox-shot --match 'Preferences' /tmp/prefs.png
+#
+# A root grab is safe in here and it is not on the host: this display holds the
+# app and nothing else, so a full-screen capture can never pick up the
+# developer's mail client. Prefer --win anyway when the subject is the window
+# rather than its placement -- GTK4 draws a wide transparent shadow around
+# client-side decorations, and untrimmed captures carry it into the issue.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+require_display
+
+TARGET=root
+TRIM=0
+case "${1:-}" in
+	--win)   TARGET=$(devbox-win || true); TRIM=1; shift ;;
+	--match) TARGET=$(devbox-win --match "${2:?--match needs a regex}" || true); TRIM=1; shift 2 ;;
+esac
+[ -n "${TARGET}" ] || die "no app window (devbox-win --list shows what exists)"
+
+OUT=${1:-}
+if [ -z "${OUT}" ]; then
+	# Numbered, not timestamped: a run produces a readable sequence, and the
+	# order the shots were taken in is the order they get written up in.
+	n=$(find "${DEVBOX_OUT}" -maxdepth 1 -name 'shot-*.png' | wc -l)
+	OUT=$(printf '%s/shot-%02d.png' "${DEVBOX_OUT}" "$((n + 1))")
+fi
+mkdir -p "$(dirname "${OUT}")"
+
+if [ "${TRIM}" = 1 ]; then
+	xdotool windowraise "${TARGET}" 2>/dev/null || true
+	sleep 0.4
+	import -silent -window "${TARGET}" png:- \
+		| convert - -bordercolor black -fuzz 8% -trim +repage "${OUT}"
+else
+	import -silent -window root "${OUT}"
+fi
+
+printf '%s  %s\n' "${OUT}" "$(identify -format '%wx%h' "${OUT}")"
