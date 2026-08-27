@@ -2772,6 +2772,46 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Every locale defines every key.
 - **Check:** suite files `tests/test_i18n.py`, `tests/test_i18n_completeness.py`.
 
+### RT-257 — No user-facing string escapes the catalogue
+- **Area:** i18n
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the app in a non-English locale, pause a game in the OpenEmux
+  window and hover the button, open "Choose cover image", and try to launch a second game while
+  one is running.
+- **Expected:** All three read in the chosen language. Each used to be English whatever the
+  locale: the pause button was *built* with a translated label and *rewritten* with the literal
+  `"Resume"`, so it flipped to English on the first click and stayed there; the file picker's
+  filter said `Images` beside an Open/Cancel pair the portal had translated; and the "a game is
+  already running" toast was an English sentence returned from `core/runtime_manager.py`, which
+  has no locale (issue #232).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.i18n import LOCALE_TRANSLATIONS, SUPPORTED_LOCALES, tr
+  for key in ("game_window.resume", "dialog.filter.images", "toast.launch.already_running"):
+      for locale in SUPPORTED_LOCALES:
+          assert key in LOCALE_TRANSLATIONS[locale], f"{locale} is missing {key}"
+  for key in ("dialog.sync.title", "dialog.scan.title"):
+      assert tr("pt_BR", key) != tr("en", key), f"{key} is still English in pt_BR"
+  print("RT-257 OK")
+  EOF
+  ```
+
+### RT-258 — No key is translated with nothing left to show it
+- **Area:** i18n
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a locale file and pick a key at random; find where the app
+  shows it.
+- **Expected:** Every key in the catalogue is reachable — spelled out in the source, or built by
+  one of the listed dynamic prefixes. 34 keys survived the phase-08 Preferences refactor with
+  nothing left to show them and were carried, and translated, in all seven locales anyway: 238
+  entries of maintenance for strings no user could see (issue #232). Adding a key with no reader,
+  or deleting the code that reads one, now fails the suite.
+- **Check:** suite file `tests/test_i18n_coverage.py`
+  (`NoKeyIsCarriedWithNothingToShowItTests`).
+
 ## Welcome wizard
 
 ### RT-120 — The wizard opens and every slide renders

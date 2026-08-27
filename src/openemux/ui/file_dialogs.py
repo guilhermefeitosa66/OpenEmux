@@ -15,13 +15,19 @@ from gi.repository import Gtk, Gio
 from openemux.core.scraper import SUPPORTED_COVER_EXTS
 
 
-def image_filters(name="Images"):
+def image_filters(name):
     """The filter list for a picker that wants a cover, and its default.
 
     ``Gtk.FileDialog`` wants both: the ``Gio.ListStore`` of filters to offer,
     and which one starts selected. The filter matches every extension in
     :data:`SUPPORTED_COVER_EXTS`, upper-cased as well -- a cover another tool
     saved as ``.PNG`` is one the app reads back happily.
+
+    ``name`` is what the picker shows beside the file list, so it is the
+    caller's translated string. It used to default to the English literal
+    ``"Images"`` and both callers took the default -- a word in English beside
+    an "Open"/"Cancel" pair the portal had already translated (issue #232).
+    No default now: a new picker cannot inherit that by forgetting.
     """
     image_filter = Gtk.FileFilter()
     image_filter.set_name(name)

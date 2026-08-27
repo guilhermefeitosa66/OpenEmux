@@ -30,7 +30,7 @@ class TheImageFilterCoversEverySupportedFormatTests(unittest.TestCase):
         from openemux.ui.file_dialogs import image_filters
 
         self.image_filters = image_filters
-        self.filters, self.default = image_filters()
+        self.filters, self.default = image_filters("Images")
 
     def test_the_store_holds_exactly_the_default_filter(self):
         # Gtk.FileDialog wants the list to show and which entry starts
@@ -58,6 +58,14 @@ class TheImageFilterCoversEverySupportedFormatTests(unittest.TestCase):
         self.assertEqual(self.default.get_name(), "Images")
         _, named = self.image_filters("Artwork")
         self.assertEqual(named.get_name(), "Artwork")
+
+    def test_the_name_has_no_default(self):
+        # It used to default to the English literal "Images", and both callers
+        # took the default -- one untranslated word beside an Open/Cancel pair
+        # the portal had already translated (issue #232). Requiring the
+        # argument is what stops a new picker inheriting that by omission.
+        with self.assertRaises(TypeError):
+            self.image_filters()
 
 
 if __name__ == "__main__":

@@ -11,8 +11,12 @@ from openemux.i18n import (
 
 class I18nTests(unittest.TestCase):
     def test_unknown_locale_falls_back_to_english(self):
+        # "settings.title" used to stand in here; it was retired with the
+        # other 33 keys the Preferences refactor left unreachable (issue
+        # #232), so this asserts against a key the app still shows.
         self.assertEqual(normalize_locale("unknown"), "en")
-        self.assertEqual(tr("unknown", "settings.title"), "Settings")
+        self.assertEqual(tr("unknown", "prefs.game_window.title"),
+                         "Play in an OpenEmux window")
 
     def test_missing_key_in_locale_uses_english(self):
         # This used to lean on German being incomplete. Every locale is
