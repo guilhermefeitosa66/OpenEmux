@@ -262,6 +262,46 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `ConfirmedQuitTests`, `TerminalEventTests`).
 - **Restore:** delete the throwaway `HOME`.
 
+### RT-007 — Cores download in parallel, and the setting says how many
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
+- **Steps:**
+  1. Launch first boot and watch "Downloading core (n/total)" advance.
+- **Expected:** Several artifacts are in flight at once, up to `parallel_downloads` (default 4,
+  capped at 8 — the buildbot is somebody else's server). That setting has been in the config, and
+  in the settings the user can edit, since the updater was written, and nothing ever read it: the
+  sweep ran one artifact at a time on one thread, so a first boot took as long as the sum of every
+  download in a 224-artifact manifest (issue #240). The progress counter still only ever grows,
+  even though downloads finish out of order.
+- **Check:** `tests/test_retroarch_buildbot_updater.py` (`ParallelDownloadTests`) — real
+  concurrency at 4, one at a time at 1, the cap, a nonsense value, and monotonic progress.
+
+### RT-008 — Installing a core costs a buffer, not the core
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Network, and a throwaway `HOME`.
+- **Steps:**
+  1. Run first boot and watch the process's resident memory while the large cores install.
+- **Expected:** Memory stays flat. The archive used to be read into memory whole and the
+  decompressed core into another buffer on top of it, so peak RSS spiked by the size of the
+  largest artifact — measured at 925 MiB for the MAME core, against 24 MiB once both are streamed
+  (issue #240). A half-written core is still never left under the final name.
+- **Check:** `tests/test_retroarch_buildbot_updater.py` (`StreamingTests`) — every read asks for a
+  bounded chunk, and a copy that fails part-way leaves no `.part` behind.
+
+### RT-009 — A refused artifact is retried with a backoff; a missing one is not
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run first boot while the buildbot is refusing or unreachable.
+- **Expected:** Each retry waits longer than the last (1s, 2s, 4s…, capped), instead of three more
+  requests inside a millisecond against a host that just failed. An artifact the buildbot answers
+  404 for is not retried at all — waiting seven seconds to hear the same thing three more times
+  costs a first boot real time (issue #240).
+- **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
+
 ## Library & scanning
 
 ### RT-010 — Rescan keeps the library consistent
