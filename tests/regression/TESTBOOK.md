@@ -1790,6 +1790,129 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Check:** human only.
 
 
+### RT-175 — The Windows artifacts build from a clean tree
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A Linux host with Docker and `vendors/RetroArch-Win64` fetched.
+- **Steps:**
+  1. Run the build from a clean staging tree.
+- **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
+  build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
+  caught.
+- **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
+
+### RT-176 — The bundle carries no path from the machine that built it
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-175 has run, so `build/win/OpenEmux` exists.
+- **Steps:**
+  1. Search the staged bundle for the build container's MSYS2 prefix.
+- **Expected:** No match outside `vendors/`. A baked-in `C:\msys64` path is a file that resolves
+  on a developer's machine and nowhere else -- how the OpenSSL CA bundle broke.
+- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux`
+
+### RT-177 — No libretro core ships inside the installer
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-175 has run.
+- **Steps:**
+  1. List the bundled RetroArch's cores directory.
+- **Expected:** It exists and is empty. Cores carry many different licences and are downloaded on
+  first boot precisely so none of them end up in the installer.
+- **Check:** `test -d build/win/OpenEmux/vendors/RetroArch-Win64/cores && [ -z "$(ls -A build/win/OpenEmux/vendors/RetroArch-Win64/cores)" ]`
+
+### RT-178 — RetroArch's licence travels with the binary
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** RT-175 has run.
+- **Steps:**
+  1. Look for RetroArch's own licence text beside `retroarch.exe`.
+- **Expected:** Present. RetroArch is GPLv3 and redistributed unmodified, so its licence must ship
+  with it; `THIRD_PARTY_NOTICES.md` carries the matching source offer.
+- **Check:** `ls build/win/OpenEmux/vendors/RetroArch-Win64/COPYING* build/win/OpenEmux/vendors/RetroArch-Win64/LICENSE* 2>/dev/null | grep -q .`
+
+### RT-179 — The MSYS2 runtime is pinned, not resolved at build time
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Confirm the lock file names every package with a checksum.
+- **Expected:** Every entry has a name, a version and a 64-character SHA-256. MSYS2 is a rolling
+  repository: without the lock the bundle would quietly change from one afternoon to the next and
+  a GTK regression could not be bisected.
+- **Check:** `python3 -c "import json,re,sys; p=json.load(open('packaging/windows/packages.lock'))['packages']; sys.exit(0 if p and all(e.get('name') and e.get('version') and re.fullmatch(r'[0-9a-f]{64}', e.get('sha256','')) for e in p) else 1)"`
+
+### RT-180 — A drifted upstream package fails the build instead of shipping
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A checkout with `packaging/windows/packages.lock`.
+- **Steps:**
+  1. Edit one entry's `sha256` in the lock to a different valid-looking hash.
+  2. Remove that package from `build/win/msys2-cache` and run `make windows`.
+  3. Restore the lock afterwards.
+- **Expected:** The build stops with a checksum mismatch naming the file, the locked hash and the
+  received one. It does not download-and-continue.
+- **Check:** human only.
+
+### RT-181 — Installing needs no administrator prompt
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine with a standard (non-admin) user, and the built
+  `OpenEmux-<version>-setup.exe`.
+- **Steps:**
+  1. Run the installer as that standard user and accept the defaults.
+- **Expected:** No UAC elevation prompt. It installs under `%LOCALAPPDATA%\Programs\OpenEmux`,
+  creates a Start Menu entry, and appears in "Installed apps". SmartScreen may warn that the
+  publisher is unknown -- the installer is unsigned, and that is expected.
+- **Check:** human only.
+
+### RT-182 — First boot works from the installed copy
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** RT-181 done on a machine with no MSYS2 and no Python installed.
+- **Steps:**
+  1. Launch OpenEmux from the Start Menu and let first boot finish.
+- **Expected:** The window opens with no console flashing behind it, and the cores download
+  completes. A failure here is usually HTTPS: the interpreter's built-in CA path points at the
+  build machine, and the launcher overrides it with the bundled bundle.
+- **Check:** human only.
+
+### RT-183 — The app is installed in the desktop's language
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A Windows machine whose display language is not English.
+- **Steps:**
+  1. Launch the installed OpenEmux from the Start Menu, not from a shell.
+- **Expected:** The UI is in the display language. Launching from Explorer is the case that
+  matters: an MSYS2 shell exports `LANG`, so this bug is invisible during development and appears
+  only in the shipped build.
+- **Check:** human only.
+
+### RT-184 — Uninstalling removes the app and keeps the library
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed, first boot completed so cores were downloaded, and at
+  least one ROM imported.
+- **Steps:**
+  1. Uninstall from "Installed apps".
+  2. Look at `%LOCALAPPDATA%\Programs\OpenEmux` and `%USERPROFILE%\.openemux`.
+- **Expected:** The install directory is gone, including the cores downloaded after installation
+  that the installer never tracked. `%USERPROFILE%\.openemux` is untouched: playlists, save
+  states, input profiles and cover art survive.
+- **Check:** human only.
+
+### RT-185 — Installing over an older version replaces it
+- **Area:** Packaging (Windows)
+- **Mode:** MANUAL
+- **Preconditions:** A previous OpenEmux version installed.
+- **Steps:**
+  1. Run the newer installer and accept the defaults.
+- **Expected:** It targets the same directory, and "Installed apps" lists one OpenEmux, not two.
+  The app starts: a stale DLL left from the older bundle beside a newer one is an ABI mismatch
+  that crashes at startup, and the installer clears the directories it owns first.
+- **Check:** human only.
+
+
 ## Retired
 
 *None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*

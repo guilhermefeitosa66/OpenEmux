@@ -16,6 +16,7 @@ artifacts. For user-facing install instructions, see the main
   - [Debian / Ubuntu (`.deb`)](#debian--ubuntu-deb)
   - [Fedora (`.rpm`)](#fedora-rpm)
   - [Flatpak](#flatpak)
+  - [Windows (portable zip + installer)](#windows-portable-zip--installer)
   - [Build everything](#build-everything)
   - [Checksums](#checksums)
 - [Testing the packages on other distros](#testing-the-packages-on-other-distros)
@@ -238,10 +239,86 @@ make flatpak
 # -> dist/OpenEmux-<version>.flatpak  (+ flatpak-repo/)
 ```
 
+### Windows (portable zip + installer)
+
+Cross-built on Linux, in Docker, like every other artifact -- there is no
+Windows machine anywhere in the release path. Three pieces make that work, and
+none of them is Wine:
+
+- the **mingw-w64 cross compiler** turns `openemux-launcher.c` into
+  `OpenEmux.exe`, the small GUI binary that points the runtime at the bundle and
+  starts Python;
+- **MSYS2 packages** supply GTK 4, libadwaita and Python already compiled for
+  Windows. They are downloaded and unpacked, never built;
+- **NSIS** has a native Linux build, so `makensis` compiles the installer as an
+  ordinary Linux program. (Issue #118 proposed Inno Setup; its compiler is a
+  32-bit Windows binary, which would have dragged Wine and an i386 architecture
+  into an otherwise self-contained Debian image.)
+
+```bash
+make vendor-retroarch   # once: fetches vendors/RetroArch-Win64 (~193 MiB)
+make windows
+# -> dist/OpenEmux-<version>-windows-x86_64.zip
+# -> dist/OpenEmux-<version>-setup.exe
+```
+
+The installer installs **per user**, under `%LOCALAPPDATA%\Programs\OpenEmux`, so
+it never raises a UAC prompt. That is not only convenience: OpenEmux downloads
+libretro cores into its own directory on first boot, and under `Program Files`
+that write would fail for a standard user -- the app would install cleanly and
+then be unable to launch a game.
+
+#### The pinned MSYS2 runtime
+
+`packaging/windows/packages.lock` names every MSYS2 package the bundle ships,
+with its version and SHA-256. MSYS2 is a rolling repository, so resolving
+dependencies against the live index at build time would mean the artifact
+quietly changed from one afternoon to the next and a GTK regression could not be
+bisected. Between updates every build installs exactly those bytes, and a
+package that changed upstream fails the build loudly.
+
+To move the bundle to a newer GTK or Python:
+
+```bash
+python3 packaging/windows/msys2_packages.py --update   # rewrite the lock
+git diff packaging/windows/packages.lock               # the diff is the review
+make windows-clean && make windows                     # rebuild and smoke-test
+```
+
+#### What is left out, and why
+
+| Dropped | Size | Why |
+| --- | --- | --- |
+| `vendors/RetroArch-Win64/cores` | 1.8 GB | Cores carry many different licences. They are downloaded from the buildbot on first boot, exactly as on Linux, which keeps all of them out of the installer |
+| `vendors/RetroArch-Win64/database` | 169 MB | RDB files for RetroArch's own content scanner, which OpenEmux never invokes |
+| `vendors/RetroArch-Win64/shaders` | 101 MB | Nothing reads them: the shader feature works off `~/.openemux/runtime/shaders_{glsl,slang}` |
+| `vendors/RetroArch-Win64/overlays` | 33 MB | A feature OpenEmux exposes no UI for |
+| Headers, static libs, pkg-config, docs | — | Build-time files; the bundle only runs the stack |
+| `tkinter` and the Tcl/Tk runtime | — | A second, unused GUI toolkit inside Python's standard library |
+
+GStreamer stays. GTK 4 declares it as a dependency for its optional
+media-playback backend, and dropping a hard dependency that is only loaded
+lazily is the kind of change that breaks a bundle on a user's machine and
+nowhere else.
+
+#### The launcher's job
+
+Nothing in the bundle knows where the user installed it, so `OpenEmux.exe` works
+out its own directory and sets `OPENEMUX_PROJECT_ROOT`, `PYTHONPATH`,
+`GI_TYPELIB_PATH`, `GSETTINGS_SCHEMA_DIR`, `XDG_DATA_DIRS`, the gdk-pixbuf
+loader cache and `PATH` from it.
+
+It also sets `SSL_CERT_FILE`. OpenSSL bakes its default CA path in at build
+time, and MSYS2 builds it as `C:\msys64\mingw64\etc\ssl\cert.pem` -- a path
+that exists on no user's machine. Without the override every HTTPS request fails
+to verify, which on first boot means no cores and no cover art: the app installs
+cleanly and then cannot fetch anything. The build's phase-5 check greps the
+staged bundle for exactly that kind of baked-in build-machine path.
+
 ### Build everything
 
 ```bash
-make packages          # appimage + deb + rpm + flatpak, then checksums
+make packages          # appimage + deb + rpm + flatpak + windows, then checksums
 make checksums         # (re)write dist/SHA256SUMS over whatever is in dist/
 make packages-clean    # remove all built artifacts from dist/
 ```

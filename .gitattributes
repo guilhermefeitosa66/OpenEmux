@@ -10,7 +10,7 @@
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
 *.bat text eol=crlf
-*.iss text eol=crlf
+# Not the NSIS script: makensis reads LF, and it is only ever compiled on Linux.
 
 # Never touched: byte-for-byte or the checksum/signature breaks.
 *.png binary

@@ -60,6 +60,9 @@ vendors/*.7z
 
 # Windows bundle staging (packaging/windows)
 build/win/
+# Derived from src/openemux/ui/assets/images/logo.png during the build, and
+# removed again; only ever present if a build was interrupted mid-way.
+packaging/windows/openemux.ico
 
 # Parallel development worktrees
 .worktree/

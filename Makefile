@@ -21,7 +21,7 @@ endif
 
 .PHONY: all setup setup-dev venv run test coverage icons clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch verify-vendors
-.PHONY: appimage appimage-clean deb rpm flatpak checksums packages packages-clean
+.PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
 .PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
 
@@ -172,6 +172,12 @@ rpm:
 flatpak:
 	./packaging/build.sh flatpak
 
+# Windows portable .zip + installer .exe — cross-built in a Debian container.
+# Needs vendors/RetroArch-Win64 first: `make vendor-retroarch`. Runs on Linux
+# like every other target; there is no Windows machine in the release path.
+windows:
+	./packaging/build.sh windows
+
 # One SHA256SUMS over every artifact in dist/, so a download can be verified
 # with `sha256sum -c SHA256SUMS`. SHA-256 rather than MD5: MD5 collisions are
 # practical, which makes it useless against a tampered file -- the one thing
@@ -183,14 +189,23 @@ checksums:
 		xargs -r sha256sum > SHA256SUMS && \
 		echo "==> dist/SHA256SUMS" && cat SHA256SUMS
 
-# Build all release artifacts into dist/, checksummed
-packages: appimage deb rpm flatpak checksums
+# Build all release artifacts into dist/, checksummed.
+# `windows` comes before `checksums` for the same reason every other target
+# does: SHA256SUMS is written over whatever is in dist/ at that moment, so an
+# artifact built afterwards would ship unverifiable.
+packages: appimage deb rpm flatpak windows checksums
 
 appimage-clean:
 	rm -rf AppDir appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
 
+# The staged bundle tree, but not build/win/msys2-cache: that holds the
+# downloaded MSYS2 packages, they are checksum-verified against packages.lock on
+# every use, and re-fetching ~400 MiB to rebuild is a poor trade.
+windows-clean:
+	rm -rf build/win/extracted build/win/OpenEmux dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe
+
 # Remove every packaged artifact
-packages-clean: appimage-clean
+packages-clean: appimage-clean windows-clean
 	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo
 	@# The flatpak build runs as root inside its container, so the tree it
 	@# leaves behind is root-owned and rm(1) on the host cannot touch it.
