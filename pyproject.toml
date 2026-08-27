@@ -49,9 +49,12 @@ openemux = [
     "ui/style.css",
     "ui/assets/**/*.png",
     "ui/assets/**/*.svg",
-    # License notice for the vendored Adwaita symbolic icons; must ship with
-    # the icons themselves.
+    # License notices for the third-party artwork; they must ship with the
+    # icons they cover -- the OpenEmu terms require the notice to travel with
+    # a binary distribution, and the Flatpak is the one build that installs
+    # from this list rather than copying src/ wholesale (issue #233).
     "ui/assets/icons/symbolic/LICENSE",
+    "ui/assets/icons/ATTRIBUTION.md",
     # The game-name database (issue #184), consumed by the staged cover
     # lookup and the cover-picker suggestions.
     "data/games.db.zip",

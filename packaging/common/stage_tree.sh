@@ -65,7 +65,12 @@ if command -v convert >/dev/null 2>&1; then
 fi
 install -Dm644 "$LOGO" "$DESTDIR/usr/share/pixmaps/$APP_ID.png"
 
-install -Dm644 "$ROOT_DIR/LICENSE" \
+# The packaged copyright file. Not a copy of LICENSE: about a third of what
+# ships is third-party (the OpenEmu console icons, the Adwaita symbolic icons,
+# the vendored RetroArch AppImage), and installing the bare MIT text here
+# implicitly claimed MIT over all of it (issue #233). DEP-5, so the per-file
+# terms are machine-readable and each one names where its notice lives.
+install -Dm644 "$ROOT_DIR/packaging/common/copyright" \
   "$DESTDIR/usr/share/doc/openemux/copyright"
 
 # Check the result rather than trust the exclude list.

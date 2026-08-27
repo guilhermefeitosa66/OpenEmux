@@ -30,6 +30,8 @@ script:
   - sh packaging/common/assert_sources_only.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages/openemux
   - cp requirements.lock AppDir/usr/lib/openemux/
   - cp README.md LICENSE AppDir/usr/lib/openemux/
+  # The third-party notices, which LICENSE alone does not cover (issue #233).
+  - cp packaging/common/copyright AppDir/usr/lib/openemux/copyright
   # --require-hashes: what lands inside a signed release artifact is fixed by
   # content, not by whatever PyPI serves for the pinned version. The file is
   # generated from requirements.lock by packaging/appimage/hash_lock.py and
