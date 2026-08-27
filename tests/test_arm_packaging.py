@@ -111,6 +111,23 @@ class AppImageArchitectureTests(unittest.TestCase):
             with self.subTest(literal=literal):
                 self.assertNotIn(literal, script)
 
+    def test_the_elf_loader_path_is_derived_not_written_down(self):
+        # The recipe's lib64 symlinks are the x86_64 answer to a relative
+        # PT_INTERP; there is no lib64 on ARM, and appimage-builder does not
+        # fill the gap there because its glibc file list has no aarch64 loader
+        # pattern. So the build reads the interpreter the bundled python asks
+        # for and places exactly that path.
+        script = _read("packaging/appimage/build.sh")
+        self.assertIn("program interpreter", script)
+        self.assertIn("AppDir/runtime/compat", script)
+        self.assertIn("realpath --relative-to", script)
+
+    def test_a_bundle_whose_loader_is_missing_is_not_packaged(self):
+        # Shipping an AppImage that builds and cannot start is worse than
+        # failing the build, and it is what happened.
+        script = _read("packaging/appimage/build.sh")
+        self.assertIn("still does not resolve", script)
+
     def test_a_runtime_is_pinned_for_each_architecture(self):
         # It is the first thing every user of an AppImage executes, so each one
         # is checksummed rather than trusted.

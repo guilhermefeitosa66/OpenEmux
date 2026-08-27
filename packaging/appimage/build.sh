@@ -72,9 +72,14 @@ case "$INTERP" in
     echo "    absolute; nothing to link"
     ;;
   *)
+    # -quit, not `| head -1`: head exits on the first line and SIGPIPEs find,
+    # which under `set -o pipefail` fails the pipeline and, under `set -e`,
+    # kills the build -- exit 141, with the diagnostics never printed. The
+    # suite has a guard against this shape for `grep -q`; it covers `head` too
+    # now, because this is where it bit.
     LOADER="$(find AppDir/usr/lib AppDir/lib AppDir/usr/lib64 AppDir/lib64 \
                    AppDir/runtime -name "$(basename "$INTERP")" \
-                   \( -type f -o -type l \) -print 2>/dev/null | head -1)"
+                   \( -type f -o -type l \) -print -quit 2>/dev/null || true)"
     test -n "$LOADER" || {
       echo "ERROR: $(basename "$INTERP") is nowhere in the AppDir." >&2
       exit 1
@@ -182,7 +187,11 @@ if [ ! -f "$RUNTIME_SRC" ]; then
 fi
 # The same name appimage-builder gave the file, from the same field, so the
 # release artifact keeps its name.
-VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE" | head -1)"
+# No `| head -1`: that shape SIGPIPEs its producer, and while sed over a small
+# file survives it, the harmful and the harmless read identically at a glance
+# -- so the suite bans the shape and the first line is taken here instead.
+VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE")"
+VERSION="${VERSION%%$'\n'*}"
 test -n "$VERSION" || { echo "ERROR: no version: field in $RECIPE." >&2; exit 1; }
 BUNDLE_NAME="OpenEmux-${VERSION}-${ARCH}.AppImage"
 PAYLOAD="$PWD/AppDir.squashfs"
@@ -204,7 +213,11 @@ done
 # bundle can assemble perfectly and still fail to exec its own interpreter --
 # which is exactly how a release shipped that died with
 # "usr/bin/python3: not found" on every machine.
-BUNDLE="$(ls -1 dist/*.AppImage | head -1)"
+# Without a pipe into head, for the reason the suite states: the shape is
+# banned because the harmful and the harmless instances look the same.
+set -- dist/*.AppImage
+BUNDLE="$1"
+test -f "$BUNDLE" || { echo "ERROR: no AppImage in dist/." >&2; exit 1; }
 
 # The bug this guards against is invisible in the build container -- every
 # check below runs the bundle extracted, so a runtime that cannot mount

@@ -3823,6 +3823,21 @@ desk. Anything needing a real ARM machine is `MANUAL`.
   distribution, the Flatpak and the setting the first time a launch finds no RetroArch.
 - **Check:** suite file `tests/test_arm_packaging.py`.
 
+### RT-278 — The AppImage's bundled interpreter can find its loader
+- **Area:** ARM
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The AppImage build derives the ELF loader path from the bundled python rather than
+  writing it down. appimage-builder links the loader into both runtimes itself on x86_64 and not on
+  aarch64 -- its glibc file list matches `ld-linux-x86-64.so*` and nothing that matches
+  `ld-linux-aarch64.so.1` -- so on ARM the relative `lib/ld-linux-aarch64.so.1` resolved to nothing
+  and the bundle died with "usr/bin/python3: not found", about a file that was right there. The
+  build fails loudly if the path still does not resolve, rather than packaging a bundle that cannot
+  start.
+- **Check:** suite file `tests/test_arm_packaging.py` (`AppImageArchitectureTests`).
+
 ### RT-276 — An ARM package installs and the app starts on real hardware
 - **Area:** ARM
 - **Mode:** MANUAL

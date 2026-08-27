@@ -39,7 +39,7 @@ grep -q "^Version:        ${VERSION}$" "$TOPDIR/SPECS/openemux.spec"
 rpmbuild -ba "$TOPDIR/SPECS/openemux.spec" --define "_topdir $TOPDIR"
 
 mkdir -p dist
-RPM_PATH="$(find "$TOPDIR/RPMS" -name "openemux-${VERSION}-*.rpm" | head -1)"
+RPM_PATH="$(find "$TOPDIR/RPMS" -name "openemux-${VERSION}-*.rpm" -print -quit)"
 cp "$RPM_PATH" dist/
 RPM_NAME="$(basename "$RPM_PATH")"
 echo "==> built: dist/${RPM_NAME}"
@@ -49,14 +49,17 @@ echo "==> the SRPM must rebuild with no OpenEmux checkout in sight"
 # The point of Source0/%prep: this is `mock`, COPR and Fedora review in
 # miniature. A different _topdir and a different working directory, so nothing
 # can reach /work by accident.
-SRPM_PATH="$(find "$TOPDIR/SRPMS" -name "openemux-${VERSION}-*.src.rpm" | head -1)"
+SRPM_PATH="$(find "$TOPDIR/SRPMS" -name "openemux-${VERSION}-*.src.rpm" -print -quit)"
 if [ -z "$SRPM_PATH" ]; then
   echo "FAIL: rpmbuild -ba produced no SRPM" >&2
   exit 1
 fi
 echo "==> rebuilding $(basename "$SRPM_PATH")"
 ( cd /tmp && rpmbuild --rebuild --define "_topdir /tmp/rpmbuild-verify" "$SRPM_PATH" )
-test -n "$(find /tmp/rpmbuild-verify/RPMS -name "openemux-${VERSION}-*.rpm" | head -1)"
+# -quit rather than `| head -1`: head exits on the first line and SIGPIPEs
+# find, and that shape kills a build outright the moment it is used outside a
+# command substitution (issue #119).
+test -n "$(find /tmp/rpmbuild-verify/RPMS -name "openemux-${VERSION}-*.rpm" -print -quit)"
 echo "the SRPM rebuilds standalone"
 
 echo "==> rpmlint: the Fedora-review blockers must be gone"
