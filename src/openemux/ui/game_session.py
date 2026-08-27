@@ -76,6 +76,19 @@ class GameSession:
         self._relaunch_in_flight = False
 
     # ----- launching ------------------------------------------------------
+    def _error_text(self, message):
+        """What core said, in the user's language.
+
+        ``RuntimeManager`` has no locale and no business having one, so a
+        failure it can name returns a translation key ("a game is already
+        running") rather than an English sentence (issue #232). ``tr`` falls
+        back to its argument for anything it does not know, so the launcher's
+        free-text failures -- a core that will not start, a path that is not
+        there -- still pass through untouched, and so does text this class
+        already translated itself.
+        """
+        return self.win.t(message)
+
     def launch(self, rom):
         try:
             success, error_msg = self.win.runtime_manager.launch(
@@ -94,7 +107,7 @@ class GameSession:
             self.win.play_history.record_launch(rom["path"])
             self.open_wrapper(rom)
         if not success and error_msg:
-            self._toast_now(error_msg, 5)
+            self._toast_now(self._error_text(error_msg), 5)
         elif success:
             self._toast_now(
                 self.win.t("toast.running", name=rom["name"], console=rom["console"]), 3
@@ -114,7 +127,7 @@ class GameSession:
         )
         if not success:
             if error_msg:
-                self.win._toast(error_msg, timeout=5)
+                self.win._toast(self._error_text(error_msg), timeout=5)
             return
         self.win.play_history.record_launch(rom["path"])
         self.open_wrapper(rom)

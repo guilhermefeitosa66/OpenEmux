@@ -649,7 +649,9 @@ class _ImportTab(Gtk.Box):
         dialog.set_title(self.manager.t("artwork.import.add"))
         dialog.set_accept_label(self.manager.t("dialog.start"))
         dialog.set_modal(True)
-        filters, default_filter = image_filters()
+        filters, default_filter = image_filters(
+            self.manager.t("dialog.filter.images")
+        )
         dialog.set_filters(filters)
         dialog.set_default_filter(default_filter)
 

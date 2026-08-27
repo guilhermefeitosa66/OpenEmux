@@ -361,8 +361,12 @@ class GameWindow(Adw.Window):
                 if self._paused
                 else "media-playback-pause-symbolic"
             )
+            # Translated, like the label the button was *built* with: an
+            # English literal here meant the tooltip flipped to English on the
+            # first click and stayed there for the rest of the session, in
+            # every locale (issue #232).
             self._pause_button.set_tooltip_text(
-                "Resume" if self._paused else "Pause"
+                self._t("game_window.resume" if self._paused else "game_window.pause")
             )
 
     def _on_reset_clicked(self, _button):

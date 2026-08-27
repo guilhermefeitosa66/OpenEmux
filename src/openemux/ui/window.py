@@ -2080,7 +2080,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         dialog.set_title(self.t(title_key))
         dialog.set_accept_label(self.t("dialog.start"))
         dialog.set_modal(True)
-        filters, default_filter = image_filters()
+        filters, default_filter = image_filters(self.t("dialog.filter.images"))
         dialog.set_filters(filters)
         dialog.set_default_filter(default_filter)
 

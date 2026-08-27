@@ -124,7 +124,12 @@ class RuntimeManager:
         """
         system_id = resolve_system_id(console)
         if self.is_running():
-            return False, "A game is already running. Close it before launching another one."
+            # A translation key, not a sentence. Core has no locale and no
+            # business having one; the UI runs whatever comes back through
+            # tr(), which is the identity for anything that is not a key --
+            # so the launcher's own free-text failures still pass through
+            # unchanged (issue #232).
+            return False, "toast.launch.already_running"
 
         mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
