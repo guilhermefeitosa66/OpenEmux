@@ -23,6 +23,14 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # against the released 1.11.3 artifact, `apt install ./openemux_*.deb` on a
 # stock ubuntu:24.04 left gdk-pixbuf with no webp loader at all, so every
 # synced cover decoded to nothing and the card rendered blank (issue #251).
+#
+# shared-mime-info is deliberately absent. It was declared so that the
+# `update-desktop-database` in the scriptlets below had something to index --
+# but the desktop entry carries no MimeType, so it indexed nothing (issue
+# #256). GTK needs the shared MIME database at runtime and `libgtk-4-1`
+# already depends on it, so nothing changes for the user. Declare it again the
+# day OpenEmux can open a ROM handed to it by a file manager, together with a
+# MimeType= line and a %%U on Exec.
 install -d "$STAGE/DEBIAN"
 INSTALLED_KB="$(du -ks "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" <<EOF
@@ -34,7 +42,7 @@ Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
-Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, shared-mime-info, libfuse2t64 | libfuse2
+Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, libfuse2t64 | libfuse2
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. It bundles a RetroArch AppImage
@@ -57,6 +65,10 @@ cp "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 
 desktop-file-validate "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
+# Only the native packages install /usr/bin/openemux, so only they may promise
+# TryExec resolves; the shared entry the AppImage installs carries none.
+grep -q '^TryExec=/usr/bin/openemux$' \
+  "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
 # The file GNOME Software and KDE Discover read. Without it the app is invisible
 # in both -- no name, no summary, no screenshots, no update notification
 # (issue #253). --no-net keeps the build offline.
@@ -68,6 +80,23 @@ appstreamcli validate --no-net \
 grep -q '^Exec=/usr/bin/openemux$' \
   "$STAGE/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop"
 
+# The release history, rendered from the spec's %changelog so a release
+# documents itself in one place. The .deb shipped none at all before --
+# lintian's debian-changelog-file-missing (issue #256).
+python3 packaging/deb/changelog_from_spec.py > "$STAGE/changelog.Debian"
+gzip -9n "$STAGE/changelog.Debian"
+install -Dm644 "$STAGE/changelog.Debian.gz" \
+  "$STAGE/usr/share/doc/openemux/changelog.Debian.gz"
+rm -f "$STAGE/changelog.Debian.gz"
+
+# md5sums, so `debsums openemux` can verify the 600+ installed files of a
+# package that ships an executable AppImage. dpkg-deb --build generates none;
+# nothing here did either, which is lintian's no-md5sums-control-file.
+( cd "$STAGE" && find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
+  | sort -z | xargs -0 md5sum > DEBIAN/md5sums )
+chmod 0644 "$STAGE/DEBIAN/md5sums"
+echo "md5sums: $(wc -l < "$STAGE/DEBIAN/md5sums") files"
+
 mkdir -p dist
 DEB="dist/openemux_${VERSION}_amd64.deb"
 dpkg-deb --root-owner-group -Zxz --build "$STAGE" "$DEB"
@@ -77,6 +106,21 @@ dpkg-deb --info "$DEB"
 echo "==> install test (resolves Depends via apt)"
 apt-get update -qq
 apt-get install -y "./$DEB"
+
+echo "==> the control members lintian and debsums look for"
+dpkg-deb --ctrl-tarfile "$DEB" | tar -t | sort
+dpkg-deb --ctrl-tarfile "$DEB" | tar -t | grep -q './md5sums'
+# Present is not the same as complete: a file missing from md5sums is a file
+# debsums silently does not verify.
+PACKAGED_FILES="$(dpkg-deb --fsys-tarfile "$DEB" | tar -tv | grep -c '^-')"
+MD5SUM_LINES="$(dpkg-deb --ctrl-tarfile "$DEB" | tar -xO ./md5sums | wc -l)"
+if [ "$PACKAGED_FILES" -ne "$MD5SUM_LINES" ]; then
+  echo "FAIL: $PACKAGED_FILES files packaged, $MD5SUM_LINES in md5sums" >&2
+  exit 1
+fi
+echo "md5sums covers all $PACKAGED_FILES packaged files"
+dpkg-deb --fsys-tarfile "$DEB" | tar -t | grep -q './usr/share/doc/openemux/changelog.Debian.gz'
+dpkg-deb --fsys-tarfile "$DEB" | tar -t | grep -q './usr/share/doc/openemux/copyright'
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
@@ -95,6 +139,11 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
 fi
 test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/LICENSE
 echo "all $PKG_ICONS symbolic icons present"
+
+echo "==> debsums must be able to verify every installed file"
+apt-get install -y -qq debsums >/dev/null
+debsums -s openemux
+echo "debsums verified $(dpkg-query -W -f='${Installed-Size}' openemux) KB of installed files"
 
 echo "==> import smoke test against installed deps"
 OPENEMUX_PROJECT_ROOT=/opt/openemux PYTHONPATH=/opt/openemux/src python3 - <<'PY'

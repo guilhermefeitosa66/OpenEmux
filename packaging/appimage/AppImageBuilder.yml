@@ -105,6 +105,10 @@ AppDir:
       - libcairo2
       - libgdk-pixbuf-2.0-0
       - libgdk-pixbuf2.0-bin
+      # Bundled, unlike in the native packages, which dropped it as redundant
+      # (issue #256). Here it is a runtime need rather than a MIME-association
+      # one: XDG_DATA_DIRS leads into the AppDir first, so GTK looks for the
+      # shared MIME database inside the bundle.
       - shared-mime-info
       - hicolor-icon-theme
       # Symbolic icons used across the HIG UI (header bar, menus, rows, status

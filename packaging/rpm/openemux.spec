@@ -66,7 +66,13 @@ Requires:       librsvg2
 # declared rather than inherited from somebody else's Recommends.
 Requires:       webp-pixbuf-loader
 Requires:       adwaita-icon-theme
-Requires:       shared-mime-info
+# shared-mime-info is deliberately absent. It was declared so that the
+# `update-desktop-database` in the scriptlets had something to index -- but the
+# desktop entry carries no MimeType, so it indexed nothing (issue #256). GTK
+# needs the shared MIME database at runtime and gtk4 already pulls it in, so
+# nothing changes for the user. Declare it again the day OpenEmux can open a
+# ROM handed to it by a file manager, together with a MimeType= line and a %%U
+# on Exec.
 # Hard, not weak: the vendored RetroArch AppImage is the only emulator this
 # package ships, and its runtime needs libfuse.so.2 to mount itself. As a
 # Recommends it arrived with `dnf install ./x.rpm` and with nothing else --
@@ -105,6 +111,10 @@ rm -rf %{buildroot}/usr/share/doc/openemux
 desktop-file-validate \
   %{buildroot}/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 grep -q '^Exec=/usr/bin/openemux$' \
+  %{buildroot}/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+# Only the native packages install /usr/bin/openemux, so only they may promise
+# TryExec resolves (issue #256).
+grep -q '^TryExec=/usr/bin/openemux$' \
   %{buildroot}/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 # The file the software centre reads. --no-net so the build stays offline; the
 # screenshot URLs are checked by tests/test_appstream_metainfo.py instead.
