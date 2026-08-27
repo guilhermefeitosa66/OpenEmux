@@ -137,10 +137,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends 7zip
 
       - name: Fetch the vendored RetroArch
-        # Verifies against the sha256 recorded in vendors/manifest.json, so a
-        # changed upstream file fails here instead of shipping.
+        # Named, not inferred: `make vendor-retroarch` takes the artifact for
+        # the host it runs on, and this host is Linux. Verifies against the
+        # sha256 in vendors/manifest.json, so a changed upstream file fails
+        # here instead of shipping.
         if: matrix.target == 'windows'
-        run: make vendor-retroarch
+        run: make vendor-retroarch-win64
 
       - name: Build the ${{ matrix.target }}
         run: ./packaging/build.sh ${{ matrix.target }}

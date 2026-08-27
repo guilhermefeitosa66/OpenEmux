@@ -60,11 +60,24 @@ class PackagesWorkflowTests(unittest.TestCase):
         )
         self.assertIsNotNone(fetch, "nothing fetches the vendored RetroArch")
         self.assertIn("windows", str(fetch.get("if", "")))
+        # Named, not inferred. `make vendor-retroarch` takes the artifact for
+        # the host it runs on, and this host is Linux -- so it verified the
+        # committed AppImage, fetched nothing, and the build stopped at its own
+        # guard twenty seconds later.
+        self.assertIn("vendor-retroarch-win64", str(fetch["run"]))
         build = next(
             index for index, step in enumerate(steps)
             if "./packaging/build.sh" in str(step.get("run", ""))
         )
         self.assertLess(names.index(fetch["name"]), build)
+
+    def test_make_windows_fetches_what_it_needs(self):
+        # Same trap, on the maintainer's side: the docs said `make
+        # vendor-retroarch` before `make windows`, which on Linux fetches the
+        # wrong artifact. The dependency makes the build self-serve.
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("windows: vendor-retroarch-win64", makefile)
+        self.assertIn("vendor_retroarch.py win64", makefile)
 
     def test_one_broken_format_does_not_hide_the_others(self):
         self.assertIs(self.data["jobs"]["build"]["strategy"]["fail-fast"], False)

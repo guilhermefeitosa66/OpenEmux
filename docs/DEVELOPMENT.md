@@ -436,8 +436,8 @@ fails hard on a mismatch.
 
 The whole suite runs on Windows -- `make test` in the development shell, and a
 `windows-latest` job in [`tests.yml`](../.github/workflows/tests.yml) under the
-same MSYS2 stack the bundle ships. About thirty of its ~1800 tests skip there,
-and every one of them is marked with a reason:
+same MSYS2 stack the bundle ships. The tests that cannot mean anything there are
+marked, each with a reason:
 
 ```python
 from tests.platform_marks import linux_only, posix_only
@@ -449,6 +449,14 @@ def test_the_file_is_owner_only(self):
 `posix_only` covers file modes and `chmod`; `linux_only` covers the evdev
 kernel ABI, `/proc`, the FHS install prefixes, AppImages, X11 and the uinput
 device tests. Both are in [`tests/platform_marks.py`](../tests/platform_marks.py).
+
+Far more than thirty are reported skipped there, and it is worth knowing why:
+the runner has no interactive desktop, so `Gdk.Display.get_default()` comes back
+`None` and every test decorated `needs_display` skips itself
+([`tests/gtk_display.py`](../tests/gtk_display.py)) -- several hundred of them.
+The Windows job therefore covers the core and the packaging, not the widgets.
+The Linux matrix runs those under `xvfb`, and the widgets are looked at by hand
+in the devbox.
 
 Skipping these is not lowering the bar -- what they assert *is* a Linux
 behaviour, and asserting it on Windows would only be asserting that Windows is
@@ -533,8 +541,7 @@ none of them is Wine:
   into an otherwise self-contained Debian image.)
 
 ```bash
-make vendor-retroarch   # once: fetches vendors/RetroArch-Win64 (~193 MiB)
-make windows
+make windows            # fetches vendors/RetroArch-Win64 (~193 MiB) the first time
 # -> dist/OpenEmux-<version>-windows-x86_64.zip
 # -> dist/OpenEmux-<version>-setup.exe
 ```
