@@ -37,20 +37,19 @@ command: openemux
 #     shipping and updating an emulator this project does not maintain.
 #
 #   --filesystem=home
-#     Load-bearing for four separate reasons today, each of which has to be
-#     settled before it can be narrowed to a portal-granted ROM directory:
-#       1. Three file choosers are Gtk.FileChooserDialog, the in-process
-#          widget, which does not go through the portal and so can only reach
-#          what the sandbox can already see (ui/window.py x2,
-#          ui/artwork_manager.py). Porting them to Gtk.FileDialog is tracked
-#          in issue #235 and is the prerequisite for everything below.
-#       2. Config, playlists, input profiles, shaders and BIOS live in
+#     Load-bearing for three separate reasons today, each of which has to be
+#     settled before it can be narrowed to a portal-granted ROM directory.
+#     The prerequisite is done: every file chooser now uses Gtk.FileDialog,
+#     which goes through the XDG portal, and no Gtk.FileChooserDialog -- the
+#     in-process widget, which could only ever reach what the sandbox already
+#     saw -- is left in the app (issue #235). What still needs the grant:
+#       1. Config, playlists, input profiles, shaders and BIOS live in
 #          ~/.openemux (core/config.py: DEFAULT_CONFIG_DIR). Without this
 #          grant $HOME becomes ~/.var/app/<app-id>, and every existing install
 #          would silently start from an empty library.
-#       3. The ROM library defaults to ~/games/roms and is user-configurable
+#       2. The ROM library defaults to ~/games/roms and is user-configurable
 #          to anywhere; covers and cartridge labels are written beside it.
-#       4. RetroArch runs on the *host* and is handed absolute paths -- the
+#       3. RetroArch runs on the *host* and is handed absolute paths -- the
 #          ROM, and the --appendconfig override written under
 #          ~/.openemux/runtime. Those paths have to mean the same thing on
 #          both sides, which they only do while the sandbox sees the real

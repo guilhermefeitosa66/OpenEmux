@@ -302,6 +302,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
 
+### RT-240 — Bootstrap timestamps are written as UTC and stay readable
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (works on a temporary config).
+- **Steps:** As a QA person: run a first boot, then read `setup.bootstrap.started_at` and
+  `finished_at` in `config.yaml`.
+- **Expected:** Both are ISO-8601 stamps ending in `Z`, in the same shape as before — the app
+  wrote them with `datetime.utcnow()`, deprecated since Python 3.12 (the version CI runs and the
+  one Ubuntu 24.04 and Fedora 40 ship) and slated for removal (issue #235). An upgrade must not
+  change the stored format, or a config written by an older version stops parsing.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import tempfile
+  from datetime import datetime, timezone
+  from pathlib import Path
+  from openemux.core.config import ConfigManager
+  with tempfile.TemporaryDirectory() as tmp:
+      cm = ConfigManager(config_file=Path(tmp) / "config.yaml")
+      cm.start_bootstrap_run()
+      cm.finish_bootstrap_success()
+      state = ConfigManager(config_file=Path(tmp) / "config.yaml").get_bootstrap_state()
+      for key in ("started_at", "finished_at"):
+          stamp = state[key]
+          assert stamp.endswith("Z"), f"{key} is not marked UTC: {stamp}"
+          parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+          assert parsed.tzinfo is not None
+          assert abs((datetime.now(timezone.utc) - parsed).total_seconds()) < 300, \
+              f"{key} is not the current UTC time: {stamp}"
+  print("RT-240 OK")
+  EOF
+  ```
+
+
 ## Library & scanning
 
 ### RT-010 — Rescan keeps the library consistent
@@ -2158,10 +2192,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   unrestricted code execution outside the sandbox — and with `--filesystem=home` beside it the
   sandbox confines essentially nothing. Both are architecturally required by the current launch
   design, but they were unremarked lines in a manifest on an app heading for Flathub, whose linter
-  asks for a justification in the submission (issue #257). Narrowing `--filesystem=home` to a
-  portal-granted ROM directory needs the three `Gtk.FileChooserDialog` call sites ported to
-  `Gtk.FileDialog` first (issue #235), then `~/.openemux`, the ROM path and the absolute paths
-  handed to the host RetroArch.
+  asks for a justification in the submission (issue #257). The first prerequisite for narrowing
+  `--filesystem=home` to a portal-granted ROM directory is done — every file chooser is
+  `Gtk.FileDialog` now (issue #235) — so what is left holding the grant is `~/.openemux`, the ROM
+  path, and the absolute paths handed to the host RetroArch.
 - **Check:** suite file `tests/test_flatpak_sandbox.py`, plus:
   ```bash
   PYTHONPATH=src .venv/bin/python - <<'EOF'
@@ -2174,7 +2208,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   for wider in ("--filesystem=host", "--socket=session-bus", "--socket=system-bus"):
       assert wider not in args, f"{wider} was added to the sandbox"
   text = path.read_text()
-  for term in ("flatpak-spawn", "retroarch_launcher.py", "Gtk.FileChooserDialog",
+  for term in ("flatpak-spawn", "retroarch_launcher.py", "Gtk.FileDialog",
                "issue #235", "no confinement"):
       assert term in text, f"the rationale no longer mentions {term}"
   print("RT-226 OK")
@@ -2476,6 +2510,51 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The first frame is already light — no dark window that repaints a moment later.
 - **Check:** screenshot of the window right after it appears; the header bar is light.
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
+
+### RT-238 — Every file picker opens the desktop's own file chooser
+- **Area:** Settings
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the UI sources).
+- **Steps:** As a QA person: open the four pickers the app offers — "Settings" → "ROMs" →
+  the folder button, a game's right-click → "Choose cover…" and → "Choose label…", the artwork
+  manager's "Add image", and the header's "Import ROMs…" — and confirm they all look like the
+  same chooser.
+- **Expected:** One chooser, the desktop's own. They used to be two: "Import ROMs…" used
+  `Gtk.FileDialog`, which goes through the XDG portal, while the other three used the in-process
+  `Gtk.FileChooserDialog`, deprecated since GTK 4.10 and invisible to the portal — so under
+  Flatpak the import dialog could reach removable media and `/mnt` and the rest could only see
+  what the sandbox already had (issue #235). No `Gtk.FileChooserDialog` is left in the app.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  ui = sorted(Path("src/openemux/ui").glob("*.py"))
+  offenders = [p.as_posix() for p in ui
+               if "Gtk.FileChooserDialog(" in p.read_text(encoding="utf-8")]
+  assert not offenders, f"non-portal file choosers: {offenders}"
+  users = [p.as_posix() for p in ui if "Gtk.FileDialog()" in p.read_text(encoding="utf-8")]
+  assert len(users) >= 3, f"expected the pickers to survive the port, found {users}"
+  print("RT-238 OK")
+  EOF
+  ```
+
+### RT-239 — "Scan ROMs" and "Sync covers" ask for a scope in an Adwaita dialog
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, at least one console in the sidebar.
+- **Steps:**
+  1. Open "Settings" (`Ctrl+,`) → "ROMs" and activate "Scan ROMs".
+  2. Read the dialog, then press `Escape`.
+  3. Activate "Sync covers" and read that dialog, then press `Escape`.
+- **Expected:** Both are Adwaita alert dialogs — a heading, one line of body text, a console
+  dropdown under it, and "Cancel" / "Start" side by side with "Start" suggested. The dropdown
+  starts on the console being browsed, or on "All" when the current view is not a console.
+  `Escape` closes each without scanning or syncing anything. They were `Gtk.Dialog` with a
+  hand-built `get_content_area()` — both deprecated, and visibly not the same dialog as the rest
+  of the app (issue #235).
+- **Check:** one screenshot per dialog showing the heading, the dropdown and the two responses;
+  the launch log gained no `Traceback` and no cover-sync or scan task line.
+
 
 ## Internationalization
 

@@ -71,6 +71,7 @@ from openemux.ui.context_menu import (
     present_context_popover,
     unparent_when_idle,
 )
+from openemux.ui.file_dialogs import image_filters
 from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
@@ -2580,28 +2581,27 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.search_entry.set_sensitive(enabled)
 
     def _choose_roms_path(self):
-        chooser = Gtk.FileChooserDialog(
-            title=self.t("settings.path.dialog_title"),
-            transient_for=self,
-            modal=True,
-            action=Gtk.FileChooserAction.SELECT_FOLDER,
-        )
-        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        chooser.add_button(self.t("settings.path.select_button"), Gtk.ResponseType.ACCEPT)
+        # Gtk.FileDialog, not the deprecated Gtk.FileChooserDialog: the
+        # in-process widget never goes through the XDG portal, so under Flatpak
+        # it could only ever show what the sandbox already had -- while the
+        # import dialog beside it, already ported, could reach removable media
+        # and /mnt. Two pickers, two behaviours (issue #235).
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("settings.path.dialog_title"))
+        dialog.set_accept_label(self.t("settings.path.select_button"))
+        dialog.set_modal(True)
         current = self.config_manager.get_roms_path()
         if current.exists():
-            chooser.set_current_folder(Gio.File.new_for_path(str(current)))
-        chooser.connect("response", self._on_choose_roms_path_response)
-        chooser.show()
+            dialog.set_initial_folder(Gio.File.new_for_path(str(current)))
+        dialog.select_folder(self, None, self._on_roms_path_chosen)
 
-    def _on_choose_roms_path_response(self, chooser, response):
-        if response != Gtk.ResponseType.ACCEPT:
-            chooser.destroy()
+    def _on_roms_path_chosen(self, dialog, result):
+        try:
+            selected_file = dialog.select_folder_finish(result)
+        except GLib.Error:
+            # Dismissed by the user; nothing to report.
             return
-
-        selected_file = chooser.get_file()
-        chooser.destroy()
-        if not selected_file:
+        if selected_file is None:
             return
 
         selected_path = selected_file.get_path()
@@ -3035,28 +3035,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
         title_key = "dialog.label.choose.title" if kind == LABEL_ART else "dialog.cover.choose.title"
-        chooser = Gtk.FileChooserDialog(
-            title=self.t(title_key),
-            transient_for=self,
-            modal=True,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        chooser.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        chooser.add_button(self.t("dialog.start"), Gtk.ResponseType.ACCEPT)
-        filter_img = Gtk.FileFilter()
-        filter_img.set_name("Images")
-        for ext in SUPPORTED_COVER_EXTS:
-            filter_img.add_pattern(f"*.{ext}")
-            filter_img.add_pattern(f"*.{ext.upper()}")
-        chooser.add_filter(filter_img)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t(title_key))
+        dialog.set_accept_label(self.t("dialog.start"))
+        dialog.set_modal(True)
+        filters, default_filter = image_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default_filter)
 
-        def _on_response(dialog, response):
-            if response != Gtk.ResponseType.ACCEPT:
-                dialog.destroy()
+        def _on_chosen(dlg, result):
+            try:
+                selected = dlg.open_finish(result)
+            except GLib.Error:
+                # Dismissed by the user; nothing to report.
                 return
-            selected = dialog.get_file()
-            dialog.destroy()
-            if not selected:
+            if selected is None:
                 return
             path = selected.get_path()
             if not path:
@@ -3075,8 +3068,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if callable(on_done):
                 on_done()
 
-        chooser.connect("response", _on_response)
-        chooser.show()
+        dialog.open(self, None, _on_chosen)
 
     def _remove_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
         removed = remove_local_art(Path(self.roms_path), rom["console"], rom["name"], kind)
@@ -3381,23 +3373,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("toast.sync_no_consoles"))
             return
 
-        dialog = Gtk.Dialog(transient_for=self, modal=True)
-        dialog.set_title(self.t("dialog.sync.title"))
-        dialog.set_default_size(360, 120)
-        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
-
-        content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_margin_top(12)
-        content.set_margin_bottom(12)
-        content.set_margin_start(12)
-        content.set_margin_end(12)
-
-        label = Gtk.Label(label=self.t("dialog.sync.scope"))
-        label.set_halign(Gtk.Align.START)
-        content.append(label)
-
         combo = self._build_console_dropdown(
             self.visible_consoles,
             default_id=None,
@@ -3413,38 +3388,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if default_scope == "all":
             default_scope = ALL_CONSOLES_ID
         self._set_console_dropdown_active_id(combo, default_scope)
-        content.append(combo)
+
+        # Adw.AlertDialog with an extra child, the same shape the import flow's
+        # console prompt uses -- Gtk.Dialog and get_content_area() are both
+        # deprecated, and the hand-built content area was reimplementing the
+        # margins Adwaita already applies (issue #235).
+        dialog = self._scope_dialog("dialog.sync.title", "dialog.sync.scope", combo)
 
         def _on_response(_dlg, response):
-            if response == Gtk.ResponseType.OK:
-                selected = self._get_console_dropdown_active_id(combo) or self.current_console or self.visible_consoles[0]
-                if selected == ALL_CONSOLES_ID:
-                    self._start_cover_sync(scope="all", selected_console=None)
-                else:
-                    self._start_cover_sync(scope="console", selected_console=selected)
-            dialog.close()
+            if response != "start":
+                return
+            selected = self._get_console_dropdown_active_id(combo) or self.current_console or self.visible_consoles[0]
+            if selected == ALL_CONSOLES_ID:
+                self._start_cover_sync(scope="all", selected_console=None)
+            else:
+                self._start_cover_sync(scope="console", selected_console=selected)
 
         dialog.connect("response", _on_response)
-        dialog.show()
+        dialog.present(self)
 
     def _show_scan_roms_dialog(self):
-        dialog = Gtk.Dialog(transient_for=self, modal=True)
-        dialog.set_title(self.t("dialog.scan.title"))
-        dialog.set_default_size(380, 120)
-        dialog.add_button(self.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(self.t("dialog.start"), Gtk.ResponseType.OK)
-
-        content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_margin_top(12)
-        content.set_margin_bottom(12)
-        content.set_margin_start(12)
-        content.set_margin_end(12)
-
-        label = Gtk.Label(label=self.t("dialog.scan.scope"))
-        label.set_halign(Gtk.Align.START)
-        content.append(label)
-
         combo = self._build_console_dropdown(
             SYSTEM_IDS,
             default_id=None,
@@ -3453,19 +3416,38 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         default_scope = self.current_console if self.current_console in SYSTEM_IDS else ALL_CONSOLES_ID
         self._set_console_dropdown_active_id(combo, default_scope)
-        content.append(combo)
+
+        dialog = self._scope_dialog("dialog.scan.title", "dialog.scan.scope", combo)
 
         def _on_response(_dlg, response):
-            if response == Gtk.ResponseType.OK:
-                selected = self._get_console_dropdown_active_id(combo) or ALL_CONSOLES_ID
-                if selected == ALL_CONSOLES_ID:
-                    self._rescan_all_consoles(show_toast=True)
-                else:
-                    self._rescan_single_console(selected, show_toast=True)
-            dialog.close()
+            if response != "start":
+                return
+            selected = self._get_console_dropdown_active_id(combo) or ALL_CONSOLES_ID
+            if selected == ALL_CONSOLES_ID:
+                self._rescan_all_consoles(show_toast=True)
+            else:
+                self._rescan_single_console(selected, show_toast=True)
 
         dialog.connect("response", _on_response)
-        dialog.show()
+        dialog.present(self)
+
+    def _scope_dialog(self, heading_key, body_key, child):
+        """An ``Adw.AlertDialog`` asking for a console, with ``child`` inside.
+
+        The scan and sync prompts differ only in their two strings, so they
+        share the assembly rather than each hand-building a content area.
+        """
+        dialog = Adw.AlertDialog(
+            heading=self.t(heading_key),
+            body=self.t(body_key),
+        )
+        dialog.set_extra_child(child)
+        dialog.add_response("cancel", self.t("dialog.cancel"))
+        dialog.add_response("start", self.t("dialog.start"))
+        dialog.set_response_appearance("start", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("start")
+        dialog.set_close_response("cancel")
+        return dialog
 
     # ----- ROM import (header button + drag and drop) -----
 

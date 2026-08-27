@@ -43,7 +43,7 @@ WIDEST_PERMISSIONS = {
         "retroarch_launcher.py",
     ),
     "--filesystem=home": (
-        "Gtk.FileChooserDialog",
+        "Gtk.FileDialog",
         "issue #235",
         "DEFAULT_CONFIG_DIR",
         "--appendconfig",
@@ -103,24 +103,25 @@ class TheStatedPrerequisiteForNarrowingIsStillTrueTests(unittest.TestCase):
         self.assertIn("flatpak-spawn", launcher)
         self.assertIn("org.libretro.RetroArch", launcher)
 
-    def test_the_file_choosers_that_make_home_load_bearing_are_still_there(self):
+    def test_no_file_chooser_bypasses_the_portal_any_more(self):
         # Three Gtk.FileChooserDialog uses -- the in-process widget, which does
-        # not go through the portal. When issue #235 ports them to
-        # Gtk.FileDialog this fails, which is the moment to revisit
-        # --filesystem=home rather than leave it granted out of habit.
-        sources = [
-            REPO_ROOT / "src/openemux/ui/window.py",
-            REPO_ROOT / "src/openemux/ui/artwork_manager.py",
-        ]
-        total = sum(
-            source.read_text(encoding="utf-8").count("Gtk.FileChooserDialog(")
+        # not go through the portal -- used to be counted here, as the tripwire
+        # for revisiting --filesystem=home once they were gone. Issue #235
+        # ported them; what the tripwire guards now is that none comes back,
+        # since a single in-process chooser would reinstate the whole argument
+        # for the grant.
+        sources = sorted((REPO_ROOT / "src/openemux/ui").glob("*.py"))
+        offenders = [
+            source.relative_to(REPO_ROOT).as_posix()
             for source in sources
-        )
+            if "Gtk.FileChooserDialog(" in source.read_text(encoding="utf-8")
+        ]
         self.assertEqual(
-            total,
-            3,
-            "the non-portal file choosers changed; --filesystem=home and the "
-            "rationale in the Flatpak manifest need revisiting (issue #257)",
+            offenders,
+            [],
+            "a non-portal file chooser came back; use Gtk.FileDialog so the "
+            "picker sees what the portal grants, not what the sandbox does "
+            "(issues #235, #257)",
         )
 
     def test_the_app_still_keeps_its_data_under_the_real_home(self):

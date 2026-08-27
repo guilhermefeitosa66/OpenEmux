@@ -2,7 +2,7 @@ import copy
 import logging
 import shutil
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -39,6 +39,18 @@ from openemux.core.update_checker import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_stamp():
+    """An ISO-8601 UTC timestamp ending in ``Z``.
+
+    ``datetime.utcnow()`` returned a naive value that the callers labelled UTC
+    by appending the ``Z`` themselves; it is deprecated since Python 3.12 --
+    the version CI runs and the one Ubuntu 24.04 and Fedora 40 ship -- and is
+    slated for removal (issue #235). The string is byte-for-byte what the old
+    call produced, so timestamps already written to config.yaml keep parsing.
+    """
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _try_mkdir(directory, failures):
@@ -1052,7 +1064,7 @@ class ConfigManager:
     def start_bootstrap_run(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "running"
-        bootstrap["started_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["started_at"] = _utc_stamp()
         bootstrap["finished_at"] = None
         bootstrap["failed_step"] = None
         bootstrap["last_error"] = None
@@ -1069,7 +1081,7 @@ class ConfigManager:
     def finish_bootstrap_success(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "completed"
-        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["finished_at"] = _utc_stamp()
         bootstrap["failed_step"] = None
         bootstrap["last_error"] = None
         bootstrap["retry_requested"] = False
@@ -1078,7 +1090,7 @@ class ConfigManager:
     def finish_bootstrap_failure(self, step_id, error_message):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "failed"
-        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["finished_at"] = _utc_stamp()
         bootstrap["failed_step"] = step_id
         bootstrap["last_error"] = str(error_message)
         bootstrap["retry_requested"] = False
