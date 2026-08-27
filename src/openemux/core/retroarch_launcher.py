@@ -30,6 +30,7 @@ from openemux.core.input_profiles import (
 from openemux.core.paths import get_real_home, is_running_in_flatpak
 from openemux.core.platform import (
     IS_WINDOWS,
+    MACHINE,
     VENDORED_RETROARCH,
     bundled_core_dir,
     cfg_path,
@@ -91,13 +92,16 @@ DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for
 
 # Distro-packaged core locations. Empty on Windows, which has no equivalent
 # convention -- cores there come from the bundled portable RetroArch.
+# The Debian multiarch directory is named after the host triplet, so it is the
+# one entry here that changes with the architecture -- and it is the one Ubuntu
+# and Debian actually use for the libretro packages (issue #119).
 DEFAULT_CORE_DIRS = (
     []
     if IS_WINDOWS
     else [
         "/usr/lib/libretro",
         "/usr/lib64/libretro",
-        "/usr/lib/x86_64-linux-gnu/libretro",
+        f"/usr/lib/{MACHINE}-linux-gnu/libretro",
         "/usr/local/lib/libretro",
     ]
 )
@@ -193,9 +197,16 @@ class RetroArchLauncher:
 
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
+            # Last resort before giving up: a RetroArch Flatpak on this same
+            # machine. The message that follows is what the user sees, so it
+            # names every way out rather than only the vendored one.
+            flatpak_prefix = self._flatpak_fallback_prefix()
+            if flatpak_prefix:
+                return flatpak_prefix, None
             return None, (
-                "RetroArch binary not found. Set runtime.retroarch.binary "
-                "or add RetroArch AppImage under vendors/."
+                "RetroArch was not found. Install it from your distribution, "
+                "or with `flatpak install flathub org.libretro.RetroArch`, or "
+                "set runtime.retroarch.binary to a RetroArch of your own."
             )
         return [retroarch_path, *appimage_flags(retroarch_path, force=force_extract)], None
 
@@ -254,7 +265,7 @@ class RetroArchLauncher:
         vendor_candidates = [
             # The vendored build for this platform comes first: on Windows it
             # is the portable RetroArch fetched by scripts/vendor_retroarch.py,
-            # on Linux the committed AppImage.
+            # on Linux the AppImage for this architecture.
             self.project_root / VENDORED_RETROARCH,
             self.project_root / "vendors" / "retroarch.AppImage",
             self.project_root / "vendors" / "retroarch-assets" / "bin" / "retroarch",
@@ -263,7 +274,42 @@ class RetroArchLauncher:
             if candidate.exists():
                 return str(candidate)
 
+        # Nothing vendored. On x86_64 that is unusual -- the AppImage is
+        # committed -- but libretro publishes no ARM build at all, so on
+        # aarch64 it is the normal case and dead-ending here would mean an
+        # install that can never launch a game (issue #119). Both of these are
+        # real RetroArch installs a user is likely to already have, and both
+        # are how the ARM packages are expected to work until there is a
+        # vendored build for them.
+        packaged = shutil.which("retroarch")
+        if packaged:
+            return packaged
         return None
+
+    def _flatpak_fallback_prefix(self):
+        """``flatpak run org.libretro.RetroArch``, when that is all there is.
+
+        Distinct from the Flatpak branch in ``_launch_prefix``: that one is
+        OpenEmux running *inside* a sandbox and reaching the host through
+        flatpak-spawn. This is OpenEmux running natively with no RetroArch of
+        its own, on a machine where the only one installed is a Flatpak --
+        which on aarch64, where libretro publishes no binary and
+        ``org.libretro.RetroArch`` is on Flathub, is a likely shape.
+        """
+        if not shutil.which("flatpak"):
+            return None
+        try:
+            listed = subprocess.run(
+                ["flatpak", "info", RETROARCH_FLATPAK_ID],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if listed.returncode != 0:
+            return None
+        return ["flatpak", "run", "--die-with-parent", RETROARCH_FLATPAK_ID]
 
     def _core_search_dirs(self):
         real_home = get_real_home()
@@ -748,11 +794,24 @@ class RetroArchLauncher:
         core_path = self._find_core_path(system_id, rom_path=rom_path)
         if not core_path:
             candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
-            return None, (
+            message = (
                 f"No RetroArch core found for {system_id}. "
-                f"Tried common core dirs and these core names: {candidates}. "
-                "Configure runtime.retroarch.cores in config.yaml."
+                f"Tried common core dirs and these core names: {candidates}."
             )
+            if MACHINE == "x86_64":
+                message += " Configure runtime.retroarch.cores in config.yaml."
+            else:
+                # The buildbot builds 153 cores for aarch64 against 217 for
+                # x86_64, so on ARM "not installed" and "does not exist" look
+                # identical from here -- and telling somebody to configure a
+                # core that was never built for their machine sends them
+                # looking for a file they cannot get (issue #119).
+                message += (
+                    f" The libretro buildbot builds fewer cores for {MACHINE}"
+                    " than for x86_64, so this console may have none at all."
+                    " Settings \u2192 Cores lists what is installed."
+                )
+            return None, message
         core_filename = Path(core_path).name
         missing_bios = find_missing_required_for_core(self.config_manager, system_id, core_filename)
         if missing_bios:

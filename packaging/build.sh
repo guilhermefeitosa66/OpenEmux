@@ -52,14 +52,31 @@ if [ -e "$ROOT_DIR/${CRED_FILE}.orig" ]; then
   exit 1
 fi
 
-if [ "$TARGET" = "appimage" ]; then
-  # appimage-builder bundles amd64 debs and the result only runs on x86_64.
-  ARCH="$(uname -m)"
-  if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "amd64" ]; then
-    echo "AppImage builds require an x86_64 host (found: $ARCH)." >&2
-    exit 1
-  fi
-fi
+# Every Linux format is built for the architecture of the machine building it.
+# That is not a limitation to work around: an AppDir is assembled out of debs
+# for one architecture and only runs there, the .deb takes its Architecture
+# from dpkg, and the .rpm from rpmbuild. Cross-building any of them would mean
+# a second, untested path -- build ARM on ARM (issue #119).
+#
+# The check is which architectures are *supported*, then, rather than which one
+# the host is.
+case "$TARGET" in
+  appimage|deb|rpm)
+    # The container's architecture, which PLATFORM overrides.
+    ARCH="$(uname -m)"
+    case "${PLATFORM:-}" in
+      */arm64|*/aarch64) ARCH=aarch64 ;;
+      */amd64|*/x86_64)  ARCH=x86_64 ;;
+    esac
+    case "$ARCH" in
+      x86_64|amd64|aarch64|arm64) ;;
+      *)
+        echo "$TARGET builds are supported on x86_64 and aarch64 (found: $ARCH)." >&2
+        exit 1
+        ;;
+    esac
+    ;;
+esac
 
 if [ "$TARGET" = "windows" ]; then
   # The bundled RetroArch for Windows is gitignored and fetched on demand (193
@@ -74,18 +91,31 @@ if [ "$TARGET" = "windows" ]; then
   fi
 fi
 
-IMAGE="openemux-build-$TARGET"
+# Cross-building under QEMU: `PLATFORM=linux/arm64 packaging/build.sh deb` on
+# an x86_64 desktop, with binfmt registered
+# (`docker run --privileged tonistiigi/binfmt --install arm64`). Slow -- an
+# emulated apt install is minutes, not seconds -- and it exists so an ARM
+# packaging change can be tried without ARM hardware. The release builds ARM on
+# ARM in CI; see docs/DEVELOPMENT.md (issue #119).
+PLATFORM_ARGS=()
+if [ -n "${PLATFORM:-}" ]; then
+  echo "==> emulating $PLATFORM (slow)"
+  PLATFORM_ARGS=(--platform "$PLATFORM")
+fi
+
+IMAGE="openemux-build-$TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
 echo "==> building image $IMAGE"
 # --pull: without it a stale local image is reused silently, possibly one
 # cached before a security update. The Dockerfiles pin their base by digest, so
 # this only ever re-fetches the same bytes (issue #255).
-docker build --pull -q -t "$IMAGE" -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
+docker build "${PLATFORM_ARGS[@]}" --pull -q -t "$IMAGE" \
+  -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
 
 # Artifacts are written as root inside the container; hand them back afterwards.
 HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
 
-DOCKER_ARGS=(--rm -t -v "$ROOT_DIR:/work" -w /work
+DOCKER_ARGS=("${PLATFORM_ARGS[@]}" --rm -t -v "$ROOT_DIR:/work" -w /work
              -e HOST_UID="$HOST_UID" -e HOST_GID="$HOST_GID")
 # Pass the ScreenScraper developer credential through to the build (from the
 # local .env sourced above, or the shell environment). Unset/empty means no

@@ -51,10 +51,25 @@ RUN python3 -m pip install --break-system-packages --no-cache-dir \
 # squashed AppDir to it by hand: this runtime reads zlib and zstd only, and
 # appimage-builder's own packaging step hardcodes xz, so its phase 2 is not
 # used at all.
-ARG APPIMAGE_RUNTIME_URL=https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
-ARG APPIMAGE_RUNTIME_SHA256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
-RUN wget -q -O /opt/appimage-runtime-x86_64 "$APPIMAGE_RUNTIME_URL" \
- && echo "$APPIMAGE_RUNTIME_SHA256  /opt/appimage-runtime-x86_64" | sha256sum -c - \
- && chmod 0644 /opt/appimage-runtime-x86_64
+#
+# One runtime per architecture, from the same pinned tag and each with its own
+# checksum. Selected from `uname -m` rather than from a build argument: the
+# image is built on the machine it will build for -- an AppDir of foreign-arch
+# debs only runs on its own machine type -- so the container already knows
+# (issue #119). The base image above is a multi-arch index, so it resolves on
+# both.
+ARG APPIMAGE_RUNTIME_BASE=https://github.com/AppImage/type2-runtime/releases/download/20251108
+ARG APPIMAGE_RUNTIME_SHA256_X86_64=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+ARG APPIMAGE_RUNTIME_SHA256_AARCH64=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+RUN set -eu; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64)  sum="$APPIMAGE_RUNTIME_SHA256_X86_64" ;; \
+      aarch64) sum="$APPIMAGE_RUNTIME_SHA256_AARCH64" ;; \
+      *) echo "no AppImage runtime pinned for $arch" >&2; exit 1 ;; \
+    esac; \
+    wget -q -O "/opt/appimage-runtime-$arch" "$APPIMAGE_RUNTIME_BASE/runtime-$arch"; \
+    echo "$sum  /opt/appimage-runtime-$arch" | sha256sum -c -; \
+    chmod 0644 "/opt/appimage-runtime-$arch"
 
 WORKDIR /work

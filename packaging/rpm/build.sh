@@ -83,7 +83,14 @@ dnf install -y "./dist/${RPM_NAME}" >/dev/null
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
-test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+# x86_64 bundles the AppImage; aarch64 has none to bundle and depends on the
+# distribution's retroarch instead, which dnf has just resolved (issue #119).
+if [ "$(uname -m)" = "x86_64" ]; then
+  test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+else
+  test ! -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+  command -v retroarch >/dev/null
+fi
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 # PATH-relative Exec would let a ~/.local/bin shadow (AppImage-manager

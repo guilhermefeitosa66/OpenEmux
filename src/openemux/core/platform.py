@@ -11,11 +11,33 @@ direction would make that a cycle.
 """
 
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
+
+
+def _machine(raw=None):
+    """The CPU architecture, spelled the way the artifacts spell it.
+
+    ``platform.machine()`` answers with whatever the OS calls it -- ``AMD64``
+    on Windows, ``x86_64`` on Linux, ``arm64`` on macOS and on some ARM
+    distributions -- and every one of those means one of two things here.
+    Normalising once is what lets a URL, a filename and a library directory all
+    be built from the same token instead of each carrying its own spelling.
+    """
+    name = (raw if raw is not None else platform.machine()).strip().lower()
+    if name in ("amd64", "x86_64", "x64"):
+        return "x86_64"
+    if name in ("arm64", "aarch64", "armv8l"):
+        return "aarch64"
+    return name or "x86_64"
+
+
+#: This machine's architecture: ``x86_64`` or ``aarch64`` (issue #119).
+MACHINE = _machine()
 
 #: File extension of a libretro core on this platform. The catalogs in
 #: ``systems.py`` and ``bios_catalog.py`` spell every core ``.so`` -- that stays
@@ -30,15 +52,31 @@ CORE_SUFFIX = ".dll" if IS_WINDOWS else ".so"
 CORE_SUFFIXES = (".so", ".dll")
 
 #: Path segment of the RetroArch buildbot that serves cores for this platform:
-#: https://buildbot.libretro.com/nightly/<BUILDBOT_OS>/x86_64/latest/
+#: https://buildbot.libretro.com/nightly/<BUILDBOT_OS>/<BUILDBOT_ARCH>/latest/
 BUILDBOT_OS = "windows" if IS_WINDOWS else "linux"
+
+#: The other half of that path. The buildbot serves 217 cores for x86_64 and
+#: 153 for aarch64, so an ARM install pointed at the x86_64 tree downloads
+#: cores that can never load -- and says nothing, because they download fine.
+BUILDBOT_ARCH = MACHINE
+
+#: Every buildbot path OpenEmux might have written into a config, so a config
+#: carrying another platform's default can be recognised as *a default* rather
+#: than as a choice the user made (see config.migrate_cores_base_url).
+BUILDBOT_OSES = ("linux", "windows")
+BUILDBOT_ARCHES = ("x86_64", "aarch64")
 
 #: Relative path, from the project root, of the vendored RetroArch. Managed by
 #: scripts/vendor_retroarch.py -- see vendors/manifest.json.
+#:
+#: Architecture-aware on Linux: an x86_64 AppImage on an ARM machine is not a
+#: RetroArch that failed to launch, it is a file the kernel refuses to execute,
+#: and the launcher has a fallback chain for the case where none is vendored
+#: (retroarch_launcher._resolve_retroarch_binary).
 VENDORED_RETROARCH = (
     "vendors/RetroArch-Win64/retroarch.exe"
     if IS_WINDOWS
-    else "vendors/RetroArch-Linux-x86_64.AppImage"
+    else f"vendors/RetroArch-Linux-{MACHINE}.AppImage"
 )
 
 

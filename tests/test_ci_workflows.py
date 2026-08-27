@@ -39,12 +39,61 @@ class PackagesWorkflowTests(unittest.TestCase):
             with self.subTest(format=fmt):
                 self.assertIn(f'"{fmt}"', self.text)
 
-    def test_pull_requests_build_the_two_cheap_formats(self):
-        self.assertIn('targets=\'["deb","rpm"]\'', self.text)
+    def _plan(self, event, choice=""):
+        """Run the plan step's own script, the way the workflow runs it."""
+        import json
+        import subprocess
+        import textwrap
 
-    def test_the_scheduled_run_builds_all_five(self):
-        self.assertIn('targets=\'["deb","rpm","appimage","flatpak","windows"]\'', self.text)
+        marker = 'python3 - "$EVENT" "$CHOICE" <<\'PY\' >> "$GITHUB_OUTPUT"\n'
+        body = self.text.split(marker)[1].split("\n          PY\n")[0]
+        result = subprocess.run(
+            ["python3", "-c", textwrap.dedent(body), event, choice],
+            capture_output=True, text=True, check=True,
+        )
+        line = next(l for l in result.stdout.splitlines() if l.startswith("jobs="))
+        return [(j["target"], j["arch"]) for j in json.loads(line[len("jobs="):])]
+
+    def test_pull_requests_build_the_two_cheap_formats_on_both_arches(self):
+        # The ARM leg especially: nobody builds it by hand, so it is the one
+        # that would regress in silence (issue #119).
+        self.assertEqual(
+            sorted(self._plan("pull_request")),
+            [("deb", "aarch64"), ("deb", "x86_64"),
+             ("rpm", "aarch64"), ("rpm", "x86_64")],
+        )
+
+    def test_the_scheduled_run_builds_every_format_for_every_architecture(self):
+        planned = sorted(self._plan("schedule"))
+        self.assertEqual(planned, sorted([
+            ("appimage", "x86_64"), ("appimage", "aarch64"),
+            ("deb", "x86_64"), ("deb", "aarch64"),
+            ("flatpak", "x86_64"), ("flatpak", "aarch64"),
+            ("rpm", "x86_64"), ("rpm", "aarch64"),
+            ("windows", "x86_64"),
+        ]))
         self.assertIn("schedule", self.text)
+
+    def test_there_is_no_windows_bundle_for_arm(self):
+        # Out of scope in the issue, and nothing cross-builds one from ARM.
+        for event, choice in (("schedule", ""), ("workflow_dispatch", "all"),
+                              ("workflow_dispatch", "aarch64")):
+            with self.subTest(event=event, choice=choice):
+                self.assertNotIn(("windows", "aarch64"), self._plan(event, choice))
+
+    def test_a_dispatch_can_ask_for_arm_alone(self):
+        self.assertEqual(
+            sorted(self._plan("workflow_dispatch", "aarch64")),
+            [("appimage", "aarch64"), ("deb", "aarch64"),
+             ("flatpak", "aarch64"), ("rpm", "aarch64")],
+        )
+
+    def test_the_arm_jobs_run_on_an_arm_runner(self):
+        # A "build ARM on ARM" job scheduled onto an x86_64 runner produces an
+        # x86_64 package with an ARM name, which is the worst of both.
+        self.assertIn("ubuntu-24.04-arm", self.text)
+        self.assertEqual(self.data["jobs"]["build"]["runs-on"],
+                         "${{ matrix.runs-on }}")
 
     def test_the_windows_build_fetches_its_vendored_retroarch_first(self):
         # The Windows bundle ships RetroArch, and that binary is a gitignored

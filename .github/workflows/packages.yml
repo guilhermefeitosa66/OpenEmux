@@ -42,6 +42,8 @@ on:
           - appimage
           - flatpak
           - windows
+          # Every Linux format, ARM only: the leg nobody builds by hand.
+          - aarch64
 
 concurrency:
   group: packages-${{ github.ref }}
@@ -55,43 +57,68 @@ jobs:
     name: Pick the formats
     runs-on: ubuntu-latest
     outputs:
-      targets: ${{ steps.pick.outputs.targets }}
+      jobs: ${{ steps.pick.outputs.jobs }}
     steps:
       - name: Pick the formats
         id: pick
         env:
           EVENT: ${{ github.event_name }}
           CHOICE: ${{ inputs.targets }}
+        # Each entry is a format *and* an architecture, because every Linux
+        # format is built for the machine it is built on -- an AppDir of
+        # foreign-arch debs runs nowhere else, and dpkg and rpmbuild stamp what
+        # they are running on (issue #119). The Windows bundle is cross-built
+        # from Linux and exists on x86_64 only.
         run: |
-          case "$EVENT" in
-            pull_request)
-              # The two cheapest builds, and the .rpm is the format with the
-              # fewest users to notice it broke.
-              targets='["deb","rpm"]' ;;
-            workflow_dispatch)
-              case "$CHOICE" in
-                deb+rpm)  targets='["deb","rpm"]' ;;
-                appimage) targets='["appimage"]' ;;
-                flatpak)  targets='["flatpak"]' ;;
-                windows)  targets='["windows"]' ;;
-                *)        targets='["deb","rpm","appimage","flatpak","windows"]' ;;
-              esac ;;
-            *)
-              targets='["deb","rpm","appimage","flatpak","windows"]' ;;
-          esac
-          echo "targets=$targets" >> "$GITHUB_OUTPUT"
-          echo "building: $targets"
+          python3 - "$EVENT" "$CHOICE" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+
+          event, choice = sys.argv[1], sys.argv[2]
+          LINUX = ["deb", "rpm", "appimage", "flatpak"]
+          RUNNER = {"x86_64": "ubuntu-latest", "aarch64": "ubuntu-24.04-arm"}
+
+          def entries(targets, arches=("x86_64",)):
+              out = []
+              for target in targets:
+                  for arch in arches:
+                      # Nothing cross-builds a Windows bundle from ARM, and
+                      # nobody is asking for one.
+                      if target == "windows" and arch != "x86_64":
+                          continue
+                      out.append({"target": target, "arch": arch,
+                                  "runs-on": RUNNER[arch]})
+              return out
+
+          if event == "pull_request":
+              # The two cheapest builds, on both architectures: the ARM leg is
+              # the one that regresses silently, since nobody builds it by hand.
+              jobs = entries(["deb", "rpm"], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice == "deb+rpm":
+              jobs = entries(["deb", "rpm"], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice in LINUX:
+              jobs = entries([choice], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice == "windows":
+              jobs = entries(["windows"])
+          elif event == "workflow_dispatch" and choice == "aarch64":
+              jobs = entries(LINUX, ("aarch64",))
+          else:
+              jobs = entries(LINUX, ("x86_64", "aarch64")) + entries(["windows"])
+
+          print("jobs=" + json.dumps(jobs))
+          print(json.dumps(jobs, indent=2), file=sys.stderr)
+          PY
 
   build:
-    name: ${{ matrix.target }}
+    name: ${{ matrix.target }} (${{ matrix.arch }})
     needs: plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 180
     strategy:
-      # One broken format should not hide the state of the other four.
+      # One broken format should not hide the state of the other four, and one
+      # broken architecture must not hide the other.
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+        include: ${{ fromJSON(needs.plan.outputs.jobs) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -156,7 +183,7 @@ jobs:
         # single-file bundle in dist/ is worth carrying.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openemux-${{ matrix.target }}
+          name: openemux-${{ matrix.target }}-${{ matrix.arch }}
           path: dist/
           if-no-files-found: error
           retention-days: 14

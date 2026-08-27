@@ -116,8 +116,18 @@ class TheBuildImagesArePinnedTests(unittest.TestCase):
     def test_the_image_build_always_refetches_its_base(self):
         # Without --pull a stale local image is reused silently -- possibly one
         # cached before a security update.
+        #
+        # Matched on the docker build *invocation* rather than on the two words
+        # being adjacent: --platform now sits between them when a build is
+        # deliberately emulated (issue #119), and an assertion that reads the
+        # command as a whole cannot be broken by inserting another flag.
         build = (REPO_ROOT / "packaging/build.sh").read_text(encoding="utf-8")
-        self.assertIn("docker build --pull", build)
+        invocation = next(
+            (line for line in build.splitlines() if line.startswith("docker build")),
+            None,
+        )
+        self.assertIsNotNone(invocation, "nothing in build.sh builds an image")
+        self.assertIn("--pull", invocation)
 
 
 class NothingIsFetchedOverPlainHttpTests(unittest.TestCase):

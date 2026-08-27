@@ -9,7 +9,13 @@ import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
 from openemux.core.atomic_write import atomic_write_text
-from openemux.core.platform import BUILDBOT_OS, VENDORED_RETROARCH
+from openemux.core.platform import (
+    BUILDBOT_ARCH,
+    BUILDBOT_ARCHES,
+    BUILDBOT_OS,
+    BUILDBOT_OSES,
+    VENDORED_RETROARCH,
+)
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
@@ -82,12 +88,45 @@ DEFAULT_RUNTIME_DIR = store_path("runtime")
 DEFAULT_STATES_DIR = store_path("states")
 MIGRATION_VERSION = 2
 
-# The buildbot serves cores per platform: .so under nightly/linux/x86_64 and
-# .dll under nightly/windows/x86_64. One constant rather than the three copies
-# of this literal that used to live in DEFAULT_CONFIG, the migration and the
+# The buildbot serves cores per platform *and* per architecture: .so under
+# nightly/linux/x86_64, .dll under nightly/windows/x86_64, and a smaller set of
+# .so under nightly/linux/aarch64. One constant rather than the three copies of
+# this literal that used to live in DEFAULT_CONFIG, the migration and the
 # getter -- three copies of a platform-dependent value is three chances to fix
 # only two of them. The info/shader URLs below are platform-neutral.
-DEFAULT_CORES_BASE_URL = f"https://buildbot.libretro.com/nightly/{BUILDBOT_OS}/x86_64/latest/"
+BUILDBOT_CORES_URL = "https://buildbot.libretro.com/nightly/{os}/{arch}/latest/"
+
+DEFAULT_CORES_BASE_URL = BUILDBOT_CORES_URL.format(os=BUILDBOT_OS, arch=BUILDBOT_ARCH)
+
+#: Every buildbot cores URL this project has ever written as a default. A
+#: stored URL that is one of these was not chosen by anybody -- it is the
+#: default of whatever machine wrote the config -- so it may be corrected to
+#: this machine's. Anything else is the user's own and is left alone.
+KNOWN_CORES_BASE_URLS = frozenset(
+    BUILDBOT_CORES_URL.format(os=os_name, arch=arch)
+    for os_name in BUILDBOT_OSES
+    for arch in BUILDBOT_ARCHES
+)
+
+
+def migrate_cores_base_url(stored):
+    """Point a config at this machine's cores, or leave it alone.
+
+    A library copied from an x86_64 desktop to a Pi -- or a config written
+    before OpenEmux knew about ARM at all -- names the x86_64 tree, and cores
+    from it download perfectly and then fail to load, with nothing in the UI to
+    say why (issue #119). The same applies in reverse, and between Linux and
+    Windows.
+
+    Only a URL this project itself would have written is replaced. A user who
+    pointed the updater at their own mirror keeps it: that is a choice, and
+    silently overwriting it would be the worse bug.
+    """
+    if not stored:
+        return DEFAULT_CORES_BASE_URL
+    if stored in KNOWN_CORES_BASE_URLS and stored != DEFAULT_CORES_BASE_URL:
+        return DEFAULT_CORES_BASE_URL
+    return stored
 
 #: Everything the RetroArch buildbot updater needs, in one place.
 #:
@@ -472,6 +511,9 @@ class ConfigManager:
         updater = runtime["retroarch"].setdefault("updater", {})
         for key, value in UPDATER_DEFAULTS.items():
             updater.setdefault(key, value)
+        # Not a setdefault: the key is present and wrong, naming another
+        # architecture's cores (issue #119).
+        updater["cores_base_url"] = migrate_cores_base_url(updater.get("cores_base_url"))
 
         migrated_backend = {}
         for key, mode in runtime.get("console_backend", {}).items():

@@ -2,7 +2,7 @@
 # Copy one directory of the project into a staging tree, leaving the local
 # build state behind.
 #
-# Usage: copy_tree.sh <source-dir> <destination-parent>
+# Usage: copy_tree.sh <source-dir> <destination-parent> [extra-exclude ...]
 #
 # Equivalent to `cp -r <source-dir> <destination-parent>/`, minus everything a
 # build, a test run or an editor drops beside the sources. Plain `cp -r` is how
@@ -29,6 +29,16 @@ set -eu
 
 SRC="${1:?usage: copy_tree.sh <source-dir> <destination-parent>}"
 DEST_PARENT="${2:?usage: copy_tree.sh <source-dir> <destination-parent>}"
+shift 2
+
+# Anything else on the command line is another tar --exclude pattern. The one
+# caller that needs it is the vendored RetroArch: a package built for one
+# architecture must not carry the AppImage for the other, which is dead weight
+# the kernel would refuse to execute anyway (issue #119).
+EXTRA=""
+for pattern in "$@"; do
+  EXTRA="$EXTRA --exclude=$pattern"
+done
 
 [ -d "$SRC" ] || { echo "copy_tree: no such directory: $SRC" >&2; exit 1; }
 
@@ -46,5 +56,6 @@ tar --create --file - \
     --exclude='RetroArch-Win64' \
     --exclude='.cache' \
     --exclude='*.7z' \
+    $EXTRA \
     --directory "$(dirname "$SRC")" "$(basename "$SRC")" \
   | tar --extract --file - --directory "$DEST_PARENT"

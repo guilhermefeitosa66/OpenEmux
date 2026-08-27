@@ -82,7 +82,14 @@ flatpak-builder --user --force-clean --disable-rofiles-fuse \
   --repo=flatpak-repo .flatpak-build-dir "$STAGE/$MANIFEST"
 
 mkdir -p dist
-BUNDLE="dist/OpenEmux-${VERSION}.flatpak"
+# The x86_64 bundle keeps the name it has always had -- it is a published
+# release asset and links to it exist -- so only the other architecture is
+# suffixed. Without a suffix the two builds would overwrite each other in
+# dist/, and SHA256SUMS would cover whichever ran last (issue #119).
+case "$(uname -m)" in
+  x86_64) BUNDLE="dist/OpenEmux-${VERSION}.flatpak" ;;
+  *)      BUNDLE="dist/OpenEmux-${VERSION}-$(uname -m).flatpak" ;;
+esac
 flatpak build-bundle flatpak-repo "$BUNDLE" "$APP_ID"
 echo "==> built: $BUNDLE"
 

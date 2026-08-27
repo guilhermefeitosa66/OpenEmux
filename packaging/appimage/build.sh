@@ -8,10 +8,27 @@ set -euo pipefail
 # leave root-owned files in dist/.
 trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appimage-builder-cache 2>/dev/null || true' EXIT
 
-RECIPE=packaging/appimage/AppImageBuilder.yml
-APPDIR_LIB="$PWD/AppDir/usr/lib/x86_64-linux-gnu"
+# Everything that varies with the architecture, derived from the host. The
+# AppDir is assembled out of foreign-arch debs and the result only runs on the
+# machine type it was built for, so host == target here; packaging/build.sh
+# refuses a mismatch before getting this far (issue #119).
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64)  TRIPLET=x86_64-linux-gnu ;;
+  aarch64) TRIPLET=aarch64-linux-gnu ;;
+  *) echo "unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+
+SOURCE_RECIPE=packaging/appimage/AppImageBuilder.yml
+# One recipe, rendered per architecture: four values differ and ninety lines of
+# package list do not, and two copies of that list is a package added to one of
+# them. On x86_64 the render is byte-identical to the file in git.
+RECIPE="$PWD/build/appimage/AppImageBuilder.${ARCH}.yml"
+python3 packaging/appimage/arch_recipe.py "$SOURCE_RECIPE" --arch "$ARCH" --output "$RECIPE"
+
+APPDIR_LIB="$PWD/AppDir/usr/lib/$TRIPLET"
 # The static-FUSE3 AppImage runtime baked into the build image (see phase 2).
-RUNTIME_SRC=/opt/appimage-runtime-x86_64
+RUNTIME_SRC="/opt/appimage-runtime-$ARCH"
 
 # The recipe is the only place the version is duplicated -- the .deb, .rpm and
 # Flatpak all derive it from src/openemux/__init__.py. A forgotten bump
@@ -19,13 +36,13 @@ RUNTIME_SRC=/opt/appimage-runtime-x86_64
 # and it went into dist/, into SHA256SUMS and into the GitHub release with
 # every check passing (issue #255).
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
-if ! grep -q "^    version: \"${VERSION}\"$" "$RECIPE"; then
-  echo "FAIL: $RECIPE does not carry version \"${VERSION}\"." >&2
+if ! grep -q "^    version: \"${VERSION}\"$" "$SOURCE_RECIPE"; then
+  echo "FAIL: $SOURCE_RECIPE does not carry version \"${VERSION}\"." >&2
   echo "src/openemux/__init__.py says ${VERSION}; the recipe says:" >&2
-  grep -n '^    version:' "$RECIPE" >&2
+  grep -n '^    version:' "$SOURCE_RECIPE" >&2
   exit 1
 fi
-echo "==> building openemux ${VERSION} AppImage"
+echo "==> building openemux ${VERSION} AppImage for ${ARCH}"
 
 echo "==> phase 1: assemble the AppDir (no packaging yet)"
 appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
@@ -36,7 +53,7 @@ appimage-builder --recipe "$RECIPE" --skip-tests --skip-appimage
 # LD_LIBRARY_PATH points at the bundled libs so the SVG and WebP loaders (which
 # need librsvg/cairo/libxml2/libwebp) can be dlopen-ed while querying.
 GPB_DIR="$APPDIR_LIB/gdk-pixbuf-2.0"
-QUERY_BIN=/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders
+QUERY_BIN="/usr/lib/$TRIPLET/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders"
 if [ ! -d "$GPB_DIR/2.10.0/loaders" ] || [ ! -x "$QUERY_BIN" ]; then
   echo "ERROR: gdk-pixbuf query tool or bundled loaders dir not found." >&2
   exit 1
@@ -44,7 +61,7 @@ fi
 
 echo "==> regenerating gdk-pixbuf loaders.cache from the bundled loaders"
 tmp_cache="$(mktemp)"
-LD_LIBRARY_PATH="$APPDIR_LIB:$PWD/AppDir/lib/x86_64-linux-gnu" \
+LD_LIBRARY_PATH="$APPDIR_LIB:$PWD/AppDir/lib/$TRIPLET" \
 GDK_PIXBUF_MODULEDIR="$GPB_DIR/2.10.0/loaders" \
   "$QUERY_BIN" > "$tmp_cache"
 # Strip the build-time absolute loader dir so entries become bare filenames; at
@@ -112,7 +129,7 @@ fi
 # release artifact keeps its name.
 VERSION="$(sed -n 's/^ *version: *"\(.*\)"/\1/p' "$RECIPE" | head -1)"
 test -n "$VERSION" || { echo "ERROR: no version: field in $RECIPE." >&2; exit 1; }
-BUNDLE_NAME="OpenEmux-${VERSION}-x86_64.AppImage"
+BUNDLE_NAME="OpenEmux-${VERSION}-${ARCH}.AppImage"
 PAYLOAD="$PWD/AppDir.squashfs"
 rm -f "$PAYLOAD" "$BUNDLE_NAME"
 mksquashfs AppDir "$PAYLOAD" -root-owned -noappend -reproducible \

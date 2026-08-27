@@ -5,7 +5,19 @@
 set -euo pipefail
 
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
-echo "==> building openemux ${VERSION} .deb"
+# Derived, not declared. The .deb was stamped `amd64` whatever it was built on,
+# so an arm64 build would have produced a package apt refuses to install with a
+# message about the wrong architecture (issue #119). dpkg knows what it is
+# building for; asking it is the whole fix.
+DEB_ARCH="$(dpkg --print-architecture)"
+# The Debian multiarch triplet, for the vendored RetroArch's filename: amd64 ->
+# x86_64, arm64 -> aarch64.
+case "$DEB_ARCH" in
+  amd64) VENDOR_ARCH=x86_64 ;;
+  arm64) VENDOR_ARCH=aarch64 ;;
+  *)     echo "unsupported architecture: $DEB_ARCH" >&2; exit 1 ;;
+esac
+echo "==> building openemux ${VERSION} .deb for ${DEB_ARCH}"
 
 STAGE="$(mktemp -d)"
 DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
@@ -31,21 +43,37 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # already depends on it, so nothing changes for the user. Declare it again the
 # day OpenEmux can open a ROM handed to it by a file manager, together with a
 # MimeType= line and a %%U on Exec.
+# libretro publishes no ARM RetroArch, so the arm64 package bundles none -- and
+# a frontend with no emulator behind it is not a working install. There it is a
+# hard dependency on the distribution's own `retroarch` (present in Ubuntu
+# noble arm64 and Debian bookworm arm64), and libfuse is not needed because
+# there is no AppImage to mount (issue #119).
+case "$DEB_ARCH" in
+  arm64)
+    RUNTIME_DEPENDS="retroarch"
+    EMULATOR_SENTENCE="It uses the RetroArch the distribution provides"
+    ;;
+  *)
+    RUNTIME_DEPENDS="libfuse2t64 | libfuse2"
+    EMULATOR_SENTENCE="It bundles a RetroArch AppImage"
+    ;;
+esac
+
 install -d "$STAGE/DEBIAN"
 INSTALLED_KB="$(du -ks "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" <<EOF
 Package: openemux
 Version: ${VERSION}
-Architecture: amd64
+Architecture: ${DEB_ARCH}
 Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
 Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
-Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, libfuse2t64 | libfuse2
+Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, ${RUNTIME_DEPENDS}
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
- games through RetroArch, inspired by OpenEmu. It bundles a RetroArch AppImage
+ games through RetroArch, inspired by OpenEmu. ${EMULATOR_SENTENCE}
  and downloads libretro cores on first launch.
 EOF
 
@@ -98,7 +126,7 @@ chmod 0644 "$STAGE/DEBIAN/md5sums"
 echo "md5sums: $(wc -l < "$STAGE/DEBIAN/md5sums") files"
 
 mkdir -p dist
-DEB="dist/openemux_${VERSION}_amd64.deb"
+DEB="dist/openemux_${VERSION}_${DEB_ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "$STAGE" "$DEB"
 echo "==> built: $DEB"
 dpkg-deb --info "$DEB"
@@ -141,7 +169,14 @@ require_member './usr/share/doc/openemux/copyright' "$FSYS_MEMBERS"
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
-test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+# On x86_64 the AppImage is committed and must be in the package. On aarch64
+# there is none to vendor, and what has to hold instead is that the package
+# declares a RetroArch to depend on -- checked above through the control file.
+if [ "$VENDOR_ARCH" = "x86_64" ]; then
+  test -f "/opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage"
+else
+  test ! -f "/opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage"
+fi
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
 test -f /usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
