@@ -1742,6 +1742,73 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-221 — No package carries artwork the UI never displays
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the source tree; the built artifacts follow from it).
+- **Steps:** As a QA person: install the `.deb` and run
+  `du -sh /opt/openemux/src/openemux/ui/assets/icons/*`.
+- **Expected:** Only `systems/` and `symbolic/`, a few hundred KB in total. About 18 MB of
+  vendored PNG artwork used to ship in every `.deb`, `.rpm`, AppImage and Flatpak without a code
+  path that could ever read it: 168 controller illustrations, six Preferences icons (the pages
+  use symbolic icon names) and 37 console icons for consoles OpenEmux does not support, regional
+  variants it does not use, and OpenEmu's own "Unused console icons" (issue #233). The only
+  reader is `_asset_path(category, filename)`, called with `"systems"` and nothing else.
+- **Check:** suite file `tests/test_icon_assets.py`, plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  icons = Path("src/openemux/ui/assets/icons")
+  for gone in ("controllers", "settings"):
+      assert not (icons / gone).exists(), f"{gone}/ ships and nothing displays it"
+  block = (Path("src/openemux/ui/window.py").read_text()
+           .split("CONSOLE_ICON_FILES = {", 1)[1].split("}", 1)[0])
+  wanted = set(re.findall(r'"([^"]+\.png)"', block))
+  wanted |= {n.replace("@2x.png", ".png") for n in wanted if n.endswith("@2x.png")}
+  present = {p.name for p in (icons / "systems").iterdir() if p.is_file()}
+  assert not present - wanted, f"unreferenced console icons: {sorted(present - wanted)}"
+  total = sum(p.stat().st_size for p in icons.rglob("*") if p.is_file())
+  assert total < 2_000_000, f"the icon tree is back up to {total} bytes"
+  print("RT-221 OK")
+  EOF
+  ```
+
+### RT-222 — The packaged copyright covers the third-party material, not just OpenEmux
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the packaging inputs).
+- **Steps:** As a QA person: install any package and read
+  `/usr/share/doc/openemux/copyright` (`/usr/share/licenses/openemux/copyright` on Fedora).
+- **Expected:** It is a DEP-5 file naming the terms of everything that ships: OpenEmux's own MIT,
+  the OpenEmu console icons (BSD-3-clause), the Adwaita symbolic icons (LGPL-3 or CC-BY-SA-3.0)
+  and the vendored RetroArch AppImage (GPL-3+). Every package used to install the bare MIT
+  `LICENSE` there, which implicitly claimed MIT over roughly a third of its own contents, while
+  `ui/assets/icons/ATTRIBUTION.md` recorded provenance and no terms at all (issue #233).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+  copyright_text = Path("packaging/common/copyright").read_text()
+  assert copyright_text.startswith("Format: https://www.debian.org/doc/"), "not DEP-5"
+  for name in ("MIT", "BSD-3-clause-OpenEmu", "LGPL-3 or CC-BY-SA-3.0", "GPL-3+"):
+      assert f"License: {name}" in copyright_text, f"no terms for {name}"
+  attribution = " ".join(
+      Path("src/openemux/ui/assets/icons/ATTRIBUTION.md").read_text().split())
+  assert "not covered by OpenEmux's MIT license" in attribution
+  assert "Redistribution and use in source and binary forms" in attribution
+  for installer in ("packaging/common/stage_tree.sh",
+                    "packaging/appimage/AppImageBuilder.yml",
+                    "packaging/flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml",
+                    "packaging/rpm/openemux.spec"):
+      assert "packaging/common/copyright" in Path(installer).read_text(), \
+          f"{installer} does not install the copyright file"
+  # The notice must reach the pip-installed build too, which copies no src/.
+  assert "ui/assets/icons/ATTRIBUTION.md" in Path("pyproject.toml").read_text()
+  print("RT-222 OK")
+  EOF
+  ```
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

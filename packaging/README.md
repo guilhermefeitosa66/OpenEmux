@@ -71,6 +71,16 @@ refuses to build when the two disagree, and
 `tests/test_reproducible_builds.py` checks all four bump sites against it on
 `develop`.
 
+**What ships is licensed.** About a third of every package is third-party: the
+console icons are OpenEmu's (BSD-3-clause), the symbolic icons are Adwaita's
+(LGPL-3 / CC-BY-SA-3.0) and the vendored RetroArch AppImage is GPL-3+. Every
+format installs `common/copyright` — a DEP-5 file naming each — rather than a
+copy of the MIT `LICENSE`, which claimed MIT over all of it. The notices ship
+beside the artwork too (`ui/assets/icons/ATTRIBUTION.md`,
+`ui/assets/icons/symbolic/LICENSE`), which is what OpenEmu's terms require of a
+binary distribution, and `tests/test_icon_assets.py` fails when a vendored
+directory has no entry.
+
 **Reproducibility.** Every Docker base is pinned by digest and
 `packaging/build.sh` builds with `--pull`, so a base-image change is a commit
 somebody reviewed rather than a silent difference between two builds of the

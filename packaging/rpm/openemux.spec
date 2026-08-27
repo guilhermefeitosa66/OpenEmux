@@ -93,8 +93,8 @@ rm -rf %{buildroot}
 DESTDIR=%{buildroot} ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 
 # stage_tree.sh writes the Debian layout, /usr/share/doc/openemux/copyright.
-# On RPM the licence belongs in %%{_licensedir}, which `%%license LICENSE`
-# below fills in itself; leaving the Debian copy behind orphaned
+# On RPM the licence belongs in %%{_licensedir}, which the `%%license` lines
+# below fill in themselves; leaving the Debian copy behind orphaned
 # /usr/share/doc/openemux (owned by no package, left behind by `dnf remove`,
 # and an rpmlint error).
 rm -rf %{buildroot}/usr/share/doc/openemux
@@ -119,6 +119,10 @@ appstreamcli validate --no-net \
 /usr/share/icons/hicolor/*/apps/io.github.guilhermefeitosa66.OpenEmux.png
 /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 %license LICENSE
+# Not a duplicate of LICENSE: about a third of what ships is third-party (the
+# OpenEmu console icons, the Adwaita symbolic icons, the vendored RetroArch
+# AppImage) and this is where their terms are recorded (issue #233).
+%license packaging/common/copyright
 
 # $1 is the number of copies of the package that will remain: 1 on a fresh
 # install and 2 during an upgrade for %%post, 1 during an upgrade and 0 on the

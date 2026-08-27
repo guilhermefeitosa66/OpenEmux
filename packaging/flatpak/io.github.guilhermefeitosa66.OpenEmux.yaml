@@ -73,6 +73,10 @@ modules:
         ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
       - install -Dm644 LICENSE
         ${FLATPAK_DEST}/share/licenses/io.github.guilhermefeitosa66.OpenEmux/LICENSE
+      # The third-party notices: the OpenEmu console icons, the Adwaita
+      # symbolic icons and the RetroArch AppImage are not MIT (issue #233).
+      - install -Dm644 packaging/common/copyright
+        ${FLATPAK_DEST}/share/licenses/io.github.guilhermefeitosa66.OpenEmux/copyright
     sources:
       # Our own builds (make flatpak, the openemux-flatpak repo's workflow)
       # build the checked-out tree, so releases need no manifest bump. The
