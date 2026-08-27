@@ -186,6 +186,29 @@ class DegradationTests(unittest.TestCase):
             self.assertIsNone(index.resolve_name(SNES, "Chrono Trigger"))
             self.assertFalse(index.available)
 
+    def test_a_rejected_database_can_be_replaced_afterwards(self):
+        """A corrupt index has to be replaceable by the download that heals it.
+
+        The file opens fine and it is the *query* that fails, so a connection
+        is already holding it when the failure is noticed. Leaving that handle
+        to the garbage collector is an idle descriptor here and a file that
+        cannot be deleted or replaced on Windows, where the suite's own
+        temporary directory could not be cleaned up (issue #118).
+
+        This passes on Linux whether or not the handle was released -- an open
+        file can still be unlinked here. It is written as the requirement
+        rather than as the mechanism, and the Windows job is what enforces it.
+        """
+        with TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            db_path.write_bytes(b"this is not sqlite at all")
+            index = ArtworkNameIndex(db_path=db_path)
+            self.assertFalse(index.available)
+            replacement = Path(tmp) / "fresh.db"
+            replacement.write_bytes(b"a replacement")
+            os.replace(replacement, db_path)
+            self.assertEqual(db_path.read_bytes(), b"a replacement")
+
     def test_a_database_without_fts_still_serves_crc(self):
         with TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "games.db"

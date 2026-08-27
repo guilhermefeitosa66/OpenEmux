@@ -194,6 +194,7 @@ class ArtworkNameIndex:
         if not self._ensure_db_file():
             # Nothing to open, and nothing that says it will stay that way.
             return None
+        conn = None
         try:
             conn = sqlite3.connect(
                 f"file:{self._db_path}?mode=ro", uri=True, timeout=1.0
@@ -201,6 +202,20 @@ class ArtworkNameIndex:
             conn.execute("SELECT 1 FROM games LIMIT 1")
             return conn
         except Exception as exc:
+            # Closed here rather than left to the garbage collector. The file
+            # opens fine and it is the *query* that fails, so a connection is
+            # already holding it by the time the failure is noticed. Dropping
+            # the last reference and trusting the interpreter to finalize it is
+            # enough on Linux, where an open file can be unlinked anyway; on
+            # Windows the handle outlived the call and the file could not be
+            # deleted or replaced at all -- which is a corrupt index that the
+            # download meant to heal it cannot overwrite (issue #118).
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:  # noqa: BLE001 - already on the failure path
+                    logger.debug("artwork index: closing the bad handle failed",
+                                 exc_info=True)
             logger.warning("artwork index unusable: path=%s error=%s", self._db_path, exc)
             self._corrupt = True
             return None

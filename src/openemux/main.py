@@ -113,6 +113,26 @@ def _configure_game_window_backend():
     os.environ["GDK_BACKEND"] = "x11"
 
 
+def _ensure_pixbuf_loaders():
+    """Windows: build gdk-pixbuf's loader cache before anything decodes an image.
+
+    Has to happen before ``gi.repository`` is imported -- gdk-pixbuf reads
+    GDK_PIXBUF_MODULE_FILE once, when it initialises -- which is what puts it
+    in this function rather than in the application. See
+    ``core/pixbuf_loaders`` for why the cache cannot be written at build time.
+    """
+    if not IS_WINDOWS:
+        return
+    from openemux.core.pixbuf_loaders import ensure_loaders_cache
+
+    try:
+        ensure_loaders_cache(get_project_root())
+    except Exception:  # noqa: BLE001 - a blank cover must not stop start-up
+        logging.getLogger(__name__).warning(
+            "gdk-pixbuf: preparing the loader cache failed", exc_info=True
+        )
+
+
 #: Whether prepare_process() has already run in this process.
 _prepared = False
 
@@ -144,6 +164,7 @@ def prepare_process():
     _configure_game_window_backend()
     configure_startup_logging()
     _ensure_gtk_typelibs()
+    _ensure_pixbuf_loaders()
 
 
 def build_application():

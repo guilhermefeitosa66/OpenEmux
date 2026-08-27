@@ -8,7 +8,12 @@
     "",
     "libretro publishes no checksums, so a null sha256 is filled in on first fetch",
     "(trust on first use). Review and commit the recorded hash: from then on any",
-    "drift in the upstream file is a hard failure instead of a silent swap."
+    "drift in the upstream file is a hard failure instead of a silent swap.",
+    "",
+    "RetroArch's own licence text is not inside any of these artifacts -- the",
+    "Windows archive carries only assets/COPYING (CC-BY-4.0, for the assets).",
+    "GPLv3 redistribution requires shipping it, so vendors/RetroArch-COPYING is",
+    "committed here, taken from the upstream tag the binary was built from."
   ],
   "manifest_version": 1,
   "artifacts": {
@@ -48,5 +53,18 @@
         "version and url the next time this artifact is refreshed."
       ]
     }
+  },
+  "retroarch_licence": {
+    "description": "RetroArch's own licence text, shipped beside every vendored binary",
+    "path": "vendors/RetroArch-COPYING",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "source": "https://raw.githubusercontent.com/libretro/RetroArch/v1.22.2/COPYING",
+    "license": "GPL-3.0-or-later",
+    "_note": [
+      "Committed rather than fetched at build time: the build already has one",
+      "network dependency too many, and a licence that has to download is a",
+      "licence that can be missing from a release. Refresh it when the",
+      "vendored RetroArch version changes, from that version's own tag."
+    ]
   }
 }

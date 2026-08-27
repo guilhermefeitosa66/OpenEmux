@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 
 from openemux.core import retroachievements
 from openemux.core.retroachievements import AchievementsStore, LoginError
+from tests.platform_marks import posix_only
 
 
 class _Response(BytesIO):
@@ -135,6 +136,7 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(store.get_username(), "player")
             self.assertEqual(store.get_token(), "abc123")
 
+    @posix_only("0o600 on the file holding the account token")
     def test_the_file_is_owner_only(self):
         with TemporaryDirectory() as tmp_dir:
             store = self._store(tmp_dir)

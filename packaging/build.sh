@@ -67,7 +67,9 @@ if [ "$TARGET" = "windows" ]; then
   # here rather than 20 minutes later, after the whole GTK stack has downloaded.
   if [ ! -f vendors/RetroArch-Win64/retroarch.exe ]; then
     echo "vendors/RetroArch-Win64/retroarch.exe is missing." >&2
-    echo "Run 'make vendor-retroarch' first." >&2
+    echo "Run 'make vendor-retroarch-win64' first, or just 'make windows'," >&2
+    echo "which fetches it. 'make vendor-retroarch' on a Linux host takes the" >&2
+    echo "artifact for *this* platform, which is the committed AppImage." >&2
     exit 1
   fi
 fi

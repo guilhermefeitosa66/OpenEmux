@@ -41,6 +41,7 @@ on:
           - deb+rpm
           - appimage
           - flatpak
+          - windows
 
 concurrency:
   group: packages-${{ github.ref }}
@@ -72,10 +73,11 @@ jobs:
                 deb+rpm)  targets='["deb","rpm"]' ;;
                 appimage) targets='["appimage"]' ;;
                 flatpak)  targets='["flatpak"]' ;;
-                *)        targets='["deb","rpm","appimage","flatpak"]' ;;
+                windows)  targets='["windows"]' ;;
+                *)        targets='["deb","rpm","appimage","flatpak","windows"]' ;;
               esac ;;
             *)
-              targets='["deb","rpm","appimage","flatpak"]' ;;
+              targets='["deb","rpm","appimage","flatpak","windows"]' ;;
           esac
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
           echo "building: $targets"
@@ -86,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
-      # One broken format should not hide the state of the other three.
+      # One broken format should not hide the state of the other four.
       fail-fast: false
       matrix:
         target: ${{ fromJSON(needs.plan.outputs.targets) }}
@@ -96,10 +98,11 @@ jobs:
 
       - name: Reclaim runner disk space
         # The AppImage and the Flatpak pull a whole GTK stack (and, for the
-        # Flatpak, the GNOME SDK) into the container. A stock runner has ~14 GB
-        # free, which the SDK alone can eat; the preinstalled toolchains below
-        # are worth ~25 GB and nothing here uses them.
-        if: matrix.target == 'appimage' || matrix.target == 'flatpak'
+        # Flatpak, the GNOME SDK) into the container, and the Windows build
+        # unpacks RetroArch *and* a MINGW64 GTK stack. A stock runner has
+        # ~14 GB free, which the SDK alone can eat; the preinstalled toolchains
+        # below are worth ~25 GB and nothing here uses them.
+        if: matrix.target != 'deb' && matrix.target != 'rpm'
         run: |
           df -h /
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
@@ -112,6 +115,34 @@ jobs:
         # be up on the host first.
         if: matrix.target == 'appimage' || matrix.target == 'flatpak'
         run: sudo modprobe fuse
+
+      # The Windows bundle ships RetroArch, and that binary is 193 MiB of
+      # gitignored download rather than a committed vendor file -- so unlike
+      # the four Linux formats, this build needs one thing fetched before it
+      # can start. Cached on the manifest's own sha256: a RetroArch bump
+      # changes the key and re-downloads, and nothing else does.
+      - name: Restore the vendored RetroArch download
+        if: matrix.target == 'windows'
+        id: retroarch-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendors/.cache
+          key: retroarch-win64-${{ hashFiles('vendors/manifest.json') }}
+
+      - name: Install 7-Zip
+        # scripts/vendor_retroarch.py unpacks RetroArch.7z with the 7-Zip CLI:
+        # py7zr cannot read BCJ2, which is 7-Zip's default filter for x86
+        # executables and therefore most of that archive.
+        if: matrix.target == 'windows'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends 7zip
+
+      - name: Fetch the vendored RetroArch
+        # Named, not inferred: `make vendor-retroarch` takes the artifact for
+        # the host it runs on, and this host is Linux. Verifies against the
+        # sha256 in vendors/manifest.json, so a changed upstream file fails
+        # here instead of shipping.
+        if: matrix.target == 'windows'
+        run: make vendor-retroarch-win64
 
       - name: Build the ${{ matrix.target }}
         run: ./packaging/build.sh ${{ matrix.target }}

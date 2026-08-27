@@ -57,7 +57,7 @@ from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
-from openemux.core.ui_gamepad import GamepadNavigator
+from openemux.core.gamepad_backend import make_navigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
@@ -210,7 +210,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._gamepad_nav_enabled = ui_settings.get("gamepad_navigation", True)
         # True while the preferences dialog waits for a button/key to bind.
         self.input_capture_active = False
-        self.gamepad_navigator = GamepadNavigator(
+        self.gamepad_navigator = make_navigator(
             on_action=lambda action: GLib.idle_add(self.navigation.on_gamepad_action, action),
             on_connected=lambda name: GLib.idle_add(self.navigation.on_gamepad_connected, name),
             on_disconnected=lambda: GLib.idle_add(self.navigation.on_gamepad_disconnected),

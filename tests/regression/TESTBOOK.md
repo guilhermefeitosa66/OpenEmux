@@ -3599,6 +3599,152 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   that crashes at startup, and the installer clears the directories it owns first.
 - **Check:** human only.
 
+### RT-267 — The suite runs on Windows, and what it skips there says why
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Check that every platform skip carries a stated reason.
+- **Expected:** Tests skipped off their platform go through `tests/platform_marks.py`, whose reasons
+  name the POSIX or Linux behaviour under test. A bare "skipped on Windows" would make a platform
+  truth indistinguishable from a bug nobody fixed, which is how a Windows port quietly stops being
+  tested.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "import pathlib, re; bad = sorted(p.name for p in pathlib.Path('tests').glob('test_*.py') if p.name != 'test_platform_marks.py' and re.search(r'skip(If|Unless)\s*\(\s*(sys\.platform|os\.name)', p.read_text())); assert not bad, bad; print('RT-267 OK')"`
+
+### RT-259 — The SDL backend spells a control the same way the evdev one does
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A button, an axis past the deadzone and a hat direction decode to the same binding
+  tokens on both backends -- `"3"`, `"+1"`/`"-1"`, `"h0up"`. Anything else and a profile written on
+  one platform means a different control on the other, and `NAV_TOKEN_ACTIONS` -- one fixed map,
+  shared by both -- would act on the wrong buttons. `test_gamepad_sdl_device.py` asserts it against
+  a real kernel device read through real libSDL2 (a uinput pad; skipped where `/dev/uinput` is not
+  writable or libSDL2 is absent), which is the only way to prove the *numbering* rather than the
+  decoding.
+- **Check:** suite files `tests/test_gamepad_sdl.py`, `tests/test_gamepad_sdl_device.py`,
+  `tests/test_gamepad_reader.py`.
+
+### RT-260 — A resting analogue trigger is not read as a held control
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** SDL rests a trigger at -32768, well past the deadzone, so a pad opened with the
+  triggers untouched must report nothing. Without this the navigator sees a control held down from
+  the moment the pad is plugged in, and the first real pull reads as a *release*.
+- **Check:** suite file `tests/test_gamepad_sdl.py` (`PadStateTests`, `PumpTests`).
+
+### RT-261 — Navigation and capture do not steal each other's presses
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Two listeners subscribed to the SDL pump both receive every transition. SDL has one
+  event queue per process, and OpenEmux reads it from two places at once -- the navigator and, while
+  remapping, the capture reader -- so polling separately would drop presses at random.
+- **Check:** suite file `tests/test_gamepad_sdl.py` (`PumpTests`).
+
+### RT-262 — The launch tells RetroArch which joypad driver to count with
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** On Windows the launch override carries `input_joypad_driver = "sdl2"`; on Linux it
+  carries no such line. A binding token is an index into whatever the joypad driver counts, and
+  RetroArch's Windows default (xinput) numbers buttons differently from SDL -- so without this a
+  button remapped in OpenEmux binds a different one in the game.
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`test_override_pins_the_joypad_driver_on_windows`,
+  `test_override_leaves_the_joypad_driver_alone_on_linux`).
+
+### RT-263 — The gamepad backend follows the platform, and can be forced
+- **Area:** Windows platform
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Ask the factory which backend it would build, with and without the override.
+- **Expected:** Linux builds the evdev reader, Windows the SDL one, and `OPENEMUX_GAMEPAD_BACKEND`
+  overrides either -- which is how the SDL path is exercised against a real controller on a Linux
+  desk. An unknown value warns and keeps the default rather than leaving the app with no gamepad.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from unittest.mock import patch; from openemux.core import gamepad_backend as b; assert b.backend_name({}) == 'evdev'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'sdl2'}) == 'sdl2'; assert b.backend_name({'OPENEMUX_GAMEPAD_BACKEND': 'nope'}) == 'evdev'; print('RT-263 OK')"`
+
+### RT-266 — Unplugging a pad mid-direction stops the scrolling
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A pad removed while a direction is held stops repeating. The release of every held
+  control is what ends an auto-repeat, so a disconnect that discards those releases leaves the grid
+  scrolling on its own with no controller attached.
+- **Check:** suite file `tests/test_gamepad_sdl.py`
+  (`test_unplugging_a_pad_mid_direction_stops_the_repeat`).
+
+### RT-268 — The Windows bundle ships RetroArch's licence
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** `vendors/RetroArch-COPYING` is the GPLv3 text, matches the hash recorded in
+  `vendors/manifest.json`, and the Windows staging copies it beside `retroarch.exe`. The upstream
+  archive carries no licence of its own -- only `assets/COPYING`, which is CC-BY-4.0 and covers the
+  assets -- so without this the build refuses to package, and shipping it anyway would be a GPLv3
+  redistribution with no licence text.
+- **Check:** suite file `tests/test_package_data.py` (`VendoredRetroArchLicenceTests`).
+
+### RT-269 — WebP covers and SVG artwork decode on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux freshly installed on Windows 10/11, one ROM in the library, an
+  internet connection.
+- **Steps:**
+  1. Start the app and let it sync cover art.
+  2. Look at the grid, then switch to the cartridge view.
+- **Expected:** Covers appear rather than blank cards, and the cartridge frames render. libretro
+  serves covers as WebP and the frames are SVG; both are gdk-pixbuf *loader* formats, so both
+  depend on `loaders.cache` -- which names its modules by absolute path and is therefore written on
+  first launch, on this machine, not at build time. If it failed, the start-up log says
+  "gdk-pixbuf:" and why.
+- **Check:** human only. The decision-making around writing it is covered by
+  `tests/test_pixbuf_loaders.py`.
+
+### RT-264 — A controller navigates the UI and can be remapped on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed on Windows 10/11, a physical controller connected, one ROM
+  in the library.
+- **Steps:**
+  1. With the app open, navigate the grid with the D-pad and the left stick; press A to open a
+     game's details and B to come back.
+  2. Open "Settings" (`Ctrl+,`) → "Input", pick the console and the gamepad device, click a binding
+     row and press a button on the pad.
+  3. Launch the game and use the control just bound.
+- **Expected:** The pad navigates the UI, the capture screen shows the button that was pressed, and
+  in the game that same physical button performs that action. This is the round trip the whole SDL
+  backend exists for: the token OpenEmux writes is read back by RetroArch's own SDL driver.
+- **Check:** human only.
+
+### RT-265 — Deleting a ROM on Windows reaches the Recycle Bin, or says so
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux running on Windows with a throwaway ROM copied into the library.
+- **Steps:**
+  1. Right-click the throwaway ROM and choose "Delete".
+  2. Open the Recycle Bin.
+- **Expected:** The file is in the Recycle Bin and the game is gone from the grid. GLib implements
+  `g_file_trash` on Win32 with `SHFileOperationW`, `wFunc = FO_DELETE` and `fFlags = FOF_ALLOWUNDO`
+  -- so `rom_actions` needs no Windows branch and this is the same call site as on Linux. If the volume has no Recycle Bin the app must say the file could not be
+  moved to the trash and leave it on disk -- never report success and delete nothing, and never
+  delete permanently without saying so.
+- **Check:** human only.
+
 
 ## Retired
 

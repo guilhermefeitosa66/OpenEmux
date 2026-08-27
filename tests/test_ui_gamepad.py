@@ -23,6 +23,7 @@ from openemux.core.ui_gamepad import (
     REPEATABLE_ACTIONS,
     action_for_token,
 )
+from tests.platform_marks import linux_only
 
 # A typical pad: 11 buttons from BTN_GAMEPAD (indices 0..10), left/right
 # sticks + triggers (axes 0..5 after hat exclusion) and one hat.
@@ -302,6 +303,7 @@ class _FakeDevice:
         self.abs_codes = ABS_CODES
 
 
+@linux_only("it opens /dev/input nodes and select()s on them")
 class HotplugScanTests(unittest.TestCase):
     """A second pad plugged in next to a working one has to be picked up.
 
@@ -386,6 +388,7 @@ class ReadErrorTests(unittest.TestCase):
             )
 
 
+@linux_only("it drives the evdev reader through select() on a file")
 class StaleSuspendFlagTests(unittest.TestCase):
     """The suspend flag is re-read after select(), not before it (#223).
 

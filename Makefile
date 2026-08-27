@@ -17,6 +17,17 @@ PYTHON := $(VENV)/bin/python3
 RETROARCH_VENDOR := vendors/RetroArch-Linux-x86_64.AppImage
 endif
 
+# scripts/vendor_retroarch.py is standard library only, on purpose: it runs on
+# the dev box, inside the MSYS2 shell, in the build container and on a CI runner
+# that has no venv at all. Sending it through $(PYTHON) made `make
+# vendor-retroarch` fail with "\.venv/bin/python3: No such file or directory" on
+# every one of those -- for a script that needs nothing installed.
+ifeq ($(OS),Windows_NT)
+VENDOR_PYTHON := python
+else
+VENDOR_PYTHON := $(if $(wildcard $(VENV)/bin/python3),$(VENV)/bin/python3,python3)
+endif
+
 # `python -m pip`, never .venv/bin/pip. A console script carries the absolute
 # path of the interpreter it was installed against baked into its shebang, so
 # renaming or moving the checkout breaks it -- which is the state this repo is
@@ -26,7 +37,7 @@ endif
 PIP := $(PYTHON) -m pip
 
 .PHONY: all setup setup-dev venv run test coverage smoke lint icons name-db clean install-sys-deps bootstrap check-retroarch lock-deps
-.PHONY: install-sys-deps-windows vendor-retroarch verify-vendors
+.PHONY: install-sys-deps-windows vendor-retroarch vendor-retroarch-win64 verify-vendors
 .PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
 .PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
@@ -98,11 +109,20 @@ endif
 # vendors/manifest.json. The Linux AppImage is committed to git and is only
 # checked; the 193 MiB Windows build is gitignored and downloaded on demand.
 vendor-retroarch:
-	$(PYTHON) scripts/vendor_retroarch.py
+	$(VENDOR_PYTHON) scripts/vendor_retroarch.py
+
+# The *Windows* RetroArch, named rather than inferred. The target above takes
+# the artifact for the host it runs on, and the Windows bundle is cross-built on
+# Linux -- where "this platform" is the committed AppImage, so `make
+# vendor-retroarch` on a Linux box verified that and fetched nothing, and the
+# Windows build then stopped at its own guard. `make windows` depends on this,
+# so the download happens by itself the first time.
+vendor-retroarch-win64:
+	$(VENDOR_PYTHON) scripts/vendor_retroarch.py win64
 
 # Check every vendored artifact against the manifest without downloading.
 verify-vendors:
-	$(PYTHON) scripts/vendor_retroarch.py --verify
+	$(VENDOR_PYTHON) scripts/vendor_retroarch.py --verify
 
 # Development extras (coverage.py) on top of the runtime dependencies.
 # On Windows coverage comes from mingw-w64-x86_64-python-coverage, installed by
@@ -225,9 +245,9 @@ flatpak:
 	./packaging/build.sh flatpak
 
 # Windows portable .zip + installer .exe — cross-built in a Debian container.
-# Needs vendors/RetroArch-Win64 first: `make vendor-retroarch`. Runs on Linux
-# like every other target; there is no Windows machine in the release path.
-windows:
+# Runs on Linux like every other target; there is no Windows machine in the
+# release path. The bundled RetroArch is fetched first (193 MiB, once).
+windows: vendor-retroarch-win64
 	./packaging/build.sh windows
 
 # One SHA256SUMS over every artifact in dist/, so a download can be verified

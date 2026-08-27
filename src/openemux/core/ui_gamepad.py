@@ -264,8 +264,15 @@ class OpenPad(namedtuple("OpenPad", "tracker name path")):
     __slots__ = ()
 
 
-class GamepadNavigator:
-    """Reads every connected gamepad and emits UI navigation actions.
+class NavigatorCore:
+    """Everything a navigator does apart from reading a device.
+
+    The thread, the callbacks, the suspend check and the token-to-action state
+    machine -- auto-repeat, long press, the held triggers -- are the same
+    whichever backend produced the ``(token, pressed)`` transitions. Only the
+    reading differs: :class:`GamepadNavigator` below reads evdev,
+    ``gamepad_sdl.SdlNavigator`` reads SDL2 (issue #118). Subclasses implement
+    ``_run`` and call ``_dispatch`` for every transition.
 
     ``on_action(action)`` fires for each press (and for repeats of held
     directions). ``on_connected(name)`` / ``on_disconnected()`` report hotplug.
@@ -275,6 +282,9 @@ class GamepadNavigator:
     are drained and dropped (a running game owns the pad, and the preferences
     switch can turn UI navigation off without tearing the thread down).
     """
+
+    #: Name of the reader thread, so `top -H` and a traceback say which backend.
+    THREAD_NAME = "gamepad-nav"
 
     def __init__(self, on_action, on_connected=None, on_disconnected=None, should_suspend=None):
         self._on_action = on_action
@@ -289,7 +299,7 @@ class GamepadNavigator:
         if self._thread is not None:
             return
         self._cancel.clear()
-        self._thread = threading.Thread(target=self._run, name="gamepad-nav", daemon=True)
+        self._thread = threading.Thread(target=self._run, name=self.THREAD_NAME, daemon=True)
         self._thread.start()
 
     def stop(self, join_timeout=1.0):
@@ -299,10 +309,60 @@ class GamepadNavigator:
         if thread is not None and thread.is_alive():
             thread.join(timeout=join_timeout)
 
+    def _run(self):  # pragma: no cover - every subclass overrides it
+        raise NotImplementedError
+
     # -- internals
     def _emit(self, callback, *args):
         if callback and not self._cancel.is_set():
             callback(*args)
+
+    def _suspended(self):
+        """The suspend flag, with a failure counted as "suspended".
+
+        The callback reaches into the window and the runtime manager, and this
+        is a bare thread: an exception here is not caught by anything above and
+        simply ends the reader, taking gamepad navigation down for the rest of
+        the session (issue #223). Suspended is the safe answer -- navigation
+        pauses for one loop rather than stopping forever, and the next call
+        gets another chance.
+        """
+        try:
+            return bool(self._should_suspend())
+        except Exception:  # noqa: BLE001 - a caller's bug must not end the thread
+            logger.warning("gamepad navigation: suspend check failed", exc_info=True)
+            return True
+
+    def _dispatch(self, token, pressed, repeat, hold, suspended):
+        """Turn one ``(token, pressed)`` transition into UI actions."""
+        action = action_for_token(token)
+        if action is None:
+            return
+        if action in STATEFUL_ACTIONS:
+            # Held state matters (the triggers): report both edges.
+            if not suspended:
+                self._emit(self._on_action, f"{action}_{'on' if pressed else 'off'}")
+            return
+        if not pressed:
+            repeat.release(action)
+            if action in HOLDABLE_ACTIONS:
+                # The tap fires on release -- unless the long press already
+                # fired its hold action instead.
+                if hold.release(action) and not suspended:
+                    self._emit(self._on_action, action)
+            return
+        if suspended:
+            return
+        if action in HOLDABLE_ACTIONS:
+            hold.press(action)
+            return
+        if action in REPEATABLE_ACTIONS:
+            repeat.press(action)
+        self._emit(self._on_action, action)
+
+
+class GamepadNavigator(NavigatorCore):
+    """Reads every connected gamepad through evdev (Linux)."""
 
     def _open_pads(self, already_open=()):
         """Open every readable pad not already open; returns {fd: OpenPad}.
@@ -334,22 +394,6 @@ class GamepadNavigator:
             except OSError:
                 pass
         pads.clear()
-
-    def _suspended(self):
-        """The suspend flag, with a failure counted as "suspended".
-
-        The callback reaches into the window and the runtime manager, and this
-        is a bare thread: an exception here is not caught by anything above and
-        simply ends the reader, taking gamepad navigation down for the rest of
-        the session (issue #223). Suspended is the safe answer -- navigation
-        pauses for one loop rather than stopping forever, and the next call
-        gets another chance.
-        """
-        try:
-            return bool(self._should_suspend())
-        except Exception:  # noqa: BLE001 - a caller's bug must not end the thread
-            logger.warning("gamepad navigation: suspend check failed", exc_info=True)
-            return True
 
     def _run(self):
         pads = {}
@@ -457,28 +501,5 @@ class GamepadNavigator:
             chunk = data[offset:offset + INPUT_EVENT_SIZE]
             _sec, _usec, ev_type, code, value = struct.unpack(INPUT_EVENT_FORMAT, chunk)
             for token, pressed in tracker.feed(ev_type, code, value):
-                action = action_for_token(token)
-                if action is None:
-                    continue
-                if action in STATEFUL_ACTIONS:
-                    # Held state matters (the triggers): report both edges.
-                    if not suspended:
-                        self._emit(self._on_action, f"{action}_{'on' if pressed else 'off'}")
-                    continue
-                if not pressed:
-                    repeat.release(action)
-                    if action in HOLDABLE_ACTIONS:
-                        # The tap fires on release -- unless the long press
-                        # already fired its hold action instead.
-                        if hold.release(action) and not suspended:
-                            self._emit(self._on_action, action)
-                    continue
-                if suspended:
-                    continue
-                if action in HOLDABLE_ACTIONS:
-                    hold.press(action)
-                    continue
-                if action in REPEATABLE_ACTIONS:
-                    repeat.press(action)
-                self._emit(self._on_action, action)
+                self._dispatch(token, pressed, repeat, hold, suspended)
         return True

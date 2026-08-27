@@ -519,6 +519,24 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines_with_audio_driver("inherit")
         self.assertEqual([l for l in lines if l.startswith("audio_driver")], [])
 
+    def test_override_pins_the_joypad_driver_on_windows(self):
+        # Issue #118: a binding token is an index into whatever the joypad
+        # driver counts. OpenEmux reads the pad through SDL2 on Windows, and
+        # RetroArch's default there is xinput, whose button order is its own --
+        # so a button remapped in OpenEmux would bind a different one in the
+        # game. Naming the driver is what makes the two ends agree.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('input_joypad_driver = "sdl2"', lines)
+
+    def test_override_leaves_the_joypad_driver_alone_on_linux(self):
+        # On Linux both ends already agree: OpenEmux reads evdev with udev's
+        # numbering and RetroArch defaults to its udev joypad driver. Naming a
+        # driver here would be imposing a choice the user did not make.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual([l for l in lines if l.startswith("input_joypad_driver")], [])
+
     def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
         legacy_only = {
             "active_device": "keyboard",

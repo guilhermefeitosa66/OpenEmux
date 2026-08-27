@@ -117,6 +117,21 @@ section above: the version is pinned in
 ships beside the executable inside the bundle, and the corresponding source is
 the upstream tag at https://github.com/libretro/RetroArch.
 
+That licence text does not come from the archive. The upstream `RetroArch.7z`
+contains no `COPYING` of its own -- only `assets/COPYING`, which is CC-BY-4.0
+and covers the assets -- so
+[`vendors/RetroArch-COPYING`](vendors/RetroArch-COPYING) is the `COPYING` from
+the same upstream tag, committed here and recorded in the manifest with its
+hash. Refresh it whenever the vendored RetroArch version changes.
+
+### RetroArch assets (bundled, Windows only)
+
+- **License:** CC-BY-4.0
+- **Source:** https://github.com/libretro/retroarch-assets
+- **How OpenEmux uses it:** it does not, directly. The assets directory travels
+  inside the bundled RetroArch, which reads its own menu artwork and fonts from
+  it. Its licence ships with it, as `assets/COPYING`.
+
 **libretro cores are not included.** They are downloaded from the buildbot on
 first launch, exactly as on Linux, which keeps their many different licences out
 of the installer entirely.

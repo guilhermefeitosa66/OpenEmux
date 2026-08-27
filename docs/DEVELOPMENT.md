@@ -12,6 +12,7 @@ artifacts. For user-facing install instructions, see the main
 - [Running it without taking the screen](#running-it-without-taking-the-screen)
 - [The game window puts the whole app on X11](#the-game-window-puts-the-whole-app-on-x11)
 - [Developing on Windows](#developing-on-windows)
+  - [Gamepads: two backends, one token vocabulary](#gamepads-two-backends-one-token-vocabulary)
 - [Tests](#tests)
   - [Lint](#lint)
   - [Dependencies and the lock files](#dependencies-and-the-lock-files)
@@ -372,6 +373,40 @@ and `make setup` are therefore no-ops that verify the pacman-provided stack
 has the shell open. Keep it, the list in `setup-dev.ps1`, and this section in
 sync.
 
+### Gamepads: two backends, one token vocabulary
+
+A binding stored in `~/.openemux/input/<CONSOLE>.config` is a RetroArch token --
+`"3"` for a button, `"+1"`/`"-1"` for an axis, `"h0up"` for a hat. A token is an
+*index*, so the reader that produces it and the driver that consumes it have to
+count the same way.
+
+| | Reads | Numbering agrees with |
+| --- | --- | --- |
+| Linux | `/dev/input/event*` (`core/gamepad_reader.py`, `core/ui_gamepad.py`) | RetroArch's `udev` joypad driver, its default there |
+| Windows | SDL2 via `ctypes` (`core/gamepad_sdl.py`) | RetroArch's `sdl2` joypad driver, which the launch override pins |
+
+`core/gamepad_backend.py` is the only place that picks; the UI asks it and never
+branches on the answer. RetroArch's default on Windows is `xinput`, whose button
+order is its own, so `retroarch_launcher` writes `input_joypad_driver = "sdl2"`
+into the launch-scoped `--appendconfig` -- a user's own RetroArch keeps whatever
+driver they chose.
+
+To exercise the SDL path on Linux -- which is where this project is developed,
+and the only place a real controller is usually plugged in:
+
+```bash
+OPENEMUX_GAMEPAD_BACKEND=sdl2 make run
+```
+
+It needs `libSDL2-2.0.so.0` (`apt install libsdl2-2.0-0`). An unknown value
+warns and falls back to the platform default rather than leaving the app with no
+gamepad at all.
+
+SDL has one event queue per process and OpenEmux reads it from two places -- the
+navigator that drives the UI, and the capture reader while remapping -- so both
+subscribe to a single `SdlJoystickPump` rather than polling separately, which
+would make them steal each other's presses.
+
 ### Line endings
 
 `.gitattributes` normalizes the repository to LF, because Git for Windows'
@@ -397,12 +432,38 @@ checksums, so the first fetch of a new upstream version records what it saw
 (`--record`) for review and commit; every later run verifies against that and
 fails hard on a mismatch.
 
-### Known-failing tests
+### Tests that do not run on Windows
 
-The suite still carries Linux-only assumptions -- POSIX file modes, `/usr`
-install prefixes, evdev struct sizes, X11 -- so a handful of tests fail on
-Windows and do not indicate a broken toolchain. Phase 4 of issue #118 covers
-fixing them and running the suite on a `windows-latest` runner.
+The whole suite runs on Windows -- `make test` in the development shell, and a
+`windows-latest` job in [`tests.yml`](../.github/workflows/tests.yml) under the
+same MSYS2 stack the bundle ships. The tests that cannot mean anything there are
+marked, each with a reason:
+
+```python
+from tests.platform_marks import linux_only, posix_only
+
+@posix_only("0o600 on the file holding the account token")
+def test_the_file_is_owner_only(self):
+```
+
+`posix_only` covers file modes and `chmod`; `linux_only` covers the evdev
+kernel ABI, `/proc`, the FHS install prefixes, AppImages, X11 and the uinput
+device tests. Both are in [`tests/platform_marks.py`](../tests/platform_marks.py).
+
+Far more than thirty are reported skipped there, and it is worth knowing why:
+the runner has no interactive desktop, so `Gdk.Display.get_default()` comes back
+`None` and every test decorated `needs_display` skips itself
+([`tests/gtk_display.py`](../tests/gtk_display.py)) -- several hundred of them.
+The Windows job therefore covers the core and the packaging, not the widgets.
+The Linux matrix runs those under `xvfb`, and the widgets are looked at by hand
+in the devbox.
+
+Skipping these is not lowering the bar -- what they assert *is* a Linux
+behaviour, and asserting it on Windows would only be asserting that Windows is
+Windows. But a mark is a claim, so make it the narrowest one that fits (a
+method, not its class) and say which platform behaviour is at stake. A bare
+"skipped on Windows" leaves the next reader unable to tell a platform truth
+from a bug nobody got around to fixing.
 
 ## Building the packages
 
@@ -480,8 +541,7 @@ none of them is Wine:
   into an otherwise self-contained Debian image.)
 
 ```bash
-make vendor-retroarch   # once: fetches vendors/RetroArch-Win64 (~193 MiB)
-make windows
+make windows            # fetches vendors/RetroArch-Win64 (~193 MiB) the first time
 # -> dist/OpenEmux-<version>-windows-x86_64.zip
 # -> dist/OpenEmux-<version>-setup.exe
 ```
@@ -570,7 +630,7 @@ shows up in a pull request instead of on release day (issue #241).
 | Trigger | Formats |
 | --- | --- |
 | Pull request touching `packaging/**`, `pyproject.toml`, `requirements*`, `Makefile`, `src/openemux/data/**` | `deb`, `rpm` |
-| Push to `main`, Monday 05:00 UTC, `workflow_dispatch` | all four |
+| Push to `main`, Monday 05:00 UTC, `workflow_dispatch` | all five |
 
 Each format's own build script ends with an install smoke test, so a green job
 means the package installed in a clean container of its target distro, not just
@@ -578,7 +638,8 @@ that it compiled. Every run uploads `dist/` as an artifact (kept 14 days), which
 is enough to hand somebody a release candidate without building it locally.
 
 `workflow_dispatch` takes a **Which formats to build** choice (`all`,
-`deb+rpm`, `appimage`, `flatpak`) so a single format can be re-run on its own:
+`deb+rpm`, `appimage`, `flatpak`, `windows`) so a single format can be re-run on
+its own:
 
 ```bash
 gh workflow run packages.yml -f targets=flatpak
@@ -587,8 +648,12 @@ gh workflow run packages.yml -f targets=flatpak
 CI is given no secrets: without a `.env`, `_EMBEDDED_BLOB` stays empty and the
 artifacts carry no ScreenScraper credential. That is deliberate — it keeps a CI
 build reproducible by anyone — and it is also why the packages that ship in a
-release are still built locally. The Windows target is not in CI: it needs the
-193 MiB vendored RetroArch, which is fetched on demand and gitignored.
+release are still built locally.
+
+The Windows leg needs one step the others do not: the vendored RetroArch is a
+gitignored 193 MiB download, so the job runs `make vendor-retroarch` before
+`packaging/build.sh`. It is cached on `vendors/manifest.json`'s own hash, so a
+RetroArch bump re-downloads and nothing else does.
 
 ## Testing the packages on other distros
 

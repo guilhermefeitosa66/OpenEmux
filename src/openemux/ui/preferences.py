@@ -25,7 +25,8 @@ from openemux.core import (
     save_backup,
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
-from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
+from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
+from openemux.core.gamepad_reader import describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.input_actions import (
@@ -1087,8 +1088,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _device_for_port(self, port):
         """Pick the physical pad to listen on for RetroArch port ``port``.
 
-        Pads are taken in /dev/input/event* order, which is the same ordering
-        RetroArch's udev driver enumerates, so port N listens on the Nth pad.
+        Pads are taken in the backend's own enumeration order -- the
+        /dev/input/event* order under evdev, the SDL device-index order under
+        SDL2 -- which is the order the matching RetroArch joypad driver
+        assigns ports in, so port N listens on the Nth pad.
         Returns ``(device, error_key)``; ``device=None`` with no error means
         "let the reader choose", which only happens for port 1.
         """
@@ -1106,7 +1109,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._cancel_capture()
             self._toast(self.t(error_key, port=port), timeout=6)
             return
-        self._gamepad_reader = GamepadCaptureReader(
+        self._gamepad_reader = make_capture_reader(
             on_token=lambda token: GLib.idle_add(self._on_gamepad_token, token),
             on_error=lambda reason: GLib.idle_add(self._on_gamepad_error, reason),
             device=device,
