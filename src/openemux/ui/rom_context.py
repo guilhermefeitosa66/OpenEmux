@@ -23,7 +23,9 @@ class RomContextMenuServices:
         # while filing a game away is housekeeping. The add/remove collection
         # pair stays adjacent -- they are two halves of the same thing.
         entries = []
-        entries.append(self._load_state_submenu(rom))
+        load_state = self._load_state_submenu(rom)
+        if load_state is not None:
+            entries.append(load_state)
         core = self._core_submenu(rom)
         if core is not None:
             entries.append(core)
@@ -185,10 +187,19 @@ class RomContextMenuServices:
 
         from openemux.core import save_states
 
+        console = rom.get("console")
+        path = rom.get("path")
+        # Guarded like every sibling submenu: both are keys into per-console
+        # and per-ROM state, and this one used to index them directly, so a
+        # ROM dict missing either raised KeyError straight out of the
+        # right-click (issue #245).
+        if not console or not path:
+            return None
+
         t = self.win.t
-        states_dir = self.win.config_manager.get_console_states_dir(rom["console"])
+        states_dir = self.win.config_manager.get_console_states_dir(console)
         entries = []
-        for slot, mtime in save_states.slot_entries(states_dir, rom["path"]):
+        for slot, mtime in save_states.slot_entries(states_dir, path):
             if mtime is None:
                 label = t("states.slot_empty", slot=slot)
                 entries.append((label, None, None))

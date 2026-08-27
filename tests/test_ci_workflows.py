@@ -101,7 +101,7 @@ class TestsWorkflowTests(unittest.TestCase):
             for line in pyproject.splitlines()
             if line.startswith("fail_under")
         )
-        self.assertGreaterEqual(floor, 50, "the floor is a ratchet; it does not go down")
+        self.assertGreaterEqual(floor, 53, "the floor is a ratchet; it does not go down")
 
     def test_something_actually_starts_the_app(self):
         smoke = self.data["jobs"]["smoke"]
