@@ -546,6 +546,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "不明なエラー",
     "toast.path_invalid": "選択した ROM フォルダーが正しくありません",
     "toast.path_updated": "ROM フォルダーを更新しました: {path}",
+    "toast.path_not_writable": "ROM フォルダーを {path} に設定しましたが、作成できませんでした。ディスクに書き込めるか確認してください",
     "toast.state_recovered.one": "設定ファイルを読み込めませんでした。「{name}」として保存し、既定値を使用しています",
     "toast.state_recovered.many": "{count} 個の設定ファイルを読み込めませんでした。元のファイルの隣に保存し、既定値を使用しています",
     "header.import": "ROM をインポート",

@@ -205,12 +205,29 @@ class RetroArchBuildbotUpdater:
 
     def _download_and_install(self, artifact):
         temp_file = self.cache_dir / artifact["filename"]
-        self._download_file_with_retries(artifact["url"], temp_file)
-        if artifact["type"] == "zip":
-            self._extract_zip_core(temp_file, artifact["core_name"])
-        else:
-            target_path = self.core_dir / artifact["core_name"]
-            self._atomic_write_bytes(target_path, temp_file.read_bytes())
+        try:
+            self._download_file_with_retries(artifact["url"], temp_file)
+            if artifact["type"] == "zip":
+                self._extract_zip_core(temp_file, artifact["core_name"])
+            else:
+                target_path = self.core_dir / artifact["core_name"]
+                self._atomic_write_bytes(target_path, temp_file.read_bytes())
+        finally:
+            # The name says temp but nothing ever removed it, and nothing ever
+            # read it back either -- the next run re-downloads regardless. A
+            # full core sweep left hundreds of megabytes here, and the same
+            # again after every update (issue #221).
+            self._discard(temp_file)
+
+    @staticmethod
+    def _discard(path):
+        """Remove a finished download; never the reason an install fails."""
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.debug("buildbot cache file not removed: path=%s error=%s", path, exc)
 
     def _download_file_with_retries(self, url, destination):
         retries = max(0, int(self.settings.get("retries", 3)))
@@ -303,6 +320,10 @@ class RetroArchBuildbotUpdater:
                 summary["failed"] += 1
                 summary["failures"].append({"artifact": pack_name, "error": str(exc)})
                 logger.warning("buildbot shader download failed: pack=%s error=%s", pack_name, exc)
+            finally:
+                # Extracted or not, the zip has served its purpose: the shader
+                # packs are tens of megabytes each (issue #221).
+                self._discard(archive_path)
         return summary
 
     def _directory_has_files_with_extension(self, directory, extension):

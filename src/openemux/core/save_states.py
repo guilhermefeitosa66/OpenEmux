@@ -43,6 +43,25 @@ def _slot_for(path):
     return int(match.group(1)) if match.group(1) else 0
 
 
+def _entries(directory):
+    """List a directory, or nothing when it cannot be listed.
+
+    A subdirectory the user cannot read, or one removed between the is_dir()
+    check and the listing, used to raise straight out of the states context
+    menu and the hot-apply poll (issue #234).
+    """
+    try:
+        return list(directory.iterdir())
+    except OSError as exc:
+        logger.debug("save states: cannot list %s: %s", directory, exc)
+        return []
+
+
+def _scan_dirs(directory):
+    """The console directory and each per-core subdirectory under it."""
+    return [directory] + [entry for entry in _entries(directory) if entry.is_dir()]
+
+
 def list_states(states_dir, rom_path):
     """Every user slot saved for ``rom_path``, sorted by slot number.
 
@@ -56,10 +75,9 @@ def list_states(states_dir, rom_path):
     if not directory.is_dir():
         return []
     stem = rom_state_stem(rom_path)
-    scan_dirs = [directory] + [sub for sub in directory.iterdir() if sub.is_dir()]
     by_slot = {}
-    for scan_dir in scan_dirs:
-        for path in scan_dir.iterdir():
+    for scan_dir in _scan_dirs(directory):
+        for path in _entries(scan_dir):
             if not path.is_file() or path.stem != stem:
                 continue
             slot = _slot_for(path)
@@ -111,9 +129,8 @@ def rename_states(states_dir, old_stem, new_stem):
     if old_stem == new_stem or not directory.is_dir():
         return 0
     moved = 0
-    scan_dirs = [directory] + [sub for sub in directory.iterdir() if sub.is_dir()]
-    for scan_dir in scan_dirs:
-        for path in sorted(scan_dir.iterdir()):
+    for scan_dir in _scan_dirs(directory):
+        for path in sorted(_entries(scan_dir)):
             if not path.is_file() or not path.name.startswith(old_stem):
                 continue
             remainder = path.name[len(old_stem):]

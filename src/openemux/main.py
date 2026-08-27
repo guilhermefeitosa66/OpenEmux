@@ -139,6 +139,7 @@ from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
+from openemux.core.housekeeping import run_startup_housekeeping
 from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
@@ -234,6 +235,7 @@ class OpenEmuxApplication(Adw.Application):
         self.config_manager = ConfigManager()
         self._bootstrap_running = False
         self._bootstrap_window = None
+        self._housekeeping_done = False
         self.main_window = None
 
     def do_activate(self):
@@ -251,6 +253,18 @@ class OpenEmuxApplication(Adw.Application):
             if self._bootstrap_window:
                 self._bootstrap_window.present()
             return
+
+        # Retention for everything the app writes and never reads back: the
+        # per-launch runtime files, the buildbot download cache and the
+        # artwork-manager temp directories (issue #221). Cheap -- a couple of
+        # directory listings -- and best-effort, so it cannot delay or block
+        # the first window. Before the bootstrap check on purpose: a first boot
+        # is exactly when a previous failed one may have left a cache behind.
+        # Once per process: a re-activation must not sweep under a download or
+        # an artwork window this same process still has open.
+        if not self._housekeeping_done:
+            self._housekeeping_done = True
+            run_startup_housekeeping(self.config_manager)
 
         bootstrapper = FirstBootBootstrapper(self.config_manager)
         if bootstrapper.needs_bootstrap():

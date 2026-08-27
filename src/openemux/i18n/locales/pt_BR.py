@@ -548,6 +548,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "erro desconhecido",
     "toast.path_invalid": "Pasta de ROMs selecionada é inválida",
     "toast.path_updated": "Pasta de ROMs atualizada: {path}",
+    "toast.path_not_writable": "Pasta de ROMs definida como {path}, mas não foi possível criá-la — verifique se o disco permite gravação",
     "toast.state_recovered.one": "Um arquivo de configuração não pôde ser lido; ele foi mantido como \"{name}\" e os padrões estão em uso",
     "toast.state_recovered.many": "{count} arquivos de configuração não puderam ser lidos; eles foram mantidos ao lado dos originais e os padrões estão em uso",
 

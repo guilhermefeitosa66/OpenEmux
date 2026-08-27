@@ -92,6 +92,29 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             self.assertEqual(summary["failed"], 0)
             self.assertTrue(core_path.exists())
             self.assertEqual(core_path.read_bytes(), b"core-binary")
+            # The download is thrown away once extracted: nothing reads the
+            # cache back, and a full sweep left hundreds of megabytes of core
+            # archives behind forever (issue #221).
+            self.assertEqual(list(updater.cache_dir.iterdir()), [])
+
+    def test_a_failed_core_download_leaves_no_archive_behind(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+
+            manifest_html = '<a href="mgba_libretro.so.zip">mgba</a>'.encode("utf-8")
+
+            def _fake_urlopen(url, timeout=5):
+                if str(url).endswith("/buildbot/"):
+                    return _FakeResponse(manifest_html)
+                # Not a zip: extraction raises after the bytes hit the cache.
+                return _FakeResponse(b"not-a-zip")
+
+            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+                summary = updater.download_all()
+
+            self.assertEqual(summary["failed"], 1)
+            self.assertEqual(list(updater.cache_dir.iterdir()), [])
 
     def test_an_offline_manifest_is_a_counted_failure_not_a_crash(self):
         # The whole point: the bootstrap step above decides whether to fall
@@ -182,6 +205,9 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             self.assertEqual(summary["failed"], 0)
             self.assertTrue((updater.shader_glsl_dir / "handheld" / "dot.glslp").exists())
             self.assertTrue((updater.shader_slang_dir / "crt" / "geom.slangp").exists())
+            # Two shader packs, tens of megabytes each, and neither zip is
+            # ever read again (issue #221).
+            self.assertEqual(list(updater.cache_dir.iterdir()), [])
 
     def test_has_local_runtime_assets_uses_runtime_dirs(self):
         with TemporaryDirectory() as tmp_dir:

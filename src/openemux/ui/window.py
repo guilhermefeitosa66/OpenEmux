@@ -358,7 +358,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Avoid Gtk.Widget.pick() here: dropdown/popover interactions may trigger
         # compute_point assertions while transient widgets are being recycled.
         target = self.get_focus()
-        logger.info(
+        # DEBUG on purpose: this fires on every mouse press anywhere in the
+        # window, which at INFO buried the log in click traces (issue #221).
+        # It is a debugging aid -- run with the root logger at DEBUG to get it.
+        logger.debug(
             "ui click: button=%s presses=%s target=%s view=%s current_console=%s x=%.1f y=%.1f",
             button,
             n_press,
@@ -2609,7 +2612,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
 
         self.config_manager.set_roms_path(selected_path)
-        self.config_manager.ensure_rom_directories()
+        # Returns what it could not create rather than raising into the GTK
+        # main loop, which is where an unwritable folder used to take this
+        # handler down mid-way (issue #234).
+        unwritable = self.config_manager.ensure_rom_directories()
         self.roms_path = self.config_manager.get_roms_path()
         self.scanner = RomScanner(self.roms_path)
         self.playlist_manager = PlaylistManager(self.config_manager, self.scanner)
@@ -2620,17 +2626,24 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         self._rescan_all_consoles(show_toast=False)
 
-        toast = Adw.Toast(title=self.t("toast.path_updated", path=str(self.roms_path)))
-        toast.set_timeout(4)
-        self.toast_overlay.add_toast(toast)
+        if unwritable:
+            self._toast(
+                self.t("toast.path_not_writable", path=str(self.roms_path)), timeout=6
+            )
+        else:
+            toast = Adw.Toast(title=self.t("toast.path_updated", path=str(self.roms_path)))
+            toast.set_timeout(4)
+            self.toast_overlay.add_toast(toast)
 
     def _open_roms_folder(self):
         self._open_path_in_file_manager(self.config_manager.get_roms_path())
 
     def _open_console_bios_folder(self, console):
-        bios_dir = get_console_bios_dir(self.config_manager, console)
-        bios_dir.mkdir(parents=True, exist_ok=True)
-        self._open_path_in_file_manager(bios_dir)
+        # Creating it is _open_path_in_file_manager's business, where the
+        # failure has a toast to land in (issue #234).
+        self._open_path_in_file_manager(
+            get_console_bios_dir(self.config_manager, console)
+        )
 
     def _reveal_rom_in_files(self, rom):
         self._reveal_in_file_manager(rom.get("path", ""))
@@ -2686,19 +2699,29 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _open_path_in_file_manager(self, path):
         path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
         if IS_WINDOWS:
             # Neither branch below works here: GIO's Windows backend answers
             # "No application is registered as handling this file" for a
             # file:// directory URI, and there is no xdg-open -- so without
             # this the button only ever produced an error toast.
             try:
+                # mkdir inside the try for the same reason as the branch
+                # below (issue #234): on an unmounted or read-only path it
+                # raises, and outside the try that raise escapes past the
+                # error toast, leaving the button doing nothing with no
+                # explanation.
+                path.mkdir(parents=True, exist_ok=True)
                 os.startfile(path)  # noqa: S606 - a directory the user chose
                 return
             except OSError as exc:
                 self._toast_open_failed(path, exc)
                 return
         try:
+            # Inside the try on purpose: this used to sit above it, so "Open
+            # folder" on an unmounted or read-only path raised past every
+            # fallback and past the error toast at the bottom -- the button
+            # simply did nothing, with no explanation (issue #234).
+            path.mkdir(parents=True, exist_ok=True)
             Gio.AppInfo.launch_default_for_uri(path.as_uri(), None)
             return
         except Exception:

@@ -546,6 +546,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "未知错误",
     "toast.path_invalid": "所选的 ROM 文件夹无效",
     "toast.path_updated": "ROM 文件夹已更新：{path}",
+    "toast.path_not_writable": "ROM 文件夹已设为 {path}，但无法创建 — 请检查磁盘是否可写",
     "toast.state_recovered.one": "无法读取一个设置文件；已将其保留为“{name}”，正在使用默认值",
     "toast.state_recovered.many": "无法读取 {count} 个设置文件；已将它们保留在原文件旁边，正在使用默认值",
     "header.import": "导入 ROM",

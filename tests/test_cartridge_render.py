@@ -314,11 +314,19 @@ class DropStaleTests(unittest.TestCase):
     The lesson generalises: ``Path.__eq__`` is not a same-file test on Windows.
     """
 
+    # A composite is named "<rom name>.<12-hex key>.png" -- _cache_key() returns
+    # the first 12 characters of a sha1. The fixtures spell real keys because
+    # _is_composite_of() checks that shape (issue #234): a made-up suffix is
+    # simply not recognised as a composite, and the test would pass while
+    # exercising nothing.
+    NEW_KEY = "0123456789ab"
+    OLD_KEY = "ba9876543210"
+
     def _populate(self, directory):
-        keep = directory / "_blank.new123.png"
-        stale = directory / "_blank.old999.png"
-        unrelated = directory / "Zelda.abc.png"
-        other_suffix = directory / "_blank.new123.png.1234.tmp"
+        keep = directory / f"_blank.{self.NEW_KEY}.png"
+        stale = directory / f"_blank.{self.OLD_KEY}.png"
+        unrelated = directory / f"Zelda.{self.NEW_KEY}.png"
+        other_suffix = directory / f"_blank.{self.NEW_KEY}.png.1234.tmp"
         for path in (keep, stale, unrelated, other_suffix):
             path.write_bytes(b"png")
         return keep, stale, unrelated, other_suffix

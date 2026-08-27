@@ -728,9 +728,7 @@ class ArtworkManagerWindow(Adw.Window):
         self.t = win.t
         self.closed = False
         self.sync_settings = win.config_manager.get_cover_sync_settings()
-        self.temp_dir = (
-            Path(GLib.get_user_cache_dir()) / "openemux" / "artwork-manager" / uuid.uuid4().hex
-        )
+        self.temp_dir = artwork_search.artwork_temp_root() / uuid.uuid4().hex
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
         self.set_title(self.t("artwork.window.title", name=rom.get("name", "")))

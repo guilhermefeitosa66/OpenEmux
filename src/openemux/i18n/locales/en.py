@@ -548,6 +548,7 @@ TRANSLATIONS = {
     "toast.bootstrap.unknown_error": "unknown error",
     "toast.path_invalid": "Invalid ROMs folder selected",
     "toast.path_updated": "ROMs folder updated: {path}",
+    "toast.path_not_writable": "ROMs folder set to {path}, but it could not be laid out — check that the disk is writable",
     "toast.state_recovered.one": "A settings file could not be read; it was kept as \"{name}\" and defaults are in use",
     "toast.state_recovered.many": "{count} settings files could not be read; they were kept beside the originals and defaults are in use",
 

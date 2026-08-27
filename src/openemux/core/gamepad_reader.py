@@ -85,7 +85,15 @@ class GamepadError(Exception):
 
 
 # ----- /proc/bus/input/devices parsing ---------------------------------------
-def parse_bitmap(text, word_bits=64):
+#: How wide a kernel ``%lx`` word is on this machine. The default used to be a
+#: hardcoded 64, and the heuristic below only ever corrects *upwards* -- so on
+#: a 32-bit kernel every bit past the first word landed in the wrong place and
+#: captured bindings did not match RetroArch's numbering (issue #234). This is
+#: the same ``long`` the kernel is printing.
+NATIVE_WORD_BITS = struct.calcsize("l") * 8
+
+
+def parse_bitmap(text, word_bits=None):
     """Parse a kernel ``B: KEY=...`` bitmap into a set of set bit indices.
 
     The kernel prints the bitmap as ``%lx`` words separated by spaces, most
@@ -93,6 +101,8 @@ def parse_bitmap(text, word_bits=64):
     therefore covers ``word_bits`` bits, and the *rightmost* word holds bits
     ``0..word_bits-1``.
     """
+    if word_bits is None:
+        word_bits = NATIVE_WORD_BITS
     bits = set()
     words = (text or "").split()
     if not words:

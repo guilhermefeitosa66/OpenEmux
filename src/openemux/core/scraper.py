@@ -93,10 +93,18 @@ def find_local_art(
     return None
 
 
-def remove_local_art(roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART) -> int:
+def remove_local_art(
+    roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART, keep=None
+) -> int:
+    """Delete this ROM's art in ``kind``, optionally sparing one file.
+
+    ``keep`` is how ``save_local_art`` clears the other extensions *after*
+    writing the new file rather than before (issue #234).
+    """
+    keep = Path(keep) if keep is not None else None
     removed = 0
     for candidate in get_art_path_candidates(roms_dir, console, rom_name, kind):
-        if not candidate.exists():
+        if candidate == keep or not candidate.exists():
             continue
         try:
             candidate.unlink()
@@ -114,10 +122,14 @@ def save_local_art(
     if ext not in SUPPORTED_COVER_EXTS:
         raise ValueError(f"Unsupported cover extension: {source.suffix}")
 
-    remove_local_art(roms_dir, console, rom_name, kind)
     target = Path(roms_dir) / console / kind / f"{rom_name}.{ext}"
     target.parent.mkdir(parents=True, exist_ok=True)
+    # Copy first, clean up after -- the order cover_sync already uses. Removing
+    # the old art up front meant a copy that failed (full disk, source gone,
+    # permissions) left the ROM with no art at all, having had a perfectly
+    # good cover a moment earlier (issue #234).
     shutil.copy2(source, target)
+    remove_local_art(roms_dir, console, rom_name, kind, keep=target)
     return target
 
 

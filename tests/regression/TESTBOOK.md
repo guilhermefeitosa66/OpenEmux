@@ -173,6 +173,97 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-178 — ROMs behind a symlinked directory are found
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: keep the big files on another disk and link them into the library —
+  `~/games/roms/PS/discs -> /mnt/storage/ps1` — then rescan.
+- **Expected:** Every ROM behind the link is in the library. It used to scan as empty, with no
+  error and nothing in the log. A link pointing back at one of its own ancestors must not hang the
+  scan either.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import tempfile
+  from pathlib import Path
+  from openemux.core.scanner import RomScanner
+
+  with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      base = root / "roms"
+      elsewhere = root / "storage" / "ps1"
+      elsewhere.mkdir(parents=True)
+      (elsewhere / "Final Fantasy VII.cue").write_bytes(b"cue")
+      (base / "PS").mkdir(parents=True)
+      (base / "PS" / "discs").symlink_to(elsewhere, target_is_directory=True)
+      # A loop back to the console directory: must terminate, not descend forever.
+      (elsewhere / "loop").symlink_to(base / "PS", target_is_directory=True)
+
+      names = [rom["name"] for rom in RomScanner(base).scan_console("PS")]
+      assert names == ["Final Fantasy VII"], names
+  print("RT-178 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-179 — A favourite under a symlinked console directory is displayed
+- **Area:** Library
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (uses a temporary directory).
+- **Steps:** As a QA person: make `~/games/roms/SFC` a symlink to another disk, favourite a game
+  under it, and open "Favorites".
+- **Expected:** The game is there. It used to be stored in the favourites file and never shown:
+  the console lookup resolved the path first, which rewrote it to its physical location outside
+  the library root, so the entry was skipped — while the pruning pass kept the line, because the
+  file does exist.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import tempfile
+  from pathlib import Path
+  from openemux.core.playlist_manager import PlaylistManager
+  from openemux.core.scanner import RomScanner
+
+  class Config:
+      def __init__(self, playlists, roms):
+          self._playlists, self._roms = playlists, roms
+      def get_playlists_dir(self): return self._playlists
+      def get_roms_path(self): return self._roms
+
+  with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      base = root / "roms"
+      base.mkdir()
+      elsewhere = root / "storage" / "snes"
+      elsewhere.mkdir(parents=True)
+      (elsewhere / "Super Metroid.sfc").write_bytes(b"rom")
+      (base / "SFC").symlink_to(elsewhere, target_is_directory=True)
+      playlists = root / "playlists"
+      playlists.mkdir()
+
+      manager = PlaylistManager(Config(playlists, base), RomScanner(base))
+      rom = base / "SFC" / "Super Metroid.sfc"
+      assert manager._console_from_rom_path(rom) == "SFC"
+      entries = manager.entries_for_paths([str(rom)])
+      assert [e["name"] for e in entries] == ["Super Metroid"], entries
+      assert entries[0]["console"] == "SFC", entries
+  print("RT-179 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-180 — Importing a folder follows its symlinked subdirectories
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: use "Import ROMs" on a folder that contains a symlink to a directory
+  of games on another disk.
+- **Expected:** The games behind the link are imported along with the rest. They used to be
+  skipped silently.
+- **Check:** suite files `tests/test_rom_importer.py`
+  (`test_a_symlinked_subdirectory_is_walked_too`), `tests/test_dir_walk.py`.
+
 ### RT-012 — Playlist files are well-formed
 - **Area:** Library
 - **Mode:** AUTO-PROBE
@@ -1262,6 +1353,42 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The gamepad indicator appears in the header; UI navigation and the game respond.
 - **Check:** human only (hardware).
 
+### RT-175 — Gamepad navigation survives quitting a game
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: launch a game with the pad, quit it, and keep navigating the library
+  with the same pad. Repeat a few times.
+- **Expected:** The pad keeps working after every quit. It used to stop working for the rest of the
+  session whenever the main thread's "the game ended" poll cleared the process reference between
+  the reader thread's two reads of it, killing the reader with an `AttributeError`. A failing
+  suspend check now reads as "suspended" for that one loop instead of ending the thread.
+- **Check:** suite files `tests/test_runtime_manager.py` (`ClearedMidReadTests`),
+  `tests/test_ui_gamepad.py` (`SuspendGuardTests`).
+
+### RT-176 — A button pressed as a capture opens is not also acted on
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "Input", click a binding row and press a gamepad
+  button the instant the capture opens — within a fifth of a second of the click.
+- **Expected:** The button is bound and nothing else happens. It used to both bind *and* navigate
+  the library underneath, because the reader decided with a suspend flag read up to 200 ms before
+  the event arrived.
+- **Check:** suite file `tests/test_ui_gamepad.py` (`StaleSuspendFlagTests`).
+
+### RT-177 — A second gamepad plugged in next to a working one is picked up
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** Two physical controllers.
+- **Steps:**
+  1. With the app open and one controller already connected and navigating, plug in a second one.
+  2. Navigate the grid with the **second** controller.
+- **Expected:** The second pad steers the UI within about a second. It used to be ignored until the
+  first was unplugged, because the device scan only ran while nothing was open.
+- **Check:** human only (hardware); `tests/test_ui_gamepad.py` (`HotplugScanTests`) covers the
+  scan itself.
+
 ### RT-073 — A console's context menu opens its own controller settings
 - **Area:** Input
 - **Mode:** AUTO-UI
@@ -1682,6 +1809,238 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Restore:** `cp $SCRATCH/play_history.bak ~/.openemux/play_history.json && rm -f
   ~/.openemux/play_history.json.broken-*` with the app closed.
 
+## Disk housekeeping
+
+### RT-170 — Per-launch runtime files are pruned at startup
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: play a few hundred games over a few months, then look at
+     `~/.openemux/runtime`.
+- **Expected:** Only the recent launches are still there. Every file a kept launch wrote
+  (`runtime_*.cfg`, `coreopts_*.cfg`, `retroarch_*.log`, `retroarch_*.cmd`) is kept together, and
+  nothing that is not a per-launch file is touched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, tempfile, time
+  from pathlib import Path
+  from openemux.core.housekeeping import prune_runtime_files
+
+  scratch = Path(tempfile.mkdtemp())
+  def launch(ts, age_days):
+      made = []
+      for name in (f"runtime_sfc_{ts}.cfg", f"coreopts_sfc_{ts}.cfg",
+                   f"retroarch_sfc_{ts}.log", f"retroarch_sfc_{ts}.cmd"):
+          path = scratch / name
+          path.write_text("x", encoding="utf-8")
+          stamp = time.time() - age_days * 86400
+          os.utime(path, (stamp, stamp))
+          made.append(path)
+      return made
+
+  old = launch("20200101120000", 90)
+  new = launch("20200201120000", 90)
+  keep = scratch / "openemux_startup.log"
+  keep.write_text("x", encoding="utf-8")
+
+  removed = prune_runtime_files(scratch, max_age_days=7, keep_launches=1)
+  assert removed == 4, removed
+  assert not any(p.exists() for p in old), "the old launch survived"
+  assert all(p.exists() for p in new), "the kept launch lost a file"
+  assert keep.exists(), "the startup log was pruned"
+  print("RT-170 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-171 — The startup log has a ceiling
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: use the app daily for months, then check the size of
+     `~/.openemux/runtime/openemux_startup.log`.
+- **Expected:** The log rotates instead of growing forever: at most 2 MB live plus three rolled
+  files.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import logging, logging.handlers, tempfile
+  from pathlib import Path
+  from openemux.core import startup_logging
+
+  scratch = Path(tempfile.mkdtemp())
+  startup_logging.configure_startup_logging(runtime_dir=scratch)
+  handler = next(h for h in logging.getLogger().handlers
+                 if isinstance(h, logging.handlers.RotatingFileHandler))
+  assert handler.maxBytes == startup_logging.LOG_MAX_BYTES
+  assert handler.backupCount == startup_logging.LOG_BACKUP_COUNT
+  handler.maxBytes = 1024
+  logging.getLogger().handlers = [handler]
+  log = logging.getLogger("openemux.rt171")
+  for index in range(2000):
+      log.info("a line long enough to force a rollover %d %s", index, "x" * 60)
+
+  written = sorted(scratch.glob("openemux_startup.log*"))
+  assert len(written) <= startup_logging.LOG_BACKUP_COUNT + 1, [p.name for p in written]
+  assert sum(p.stat().st_size for p in written) < 64 * 1024
+  print("RT-171 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-172 — A core download leaves no archive behind
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: run the first boot to completion, then look at
+  `~/.openemux/runtime/buildbot_cache`.
+- **Expected:** The directory is empty. Each core `.zip` and each shader pack is removed once it
+  has been extracted (and also when extraction fails), rather than left behind — a full core
+  sweep used to leave hundreds of megabytes there.
+- **Check:** `tests/test_retroarch_buildbot_updater.py`, `tests/test_housekeeping.py`.
+
+### RT-173 — Stale artwork temp directories are swept at startup
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. As a QA person: open "Manage artwork" for a ROM, then kill the app instead of closing the
+     window. Relaunch and check `~/.cache/openemux/artwork-manager`.
+- **Expected:** The orphaned session directory is gone. A directory young enough to belong to a
+  live session is left alone.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, tempfile, time
+  from pathlib import Path
+  from openemux.core.housekeeping import sweep_artwork_temp_dirs
+
+  root = Path(tempfile.mkdtemp())
+  stale = root / "deadbeef"
+  stale.mkdir()
+  (stale / "candidate-001.png").write_bytes(b"x")
+  stamp = time.time() - 3 * 86400
+  os.utime(stale, (stamp, stamp))
+  fresh = root / "cafebabe"
+  fresh.mkdir()
+
+  removed = sweep_artwork_temp_dirs(root, max_age_hours=24)
+  assert removed == 1, removed
+  assert not stale.exists(), "the orphaned session directory survived"
+  assert fresh.exists(), "a live session directory was swept"
+  print("RT-173 OK")
+  EOF
+  ```
+- **Restore:** none — the probe works entirely inside its own temp directory.
+
+### RT-174 — Ordinary use does not flood the startup log
+- **Area:** Disk housekeeping
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**.
+- **Steps:**
+  1. Launch the app (`make run`), writing its output to `$SCRATCH/app.log`.
+  2. Wait for the library to appear, then click around the grid and the sidebar a dozen times.
+  3. Close the app.
+- **Expected:** The log carries one summary line per console rescan and one per console scan, and
+  no line per ROM and no line per mouse click. The startup housekeeping reports what it swept.
+- **Check:** `grep -c "ui click" $SCRATCH/app.log`, `grep -c "playlist add rom"
+  $SCRATCH/app.log` and `grep -c "scan_roms found rom" $SCRATCH/app.log` all print `0`;
+  `grep -c "playlist rebuild finished" $SCRATCH/app.log` and `grep -c "scan_roms finished"
+  $SCRATCH/app.log` are both greater than `0`; `grep "housekeeping" $SCRATCH/app.log` prints at
+  least one line.
+- **Restore:** none.
+
+## Robustness
+
+### RT-181 — A read-only library does not break the BIOS pages
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: put the library on a read-only mount (or `chmod -w` the console
+  folder), then open "Settings" → "BIOS" and launch a game that needs a BIOS.
+- **Expected:** The page lists every console with its files reported missing, and the pre-launch
+  check says which BIOS is missing. Both used to `mkdir` the directory unguarded on a path they
+  only ever read, so both raised `OSError`.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`UnwritableBiosDirTests`).
+
+### RT-182 — Choosing an unwritable ROMs folder is reported, not a crash
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "ROMs", pick a folder on a read-only disk.
+- **Expected:** A toast says the folder was set but could not be laid out. The layout call used to
+  create 93 directories with nothing caught, and the exception escaped into the GTK main loop from
+  the folder-change handler, taking the rest of it down mid-way. (It also built the same 93
+  directories twice; once, after the migration, is enough.)
+- **Check:** suite file `tests/test_robustness_gaps.py` (`EnsureRomDirectoriesTests`), including
+  `test_the_console_directories_are_created_once_not_twice`.
+
+### RT-183 — An unreadable states subdirectory does not break the states menu
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: make one per-core subdirectory under `~/.openemux/states/<console>/`
+  unreadable, then open a game's "Save states" menu and rename the ROM.
+- **Expected:** The states that can be read are listed and renamed; the unreadable folder is
+  skipped. Both used to iterate with no guard, so they raised out of the context menu and the
+  hot-apply poll — including for a directory removed between the `is_dir()` check and the listing.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`UnreadableStatesDirTests`).
+
+### RT-184 — "Open folder" on an unreachable path says so
+- **Area:** Robustness
+- **Mode:** MANUAL
+- **Preconditions:** A ROMs folder on a disk that is not mounted.
+- **Steps:**
+  1. Use "Open folder" (from the console menu, the BIOS page, or "Reveal in Files").
+- **Expected:** An error toast naming the path. The `mkdir` used to sit *above* the `try`, so the
+  failure escaped past every fallback and past the toast — the button silently did nothing.
+- **Check:** human only (needs an unmounted path); the reordering is visible in
+  `ui/window.py:_open_path_in_file_manager`.
+
+### RT-185 — A cache drop never takes another ROM's composite
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: have both "Dr" and "Dr. Mario" in the same console, with cartridge
+  art rendered for each. Rename or delete "Dr".
+- **Expected:** Only "Dr"'s composite goes. The match was `name.startswith("Dr.")`, so
+  `Dr. Mario.<key>.png` matched too — self-healing, since it is re-rendered, but wrong.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`CompositeCacheMatchTests`).
+
+### RT-186 — A ROM name with a newline in it is refused
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: rename a ROM and paste a name that carries a line break.
+- **Expected:** The rename is refused as an invalid name. Playlists are newline-delimited path
+  lists, so it used to serialize as two broken lines and the game silently disappeared from the
+  library.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`RomNameValidationTests`).
+
+### RT-187 — A failed art save leaves the previous cover in place
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: pick new artwork for a ROM that already has a cover, with the disk
+  full (or the source file removed mid-save).
+- **Expected:** The old cover is still there. The save used to delete it *before* copying, so a
+  failed copy left the ROM with no art at all.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`SaveLocalArtOrderTests`).
+
+### RT-188 — Gamepad bitmaps are read with the kernel's own word size
+- **Area:** Robustness
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person on a 32-bit kernel: remap a control and check the binding matches what
+  RetroArch expects.
+- **Expected:** The button numbering matches. `parse_bitmap` defaulted to 64-bit words and its
+  heuristic only ever corrects *upwards*, so on a 32-bit kernel every bit past the first word
+  landed in the wrong place. The default is now `struct.calcsize("l") * 8`.
+- **Check:** suite file `tests/test_robustness_gaps.py` (`BitmapWordSizeTests`).
+
 
 ## Windows platform
 
@@ -1734,7 +2093,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   with no frame around it.
 - **Check:** `tests/test_cartridge_render.py`
 
-### RT-170 — Link import degrades instead of failing without symlink permission
+### RT-189 — Link import degrades instead of failing without symlink permission
 - **Area:** Windows platform
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.
@@ -1745,7 +2104,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   error either way.
 - **Check:** `tests/test_rom_importer.py` (`LinkFallbackTests`)
 
-### RT-171 — Windows picks its language from the OS, not from an unset LANG
+### RT-190 — Windows picks its language from the OS, not from an unset LANG
 - **Area:** Windows platform
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.
@@ -1756,7 +2115,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   overridden by the OS, and an explicitly passed environment is never mixed with the host's.
 - **Check:** `tests/test_i18n.py`, `tests/test_config_locale.py`
 
-### RT-172 — "Open folder" opens Explorer on Windows
+### RT-191 — "Open folder" opens Explorer on Windows
 - **Area:** Windows platform
 - **Mode:** MANUAL
 - **Preconditions:** OpenEmux running on Windows with at least one console in the sidebar.
@@ -1768,7 +2127,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   and there is no `xdg-open`, so both Linux paths fail here.)
 - **Check:** human only.
 
-### RT-173 — The game window is reported unavailable on Windows, with the right reason
+### RT-192 — The game window is reported unavailable on Windows, with the right reason
 - **Area:** Windows platform
 - **Mode:** MANUAL
 - **Preconditions:** OpenEmux running on Windows.
@@ -1779,7 +2138,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   "install an X server and this will work". Launching a game opens RetroArch's own window.
 - **Check:** human only.
 
-### RT-174 — A user's own RetroArch install is left untouched
+### RT-193 — A user's own RetroArch install is left untouched
 - **Area:** Windows platform
 - **Mode:** MANUAL
 - **Preconditions:** A Windows machine; note whether `%APPDATA%\RetroArch` exists before starting.
@@ -1790,7 +2149,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Check:** human only.
 
 
-### RT-175 — The Windows artifacts build from a clean tree
+### RT-194 — The Windows artifacts build from a clean tree
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A Linux host with Docker and `vendors/RetroArch-Win64` fetched.
@@ -1801,37 +2160,37 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   caught.
 - **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
-### RT-176 — The bundle carries no path from the machine that built it
+### RT-195 — The bundle carries no path from the machine that built it
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
-- **Preconditions:** RT-175 has run, so `build/win/OpenEmux` exists.
+- **Preconditions:** RT-194 has run, so `build/win/OpenEmux` exists.
 - **Steps:**
   1. Search the staged bundle for the build container's MSYS2 prefix.
 - **Expected:** No match outside `vendors/`. A baked-in `C:\msys64` path is a file that resolves
   on a developer's machine and nowhere else -- how the OpenSSL CA bundle broke.
 - **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux`
 
-### RT-177 — No libretro core ships inside the installer
+### RT-196 — No libretro core ships inside the installer
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
-- **Preconditions:** RT-175 has run.
+- **Preconditions:** RT-194 has run.
 - **Steps:**
   1. List the bundled RetroArch's cores directory.
 - **Expected:** It exists and is empty. Cores carry many different licences and are downloaded on
   first boot precisely so none of them end up in the installer.
 - **Check:** `test -d build/win/OpenEmux/vendors/RetroArch-Win64/cores && [ -z "$(ls -A build/win/OpenEmux/vendors/RetroArch-Win64/cores)" ]`
 
-### RT-178 — RetroArch's licence travels with the binary
+### RT-197 — RetroArch's licence travels with the binary
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
-- **Preconditions:** RT-175 has run.
+- **Preconditions:** RT-194 has run.
 - **Steps:**
   1. Look for RetroArch's own licence text beside `retroarch.exe`.
 - **Expected:** Present. RetroArch is GPLv3 and redistributed unmodified, so its licence must ship
   with it; `THIRD_PARTY_NOTICES.md` carries the matching source offer.
 - **Check:** `ls build/win/OpenEmux/vendors/RetroArch-Win64/COPYING* build/win/OpenEmux/vendors/RetroArch-Win64/LICENSE* 2>/dev/null | grep -q .`
 
-### RT-179 — The MSYS2 runtime is pinned, not resolved at build time
+### RT-198 — The MSYS2 runtime is pinned, not resolved at build time
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.
@@ -1842,7 +2201,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   a GTK regression could not be bisected.
 - **Check:** `python3 -c "import json,re,sys; p=json.load(open('packaging/windows/packages.lock'))['packages']; sys.exit(0 if p and all(e.get('name') and e.get('version') and re.fullmatch(r'[0-9a-f]{64}', e.get('sha256','')) for e in p) else 1)"`
 
-### RT-180 — A drifted upstream package fails the build instead of shipping
+### RT-199 — A drifted upstream package fails the build instead of shipping
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
 - **Preconditions:** A checkout with `packaging/windows/packages.lock`.
@@ -1854,7 +2213,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   received one. It does not download-and-continue.
 - **Check:** human only.
 
-### RT-181 — Installing needs no administrator prompt
+### RT-200 — Installing needs no administrator prompt
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
 - **Preconditions:** A Windows 10/11 machine with a standard (non-admin) user, and the built
@@ -1866,10 +2225,10 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   publisher is unknown -- the installer is unsigned, and that is expected.
 - **Check:** human only.
 
-### RT-182 — First boot works from the installed copy
+### RT-201 — First boot works from the installed copy
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
-- **Preconditions:** RT-181 done on a machine with no MSYS2 and no Python installed.
+- **Preconditions:** RT-200 done on a machine with no MSYS2 and no Python installed.
 - **Steps:**
   1. Launch OpenEmux from the Start Menu and let first boot finish.
 - **Expected:** The window opens with no console flashing behind it, and the cores download
@@ -1877,7 +2236,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   build machine, and the launcher overrides it with the bundled bundle.
 - **Check:** human only.
 
-### RT-183 — The app is installed in the desktop's language
+### RT-202 — The app is installed in the desktop's language
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
 - **Preconditions:** A Windows machine whose display language is not English.
@@ -1888,7 +2247,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   only in the shipped build.
 - **Check:** human only.
 
-### RT-184 — Uninstalling removes the app and keeps the library
+### RT-203 — Uninstalling removes the app and keeps the library
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
 - **Preconditions:** OpenEmux installed, first boot completed so cores were downloaded, and at
@@ -1901,7 +2260,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   states, input profiles and cover art survive.
 - **Check:** human only.
 
-### RT-185 — Installing over an older version replaces it
+### RT-204 — Installing over an older version replaces it
 - **Area:** Packaging (Windows)
 - **Mode:** MANUAL
 - **Preconditions:** A previous OpenEmux version installed.
