@@ -15,12 +15,52 @@ RUNTIME_VERSION="$(sed -n "s/^runtime-version: '\(.*\)'/\1/p" "$MANIFEST")"
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
 echo "==> building openemux ${VERSION} flatpak (GNOME ${RUNTIME_VERSION})"
 
-# The manifest builds the working tree (type: dir), so the embedded credential
-# is injected in place and restored afterwards, exactly like the other builds.
-CRED_FILE="src/openemux/core/embedded_credentials.py"
-cp "$CRED_FILE" "${CRED_FILE}.orig"
-trap 'mv "${CRED_FILE}.orig" "$CRED_FILE"' EXIT
-python3 packaging/embed_screenscraper_credentials.py "$CRED_FILE"
+# Build from a staging copy, never from the working tree (issue #250).
+#
+# The manifest's source is `type: dir`, `path: ../..` -- the repository root
+# relative to the manifest. Copying the manifest into a staging tree makes that
+# same relative path resolve to the staging tree instead, so nothing here has
+# to be duplicated in the manifest and the openemux-flatpak workflow, which
+# builds a throwaway CI checkout directly, keeps working unchanged.
+#
+# Two things this buys:
+#
+#   * the ScreenScraper credential is injected into the copy. It used to be
+#     written into the *tracked* src/openemux/core/embedded_credentials.py and
+#     restored by an EXIT trap, so any SIGKILL (docker kill, OOM, reboot) left
+#     the obfuscated developer credential in a tracked file, one `git commit -a`
+#     away from being published.
+#   * the copy is an explicit list of inputs, so `.env` (which holds
+#     SCREENSCRAPER_DEVID/DEVPASSWORD), `.git`, `dist/`, `.venv/` and every
+#     other gitignored artifact in the working tree cannot reach the
+#     root-owned .flatpak-build-dir the way `path: ../..` on the real tree did.
+#
+# The staging tree lives outside the bind mount, so an interrupted build leaves
+# nothing behind on the host at all.
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+
+# Everything the manifest reads: `pip3 install .` needs the project metadata
+# and src/, the install steps need packaging/flatpak/ and LICENSE. A file added
+# to the manifest and forgotten here fails the build loudly rather than
+# silently widening what gets copied.
+for item in pyproject.toml README.md LICENSE requirements.lock src \
+            packaging/flatpak packaging/embed_screenscraper_credentials.py; do
+  install -d "$STAGE/$(dirname "$item")"
+  cp -a "$item" "$STAGE/$item"
+done
+python3 "$STAGE/packaging/embed_screenscraper_credentials.py" \
+  "$STAGE/src/openemux/core/embedded_credentials.py"
+
+# After the injection, which imports the staged package and writes bytecode of
+# its own. setuptools reuses egg-info when it finds one, and __pycache__ of a
+# pre-injection module is exactly the sort of build state a package should not
+# be carrying.
+find "$STAGE/src" \( -name '__pycache__' -o -name '*.egg-info' \) -type d -prune \
+  -exec rm -rf {} + 2>/dev/null || true
+
+# The tracked file must have come out of this untouched.
+grep -q '^_EMBEDDED_BLOB = ""$' src/openemux/core/embedded_credentials.py
 
 flatpak remote-add --user --if-not-exists flathub \
   https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -28,7 +68,7 @@ flatpak install -y --user --noninteractive flathub \
   "org.gnome.Platform//${RUNTIME_VERSION}" "org.gnome.Sdk//${RUNTIME_VERSION}"
 
 flatpak-builder --user --force-clean --disable-rofiles-fuse \
-  --repo=flatpak-repo .flatpak-build-dir "$MANIFEST"
+  --repo=flatpak-repo .flatpak-build-dir "$STAGE/$MANIFEST"
 
 mkdir -p dist
 BUNDLE="dist/OpenEmux-${VERSION}.flatpak"
@@ -51,6 +91,17 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
 fi
 test -f "$ICONS_DIR/LICENSE"
 echo "all $PKG_ICONS symbolic icons present"
+
+echo "==> verify the build carried no working-tree leftovers"
+# The staging list is the whole defence against `path: ../..` scooping up the
+# working tree; check the result rather than trusting the list.
+for unwanted in .env .git dist .venv AppDir flatpak-repo; do
+  if [ -e "$STAGE/$unwanted" ]; then
+    echo "FAIL: $unwanted reached the flatpak staging tree" >&2
+    exit 1
+  fi
+done
+echo "staging tree is clean"
 
 echo "==> verify the bundle installs"
 flatpak install -y --user --noninteractive "./$BUNDLE"

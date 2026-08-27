@@ -34,6 +34,24 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+# Never build from a tree that already carries a baked credential (issue #250).
+# Every target injects the credential into its own staging copy and leaves the
+# tracked source alone; a non-empty blob in the working tree therefore means an
+# interrupted build restored nothing, and building on would bake a credential
+# that the next `git commit -a` would publish.
+CRED_FILE="src/openemux/core/embedded_credentials.py"
+if ! grep -q '^_EMBEDDED_BLOB = ""$' "$ROOT_DIR/$CRED_FILE"; then
+  echo "$CRED_FILE carries an embedded credential." >&2
+  echo "A previous build was interrupted before it could restore the file." >&2
+  echo "Restore it with: git checkout -- $CRED_FILE" >&2
+  exit 1
+fi
+if [ -e "$ROOT_DIR/${CRED_FILE}.orig" ]; then
+  echo "${CRED_FILE}.orig is left over from an interrupted build." >&2
+  echo "Check it against the tracked file and delete it before building." >&2
+  exit 1
+fi
+
 if [ "$TARGET" = "appimage" ]; then
   # appimage-builder bundles amd64 debs and the result only runs on x86_64.
   ARCH="$(uname -m)"

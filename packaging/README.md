@@ -61,3 +61,19 @@ plain covers.
 
 **Versions.** `src/openemux/__init__.py` is the single source of truth; the
 AppImage recipe carries its own copy that must be bumped with it.
+
+**The ScreenScraper credential.** `embed_screenscraper_credentials.py` rewrites
+`_EMBEDDED_BLOB` in `core/embedded_credentials.py`, and every target must run it
+against **its own staging copy** — `$DESTDIR` for the `.deb`/`.rpm`, `AppDir`
+for the AppImage, the staged bundle for Windows, a `mktemp -d` tree for the
+Flatpak. Never the working tree: the tracked file restored by a trap is one
+`docker kill` away from leaving the project's credential in a committable file.
+`build.sh` refuses to start when the tracked file already carries a blob, and
+`tests/test_packaging_credentials.py` checks that no injection site targets it.
+
+The Flatpak needs the extra staging step because its source is `type: dir`,
+`path: ../..` — the *whole* directory beside the manifest, `.env` and `dist/`
+included. `flatpak/build.sh` copies the build inputs into a staging tree and
+builds the manifest from there; the manifest's own `skip:` list covers the two
+paths that build the working tree directly (a developer running
+`org.flatpak.Builder` by hand, and the `openemux-flatpak` publish workflow).

@@ -68,5 +68,28 @@ modules:
       # build the checked-out tree, so releases need no manifest bump. The
       # Flathub submission variant replaces this with a git source pinned to
       # the release tag + commit.
+      #
+      # `make flatpak` points this at a staging copy holding only the build
+      # inputs (packaging/flatpak/build.sh), so the skip list below is what
+      # protects the other two ways this manifest is built -- a developer's
+      # `flatpak run org.flatpak.Builder …` on a working tree, and the
+      # openemux-flatpak workflow. Without it the source copies *everything*
+      # beside the manifest: `.env` (SCREENSCRAPER_DEVID/DEVPASSWORD), `.git`,
+      # `.venv/`, `AppDir/` and ~170 MB of `dist/`, all into the root-owned
+      # build directory (issue #250).
       - type: dir
         path: ../..
+        skip:
+          - .env
+          - .git
+          - .venv
+          - .worktree
+          - .flatpak-builder
+          - .flatpak-build-dir
+          - flatpak-repo
+          - dist
+          - build
+          - AppDir
+          - appimage-build
+          - appimage-builder-cache
+          - htmlcov
