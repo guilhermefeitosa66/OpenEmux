@@ -1936,6 +1936,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-228 — Every package format is built by CI, not first at release time
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open `.github/workflows/packages.yml` and check which formats each
+  trigger builds.
+- **Expected:** A pull request touching the packaging paths builds the `.deb` and the `.rpm`; the
+  scheduled run, a push to `main` and `workflow_dispatch` build all four Linux formats, through the
+  same `packaging/build.sh` a maintainer runs locally. One failing format does not cancel the
+  others, and every run uploads `dist/`. Before this, no CI job built a package at all, so a broken
+  artifact was only discovered on release day, with the release already under way (issue #241).
+- **Check:** suite file `tests/test_ci_workflows.py`.
+
 ## Input
 
 ### RT-070 — Input profiles on disk are valid

@@ -1,0 +1,131 @@
+name: Packages
+
+# A broken package used to surface on release day, in the middle of the release
+# process, because nothing built one until then (issue #241). Everything needed
+# was already in the repo: `packaging/build.sh <target>` is self-contained, runs
+# in a pinned Docker image, and each format's script ends with its own install
+# smoke test. This workflow only wires it up.
+#
+# No secrets are involved. Without a local `.env`, `_EMBEDDED_BLOB` stays empty
+# and the artifacts carry no ScreenScraper credential -- by design, so a CI
+# build is a build anybody could reproduce.
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    # Only the paths that can actually break a package. A UI-only PR does not
+    # need 20 minutes of Docker to prove the .deb still installs.
+    paths:
+      - 'packaging/**'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - 'requirements.lock'
+      - 'Makefile'
+      - 'src/openemux/data/**'
+      - 'src/openemux/__init__.py'
+      - '.github/workflows/packages.yml'
+  push:
+    branches: [ main ]
+  schedule:
+    # Monday morning: catches the formats that PRs do not build, and any rot in
+    # the base images the Dockerfiles pin.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Which formats to build'
+        type: choice
+        default: all
+        options:
+          - all
+          - deb+rpm
+          - appimage
+          - flatpak
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Pick the formats
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.pick.outputs.targets }}
+    steps:
+      - name: Pick the formats
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          CHOICE: ${{ inputs.targets }}
+        run: |
+          case "$EVENT" in
+            pull_request)
+              # The two cheapest builds, and the .rpm is the format with the
+              # fewest users to notice it broke.
+              targets='["deb","rpm"]' ;;
+            workflow_dispatch)
+              case "$CHOICE" in
+                deb+rpm)  targets='["deb","rpm"]' ;;
+                appimage) targets='["appimage"]' ;;
+                flatpak)  targets='["flatpak"]' ;;
+                *)        targets='["deb","rpm","appimage","flatpak"]' ;;
+              esac ;;
+            *)
+              targets='["deb","rpm","appimage","flatpak"]' ;;
+          esac
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          echo "building: $targets"
+
+  build:
+    name: ${{ matrix.target }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      # One broken format should not hide the state of the other three.
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reclaim runner disk space
+        # The AppImage and the Flatpak pull a whole GTK stack (and, for the
+        # Flatpak, the GNOME SDK) into the container. A stock runner has ~14 GB
+        # free, which the SDK alone can eat; the preinstalled toolchains below
+        # are worth ~25 GB and nothing here uses them.
+        if: matrix.target == 'appimage' || matrix.target == 'flatpak'
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
+
+      - name: Load the fuse module
+        # appimage-builder mounts squashfs and flatpak-builder runs bubblewrap;
+        # both are handed /dev/fuse by packaging/build.sh, so the module has to
+        # be up on the host first.
+        if: matrix.target == 'appimage' || matrix.target == 'flatpak'
+        run: sudo modprobe fuse
+
+      - name: Build the ${{ matrix.target }}
+        run: ./packaging/build.sh ${{ matrix.target }}
+
+      - name: Show what was produced
+        run: ls -lh dist/
+
+      - name: Upload the ${{ matrix.target }}
+        # So a release candidate can be tested from a CI run instead of a local
+        # build. The Flatpak also leaves an ostree repo behind; only the
+        # single-file bundle in dist/ is worth carrying.
+        uses: actions/upload-artifact@v4
+        with:
+          name: openemux-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

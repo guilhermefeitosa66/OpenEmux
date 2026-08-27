@@ -19,6 +19,7 @@ artifacts. For user-facing install instructions, see the main
   - [Windows (portable zip + installer)](#windows-portable-zip--installer)
   - [Build everything](#build-everything)
   - [Checksums](#checksums)
+  - [Package CI](#package-ci)
 - [Testing the packages on other distros](#testing-the-packages-on-other-distros)
 - [How the packages are laid out](#how-the-packages-are-laid-out)
 - [Cutting a release](#cutting-a-release)
@@ -337,6 +338,35 @@ useless against exactly the tampering a checksum exists to detect. One
 combined file rather than one per artifact keeps verification to a single
 command.
 
+### Package CI
+
+[`.github/workflows/packages.yml`](../.github/workflows/packages.yml) runs the
+same `packaging/build.sh <target>` this page describes, so a broken package
+shows up in a pull request instead of on release day (issue #241).
+
+| Trigger | Formats |
+| --- | --- |
+| Pull request touching `packaging/**`, `pyproject.toml`, `requirements*`, `Makefile`, `src/openemux/data/**` | `deb`, `rpm` |
+| Push to `main`, Monday 05:00 UTC, `workflow_dispatch` | all four |
+
+Each format's own build script ends with an install smoke test, so a green job
+means the package installed in a clean container of its target distro, not just
+that it compiled. Every run uploads `dist/` as an artifact (kept 14 days), which
+is enough to hand somebody a release candidate without building it locally.
+
+`workflow_dispatch` takes a **Which formats to build** choice (`all`,
+`deb+rpm`, `appimage`, `flatpak`) so a single format can be re-run on its own:
+
+```bash
+gh workflow run packages.yml -f targets=flatpak
+```
+
+CI is given no secrets: without a `.env`, `_EMBEDDED_BLOB` stays empty and the
+artifacts carry no ScreenScraper credential. That is deliberate — it keeps a CI
+build reproducible by anyone — and it is also why the packages that ship in a
+release are still built locally. The Windows target is not in CI: it needs the
+193 MiB vendored RetroArch, which is fetched on demand and gitignored.
+
 ## Testing the packages on other distros
 
 Building a package proves it builds. Whether it *installs and runs* on the
@@ -453,9 +483,11 @@ works out of the box. End users still add their own ScreenScraper account
 (`ssid`/`sspassword`) in Preferences — that is what spends their own quota
 rather than the project's shared pool.
 
-The credential lives **only** in a local, gitignored `.env` — there is no build
-CI; packages and releases are produced locally on an x86_64 host (see below).
-Copy [`.env.example`](../.env.example) to `.env` and fill it in:
+The credential lives **only** in a local, gitignored `.env`. CI builds packages
+(see [Package CI](#package-ci)) but is given no secret, so its artifacts carry
+no credential; the packages that ship in a release are produced locally on an
+x86_64 host (see below). Copy [`.env.example`](../.env.example) to `.env` and
+fill it in:
 
 ```bash
 cp .env.example .env
