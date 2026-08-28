@@ -612,16 +612,37 @@ make windows-clean && make windows                     # rebuild and smoke-test
 
 #### What is left out, and why
 
-| Dropped | Size | Why |
-| --- | --- | --- |
-| `vendors/RetroArch-Win64/cores` | 1.8 GB | Cores carry many different licences. They are downloaded from the buildbot on first boot, exactly as on Linux, which keeps all of them out of the installer |
-| `vendors/RetroArch-Win64/database` | 169 MB | RDB files for RetroArch's own content scanner, which OpenEmux never invokes |
-| `vendors/RetroArch-Win64/shaders` | 101 MB | Nothing reads them: the shader feature works off `~/.openemux/runtime/shaders_{glsl,slang}` |
-| `vendors/RetroArch-Win64/overlays` | 33 MB | A feature OpenEmux exposes no UI for |
-| Headers, static libs, pkg-config, docs | — | Build-time files; the bundle only runs the stack |
-| `tkinter` and the Tcl/Tk runtime | — | A second, unused GUI toolkit inside Python's standard library |
+Two different axes, and the second one is easy to miss. **Size** is what the
+download costs. **File count** is what the *install* costs: NSIS extracts one
+file at a time, so 21.909 of them took far longer than 610 MB has any right to,
+and that was the actual complaint (issue #365). `stage.py` prints both numbers
+at the end of phase 2; a build that grows either is worth looking at.
 
-GStreamer stays. GTK 4 declares it as a dependency for its optional
+| Dropped | Size | Files | Why |
+| --- | --- | --- | --- |
+| `vendors/RetroArch-Win64/cores` | 1.8 GB | — | Cores carry many different licences. They are downloaded from the buildbot on first boot, exactly as on Linux, which keeps all of them out of the installer |
+| `vendors/RetroArch-Win64/database` | 169 MB | 146 | RDB files for RetroArch's own content scanner, which OpenEmux never invokes |
+| `vendors/RetroArch-Win64/shaders` | 101 MB | 5.411 | Nothing reads them: the shader feature works off `~/.openemux/runtime/shaders_{glsl,slang}` |
+| `vendors/RetroArch-Win64/overlays` | 33 MB | 1.829 | A feature OpenEmux exposes no UI for |
+| `vendors/RetroArch-Win64/assets/xmb` | 71 MB | 5.499 | Nine icon themes for a menu driver the bundled build does not run — RetroArch 1.22.2 defaults to `ozone`, and OpenEmux never sets `menu_driver` |
+| `share/terminfo` + `lib/terminfo` | 24 MB | 5.792 | Terminal capability descriptions, shipped twice by ncurses, which arrives as a transitive dependency. A GTK4 app opens no terminal |
+| `share/locale`, all but 8 languages | 57 MB | 1.485 | GTK/GLib strings in 185 languages. What is readable is the subset the app itself is translated into; outside those its own UI is English anyway |
+| `share/zoneinfo` | 4.5 MB | 1.803 | Unreachable on Windows twice over: Python's `TZPATH` is baked to the POSIX string `/mingw64/share/zoneinfo`, and GLib reads time zones from the registry |
+| Headers, static libs, pkg-config, docs | — | — | Build-time files; the bundle only runs the stack |
+| `tkinter`, the Tcl/Tk runtime and the Tcl extension packages | — | 28 | A second, unused GUI toolkit inside Python's standard library, plus the `itcl`/`tdbc`/`thread` packages that outlive it |
+
+That is 21.909 files down to 6.870, and 572 MiB down to 435 MiB — the two
+numbers phase 2 prints.
+
+**The Qt5 DLLs stay, and it is not an oversight.** `Qt5Core`, `Qt5Gui`,
+`Qt5Network` and `Qt5Widgets` are 20 MB that exist for RetroArch's WIMP desktop
+menu, which the launch override switches off (issue #367) — so they read as dead
+weight, and issue #365 proposed dropping them. They are not loaded on demand:
+`retroarch.exe` names all four in its PE import table (`objdump -p` says so), and
+Windows resolves an import table before the process starts. Removing them stops
+RetroArch from launching at all. Phase 5 asserts they are present.
+
+GStreamer stays too. GTK 4 declares it as a dependency for its optional
 media-playback backend, and dropping a hard dependency that is only loaded
 lazily is the kind of change that breaks a bundle on a user's machine and
 nowhere else.

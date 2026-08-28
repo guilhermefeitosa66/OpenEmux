@@ -33,9 +33,20 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 
+# The locale prune below keeps the languages the app itself ships, so it reads
+# that list from the app rather than repeating it. openemux.i18n is plain
+# Python -- dictionaries of strings, no GTK -- so importing it here costs
+# nothing and cannot drift from src/openemux/i18n/.
+sys.path.insert(0, str(REPO / "src"))
+from openemux.i18n import SUPPORTED_LOCALES  # noqa: E402 - needs sys.path above
+
 #: Build-time-only files inside the MSYS2 prefix. Headers, static libraries and
 #: pkg-config metadata exist to compile against this stack; the bundle only runs
 #: it. Documentation is the same story and is the larger half.
+#:
+#: The second half of this list is about *file count* rather than size, because
+#: that is what the Windows installer spends its time on: NSIS extracts one file
+#: at a time, and the 1.11.3 bundle held 21.909 of them (issue #365).
 PREFIX_PRUNE_DIRS = [
     "include",
     "share/man",
@@ -54,6 +65,20 @@ PREFIX_PRUNE_DIRS = [
     # spells an absolute C:/msys64 path, which is exactly what the bundle must
     # never carry: a file that resolves on the build machine and nowhere else.
     "share/sqlite",
+    # Terminal capability descriptions, shipped twice by ncurses -- 2.896 files
+    # under each of these, 5.792 in total, the largest single count in the
+    # bundle. ncurses arrives as a transitive dependency of the MSYS2 stack;
+    # OpenEmux is a GTK4 application and opens no terminal, so nothing here is
+    # ever read. The question asked was "what in the bundle links ncurses and
+    # draws a text UI?" -- nothing does.
+    "share/terminfo",
+    "lib/terminfo",
+    # The tzdata tree. Two independent reasons it is unreachable on Windows:
+    # Python's TZPATH is baked at build time to the POSIX string
+    # "/mingw64/share/zoneinfo", which resolves to nothing on a user's machine
+    # and never to this directory; and GLib reads time zones from the Windows
+    # registry, not from a tzdata tree. Nothing in src/ imports zoneinfo either.
+    "share/zoneinfo",
 ]
 
 #: Python's standard library carries things this app never imports. tkinter (and
@@ -85,8 +110,40 @@ PYTHON_PRUNE = [
 #:
 #: ``overlays`` is 33 MB for a feature OpenEmux exposes no UI for.
 #:
-#: Together these take the vendored RetroArch from 2.3 GB to roughly 200 MB.
-RETROARCH_PRUNE_DIRS = ["cores", "database", "shaders", "overlays"]
+#: ``assets/xmb`` is 5.499 files and 71 MB of icon themes for a menu driver the
+#: bundled build does not run. Measured, not assumed: RetroArch 1.22.2 -- the
+#: version vendored here -- writes ``menu_driver = "ozone"`` into a config it
+#: generates from its own defaults, and OpenEmux never sets that key. Ozone's
+#: own assets (840 files), the fonts under ``assets/pkg`` and the two light
+#: drivers (``rgui``, ``glui``) all stay, so the menu OpenEmux actually opens is
+#: untouched; what goes is nine alternative icon themes for XMB, reachable only
+#: by a user who switches menu driver inside RetroArch's own settings.
+#:
+#: Together these take the vendored RetroArch from 2.3 GB to roughly 130 MB.
+#:
+#: Deliberately *not* here: ``Qt5Core.dll``, ``Qt5Gui.dll``, ``Qt5Network.dll``
+#: and ``Qt5Widgets.dll``. Issue #365 expected them to become dead weight once
+#: #367 turned the WIMP desktop menu off, but they are not loaded on demand --
+#: ``retroarch.exe`` names all four in its PE import table, so Windows resolves
+#: them before the process starts and dropping them stops RetroArch from
+#: launching at all. ``build.sh`` phase 5 asserts they are still there.
+RETROARCH_PRUNE_DIRS = ["cores", "database", "shaders", "overlays", "assets/xmb"]
+
+#: Locale directories kept under ``share/locale``.
+#:
+#: MSYS2 ships translations for the whole stack in 185 languages -- 1.642 files
+#: and 63 MB of GTK, GLib and shared-mime-info strings. What is readable in
+#: OpenEmux is the subset for the languages the app itself is translated into:
+#: outside those, its own UI is English, and a German file-chooser button under
+#: an English window is not a feature anybody asked for.
+#:
+#: The base language of each locale comes along because that is where gettext
+#: looks next -- a ``pt_PT`` desktop gets OpenEmux in pt_BR (``i18n``'s own
+#: ``LANGUAGE_FALLBACKS``) and GTK from ``pt``.
+LOCALE_KEEP = sorted(
+    set(SUPPORTED_LOCALES)
+    | {locale.split("_", 1)[0] for locale in SUPPORTED_LOCALES}
+)
 
 
 def log(message):
@@ -139,7 +196,34 @@ def prune_prefix(bundle):
         for path in (bundle / "bin").glob(pattern):
             path.unlink(missing_ok=True)
 
+    # And the Tcl *extensions*, which the two globs above miss because they are
+    # named after themselves: itcl, tdbc, thread, reg, dde and the Tcl binding
+    # to SQLite. A Tcl package directory is precisely one holding a
+    # pkgIndex.tcl, so that is what this looks for rather than a name list that
+    # would go stale at the next MSYS2 bump.
+    if lib.is_dir():
+        for path in sorted(lib.iterdir()):
+            if path.is_dir() and (path / "pkgIndex.tcl").is_file():
+                rmtree(path)
+
+    prune_locales(bundle)
     drop_pycache(bundle)
+
+
+def prune_locales(bundle):
+    """Drop the translations for languages OpenEmux is not translated into.
+
+    Only whole language directories are considered; anything else that lives
+    directly under ``share/locale`` (``locale.alias`` and friends) is left
+    alone.
+    """
+    directory = bundle / "share" / "locale"
+    if not directory.is_dir():
+        return
+    keep = set(LOCALE_KEEP)
+    for entry in sorted(directory.iterdir()):
+        if entry.is_dir() and entry.name not in keep:
+            rmtree(entry)
 
 
 def drop_pycache(root):
@@ -253,14 +337,23 @@ def copy_documents(bundle):
 
 
 def directory_size(path):
+    """``(bytes, file count)`` for everything under ``path``.
+
+    The count is reported alongside the size because it is the number the
+    Windows installer's running time follows: NSIS extracts files one at a
+    time, so 21.909 of them took far longer than 572 MiB has any right to
+    (issue #365). A build that quietly grows the count back is worth seeing.
+    """
     total = 0
+    files_seen = 0
     for root, _dirs, files in os.walk(path):
         for name in files:
+            files_seen += 1
             try:
                 total += (Path(root) / name).stat().st_size
             except OSError:
                 pass
-    return total
+    return total, files_seen
 
 
 def main(argv=None):
@@ -291,8 +384,11 @@ def main(argv=None):
 
     copy_documents(args.bundle)
 
-    size = directory_size(args.bundle)
-    print(f"==> bundle staged at {args.bundle} ({size / (1 << 20):.0f} MiB)")
+    size, files = directory_size(args.bundle)
+    print(
+        f"==> bundle staged at {args.bundle} "
+        f"({size / (1 << 20):.0f} MiB, {files} files)"
+    )
     return 0
 
 
