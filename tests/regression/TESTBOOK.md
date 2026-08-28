@@ -21,7 +21,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 | --- | --- | --- |
 | `AUTO-SUITE` | Covered by unit tests | One run of the full suite; the scenario's verdict follows the listed test files |
 | `AUTO-PROBE` | Verifiable headlessly | Run the exact command in **Check**; `RT-NNN OK` on stdout = PASS, `AssertionError` = FAIL, any other error = BLOCKED |
-| `AUTO-UI` | Verifiable by driving the real app on X11 | Follow **Steps** with the UI driver, save a screenshot per observation |
+| `AUTO-UI` | Verifiable by driving the real app | Start it in the devbox, follow **Steps** with `make devbox-xdo`, save a `make devbox-shot` per observation |
 | `MANUAL` | Needs the human (hardware, a real game session) | Never executed by the runner; reported as `N/A (manual)` and handed to the developer |
 
 - **Safety:** automated scenarios must not damage the real library. Anything that creates, renames
@@ -29,6 +29,16 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   destructive UI flow is exercised by the human on a throwaway file). The only allowed mutations in
   `AUTO-UI`/`AUTO-PROBE` scenarios are **self-restoring** (toggle and toggle back, edit a copy,
   backup-then-restore) and the scenario must spell out the restore step.
+- **Where `AUTO-UI` runs: the devbox, not the developer's screen.** `make devbox-up` creates the
+  container (`devbox/`), `make devbox-app` starts the app on its own X server from this checkout,
+  `make devbox-xdo CMD='...'` drives it, `make devbox-shot OUT=... WIN=1` captures it and
+  `make devbox-res RES=520x900` resizes it. The container has a `$HOME` of its own, so no scenario
+  can reach the real config or library, and the app's log is readable from the host at
+  `~/.local/share/openemux-devbox/home/.devbox/app.log`. Run `make devbox-verify` before a batch:
+  it says whether the box can run the app at all. Driving the app on the host display (`make run`)
+  is for when the *developer* is the one watching — it takes the mouse and the keyboard for as
+  long as the run lasts (issue #345).
+
 - `$SCRATCH` in Check commands is the runner's scratch directory. Probes run from the repository
   root on the `develop` branch with `PYTHONPATH=src .venv/bin/python`.
 
@@ -53,14 +63,20 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 ### RT-001 — The app launches clean
 - **Area:** Startup
 - **Mode:** AUTO-UI
-- **Preconditions:** `develop` checked out, `make bootstrap` already done on this machine.
+- **Preconditions:** `develop` checked out and the devbox created (`make devbox-up`); on the
+  developer's own display instead, `make bootstrap` already done on this machine.
 - **Steps:**
-  1. Launch the app (`make run`).
-  2. Wait for the main window.
+  1. Start the app in the devbox (`make devbox-app`) — or, with the developer watching,
+     `make run`.
+  2. Wait for the main window and capture it (`make devbox-shot OUT=$SCRATCH/RT-001.png`).
 - **Expected:** The "OpenEmux" window appears with the sidebar ("Library") and a game grid. No
   crash dialog.
-- **Check:** `wmctrl -l` lists a window titled `OpenEmux` within 25 s, and the launch log contains
-  no `Traceback` and no `CRITICAL` (`grep -niE "traceback|critical" $SCRATCH/app.log`).
+- **Check:** `make devbox-app` prints `window <id> -- OpenEmux` within its 45 s wait (it fails
+  loudly with the tail of the log if the app exits during start-up), `make devbox-app ACTION=status`
+  says `running`, and the log carries no `Traceback` and no `CRITICAL`
+  (`grep -niE "traceback|critical" ~/.local/share/openemux-devbox/home/.devbox/app.log`). On the
+  host display the equivalent is `wmctrl -l` listing a window titled `OpenEmux` within 25 s and the
+  same grep over `$SCRATCH/app.log`.
   Without a desktop, `make smoke` (or `xvfb-run -a .venv/bin/python scripts/smoke_start.py`) makes
   the same check headlessly against a throwaway `HOME`; exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. This
   is what CI runs (issue #242).
@@ -821,7 +837,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-PROBE
 - **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
   `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter, so this is
-  the only coverage the grid's gesture stack has.
+  the only coverage the grid's gesture stack has. The harness builds a stub window and hands it to
+  the real `NavigationController`, so it has to be kept in step with what that controller reads off
+  the window — after the split into collaborators (issue #237) the grid registry moved to
+  `window.pages`, and a stub still carrying `_grids` resolved every keyboard check's context to
+  "nowhere" and selected nothing.
 - **Steps:** As a QA person: Ctrl-click and Shift-click cards, drag a rubber band from empty page
   space *and* from the gap between two cards, clear by clicking empty space, range with
   Shift+arrows, filter the page, leave and come back, open two context menus in a row.
@@ -1904,8 +1924,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   spec = Path("packaging/rpm/openemux.spec").read_text()
   assert "Requires:       webp-pixbuf-loader" in spec, "the .rpm does not require the loader"
   deb = Path("packaging/deb/build.sh").read_text()
-  depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
+  # The list is assembled in shell and substituted into the control file, so
+  # it is the `DEPENDS=` lines that carry it, not the `Depends:` template.
+  depends = " ".join(l for l in deb.splitlines() if l.startswith("DEPENDS="))
+  assert depends, "the .deb assembles no dependency list at all"
   assert "webp-pixbuf-loader" in depends, f"the .deb does not depend on the loader: {depends}"
+  assert "Depends: ${DEPENDS}" in deb, "the control field is not the assembled list"
   # ...and each build proves it against its own install rather than trusting the line.
   for build in ("packaging/deb/build.sh", "packaging/rpm/build.sh",
                 "packaging/appimage/selftest.py"):
@@ -2214,7 +2238,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
           assert "http://" not in line or line.strip().startswith("#"), \
               f"{dockerfile.name}: plain HTTP: {line.strip()}"
   build = Path("packaging/build.sh").read_text()
-  assert "docker build --pull" in build, "a stale base image can still be reused"
+  # Read the line, not a fixed spelling of it: the ARM builds inserted a
+  # `--platform` argument list ahead of the flag (issue #119).
+  build_line = next(l for l in build.splitlines() if l.strip().startswith("docker build"))
+  assert "--pull" in build_line, f"a stale base image can still be reused: {build_line.strip()}"
   recipe = Path("packaging/appimage/AppImageBuilder.yml").read_text()
   assert "http://" not in recipe, "the AppImage still fetches something over plain HTTP"
   assert "--require-hashes" in recipe, "the bundle's Python deps are not hash-pinned"
@@ -3289,7 +3316,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App **closed**.
 - **Steps:**
-  1. Launch the app (`make run`), writing its output to `$SCRATCH/app.log`.
+  1. Start the app fresh in the devbox (`make devbox-app ACTION=restart`); its output is
+     `~/.local/share/openemux-devbox/home/.devbox/app.log`, which the host can read — copy it to
+     `$SCRATCH/app.log` when the run ends. On the host display, `make run` writing to the same
+     file.
   2. Wait for the library to appear, then click around the grid and the sidebar a dozen times.
   3. Close the app.
 - **Expected:** The log carries one summary line per console rescan and one per console scan, and
@@ -3952,6 +3982,368 @@ desk. Anything needing a real ARM machine is `MANUAL`.
   have an aarch64 leg pushing into it -- which is why this scenario exists rather than being
   assumed.
 - **Check:** human only.
+
+
+## Developer tooling & docs
+
+The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
+scenarios above run in, and the claims the documentation makes about the project. Both are checked
+like behaviour, because both fail the same way — a devbox that reaches the host takes the
+developer's session down with it, and a wrong document sends a contributor into a protected branch
+or into an environment that cannot run the tests.
+
+### RT-283 — The devbox opens a display of its own, never the developer's
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `devbox/`).
+- **Steps:** As a QA person: with your own desktop in use, run `make devbox-app`,
+  `make devbox-xdo CMD='key ctrl+f'` and `make devbox-shot OUT=/tmp/box.png`, then look at the
+  capture and at your screen.
+- **Expected:** The capture shows the container's window, the keystroke went into it, and nothing
+  reached the desktop you are working in. distrobox gives the container the host's network
+  namespace and bind-mounts the host's `/tmp` — which are both places an X server advertises
+  itself, so a display number the host also uses would not collide loudly: it would connect, and
+  every keystroke and every screenshot would land on the developer's screen. That is the failure
+  the whole container exists to prevent (issue #345), so the display is `:77`, spelled the same on
+  the host driver and inside, and every tool exports `DISPLAY` from it instead of inheriting one.
+  "Something answers on `:77`" is not the question asked either: the server has to advertise the
+  VNC extension, which only our Xvnc does, and a tool that finds a display it does not own refuses
+  to run rather than drawing on it. `make devbox-verify` reports that case as a failure in those
+  words. The VNC port is bound to loopback, because the network namespace is the host's.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+
+  lib = Path("devbox/lib.sh").read_text()
+  host = Path("devbox/devbox.sh").read_text()
+  xsrv = Path("devbox/bin/devbox-x").read_text()
+  verify = Path("devbox/bin/devbox-verify").read_text()
+
+  assert "DEVBOX_DISPLAY=${DEVBOX_DISPLAY:-:77}" in lib, "the kit does not default to :77"
+  assert "DEVBOX_DISPLAY=${DEVBOX_DISPLAY:-:77}" in host, "the host driver does not default to :77"
+  assert 'export DISPLAY="${DEVBOX_DISPLAY}"' in lib, "a tool could inherit the host DISPLAY"
+
+  # Ownership is asserted, not assumed: only Xvnc advertises the extension.
+  assert "xdpyinfo" in lib and "TIGERVNC|VNC-EXTENSION" in lib, \
+      "display_is_ours no longer identifies the server"
+  assert "display_is_ours || die" in lib, "require_display no longer refuses a foreign display"
+  assert "is NOT our Xvnc" in verify, "devbox-verify no longer reports the dangerous case"
+
+  assert "DEVBOX_VNC_HOST=127.0.0.1" in lib, "the VNC host is not pinned to loopback"
+  assert "-localhost=1" in xsrv, "Xvnc is not started loopback-only"
+  print("RT-283 OK")
+  EOF
+  ```
+
+### RT-284 — The devbox writes into a home of its own
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `devbox/`).
+- **Steps:** As a QA person: note the modification time of your `~/.openemux/config.yaml` and the
+  contents of your ROM directory, run `make devbox-app` and click around the library in the
+  container, then look at both again.
+- **Expected:** Neither moved. The container's `$HOME` is
+  `~/.local/share/openemux-devbox/home`, so `~/.openemux` in there is throwaway and the developer's
+  real config, playlists and library are never opened. The real home is *also* mounted, at its real
+  path — that is what makes the checkout live in the container — so one wrong `HOME` would turn
+  every tool in the kit into something that edits the actual config. distrobox names the host home
+  in `DISTROBOX_HOST_HOME`, so the mistake is detectable, and the kit exits rather than finding out
+  afterwards (issue #345). The session's state, its captures and the synthetic library all live
+  under that home, which is why evidence never has to be copied out of the container.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+
+  lib = Path("devbox/lib.sh").read_text()
+  host = Path("devbox/devbox.sh").read_text()
+  verify = Path("devbox/bin/devbox-verify").read_text()
+  seed = Path("devbox/bin/devbox-seed").read_text()
+
+  assert 'BOX_HOME="${DEVBOX_ROOT}/home"' in host, "the container no longer gets its own home"
+  assert '--home "${BOX_HOME}"' in host, "distrobox is not told to use it"
+  assert "DISTROBOX_HOST_HOME" in lib and "exit 1" in lib, \
+      "the kit no longer refuses to run against the host home"
+  assert "HOME is the developer's real home" in verify, "devbox-verify no longer checks the home"
+  assert 'DEVBOX_STATE=${DEVBOX_STATE:-${HOME}/.devbox}' in lib
+  assert 'DEVBOX_OUT=${DEVBOX_OUT:-${HOME}/devbox-out}' in lib
+  assert 'home / "games" / "roms"' in seed, "the synthetic library is not under the container's home"
+  print("RT-284 OK")
+  EOF
+  ```
+
+### RT-285 — Nothing in the devbox is stopped by name
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `devbox/`).
+- **Steps:** As a QA person: run the app on your own desktop with `make run`, then, in another
+  terminal, `make devbox-app ACTION=stop` and `make devbox-rm`.
+- **Expected:** The app on your desktop is still running. The container shares the host's **PID
+  namespace**, so a `pkill openemux` inside it matches the developer's own process just as well as
+  the container's, and a looser pattern reaches their window manager (issue #345). Every stop in
+  the kit therefore targets a pid the kit itself recorded — the app, Xvnc and the window manager
+  each have a pidfile under the session's state directory — and no script in `devbox/` invokes
+  `pkill` or `killall` at all.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+
+  scripts = [Path("devbox/devbox.sh"), Path("devbox/lib.sh"), Path("devbox/provision.sh")]
+  scripts += sorted(p for p in Path("devbox/bin").iterdir() if p.is_file())
+  for script in scripts:
+      code = [l for l in script.read_text().splitlines() if not l.lstrip().startswith("#")]
+      for line in code:
+          assert "pkill" not in line and "killall" not in line, f"{script}: {line.strip()}"
+
+  app = Path("devbox/bin/devbox-app").read_text()
+  xsrv = Path("devbox/bin/devbox-x").read_text()
+  assert "${DEVBOX_STATE}/app.pid" in app, "the app is not stopped by its recorded pid"
+  assert "stop_pid" in xsrv and "xvnc.pid" in xsrv and "wm.pid" in xsrv, \
+      "the display's services are not stopped by their recorded pids"
+  print("RT-285 OK")
+  EOF
+  ```
+
+### RT-286 — A window manager is managing our display, and its absence is reported
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `devbox/`).
+- **Steps:** As a QA person: `make devbox-res RES=520x900`, then `make devbox-shot WIN=1
+  OUT=/tmp/narrow.png` and look at the capture.
+- **Expected:** The window is 520 px wide and the adaptive layout has collapsed (the check RT-033
+  makes). Without a window manager GTK's resize requests go nowhere — there is nothing to mediate
+  them — and every narrow capture comes out as the wide layout, clipped. That happened because the
+  question was put to the process table: this container shares the host's PID namespace, so
+  `pgrep -x openbox` cheerfully matched the *developer's* window manager and reported one that was
+  managing nothing in here. It is asked of the display instead, and answered by what a present
+  `_NET_SUPPORTING_WM_CHECK` looks like — it names a window id — never by `xprop`'s phrasing for an
+  absent one, of which there are two: a server that has hosted a window manager before says "not
+  found", one that never has says "no such atom on any window", and matching the first alone
+  reported a window manager on every freshly started server (issue #345). `devbox-x start` waits
+  for a real answer, and `make devbox-verify` says so when there is none.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+
+  lib = Path("devbox/lib.sh").read_text()
+  xsrv = Path("devbox/bin/devbox-x").read_text()
+  verify = Path("devbox/bin/devbox-verify").read_text()
+
+  wm = lib.split("wm_running()")[1].split("\n}")[0]
+  assert "xprop -root -display" in wm and "_NET_SUPPORTING_WM_CHECK" in wm, \
+      "wm_running no longer asks the display"
+  assert "pgrep" not in wm and "pidof" not in wm, \
+      "wm_running reads the process table, which is the host's too"
+  assert "window id # 0x" in wm, "wm_running matches something other than a window id"
+  assert "not found" not in wm and "no such atom" not in wm, \
+      "wm_running matches xprop's absent-property wording again"
+
+  assert "openbox --sm-disable" in xsrv, "no window manager is started"
+  assert "wm_running && break" in xsrv, "the start does not wait for the window manager"
+  assert "no window manager on" in verify, "devbox-verify no longer reports its absence"
+  print("RT-286 OK")
+  EOF
+  ```
+
+### RT-287 — `make devbox-verify` says whether the box can run the app
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none. The probe runs the real target when the container is up on this machine,
+  and reads the wiring otherwise.
+- **Steps:** As a QA person: run `make devbox-verify` before starting a batch of UI scenarios.
+- **Expected:** A section per question — the container, the display, the tools, the GTK stack, the
+  library, the app — with a tick, a note or a cross each, and `Ready.` at the end. A missing
+  screenshot tool or a GTK stack that does not import is named there instead of surfacing later as
+  a capture of nothing, and anything genuinely broken exits non-zero with the count (issue #345).
+  Notes are not failures: no display yet, no library yet, the app not started are all states the
+  next command fixes.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import shutil, subprocess
+  from pathlib import Path
+
+  host = Path("devbox/devbox.sh").read_text()
+  verify = Path("devbox/bin/devbox-verify").read_text()
+  makefile = Path("Makefile").read_text()
+
+  assert "devbox-verify:" in makefile and "$(DEVBOX) verify" in makefile
+  assert "verify)  ensure_up; inside devbox-verify" in host
+  for question in ("the container", "the display", "the tools", "the GTK stack",
+                   "the library", "the app"):
+      assert f'step "{question}"' in verify, f"devbox-verify no longer checks {question}"
+  for tool in ("Xvnc", "openbox", "xdotool", "wmctrl", "xdpyinfo", "import", "convert"):
+      assert tool in verify, f"{tool} is no longer part of the inventory"
+  assert "check(s) failed" in verify and "exit 1" in verify, \
+      "devbox-verify no longer fails when something is missing"
+
+  if shutil.which("distrobox"):
+      listed = subprocess.run(["distrobox", "list"], capture_output=True, text=True).stdout
+      up = any("openemux-devbox" in line and "Up" in line.split("|")[2]
+               for line in listed.splitlines() if line.count("|") >= 2)
+      if up:
+          run = subprocess.run(["make", "devbox-verify"], capture_output=True, text=True)
+          assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]
+          assert "Ready." in run.stdout, run.stdout[-2000:]
+  print("RT-287 OK")
+  EOF
+  ```
+
+### RT-288 — The developer guide describes the test suite that exists
+- **Area:** Docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person on a box with no GTK4 typelibs: follow `docs/DEVELOPMENT.md` from the
+  top and run the suite where it tells you to.
+- **Expected:** The guide has already told you to install them. It used to say the suite "covers
+  the `core/` modules only (no GTK in tests)" and that the layout was one `test_<module>.py` per
+  core module — neither of which was true: about a fifth of the files import `gi` or a module from
+  `openemux.ui`, so a contributor following the doc met an `ImportError` and a red `make test` that
+  had nothing to do with their change (issue #246). It also separates the two questions a GTK test
+  raises: the typelibs, which every such file needs at import, and a *display*, which only the
+  files that build real widgets need — and which GTK answers with a segfault rather than an
+  exception, hence `@needs_display` and `xvfb-run` (issue #242).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import glob
+  from pathlib import Path
+
+  dev = Path("docs/DEVELOPMENT.md").read_text()
+  assert "no GTK in tests" not in dev, "the guide still claims the suite is GTK-free"
+  assert "typelibs therefore have to be" in dev, "the guide does not require the typelibs"
+  assert "needs_display" in dev and "segfault" in dev, "the guide does not explain the display half"
+  assert "one `test_<module>.py` per core module" not in dev, \
+      "the guide still states the layout as a rule"
+
+  gtk_tests = [p for p in glob.glob("tests/test_*.py")
+               if "gi.require_version" in Path(p).read_text()
+               or "openemux.ui" in Path(p).read_text()]
+  assert len(gtk_tests) > 10, f"only {len(gtk_tests)} test files touch GTK"
+  assert "needs_display" in Path("tests/gtk_display.py").read_text()
+  assert [p for p in glob.glob("tests/test_*.py") if "needs_display" in Path(p).read_text()], \
+      "no test file uses @needs_display"
+  print("RT-288 OK")
+  EOF
+  ```
+
+### RT-289 — The documented release path is the one the branch protection allows
+- **Area:** Docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: cut a release by following `docs/DEVELOPMENT.md` and nothing else.
+- **Expected:** It works. The section used to say "commit, tag `vX.Y.Z`, push `main` and the tag" —
+  a push the ruleset rejects — and then to publish with no notes file, leaving the version bump
+  stranded off `develop` (issue #246). What it describes now is the sequence the repository
+  actually has: a `release/vX.Y.Z` branch off `develop` that is kept forever, the four version
+  files, the committed release notes, a PR to `main` merged with `--squash --admin` and **not**
+  `--delete-branch`, `gh release create --target main --notes-file`, and the merge back into
+  `develop`. `CLAUDE.md` carries the same sequence for the assistant, and the section says so, so
+  the two are edited together.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from pathlib import Path
+
+  dev = Path("docs/DEVELOPMENT.md").read_text()
+  section = dev.split("## Cutting a release")[1].split("\n## ")[0]
+  for needle in ("release/vX.Y.Z", "kept forever", "gh pr create --base main",
+                 "--squash --admin", "--notes-file release/RELEASE_NOTES_vX.Y.Z.md",
+                 "--target main", "Merge `main` back into `develop`", "all four places",
+                 "NOT --delete-branch", "CLAUDE.md"):
+      assert needle in section, f"the release section no longer says: {needle}"
+  assert "push `main`" not in section and "git push origin main" not in section, \
+      "the release section tells the reader to push to a protected branch"
+  print("RT-289 OK")
+  EOF
+  ```
+
+### RT-290 — Every format the build produces is documented as one of them
+- **Area:** Docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: read `packaging/README.md` and `docs/DEVELOPMENT.md`, then run
+  `./packaging/build.sh` with no argument and compare the usage line with what you were told.
+- **Expected:** The same list, and the same count. The docs said "three distributable formats" and
+  `{appimage|deb|rpm}` while the script had four and `make packages` built four plus the checksums
+  (issue #246); there are five now, Windows included, and the count in the docs is the count of
+  targets. `make packages` builds every one of them and finishes with `checksums`, so nothing can
+  be built after `dist/SHA256SUMS` was written and ship unverifiable.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+
+  build = Path("packaging/build.sh").read_text()
+  usage = re.search(r"usage: \$0 \{([a-z|]+)\}", build).group(1).split("|")
+  case = re.search(r"^\s*([a-z|]+)\) ;;", build, re.M).group(1).split("|")
+  assert set(usage) == set(case), f"usage says {usage}, the dispatch accepts {case}"
+
+  pkg = Path("packaging/README.md").read_text()
+  dev = Path("docs/DEVELOPMENT.md").read_text()
+  for target in usage:
+      assert f"./packaging/build.sh {target}" in pkg, f"packaging/README.md omits {target}"
+      assert f"make {target}" in pkg, f"packaging/README.md does not name `make {target}`"
+      assert target in dev, f"docs/DEVELOPMENT.md never mentions {target}"
+  counts = {3: "Three", 4: "Four", 5: "Five", 6: "Six"}
+  assert f"{counts[len(usage)]} distributable formats" in pkg, \
+      "packaging/README.md's headline count is not the number of targets"
+
+  mk = Path("Makefile").read_text()
+  packages = re.search(r"^packages: (.+)$", mk, re.M).group(1).split()
+  for target in usage:
+      assert target in packages, f"`make packages` does not build {target}"
+  assert packages[-1] == "checksums", f"`make packages` does not end in checksums: {packages}"
+  print("RT-290 OK")
+  EOF
+  ```
+
+### RT-291 — Every tool is documented, and nothing points at a launcher that is gone
+- **Area:** Docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: list `tools/`, look each one up in `tools/README.md`, then run every
+  way of starting the app that the docs offer.
+- **Expected:** Each tool has a section describing what it is for, and every documented launcher
+  exists. `tools/README.md` covered one tool out of four — leaving the Xephyr/XTest input harness,
+  the icon browser and the cartridge-colour generator undiscoverable — and `run.sh` was a stale
+  launcher that ran `python3` from `PATH`, which on the development machine is a pyenv shim with no
+  PyGObject: exactly the `ModuleNotFoundError: No module named 'gi'` the packaging docs warn about,
+  and it skipped the `.env` that `make run` sources. It is deleted, and `AGENTS.md` no longer
+  claims it "runs the app with the system Python" (issue #247). The README's checksum example is
+  version-neutral, so it cannot go stale again the way `1.9.0` did.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+
+  readme = Path("tools/README.md").read_text()
+  for tool in sorted(Path("tools").glob("*.py")):
+      assert f"`{tool.name}`" in readme, f"tools/README.md does not document {tool.name}"
+      doc = readme.split(f"`{tool.name}`")[1].split("\n## ")[0]
+      assert len(doc.split()) > 40, f"{tool.name} is named but not described"
+
+  mk = Path("Makefile").read_text()
+  phony = " ".join(re.findall(r"^\.PHONY: (.+)$", mk, re.M)).split()
+  for target in ("name-db", "icons"):
+      assert target in phony, f"`make {target}` is not declared .PHONY"
+
+  assert not Path("run.sh").exists(), "run.sh is back"
+  for doc in ("AGENTS.md", "CLAUDE.md", "README.md", "Makefile", "docs/DEVELOPMENT.md"):
+      assert not re.search(r"(?<!openemux-)\brun\.sh\b", Path(doc).read_text()), \
+          f"{doc} still points at run.sh"
+
+  home = Path("README.md").read_text()
+  assert "1.9.0" not in home, "README.md cites a stale version"
+  assert "OpenEmux-<version>-x86_64.AppImage" in home, "the checksum example is not version-neutral"
+  print("RT-291 OK")
+  EOF
+  ```
 
 
 ## Retired
