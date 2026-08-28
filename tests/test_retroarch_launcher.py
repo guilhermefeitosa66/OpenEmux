@@ -234,6 +234,11 @@ class RetroArchLauncherTests(unittest.TestCase):
             shader.parent.mkdir(parents=True, exist_ok=True)
             shader.write_text("shader preset", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
+            # A .glslp is loadable by `gl` and by nothing else, so this test
+            # says which driver it is about rather than inheriting the one the
+            # machine running the suite would get (issue #366) -- the Windows
+            # job would otherwise be asserting that d3d11 loads GLSL.
+            cfg.video_driver = "gl"
             launcher = RetroArchLauncher(base, cfg)
 
             with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
