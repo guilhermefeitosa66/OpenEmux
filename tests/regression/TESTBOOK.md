@@ -499,6 +499,31 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   to start over a *cache* would be worse.
 - **Check:** `tests/test_startup_bytecode.py`
 
+### RT-295 — Starting the app pulls in no HTTP stack and no X protocol stack
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `develop` checked out, GTK importable.
+- **Steps:** As a QA person: start the app and confirm it still syncs covers, checks for updates,
+  signs in to RetroAchievements and embeds a game window — none of which happens at start-up.
+- **Expected:** `urllib.request` (which brings `http.client` and `ssl` with it) and
+  `Xlib.display` (the X protocol machinery) are not imported by starting the app. They are loaded
+  by the first sync, update check, sign-in or window embed instead. `asyncio` and `ssl` are
+  deliberately not checked: PyGObject's own `gi/overrides/Gio.py` imports asyncio at module scope,
+  so they arrive with `Gio` no matter what this app does.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import subprocess, sys
+  probe = ("import openemux.app, sys; "
+           "print(sorted(m for m in sys.modules "
+           "if m in {'urllib.request','http.client','Xlib.display'}))")
+  out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
+                       check=True).stdout.strip()
+  assert out == "[]", f"imported at start-up and should be deferred: {out}"
+  print("RT-295 OK")
+  EOF
+  ```
+
 ### RT-296 — The AppImage carries bytecode its own interpreter can use
 - **Area:** Startup
 - **Mode:** MANUAL

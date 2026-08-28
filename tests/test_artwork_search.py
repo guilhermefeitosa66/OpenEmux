@@ -136,7 +136,7 @@ class CandidateDownloadTests(unittest.TestCase):
     def test_an_image_candidate_is_saved_under_its_real_extension(self):
         with TemporaryDirectory() as tmp_dir:
             with patch(
-                "openemux.core.artwork_search.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 return_value=self._response(self.PNG, "image/jpeg"),
             ):
                 target, digest = artwork_search._download(
@@ -150,7 +150,7 @@ class CandidateDownloadTests(unittest.TestCase):
     def test_an_error_page_is_not_offered_as_a_candidate(self):
         with TemporaryDirectory() as tmp_dir:
             with patch(
-                "openemux.core.artwork_search.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 return_value=self._response(b"<html>quota exceeded</html>" * 4),
             ):
                 target, digest = artwork_search._download(

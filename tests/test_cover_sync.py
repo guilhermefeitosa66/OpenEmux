@@ -302,7 +302,7 @@ class CoverSyncTests(unittest.TestCase):
             with TemporaryDirectory() as tmp_dir:
                 response = _image_response(payload, content_type)
                 with patch(
-                    "openemux.core.cover_sync.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     return_value=response,
                 ):
                     ok = _download_cover(url, Path(tmp_dir) / "labels" / "Game.png")
@@ -343,7 +343,7 @@ class CoverSyncTests(unittest.TestCase):
             with TemporaryDirectory() as tmp_dir:
                 response = _image_response(payload, "image/png")
                 with patch(
-                    "openemux.core.cover_sync.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     return_value=response,
                 ):
                     ok = _download_cover(
@@ -358,7 +358,7 @@ class CoverSyncTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             response = _image_response(_PNG_BYTES, "image/png")
             with patch(
-                "openemux.core.cover_sync.urllib.request.urlopen", return_value=response
+                "urllib.request.urlopen", return_value=response
             ):
                 with patch(
                     "openemux.core.atomic_write.os.replace", side_effect=OSError("disk full")
@@ -1372,7 +1372,7 @@ class DownloadStatusTests(unittest.TestCase):
 
     def test_a_404_is_a_miss_and_is_not_retried(self):
         with TemporaryDirectory() as tmp_dir:
-            with patch("openemux.core.cover_sync.urllib.request.urlopen",
+            with patch("urllib.request.urlopen",
                        side_effect=self._fail_with(404)) as open_mock:
                 written = cover_sync._download_cover(
                     "https://thumbnails.libretro.com/x.png", Path(tmp_dir) / "a.png"
@@ -1385,7 +1385,7 @@ class DownloadStatusTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             with (
                 patch("openemux.core.cover_sync.time.sleep") as sleep_mock,
-                patch("openemux.core.cover_sync.urllib.request.urlopen",
+                patch("urllib.request.urlopen",
                       side_effect=responses) as open_mock,
             ):
                 written = cover_sync._download_cover(
@@ -1399,7 +1399,7 @@ class DownloadStatusTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             with (
                 patch("openemux.core.cover_sync.time.sleep"),
-                patch("openemux.core.cover_sync.urllib.request.urlopen",
+                patch("urllib.request.urlopen",
                       side_effect=self._fail_with(503)) as open_mock,
             ):
                 written = cover_sync._download_cover(

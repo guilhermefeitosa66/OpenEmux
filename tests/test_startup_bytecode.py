@@ -6,12 +6,17 @@ sources fails and it falls back, silently, to compiling all ~36k lines in
 memory. Every launch. ``main._redirect_bytecode_cache`` gives that work a
 writable home; the formats that pin their interpreter ship the bytecode
 instead, and must therefore *not* be redirected (issue #364).
+
+The second half of the file guards the other side of the same launch: modules
+that cost real time to import and that starting the app does not need.
 """
 
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -128,6 +133,47 @@ class RedirectBytecodeCacheTests(unittest.TestCase):
         body = source.split("    _prepared = True", 1)[1]
         calls = [line.strip() for line in body.splitlines() if line.startswith("    _")]
         self.assertEqual(calls[0], "_redirect_bytecode_cache()")
+
+
+PROBE = textwrap.dedent(
+    """
+    import json, sys
+    import openemux.app  # noqa: F401
+    print(json.dumps(sorted(m for m in sys.modules if m in {
+        "urllib.request", "http.client", "Xlib.display",
+    })))
+    """
+)
+
+
+class StartupImportsTests(unittest.TestCase):
+    """Modules the app pays for at import time and does not use to start.
+
+    ``urllib.request`` brings ``http.client`` and ``ssl`` with it and is only
+    ever needed by a sync, an update check or a sign-in; ``Xlib.display``
+    brings the X protocol machinery and is only needed by a launch that embeds
+    a game window. Between them they cost ~18 ms of a ~167 ms start-up, on
+    every launch, for work the overwhelming majority of launches never do.
+
+    ``asyncio`` and ``ssl`` are deliberately not on the list: PyGObject's own
+    ``gi/overrides/Gio.py`` imports asyncio at module scope, and it arrives
+    with ``Gio`` no matter what this app does.
+    """
+
+    def test_starting_the_app_imports_no_network_or_x_protocol_stack(self):
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(REPO_ROOT / "src")
+        result = subprocess.run(
+            [sys.executable, "-c", PROBE],
+            capture_output=True, text=True, env=env, timeout=180, check=False,
+        )
+        if result.returncode != 0:
+            self.skipTest(f"openemux.app is not importable here: {result.stderr.strip()[-300:]}")
+        self.assertEqual(
+            result.stdout.strip(),
+            "[]",
+            "these are imported at start-up and should be deferred to their first use",
+        )
 
 
 if __name__ == "__main__":

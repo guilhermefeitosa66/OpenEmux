@@ -12,8 +12,6 @@ Widget-free on purpose: the window drives this from worker threads.
 import hashlib
 import logging
 import os
-import urllib.error
-import urllib.request
 from pathlib import Path
 from threading import Thread
 
@@ -84,6 +82,12 @@ def provider_candidates(console, rom_name, sync_settings, art_kind, rom_path=Non
 
 
 def _download(url, dest_dir, index):
+    # Imported here, not at module scope: urllib.request brings http.client
+    # and ssl with it -- ~13 ms of every launch -- and this is the only
+    # thing in the module that speaks HTTP (issue #364).
+    import urllib.error
+    import urllib.request
+
     try:
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()

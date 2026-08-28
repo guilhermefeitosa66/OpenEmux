@@ -66,7 +66,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                 f'<a href="snes9x_libretro{CORE_SUFFIX}.zip">snes9x</a>'
             ).encode("utf-8")
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 return_value=_FakeResponse(listing),
             ):
                 manifest = updater.fetch_manifest()
@@ -93,7 +93,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                     return _FakeResponse(zip_bytes)
                 raise AssertionError(f"unexpected url: {url}")
 
-            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_all()
 
             core_path = updater.core_dir / f"mgba_libretro{CORE_SUFFIX}"
@@ -119,7 +119,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                 # Not a zip: extraction raises after the bytes hit the cache.
                 return _FakeResponse(b"not-a-zip")
 
-            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_all()
 
             self.assertEqual(summary["failed"], 1)
@@ -132,7 +132,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=urllib.error.URLError("Network is unreachable"),
             ):
                 summary = updater.download_all()
@@ -150,7 +150,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 return_value=_FakeResponse(b"<html><body>nothing here</body></html>"),
             ):
                 summary = updater.download_all()
@@ -207,7 +207,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                     return _FakeResponse(slang_zip_bytes)
                 raise AssertionError(f"unexpected url: {url}")
 
-            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
                 summary = updater.download_shader_packs_if_missing()
 
             self.assertEqual(summary["downloaded"], 2)
@@ -247,7 +247,7 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
                 return _FakeResponse(glsl_zip_bytes)
 
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=_fake_urlopen,
             ):
                 summary = updater.download_shader_packs_if_missing()
@@ -306,7 +306,7 @@ class DownloadPacingTests(unittest.TestCase):
             with (
                 patch("openemux.core.retroarch_buildbot_updater.time.sleep") as sleep_mock,
                 patch(
-                    "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     side_effect=urllib.error.URLError("Connection reset"),
                 ) as open_mock,
             ):
@@ -325,7 +325,7 @@ class DownloadPacingTests(unittest.TestCase):
             with (
                 patch("openemux.core.retroarch_buildbot_updater.time.sleep") as sleep_mock,
                 patch(
-                    "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     side_effect=urllib.error.URLError("nope"),
                 ),
             ):
@@ -348,7 +348,7 @@ class DownloadPacingTests(unittest.TestCase):
             with (
                 patch("openemux.core.retroarch_buildbot_updater.time.sleep") as sleep_mock,
                 patch(
-                    "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     side_effect=error,
                 ) as open_mock,
             ):
@@ -367,7 +367,7 @@ class DownloadPacingTests(unittest.TestCase):
             with (
                 patch("openemux.core.retroarch_buildbot_updater.time.sleep"),
                 patch(
-                    "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     side_effect=error,
                 ) as open_mock,
             ):
@@ -409,7 +409,7 @@ class StreamingTests(unittest.TestCase):
             updater.ensure_environment()
             target = updater.cache_dir / "core.bin"
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=lambda url, timeout=5: self._RecordingResponse(payload, sizes),
             ):
                 updater._download_file_with_retries("https://example.invalid/x", target)
@@ -470,7 +470,7 @@ class ParallelDownloadTests(unittest.TestCase):
             )
             updater.ensure_environment()
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=_fake_urlopen,
             ):
                 summary = updater.download_all(on_progress=on_progress)

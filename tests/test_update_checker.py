@@ -66,37 +66,37 @@ class IsNewerTests(unittest.TestCase):
 class FetchLatestReleaseTests(unittest.TestCase):
     def test_returns_version_and_url(self):
         payload = {"tag_name": "v1.2.0", "html_url": "https://example.test/releases/v1.2.0"}
-        with patch("openemux.core.update_checker.urllib.request.urlopen", return_value=FakeResponse(payload)):
+        with patch("urllib.request.urlopen", return_value=FakeResponse(payload)):
             release = fetch_latest_release()
         self.assertEqual(release["version"], "v1.2.0")
         self.assertEqual(release["url"], "https://example.test/releases/v1.2.0")
 
     def test_network_failure_returns_none(self):
         with patch(
-            "openemux.core.update_checker.urllib.request.urlopen",
+            "urllib.request.urlopen",
             side_effect=urllib.error.URLError("offline"),
         ):
             self.assertIsNone(fetch_latest_release())
 
     def test_malformed_payload_returns_none(self):
-        with patch("openemux.core.update_checker.urllib.request.urlopen", return_value=FakeResponse({})):
+        with patch("urllib.request.urlopen", return_value=FakeResponse({})):
             self.assertIsNone(fetch_latest_release())
 
 
 class CheckForUpdateTests(unittest.TestCase):
     def test_reports_release_when_newer(self):
         payload = {"tag_name": "v1.2.0", "html_url": "https://example.test/r"}
-        with patch("openemux.core.update_checker.urllib.request.urlopen", return_value=FakeResponse(payload)):
+        with patch("urllib.request.urlopen", return_value=FakeResponse(payload)):
             self.assertEqual(check_for_update("1.1.1")["version"], "v1.2.0")
 
     def test_silent_when_up_to_date(self):
         payload = {"tag_name": "v1.1.1", "html_url": "https://example.test/r"}
-        with patch("openemux.core.update_checker.urllib.request.urlopen", return_value=FakeResponse(payload)):
+        with patch("urllib.request.urlopen", return_value=FakeResponse(payload)):
             self.assertIsNone(check_for_update("1.1.1"))
 
     def test_silent_when_check_fails(self):
         with patch(
-            "openemux.core.update_checker.urllib.request.urlopen",
+            "urllib.request.urlopen",
             side_effect=urllib.error.URLError("offline"),
         ):
             self.assertIsNone(check_for_update("1.1.1"))

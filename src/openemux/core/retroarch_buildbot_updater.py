@@ -3,9 +3,7 @@ import os
 import re
 import shutil
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -266,6 +264,11 @@ class RetroArchBuildbotUpdater:
         }
 
     def _fetch_text(self, url):
+        # Imported here, not at module scope: urllib.request brings http.client
+        # and ssl with it -- ~13 ms of every launch -- and only the three
+        # methods that talk to the buildbot need it (issue #364).
+        import urllib.request
+
         timeout = max(5, int(self.settings.get("request_timeout_sec", 30)))
         # url is the configured https RetroArch buildbot base
         with urllib.request.urlopen(url, timeout=timeout) as resp:  # nosec B310
@@ -307,6 +310,9 @@ class RetroArchBuildbotUpdater:
         before anything was written, which for a MAME-class core is hundreds of
         megabytes of resident memory per download.
         """
+        import urllib.error
+        import urllib.request
+
         retries = max(0, int(self.settings.get("retries", 3)))
         timeout = max(5, int(self.settings.get("request_timeout_sec", 30)))
         last_error = None
@@ -335,6 +341,8 @@ class RetroArchBuildbotUpdater:
     @staticmethod
     def _is_retryable(exc):
         """Whether another attempt could plausibly go differently."""
+        import urllib.error
+
         if isinstance(exc, urllib.error.HTTPError):
             return exc.code in RETRYABLE_STATUSES
         # A transport error -- unreachable, reset, timed out -- is exactly what

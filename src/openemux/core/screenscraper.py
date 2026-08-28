@@ -30,9 +30,7 @@ import json
 import logging
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 
 from openemux.core.hasher import rom_digests
 from openemux.core.systems import resolve_system_id
@@ -383,6 +381,12 @@ def parse_media_urls(payload, art_kind=DEFAULT_ART_KIND, region_priority=None):
 
 def _fetch_json(url, opener=None, quota=None):
     """GET `url` and decode JSON. Returns None on any failure."""
+    # Imported here, not at module scope: urllib.request brings http.client
+    # and ssl with it -- ~13 ms of every launch -- and this is the only
+    # thing in the module that speaks HTTP (issue #364).
+    import urllib.error
+    import urllib.request
+
     throttle()
     try:
         open_url = opener or urllib.request.urlopen

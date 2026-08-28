@@ -14,9 +14,6 @@ Widget-free, one test file: the repo's core-module convention.
 
 import json
 import logging
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
@@ -57,6 +54,14 @@ def login(username, password, opener=None):
     returned, not stored and not logged, and the caller is expected to keep
     only the token.
     """
+    # Imported here, not at module scope: config.py imports this module on
+    # every launch, urllib.request costs ~13 ms to import (it drags http.client
+    # and ssl in with it), and signing in is the only thing here that speaks
+    # HTTP at all (issue #364).
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
     username = (username or "").strip()
     if not username or not password:
         raise LoginError("A username and a password are needed")

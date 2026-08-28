@@ -9,8 +9,6 @@ the UI layer's job, same as openemux.core.cover_sync.
 import json
 import logging
 import re
-import urllib.error
-import urllib.request
 from threading import Thread
 
 logger = logging.getLogger(__name__)
@@ -51,6 +49,12 @@ def fetch_latest_release(api_url=DEFAULT_API_URL, timeout=DEFAULT_TIMEOUT):
     GitHub excludes drafts and pre-releases from this endpoint, so whatever it
     returns is a real release.
     """
+    # Imported here, not at module scope: urllib.request brings http.client
+    # and ssl with it -- ~13 ms of every launch -- and this is the only
+    # thing in the module that speaks HTTP (issue #364).
+    import urllib.error
+    import urllib.request
+
     request = urllib.request.Request(
         api_url,
         headers={
