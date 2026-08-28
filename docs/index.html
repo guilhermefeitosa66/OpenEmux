@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenEmux — Retro gaming, beautifully native on Linux</title>
   <meta name="description"
-    content="OpenEmux is a beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable. Browse your library with cover art, and play the games you own." />
+    content="OpenEmux is a beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable — now with a Windows build in beta. Browse your library with cover art, and play the games you own." />
   <link rel="icon" href="assets/logo.png" />
   <meta property="og:title" content="OpenEmux — Retro gaming, beautifully native on Linux" />
   <meta property="og:description"
-    content="A beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable for everyone." />
+    content="A beautiful, Linux-native emulation frontend that makes RetroArch simple and enjoyable for everyone — and now on Windows, in beta." />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -264,6 +264,42 @@
       text-align: center
     }
 
+    /* Announcement pill above the headline — carries whatever is new this
+       release without touching the h1. */
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 18px 7px 9px;
+      margin: 0 0 22px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, .13);
+      border: 1px solid rgba(139, 92, 246, .42);
+      color: var(--text);
+      font-size: .88rem;
+      font-weight: 600;
+    }
+
+    .hero-pill:hover {
+      text-decoration: none;
+      background: rgba(139, 92, 246, .22);
+      border-color: rgba(139, 92, 246, .7);
+    }
+
+    .beta {
+      flex: none;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--gold);
+      background: rgba(255, 210, 30, .13);
+      border: 1px solid rgba(255, 210, 30, .4);
+      border-radius: 999px;
+      padding: 4px 10px;
+      line-height: 1;
+    }
+
     .hero-logo {
       width: 118px;
       height: 118px;
@@ -494,6 +530,26 @@
       .steps {
         grid-template-columns: 1fr
       }
+    }
+
+    .platform-head {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 1.4rem;
+      letter-spacing: -.02em;
+      margin: 52px 0 0;
+    }
+
+    .platform-head+.lede {
+      margin: 10px auto 0;
+      font-size: 1rem;
+    }
+
+    .platform-head+.steps,
+    .platform-head+.lede+.steps {
+      margin-top: 20px;
     }
 
     .step-n {
@@ -816,15 +872,19 @@
     <div class="stars"></div>
     <div class="wrap hero-inner">
       <img class="hero-logo" src="assets/logo.png" alt="OpenEmux logo" />
+      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux now runs on Windows →</a>
       <h1>Retro gaming,<br /><span class="grad">beautifully native on Linux.</span></h1>
       <p class="lede">OpenEmux wraps the power of RetroArch in a clean GNOME-native frontend — so you can browse your
         collection with cover art, pick up a gamepad, and just play. No config files. No setup rabbit holes.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
           Linux</a>
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
+          Windows <span class="beta">Beta</span></a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ View on GitHub</a>
       </div>
-      <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak</p>
+      <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak on Linux ·
+        installer &amp; portable ZIP on Windows</p>
       <div class="shot">
         <img src="assets/openemux-roms-snes.png" alt="OpenEmux library view showing SNES games with cover art" />
       </div>
@@ -1029,8 +1089,9 @@
     <div class="wrap center">
       <span class="eyebrow">Get started</span>
       <h2>Running in under a minute</h2>
-      <p class="lede">Grab a package for your distro, the universal AppImage, or the Flatpak. OpenEmux handles the rest
-        on first launch.</p>
+      <p class="lede">Grab a package for your distro, the universal AppImage, the Flatpak — or, on Windows, the
+        installer. OpenEmux handles the rest on first launch.</p>
+      <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
           <div class="step-n">AppImage</div>
@@ -1063,6 +1124,29 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </p>
         </div>
       </div>
+
+      <h3 class="platform-head">Windows <span class="beta">Beta</span></h3>
+      <p class="lede">Both builds carry GTK 4, the Python runtime and RetroArch itself, so there is nothing to install
+        alongside them. Windows 10 or 11, 64-bit. It is new — if something misbehaves, <a
+          href="https://github.com/guilhermefeitosa66/OpenEmux/issues">open an issue</a>.</p>
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">Installer</div>
+          <h3>The usual way</h3>
+          <pre><code>OpenEmux-*-setup.exe</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">Installs for your user only, so no administrator prompt.
+            The builds are not code-signed yet: SmartScreen will warn, and <em>More info → Run anyway</em> gets past
+            it.</p>
+        </div>
+        <div class="card">
+          <div class="step-n">Portable</div>
+          <h3>Nothing installed</h3>
+          <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">Unzip it anywhere and run <code>OpenEmux.exe</code> from the
+            <code>OpenEmux\</code> folder inside. Good for a USB stick or a machine you cannot install software on.</p>
+        </div>
+      </div>
+
       <div class="card" style="margin-top:22px;text-align:left">
         <div class="step-n">Checksums</div>
         <h3>Verify your download</h3>
@@ -1071,6 +1155,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
         <p style="margin-top:12px;font-size:.85rem"><code>OK</code> means the file is exactly what was published.
           Anything else means it is corrupt or tampered with — don't run it.</p>
+        <p style="margin-top:16px;font-size:.9rem">On Windows, PowerShell prints the hash and you compare it by eye
+          with the matching line in <code>SHA256SUMS</code>:</p>
+        <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
       </div>
       <p style="margin-top:22px"><a class="btn btn-primary btn-sm"
           href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download from Releases →</a></p>
