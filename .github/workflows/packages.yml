@@ -24,6 +24,10 @@ on:
       - 'src/openemux/data/**'
       - 'src/openemux/__init__.py'
       - '.github/workflows/packages.yml'
+      # What every bundled emulator is fetched from. A manifest bump or a
+      # change to the fetcher can break three formats at once (issue #328).
+      - 'vendors/manifest.json'
+      - 'scripts/vendor_retroarch.py'
   push:
     branches: [ main ]
   schedule:
@@ -143,33 +147,53 @@ jobs:
         if: matrix.target == 'appimage' || matrix.target == 'flatpak'
         run: sudo modprobe fuse
 
-      # The Windows bundle ships RetroArch, and that binary is 193 MiB of
-      # gitignored download rather than a committed vendor file -- so unlike
-      # the four Linux formats, this build needs one thing fetched before it
-      # can start. Cached on the manifest's own sha256: a RetroArch bump
-      # changes the key and re-downloads, and nothing else does.
+      # Every format that bundles an emulator has to fetch it first: nothing is
+      # committed to git (issue #328), so the Windows bundle needs 193 MiB and
+      # the three x86_64 Linux formats 171 MiB before their container can
+      # start. The Flatpak needs none -- it launches the host's
+      # org.libretro.RetroArch -- and aarch64 has none published at all, so
+      # the ARM legs skip this too (issue #119).
+      #
+      # Cached on the manifest's own contents: a RetroArch bump changes the key
+      # and re-downloads, and nothing else does.
+      - name: Does this build bundle a RetroArch?
+        id: bundles
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$TARGET:$ARCH" in
+            windows:*)                       echo "artifact=win64" ;;
+            appimage:x86_64|deb:x86_64|rpm:x86_64) echo "artifact=linux-x86_64" ;;
+            *)                               echo "artifact=" ;;
+          esac >> "$GITHUB_OUTPUT"
+
       - name: Restore the vendored RetroArch download
-        if: matrix.target == 'windows'
-        id: retroarch-cache
+        if: steps.bundles.outputs.artifact != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vendors/.cache
-          key: retroarch-win64-${{ hashFiles('vendors/manifest.json') }}
+          key: retroarch-${{ steps.bundles.outputs.artifact }}-${{ hashFiles('vendors/manifest.json') }}
 
       - name: Install 7-Zip
         # scripts/vendor_retroarch.py unpacks RetroArch.7z with the 7-Zip CLI:
         # py7zr cannot read BCJ2, which is 7-Zip's default filter for x86
         # executables and therefore most of that archive.
-        if: matrix.target == 'windows'
+        if: steps.bundles.outputs.artifact != ''
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends 7zip
 
       - name: Fetch the vendored RetroArch
         # Named, not inferred: `make vendor-retroarch` takes the artifact for
-        # the host it runs on, and this host is Linux. Verifies against the
-        # sha256 in vendors/manifest.json, so a changed upstream file fails
-        # here instead of shipping.
-        if: matrix.target == 'windows'
-        run: make vendor-retroarch-win64
+        # the host it runs on, and the Windows bundle is cross-built from Linux.
+        # Verifies against the hashes in vendors/manifest.json, so a changed
+        # upstream file fails here instead of shipping.
+        if: steps.bundles.outputs.artifact != ''
+        run: |
+          if [ "${{ steps.bundles.outputs.artifact }}" = "win64" ]; then
+            make vendor-retroarch-win64
+          else
+            make vendor-retroarch
+          fi
 
       - name: Build the ${{ matrix.target }}
         run: ./packaging/build.sh ${{ matrix.target }}

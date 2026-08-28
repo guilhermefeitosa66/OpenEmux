@@ -55,6 +55,11 @@ def is_appimage(binary_path):
 def appimage_flags(binary_path, libfuse_available=None, force=False):
     """The flags an AppImage needs to run on *this* host, if any.
 
+    OpenEmux no longer ships one -- the vendored RetroArch is a plain binary in
+    a portable tree since issue #328 -- but ``runtime.retroarch.binary`` may
+    still name an AppImage the user downloaded themselves, and that is the case
+    every line below exists for.
+
     ``--appimage-extract-and-run`` unpacks the image to a temp dir instead of
     mounting it, which is slower but needs no FUSE at all. Only used when
     ``libfuse.so.2`` is genuinely missing: on a host that has it, mounting is
@@ -216,7 +221,8 @@ class RetroArchLauncher:
         Asked before retrying a failed launch unpacked: outside an AppImage
         there is nothing to unpack, so a FUSE-looking line in the log (a
         wrapper script echoing one, say) must not buy a second launch
-        (issue #248).
+        (issue #248). False for everything OpenEmux ships since issue #328;
+        true when the user pointed the setting at an AppImage of their own.
         """
         if is_running_in_flatpak():
             return False
@@ -227,11 +233,12 @@ class RetroArchLauncher:
         """Whether the AppImage runtime's ``libfuse.so.2`` can be loaded.
 
         A type-2 AppImage mounts itself with FUSE 2. Several current
-        distributions ship only FUSE 3 (or nothing), and there the vendored
-        RetroArch AppImage *starts* -- Popen succeeds -- and its runtime exits
-        within a second with ``dlopen(): error loading libfuse.so.2`` written
-        only to the launch log. Every launch died instantly and the app just
-        said "finished (exit code 1)" (issue #226).
+        distributions ship only FUSE 3 (or nothing), and there a RetroArch
+        AppImage *starts* -- Popen succeeds -- and its runtime exits within a
+        second with ``dlopen(): error loading libfuse.so.2`` written only to
+        the launch log. Every launch died instantly and the app just said
+        "finished (exit code 1)" (issue #226). That was the vendored AppImage
+        then; since issue #328 it can only be a user's own.
 
         Asked the same way the runtime asks: by name, not by guessing from a
         package list. libfuse3 does not answer to this name and must not, or
@@ -263,9 +270,10 @@ class RetroArchLauncher:
             return resolved
 
         vendor_candidates = [
-            # The vendored build for this platform comes first: on Windows it
-            # is the portable RetroArch fetched by scripts/vendor_retroarch.py,
-            # on Linux the AppImage for this architecture.
+            # The vendored build for this platform comes first. Both are
+            # portable trees fetched by scripts/vendor_retroarch.py: on Windows
+            # retroarch.exe beside its DLLs, on Linux usr/bin/retroarch beside
+            # the libraries it finds through RUNPATH (issue #328).
             self.project_root / VENDORED_RETROARCH,
             self.project_root / "vendors" / "retroarch.AppImage",
             self.project_root / "vendors" / "retroarch-assets" / "bin" / "retroarch",
@@ -274,9 +282,9 @@ class RetroArchLauncher:
             if candidate.exists():
                 return str(candidate)
 
-        # Nothing vendored. On x86_64 that is unusual -- the AppImage is
-        # committed -- but libretro publishes no ARM build at all, so on
-        # aarch64 it is the normal case and dead-ending here would mean an
+        # Nothing vendored. On x86_64 that means `make vendor-retroarch` has
+        # not run yet in this checkout; libretro publishes no ARM build at all,
+        # so on aarch64 it is the normal case and dead-ending here would mean an
         # install that can never launch a game (issue #119). Both of these are
         # real RetroArch installs a user is likely to already have, and both
         # are how the ARM packages are expected to work until there is a
@@ -865,6 +873,9 @@ class RetroArchLauncher:
             # PYTHONHOME and GTK/GI/pixbuf caches, so RetroArch resolved its
             # libraries against the stack bundled for a GTK4 app rather than
             # its own (issue #249). Outside an AppImage this is a plain copy.
+            # LD_LIBRARY_PATH outranks RUNPATH, and RUNPATH is how the vendored
+            # tree finds its own 56 libraries, so dropping it is what keeps the
+            # unwrapped RetroArch loading its own (issue #328).
             env = host_env(os.environ)
             # On a Wayland session RetroArch would pick its native wayland
             # driver, whose window no X client can reparent. Stripped of the

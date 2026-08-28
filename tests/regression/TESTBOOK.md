@@ -1250,20 +1250,26 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   on a host with no libfuse2 every launch died in silence (issue #226). The toast appears
   immediately here: the configured binary is a script, not an AppImage, so there is nothing to
   unpack and the retry of RT-206 does not apply.
+  OpenEmux ships no AppImage of its own since issue #328, so this failure can only reach a
+  RetroArch the *user* configured — which is exactly what `runtime.retroarch.binary` points at
+  here.
 - **Check:** screenshot of the toast; `grep "died on startup" <launch log>`; suite files
   `tests/test_runtime_manager.py` (`StartupFailureTests`), `tests/test_retroarch_log.py`
   (`FailureReasonTests`, `ReadFailureReasonTests`).
 - **Restore:** delete the throwaway `HOME`.
 
-### RT-078 — An AppImage runs without FUSE when the host has none
+### RT-078 — A user's own AppImage runs without FUSE when the host has none
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
-- **Steps:** As a QA person: run the app on a distribution that ships no libfuse2 and launch a
-  game against the vendored RetroArch AppImage.
+- **Steps:** As a QA person: on a distribution that ships no libfuse2, point
+  `runtime.retroarch.binary` at a RetroArch AppImage of your own and launch a game.
 - **Expected:** The AppImage is started with `--appimage-extract-and-run`, which needs no FUSE, and
   the game runs. On a host that *has* libfuse2 the flag is not used — extracting the whole image
   on every launch is only worth paying for when mounting cannot work (issue #226).
+  The binary is the user's, not ours: OpenEmux vendors the portable tree since issue #328 and
+  never launches an AppImage of its own (RT-280). This handling stays because pointing the setting
+  at an AppImage is a reasonable thing to do, and it has to keep working.
 - **Check:** suite file `tests/test_retroarch_launcher.py` (`AppImageFuseFallbackTests`).
 
 ### RT-062 — A game launches and plays
@@ -1750,7 +1756,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 ### RT-206 — A game whose AppImage cannot mount is retried unpacked
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
-- **Preconditions:** none.
+- **Preconditions:** `runtime.retroarch.binary` points at a RetroArch AppImage of the user's own —
+  since issue #328 nothing OpenEmux ships is one.
 - **Steps:** As a QA person on a host that *has* libfuse2 but cannot mount with it — no
   `/dev/fuse` (a container), or a `fusermount` that is not setuid: click a game.
 - **Expected:** The game starts. The `libfuse.so.2` probe answers "can this library be loaded",
@@ -1767,30 +1774,111 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`),
   `tests/test_game_window.py` (`FollowRelaunchTests`).
 
-### RT-207 — The native packages require FUSE rather than suggesting it
+### RT-279 — The native packages need no FUSE at all
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads the packaging inputs).
-- **Steps:** As a QA person: install the `.rpm` with `rpm -ivh` (or the `.deb` with `dpkg -i`) —
-  neither pulls weak dependencies — and launch a game.
-- **Expected:** The install pulls the FUSE 2 library, and the game runs. The vendored RetroArch
-  AppImage is the only emulator these packages ship and its runtime needs `libfuse.so.2`; as a
-  `Recommends` it arrived only with `dnf install ./x.rpm` / `apt install ./x.deb`, so `rpm -ivh`,
-  `dpkg -i`, `--setopt=install_weak_deps=False` and offline installs produced an app that
-  installed cleanly and could not launch a single game (issue #248).
+- **Steps:** As a QA person: on a stock Ubuntu 24.04 or Fedora 40 — neither installs a FUSE 2
+  library — install the `.deb` with `dpkg -i` (or the `.rpm` with `rpm -ivh`; neither pulls weak
+  dependencies), confirm no FUSE package came with it, and launch a game.
+- **Expected:** Nothing FUSE-related is installed, and the game runs. These packages used to
+  declare a hard dependency on `libfuse2t64 | libfuse2` / `fuse-libs` — the only reason being that
+  the vendored RetroArch was an AppImage whose runtime mounts itself (issue #248) — so installing
+  OpenEmux pulled a superseded library onto every FUSE 3 system. What ships now is the portable
+  tree that AppImage always contained (issue #328), which is an ordinary binary.
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python - <<'EOF'
   from pathlib import Path
   spec = Path("packaging/rpm/openemux.spec").read_text()
-  assert "Requires:       fuse-libs" in spec, "the .rpm does not require fuse-libs"
-  assert "Recommends:     fuse-libs" not in spec, "fuse-libs is still only recommended"
+  declared = [l for l in spec.splitlines() if l.startswith(("Requires:", "Recommends:"))]
+  assert declared, "the .rpm declares no dependencies at all"
+  for line in declared:
+      assert "fuse" not in line, f"the .rpm still declares FUSE: {line}"
   deb = Path("packaging/deb/build.sh").read_text()
-  depends = next(l for l in deb.splitlines() if l.startswith("Depends:"))
-  assert "libfuse2t64 | libfuse2" in depends, f"the .deb does not depend on libfuse2: {depends}"
-  assert "Recommends: libfuse2" not in deb, "libfuse2 is still only recommended"
-  print("RT-207 OK")
+  depends = [l for l in deb.splitlines() if l.startswith("DEPENDS=")]
+  assert depends, "the .deb declares no dependencies at all"
+  for line in depends:
+      assert "fuse" not in line, f"the .deb still depends on FUSE: {line}"
+  assert "Depends: ${DEPENDS}" in deb, "the .deb control field is not the assembled list"
+  print("RT-279 OK")
   EOF
+  ```
+
+### RT-280 — The vendored RetroArch is a plain binary, launched as one
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `vendors/manifest.json` and the packaging inputs). After
+  `make vendor-retroarch` the probe also checks the tree on disk.
+- **Steps:** As a QA person: on a host with no FUSE package installed at all, install any Linux
+  artifact and launch a game; then look at `/opt/openemux/vendors/` (or `vendors/` in a checkout).
+- **Expected:** The game runs, and nothing was mounted or unpacked to make it. `vendors/` holds
+  `RetroArch-Linux-x86_64/usr/bin/retroarch` and the libraries it resolves through
+  `RUNPATH=$ORIGIN/../lib` — the upstream AppImage's own contents, unwrapped — and no `.AppImage`
+  anywhere. The first launch of a session is immediate rather than paying 2.1 s to unpack an
+  image into `/tmp`, and the launch command carries no `--appimage-extract-and-run`
+  (issue #328).
+  Inside the OpenEmux AppImage it is the *unpatched* binary. appimage-builder rewrites the
+  PT_INTERP and RUNPATH of every ELF in the AppDir, which was harmless while the vendored
+  RetroArch was one opaque image and is not now that it is 115 loose files: staged through the
+  recipe it came out with `RUNPATH: [librt.so.1]` and could not find one of the 56 libraries
+  beside it. The bundle stages it after that step instead, and the build fails if either value
+  was touched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import json, subprocess
+  from pathlib import Path
+  from openemux.core.platform import VENDORED_RETROARCH
+
+  assert VENDORED_RETROARCH.endswith("/usr/bin/retroarch"), VENDORED_RETROARCH
+  manifest = json.loads(Path("vendors/manifest.json").read_text())
+  for name, entry in manifest["artifacts"].items():
+      assert not entry["dest"].endswith(".AppImage"), f"{name} still vendors an AppImage"
+  assert not list(Path("vendors").glob("*.AppImage")), "an AppImage is still in vendors/"
+
+  tree = Path(VENDORED_RETROARCH)
+  if tree.exists():
+      out = subprocess.run(["ldd", str(tree)], capture_output=True, text=True).stdout
+      # $ORIGIN is the directory holding the binary, so the loader prints the
+      # RUNPATH as written -- `usr/bin/../lib`, not a normalised `usr/lib`.
+      assert f"{tree.parent}/../lib/" in out, "RUNPATH does not reach the bundled libraries"
+      version = subprocess.run([str(tree), "--version"], capture_output=True, text=True)
+      assert "RetroArch" in version.stdout, version.stderr
+  print("RT-280 OK")
+  EOF
+  ```
+  The AppImage half is asserted by `packaging/appimage/build.sh` on every `make appimage`
+  ("vendored RetroArch OK: 56 libraries, RUNPATH and interpreter intact").
+
+### RT-281 — An install that names the old vendored AppImage keeps launching
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: update an install made before the change — its
+  `~/.openemux/config.yaml` says `runtime.retroarch.binary: vendors/RetroArch-Linux-x86_64.AppImage`
+  — and launch a game.
+- **Expected:** The game runs. The update removes that file (dpkg/rpm delete it; a checkout's pull
+  does), so a config still naming it resolves to nothing and every launch would fall through to a
+  distribution RetroArch or to the error, on a machine with a perfectly good one bundled. The
+  setting is rewritten to the vendored tree on load, once, and saved. A path the *user* chose — an
+  AppImage of their own, a system `retroarch` — is never touched (issue #328).
+- **Check:** suite file `tests/test_architecture.py` (`RetroArchBinaryMigrationTests`).
+
+### RT-282 — `make verify-vendors` checks what is actually on disk
+- **Area:** Packaging
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `make vendor-retroarch` has run on this machine.
+- **Steps:** As a QA person: run `make verify-vendors` and read what it says about each artifact.
+- **Expected:** `OK` for every vendored artifact, and a `MISMATCH` naming both hashes for one that
+  has drifted. Neither RetroArch is committed to git, so the manifest is the only thing that can
+  answer "is this the build we recorded" — and it used to compare an extracted tree's digest with
+  the *archive's* sha256, so a perfectly good `vendors/RetroArch-Win64` reported MISMATCH and the
+  target failed on every machine that had it (issue #328). Each artifact now records both:
+  `sha256` for the download and `tree_sha256` for what unpacking it produced.
+- **Check:**
+  ```bash
+  make verify-vendors && echo "RT-282 OK"
   ```
 
 ### RT-209 — Every package can decode the covers it downloads
@@ -2065,7 +2153,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   # ...and nothing the app needs was dropped on the way.
   assert (staged / "src/openemux/main.py").is_file()
   assert (staged / "src/openemux/ui/assets/icons/symbolic/LICENSE").is_file()
-  assert (staged / "vendors/RetroArch-Linux-x86_64.AppImage").is_file()
+  assert (staged / "vendors/RetroArch-Linux-x86_64/usr/bin/retroarch").is_file()
   print("RT-217 OK")
   EOF
   ```
@@ -3868,4 +3956,13 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 
 ## Retired
 
-*None yet. Move scenarios here instead of deleting them: keep the ID, add the reason and date.*
+Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
+the date.
+
+### RT-207 — The native packages require FUSE rather than suggesting it
+- **Retired:** 2026-08-27 (issue #328).
+- **Reason:** The behaviour it guarded is gone rather than changed. The packages required
+  `libfuse2t64 | libfuse2` / `fuse-libs` only so the vendored RetroArch AppImage could mount
+  itself; what ships now is the portable tree that image always contained, so there is no FUSE
+  dependency to declare weakly or strongly. RT-279 asserts the opposite in its place: no package
+  declares one at all.

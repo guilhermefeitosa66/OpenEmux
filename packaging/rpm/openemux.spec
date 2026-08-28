@@ -1,6 +1,9 @@
-# Built from a self-contained tree (pure-Python app + a vendored RetroArch
-# AppImage), so skip debuginfo and the binary-reprocessing steps that would try
-# to strip/mangle the bundled AppImage, and declare Requires by hand.
+# Built from a self-contained tree (pure-Python app + a vendored RetroArch),
+# so skip debuginfo and the binary-reprocessing steps that would try to
+# strip/mangle the bundled emulator, and declare Requires by hand. Stripping
+# matters more since issue #328: what is bundled is no longer one opaque
+# AppImage but 57 ordinary ELF files, every one of which those steps would
+# happily rewrite.
 #
 # `Version:` is templated: packaging/rpm/build.sh resolves it from
 # src/openemux/__init__.py (the single source of truth) into the copy of this
@@ -24,8 +27,8 @@ Summary:        Linux-native emulator frontend for RetroArch
 
 License:        MIT
 URL:            https://github.com/guilhermefeitosa66/OpenEmux
-# ExclusiveArch, not BuildArch: the vendored RetroArch AppImage is an x86_64
-# binary, so this package can only be *built* somewhere that produces x86_64 --
+# ExclusiveArch, not BuildArch: the vendored RetroArch is an x86_64 binary, so
+# this package can only be *built* somewhere that produces x86_64 --
 # which is what ExclusiveArch says. BuildArch claims the opposite, that the
 # contents are architecture-independent enough to be labelled by hand, and
 # rpmlint calls it out (buildarch-instead-of-exclusivearch-tag).
@@ -66,8 +69,8 @@ Requires:       librsvg2
 # dependency of gdk-pixbuf2-modules, so `rpm -ivh`, offline installs and
 # --setopt=install_weak_deps=False all did without it -- and then every synced
 # cover decoded to nothing and the card rendered blank, with one
-# "cover decode failed" line in the log to say why (issue #251). The AppImage
-# has bundled the loader from the start; this is the same dependency,
+# "cover decode failed" line in the log to say why (issue #251). The OpenEmux
+# AppImage has bundled the loader from the start; this is the same dependency,
 # declared rather than inherited from somebody else's Recommends.
 Requires:       webp-pixbuf-loader
 Requires:       adwaita-icon-theme
@@ -78,41 +81,38 @@ Requires:       adwaita-icon-theme
 # nothing changes for the user. Declare it again the day OpenEmux can open a
 # ROM handed to it by a file manager, together with a MimeType= line and a %%U
 # on Exec.
-# Hard, not weak: the vendored RetroArch AppImage is the only emulator this
-# package ships, and its runtime needs libfuse.so.2 to mount itself. As a
-# Recommends it arrived with `dnf install ./x.rpm` and with nothing else --
-# `rpm -ivh`, --setopt=install_weak_deps=False and offline installs all
-# skipped it, and the app then installed cleanly and could not launch a
-# single game (issue #248).
+# No fuse-libs. The vendored RetroArch used to be an AppImage whose runtime
+# mounts itself with FUSE 2, so this package required fuse-libs -- and Fedora
+# 40, the floor it targets, ships FUSE 3, so installing OpenEmux pulled a
+# superseded library onto every install (issues #248, #328). What ships now is
+# the portable tree that AppImage always contained: an ordinary ELF that needs
+# nothing to be mounted.
 #
-# On aarch64 there is no AppImage, so there is nothing to mount -- and nothing
-# bundled to launch either. RetroArch becomes the dependency, but a *weak* one,
-# which is the opposite of the reasoning above and for a reason that does not
-# apply to fuse-libs: RetroArch is not in Fedora at all, it is in RPM Fusion.
-# A hard Requires would make this package refuse to install on a stock Fedora
-# -- "nothing provides retroarch" -- where a Recommends installs, pulls it in
-# for the many users who do have RPM Fusion enabled, and leaves the rest with
-# an app that says exactly what to do the first time they launch a game
-# (retroarch_launcher names the distribution, the Flatpak and the setting).
-%ifarch x86_64
-Requires:       fuse-libs
-%else
+# On aarch64 there is nothing bundled to launch at all -- libretro publishes no
+# ARM build. RetroArch becomes the dependency there, but a *weak* one: it is
+# not in Fedora, it is in RPM Fusion, and a hard Requires would make this
+# package refuse to install on a stock Fedora -- "nothing provides retroarch"
+# -- where a Recommends installs, pulls it in for the many users who do have
+# RPM Fusion enabled, and leaves the rest with an app that says exactly what to
+# do the first time they launch a game (retroarch_launcher names the
+# distribution, the Flatpak and the setting).
+%ifnarch x86_64
 Recommends:     retroarch
 %endif
 
 %description
 OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
-games through RetroArch, inspired by OpenEmu. On x86_64 it bundles a RetroArch
-AppImage; on aarch64 it uses the RetroArch the distribution provides. Either
+games through RetroArch, inspired by OpenEmu. On x86_64 it bundles a portable
+RetroArch; on aarch64 it uses the RetroArch the distribution provides. Either
 way it downloads libretro cores on first launch.
 
 %prep
 %autosetup
 
 %build
-# Nothing to compile. OpenEmux is pure Python; the RetroArch AppImage it
-# vendors is shipped prebuilt and is deliberately left untouched (see the
-# __brp_* overrides above).
+# Nothing to compile. OpenEmux is pure Python; the RetroArch it vendors is
+# shipped prebuilt and is deliberately left untouched (see the __brp_*
+# overrides above).
 
 %install
 rm -rf %{buildroot}
@@ -150,8 +150,8 @@ appstreamcli validate --no-net \
 /usr/share/pixmaps/io.github.guilhermefeitosa66.OpenEmux.png
 %license LICENSE
 # Not a duplicate of LICENSE: about a third of what ships is third-party (the
-# OpenEmu console icons, the Adwaita symbolic icons, the vendored RetroArch
-# AppImage) and this is where their terms are recorded (issue #233).
+# OpenEmu console icons, the Adwaita symbolic icons, the vendored RetroArch)
+# and this is where their terms are recorded (issue #233).
 %license packaging/common/copyright
 
 # $1 is the number of copies of the package that will remain: 1 on a fresh

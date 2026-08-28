@@ -26,11 +26,14 @@ Comment: Vendored so the UI renders its symbolic icons on hosts whose icon
  theme does not provide these names. The notice ships beside them as
  src/openemux/ui/assets/icons/symbolic/LICENSE.
 
-Files: vendors/RetroArch-Linux-x86_64.AppImage
-Copyright: 2010-2026 The RetroArch team and contributors
+Files: vendors/RetroArch-Linux-x86_64/*
+Copyright: 2010-2025 The RetroArch team and contributors
 License: GPL-3+
-Comment: The emulator OpenEmux drives, vendored as an AppImage and executed
- unmodified. Provenance and the pinned sha256 are in vendors/manifest.json.
+Comment: The emulator OpenEmux drives, executed unmodified. These are the
+ upstream AppImage's own contents, unwrapped: the binary and the libraries it
+ bundles, byte for byte as libretro published them. Provenance and the pinned
+ sha256 of both the download and the extracted tree are in
+ vendors/manifest.json.
  Source: https://github.com/libretro/RetroArch
 
 License: MIT

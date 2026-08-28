@@ -159,8 +159,8 @@ downloading the whole GNOME runtime. The `system-bus` target starts one first.
 **A container image is not a desktop, and Fedora's is furthest from one.**
 Three separate gaps, each of which failed a different format: `mesa-dri-drivers`
 does not pull `libGLESv2`, so GTK4's renderer aborted the `.rpm` at window
-construction; `fuse-libs` is the library but `fuse` carries the `fusermount`
-binary the AppImage runtime actually execs; and nothing creates
+construction; `fuse` carries the `fusermount` binary the AppImage runtime
+actually execs, which no container image has; and nothing creates
 `/var/lib/flatpak/repo`, so a plain `flatpak run` refused to start until it was
 told `--user`. All three are provisioning, not app bugs — which is the sort of
 thing this rig exists to tell apart.
@@ -179,6 +179,12 @@ kept inside the container instead.
 the normal FUSE path is what gets tested. Where it is not, the target falls
 back to extract-and-run and says so, because only the first path is what users
 actually get.
+
+**No FUSE *library* is installed any more.** `libfuse2`/`fuse-libs` were here
+so the vendored RetroArch AppImage could mount itself; the packages ship the
+portable tree instead (issue #328), so these containers are now exactly the
+host that used to fail — no FUSE 2 anywhere — and a game launching on them is
+the evidence that matters.
 
 ## What this does not cover
 

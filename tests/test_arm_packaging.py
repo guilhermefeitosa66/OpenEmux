@@ -36,12 +36,20 @@ class DebArchitectureTests(unittest.TestCase):
 
     def test_arm_depends_on_a_retroarch_it_does_not_bundle(self):
         # libretro publishes no ARM build, so nothing is vendored there.
-        self.assertRegex(self.script, r'arm64\)\s*RUNTIME_DEPENDS="retroarch"')
+        self.assertRegex(self.script, r'arm64\)\s*DEPENDS="\$DEPENDS, retroarch"')
 
-    def test_arm_does_not_require_libfuse(self):
-        # It is there to mount the vendored AppImage; with no AppImage it is a
-        # dependency on nothing.
-        self.assertRegex(self.script, r'\*\)\s*RUNTIME_DEPENDS="libfuse2t64 \| libfuse2"')
+    def test_no_architecture_depends_on_libfuse(self):
+        # It was there to mount the vendored RetroArch AppImage. The packages
+        # ship the portable tree now, so on x86_64 it is a dependency on
+        # nothing and on arm64 it always was (issue #328). Read off the
+        # Depends assignments, not the whole file: the comment above them says
+        # why it is gone and has to keep saying it.
+        depends = [
+            line for line in self.script.splitlines() if line.startswith("DEPENDS=")
+        ]
+        self.assertTrue(depends)
+        for line in depends:
+            self.assertNotIn("fuse", line)
 
     def test_the_install_test_checks_the_right_thing_per_architecture(self):
         self.assertIn('if [ "$VENDOR_ARCH" = "x86_64" ]', self.script)
@@ -55,13 +63,26 @@ class RpmArchitectureTests(unittest.TestCase):
     def test_both_architectures_are_buildable(self):
         self.assertIn("\nExclusiveArch:  x86_64 aarch64\n", self.spec)
 
-    def test_the_bundled_appimage_dependency_is_per_architecture(self):
-        self.assertIn("%ifarch x86_64", self.spec)
-        self.assertIn("Requires:       fuse-libs", self.spec)
+    def test_only_arm_declares_a_retroarch_it_does_not_bundle(self):
+        self.assertIn("%ifnarch x86_64", self.spec)
         # Weak on purpose: RetroArch is in RPM Fusion, not in Fedora, so a hard
         # Requires would make the package refuse to install on a stock system.
         self.assertIn("Recommends:     retroarch", self.spec)
         self.assertNotIn("Requires:       retroarch", self.spec)
+
+    def test_no_architecture_requires_fuse(self):
+        # The vendored RetroArch is a plain binary since issue #328; nothing
+        # has to be mounted to run it, on either architecture. Read off the
+        # Requires/Recommends lines, not the whole spec: the comment above them
+        # says why it is gone and has to keep saying it.
+        declared = [
+            line
+            for line in self.spec.splitlines()
+            if line.startswith(("Requires:", "Recommends:"))
+        ]
+        self.assertTrue(declared)
+        for line in declared:
+            self.assertNotIn("fuse", line)
 
     def test_the_install_test_checks_the_right_thing_per_architecture(self):
         self.assertIn('if [ "$(uname -m)" = "x86_64" ]', self.script)
@@ -70,12 +91,14 @@ class RpmArchitectureTests(unittest.TestCase):
 
 class StagingTests(unittest.TestCase):
     def test_only_this_architectures_retroarch_is_staged(self):
-        # An x86_64 AppImage inside an ARM package is not a RetroArch that
-        # failed to start; it is a file the kernel refuses to execute.
+        # An x86_64 binary inside an ARM package is not a RetroArch that failed
+        # to start; it is a file the kernel refuses to execute. A directory
+        # name since issue #328, and tar --exclude matches path components, so
+        # the whole tree goes with it.
         stage = _read("packaging/common/stage_tree.sh")
         self.assertIn("FOREIGN_RETROARCH", stage)
-        self.assertIn("RetroArch-Linux-aarch64.AppImage", stage)
-        self.assertIn("RetroArch-Linux-x86_64.AppImage", stage)
+        self.assertIn('FOREIGN_RETROARCH="RetroArch-Linux-aarch64"', stage)
+        self.assertIn('FOREIGN_RETROARCH="RetroArch-Linux-x86_64"', stage)
 
     def test_copy_tree_takes_the_extra_exclusions(self):
         copy_tree = _read("packaging/common/copy_tree.sh")

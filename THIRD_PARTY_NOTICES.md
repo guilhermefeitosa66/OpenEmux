@@ -8,9 +8,9 @@ running another program at arm's length does not make the calling program a
 derivative work, so OpenEmux's own code can be — and is — MIT-licensed.
 
 When OpenEmux **redistributes** third-party software (for example, the vendored
-RetroArch AppImage bundled inside the OpenEmux AppImage, or libretro cores it
-downloads), those components remain under **their own licenses**. This is a
-"mere aggregation" of independently-licensed works. The notices below cover the
+RetroArch bundled inside every Linux package, or libretro cores it downloads),
+those components remain under **their own licenses**. This is a "mere
+aggregation" of independently-licensed works. The notices below cover the
 components OpenEmux ships or fetches.
 
 ---
@@ -21,8 +21,11 @@ components OpenEmux ships or fetches.
 - **Copyright:** The RetroArch / libretro team and contributors
 - **Source:** https://github.com/libretro/RetroArch
 - **How OpenEmux uses it:** invoked as a separate process. The official,
-  unmodified RetroArch AppImage may be vendored (`vendors/`) and bundled into
-  the OpenEmux AppImage for convenience.
+  unmodified RetroArch build may be vendored (`vendors/`) and bundled into the
+  OpenEmux packages for convenience. On Linux that is the contents of
+  libretro's own AppImage, unwrapped into the portable directory it already
+  was — the same bytes, shipped without the image around them, so no FUSE is
+  needed to run it (issue #328).
 - **Obligation when redistributing:** the GPLv3 terms apply to the RetroArch
   binary. Because it is redistributed **unmodified**, pointing to the upstream
   corresponding source above satisfies the source-availability requirement.

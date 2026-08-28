@@ -1,8 +1,8 @@
 #!/bin/sh
 # Populate a staging root with the OpenEmux install layout shared by the .deb
 # and .rpm packages. The app runs from /opt/openemux (its "project root", which
-# holds src/ and the vendored RetroArch AppImage); /usr/bin/openemux launches it
-# and the desktop file + icons register it with the desktop environment.
+# holds src/ and the vendored RetroArch); /usr/bin/openemux launches it and the
+# desktop file + icons register it with the desktop environment.
 #
 # Usage: DESTDIR=<stage> ROOT_DIR=<repo> stage_tree.sh
 set -eu
@@ -13,14 +13,17 @@ APP_ID="io.github.guilhermefeitosa66.OpenEmux"
 LOGO="$ROOT_DIR/src/openemux/ui/assets/images/logo.png"
 
 # The vendored RetroArch is per-architecture, and a package must carry only its
-# own: an x86_64 AppImage on an ARM machine is not a RetroArch that failed to
+# own: an x86_64 binary on an ARM machine is not a RetroArch that failed to
 # start, it is a file the kernel refuses to execute (issue #119). libretro
 # publishes no ARM build, so on aarch64 there is usually nothing to carry at
 # all and the launcher falls back to a distro or Flatpak RetroArch.
+#
+# A directory name since issue #328: what is vendored is the portable tree the
+# AppImage used to wrap, so the package needs no FUSE to run it.
 BUILD_ARCH="$(uname -m)"
 case "$BUILD_ARCH" in
-  aarch64|arm64) FOREIGN_RETROARCH="RetroArch-Linux-x86_64.AppImage" ;;
-  *)             FOREIGN_RETROARCH="RetroArch-Linux-aarch64.AppImage" ;;
+  aarch64|arm64) FOREIGN_RETROARCH="RetroArch-Linux-x86_64" ;;
+  *)             FOREIGN_RETROARCH="RetroArch-Linux-aarch64" ;;
 esac
 
 install -d "$DESTDIR/opt/openemux"
@@ -88,9 +91,9 @@ install -Dm644 "$LOGO" "$DESTDIR/usr/share/pixmaps/$APP_ID.png"
 
 # The packaged copyright file. Not a copy of LICENSE: about a third of what
 # ships is third-party (the OpenEmu console icons, the Adwaita symbolic icons,
-# the vendored RetroArch AppImage), and installing the bare MIT text here
-# implicitly claimed MIT over all of it (issue #233). DEP-5, so the per-file
-# terms are machine-readable and each one names where its notice lives.
+# the vendored RetroArch), and installing the bare MIT text here implicitly
+# claimed MIT over all of it (issue #233). DEP-5, so the per-file terms are
+# machine-readable and each one names where its notice lives.
 install -Dm644 "$ROOT_DIR/packaging/common/copyright" \
   "$DESTDIR/usr/share/doc/openemux/copyright"
 

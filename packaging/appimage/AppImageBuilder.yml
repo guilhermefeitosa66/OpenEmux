@@ -23,7 +23,12 @@ script:
   # the host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/python3/dist-packages/openemux/core/embedded_credentials.py
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/openemux/src/openemux/core/embedded_credentials.py
-  - sh packaging/common/copy_tree.sh vendors AppDir/usr/lib/openemux
+  # vendors/ is deliberately *not* staged here. appimage-builder patches every
+  # ELF it finds in the AppDir, and the vendored RetroArch is 115 loose files
+  # since issue #328 -- it rewrote the binary's RUNPATH from $ORIGIN/../lib to
+  # a garbage string, so it could no longer find the 56 libraries shipped
+  # beside it. packaging/appimage/build.sh copies the tree in after this step
+  # has finished, where nothing patches it.
   # Before pip runs: everything below this line legitimately writes
   # bytecode into dist-packages, so this is the moment the app's own
   # trees can be checked for what the copies left behind.

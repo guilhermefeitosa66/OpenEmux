@@ -66,11 +66,34 @@ echo "==> rpmlint: the Fedora-review blockers must be gone"
 # The whole report is noisy and not all of it is actionable here; these are the
 # findings issue #252 identified, each of which is an error for Fedora review.
 rpmlint "dist/${RPM_NAME}" "$SRPM_PATH" > /tmp/rpmlint.txt 2>&1 || true
-# /opt is where this package deliberately installs -- it ships a vendored
-# RetroArch AppImage and runs from its own project root -- so the ~580
-# dir-or-file-in-opt lines are the design, not findings. Everything else is
-# worth reading, and would be invisible underneath them.
-grep -v 'dir-or-file-in-opt' /tmp/rpmlint.txt | tail -30
+# Three findings are this package's design rather than defects, and each of
+# them repeats per file, so together they bury everything worth reading:
+#
+#   dir-or-file-in-opt          /opt is where a self-contained app that runs
+#                               from its own project root belongs -- hundreds
+#                               of lines, one per packaged path.
+#   binary-or-shlib-defines-rpath  RUNPATH=$ORIGIN is what makes the vendored
+#                               RetroArch relocatable -- it is how the binary
+#                               finds the 56 libraries beside it (issue #328).
+#   unstripped-binary-or-object the __brp_strip overrides at the top of the
+#                               spec are deliberate: the emulator is
+#                               redistributed unmodified, byte for byte.
+#   shared-library-not-executable  the same reason, from the other end: 0644 is
+#                               the mode libretro shipped those 56 libraries
+#                               with, and dlopen does not care. chmod-ing them
+#                               would mean the tree is no longer what upstream
+#                               published, which the manifest's tree_sha256
+#                               exists to state.
+#
+# Counted first, then listed, so a new *kind* of finding is visible even when
+# it is one line among a thousand. This package ships no libraries of its own,
+# so the last two can only ever be about the vendored emulator.
+BY_DESIGN='dir-or-file-in-opt|binary-or-shlib-defines-rpath|unstripped-binary-or-object'
+BY_DESIGN="$BY_DESIGN|shared-library-not-executable"
+REST="$(grep -Ev "$BY_DESIGN" /tmp/rpmlint.txt || true)"
+echo "by design, suppressed: $(grep -Ec "$BY_DESIGN" /tmp/rpmlint.txt || true) lines"
+sed -n 's/.*: [EW]: \([a-z0-9-]*\).*/\1/p' <<< "$REST" | sort | uniq -c | sort -rn
+tail -30 <<< "$REST"
 for finding in incoherent-changelog-date no-blank-line-in-changelog \
                dir-or-file-in-usr-share-doc buildarch-instead-of-exclusivearch-tag; do
   if grep -q "$finding" /tmp/rpmlint.txt; then
@@ -86,12 +109,30 @@ dnf install -y "./dist/${RPM_NAME}" >/dev/null
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
-# x86_64 bundles the AppImage; aarch64 has none to bundle and depends on the
+# x86_64 bundles RetroArch; aarch64 has none to bundle and depends on the
 # distribution's retroarch instead, which dnf has just resolved (issue #119).
 if [ "$(uname -m)" = "x86_64" ]; then
-  test -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+  RETROARCH_DIR=/opt/openemux/vendors/RetroArch-Linux-x86_64
+  test -x "$RETROARCH_DIR/usr/bin/retroarch"
+  # The tree is only portable because the binary finds its own 56 libraries
+  # through RUNPATH=$ORIGIN/../lib, and that has to survive being packaged and
+  # installed somewhere else (issue #328). Checked with ldd rather than by
+  # running it: RetroArch also needs libGL, libjack and the host's audio stack,
+  # which a build container has no reason to install.
+  LDD="$(ldd "$RETROARCH_DIR/usr/bin/retroarch" || true)"
+  case "$LDD" in
+    # What the loader prints is the RUNPATH as written -- $ORIGIN is the
+    # directory holding the binary, so the resolved path keeps the `bin/..`.
+    *"$RETROARCH_DIR/usr/bin/../lib/"*) ;;
+    *)
+      echo "FAIL: the installed RetroArch does not resolve its bundled libraries" >&2
+      echo "$LDD" >&2
+      exit 1
+      ;;
+  esac
+  echo "the vendored RetroArch resolves its own libraries from $RETROARCH_DIR"
 else
-  test ! -f /opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage
+  test ! -e /opt/openemux/vendors/RetroArch-Linux-x86_64
   # Not `command -v retroarch`: the dependency is a Recommends, because
   # RetroArch lives in RPM Fusion rather than in Fedora, and this container has
   # only Fedora. What must hold is that the package *asks* for it.

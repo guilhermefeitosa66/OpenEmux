@@ -14,7 +14,7 @@ RETROARCH_VENDOR := vendors/RetroArch-Win64/retroarch.exe
 else
 VENV := .venv
 PYTHON := $(VENV)/bin/python3
-RETROARCH_VENDOR := vendors/RetroArch-Linux-x86_64.AppImage
+RETROARCH_VENDOR := vendors/RetroArch-Linux-x86_64/usr/bin/retroarch
 endif
 
 # scripts/vendor_retroarch.py is standard library only, on purpose: it runs on
@@ -49,10 +49,13 @@ all: setup
 # Full bootstrap: from fresh clone to running (requires sudo for sys deps).
 # On Windows there is no venv and no pip step -- pacman provides everything --
 # so the bootstrap is the package install plus the vendored RetroArch.
+#
+# vendor-retroarch is part of both since issue #328: no RetroArch is committed
+# to git any more, so a fresh clone that skipped it has no emulator to launch.
 ifeq ($(OS),Windows_NT)
 bootstrap: install-sys-deps-windows vendor-retroarch
 else
-bootstrap: install-sys-deps venv setup
+bootstrap: install-sys-deps venv setup vendor-retroarch
 endif
 	@echo ""
 	@echo "✅ OpenEmux is ready! Run 'make run' to start."
@@ -62,7 +65,7 @@ install-sys-deps:
 	sudo apt update
 	sudo apt install -y libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev \
 		libgtk-4-dev libadwaita-1-dev gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-rsvg-2.0
-	@echo "Install RetroArch/libretro cores from your distro OR use vendors/RetroArch-Linux-x86_64.AppImage."
+	@echo "Install RetroArch/libretro cores from your distro OR run 'make vendor-retroarch'."
 
 # System dependencies for Windows, from inside an MSYS2 MINGW64 shell.
 # scripts/windows/setup-dev.ps1 installs MSYS2 itself and then runs this list;
@@ -106,17 +109,17 @@ setup:
 endif
 
 # Fetch the vendored RetroArch for this platform, verified against
-# vendors/manifest.json. The Linux AppImage is committed to git and is only
-# checked; the 193 MiB Windows build is gitignored and downloaded on demand.
+# vendors/manifest.json. Neither build is committed to git: 171 MiB for Linux
+# and 193 MiB for Windows, both downloaded once and unpacked into a portable
+# tree under vendors/. A no-op on aarch64, where libretro publishes none.
 vendor-retroarch:
 	$(VENDOR_PYTHON) scripts/vendor_retroarch.py
 
 # The *Windows* RetroArch, named rather than inferred. The target above takes
 # the artifact for the host it runs on, and the Windows bundle is cross-built on
-# Linux -- where "this platform" is the committed AppImage, so `make
-# vendor-retroarch` on a Linux box verified that and fetched nothing, and the
-# Windows build then stopped at its own guard. `make windows` depends on this,
-# so the download happens by itself the first time.
+# Linux -- where "this platform" is the Linux tree, so `make vendor-retroarch`
+# on a Linux box fetches that and not this. `make windows` depends on this
+# target, so the download happens by itself the first time.
 vendor-retroarch-win64:
 	$(VENDOR_PYTHON) scripts/vendor_retroarch.py win64
 
@@ -208,7 +211,7 @@ icons:
 	PYTHONPATH=src $(PYTHON) tools/icon_browser.py $(FILTER)
 
 # -f rather than -x: the vendored Windows build is a .exe, and MSYS2 does not
-# report the executable bit for it the way Linux does for the AppImage.
+# report the executable bit for it the way Linux does for an ELF.
 check-retroarch:
 	@echo "Checking RetroArch binary..."
 	@if [ -f $(RETROARCH_VENDOR) ]; then \
@@ -227,16 +230,21 @@ check-retroarch:
 # build install-tests its own artifact. Results land in dist/.
 # The AppImage additionally requires an x86_64 host. See docs/DEVELOPMENT.md.
 
+# The three formats that bundle an emulator fetch it first (171 MiB, once):
+# nothing is committed to git since issue #328, and packaging/build.sh refuses
+# to start a 20-minute container build without it. The Flatpak needs none --
+# it launches the host's org.libretro.RetroArch.
+
 # Universal AppImage (Ubuntu 24.04 build container)
-appimage:
+appimage: vendor-retroarch
 	./packaging/build.sh appimage
 
 # Debian/Ubuntu .deb — built and install-tested in an Ubuntu 24.04 container
-deb:
+deb: vendor-retroarch
 	./packaging/build.sh deb
 
 # Fedora .rpm — built and install-tested in a Fedora container
-rpm:
+rpm: vendor-retroarch
 	./packaging/build.sh rpm
 
 # Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.

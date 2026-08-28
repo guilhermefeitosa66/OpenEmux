@@ -14,6 +14,7 @@ from openemux.core.platform import (
     BUILDBOT_ARCHES,
     BUILDBOT_OS,
     BUILDBOT_OSES,
+    LEGACY_VENDORED_RETROARCH,
     VENDORED_RETROARCH,
 )
 from openemux.core.state_recovery import quarantine_state_file
@@ -127,6 +128,30 @@ def migrate_cores_base_url(stored):
     if stored in KNOWN_CORES_BASE_URLS and stored != DEFAULT_CORES_BASE_URL:
         return DEFAULT_CORES_BASE_URL
     return stored
+
+
+def migrate_retroarch_binary(stored):
+    """Point a config at the vendored RetroArch as it is shipped now.
+
+    Every install created before issue #328 has ``runtime.retroarch.binary``
+    naming the vendored *AppImage*, which the update replaces with the portable
+    tree it always contained. The file is gone after the update -- removed by
+    dpkg/rpm, or by the pull in a checkout -- so a config still naming it
+    resolves to nothing and every launch falls through to a distribution
+    RetroArch or to the error, on a machine that has a perfectly good one
+    bundled.
+
+    Only a path this project itself would have written is replaced, and only
+    the relative one it wrote: a user who pointed the setting at an AppImage of
+    their own keeps it, and keeps the ``--appimage-extract-and-run`` handling
+    that goes with it.
+    """
+    if not stored:
+        return VENDORED_RETROARCH
+    if stored in LEGACY_VENDORED_RETROARCH:
+        return VENDORED_RETROARCH
+    return stored
+
 
 #: Everything the RetroArch buildbot updater needs, in one place.
 #:
@@ -505,7 +530,11 @@ class ConfigManager:
             runtime["network_cmd_port"] = AUTO_NETWORK_CMD_PORT
         runtime.setdefault("console_backend", {})
         runtime.setdefault("retroarch", {})
-        runtime["retroarch"].setdefault("binary", VENDORED_RETROARCH)
+        # Not a setdefault: the key is present and names a file this version no
+        # longer ships (issue #328).
+        runtime["retroarch"]["binary"] = migrate_retroarch_binary(
+            runtime["retroarch"].get("binary")
+        )
         runtime["retroarch"].setdefault("extra_flags", [])
         runtime["retroarch"].setdefault("cores", {})
         updater = runtime["retroarch"].setdefault("updater", {})

@@ -95,12 +95,12 @@ class PackagesWorkflowTests(unittest.TestCase):
         self.assertEqual(self.data["jobs"]["build"]["runs-on"],
                          "${{ matrix.runs-on }}")
 
-    def test_the_windows_build_fetches_its_vendored_retroarch_first(self):
-        # The Windows bundle ships RetroArch, and that binary is a gitignored
-        # 193 MiB download rather than a committed vendor file -- so this is
-        # the one format whose build needs a step before packaging/build.sh.
-        # Without it the build stops at the guard in packaging/build.sh, 20
-        # minutes of Docker later (issue #118).
+    def test_every_bundled_emulator_is_fetched_first(self):
+        # Nothing is committed to git: the Windows bundle needs a 193 MiB
+        # download and the three x86_64 Linux formats a 171 MiB one, so each of
+        # them needs a step before packaging/build.sh. Without it the build
+        # stops at that script's guard, after the Docker image has been built
+        # (issues #118, #328).
         steps = self.data["jobs"]["build"]["steps"]
         names = [step.get("name", "") for step in steps]
         fetch = next(
@@ -108,17 +108,37 @@ class PackagesWorkflowTests(unittest.TestCase):
             None,
         )
         self.assertIsNotNone(fetch, "nothing fetches the vendored RetroArch")
-        self.assertIn("windows", str(fetch.get("if", "")))
         # Named, not inferred. `make vendor-retroarch` takes the artifact for
-        # the host it runs on, and this host is Linux -- so it verified the
-        # committed AppImage, fetched nothing, and the build stopped at its own
-        # guard twenty seconds later.
+        # the host it runs on, and every runner here is Linux -- so the Windows
+        # leg has to ask for win64 by name or it fetches the Linux tree and
+        # stops at its own guard twenty seconds later.
         self.assertIn("vendor-retroarch-win64", str(fetch["run"]))
+        self.assertIn("make vendor-retroarch\n", str(fetch["run"]))
         build = next(
             index for index, step in enumerate(steps)
             if "./packaging/build.sh" in str(step.get("run", ""))
         )
         self.assertLess(names.index(fetch["name"]), build)
+
+    def test_the_formats_that_bundle_nothing_skip_the_download(self):
+        # The Flatpak launches the host's org.libretro.RetroArch, and libretro
+        # publishes no ARM build at all -- so neither has anything to fetch,
+        # and a 171 MiB download on those legs would be pure waste.
+        steps = self.data["jobs"]["build"]["steps"]
+        decide = next(
+            step for step in steps if step.get("id") == "bundles"
+        )
+        run = str(decide["run"])
+        self.assertIn("windows:*", run)
+        self.assertIn("appimage:x86_64|deb:x86_64|rpm:x86_64", run)
+        for step in steps:
+            if "vendor-retroarch" in str(step.get("run", "")) or step.get("id") == "bundles":
+                continue
+            if "7zip" in str(step.get("run", "")) or "actions/cache" in str(step.get("uses", "")):
+                self.assertEqual(
+                    step.get("if"), "steps.bundles.outputs.artifact != ''",
+                    f"{step.get('name')} runs on legs that bundle no emulator",
+                )
 
     def test_make_windows_fetches_what_it_needs(self):
         # Same trap, on the maintainer's side: the docs said `make

@@ -51,12 +51,16 @@ vendors/nestopia/build/
 vendors/mgba/build/
 vendors/snes9x/gtk/build/
 
-# Fetched vendors (issue #118). The Windows RetroArch is ~193 MiB, so unlike the
-# 10.9 MiB Linux AppImage it is downloaded on demand rather than committed --
-# see vendors/manifest.json and 'make vendor-retroarch'.
+# Fetched vendors (issues #118, #328). Neither RetroArch is committed: the
+# Windows build is ~193 MiB and the Linux one ~171 MiB to download, and both
+# unpack into directory trees of loose binaries that git history would carry
+# forever -- see vendors/manifest.json and 'make vendor-retroarch'.
 vendors/RetroArch-Win64/
+vendors/RetroArch-Linux-x86_64/
+vendors/RetroArch-Linux-aarch64/
 vendors/.cache/
 vendors/*.7z
+vendors/*.AppImage
 
 # Windows bundle staging (packaging/windows)
 build/win/
