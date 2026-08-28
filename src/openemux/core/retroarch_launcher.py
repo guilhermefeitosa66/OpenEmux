@@ -404,6 +404,7 @@ class RetroArchLauncher:
         overrides = {}
         overrides.update(self._input_overrides(console))
         overrides.update(self._joypad_driver_overrides())
+        overrides.update(self._desktop_ui_overrides())
         overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
         overrides.update(self._bios_overrides(console, core_filename))
         overrides.update(self._shader_overrides(shader_path, shader_enabled))
@@ -628,6 +629,38 @@ class RetroArchLauncher:
         if not IS_WINDOWS:
             return {}
         return {"input_joypad_driver": '"sdl2"'}
+
+    @staticmethod
+    def _desktop_ui_overrides():
+        """Keep RetroArch's own desktop UI out of a game OpenEmux launched.
+
+        On Windows the win32 UI companion starts with every launch and draws a
+        menu bar across the game's window, and the Qt "WIMP" desktop menu is
+        initialised behind it. Both are on by default -- the vendored build's
+        own retroarch.default.cfg documents `ui_companion_start_on_boot = true`
+        and `desktop_menu_enable = true` -- and OpenEmux never said otherwise,
+        so a game opened from the library came up wearing the emulator's
+        interface (issue #367).
+
+        Windows-only for the same reason the joypad driver above is: the
+        vendored Linux build has no WIMP UI to start, so writing it there would
+        be a line that reads as if it were load-bearing and is not.
+
+        This is not the game window. That wrapper -- pause, save state, volume
+        -- is X11 reparenting and has no Windows equivalent; Preferences says
+        so there (issue #118). This only stops RetroArch from putting its own
+        menu in front of the game.
+
+        Launch-scoped like everything else in this file: ``--appendconfig``
+        with ``config_save_on_exit = false``, so a user's own RetroArch keeps
+        whatever they chose.
+        """
+        if not IS_WINDOWS:
+            return {}
+        return {
+            "ui_companion_start_on_boot": '"false"',
+            "desktop_menu_enable": '"false"',
+        }
 
     def _av_overrides(self):
         """Which audio driver RetroArch is told to use (issue #176).
