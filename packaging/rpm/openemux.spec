@@ -179,6 +179,20 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri Aug 28 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.12.0-1
+- OpenEmux runs on Windows: an installer, a portable bundle and gamepads read through SDL2
+- Linux packages are built for aarch64 as well as x86_64, in every format
+- The library scrolls a screenful instead of the whole collection, so big libraries open at once
+- Nothing is ever written half-way: settings, playlists and favorites survive a crash mid-write
+- Favorites are kept when the drive holding those ROMs is not mounted
+- First boot works offline, falling back to the bundled cores instead of failing
+- RetroAchievements: sign in once and unlock on every launch
+- Saves and save states can be exported and imported without hunting for two directories
+- Advanced core settings for PlayStation and PSP: resolution, graphics API and texture filtering
+- ROMs can be imported as links instead of copies
+- Shader packs can no longer write outside the shader directory
+- The AppImage needs no libfuse2, and every package ships the AppStream metadata software centres read
+
 * Wed Aug 19 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.11.3-1
 - Never leave a game borderless and unmovable when the game window cannot adopt it
 - Say what the game window is doing while it waits, and give up in seconds instead of twenty

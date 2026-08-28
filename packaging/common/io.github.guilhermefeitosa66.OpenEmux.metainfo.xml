@@ -88,6 +88,23 @@
   </keywords>
 
   <releases>
+    <release version="1.12.0" date="2026-08-28">
+      <description>
+        <p>OpenEmux arrives on Windows and on ARM, and the library it manages is faster and safer than it has ever been.</p>
+        <ul>
+          <li>Windows is a supported platform: an installer, a portable bundle, gamepads read through SDL2 and RetroArch shipped alongside</li>
+          <li>Every Linux format is now built for aarch64 as well as x86_64</li>
+          <li>The grid builds a screenful instead of the whole collection, and stops re-reading, re-hashing and re-decoding work it had already done</li>
+          <li>Persistence is atomic: settings, playlists and favorites are written whole or not at all, and a corrupt file is kept instead of being replaced with defaults</li>
+          <li>Favorites survive a drive that is not mounted, and first boot works offline by falling back to the bundled cores</li>
+          <li>Sign in to RetroAchievements once and unlock achievements on every launch</li>
+          <li>Export and import saves and save states from one place</li>
+          <li>Advanced core settings for PlayStation and PSP, and the option to import ROMs as links instead of copies</li>
+          <li>Shader packs can no longer write outside the shader directory</li>
+          <li>The AppImage no longer needs libfuse2, and every package ships the metadata software centres read</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.3" date="2026-08-19">
       <description>
         <p>The game window never strands a game any more.</p>
