@@ -18,9 +18,10 @@
 # maintainer's local state is also not reproducible from a clean clone.
 #
 # The vendors/ entries below are the same class of problem with a bigger
-# number on it: the Windows RetroArch is 193 MiB, gitignored, and fetched on
-# demand for the Windows build alone -- a Linux package built after
-# `make vendor-retroarch` would carry all of it.
+# number on it: the Windows RetroArch is 556 MiB unpacked, gitignored, and
+# fetched on demand for the Windows build alone -- a Linux package built after
+# `make vendor-retroarch-win64` would carry all of it. `.cache` and `*.7z` are
+# the downloads both of them come out of, which are bigger still.
 #
 # tar rather than `git archive`: this has to work from an unpacked source
 # tarball too (the RPM's %install runs in %{_builddir}, where there is no git
@@ -33,8 +34,8 @@ shift 2
 
 # Anything else on the command line is another tar --exclude pattern. The one
 # caller that needs it is the vendored RetroArch: a package built for one
-# architecture must not carry the AppImage for the other, which is dead weight
-# the kernel would refuse to execute anyway (issue #119).
+# architecture must not carry the tree for the other, which is dead weight the
+# kernel would refuse to execute anyway (issue #119).
 EXTRA=""
 for pattern in "$@"; do
   EXTRA="$EXTRA --exclude=$pattern"

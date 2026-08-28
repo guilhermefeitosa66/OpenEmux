@@ -44,12 +44,25 @@ class MachineNamesTests(unittest.TestCase):
 
 
 class VendoredRetroArchTests(unittest.TestCase):
-    @linux_only("the vendored RetroArch is an AppImage only here; Windows gets a .exe")
-    def test_the_linux_appimage_is_named_for_the_architecture(self):
-        # An x86_64 AppImage on an ARM machine is not a RetroArch that failed
+    @linux_only("the vendored tree is laid out this way only here; Windows gets a .exe")
+    def test_the_linux_tree_is_named_for_the_architecture(self):
+        # An x86_64 binary on an ARM machine is not a RetroArch that failed
         # to start; it is a file the kernel refuses to execute.
         self.assertIn(pf.MACHINE, pf.VENDORED_RETROARCH)
-        self.assertTrue(pf.VENDORED_RETROARCH.endswith(".AppImage"))
+        self.assertTrue(pf.VENDORED_RETROARCH.endswith("/usr/bin/retroarch"))
+
+    @linux_only("the legacy path was a Linux AppImage; Windows never had one")
+    def test_the_path_it_replaced_is_remembered_for_both_architectures(self):
+        # A config written before issue #328 names the vendored AppImage, and
+        # one carried between machines names whichever architecture wrote it.
+        self.assertEqual(
+            set(pf.LEGACY_VENDORED_RETROARCH),
+            {
+                "vendors/RetroArch-Linux-x86_64.AppImage",
+                "vendors/RetroArch-Linux-aarch64.AppImage",
+            },
+        )
+        self.assertNotIn(pf.VENDORED_RETROARCH, pf.LEGACY_VENDORED_RETROARCH)
 
 
 class CoresUrlTests(unittest.TestCase):
@@ -106,6 +119,70 @@ class CoresUrlTests(unittest.TestCase):
         for empty in (None, ""):
             with self.subTest(stored=empty):
                 self.assertEqual(migrate_cores_base_url(empty), DEFAULT_CORES_BASE_URL)
+
+
+class RetroArchBinaryMigrationTests(unittest.TestCase):
+    """A config that still names the vendored AppImage (issue #328).
+
+    The file is gone after the update -- removed by dpkg/rpm, or by the pull in
+    a checkout -- so a config still naming it resolves to nothing and every
+    launch falls through to a distribution RetroArch or to the error, on a
+    machine that has a perfectly good one bundled.
+    """
+
+    @linux_only("Windows never vendored an AppImage, so there is none to migrate")
+    def test_the_vendored_appimage_becomes_the_vendored_tree(self):
+        from openemux.core.config import migrate_retroarch_binary
+
+        for legacy in pf.LEGACY_VENDORED_RETROARCH:
+            with self.subTest(stored=legacy):
+                self.assertEqual(
+                    migrate_retroarch_binary(legacy), pf.VENDORED_RETROARCH
+                )
+
+    def test_a_users_own_appimage_is_left_alone(self):
+        # It keeps working, and keeps the --appimage-extract-and-run handling
+        # that goes with it. Silently repointing it would be the worse bug.
+        from openemux.core.config import migrate_retroarch_binary
+
+        mine = "/home/someone/Apps/RetroArch-Linux-x86_64.AppImage"
+        self.assertEqual(migrate_retroarch_binary(mine), mine)
+
+    def test_a_system_retroarch_is_left_alone(self):
+        from openemux.core.config import migrate_retroarch_binary
+
+        self.assertEqual(migrate_retroarch_binary("retroarch"), "retroarch")
+
+    def test_nothing_stored_gets_this_machines_default(self):
+        from openemux.core.config import migrate_retroarch_binary
+
+        for empty in (None, ""):
+            with self.subTest(stored=empty):
+                self.assertEqual(migrate_retroarch_binary(empty), pf.VENDORED_RETROARCH)
+
+    @linux_only("the vendored AppImage this migrates away from was Linux-only")
+    def test_a_loaded_config_is_migrated_end_to_end(self):
+        from tempfile import TemporaryDirectory
+
+        import yaml
+
+        from openemux.core.config import ConfigManager
+
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "config.yaml").write_text(
+                yaml.safe_dump(
+                    {"runtime": {"retroarch": {"binary": pf.LEGACY_VENDORED_RETROARCH[0]}}}
+                ),
+                encoding="utf-8",
+            )
+            manager = ConfigManager(config_file=base / "config.yaml")
+            self.assertEqual(manager.get_retroarch_binary(), pf.VENDORED_RETROARCH)
+            # And it is written back, so the next launch does not migrate again.
+            written = yaml.safe_load((base / "config.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["runtime"]["retroarch"]["binary"], pf.VENDORED_RETROARCH
+            )
 
 
 class CoreSearchDirTests(unittest.TestCase):

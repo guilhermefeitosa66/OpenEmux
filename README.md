@@ -277,7 +277,7 @@ another program at arm's length, so OpenEmux's own code stays MIT. For reference
 RetroArch is [GPLv3](https://github.com/libretro/RetroArch) while the libretro
 API itself is MIT.
 
-When OpenEmux **bundles and redistributes** RetroArch (the vendored AppImage) or
+When OpenEmux **bundles and redistributes** RetroArch (the vendored build) or
 downloads libretro cores, those components keep their own licenses (GPLv3 and
 others) — a "mere aggregation" of independently-licensed software. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details. *(Informational,

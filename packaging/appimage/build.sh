@@ -153,6 +153,64 @@ test -f "$APPDIR_LIB/girepository-1.0/Rsvg-2.0.typelib" \
 test -f AppDir/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml \
   || { echo "ERROR: AppStream metainfo missing from the bundle." >&2; exit 1; }
 
+# The vendored RetroArch, staged now that appimage-builder has finished with
+# the AppDir -- and deliberately not by the recipe, which runs before it.
+#
+# appimage-builder patches every ELF it finds: PT_INTERP to a relative loader
+# and RUNPATH to the bundle's own library paths. That was harmless while the
+# vendored RetroArch was one opaque image, and is not now that it is 115 loose
+# files (issue #328): it rewrote the binary's RUNPATH from $ORIGIN/../lib to
+# "librt.so.1" -- after "Patch value (25275 bytes @0x678) exceeds segment
+# bounds" -- and the bundled RetroArch could no longer find one of the 56
+# libraries shipped beside it. Copied here, nothing ever touches it.
+#
+# Only this architecture's: an x86_64 tree inside an ARM bundle is dead weight
+# the kernel refuses to execute (issue #119), and libretro publishes no ARM
+# build, so on aarch64 there is usually nothing to carry at all.
+echo "==> staging the vendored RetroArch"
+case "$ARCH" in
+  aarch64) FOREIGN_RETROARCH="RetroArch-Linux-x86_64" ;;
+  *)       FOREIGN_RETROARCH="RetroArch-Linux-aarch64" ;;
+esac
+sh packaging/common/copy_tree.sh vendors AppDir/usr/lib/openemux "$FOREIGN_RETROARCH"
+sh packaging/common/assert_sources_only.sh AppDir/usr/lib/openemux/vendors
+
+VENDORED_RETROARCH="AppDir/usr/lib/openemux/vendors/RetroArch-Linux-${ARCH}/usr/bin/retroarch"
+if [ "$ARCH" = "x86_64" ]; then
+  test -x "$VENDORED_RETROARCH" || {
+    echo "ERROR: the vendored RetroArch is not in the bundle." >&2
+    exit 1
+  }
+  # Collected first, then matched: `readelf | grep -q` SIGPIPEs readelf, and
+  # under `set -o pipefail` that fails the pipeline on a bundle that is fine.
+  VENDORED_DYNAMIC="$(readelf -d "$VENDORED_RETROARCH")"
+  case "$VENDORED_DYNAMIC" in
+    *'$ORIGIN/../lib'*) ;;
+    *)
+      echo "ERROR: the vendored RetroArch's RUNPATH was rewritten:" >&2
+      grep -E 'RUNPATH|RPATH' <<< "$VENDORED_DYNAMIC" >&2 || true
+      exit 1
+      ;;
+  esac
+  # PT_INTERP too: a relative loader path resolves against the cwd of whoever
+  # execs it, and the launcher execs RetroArch from the user's own directory.
+  VENDORED_INTERP="$(readelf -l "$VENDORED_RETROARCH")"
+  case "$VENDORED_INTERP" in
+    *"[Requesting program interpreter: /"*) ;;
+    *)
+      echo "ERROR: the vendored RetroArch's ELF interpreter was rewritten:" >&2
+      grep -F 'program interpreter' <<< "$VENDORED_INTERP" >&2 || true
+      exit 1
+      ;;
+  esac
+  LIB_COUNT="$(find "$(dirname "$VENDORED_RETROARCH")/../lib" -name '*.so*' | wc -l)"
+  test "$LIB_COUNT" -ge 50 || {
+    echo "ERROR: only $LIB_COUNT bundled RetroArch libraries reached the AppDir." >&2
+    exit 1
+  }
+  echo "vendored RetroArch OK: $LIB_COUNT libraries, RUNPATH and interpreter intact"
+fi
+
 # TryExec is resolved against the user's PATH, and no `openemux` binary lives
 # there for an AppImage. An integrator (appimaged, AppImageLauncher,
 # GearLever) rewrites Exec to the bundle path and leaves TryExec alone, so an

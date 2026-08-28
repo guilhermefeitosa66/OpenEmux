@@ -76,19 +76,31 @@ class CopyTreeLeavesTheBuildStateBehindTests(unittest.TestCase):
                 )
 
     def test_the_windows_retroarch_is_not_dragged_into_a_linux_package(self):
-        # 193 MiB, gitignored, fetched on demand for the Windows build alone.
+        # 556 MiB unpacked, gitignored, fetched on demand for the Windows build
+        # alone -- and the .7z both of them come out of is bigger still.
         vendors = self.tmp / "vendors"
         (vendors / "RetroArch-Win64").mkdir(parents=True)
         (vendors / "RetroArch-Win64" / "retroarch.exe").write_text("x")
-        (vendors / "RetroArch-Linux-x86_64.AppImage").write_text("x")
+        (vendors / "RetroArch-Linux-x86_64" / "usr" / "bin").mkdir(parents=True)
+        (vendors / "RetroArch-Linux-x86_64" / "usr" / "bin" / "retroarch").write_text("x")
+        (vendors / ".cache").mkdir()
+        (vendors / ".cache" / "win64-RetroArch.7z").write_text("x")
         destination = self.tmp / "vendors-stage"
         subprocess.run(
             ["sh", str(COPY_TREE), str(vendors), str(destination)], check=True
         )
         self.assertTrue(
-            (destination / "vendors" / "RetroArch-Linux-x86_64.AppImage").is_file()
+            (
+                destination
+                / "vendors"
+                / "RetroArch-Linux-x86_64"
+                / "usr"
+                / "bin"
+                / "retroarch"
+            ).is_file()
         )
         self.assertFalse((destination / "vendors" / "RetroArch-Win64").exists())
+        self.assertFalse((destination / "vendors" / ".cache").exists())
 
     def test_a_missing_source_directory_is_an_error_not_an_empty_package(self):
         result = subprocess.run(

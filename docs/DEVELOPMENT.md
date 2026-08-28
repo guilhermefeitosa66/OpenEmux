@@ -86,8 +86,10 @@ equivalents (`gtk4`, `libadwaita`, `python3-gobject`, `python3-cairo`,
 `python3-pyyaml`, `librsvg2`, `gobject-introspection`) with `dnf`, then run
 `make venv setup`.
 
-RetroArch is resolved at launch from `vendors/RetroArch-Linux-x86_64.AppImage`,
-a system `retroarch`, or a configured path — check with `make check-retroarch`.
+RetroArch is resolved at launch from
+`vendors/RetroArch-Linux-x86_64/usr/bin/retroarch` (fetched by `make
+bootstrap`), a system `retroarch`, or a configured path — check with
+`make check-retroarch`.
 
 ## Running it without taking the screen
 
@@ -428,11 +430,30 @@ make vendor-retroarch   # download what this platform needs
 make verify-vendors     # check what is already there, without downloading
 ```
 
-The Linux AppImage (10.9 MiB) is committed to git and only verified. The Windows
-build (193 MiB) is gitignored and downloaded on demand. libretro publishes no
-checksums, so the first fetch of a new upstream version records what it saw
-(`--record`) for review and commit; every later run verifies against that and
-fails hard on a mismatch.
+Neither build is committed to git: 171 MiB to download for Linux and 193 MiB
+for Windows, each unpacked into a portable tree under `vendors/`. `make
+bootstrap` fetches the one for this platform, and `make deb` / `make rpm` /
+`make appimage` / `make windows` each fetch what they bundle before starting a
+container.
+
+libretro publishes no checksums, so the first fetch of a new upstream version
+records what it saw (`--record`) for review and commit; every later run
+verifies against that and fails hard on a mismatch. Two hashes per artifact:
+`sha256` pins the download, and `tree_sha256` pins what unpacking it produced —
+which is what actually ships, and the only one `--verify` can still check once
+the download cache is gone.
+
+**Why a tree and not a binary.** RetroArch `dlopen`s its cores and resolves
+`libGL`, the X11/Wayland client libraries and the host's audio stack from the
+host, so no platform gets a single portable file. Upstream's Linux build is an
+AppImage; what OpenEmux vendors is that image's own contents, unwrapped —
+`usr/bin/retroarch` plus the 56 libraries it finds through
+`RUNPATH=$ORIGIN/../lib`, byte for byte as libretro published them. Nothing in
+RetroArch knows it was launched from an image, so unwrapping it costs nothing
+and buys back the FUSE dependency, the unpacking on first launch, and a
+squashfs image nested inside the OpenEmux AppImage (issue #328). An AppImage a
+*user* points `runtime.retroarch.binary` at still gets the
+`--appimage-extract-and-run` handling it needs.
 
 ### Tests that do not run on Windows
 
@@ -651,15 +672,15 @@ system. The launcher then resolves in this order:
 
 1. `runtime.retroarch.binary`, if it names something that exists;
 2. that path on `PATH`;
-3. the vendored AppImage for this architecture;
+3. the vendored RetroArch for this architecture;
 4. `retroarch` on `PATH`;
 5. `flatpak run org.libretro.RetroArch`, if that Flatpak is installed;
 6. an error naming all of the above.
 
-Building an ARM RetroArch AppImage is possible and is not done here: the thing
-that would have to be proven is that it *works* -- GL/EGL, audio and gamepad on
-a real ARM desktop -- and until somebody can prove that on hardware, shipping
-one would be shipping a binary nobody has run. The chain above is the position
+Building an ARM RetroArch is possible and is not done here: the thing that
+would have to be proven is that it *works* -- GL/EGL, audio and gamepad on a
+real ARM desktop -- and until somebody can prove that on hardware, shipping one
+would be shipping a binary nobody has run. The chain above is the position
 issue #119 names to fall back to.
 
 **Fewer cores.** The buildbot builds 153 cores for aarch64 against 217 for
@@ -817,7 +838,7 @@ The `.deb` and `.rpm` share one install layout, assembled by
 [`packaging/common/stage_tree.sh`](../packaging/common/stage_tree.sh):
 
 - **`/opt/openemux/`** — the app "project root": `src/` plus the vendored
-  RetroArch AppImage. The launcher sets `OPENEMUX_PROJECT_ROOT` to this path.
+  RetroArch. The launcher sets `OPENEMUX_PROJECT_ROOT` to this path.
 - **`/usr/bin/openemux`** — launcher
   ([`openemux-launcher.sh`](../packaging/common/openemux-launcher.sh)) that
   exports `OPENEMUX_PROJECT_ROOT` + `PYTHONPATH` and runs `openemux.main`.

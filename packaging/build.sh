@@ -78,18 +78,35 @@ case "$TARGET" in
     ;;
 esac
 
+# Both vendored RetroArch builds are gitignored and fetched on demand, so
+# either may simply not be there yet. Said here rather than 20 minutes later,
+# after the whole GTK stack has downloaded into a container.
 if [ "$TARGET" = "windows" ]; then
-  # The bundled RetroArch for Windows is gitignored and fetched on demand (193
-  # MiB), so unlike the Linux AppImage it may simply not be there yet. Said
-  # here rather than 20 minutes later, after the whole GTK stack has downloaded.
   if [ ! -f vendors/RetroArch-Win64/retroarch.exe ]; then
     echo "vendors/RetroArch-Win64/retroarch.exe is missing." >&2
     echo "Run 'make vendor-retroarch-win64' first, or just 'make windows'," >&2
     echo "which fetches it. 'make vendor-retroarch' on a Linux host takes the" >&2
-    echo "artifact for *this* platform, which is the committed AppImage." >&2
+    echo "artifact for *this* platform, which is the Linux one." >&2
     exit 1
   fi
 fi
+
+# The three Linux formats that bundle an emulator. The Flatpak does not -- it
+# launches the host's org.libretro.RetroArch -- and on aarch64 there is nothing
+# to bundle, since libretro publishes no ARM build (issue #119).
+# ARCH is set by the architecture gate above, which only runs for these three
+# targets; ${ARCH:-} keeps `set -u` out of it for the other two.
+case "$TARGET:${ARCH:-}" in
+  appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64)
+    if [ ! -x vendors/RetroArch-Linux-x86_64/usr/bin/retroarch ]; then
+      echo "vendors/RetroArch-Linux-x86_64/usr/bin/retroarch is missing." >&2
+      echo "Run 'make vendor-retroarch' first, or 'make $TARGET', which" >&2
+      echo "fetches it. It is a 171 MiB download, unwrapped into the portable" >&2
+      echo "tree the packages ship (issue #328)." >&2
+      exit 1
+    fi
+    ;;
+esac
 
 # Cross-building under QEMU: `PLATFORM=linux/arm64 packaging/build.sh deb` on
 # an x86_64 desktop, with binfmt registered

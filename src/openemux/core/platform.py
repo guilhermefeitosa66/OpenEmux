@@ -69,14 +69,32 @@ BUILDBOT_ARCHES = ("x86_64", "aarch64")
 #: Relative path, from the project root, of the vendored RetroArch. Managed by
 #: scripts/vendor_retroarch.py -- see vendors/manifest.json.
 #:
-#: Architecture-aware on Linux: an x86_64 AppImage on an ARM machine is not a
+#: A binary inside a portable directory on both platforms. RetroArch dlopens its
+#: cores and resolves libGL and the host's audio stack from the host, so neither
+#: build is a single file: the Windows one is retroarch.exe plus its DLLs, and
+#: the Linux one is this binary plus 56 libraries it finds through
+#: RUNPATH=$ORIGIN/../lib. Vendoring the Linux tree rather than the AppImage
+#: upstream wraps it in is what freed the packages from FUSE (issue #328).
+#:
+#: Architecture-aware on Linux: an x86_64 build on an ARM machine is not a
 #: RetroArch that failed to launch, it is a file the kernel refuses to execute,
 #: and the launcher has a fallback chain for the case where none is vendored
 #: (retroarch_launcher._resolve_retroarch_binary).
 VENDORED_RETROARCH = (
     "vendors/RetroArch-Win64/retroarch.exe"
     if IS_WINDOWS
-    else f"vendors/RetroArch-Linux-{MACHINE}.AppImage"
+    else f"vendors/RetroArch-Linux-{MACHINE}/usr/bin/retroarch"
+)
+
+#: What ``VENDORED_RETROARCH`` used to be, for a config.yaml written before
+#: issue #328. Both architectures, because a config carried between machines
+#: names whichever one wrote it; see config.migrate_retroarch_binary.
+LEGACY_VENDORED_RETROARCH = (
+    ()
+    if IS_WINDOWS
+    else tuple(
+        f"vendors/RetroArch-Linux-{arch}.AppImage" for arch in ("x86_64", "aarch64")
+    )
 )
 
 

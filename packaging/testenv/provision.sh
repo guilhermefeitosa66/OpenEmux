@@ -44,15 +44,12 @@ if [ "${FAMILY}" = debian ]; then
 		imagemagick
 		flatpak
 	)
-	# The *vendored RetroArch* AppImage needs libfuse2 -- OpenEmux's own
-	# bundle carries a static FUSE 3 runtime and no longer asks for it
-	# (issue #248). Noble and trixie renamed the package in the 64-bit
-	# time_t transition; older bases still carry the old name.
-	if apt-cache show libfuse2t64 >/dev/null 2>&1; then
-		pkgs+=(libfuse2t64)
-	else
-		pkgs+=(libfuse2)
-	fi
+	# No libfuse2. It was here for the vendored RetroArch AppImage
+	# (issue #248); the packages now ship the portable tree instead
+	# (issue #328), and OpenEmux's own bundle carries a static FUSE 3
+	# runtime. So these containers are exactly the FUSE-less host the
+	# .deb has to launch a game on -- which is worth testing, not
+	# provisioning away.
 	[ "${SESSION}" = wayland ] && pkgs+=(weston)
 	sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
 else
@@ -65,10 +62,13 @@ else
 		mesa-dri-drivers mesa-vulkan-drivers mesa-libGLES mesa-libEGL mesa-libGL
 		google-noto-sans-fonts abattis-cantarell-fonts adwaita-icon-theme
 		ImageMagick
-		# For the vendored RetroArch AppImage (issue #248): fuse-libs is
-		# the library, and `fuse` is what carries the fusermount binary
-		# its runtime actually execs.
-		fuse-libs fuse
+		# No fuse-libs: it was the library the vendored RetroArch
+		# AppImage mounted itself with (issue #248), and the packages
+		# ship the portable tree now (issue #328), so this container is
+		# the FUSE-less host the .rpm has to launch a game on. `fuse`
+		# stays for the fusermount binary OpenEmux's *own* AppImage
+		# runtime execs -- a container image carries none.
+		fuse
 		flatpak
 	)
 	[ "${SESSION}" = wayland ] && pkgs+=(weston)

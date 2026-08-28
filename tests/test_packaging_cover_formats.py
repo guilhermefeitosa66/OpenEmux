@@ -66,11 +66,14 @@ class EveryPackageDeclaresItsLoadersTests(unittest.TestCase):
     def test_the_deb_declares_it_as_a_dependency_not_a_suggestion(self):
         # A Recommends is not enough: dpkg -i and offline installs skip them,
         # and apt does not pull one for a format nothing else on the box uses.
+        # The control field is assembled from DEPENDS= lines rather than
+        # written out in one, so that an architecture with nothing extra to
+        # declare does not leave a trailing comma behind (issue #328).
         text = (REPO_ROOT / "packaging/deb/build.sh").read_text(encoding="utf-8")
-        depends = next(
-            line for line in text.splitlines() if line.startswith("Depends:")
-        )
-        self.assertIn("webp-pixbuf-loader", depends)
+        depends = [line for line in text.splitlines() if line.startswith("DEPENDS=")]
+        self.assertTrue(depends, "the .deb declares no Depends at all")
+        self.assertIn("Depends: ${DEPENDS}", text)
+        self.assertIn("webp-pixbuf-loader", "\n".join(depends))
 
     def test_the_rpm_declares_it_as_a_requires(self):
         text = (REPO_ROOT / "packaging/rpm/openemux.spec").read_text(encoding="utf-8")

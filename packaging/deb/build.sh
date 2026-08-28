@@ -22,14 +22,14 @@ echo "==> building openemux ${VERSION} .deb for ${DEB_ARCH}"
 STAGE="$(mktemp -d)"
 DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 
-# libfuse2t64 | libfuse2 is a hard dependency, not a Recommends: the vendored
-# RetroArch AppImage is the only emulator this package ships and its runtime
-# needs libfuse.so.2 to mount itself. `apt install ./x.deb` does pull
-# recommends, but `dpkg -i` and offline installs do not -- and the app then
-# installed cleanly and could not launch a single game (issue #248). The
-# alternative covers both spellings: noble renamed the package to libfuse2t64.
+# No FUSE. The vendored RetroArch used to be an AppImage, whose runtime needs
+# libfuse.so.2 to mount itself -- so this package declared a hard dependency on
+# `libfuse2t64 | libfuse2`, and installing OpenEmux pulled a superseded library
+# onto every FUSE 3 system (issues #248, #328). What ships now is the portable
+# tree that AppImage always contained: a plain ELF that needs nothing to be
+# mounted, so the dependency is gone rather than downgraded.
 #
-# webp-pixbuf-loader is there for the same reason in a different place: cover
+# webp-pixbuf-loader is a dependency for the reason libfuse used to be: cover
 # art synced from libretro is WebP and gdk-pixbuf has no built-in decoder for
 # it. Nothing else this package depends on pulls the loader -- measured
 # against the released 1.11.3 artifact, `apt install ./openemux_*.deb` on a
@@ -46,16 +46,19 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # libretro publishes no ARM RetroArch, so the arm64 package bundles none -- and
 # a frontend with no emulator behind it is not a working install. There it is a
 # hard dependency on the distribution's own `retroarch` (present in Ubuntu
-# noble arm64 and Debian bookworm arm64), and libfuse is not needed because
-# there is no AppImage to mount (issue #119).
+# noble arm64 and Debian bookworm arm64). x86_64 bundles its own and therefore
+# depends on nothing extra at all (issues #119, #328).
+DEPENDS="python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6),"
+DEPENDS="$DEPENDS gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib,"
+DEPENDS="$DEPENDS librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader,"
+DEPENDS="$DEPENDS adwaita-icon-theme"
 case "$DEB_ARCH" in
   arm64)
-    RUNTIME_DEPENDS="retroarch"
+    DEPENDS="$DEPENDS, retroarch"
     EMULATOR_SENTENCE="It uses the RetroArch the distribution provides"
     ;;
   *)
-    RUNTIME_DEPENDS="libfuse2t64 | libfuse2"
-    EMULATOR_SENTENCE="It bundles a RetroArch AppImage"
+    EMULATOR_SENTENCE="It bundles a portable RetroArch"
     ;;
 esac
 
@@ -70,7 +73,7 @@ Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
-Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6), gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib, librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader, adwaita-icon-theme, ${RUNTIME_DEPENDS}
+Depends: ${DEPENDS}
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. ${EMULATOR_SENTENCE}
@@ -117,9 +120,9 @@ install -Dm644 "$STAGE/changelog.Debian.gz" \
   "$STAGE/usr/share/doc/openemux/changelog.Debian.gz"
 rm -f "$STAGE/changelog.Debian.gz"
 
-# md5sums, so `debsums openemux` can verify the 600+ installed files of a
-# package that ships an executable AppImage. dpkg-deb --build generates none;
-# nothing here did either, which is lintian's no-md5sums-control-file.
+# md5sums, so `debsums openemux` can verify every installed file of a package
+# that ships an emulator. dpkg-deb --build generates none; nothing here did
+# either, which is lintian's no-md5sums-control-file.
 ( cd "$STAGE" && find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
   | sort -z | xargs -0 md5sum > DEBIAN/md5sums )
 chmod 0644 "$STAGE/DEBIAN/md5sums"
@@ -169,13 +172,33 @@ require_member './usr/share/doc/openemux/copyright' "$FSYS_MEMBERS"
 
 echo "==> verify installed files"
 test -x /usr/bin/openemux
-# On x86_64 the AppImage is committed and must be in the package. On aarch64
-# there is none to vendor, and what has to hold instead is that the package
-# declares a RetroArch to depend on -- checked above through the control file.
+# On x86_64 the vendored RetroArch must be in the package, and it must be the
+# executable the launcher will actually exec -- not a directory that arrived
+# with the binary missing. On aarch64 there is none to vendor, and what has to
+# hold instead is that the package declares a RetroArch to depend on -- checked
+# above through the control file.
+RETROARCH_DIR="/opt/openemux/vendors/RetroArch-Linux-${VENDOR_ARCH}"
 if [ "$VENDOR_ARCH" = "x86_64" ]; then
-  test -f "/opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage"
+  test -x "$RETROARCH_DIR/usr/bin/retroarch"
+  # The tree is only portable because the binary finds its own 56 libraries
+  # through RUNPATH=$ORIGIN/../lib, and that is what has to survive being
+  # copied into a package and installed somewhere else (issue #328). Checked
+  # with ldd rather than by running it: RetroArch also needs libGL, libjack and
+  # the host's audio stack, which a build container has no reason to install.
+  LDD="$(ldd "$RETROARCH_DIR/usr/bin/retroarch" || true)"
+  case "$LDD" in
+    # What the loader prints is the RUNPATH as written -- $ORIGIN is the
+    # directory holding the binary, so the resolved path keeps the `bin/..`.
+    *"$RETROARCH_DIR/usr/bin/../lib/"*) ;;
+    *)
+      echo "FAIL: the installed RetroArch does not resolve its bundled libraries" >&2
+      echo "$LDD" >&2
+      exit 1
+      ;;
+  esac
+  echo "the vendored RetroArch resolves its own libraries from $RETROARCH_DIR"
 else
-  test ! -f "/opt/openemux/vendors/RetroArch-Linux-x86_64.AppImage"
+  test ! -e "/opt/openemux/vendors/RetroArch-Linux-x86_64"
 fi
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
 test -f /usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml

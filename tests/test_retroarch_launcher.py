@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from openemux.core import game_window_support
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
-from openemux.core.platform import CORE_SUFFIX
+from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
 from openemux.core.retroarch_launcher import (
     APPIMAGE_EXTRACT_AND_RUN,
     RetroArchLauncher,
@@ -118,17 +118,38 @@ class RetroArchLauncherTests(unittest.TestCase):
     def test_resolve_retroarch_binary_from_project_relative_path(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            binary = base / "vendors" / "RetroArch-Linux-x86_64.AppImage"
+            binary = base / VENDORED_RETROARCH
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_text("", encoding="utf-8")
             core = base / f"mgba_libretro{CORE_SUFFIX}"
             core.write_text("", encoding="utf-8")
-            cfg = _DummyConfig(base, "vendors/RetroArch-Linux-x86_64.AppImage", core)
+            cfg = _DummyConfig(base, VENDORED_RETROARCH, core)
             launcher = RetroArchLauncher(base, cfg)
 
             resolved = launcher._resolve_retroarch_binary()
 
         self.assertEqual(resolved, str(binary))
+
+    def test_the_vendored_retroarch_is_launched_as_a_plain_binary(self):
+        # No --appimage-extract-and-run, no libfuse probe, nothing to unpack:
+        # what OpenEmux vendors is the portable tree upstream's AppImage wraps,
+        # so a host with no FUSE at all launches it the same way (issue #328).
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / VENDORED_RETROARCH
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("", encoding="utf-8")
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, VENDORED_RETROARCH, core))
+            with patch.object(
+                RetroArchLauncher, "libfuse2_available", staticmethod(lambda: False)
+            ):
+                prefix, error = launcher._launch_prefix()
+            self.assertFalse(launcher.launches_an_appimage())
+
+        self.assertIsNone(error)
+        self.assertEqual(prefix, [str(binary)])
 
     def test_per_rom_core_override_wins_and_stale_falls_back(self):
         with TemporaryDirectory() as tmp_dir:

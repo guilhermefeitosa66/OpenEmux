@@ -131,7 +131,7 @@ ROM from the file manager, together with the `MimeType=` line and `%U`.
 
 **What ships is licensed.** About a third of every package is third-party: the
 console icons are OpenEmu's (BSD-3-clause), the symbolic icons are Adwaita's
-(LGPL-3 / CC-BY-SA-3.0) and the vendored RetroArch AppImage is GPL-3+. Every
+(LGPL-3 / CC-BY-SA-3.0) and the vendored RetroArch is GPL-3+. Every
 format installs `common/copyright` — a DEP-5 file naming each — rather than a
 copy of the MIT `LICENSE`, which claimed MIT over all of it. The notices ship
 beside the artwork too (`ui/assets/icons/ATTRIBUTION.md`,

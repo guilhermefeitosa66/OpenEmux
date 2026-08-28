@@ -22,10 +22,19 @@ class PathsTests(unittest.TestCase):
     def test_resolve_project_path_uses_project_root_for_relative_values(self):
         with TemporaryDirectory() as tmp_dir:
             with patch.dict(os.environ, {"OPENEMUX_PROJECT_ROOT": tmp_dir}, clear=False):
-                resolved = resolve_project_path("vendors/RetroArch-Linux-x86_64.AppImage")
+                resolved = resolve_project_path(
+                    "vendors/RetroArch-Linux-x86_64/usr/bin/retroarch"
+                )
         self.assertEqual(
             resolved,
-            (Path(tmp_dir) / "vendors" / "RetroArch-Linux-x86_64.AppImage").resolve(),
+            (
+                Path(tmp_dir)
+                / "vendors"
+                / "RetroArch-Linux-x86_64"
+                / "usr"
+                / "bin"
+                / "retroarch"
+            ).resolve(),
         )
 
     def test_get_project_root_uses_appdir_layout_when_available(self):
