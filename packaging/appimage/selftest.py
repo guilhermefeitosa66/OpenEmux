@@ -96,6 +96,37 @@ def bundled_symbolic_icons():
     return f"{len(svgs)} icons in {SYMBOLIC_ICON_DIR.name}/"
 
 
+def shipped_bytecode():
+    """The bundle carries bytecode the bundled interpreter can actually use.
+
+    It is compiled by the container's python3 and read by the python3 apt put
+    in the AppDir. Both come from the same Ubuntu release today, so their cache
+    tags agree -- and on the day they stop agreeing every .pyc in the image
+    becomes dead weight, the app goes quietly back to recompiling itself on
+    every launch, and nothing else in this build would say a word (issue #364).
+    """
+    import importlib.util
+
+    from openemux.core import config
+
+    root = Path(config.__file__).resolve().parent
+    sources = sorted(root.glob("*.py"))
+    if not sources:
+        raise RuntimeError(f"no sources found under {root}")
+    missing = [
+        path.name
+        for path in sources
+        if not Path(importlib.util.cache_from_source(str(path))).exists()
+    ]
+    if missing:
+        shown = ", ".join(missing[:3]) + ("..." if len(missing) > 3 else "")
+        raise RuntimeError(
+            f"{len(missing)}/{len(sources)} modules under {root.name}/ ship no "
+            f"bytecode for {sys.implementation.cache_tag}: {shown}"
+        )
+    return f"{len(sources)} modules cached for {sys.implementation.cache_tag}"
+
+
 def ui_imports():
     from openemux.ui import window  # noqa: F401  - exercises the whole chain
     import openemux
@@ -108,6 +139,7 @@ check("Rsvg bindings", rsvg_bindings)
 check("cartridge render (cairo <-> GI)", cartridge_render_works)
 check("bundled symbolic icons", bundled_symbolic_icons)
 check("UI import chain", ui_imports)
+check("shipped bytecode", shipped_bytecode)
 
 if failures:
     print(f"\n{len(failures)} self-check failure(s):")

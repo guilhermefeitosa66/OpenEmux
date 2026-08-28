@@ -387,6 +387,136 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-292 — A read-only install stops recompiling itself on every launch
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `develop` checked out.
+- **Steps:** As a QA person: install the .deb or .rpm, launch the app twice, and compare how long
+  it takes to show its window the second time.
+- **Expected:** The first launch after installing is the slow one; every launch after it is
+  noticeably quicker. The packages install to `/opt/openemux`, which the user cannot write, so
+  CPython's attempt to put `__pycache__` beside the sources failed and it fell back — silently — to
+  compiling all ~36k lines in memory, on every single launch (issue #364). The cache now goes to
+  `$XDG_CACHE_HOME/openemux/bytecode` instead, and nothing is written into the install.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil, subprocess, sys, tempfile
+  from pathlib import Path
+
+  src = Path("src").resolve()
+  with tempfile.TemporaryDirectory() as tmp:
+      tmp = Path(tmp)
+      install = tmp / "opt" / "openemux"
+      install.mkdir(parents=True)
+      shutil.copytree(src, install / "src")
+      for stale in list((install / "src").rglob("__pycache__")):
+          shutil.rmtree(stale, ignore_errors=True)
+      # Only the directories: creating __pycache__ needs write on the parent,
+      # which is exactly what /opt/openemux denies the user running the app.
+      dirs = [p for p in (install / "src").rglob("*") if p.is_dir()] + [install / "src"]
+      for d in dirs:
+          d.chmod(0o500)
+      try:
+          home = tmp / "home"
+          home.mkdir()
+          cache = home / ".cache"
+          env = dict(os.environ, HOME=str(home), XDG_CACHE_HOME=str(cache),
+                     PYTHONPATH=str(install / "src"))
+          env.pop("PYTHONPYCACHEPREFIX", None)
+          env.pop("PYTHONDONTWRITEBYTECODE", None)
+          probe = ("from openemux.main import prepare_process; prepare_process();"
+                   "import openemux.app, sys; print(sys.pycache_prefix)")
+          out = subprocess.run([sys.executable, "-c", probe], env=env,
+                               capture_output=True, text=True,
+                               check=True).stdout.strip().splitlines()[-1]
+          expected = str(cache / "openemux" / "bytecode")
+          assert out == expected, f"cache went to {out!r}, expected {expected!r}"
+          cached = list(Path(expected).rglob("*.pyc"))
+          assert len(cached) > 50, f"only {len(cached)} modules cached"
+          leaked = list((install / "src").rglob("*.pyc"))
+          assert not leaked, f"wrote into the read-only install: {leaked[:3]}"
+      finally:
+          for d in dirs:
+              d.chmod(0o700)
+  print("RT-292 OK")
+  EOF
+  ```
+
+### RT-293 — A source checkout still caches beside its own sources
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** `develop` checked out.
+- **Steps:** As a QA person: run the app from a clone with `make run`, then look for a
+  `__pycache__` beside the sources and for anything new under `~/.cache/openemux`.
+- **Expected:** `__pycache__` directories appear inside the checkout, the way every Python
+  developer expects, and **no** `~/.cache/openemux/bytecode` is created. The redirect is for
+  installs that cannot write to themselves; a checkout can, and a surprise cache directory outside
+  the tree would be one more place to remember to clear.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import os, shutil, subprocess, sys, tempfile
+  from pathlib import Path
+
+  src = Path("src").resolve()
+  with tempfile.TemporaryDirectory() as tmp:
+      tmp = Path(tmp)
+      checkout = tmp / "checkout"
+      checkout.mkdir()
+      shutil.copytree(src, checkout / "src")
+      for stale in list((checkout / "src").rglob("__pycache__")):
+          shutil.rmtree(stale, ignore_errors=True)
+      home = tmp / "home"
+      home.mkdir()
+      cache = home / ".cache"
+      env = dict(os.environ, HOME=str(home), XDG_CACHE_HOME=str(cache),
+                 PYTHONPATH=str(checkout / "src"))
+      env.pop("PYTHONPYCACHEPREFIX", None)
+      env.pop("PYTHONDONTWRITEBYTECODE", None)
+      probe = ("from openemux.main import prepare_process; prepare_process();"
+               "import openemux.app, sys; print(sys.pycache_prefix)")
+      out = subprocess.run([sys.executable, "-c", probe], env=env, capture_output=True,
+                           text=True, check=True).stdout.strip().splitlines()[-1]
+      assert out == "None", f"a writable checkout was redirected to {out!r}"
+      assert list((checkout / "src").rglob("*.pyc")), "nothing cached beside the sources"
+      assert not (cache / "openemux" / "bytecode").exists(), \
+          "a writable checkout created a cache directory outside the tree"
+  print("RT-293 OK")
+  EOF
+  ```
+
+### RT-294 — A bundle that ships its own bytecode is left alone, and so is the user's choice
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: this is the set of cases where the redirect must *not* fire.
+- **Expected:** The redirect stands down when the install already carries bytecode for the running
+  interpreter (the AppImage, the Flatpak and the Windows bundle pin their interpreter and compile
+  at build time — redirecting would hide what the build produced), when the user has set
+  `PYTHONPYCACHEPREFIX` or `PYTHONDONTWRITEBYTECODE`, and when the cache directory cannot be
+  created at all. That last one must not be fatal: recompiling every launch is slow, but refusing
+  to start over a *cache* would be worse.
+- **Check:** `tests/test_startup_bytecode.py`
+
+### RT-296 — The AppImage carries bytecode its own interpreter can use
+- **Area:** Startup
+- **Mode:** MANUAL
+- **Preconditions:** An x86_64 host with Docker; `make appimage` completed.
+- **Steps:**
+  1. Run `make appimage` and read the self-check output near the end of the build.
+  2. Launch the produced AppImage twice and compare how quickly the window appears.
+- **Expected:** The self-check prints `[ OK ] shipped bytecode -- <n> modules cached for
+  cpython-<version>`. Both launches are equally quick — the bundle carries its bytecode, so unlike
+  the .deb and .rpm it has nothing to compile even the first time. This check exists because the
+  bytecode is built by the container's `python3` and read by the `python3` apt puts in the AppDir:
+  the day those stop being the same Ubuntu build, every `.pyc` in the image becomes dead weight,
+  the app goes quietly back to recompiling itself, and nothing else in the build would say so.
+  The AppImage cannot use the runtime redirect that covers the .deb and .rpm — it is mounted at a
+  fresh `/tmp/.mount_*` on every launch, so a cache keyed by path would never be hit twice and
+  would grow without bound.
+- **Check:** human only — needs a full AppImage build.
+
 
 ## Library & scanning
 

@@ -44,6 +44,14 @@ script:
   # (issue #255). PyGObject and pycairo are absent on purpose -- the bundle
   # takes them from the apt packages below.
   - python3 -m pip install --break-system-packages --no-cache-dir --require-hashes --target AppDir/usr/lib/python3/dist-packages -r packaging/appimage/requirements.hashed.txt
+  # Both python trees, now that everything that writes into them has run. The
+  # mount is read-only and its path is a fresh /tmp/.mount_* every launch, so
+  # the bundle can neither cache beside its sources nor keep a cache keyed by
+  # where it happens to be mounted -- it has to carry one (issue #364). Valid
+  # because the interpreter is pinned: the python3 compiling here and the
+  # python3 apt puts in the AppDir are the same Ubuntu noble build. selftest.py
+  # checks that from inside the bundle, so a version drift fails the build.
+  - sh packaging/common/compile_bytecode.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages
   # appimage-builder requires app_info.exec to be an ELF, so a tiny static
   # binary is the entry point and immediately hands over to openemux-run, which
   # sets up GI_TYPELIB_PATH / gdk-pixbuf / XDG_DATA_DIRS. (AppDir/AppRun is

@@ -76,7 +76,12 @@ finish-args:
   - --talk-name=org.freedesktop.Flatpak
 
 cleanup:
-  - '*.pyc'
+  # '*.pyc' used to be here, and it was throwing away the one thing that keeps
+  # the app from recompiling itself on every launch. /app is read-only, so
+  # CPython cannot write __pycache__ next to the sources and silently falls
+  # back to compiling all ~36k lines in memory, every time (issue #364). The
+  # bytecode is valid for good here: org.gnome.Platform pins the interpreter,
+  # so the one that compiles it in the SDK is the one that reads it.
   - /include
   - /lib/pkgconfig
   - /share/man
@@ -95,6 +100,10 @@ modules:
       - rm -rf build dist
       - pip3 install --verbose --exists-action=i --no-index --no-build-isolation
         --prefix=${FLATPAK_DEST} .
+      # See the cleanup section: /app is read-only, so the bytecode has to be
+      # built now or paid for on every launch (issue #364).
+      - sh packaging/common/compile_bytecode.sh
+        ${FLATPAK_DEST}/lib/python3*/site-packages/openemux
       - install -Dm644 packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
         ${FLATPAK_DEST}/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
       # The same entry every other format installs. The Flatpak used to carry

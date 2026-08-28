@@ -1,11 +1,13 @@
 import os
 import sys
 import logging
+import importlib.util
 import traceback
 from pathlib import Path
 import shutil
 
 from openemux.core.paths import (
+    bytecode_cache_dir,
     get_project_root,
     is_running_in_appimage,
     is_running_in_flatpak,
@@ -137,6 +139,60 @@ def _ensure_pixbuf_loaders():
 _prepared = False
 
 
+def _redirect_bytecode_cache(package_dir=None):
+    """Give the interpreter somewhere writable to keep this install's bytecode.
+
+    The .deb and .rpm install to ``/opt/openemux``, which the user running the
+    app cannot write. CPython still tries to put ``__pycache__`` beside the
+    sources, fails, and silently falls back to compiling in memory -- so every
+    launch reparses and recompiles the whole app, roughly 36k lines across 98
+    modules, and throws the result away at exit (issue #364). Pointing
+    ``sys.pycache_prefix`` at the user's cache directory gives that work a
+    place to land, and it is paid once instead of always.
+
+    Redirecting is per-interpreter for free: CPython names each file
+    ``<module>.cpython-<version>.pyc``, so a machine that moves from Python
+    3.12 to 3.13 recompiles once and the two caches sit side by side without
+    ever being mistaken for each other. That is the whole reason the packages
+    cannot simply ship bytecode: one .deb serves Ubuntu 24.04 through 26.04,
+    whose interpreters do not agree on the magic number.
+
+    Deliberately narrow -- it stands down in three cases:
+
+    * **The tree is writable.** A source checkout, `make run` and the devbox
+      cache beside the sources the way every Python developer expects, and no
+      surprise directory appears under ``~/.cache``.
+    * **The install already carries bytecode for this interpreter.** The
+      AppImage, the Flatpak and the Windows bundle each pin the interpreter
+      they run, so their builds compile ahead of time and the cache is valid
+      before the first launch -- there is nothing left to redirect, and
+      redirecting would *hide* what the build produced.
+    * **The user has already decided**, through ``PYTHONPYCACHEPREFIX`` or
+      ``PYTHONDONTWRITEBYTECODE``.
+    """
+    if sys.dont_write_bytecode or sys.pycache_prefix is not None:
+        return
+    # ``package_dir`` is the seam the tests use; nothing else passes it.
+    package_dir = Path(package_dir) if package_dir else Path(__file__).resolve().parent
+    if os.access(package_dir, os.W_OK):
+        return
+    try:
+        if os.path.exists(importlib.util.cache_from_source(str(package_dir / "main.py"))):
+            return
+    except (NotImplementedError, ValueError):
+        # No bytecode path for this source (a frozen or namespace loader).
+        # Nothing to look for, and nothing that says the redirect is wrong.
+        pass
+    try:
+        cache_dir = bytecode_cache_dir()
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # A read-only home, a full disk, an unusual sandbox. Recompiling every
+        # launch is slow; refusing to start over a *cache* would be worse.
+        return
+    sys.pycache_prefix = str(cache_dir)
+
+
 def prepare_process():
     """Everything that has to happen before the GTK stack is imported.
 
@@ -157,6 +213,10 @@ def prepare_process():
     if _prepared:
         return
     _prepared = True
+    # First: everything below this line imports, and each import that lands
+    # before the redirect is one more module the packaged install recompiles
+    # on every launch.
+    _redirect_bytecode_cache()
     _configure_gtk_renderer()
     # Before the backend pick: the setting is read straight off the config
     # file, which a legacy config dir may still be on its way to.
