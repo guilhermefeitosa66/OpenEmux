@@ -9,9 +9,10 @@
 # installer is produced by NSIS's native Linux build.
 set -euo pipefail
 
-# Hand the artifacts back even when a later step fails, so a failed run does not
-# leave root-owned files in dist/ and build/.
-trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist build 2>/dev/null || true' EXIT
+# Hand the tree back even when a later step fails, so a failed run does not
+# leave root-owned files behind. Not a list of paths: see
+# packaging/common/hand_back.sh for what naming them by hand kept missing.
+trap 'sh packaging/common/hand_back.sh || true' EXIT
 
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
 echo "==> building OpenEmux ${VERSION} for Windows x86_64"

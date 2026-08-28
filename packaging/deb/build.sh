@@ -4,6 +4,11 @@
 # `packaging/build.sh deb` (or `make deb`), not directly on the host.
 set -euo pipefail
 
+# Hand the tree back even when a check fails: this runs as root on a bind mount
+# of the developer's checkout, so anything it writes is theirs to keep. It used
+# to be a `chown dist` on the last line, which a failing build never reached.
+trap 'sh packaging/common/hand_back.sh || true' EXIT
+
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
 # Derived, not declared. The .deb was stamped `amd64` whatever it was built on,
 # so an arm64 build would have produced a package apt refuses to install with a
@@ -278,4 +283,3 @@ fi
 echo "launcher resolved a working interpreter"
 
 echo "==> ALL DEB CHECKS PASSED"
-chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist 2>/dev/null || true

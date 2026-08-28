@@ -11,6 +11,11 @@
 # a real Fedora box all had nowhere to start (issue #252).
 set -euo pipefail
 
+# Hand the tree back even when a check fails: this runs as root on a bind mount
+# of the developer's checkout, so anything it writes is theirs to keep. It used
+# to be a `chown dist` on the last line, which a failing build never reached.
+trap 'sh packaging/common/hand_back.sh || true' EXIT
+
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
 echo "==> building openemux ${VERSION} .rpm"
 
@@ -237,4 +242,3 @@ done
 echo "erase is clean"
 
 echo "==> ALL RPM CHECKS PASSED"
-chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist 2>/dev/null || true

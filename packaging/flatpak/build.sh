@@ -38,7 +38,10 @@ echo "==> building openemux ${VERSION} flatpak (GNOME ${RUNTIME_VERSION})"
 # The staging tree lives outside the bind mount, so an interrupted build leaves
 # nothing behind on the host at all.
 STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
+# The hand-back runs on every exit, not only a successful one -- and it covers
+# .flatpak-builder/ and .flatpak-build-dir/, which the old trailing `chown dist
+# flatpak-repo` did not, leaving 2154 files the developer could not delete.
+trap 'rm -rf "$STAGE"; sh packaging/common/hand_back.sh || true' EXIT
 
 # Everything the manifest reads: `pip3 install .` needs the project metadata
 # and src/, the install steps need packaging/flatpak/ and LICENSE. A file added
@@ -138,4 +141,3 @@ flatpak install -y --user --noninteractive "./$BUNDLE"
 flatpak info --user "$APP_ID"
 
 echo "==> ALL FLATPAK CHECKS PASSED"
-chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist flatpak-repo 2>/dev/null || true
