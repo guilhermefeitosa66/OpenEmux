@@ -558,6 +558,31 @@ class RetroArchLauncherTests(unittest.TestCase):
             lines = self._override_lines(None)
         self.assertEqual([l for l in lines if l.startswith("input_joypad_driver")], [])
 
+    def test_override_silences_retroarchs_own_desktop_ui_on_windows(self):
+        # Issue #367: the win32 UI companion starts with every launch and draws
+        # a menu bar across the game's window, and the Qt WIMP menu comes up
+        # behind it. Both default to on in the vendored build's own
+        # retroarch.default.cfg, so a game opened from the library came up
+        # wearing the emulator's interface.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('ui_companion_start_on_boot = "false"', lines)
+        self.assertIn('desktop_menu_enable = "false"', lines)
+
+    def test_override_leaves_the_desktop_ui_alone_on_linux(self):
+        # The vendored Linux build has no WIMP UI to start, so writing these
+        # there would be two lines that read as load-bearing and are not.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual(
+            [
+                line
+                for line in lines
+                if line.startswith(("ui_companion", "desktop_menu"))
+            ],
+            [],
+        )
+
     def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
         legacy_only = {
             "active_device": "keyboard",
