@@ -144,7 +144,7 @@ class OfflineFirstBootTests(unittest.TestCase):
             cfg, bootstrapper = self._bootstrapper(tmp_dir)
             bootstrapper.updater.has_local_runtime_assets = lambda: True
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=urllib.error.URLError("Network is unreachable"),
             ):
                 result = bootstrapper.run()
@@ -158,7 +158,7 @@ class OfflineFirstBootTests(unittest.TestCase):
             cfg, bootstrapper = self._bootstrapper(tmp_dir)
             bootstrapper.updater.has_local_runtime_assets = lambda: False
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=urllib.error.URLError("Network is unreachable"),
             ):
                 result = bootstrapper.run()
@@ -177,7 +177,7 @@ class OfflineFirstBootTests(unittest.TestCase):
                 lambda on_progress=None: {"total": 0, "downloaded": 0, "failed": 0, "failures": []}
             )
             with patch(
-                "openemux.core.retroarch_buildbot_updater.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 return_value=_FakeListing(b"<html>the layout changed</html>"),
             ):
                 result = bootstrapper.run()

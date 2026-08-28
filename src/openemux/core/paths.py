@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
+from openemux.core.platform import IS_WINDOWS
 
 #: How the ``.list`` files encode a ROM path.
 #:
@@ -77,6 +78,26 @@ def store_path(name, config_dir=None):
     """
     base = Path(config_dir) if config_dir is not None else default_config_dir()
     return base / STORE_FILENAMES[name]
+
+
+def bytecode_cache_dir():
+    """Where an install that cannot write beside its own sources caches bytecode.
+
+    Deliberately not under :func:`default_config_dir`, and deliberately not
+    under :func:`get_real_home`. This is derived data: rebuilt from the sources
+    whenever it is missing, correct to delete at any moment, and worthless to
+    back up -- which is the definition of ``XDG_CACHE_HOME``. Inside a Flatpak
+    that resolves to the sandbox's own cache, so ``flatpak uninstall
+    --delete-data`` takes it away with everything else the app left behind,
+    and no bytecode of a sandboxed install is left sitting in the real home.
+    """
+    if IS_WINDOWS:
+        base = os.environ.get("LOCALAPPDATA")
+        root = Path(base) if base else Path.home() / "AppData" / "Local"
+    else:
+        base = os.environ.get("XDG_CACHE_HOME")
+        root = Path(base) if base else Path.home() / ".cache"
+    return root / "openemux" / "bytecode"
 
 
 def migrate_legacy_config_dir():

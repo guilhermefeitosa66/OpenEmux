@@ -3,9 +3,7 @@ import re
 import time
 import threading
 import unicodedata
-import urllib.error
 import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Thread
@@ -790,6 +788,13 @@ def _download_cover(url, dest, attempts=2):
     after: every later sync skipped the ROM because a file was there, and the
     only symptom was a blank card and a decode warning (issue #213).
     """
+    # Imported here, not at module scope: ui/window.py imports this module on
+    # every launch, and urllib.request costs ~13 ms that only a sync actually
+    # spends. urllib.parse stays at the top -- it is 2.8 ms and this file
+    # builds URLs in seven places (issue #364).
+    import urllib.error
+    import urllib.request
+
     # Media URLs can come from ScreenScraper, so redact before every log line in
     # case credentials were ever carried in the query string.
     safe_url = screenscraper.redact(url)

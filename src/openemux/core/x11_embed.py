@@ -11,6 +11,7 @@ Every method is best-effort and never raises to the UI: a lost race with a
 closing window costs the embed, not the app.
 """
 
+import importlib.util
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,17 @@ try:
     # Xcursorfont is unused, and imported anyway: this block is the probe for
     # whether python-xlib is installed at all, and importing the whole set is
     # what makes XLIB_AVAILABLE mean "every module this file may reach for".
+    #
+    # Xlib.display is the one exception, located rather than imported. It drags
+    # the protocol and socket machinery along with it -- 9 ms of the 10.5 this
+    # block used to cost -- and it is touched in exactly one place, _dpy(), on
+    # the launches that actually embed a window. The other four are 1.5 ms
+    # together, so they stay eager and every call site below reads unchanged
+    # (issue #364). Finding it proves it is installed, which is the whole of
+    # what XLIB_AVAILABLE claims; importing it is deferred to the first embed.
     from Xlib import X, XK, Xatom, Xcursorfont  # noqa: F401
-    from Xlib import display as x11_display
 
-    XLIB_AVAILABLE = True
+    XLIB_AVAILABLE = importlib.util.find_spec("Xlib.display") is not None
 except ImportError:  # pragma: no cover - exercised only without python-xlib
     XLIB_AVAILABLE = False
 
@@ -119,6 +127,11 @@ class RetroArchWindowEmbedder:
             return None
         if self._display is None:
             try:
+                # See the import block at the top of the file: this is the one
+                # place Xlib.display is reached for, and the first embed of the
+                # session is when it gets loaded.
+                from Xlib import display as x11_display
+
                 self._display = x11_display.Display()
             except Exception as exc:
                 logger.warning("embed: cannot open X display: %s", exc)
