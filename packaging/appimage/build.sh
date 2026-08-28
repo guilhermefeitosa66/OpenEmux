@@ -4,9 +4,10 @@
 # `packaging/build.sh appimage` (or `make appimage`), not directly on the host.
 set -euo pipefail
 
-# Hand the artifacts back even when a check fails, so a failed run does not
-# leave root-owned files in dist/.
-trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist AppDir appimage-build appimage-builder-cache 2>/dev/null || true' EXIT
+# Hand the tree back even when a check fails, so a failed run does not leave
+# root-owned files behind. Not a list of paths: see packaging/common/hand_back.sh
+# for what naming them by hand kept missing.
+trap 'sh packaging/common/hand_back.sh || true' EXIT
 
 # Everything that varies with the architecture, derived from the host. The
 # AppDir is assembled out of foreign-arch debs and the result only runs on the
