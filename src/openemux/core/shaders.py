@@ -7,6 +7,7 @@ from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.paths import get_project_root, store_path
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
+from openemux.core.video_driver import default_video_driver, preset_backends
 
 DEFAULT_SHADERS_CONFIG_FILE = store_path("shaders")
 DISABLED_SHADER_ID = "disabled"
@@ -270,12 +271,29 @@ class ShaderCatalog:
         index = self._ensure_index()
         return sorted(index.keys())
 
-    def resolve_shader_path(self, shader_id):
+    def resolve_shader_path(self, shader_id, video_driver=None):
+        """The preset for ``shader_id`` that ``video_driver`` can load, or None.
+
+        The backend is not a preference, it is a property of the driver: only
+        ``gl`` reads ``.glslp`` and only the Vulkan-era drivers read
+        ``.slangp``. This used to try glsl and then slang whatever was running,
+        which is right on Linux by accident -- the vendored build's driver is
+        ``gl`` -- and wrong on every Windows install, where RetroArch's default
+        is ``d3d11`` and the ``.glslp`` it was handed went straight in the bin
+        without a line in the log (issue #366).
+
+        ``video_driver`` defaults to the one RetroArch runs on this platform,
+        so a caller that does not care still gets a correct answer.
+        """
         shader_id = normalize_shader_id(shader_id)
         if shader_id == DISABLED_SHADER_ID:
             return None
+        backend_order = preset_backends(video_driver or default_video_driver())
+        if not backend_order:
+            # A driver with no shader pipeline at all. Returning nothing is the
+            # honest answer; the launcher says so rather than running silent.
+            return None
         index = self._ensure_index()
-        backend_order = ("glsl", "slang")
         for candidate_id in self._candidate_ids(shader_id):
             item = index.get(candidate_id)
             if not item:

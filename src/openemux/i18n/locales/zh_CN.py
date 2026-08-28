@@ -229,6 +229,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "无法保存游戏状态——更改将在下次启动时生效。",
     "toast.finished": "{name} 已结束（代码 {code}）",
     "toast.launch_failed": "无法启动游戏：{error}",
+    "toast.shader.preset_missing": "没有为 {driver} 视频驱动安装 {shader} 预设 — 将不使用着色器运行",
+    "toast.shader.driver_has_no_presets": "{driver} 视频驱动不加载着色器预设 — 未应用 {shader}",
     "toast.launch.already_running": "已有游戏在运行。请先关闭它，再启动其他游戏。",
     "toast.launch_died": "{name} 立刻就退出了 — {reason}",
     "toast.input_saved": "已保存 {console} 的按键映射",

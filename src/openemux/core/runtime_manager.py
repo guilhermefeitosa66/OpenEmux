@@ -64,6 +64,10 @@ class RuntimeManager:
         self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
+        # Something the last successful launch has to tell the user -- today
+        # only "this console's shader has no preset your video driver can
+        # load" (issue #366). A (key, kwargs) pair for tr(), or None.
+        self.launch_notice = None
         # The live volume tracker (issue #69): RetroArch only steps relative
         # over UDP, so the absolute slider walks from this locally known level.
         # Seeded at launch from the same config value the launcher writes as
@@ -141,6 +145,12 @@ class RuntimeManager:
             )
             if not proc:
                 return False, error_msg
+            # A launch that started but has something to say. Not an error --
+            # the game is up -- so it cannot travel in the error slot; the UI
+            # reads it after a successful launch (issue #366).
+            self.launch_notice = getattr(
+                self.retroarch_launcher, "last_shader_notice", None
+            )
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
             # What a retry has to repeat, and whether one is still owed. A

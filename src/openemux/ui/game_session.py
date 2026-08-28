@@ -112,6 +112,21 @@ class GameSession:
             self._toast_now(
                 self.win.t("toast.running", name=rom["name"], console=rom["console"]), 3
             )
+            self._announce_launch_notice()
+
+    def _announce_launch_notice(self):
+        """Say what a launch that *worked* still could not do.
+
+        A console configured with a CRT shader that comes up without one is
+        invisible otherwise -- the game runs, nothing is wrong on screen, and
+        the only trace used to be an INFO line in a log file (issue #366).
+        Queued behind the "Running" toast, which Adwaita handles.
+        """
+        notice = getattr(self.win.runtime_manager, "launch_notice", None)
+        if not notice:
+            return
+        key, kwargs = notice
+        self._toast_now(self.win.t(key, **kwargs), 6)
 
     def launch_at_state(self, rom, slot):
         """Launch a ROM parked on ``slot`` and load that state once it is up.

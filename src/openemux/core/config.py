@@ -333,6 +333,15 @@ DEFAULT_CONFIG = {
             # emulation by. "inherit" restores the pre-#176 behaviour; any
             # other value is passed through for deliberate JACK/ALSA setups.
             "audio_driver": "auto",
+            # Which video driver RetroArch is told to use (issue #366).
+            # "auto" names d3d11 on Windows -- the driver RetroArch picks for
+            # itself there -- and writes nothing on Linux, where the default is
+            # gl. It matters because a shader preset belongs to a driver:
+            # .glslp is gl-only and .slangp is for the Vulkan-era drivers, so a
+            # backend picked without knowing the driver is a shader that never
+            # loads and never says why. Any other value is passed through, for
+            # a deliberate vulkan/glcore setup.
+            "video_driver": "auto",
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
                 **UPDATER_DEFAULTS,
@@ -1031,6 +1040,14 @@ class ConfigManager:
             self.config.get("runtime", {})
             .get("retroarch", {})
             .get("audio_driver", "auto")
+        )
+
+    def get_retroarch_video_driver(self):
+        """The raw ``video_driver`` setting; see core/video_driver.py (#366)."""
+        return (
+            self.config.get("runtime", {})
+            .get("retroarch", {})
+            .get("video_driver", "auto")
         )
 
     def get_retroarch_core_hints(self, console):

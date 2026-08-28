@@ -44,6 +44,8 @@ class _DummyConfig:
         # assertions stay about what they were written for; the #176 tests set
         # it explicitly.
         self.audio_driver = "inherit"
+        # "auto" is the shipped default; the #366 tests set it explicitly.
+        self.video_driver = "auto"
         self.game_window = False
         # Per-console core options (issue #296); None means "no store", which
         # is what every test that predates them expects.
@@ -51,6 +53,9 @@ class _DummyConfig:
 
     def get_retroarch_binary(self):
         return self.binary_path
+
+    def get_retroarch_video_driver(self):
+        return self.video_driver
 
     def get_retroarch_core_hints(self, _console):
         return self.core_hints if self.core_hints is not None else [self.core_path]
@@ -247,6 +252,116 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn(str(shader), cmd)
         self.assertIn('video_shader_enable = "true"', runtime_content)
         self.assertIn(f'video_shader = "{shader}"', runtime_content)
+
+    def _launch_with_presets(self, backends, video_driver_windows, shader="dot"):
+        """Launch GBA with ``shader`` configured and only ``backends`` on disk.
+
+        Returns ``(cmd, launcher, log_text)``. ``video_driver_windows`` patches
+        the platform the driver resolves against, because the whole point of
+        issue #366 is that the answer differs between the two.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            presets = {}
+            for backend, suffix in (("glsl", ".glslp"), ("slang", ".slangp")):
+                if backend not in backends:
+                    continue
+                preset = base / "runtime" / f"shaders_{backend}" / "handheld" / f"dot{suffix}"
+                preset.parent.mkdir(parents=True, exist_ok=True)
+                preset.write_text("preset", encoding="utf-8")
+                presets[backend] = preset
+            cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": shader})
+            launcher = RetroArchLauncher(base, cfg)
+            with patch("openemux.core.video_driver.IS_WINDOWS", video_driver_windows):
+                with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                    popen_mock.return_value = Mock()
+                    proc, _error = launcher.launch_process("/tmp/game.gba", "GBA")
+                    _close_log(proc)
+                    cmd = popen_mock.call_args[0][0]
+            log_text = "".join(
+                path.read_text(encoding="utf-8")
+                for path in sorted((base / "runtime").glob("retroarch_gba_*.log"))
+            )
+            return cmd, launcher, log_text, presets
+
+    def test_a_d3d11_host_is_handed_the_slang_preset(self):
+        # Issue #366: both packs are installed and the old order took the
+        # .glslp every time, which d3d11 cannot load. RetroArch discarded it
+        # silently -- the launch log had no shader line at all.
+        cmd, launcher, _log, presets = self._launch_with_presets(
+            ("glsl", "slang"), video_driver_windows=True
+        )
+        self.assertIn("--set-shader", cmd)
+        self.assertIn(str(presets["slang"]), cmd)
+        self.assertNotIn(str(presets["glsl"]), cmd)
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_a_gl_host_is_still_handed_the_glsl_preset(self):
+        # Linux must not move: the vendored build runs gl (RT-115 onward).
+        cmd, launcher, _log, presets = self._launch_with_presets(
+            ("glsl", "slang"), video_driver_windows=False
+        )
+        self.assertIn(str(presets["glsl"]), cmd)
+        self.assertNotIn(str(presets["slang"]), cmd)
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_a_missing_preset_for_the_driver_is_said_out_loud(self):
+        # Only the glsl pack arrived, and the host runs d3d11. The game still
+        # launches -- but without a shader, and that used to leave nothing but
+        # an INFO line in the app log.
+        cmd, launcher, log_text, _presets = self._launch_with_presets(
+            ("glsl",), video_driver_windows=True
+        )
+        self.assertNotIn("--set-shader", cmd)
+        self.assertIsNotNone(launcher.last_shader_notice)
+        key, kwargs = launcher.last_shader_notice
+        self.assertEqual(key, "toast.shader.preset_missing")
+        self.assertEqual(kwargs["driver"], "d3d11")
+        self.assertEqual(kwargs["shader"], "Dot")
+
+    def test_a_driver_with_no_shader_pipeline_says_which_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
+            cfg.video_driver = "sdl2"
+            launcher = RetroArchLauncher(base, cfg)
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                proc, _error = launcher.launch_process("/tmp/game.gba", "GBA")
+                _close_log(proc)
+        key, kwargs = launcher.last_shader_notice
+        self.assertEqual(key, "toast.shader.driver_has_no_presets")
+        self.assertEqual(kwargs["driver"], "sdl2")
+
+    def test_a_disabled_shader_is_not_a_complaint(self):
+        _cmd, launcher, _log, _presets = self._launch_with_presets(
+            (), video_driver_windows=True, shader="disabled"
+        )
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_the_launch_log_opens_with_the_driver_and_the_preset(self):
+        # Issue #366 was diagnosed from a log with no shader line in it, so
+        # "what did OpenEmux ask for" was the one question it could not answer.
+        _cmd, _launcher, log_text, presets = self._launch_with_presets(
+            ("slang",), video_driver_windows=True
+        )
+        self.assertIn("[openemux]", log_text)
+        self.assertIn("video_driver=d3d11", log_text)
+        self.assertIn(str(presets["slang"]), log_text)
+
+    def test_the_launch_log_says_when_there_was_no_preset(self):
+        _cmd, _launcher, log_text, _presets = self._launch_with_presets(
+            ("glsl",), video_driver_windows=True
+        )
+        self.assertIn("no preset for this driver", log_text)
 
     # ----- multi-port -----------------------------------------------------
     def _override_lines(self, profile):
@@ -568,6 +683,32 @@ class RetroArchLauncherTests(unittest.TestCase):
             lines = self._override_lines(None)
         self.assertIn('ui_companion_start_on_boot = "false"', lines)
         self.assertIn('desktop_menu_enable = "false"', lines)
+
+    def test_override_names_the_video_driver_on_windows(self):
+        # Issue #366: the shader backend has to follow the driver, so the
+        # driver stops being something to discover from a log after the fact.
+        # d3d11 is what RetroArch picks there anyway -- naming it is what makes
+        # "which presets can this load" answerable before the launch.
+        with patch("openemux.core.video_driver.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('video_driver = "d3d11"', lines)
+
+    def test_override_leaves_the_video_driver_alone_on_linux(self):
+        # The vendored Linux build already runs gl. Measured: run it with an
+        # empty config and the log says "[GL] Found GL context".
+        with patch("openemux.core.video_driver.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual([l for l in lines if l.startswith("video_driver")], [])
+
+    def test_override_writes_the_driver_the_user_named(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            cfg.video_driver = "vulkan"
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA")
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        self.assertIn('video_driver = "vulkan"', lines)
 
     def test_override_leaves_the_desktop_ui_alone_on_linux(self):
         # The vendored Linux build has no WIMP UI to start, so writing these

@@ -229,6 +229,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "ゲームの状態を保存できませんでした。変更は次回起動時に反映されます。",
     "toast.finished": "{name} が終了しました (コード {code})",
     "toast.launch_failed": "ゲームを開始できませんでした: {error}",
+    "toast.shader.preset_missing": "ビデオドライバー {driver} 用の {shader} プリセットがありません — シェーダーなしで実行します",
+    "toast.shader.driver_has_no_presets": "ビデオドライバー {driver} はシェーダープリセットを読み込みません — {shader} は適用されませんでした",
     "toast.launch.already_running": "すでにゲームが実行中です。別のゲームを起動する前に終了してください。",
     "toast.launch_died": "{name} はすぐに終了しました — {reason}",
     "toast.input_saved": "{console} の入力割り当てを保存しました",
