@@ -3,11 +3,13 @@ from pathlib import Path
 
 import yaml
 
-from openemux.core.paths import get_project_root
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
+from openemux.core.paths import get_project_root, store_path
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
+from openemux.core.video_driver import default_video_driver, preset_backends
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_SHADERS_CONFIG_FILE = DEFAULT_CONFIG_DIR / "shaders.config"
+DEFAULT_SHADERS_CONFIG_FILE = store_path("shaders")
 DISABLED_SHADER_ID = "disabled"
 
 HANDHELD_SHADER_CONSOLES = {"GBA", "GBC", "GB", "NDS"}
@@ -93,27 +95,32 @@ class ShaderConfigStore:
 
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+
+            data = copy.deepcopy(DEFAULT_SHADER_CONFIG)
+            data["version"] = int(raw.get("version", 1))
+            data["show_all_shaders"] = bool(raw.get("show_all_shaders", False))
+            overrides = {}
+            for key, value in (raw.get("console_overrides") or {}).items():
+                canonical = resolve_system_id(key)
+                if canonical not in SYSTEM_IDS:
+                    continue
+                overrides[canonical] = normalize_shader_id(value)
+            data["console_overrides"] = overrides
+
+            rom_overrides = {}
+            for key, value in (raw.get("rom_overrides") or {}).items():
+                if not key:
+                    continue
+                rom_overrides[str(key)] = normalize_shader_id(value)
+            data["rom_overrides"] = rom_overrides
+            return data
+        except Exception as exc:
+            # Every per-console and per-ROM shader pick lives in this file;
+            # falling back to defaults and saving would erase them (#209).
+            quarantine_state_file(self.config_file, exc)
             return copy.deepcopy(DEFAULT_SHADER_CONFIG)
-
-        data = copy.deepcopy(DEFAULT_SHADER_CONFIG)
-        data["version"] = int(raw.get("version", 1))
-        data["show_all_shaders"] = bool(raw.get("show_all_shaders", False))
-        overrides = {}
-        for key, value in (raw.get("console_overrides") or {}).items():
-            canonical = resolve_system_id(key)
-            if canonical not in SYSTEM_IDS:
-                continue
-            overrides[canonical] = normalize_shader_id(value)
-        data["console_overrides"] = overrides
-
-        rom_overrides = {}
-        for key, value in (raw.get("rom_overrides") or {}).items():
-            if not key:
-                continue
-            rom_overrides[str(key)] = normalize_shader_id(value)
-        data["rom_overrides"] = rom_overrides
-        return data
 
     def save(self, settings):
         payload = dict(DEFAULT_SHADER_CONFIG)
@@ -138,8 +145,7 @@ class ShaderConfigStore:
             rom_overrides[str(key)] = normalize_shader_id(raw_value)
         payload["rom_overrides"] = rom_overrides
 
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
         return payload
 
     def get_settings(self):
@@ -232,7 +238,7 @@ class ShaderConfigStore:
 
 class ShaderCatalog:
     def __init__(self, runtime_dir=None, project_root=None):
-        self.runtime_dir = Path(runtime_dir or (DEFAULT_CONFIG_DIR / "runtime")).expanduser()
+        self.runtime_dir = Path(runtime_dir or store_path("runtime")).expanduser()
         self.project_root = Path(project_root).expanduser() if project_root else get_project_root()
         self._index = None
 
@@ -265,12 +271,29 @@ class ShaderCatalog:
         index = self._ensure_index()
         return sorted(index.keys())
 
-    def resolve_shader_path(self, shader_id):
+    def resolve_shader_path(self, shader_id, video_driver=None):
+        """The preset for ``shader_id`` that ``video_driver`` can load, or None.
+
+        The backend is not a preference, it is a property of the driver: only
+        ``gl`` reads ``.glslp`` and only the Vulkan-era drivers read
+        ``.slangp``. This used to try glsl and then slang whatever was running,
+        which is right on Linux by accident -- the vendored build's driver is
+        ``gl`` -- and wrong on every Windows install, where RetroArch's default
+        is ``d3d11`` and the ``.glslp`` it was handed went straight in the bin
+        without a line in the log (issue #366).
+
+        ``video_driver`` defaults to the one RetroArch runs on this platform,
+        so a caller that does not care still gets a correct answer.
+        """
         shader_id = normalize_shader_id(shader_id)
         if shader_id == DISABLED_SHADER_ID:
             return None
+        backend_order = preset_backends(video_driver or default_video_driver())
+        if not backend_order:
+            # A driver with no shader pipeline at all. Returning nothing is the
+            # honest answer; the launcher says so rather than running silent.
+            return None
         index = self._ensure_index()
-        backend_order = ("glsl", "slang")
         for candidate_id in self._candidate_ids(shader_id):
             item = index.get(candidate_id)
             if not item:

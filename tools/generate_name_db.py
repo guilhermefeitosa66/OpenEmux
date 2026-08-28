@@ -20,15 +20,23 @@ Usage:
 
 Standalone by design -- no imports from the app -- so it runs against a
 bare checkout with any Python 3.8+.
+
+Progress goes through ``logging``, not ``print``: the unit suite imports this
+module and calls into it, and the three bare prints it used to carry surfaced
+*after* the test summary, reading like files leaked into the working tree
+(issue #244). ``main()`` configures a plain INFO handler, so running it from a
+shell looks exactly as it did.
 """
 
 import argparse
+import logging
 import sqlite3
-import sys
 import tempfile
 import xml.etree.ElementTree as ElementTree
 import zipfile
 from pathlib import Path
+
+logger = logging.getLogger("generate_name_db")
 
 DEFAULT_OUTPUT = Path("src") / "openemux" / "data" / "games.db.zip"
 
@@ -83,8 +91,7 @@ def collect_crc_rows(dats_dir, stems_by_system):
         try:
             root = ElementTree.parse(dat_file).getroot()
         except ElementTree.ParseError as exc:
-            print(f"warning: unparseable DAT skipped: {dat_file.name}: {exc}",
-                  file=sys.stderr)
+            logger.warning("unparseable DAT skipped: %s: %s", dat_file.name, exc)
             continue
         for game in root.iter("game"):
             stem = sanitize_stem(game.get("name") or "")
@@ -95,10 +102,8 @@ def collect_crc_rows(dats_dir, stems_by_system):
                 if len(crc) == 8:
                     crc_rows.append((crc, system, stem))
     if skipped_files:
-        print(
-            "warning: DATs skipped (no matching mirror system): "
-            + ", ".join(skipped_files),
-            file=sys.stderr,
+        logger.warning(
+            "DATs skipped (no matching mirror system): %s", ", ".join(skipped_files)
         )
     return crc_rows
 
@@ -166,11 +171,12 @@ def generate(mirror, output, dats=None):
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.write(db_path, "games.db")
     systems = len({system for _stem, system in rows})
-    print(
-        f"games.db.zip written: {output} "
-        f"({len(rows)} names, {systems} systems"
-        + (f", {len(crc_rows)} crc entries" if crc_rows else "")
-        + ")"
+    logger.info(
+        "games.db.zip written: %s (%d names, %d systems%s)",
+        output,
+        len(rows),
+        systems,
+        f", {len(crc_rows)} crc entries" if crc_rows else "",
     )
     return len(rows)
 
@@ -193,6 +199,9 @@ def main():
         help=f"where the zipped database goes (default: {DEFAULT_OUTPUT})",
     )
     args = parser.parse_args()
+    # Only here, never at import: the suite imports this module, and a handler
+    # installed at import time would put its progress on the test run's stderr.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     generate(args.mirror, args.output, dats=args.dats)
 
 

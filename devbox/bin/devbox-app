@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+#
+# OpenEmux, from the checkout, on the container's virtual display.
+#
+#   devbox-app start [--first-boot]   launch and wait for the window
+#   devbox-app stop|restart|status
+#   devbox-app log [-f] [-n N]        the launch log
+#
+# Not `make run`: the project Makefile runs .venv/bin/python3, and that venv
+# was built on the host against the host's interpreter. In here the GTK stack
+# comes from apt, so the app runs against /usr/bin/python3 directly and the
+# host's venv is never opened.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+
+WINDOW_WAIT=${DEVBOX_WINDOW_WAIT:-45}
+
+running_pid() {
+	local pid
+	[ -r "${DEVBOX_STATE}/app.pid" ] || return 1
+	pid=$(cat "${DEVBOX_STATE}/app.pid")
+	[ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null || return 1
+	echo "${pid}"
+}
+
+start() {
+	local first_boot=0
+	[ "${1:-}" = "--first-boot" ] && first_boot=1
+
+	if running_pid >/dev/null; then
+		info "already running (pid $(running_pid))"
+		return 0
+	fi
+
+	devbox-x start >/dev/null
+	require_display
+	load_bus
+
+	if [ "${first_boot}" = 1 ]; then
+		# The real thing: no config, so the app opens FirstBootWindow and
+		# downloads every libretro core from the buildbot. Minutes, and network.
+		# Worth it only when first boot is what is being tested.
+		warn "first-boot mode: wiping ${HOME}/.openemux and letting bootstrap run for real"
+		rm -rf "${HOME}/.openemux"
+	elif [ ! -f "${HOME}/.openemux/config.yaml" ]; then
+		devbox-seed
+	fi
+
+	: >"${DEVBOX_STATE}/app.log"
+	info "starting OpenEmux from ${DEVBOX_REPO}"
+
+	# The same .env `make run` reads, so ScreenScraper behaves here the way it
+	# does on the host. It holds a credential: it is sourced, never echoed.
+	(
+		cd "${DEVBOX_REPO}"
+		set -a
+		# shellcheck disable=SC1091
+		[ -f .env ] && . ./.env
+		set +a
+		export PYTHONPATH=src
+		export GDK_BACKEND=x11
+		exec "${DEVBOX_PYTHON}" src/openemux/main.py
+	) >>"${DEVBOX_STATE}/app.log" 2>&1 &
+	echo $! >"${DEVBOX_STATE}/app.pid"
+
+	local waited=0 wid=''
+	while [ "${waited}" -lt "${WINDOW_WAIT}" ]; do
+		running_pid >/dev/null || {
+			printf '\033[1;31m==> the app exited during start-up\033[0m\n' >&2
+			tail -n 25 "${DEVBOX_STATE}/app.log" >&2
+			rm -f "${DEVBOX_STATE}/app.pid"
+			return 1
+		}
+		wid=$(devbox-win 2>/dev/null || true)
+		[ -n "${wid}" ] && break
+		sleep 1
+		waited=$((waited + 1))
+	done
+	[ -n "${wid}" ] || die "no window after ${WINDOW_WAIT}s -- devbox-app log"
+
+	# The window is up well before start-up is done: the library scan and the
+	# playlist rebuild run on background threads. Screenshotting on sight
+	# catches a half-built grid.
+	sleep "${DEVBOX_SETTLE:-4}"
+	info "window ${wid} -- $(xdotool getwindowname "${wid}" 2>/dev/null)"
+}
+
+stop() {
+	local pid
+	if ! pid=$(running_pid); then
+		rm -f "${DEVBOX_STATE}/app.pid"
+		info "not running"
+		return 0
+	fi
+	# By recorded pid, and never `pkill openemux`: this container shares the
+	# host's PID namespace, so a name-based kill in here would take down the
+	# copy the developer has open on their own desktop.
+	kill "${pid}" 2>/dev/null || true
+	local waited=0
+	while kill -0 "${pid}" 2>/dev/null && [ "${waited}" -lt 10 ]; do
+		sleep 0.5
+		waited=$((waited + 1))
+	done
+	kill -9 "${pid}" 2>/dev/null || true
+	rm -f "${DEVBOX_STATE}/app.pid"
+	info "stopped (pid ${pid})"
+}
+
+case "${1:-status}" in
+	start)   shift; start "$@" ;;
+	stop)    stop ;;
+	restart) stop; sleep 1; start ;;
+	status)
+		if pid=$(running_pid); then
+			printf 'app       running (pid %s)\n' "${pid}"
+			printf 'windows\n'
+			devbox-win --list | sed 's/^/  /'
+		else
+			printf 'app       not running\n'
+			exit 1
+		fi
+		;;
+	log)
+		shift
+		[ -r "${DEVBOX_STATE}/app.log" ] || die "no log yet -- devbox-app start"
+		if [ $# -gt 0 ]; then
+			tail "$@" "${DEVBOX_STATE}/app.log"
+		else
+			tail -n 60 "${DEVBOX_STATE}/app.log"
+		fi
+		;;
+	*)
+		sed -n '3,7p' "$0"
+		exit 2
+		;;
+esac

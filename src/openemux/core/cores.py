@@ -20,19 +20,20 @@ from pathlib import Path
 
 import yaml
 
-from openemux.core.paths import get_real_home
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
+from openemux.core.paths import get_real_home, store_path
+from openemux.core.platform import CORE_SUFFIX, bundled_core_dir, core_stem, user_retroarch_dirs
 from openemux.core.systems import (
     get_runtime_core_candidates,
     get_thumbnail_system,
-    resolve_system_id,
 )
 
 # Mirrors RetroArchLauncher's search order: user config first, then Flatpak,
 # the vendored bundle, and the common system locations.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CORES_CONFIG_FILE = DEFAULT_CONFIG_DIR / "cores.config"
+DEFAULT_CORES_CONFIG_FILE = store_path("cores")
 DEFAULT_CORES_CONFIG = {
     "version": 1,
     # Per-ROM core overrides keyed by absolute ROM path. The per-console
@@ -57,12 +58,20 @@ def core_search_dirs(project_root=None):
     ]
     if project_root:
         dirs.append(Path(project_root) / "vendors" / "retroarch-assets" / "cores")
+        # The bundled Windows RetroArch runs portable, so it keeps its cores
+        # beside the executable. That is also where the updater downloads them,
+        # which is what leaves a user's own RetroArch install untouched.
+        bundled = bundled_core_dir(project_root)
+        if bundled:
+            dirs.append(bundled)
+    # Searched, never written to: a RetroArch the user installed themselves.
+    dirs.extend(user_retroarch_dirs())
     dirs.extend(Path(p) for p in SYSTEM_CORE_DIRS)
     return dirs
 
 
 def humanize_core_filename(filename):
-    stem = filename[:-3] if filename.endswith(".so") else filename
+    stem = core_stem(filename)
     if stem.endswith("_libretro"):
         stem = stem[: -len("_libretro")]
     text = stem.replace("_", " ").replace("-", " ").strip()
@@ -116,13 +125,13 @@ class CoreCatalog:
                 continue
             for info_path in base.glob("*.info"):
                 infos.setdefault(info_path.stem, parse_core_info(info_path))
-            for so_path in base.glob("*.so"):
+            for so_path in base.glob("*" + CORE_SUFFIX):
                 # First directory wins, matching the launcher's resolution order.
                 so_paths.setdefault(so_path.name, so_path)
 
         cores = {}
         for filename, so_path in so_paths.items():
-            info = infos.get(filename[:-3], {})
+            info = infos.get(core_stem(filename), {})
             display = info.get("corename") or info.get("display_name") or humanize_core_filename(filename)
             cores[filename] = CoreInfo(
                 filename=filename,
@@ -190,16 +199,22 @@ class CoreConfigStore:
             return copy.deepcopy(DEFAULT_CORES_CONFIG)
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+            data = copy.deepcopy(DEFAULT_CORES_CONFIG)
+            data["version"] = int(raw.get("version", 1))
+            overrides = {}
+            for key, value in (raw.get("rom_overrides") or {}).items():
+                if key and value:
+                    overrides[str(key)] = str(value)
+            data["rom_overrides"] = overrides
+            return data
+        except Exception as exc:
+            # Defaults here mean "no per-ROM core pinned anywhere", and the
+            # next set_rom_core would write that emptiness back over the
+            # user's pins. Keep the file (issue #209).
+            quarantine_state_file(self.config_file, exc)
             return copy.deepcopy(DEFAULT_CORES_CONFIG)
-        data = copy.deepcopy(DEFAULT_CORES_CONFIG)
-        data["version"] = int(raw.get("version", 1))
-        overrides = {}
-        for key, value in (raw.get("rom_overrides") or {}).items():
-            if key and value:
-                overrides[str(key)] = str(value)
-        data["rom_overrides"] = overrides
-        return data
 
     def save(self, data):
         payload = copy.deepcopy(DEFAULT_CORES_CONFIG)
@@ -209,8 +224,7 @@ class CoreConfigStore:
             if key and value:
                 overrides[str(key)] = str(value)
         payload["rom_overrides"] = overrides
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
         return payload
 
     def get_rom_core(self, rom_path):

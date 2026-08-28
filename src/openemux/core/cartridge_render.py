@@ -19,6 +19,7 @@ so this stays in core/ and is testable without a display.
 import hashlib
 import logging
 import os
+import re
 import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -28,6 +29,8 @@ import gi
 
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gio, GLib, GdkPixbuf
+
+from openemux.core.paths import store_path
 
 try:
     gi.require_version("Rsvg", "2.0")
@@ -53,7 +56,7 @@ BLANK_LABEL_RGB = (0.87, 0.86, 0.83)
 SVG_NS = "http://www.w3.org/2000/svg"
 INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
-DEFAULT_CACHE_DIR = Path.home() / ".openemux" / "cache" / "cartridges"
+DEFAULT_CACHE_DIR = store_path("cartridge_cache")
 
 # The shipped frame assets. They live under ui/ because that is where the app's
 # image assets are kept, but this module is their only reader, so the lookup
@@ -379,10 +382,34 @@ def _cache_key(cover_path, frame_path, width, scale) -> str:
     return digest.hexdigest()[:12]
 
 
+#: What a composite's name carries after the ROM name: the 12-hex cache key
+#: and the extension. Matching the ROM name as a bare prefix was enough for a
+#: ROM called "Dr" to match -- and delete -- "Dr. Mario.<key>.png"
+#: (issue #234). Self-healing, since the composite is re-rendered, but it made
+#: one ROM's rename quietly re-render another's art.
+_CACHE_SUFFIX_RE = re.compile(r"^\.[0-9a-f]{12}\.png$")
+
+
+def _is_composite_of(entry: Path, stem: str):
+    """Whether ``entry`` is a cached composite for exactly ``stem``."""
+    name = entry.name
+    if not name.startswith(stem):
+        return False
+    return bool(_CACHE_SUFFIX_RE.match(name[len(stem):]))
+
+
 def _drop_stale(directory: Path, stem: str, keep: Path):
-    prefix = f"{stem}."
+    # Compared by name, not by Path equality. Both live in ``directory``, so the
+    # name is exact -- and on Windows ``Path.__eq__`` is not a reliable
+    # same-file test: ``keep`` is built by joining with "/" while ``iterdir()``
+    # appends with the OS separator, so the two differ as strings ("MD/a.png"
+    # vs "MD\\a.png") and compare unequal even though ``samefile()`` is True.
+    # That made this function delete the composite it had just been handed to
+    # keep, so every cartridge render produced a path to a file that no longer
+    # existed and the grid silently fell back to the bare cover art.
+    keep_name = keep.name
     for entry in directory.iterdir():
-        if entry == keep or not entry.name.startswith(prefix) or entry.suffix != ".png":
+        if entry.name == keep_name or not _is_composite_of(entry, stem):
             continue
         try:
             entry.unlink()
@@ -400,9 +427,8 @@ def drop_cached(console, rom_name, cache_dir=None):
     if not directory.is_dir():
         return 0
     dropped = 0
-    prefix = f"{rom_name}."
     for entry in directory.iterdir():
-        if entry.suffix != ".png" or not entry.name.startswith(prefix):
+        if not _is_composite_of(entry, rom_name):
             continue
         try:
             entry.unlink()

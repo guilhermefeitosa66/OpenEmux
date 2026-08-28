@@ -14,17 +14,44 @@ script:
   # link the loader is unreachable and every exec of a bundled binary dies with
   # a bare "not found".
   - ln -sfn usr/lib64 AppDir/runtime/compat/lib64
-  - cp -r src AppDir/usr/lib/openemux/
-  - cp -r src/openemux AppDir/usr/lib/python3/dist-packages/
+  # copy_tree.sh, not `cp -r`: the working tree's egg-info directories and
+  # __pycache__ rode into the bundle the same way they rode into the .deb and
+  # the .rpm (issue #254).
+  - sh packaging/common/copy_tree.sh src AppDir/usr/lib/openemux
+  - sh packaging/common/copy_tree.sh src/openemux AppDir/usr/lib/python3/dist-packages
   # Bake the ScreenScraper developer credential into the bundled copies (never
   # the host source). No-op unless SCREENSCRAPER_DEVID/DEVPASSWORD are set.
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/python3/dist-packages/openemux/core/embedded_credentials.py
   - python3 packaging/embed_screenscraper_credentials.py AppDir/usr/lib/openemux/src/openemux/core/embedded_credentials.py
-  - cp -r vendors AppDir/usr/lib/openemux/
+  # vendors/ is deliberately *not* staged here. appimage-builder patches every
+  # ELF it finds in the AppDir, and the vendored RetroArch is 115 loose files
+  # since issue #328 -- it rewrote the binary's RUNPATH from $ORIGIN/../lib to
+  # a garbage string, so it could no longer find the 56 libraries shipped
+  # beside it. packaging/appimage/build.sh copies the tree in after this step
+  # has finished, where nothing patches it.
+  # Before pip runs: everything below this line legitimately writes
+  # bytecode into dist-packages, so this is the moment the app's own
+  # trees can be checked for what the copies left behind.
+  - sh packaging/common/assert_sources_only.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages/openemux
   - cp requirements.lock AppDir/usr/lib/openemux/
   - cp README.md LICENSE AppDir/usr/lib/openemux/
-  - grep -viE '^(pygobject|pycairo)==' requirements.lock > /tmp/openemux-pydeps.lock
-  - python3 -m pip install --break-system-packages --no-cache-dir --target AppDir/usr/lib/python3/dist-packages -r /tmp/openemux-pydeps.lock
+  # The third-party notices, which LICENSE alone does not cover (issue #233).
+  - cp packaging/common/copyright AppDir/usr/lib/openemux/copyright
+  # --require-hashes: what lands inside a signed release artifact is fixed by
+  # content, not by whatever PyPI serves for the pinned version. The file is
+  # generated from requirements.lock by packaging/appimage/hash_lock.py and
+  # carries the same sdist hashes the Flatpak manifests already vendor
+  # (issue #255). PyGObject and pycairo are absent on purpose -- the bundle
+  # takes them from the apt packages below.
+  - python3 -m pip install --break-system-packages --no-cache-dir --require-hashes --target AppDir/usr/lib/python3/dist-packages -r packaging/appimage/requirements.hashed.txt
+  # Both python trees, now that everything that writes into them has run. The
+  # mount is read-only and its path is a fresh /tmp/.mount_* every launch, so
+  # the bundle can neither cache beside its sources nor keep a cache keyed by
+  # where it happens to be mounted -- it has to carry one (issue #364). Valid
+  # because the interpreter is pinned: the python3 compiling here and the
+  # python3 apt puts in the AppDir are the same Ubuntu noble build. selftest.py
+  # checks that from inside the bundle, so a version drift fails the build.
+  - sh packaging/common/compile_bytecode.sh AppDir/usr/lib/openemux AppDir/usr/lib/python3/dist-packages
   # appimage-builder requires app_info.exec to be an ELF, so a tiny static
   # binary is the entry point and immediately hands over to openemux-run, which
   # sets up GI_TYPELIB_PATH / gdk-pixbuf / XDG_DATA_DIRS. (AppDir/AppRun is
@@ -35,6 +62,9 @@ script:
   - install -Dm755 packaging/appimage/gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders
   - ln -sf gdk-pixbuf-query-loaders AppDir/usr/bin/gdk-pixbuf-query-loaders-64
   - install -Dm644 packaging/common/openemux.desktop AppDir/usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop
+  # AppStream metainfo, so an integrated AppImage is known to the software
+  # centre the same way the native packages are (issue #253).
+  - install -Dm644 packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml AppDir/usr/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
   - install -Dm644 src/openemux/ui/assets/images/logo.png AppDir/usr/share/icons/hicolor/512x512/apps/io.github.guilhermefeitosa66.OpenEmux.png
 
 AppDir:
@@ -43,7 +73,11 @@ AppDir:
     id: io.github.guilhermefeitosa66.OpenEmux
     name: OpenEmux
     icon: io.github.guilhermefeitosa66.OpenEmux
-    version: "1.11.3"
+    # Kept in step with src/openemux/__init__.py by hand -- it is the one
+    # place the version is duplicated. appimage/build.sh refuses to build when
+    # the two disagree, and tests/test_reproducible_builds.py fails on develop
+    # (issue #255).
+    version: "1.12.0"
     exec: usr/bin/openemux-launcher
   runtime:
     # Belt and braces alongside the launcher script: these are the paths the
@@ -57,10 +91,14 @@ AppDir:
   apt:
     arch: amd64
     sources:
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble main universe
-        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble-updates main universe
-        key_url: "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      # https, for the archive and for the key that authenticates it. Over
+      # plain http anyone on the build network could serve a substituted key
+      # and then substituted debs for libgtk-4-1, python3-gi or librsvg2-2 --
+      # all of which end up inside the signed release artifact (issue #255).
+      - sourceline: deb https://archive.ubuntu.com/ubuntu/ noble main universe
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      - sourceline: deb https://archive.ubuntu.com/ubuntu/ noble-updates main universe
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
     include:
       - python3
       - python3-gi
@@ -80,6 +118,10 @@ AppDir:
       - libcairo2
       - libgdk-pixbuf-2.0-0
       - libgdk-pixbuf2.0-bin
+      # Bundled, unlike in the native packages, which dropped it as redundant
+      # (issue #256). Here it is a runtime need rather than a MIME-association
+      # one: XDG_DATA_DIRS leads into the AppDir first, so GTK looks for the
+      # shared MIME database inside the bundle.
       - shared-mime-info
       - hicolor-icon-theme
       # Symbolic icons used across the HIG UI (header bar, menus, rows, status

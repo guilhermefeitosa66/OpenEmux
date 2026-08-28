@@ -405,9 +405,17 @@ def normalize_bindings(bindings, device_type, console=None):
     defaults = default_bindings_for_device(device_type, console=console)
     allowed_actions = get_actions_for_console(console)
 
-    # Preserve user-provided values first.
+    # Preserve user-provided values first. An action that is *present* with an
+    # empty value is one the user cleared on purpose -- remapping a button onto
+    # a token something else held releases the other one -- while an *absent*
+    # action is one nobody has ever set. Only the second kind is filled from
+    # the defaults: "" used to mean both, so a released binding came straight
+    # back and the button ended up firing two commands (issue #281).
+    provided = set()
     for action in allowed_actions:
         value = bindings.get(action, "")
+        if action in bindings and value is not None:
+            provided.add(action)
         normalized[action] = str(value).strip().lower() if value is not None else ""
 
     # Fill missing values from defaults and then fallback letters.
@@ -415,6 +423,8 @@ def normalize_bindings(bindings, device_type, console=None):
     fallback_index = 0
     for action in allowed_actions:
         if normalized[action]:
+            continue
+        if action in provided:
             continue
         if action in OPTIONAL_ACTIONS:
             continue
@@ -626,6 +636,22 @@ def _is_axis_binding(value):
     return value[1:].isdigit()
 
 
+def _unbind(overrides, base_key, device_type):
+    """Write the bind id as explicitly unbound.
+
+    Leaving it out is not the same thing: RetroArch falls back to the pad's
+    autoconfig profile for any bind id the config does not set, so an omitted
+    key keeps the stock mapping alive. ``"nul"`` is how RetroArch spells "this
+    is bound to nothing", the same idiom the launcher already uses to take the
+    fullscreen toggle away from the embedded window.
+    """
+    if device_type == "keyboard":
+        overrides[base_key] = _quote("nul")
+        return
+    for suffix in ("_btn", "_axis"):
+        overrides[f"{base_key}{suffix}"] = _quote("nul")
+
+
 def to_retroarch_overrides(bindings, device_type, console=None, player=1):
     """Translate a binding map into RetroArch config keys for one port.
 
@@ -654,6 +680,18 @@ def to_retroarch_overrides(bindings, device_type, console=None, player=1):
         # Gamepad: infer axis or button token.
         suffix = "_axis" if _is_axis_binding(bind_value) else "_btn"
         overrides[f"{base_key}{suffix}"] = _quote(bind_value)
+
+    # Every libretro button this port did not claim: one the console has no
+    # action for (a GBA has no x/y), or one the user released by binding its
+    # token to something else. RetroArch resolves a bind id as "config bind if
+    # set, else autoconfig bind", so a bind id we never write keeps the pad's
+    # stock mapping alive -- and one press then fires two libretro buttons
+    # (issue #281). Only the gameplay ids: the hotkeys and the analog stick
+    # are ours alone, and nothing autoconfigures them behind our back.
+    for action in GAMEPLAY_ACTIONS_FULL:
+        if bindings.get(action):
+            continue
+        _unbind(overrides, retroarch_key_for(action, player), device_type)
 
     if device_type == "gamepad":
         # The sticks are not bindable actions, but analog_dpad_mode is dead

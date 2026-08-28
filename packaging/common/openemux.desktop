@@ -5,7 +5,6 @@ Name=OpenEmux
 GenericName=Emulator Frontend
 Comment=Linux-native emulator frontend for RetroArch
 Exec=openemux
-TryExec=openemux
 Icon=io.github.guilhermefeitosa66.OpenEmux
 Terminal=false
 Categories=Game;Emulator;

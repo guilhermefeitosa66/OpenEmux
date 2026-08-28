@@ -15,12 +15,66 @@ RUNTIME_VERSION="$(sed -n "s/^runtime-version: '\(.*\)'/\1/p" "$MANIFEST")"
 VERSION="$(sed -n 's/.*"\(.*\)".*/\1/p' src/openemux/__init__.py)"
 echo "==> building openemux ${VERSION} flatpak (GNOME ${RUNTIME_VERSION})"
 
-# The manifest builds the working tree (type: dir), so the embedded credential
-# is injected in place and restored afterwards, exactly like the other builds.
-CRED_FILE="src/openemux/core/embedded_credentials.py"
-cp "$CRED_FILE" "${CRED_FILE}.orig"
-trap 'mv "${CRED_FILE}.orig" "$CRED_FILE"' EXIT
-python3 packaging/embed_screenscraper_credentials.py "$CRED_FILE"
+# Build from a staging copy, never from the working tree (issue #250).
+#
+# The manifest's source is `type: dir`, `path: ../..` -- the repository root
+# relative to the manifest. Copying the manifest into a staging tree makes that
+# same relative path resolve to the staging tree instead, so nothing here has
+# to be duplicated in the manifest and the openemux-flatpak workflow, which
+# builds a throwaway CI checkout directly, keeps working unchanged.
+#
+# Two things this buys:
+#
+#   * the ScreenScraper credential is injected into the copy. It used to be
+#     written into the *tracked* src/openemux/core/embedded_credentials.py and
+#     restored by an EXIT trap, so any SIGKILL (docker kill, OOM, reboot) left
+#     the obfuscated developer credential in a tracked file, one `git commit -a`
+#     away from being published.
+#   * the copy is an explicit list of inputs, so `.env` (which holds
+#     SCREENSCRAPER_DEVID/DEVPASSWORD), `.git`, `dist/`, `.venv/` and every
+#     other gitignored artifact in the working tree cannot reach the
+#     root-owned .flatpak-build-dir the way `path: ../..` on the real tree did.
+#
+# The staging tree lives outside the bind mount, so an interrupted build leaves
+# nothing behind on the host at all.
+STAGE="$(mktemp -d)"
+# The hand-back runs on every exit, not only a successful one -- and it covers
+# .flatpak-builder/ and .flatpak-build-dir/, which the old trailing `chown dist
+# flatpak-repo` did not, leaving 2154 files the developer could not delete.
+trap 'rm -rf "$STAGE"; sh packaging/common/hand_back.sh || true' EXIT
+
+# Everything the manifest reads: `pip3 install .` needs the project metadata
+# and src/, the install steps need packaging/flatpak/ and LICENSE. A file added
+# to the manifest and forgotten here fails the build loudly rather than
+# silently widening what gets copied.
+for item in pyproject.toml README.md LICENSE requirements.lock \
+            packaging/common packaging/flatpak \
+            packaging/embed_screenscraper_credentials.py; do
+  install -d "$STAGE/$(dirname "$item")"
+  cp -a "$item" "$STAGE/$item"
+done
+# The sources, without the working tree's build state (issue #254).
+sh packaging/common/copy_tree.sh src "$STAGE"
+python3 "$STAGE/packaging/embed_screenscraper_credentials.py" \
+  "$STAGE/src/openemux/core/embedded_credentials.py"
+
+# The injection imports the staged package to reuse its obfuscation, which
+# writes bytecode -- of the *pre-injection* module -- into the staging tree.
+find "$STAGE/src" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+sh packaging/common/assert_sources_only.sh "$STAGE/src"
+
+# The tracked file must have come out of this untouched.
+grep -q '^_EMBEDDED_BLOB = ""$' src/openemux/core/embedded_credentials.py
+
+echo "==> validate the two files Flathub reads before publishing"
+# Neither was checked here: deb/build.sh and rpm/build.sh both run
+# desktop-file-validate, the Flatpak ran nothing at all -- on the app that is
+# heading for Flathub, whose linter reads exactly these two (issue #253).
+# --no-net keeps the build offline; the screenshot URLs are checked by
+# tests/test_appstream_metainfo.py.
+appstreamcli validate --no-net \
+  "$STAGE/packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml"
+desktop-file-validate "$STAGE/packaging/common/openemux.desktop"
 
 flatpak remote-add --user --if-not-exists flathub \
   https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -28,17 +82,24 @@ flatpak install -y --user --noninteractive flathub \
   "org.gnome.Platform//${RUNTIME_VERSION}" "org.gnome.Sdk//${RUNTIME_VERSION}"
 
 flatpak-builder --user --force-clean --disable-rofiles-fuse \
-  --repo=flatpak-repo .flatpak-build-dir "$MANIFEST"
+  --repo=flatpak-repo .flatpak-build-dir "$STAGE/$MANIFEST"
 
 mkdir -p dist
-BUNDLE="dist/OpenEmux-${VERSION}.flatpak"
+# The x86_64 bundle keeps the name it has always had -- it is a published
+# release asset and links to it exist -- so only the other architecture is
+# suffixed. Without a suffix the two builds would overwrite each other in
+# dist/, and SHA256SUMS would cover whichever ran last (issue #119).
+case "$(uname -m)" in
+  x86_64) BUNDLE="dist/OpenEmux-${VERSION}.flatpak" ;;
+  *)      BUNDLE="dist/OpenEmux-${VERSION}-$(uname -m).flatpak" ;;
+esac
 flatpak build-bundle flatpak-repo "$BUNDLE" "$APP_ID"
 echo "==> built: $BUNDLE"
 
 echo "==> verify the vendored symbolic icons made it into the build"
 # pip installs them as package data; a pattern regression in pyproject would
 # drop them from the Flatpak only, so count them against the source tree.
-ICONS_DIR="$(find .flatpak-build-dir/files -type d -path '*openemux/ui/assets/icons/symbolic' | head -1)"
+ICONS_DIR="$(find .flatpak-build-dir/files -type d -path '*openemux/ui/assets/icons/symbolic' -print -quit)"
 if [ -z "$ICONS_DIR" ]; then
   echo "FAIL: openemux/ui/assets/icons/symbolic missing from the flatpak build" >&2
   exit 1
@@ -52,9 +113,31 @@ fi
 test -f "$ICONS_DIR/LICENSE"
 echo "all $PKG_ICONS symbolic icons present"
 
+echo "==> verify the exported desktop entry is not hidden by TryExec"
+# Flatpak exports the entry to the host, where TryExec is resolved against the
+# host PATH -- and no `openemux` binary lives there.
+DESKTOP="$(find .flatpak-build-dir/files/share/applications -name '*.desktop' -print -quit)"
+if grep -q '^TryExec=' "$DESKTOP"; then
+  echo "FAIL: the exported desktop entry still carries TryExec" >&2
+  exit 1
+fi
+grep -q '^Exec=openemux$' "$DESKTOP"
+test -f .flatpak-build-dir/files/share/metainfo/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml
+echo "desktop entry and metainfo in place"
+
+echo "==> verify the build carried no working-tree leftovers"
+# The staging list is the whole defence against `path: ../..` scooping up the
+# working tree; check the result rather than trusting the list.
+for unwanted in .env .git dist .venv AppDir flatpak-repo; do
+  if [ -e "$STAGE/$unwanted" ]; then
+    echo "FAIL: $unwanted reached the flatpak staging tree" >&2
+    exit 1
+  fi
+done
+echo "staging tree is clean"
+
 echo "==> verify the bundle installs"
 flatpak install -y --user --noninteractive "./$BUNDLE"
 flatpak info --user "$APP_ID"
 
 echo "==> ALL FLATPAK CHECKS PASSED"
-chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist flatpak-repo 2>/dev/null || true

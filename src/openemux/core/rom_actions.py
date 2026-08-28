@@ -14,8 +14,6 @@ UI already owns, and it is called right after these.
 import logging
 from pathlib import Path
 
-import gi
-
 from gi.repository import Gio, GLib
 
 from openemux.core import cartridge_render, save_states
@@ -31,7 +29,12 @@ logger = logging.getLogger(__name__)
 
 # Characters that cannot appear in a file name, plus the two names that would
 # escape the ROM's own folder.
-_FORBIDDEN = ("/", "\\", "\0")
+#
+# Every control character, not just NUL: playlists are newline-delimited path
+# lists, so a name carrying an embedded \n -- a paste accident is all it takes
+# -- serialized as two broken lines and the game vanished from the library
+# (issue #234). \r would split them just as effectively on the way back in.
+_FORBIDDEN = ("/", "\\")
 _RESERVED = (".", "..")
 
 
@@ -45,6 +48,8 @@ def sanitize_rom_name(name):
     if not cleaned:
         raise RomActionError("empty name")
     if cleaned in _RESERVED or any(char in cleaned for char in _FORBIDDEN):
+        raise RomActionError(f"invalid name: {name!r}")
+    if any(ord(char) < 32 or ord(char) == 127 for char in cleaned):
         raise RomActionError(f"invalid name: {name!r}")
     return cleaned
 

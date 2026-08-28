@@ -5,7 +5,25 @@ from unittest.mock import Mock, patch
 
 from openemux.core import game_window_support
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
-from openemux.core.retroarch_launcher import RetroArchLauncher, x11_only_env
+from openemux.core.core_options import CoreOptionsStore
+from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
+from openemux.core.retroarch_launcher import (
+    APPIMAGE_EXTRACT_AND_RUN,
+    RetroArchLauncher,
+    appimage_flags,
+    x11_only_env,
+)
+
+
+def _close_log(proc):
+    """Close the launch log the mocked process is holding open.
+
+    In the app ``RuntimeManager._clear_active`` does this when the game ends;
+    a Mock never ends, so the tests have to.
+    """
+    handle = getattr(proc, "_openemux_log_handle", None)
+    if handle is not None and not isinstance(handle, Mock):
+        handle.close()
 
 
 class _DummyConfig:
@@ -26,10 +44,18 @@ class _DummyConfig:
         # assertions stay about what they were written for; the #176 tests set
         # it explicitly.
         self.audio_driver = "inherit"
+        # "auto" is the shipped default; the #366 tests set it explicitly.
+        self.video_driver = "auto"
         self.game_window = False
+        # Per-console core options (issue #296); None means "no store", which
+        # is what every test that predates them expects.
+        self.core_options = None
 
     def get_retroarch_binary(self):
         return self.binary_path
+
+    def get_retroarch_video_driver(self):
+        return self.video_driver
 
     def get_retroarch_core_hints(self, _console):
         return self.core_hints if self.core_hints is not None else [self.core_path]
@@ -97,25 +123,46 @@ class RetroArchLauncherTests(unittest.TestCase):
     def test_resolve_retroarch_binary_from_project_relative_path(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            binary = base / "vendors" / "RetroArch-Linux-x86_64.AppImage"
+            binary = base / VENDORED_RETROARCH
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_text("", encoding="utf-8")
-            core = base / "mgba_libretro.so"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
             core.write_text("", encoding="utf-8")
-            cfg = _DummyConfig(base, "vendors/RetroArch-Linux-x86_64.AppImage", core)
+            cfg = _DummyConfig(base, VENDORED_RETROARCH, core)
             launcher = RetroArchLauncher(base, cfg)
 
             resolved = launcher._resolve_retroarch_binary()
 
         self.assertEqual(resolved, str(binary))
 
+    def test_the_vendored_retroarch_is_launched_as_a_plain_binary(self):
+        # No --appimage-extract-and-run, no libfuse probe, nothing to unpack:
+        # what OpenEmux vendors is the portable tree upstream's AppImage wraps,
+        # so a host with no FUSE at all launches it the same way (issue #328).
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / VENDORED_RETROARCH
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("", encoding="utf-8")
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, VENDORED_RETROARCH, core))
+            with patch.object(
+                RetroArchLauncher, "libfuse2_available", staticmethod(lambda: False)
+            ):
+                prefix, error = launcher._launch_prefix()
+            self.assertFalse(launcher.launches_an_appimage())
+
+        self.assertIsNone(error)
+        self.assertEqual(prefix, [str(binary)])
+
     def test_per_rom_core_override_wins_and_stale_falls_back(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             cores_dir = base / "cores"
             cores_dir.mkdir()
-            (cores_dir / "snes9x_libretro.so").write_text("", encoding="utf-8")
-            (cores_dir / "bsnes_libretro.so").write_text("", encoding="utf-8")
+            (cores_dir / f"snes9x_libretro{CORE_SUFFIX}").write_text("", encoding="utf-8")
+            (cores_dir / f"bsnes_libretro{CORE_SUFFIX}").write_text("", encoding="utf-8")
 
             cfg = _DummyConfig(base, base / "retroarch", base / "unused.so", core_hints=[])
             launcher = RetroArchLauncher(base, cfg)
@@ -123,20 +170,20 @@ class RetroArchLauncherTests(unittest.TestCase):
             launcher._core_search_dirs = lambda: [str(cores_dir)]
 
             # A per-ROM override wins over the automatic candidate list.
-            cfg.rom_core = "bsnes_libretro.so"
+            cfg.rom_core = f"bsnes_libretro{CORE_SUFFIX}"
             resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
-            self.assertTrue(resolved.endswith("bsnes_libretro.so"))
+            self.assertTrue(resolved.endswith(f"bsnes_libretro{CORE_SUFFIX}"))
 
             # A stale override (core uninstalled) falls back to the candidate.
-            cfg.rom_core = "does_not_exist_libretro.so"
+            cfg.rom_core = f"does_not_exist_libretro{CORE_SUFFIX}"
             resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
-            self.assertTrue(resolved.endswith("snes9x_libretro.so"))
+            self.assertTrue(resolved.endswith(f"snes9x_libretro{CORE_SUFFIX}"))
 
     def test_launch_blocks_when_required_bios_missing(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mednafen_psx_libretro.so"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core)
@@ -154,7 +201,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mednafen_psx_libretro.so"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core)
@@ -166,6 +213,7 @@ class RetroArchLauncherTests(unittest.TestCase):
             with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.cue", "PS")
+                _close_log(proc)
 
             runtime_cfgs = list((base / "runtime").glob("runtime_ps_*.cfg"))
             self.assertTrue(runtime_cfgs)
@@ -179,18 +227,24 @@ class RetroArchLauncherTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             binary = base / "retroarch"
-            core = base / "mgba_libretro.so"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
             binary.write_text("", encoding="utf-8")
             core.write_text("", encoding="utf-8")
             shader = base / "runtime" / "shaders_glsl" / "handheld" / "dot.glslp"
             shader.parent.mkdir(parents=True, exist_ok=True)
             shader.write_text("shader preset", encoding="utf-8")
             cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
+            # A .glslp is loadable by `gl` and by nothing else, so this test
+            # says which driver it is about rather than inheriting the one the
+            # machine running the suite would get (issue #366) -- the Windows
+            # job would otherwise be asserting that d3d11 loads GLSL.
+            cfg.video_driver = "gl"
             launcher = RetroArchLauncher(base, cfg)
 
             with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
                 popen_mock.return_value = Mock()
                 proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                _close_log(proc)
                 args, kwargs = popen_mock.call_args
                 cmd = args[0]
             runtime_cfgs = list((base / "runtime").glob("runtime_gba_*.cfg"))
@@ -204,11 +258,121 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('video_shader_enable = "true"', runtime_content)
         self.assertIn(f'video_shader = "{shader}"', runtime_content)
 
+    def _launch_with_presets(self, backends, video_driver_windows, shader="dot"):
+        """Launch GBA with ``shader`` configured and only ``backends`` on disk.
+
+        Returns ``(cmd, launcher, log_text)``. ``video_driver_windows`` patches
+        the platform the driver resolves against, because the whole point of
+        issue #366 is that the answer differs between the two.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            presets = {}
+            for backend, suffix in (("glsl", ".glslp"), ("slang", ".slangp")):
+                if backend not in backends:
+                    continue
+                preset = base / "runtime" / f"shaders_{backend}" / "handheld" / f"dot{suffix}"
+                preset.parent.mkdir(parents=True, exist_ok=True)
+                preset.write_text("preset", encoding="utf-8")
+                presets[backend] = preset
+            cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": shader})
+            launcher = RetroArchLauncher(base, cfg)
+            with patch("openemux.core.video_driver.IS_WINDOWS", video_driver_windows):
+                with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                    popen_mock.return_value = Mock()
+                    proc, _error = launcher.launch_process("/tmp/game.gba", "GBA")
+                    _close_log(proc)
+                    cmd = popen_mock.call_args[0][0]
+            log_text = "".join(
+                path.read_text(encoding="utf-8")
+                for path in sorted((base / "runtime").glob("retroarch_gba_*.log"))
+            )
+            return cmd, launcher, log_text, presets
+
+    def test_a_d3d11_host_is_handed_the_slang_preset(self):
+        # Issue #366: both packs are installed and the old order took the
+        # .glslp every time, which d3d11 cannot load. RetroArch discarded it
+        # silently -- the launch log had no shader line at all.
+        cmd, launcher, _log, presets = self._launch_with_presets(
+            ("glsl", "slang"), video_driver_windows=True
+        )
+        self.assertIn("--set-shader", cmd)
+        self.assertIn(str(presets["slang"]), cmd)
+        self.assertNotIn(str(presets["glsl"]), cmd)
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_a_gl_host_is_still_handed_the_glsl_preset(self):
+        # Linux must not move: the vendored build runs gl (RT-115 onward).
+        cmd, launcher, _log, presets = self._launch_with_presets(
+            ("glsl", "slang"), video_driver_windows=False
+        )
+        self.assertIn(str(presets["glsl"]), cmd)
+        self.assertNotIn(str(presets["slang"]), cmd)
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_a_missing_preset_for_the_driver_is_said_out_loud(self):
+        # Only the glsl pack arrived, and the host runs d3d11. The game still
+        # launches -- but without a shader, and that used to leave nothing but
+        # an INFO line in the app log.
+        cmd, launcher, log_text, _presets = self._launch_with_presets(
+            ("glsl",), video_driver_windows=True
+        )
+        self.assertNotIn("--set-shader", cmd)
+        self.assertIsNotNone(launcher.last_shader_notice)
+        key, kwargs = launcher.last_shader_notice
+        self.assertEqual(key, "toast.shader.preset_missing")
+        self.assertEqual(kwargs["driver"], "d3d11")
+        self.assertEqual(kwargs["shader"], "Dot")
+
+    def test_a_driver_with_no_shader_pipeline_says_which_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core, shader_by_console={"GBA": "dot"})
+            cfg.video_driver = "sdl2"
+            launcher = RetroArchLauncher(base, cfg)
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                proc, _error = launcher.launch_process("/tmp/game.gba", "GBA")
+                _close_log(proc)
+        key, kwargs = launcher.last_shader_notice
+        self.assertEqual(key, "toast.shader.driver_has_no_presets")
+        self.assertEqual(kwargs["driver"], "sdl2")
+
+    def test_a_disabled_shader_is_not_a_complaint(self):
+        _cmd, launcher, _log, _presets = self._launch_with_presets(
+            (), video_driver_windows=True, shader="disabled"
+        )
+        self.assertIsNone(launcher.last_shader_notice)
+
+    def test_the_launch_log_opens_with_the_driver_and_the_preset(self):
+        # Issue #366 was diagnosed from a log with no shader line in it, so
+        # "what did OpenEmux ask for" was the one question it could not answer.
+        _cmd, _launcher, log_text, presets = self._launch_with_presets(
+            ("slang",), video_driver_windows=True
+        )
+        self.assertIn("[openemux]", log_text)
+        self.assertIn("video_driver=d3d11", log_text)
+        self.assertIn(str(presets["slang"]), log_text)
+
+    def test_the_launch_log_says_when_there_was_no_preset(self):
+        _cmd, _launcher, log_text, _presets = self._launch_with_presets(
+            ("glsl",), video_driver_windows=True
+        )
+        self.assertIn("no preset for this driver", log_text)
+
     # ----- multi-port -----------------------------------------------------
     def _override_lines(self, profile):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.input_profile = profile
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA")
@@ -328,7 +492,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def _game_window_override_lines(self, enabled, embeddable=True):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.game_window = enabled
             launcher = RetroArchLauncher(base, cfg)
             with patch(
@@ -409,7 +573,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA", state_slot=3)
             lines = Path(path).read_text(encoding="utf-8").splitlines()
@@ -446,6 +610,17 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('network_cmd_port = "55355"', lines)
         self.assertIn('audio_volume = "-6.0"', lines)
 
+    def test_the_launch_decides_the_command_port(self):
+        # The port is picked per launch (issue #227) and RetroArch has to be
+        # told the same number the client will send to.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            override = launcher._write_runtime_override("GBA", network_cmd_port=54321)
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertIn('network_cmd_port = "54321"', lines)
+
     def test_override_never_lets_itself_be_saved_into_the_users_config(self):
         # RetroArch saves its configuration on exit, and by then the
         # --appendconfig values are part of it: without this every launch
@@ -466,7 +641,7 @@ class RetroArchLauncherTests(unittest.TestCase):
     def _override_lines_with_audio_driver(self, setting):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.audio_driver = setting
             launcher = RetroArchLauncher(base, cfg)
             path = launcher._write_runtime_override("GBA")
@@ -484,6 +659,75 @@ class RetroArchLauncherTests(unittest.TestCase):
     def test_override_leaves_the_audio_driver_alone_when_inheriting(self):
         lines = self._override_lines_with_audio_driver("inherit")
         self.assertEqual([l for l in lines if l.startswith("audio_driver")], [])
+
+    def test_override_pins_the_joypad_driver_on_windows(self):
+        # Issue #118: a binding token is an index into whatever the joypad
+        # driver counts. OpenEmux reads the pad through SDL2 on Windows, and
+        # RetroArch's default there is xinput, whose button order is its own --
+        # so a button remapped in OpenEmux would bind a different one in the
+        # game. Naming the driver is what makes the two ends agree.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('input_joypad_driver = "sdl2"', lines)
+
+    def test_override_leaves_the_joypad_driver_alone_on_linux(self):
+        # On Linux both ends already agree: OpenEmux reads evdev with udev's
+        # numbering and RetroArch defaults to its udev joypad driver. Naming a
+        # driver here would be imposing a choice the user did not make.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual([l for l in lines if l.startswith("input_joypad_driver")], [])
+
+    def test_override_silences_retroarchs_own_desktop_ui_on_windows(self):
+        # Issue #367: the win32 UI companion starts with every launch and draws
+        # a menu bar across the game's window, and the Qt WIMP menu comes up
+        # behind it. Both default to on in the vendored build's own
+        # retroarch.default.cfg, so a game opened from the library came up
+        # wearing the emulator's interface.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('ui_companion_start_on_boot = "false"', lines)
+        self.assertIn('desktop_menu_enable = "false"', lines)
+
+    def test_override_names_the_video_driver_on_windows(self):
+        # Issue #366: the shader backend has to follow the driver, so the
+        # driver stops being something to discover from a log after the fact.
+        # d3d11 is what RetroArch picks there anyway -- naming it is what makes
+        # "which presets can this load" answerable before the launch.
+        with patch("openemux.core.video_driver.IS_WINDOWS", True):
+            lines = self._override_lines(None)
+        self.assertIn('video_driver = "d3d11"', lines)
+
+    def test_override_leaves_the_video_driver_alone_on_linux(self):
+        # The vendored Linux build already runs gl. Measured: run it with an
+        # empty config and the log says "[GL] Found GL context".
+        with patch("openemux.core.video_driver.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual([l for l in lines if l.startswith("video_driver")], [])
+
+    def test_override_writes_the_driver_the_user_named(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            cfg.video_driver = "vulkan"
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA")
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        self.assertIn('video_driver = "vulkan"', lines)
+
+    def test_override_leaves_the_desktop_ui_alone_on_linux(self):
+        # The vendored Linux build has no WIMP UI to start, so writing these
+        # there would be two lines that read as load-bearing and are not.
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertEqual(
+            [
+                line
+                for line in lines
+                if line.startswith(("ui_companion", "desktop_menu"))
+            ],
+            [],
+        )
 
     def test_override_is_unchanged_when_no_extra_port_is_enabled(self):
         legacy_only = {
@@ -531,6 +775,236 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertFalse([l for l in lines if "player2_enable_hotkey" in l])
 
 
+class LaunchFailuresAreVisibleTests(unittest.TestCase):
+    """Every launch failure has to come back as a message (issue #226)."""
+
+    def _launcher(self, base):
+        binary = base / "retroarch"
+        core = base / "mgba_libretro.so"
+        binary.write_text("", encoding="utf-8")
+        core.write_text("", encoding="utf-8")
+        return RetroArchLauncher(base, _DummyConfig(base, binary, core))
+
+    def test_an_io_error_before_the_launch_becomes_an_error_message(self):
+        # _write_runtime_override creates directories and writes a file, all
+        # of it outside the old try: a read-only home raised straight into the
+        # GTK click handler, which prints the traceback and swallows it.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            with patch.object(
+                RetroArchLauncher,
+                "_write_runtime_override",
+                side_effect=OSError("Read-only file system"),
+            ):
+                proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+
+        self.assertIsNone(proc)
+        self.assertIn("Read-only file system", error)
+
+    def test_a_failed_popen_closes_the_log_it_opened(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            opened = []
+            real_open = open
+
+            def _tracking_open(*args, **kwargs):
+                handle = real_open(*args, **kwargs)
+                opened.append(handle)
+                return handle
+
+            with patch("openemux.core.retroarch_launcher.open", _tracking_open, create=True):
+                with patch(
+                    "openemux.core.retroarch_launcher.subprocess.Popen",
+                    side_effect=OSError("Exec format error"),
+                ):
+                    proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+
+        self.assertIsNone(proc)
+        self.assertIn("Exec format error", error)
+        self.assertTrue(opened, "the launcher never opened its log")
+        self.assertTrue(
+            all(handle.closed for handle in opened),
+            "a failed launch leaked its log file descriptor",
+        )
+
+
+class AppImageFuseFallbackTests(unittest.TestCase):
+    """An AppImage on a host with no libfuse2 (issue #226)."""
+
+    def test_a_host_without_libfuse2_runs_the_appimage_extracted(self):
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch-Linux-x86_64.AppImage", libfuse_available=False),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_a_host_with_libfuse2_mounts_it_as_usual(self):
+        # Extract-and-run unpacks the whole image on every launch; only worth
+        # paying for when mounting genuinely cannot work.
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch-Linux-x86_64.AppImage", libfuse_available=True),
+            [],
+        )
+
+    def test_a_plain_binary_is_never_given_appimage_flags(self):
+        self.assertEqual(appimage_flags("/usr/bin/retroarch", libfuse_available=False), [])
+
+    def test_the_extension_check_is_case_insensitive(self):
+        self.assertEqual(
+            appimage_flags("/opt/RetroArch.APPIMAGE", libfuse_available=False),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_libfuse3_does_not_count_as_libfuse2(self):
+        # The AppImage runtime dlopens "libfuse.so.2" by that exact name, so
+        # that is what gets asked for. A host with only FUSE 3 must still get
+        # the fallback.
+        def _loader(name):
+            if name == "libfuse.so.2":
+                raise OSError("cannot open shared object file")
+            return object()
+
+        self.assertFalse(RetroArchLauncher.libfuse2_available(loader=_loader))
+
+    def test_a_loadable_libfuse2_is_reported_as_present(self):
+        self.assertTrue(RetroArchLauncher.libfuse2_available(loader=lambda name: object()))
+
+    def test_the_flag_goes_in_front_of_the_core_argument(self):
+        # It is the AppImage runtime's own switch, so it has to sit right
+        # after the binary -- RetroArch never sees it.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.object(RetroArchLauncher, "libfuse2_available", staticmethod(lambda: False)):
+                prefix, error = launcher._launch_prefix()
+
+        self.assertIsNone(error)
+        self.assertEqual(prefix, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
+
+
+class LaunchEnvironmentTests(unittest.TestCase):
+    """What RetroArch's environment says when we run from an AppImage (#249).
+
+    The vendored RetroArch lives inside our AppDir, and appimage-builder's
+    AppRun hooks hand anything under ``$APPDIR`` this bundle's loader path,
+    ``LD_PRELOAD`` and toolkit caches. The launcher is the only place that can
+    hand it the session's environment instead.
+    """
+
+    def _launch_env(self, environ):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.dict(
+                "openemux.core.retroarch_launcher.os.environ", environ, clear=True
+            ):
+                with patch(
+                    "openemux.core.retroarch_launcher.subprocess.Popen"
+                ) as popen_mock:
+                    popen_mock.return_value = Mock()
+                    proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                    _close_log(proc)
+            self.assertIsNone(error)
+            return popen_mock.call_args.kwargs["env"]
+
+    def test_the_bundles_loader_never_reaches_retroarch(self):
+        env = self._launch_env(
+            {
+                "HOME": "/home/u",
+                "APPDIR": "/tmp/.mount_OpenEmXYZ",
+                "LD_LIBRARY_PATH": "/tmp/.mount_OpenEmXYZ/usr/lib",
+                "LD_PRELOAD": "libapprun_hooks.so",
+                "PYTHONHOME": "/tmp/.mount_OpenEmXYZ/usr",
+                "GI_TYPELIB_PATH": "/tmp/.mount_OpenEmXYZ/usr/lib/girepository-1.0",
+                "PATH": "/tmp/.mount_OpenEmXYZ/usr/bin:/usr/bin",
+                "APPRUN_ORIGINAL_PATH": "/home/u/bin:/usr/bin",
+            }
+        )
+        self.assertNotIn("APPDIR", env)
+        self.assertNotIn("LD_LIBRARY_PATH", env)
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertNotIn("PYTHONHOME", env)
+        self.assertNotIn("GI_TYPELIB_PATH", env)
+        self.assertEqual(env["PATH"], "/home/u/bin:/usr/bin")
+        self.assertEqual(env["HOME"], "/home/u")
+
+    def test_a_native_run_hands_the_session_through_untouched(self):
+        env = self._launch_env(
+            {"HOME": "/home/u", "PATH": "/usr/bin", "LD_PRELOAD": "/usr/lib/mangohud.so"}
+        )
+        self.assertEqual(env["LD_PRELOAD"], "/usr/lib/mangohud.so")
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+
+class ForcedExtractRetryTests(unittest.TestCase):
+    """The second attempt after an AppImage failed to mount itself (#248).
+
+    The ``libfuse.so.2`` probe answers "can this library be loaded", which is
+    not "can this host mount a FUSE filesystem". A machine with the library
+    but no ``/dev/fuse``, or a ``fusermount`` that is not setuid, passes the
+    probe and still dies at the mount -- only visible afterwards, in the log.
+    """
+
+    def test_forcing_overrides_a_libfuse2_that_loads_fine(self):
+        self.assertEqual(
+            appimage_flags(
+                "/opt/RetroArch-Linux-x86_64.AppImage",
+                libfuse_available=True,
+                force=True,
+            ),
+            [APPIMAGE_EXTRACT_AND_RUN],
+        )
+
+    def test_forcing_never_invents_a_flag_for_a_plain_binary(self):
+        self.assertEqual(appimage_flags("/usr/bin/retroarch", force=True), [])
+
+    def test_the_forced_flag_reaches_the_launch_prefix(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            with patch.object(RetroArchLauncher, "libfuse2_available", staticmethod(lambda: True)):
+                mounted, _ = launcher._launch_prefix()
+                unpacked, _ = launcher._launch_prefix(force_extract=True)
+
+        self.assertEqual(mounted, [str(binary)])
+        self.assertEqual(unpacked, [str(binary), APPIMAGE_EXTRACT_AND_RUN])
+
+    def test_an_appimage_retroarch_is_recognized_as_retryable(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "RetroArch.AppImage"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            self.assertTrue(launcher.launches_an_appimage())
+
+    def test_a_native_retroarch_has_nothing_to_unpack(self):
+        # Nothing to retry: a wrapper script that merely echoes a FUSE line
+        # must not buy a second launch.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / "mgba_libretro.so"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            launcher = RetroArchLauncher(base, _DummyConfig(base, binary, core))
+            self.assertFalse(launcher.launches_an_appimage())
+
+
 class X11OnlyEnvTests(unittest.TestCase):
     """What RetroArch's environment must not say while the wrapper embeds."""
 
@@ -563,7 +1037,7 @@ class StoppingAGameTests(unittest.TestCase):
     def _launcher(self, tmp_dir):
         base = Path(tmp_dir)
         return RetroArchLauncher(
-            base, _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            base, _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
         )
 
     def test_the_flatpak_prefix_ties_the_sandbox_to_the_process_we_hold(self):
@@ -600,7 +1074,7 @@ class StoppingAGameTests(unittest.TestCase):
         # window the wrapper is about to adopt is an X window (issue #267).
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            cfg = _DummyConfig(base, base / "retroarch", base / "mgba_libretro.so")
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             cfg.game_window = True
             launcher = RetroArchLauncher(base, cfg)
             with patch(
@@ -675,6 +1149,54 @@ class StoppingAGameTests(unittest.TestCase):
                 ],
             )
             proc.kill.assert_called_once_with()
+
+
+class CoreOptionsOverrideTests(unittest.TestCase):
+    """Core options travel in their own file, named by the override (#296)."""
+
+    def _launcher(self, base, chosen=None):
+        cfg = _DummyConfig(base, base / "retroarch", base / f"mednafen_psx_hw_libretro{CORE_SUFFIX}")
+        if chosen is not None:
+            cfg.core_options = CoreOptionsStore(base / "core_options.config")
+            for key, value in chosen.items():
+                cfg.core_options.set_for_console("PS", f"mednafen_psx_hw_libretro{CORE_SUFFIX}", key, value)
+        return RetroArchLauncher(base, cfg)
+
+    def test_nothing_chosen_writes_no_options_path(self):
+        # Naming our file replaces the one RetroArch would have read, so a
+        # console nobody configured must not get one.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base)
+            override = launcher._write_runtime_override(
+                "PS", core_filename=f"mednafen_psx_hw_libretro{CORE_SUFFIX}"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertFalse(any(line.startswith("core_options_path") for line in lines))
+
+    def test_a_choice_is_written_to_a_file_the_override_names(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base, {"beetle_psx_hw_internal_resolution": "4x"})
+            override = launcher._write_runtime_override(
+                "PS", core_filename=f"mednafen_psx_hw_libretro{CORE_SUFFIX}"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+            named = [l for l in lines if l.startswith("core_options_path")]
+            self.assertEqual(len(named), 1, lines)
+            options_path = named[0].split("=", 1)[1].strip().strip('"')
+            written = Path(options_path).read_text(encoding="utf-8")
+        self.assertIn('beetle_psx_hw_internal_resolution = "4x"', written)
+
+    def test_a_console_with_a_different_core_gets_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            launcher = self._launcher(base, {"beetle_psx_hw_filter": "xBR"})
+            override = launcher._write_runtime_override(
+                "SFC", core_filename=f"snes9x_libretro{CORE_SUFFIX}"
+            )
+            lines = Path(override).read_text(encoding="utf-8").splitlines()
+        self.assertFalse(any(line.startswith("core_options_path") for line in lines))
 
 
 if __name__ == "__main__":

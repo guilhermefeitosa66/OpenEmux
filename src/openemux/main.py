@@ -1,16 +1,19 @@
 import os
 import sys
 import logging
+import importlib.util
 import traceback
-from threading import Thread
 from pathlib import Path
 import shutil
 
 from openemux.core.paths import (
+    bytecode_cache_dir,
     get_project_root,
     is_running_in_appimage,
+    is_running_in_flatpak,
     migrate_legacy_config_dir,
 )
+from openemux.core.platform import IS_WINDOWS
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -27,8 +30,12 @@ def _ensure_gtk_typelibs():
     No-op inside the AppImage and when the system already provides the typelibs.
     Installing ``gir1.2-gtk-4.0`` / ``gir1.2-adw-1`` (``make install-sys-deps``)
     remains the recommended system-wide setup.
+
+    Linux-only. On Windows the typelibs sit inside the MSYS2 prefix (or the
+    shipped bundle, where the launcher sets GI_TYPELIB_PATH), and every path
+    probed below is meaningless.
     """
-    if is_running_in_appimage():
+    if IS_WINDOWS or is_running_in_appimage():
         return
 
     system_dirs = [
@@ -87,6 +94,12 @@ def _configure_game_window_backend():
     display -- forcing x11 there would leave GTK with no display and the app
     would not start); or the user turned the game window off.
     """
+    # Windows has no X server and no reparenting equivalent, so the game
+    # window is off there and RetroArch opens its own. game_window_support
+    # already reaches the same conclusion via the absent DISPLAY; returning
+    # here says so outright and skips importing the X11 machinery to find out.
+    if IS_WINDOWS:
+        return
     if os.environ.get("GDK_BACKEND"):
         return
     # Imported here rather than at module scope: this runs before the GTK
@@ -102,33 +115,132 @@ def _configure_game_window_backend():
     os.environ["GDK_BACKEND"] = "x11"
 
 
-_configure_gtk_renderer()
-# Before the backend pick: the setting is read straight off the config file,
-# which a legacy config dir may still be on its way to.
-migrate_legacy_config_dir()
-_configure_game_window_backend()
-configure_startup_logging()
-_ensure_gtk_typelibs()
+def _ensure_pixbuf_loaders():
+    """Windows: build gdk-pixbuf's loader cache before anything decodes an image.
 
-try:
-    import gi
-    gi.require_version('Gtk', '4.0')
-    gi.require_version('Adw', '1')
-except Exception:
-    append_startup_error(
-        "Failed to import GTK stack (gi/Gtk/Adw). On Debian/Ubuntu/Mint install "
-        "the introspection typelibs: sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1 "
-        "(or run 'make install-sys-deps').",
-        exc_text=traceback.format_exc(),
-    )
-    raise
+    Has to happen before ``gi.repository`` is imported -- gdk-pixbuf reads
+    GDK_PIXBUF_MODULE_FILE once, when it initialises -- which is what puts it
+    in this function rather than in the application. See
+    ``core/pixbuf_loaders`` for why the cache cannot be written at build time.
+    """
+    if not IS_WINDOWS:
+        return
+    from openemux.core.pixbuf_loaders import ensure_loaders_cache
 
-from gi.repository import Gtk, Adw, GLib
-from openemux.ui.window import OpenEmuxWindow
-from openemux.ui.first_boot_window import FirstBootWindow
-from openemux.core.config import ConfigManager
-from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.paths import get_project_root, is_running_in_appimage, is_running_in_flatpak
+    try:
+        ensure_loaders_cache(get_project_root())
+    except Exception:  # noqa: BLE001 - a blank cover must not stop start-up
+        logging.getLogger(__name__).warning(
+            "gdk-pixbuf: preparing the loader cache failed", exc_info=True
+        )
+
+
+#: Whether prepare_process() has already run in this process.
+_prepared = False
+
+
+def _redirect_bytecode_cache(package_dir=None):
+    """Give the interpreter somewhere writable to keep this install's bytecode.
+
+    The .deb and .rpm install to ``/opt/openemux``, which the user running the
+    app cannot write. CPython still tries to put ``__pycache__`` beside the
+    sources, fails, and silently falls back to compiling in memory -- so every
+    launch reparses and recompiles the whole app, roughly 36k lines across 98
+    modules, and throws the result away at exit (issue #364). Pointing
+    ``sys.pycache_prefix`` at the user's cache directory gives that work a
+    place to land, and it is paid once instead of always.
+
+    Redirecting is per-interpreter for free: CPython names each file
+    ``<module>.cpython-<version>.pyc``, so a machine that moves from Python
+    3.12 to 3.13 recompiles once and the two caches sit side by side without
+    ever being mistaken for each other. That is the whole reason the packages
+    cannot simply ship bytecode: one .deb serves Ubuntu 24.04 through 26.04,
+    whose interpreters do not agree on the magic number.
+
+    Deliberately narrow -- it stands down in three cases:
+
+    * **The tree is writable.** A source checkout, `make run` and the devbox
+      cache beside the sources the way every Python developer expects, and no
+      surprise directory appears under ``~/.cache``.
+    * **The install already carries bytecode for this interpreter.** The
+      AppImage, the Flatpak and the Windows bundle each pin the interpreter
+      they run, so their builds compile ahead of time and the cache is valid
+      before the first launch -- there is nothing left to redirect, and
+      redirecting would *hide* what the build produced.
+    * **The user has already decided**, through ``PYTHONPYCACHEPREFIX`` or
+      ``PYTHONDONTWRITEBYTECODE``.
+    """
+    if sys.dont_write_bytecode or sys.pycache_prefix is not None:
+        return
+    # ``package_dir`` is the seam the tests use; nothing else passes it.
+    package_dir = Path(package_dir) if package_dir else Path(__file__).resolve().parent
+    if os.access(package_dir, os.W_OK):
+        return
+    try:
+        if os.path.exists(importlib.util.cache_from_source(str(package_dir / "main.py"))):
+            return
+    except (NotImplementedError, ValueError):
+        # No bytecode path for this source (a frozen or namespace loader).
+        # Nothing to look for, and nothing that says the redirect is wrong.
+        pass
+    try:
+        cache_dir = bytecode_cache_dir()
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # A read-only home, a full disk, an unusual sandbox. Recompiling every
+        # launch is slow; refusing to start over a *cache* would be worse.
+        return
+    sys.pycache_prefix = str(cache_dir)
+
+
+def prepare_process():
+    """Everything that has to happen before the GTK stack is imported.
+
+    Deliberately *not* run at import time. It used to be five bare calls at
+    module level, so importing anything at all out of ``main`` -- which two
+    test files do -- migrated the developer's real config directory, read
+    their real config, redirected the root logger into a FileHandler on
+    ``~/.openemux/runtime/openemux_startup.log`` and replaced
+    ``sys.excepthook`` and ``threading.excepthook`` for the whole process
+    (issue #244).
+
+    Runs once per process. ``configure_startup_logging`` uses
+    ``force=True``, so a second call would swap the root handlers out and log
+    the start-up context line again -- and calling it after GTK is imported is
+    too late for the two environment variables set here anyway.
+    """
+    global _prepared
+    if _prepared:
+        return
+    _prepared = True
+    # First: everything below this line imports, and each import that lands
+    # before the redirect is one more module the packaged install recompiles
+    # on every launch.
+    _redirect_bytecode_cache()
+    _configure_gtk_renderer()
+    # Before the backend pick: the setting is read straight off the config
+    # file, which a legacy config dir may still be on its way to.
+    migrate_legacy_config_dir()
+    _configure_game_window_backend()
+    configure_startup_logging()
+    _ensure_gtk_typelibs()
+    _ensure_pixbuf_loaders()
+
+
+def build_application():
+    """Prepare the process, then hand back the application object.
+
+    The GTK import and the application class live in ``openemux.app``, reached
+    only from here: importing ``gi.repository.Gtk`` runs ``Gtk.init()``, which
+    *opens the display*, so ``GDK_BACKEND`` -- which
+    ``_configure_game_window_backend`` sets -- has to be in the environment
+    before that import rather than after it.
+    """
+    prepare_process()
+    from openemux.app import OpenEmuxApplication
+
+    return OpenEmuxApplication()
+
 
 APP_ID = "io.github.guilhermefeitosa66.OpenEmux"
 
@@ -138,6 +250,11 @@ SYSTEM_INSTALL_PREFIXES = ("/opt/", "/usr/")
 
 
 def _is_packaged_install(project_root):
+    # SYSTEM_INSTALL_PREFIXES are POSIX paths, and the string concat below
+    # assumes a "/" separator, so neither means anything on Windows. There the
+    # bundle launcher says so explicitly instead.
+    if IS_WINDOWS:
+        return bool(os.environ.get("OPENEMUX_PACKAGED"))
     root = f"{Path(project_root).resolve()}/"
     return root.startswith(SYSTEM_INSTALL_PREFIXES)
 
@@ -168,6 +285,12 @@ def _remove_generated_desktop_entry():
 
 
 def _ensure_desktop_integration():
+    # freedesktop .desktop entries mean nothing on Windows, and a Start Menu
+    # shortcut is the installer's job -- an app run from a source checkout has
+    # no business writing one.
+    if IS_WINDOWS:
+        return
+
     project_root = get_project_root()
 
     # A packaged install ships its own desktop file and icon. Writing a
@@ -205,102 +328,18 @@ def _ensure_desktop_integration():
         desktop_target.write_text(desktop_content, encoding="utf-8")
 
 
-class OpenEmuxApplication(Adw.Application):
-    def __init__(self):
-        super().__init__(application_id=APP_ID,
-                         flags=gi.repository.Gio.ApplicationFlags.FLAGS_NONE)
-        self.config_manager = ConfigManager()
-        self._bootstrap_running = False
-        self._bootstrap_window = None
-        self.main_window = None
-
-    def do_activate(self):
-        # Register the vendored symbolic icons before any window exists, so
-        # every lookup can fall back to them when the host theme lacks a name.
-        from openemux.ui.icons import register_bundled_icons
-        register_bundled_icons()
-
-        # Before the first window is drawn: setting the scheme afterwards
-        # repaints a window the user is already looking at (issue #198).
-        from openemux.ui.theming import apply_theme
-        apply_theme(self.config_manager.get_ui_settings()["theme"])
-
-        if self._bootstrap_running:
-            if self._bootstrap_window:
-                self._bootstrap_window.present()
-            return
-
-        bootstrapper = FirstBootBootstrapper(self.config_manager)
-        if bootstrapper.needs_bootstrap():
-            self._start_bootstrap_flow(initial_boot=True, parent=None)
-            return
-
-        self._present_main_window()
-
-    def do_shutdown(self):
-        # Last line of defence against a game outliving the app. Closing the
-        # library window already stops it; this covers every other way the
-        # app can end (Ctrl+Q, a quit action, the session going away), where
-        # nothing else is left running to notice the process.
-        runtime = getattr(self.main_window, "runtime_manager", None)
-        if runtime is not None and runtime.is_running():
-            runtime.stop_active(block=True)
-        Adw.Application.do_shutdown(self)
-
-    def _present_main_window(self):
-        if self.main_window:
-            self.main_window.present()
-            return
-        self.config_manager.ensure_rom_directories()
-        self.main_window = OpenEmuxWindow(application=self)
-        self.main_window.present()
-        self.main_window.maybe_show_welcome()
-
-    def request_bootstrap_retry_from_ui(self, parent_window):
-        if self._bootstrap_running:
-            return False
-        self.config_manager.request_bootstrap_retry()
-        self._start_bootstrap_flow(initial_boot=False, parent=parent_window)
-        return True
-
-    def _start_bootstrap_flow(self, initial_boot, parent=None):
-        self._bootstrap_running = True
-        locale = self.config_manager.get_locale()
-        self._bootstrap_window = FirstBootWindow(
-            application=self,
-            locale=locale,
-            parent=parent,
-        )
-        self._bootstrap_window.present()
-        bootstrapper = FirstBootBootstrapper(self.config_manager)
-
-        def _emit(evt):
-            GLib.idle_add(self._bootstrap_window.handle_event, evt)
-
-        def _worker():
-            result = bootstrapper.run(on_event=_emit)
-            GLib.idle_add(self._finish_bootstrap_flow, result, initial_boot)
-
-        Thread(target=_worker, daemon=True).start()
-
-    def _finish_bootstrap_flow(self, result, initial_boot):
-        self._bootstrap_running = False
-        if self._bootstrap_window:
-            self._bootstrap_window.close()
-            self._bootstrap_window = None
-
-        if initial_boot:
-            self._present_main_window()
-
-        if self.main_window and hasattr(self.main_window, "on_bootstrap_finished"):
-            self.main_window.on_bootstrap_finished(result)
-        return False
-
 def main():
     try:
+        prepare_process()
+        # GLib on its own, before the application object exists: it pulls in no
+        # GTK and opens no display, so the program name is set before anything
+        # can read it for a window's WM_CLASS. main.py imports nothing from
+        # gi at module level any more.
+        from gi.repository import GLib
+
         GLib.set_prgname(APP_ID)
         _ensure_desktop_integration()
-        app = OpenEmuxApplication()
+        app = build_application()
         return app.run(sys.argv)
     except Exception:
         append_startup_error(

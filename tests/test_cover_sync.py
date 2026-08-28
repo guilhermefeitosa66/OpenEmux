@@ -1,4 +1,5 @@
 import re
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -19,6 +20,21 @@ from openemux.core.cover_sync import (
     build_artwork_passes,
     fuzzy_candidate_names,
 )
+
+
+#: The smallest bodies that pass the sniffer, padded past MIN_IMAGE_BYTES.
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 96
+_JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 96
+_WEBP_BYTES = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"\x00" * 96
+
+
+def _image_response(payload, content_type):
+    response = mock.MagicMock()
+    response.read.return_value = payload
+    response.headers.get_content_type.return_value = content_type
+    response.__enter__ = lambda s: s
+    response.__exit__ = lambda s, *a: False
+    return response
 
 
 class CoverSyncTests(unittest.TestCase):
@@ -270,36 +286,197 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 1)
         self.assertEqual(download_mock.call_args[0][1].parent.name, "labels")
 
-    def test_download_keeps_the_source_extension(self):
+    def test_download_names_the_file_after_the_bytes(self):
         # The default target says .png, but the file on disk must tell the
-        # truth about its own format: URL extension first, Content-Type second,
-        # png only when neither names one (issue #75).
+        # truth about its own format (issue #75). The bytes are the only
+        # signal that cannot be wrong, so they win over the URL and the
+        # Content-Type (issue #213).
         cases = [
-            ("https://cdn.example/art/label.jpg", "text/plain", "Game.jpg"),
-            ("https://cdn.example/art/label.jpeg", "text/plain", "Game.jpg"),
-            ("https://cdn.example/art/label.webp", "text/plain", "Game.webp"),
-            ("https://cdn.example/art/media?id=1", "image/jpeg", "Game.jpg"),
-            ("https://cdn.example/art/media?id=1", "image/webp", "Game.webp"),
-            ("https://cdn.example/art/media?id=1", "application/octet-stream", "Game.png"),
-            ("https://cdn.example/art/label.png", "image/jpeg", "Game.png"),
+            ("https://cdn.example/art/label.jpg", "image/jpeg", _PNG_BYTES, "Game.png"),
+            ("https://cdn.example/art/label.png", "image/png", _JPEG_BYTES, "Game.jpg"),
+            ("https://cdn.example/art/media?id=1", "text/plain", _WEBP_BYTES, "Game.webp"),
         ]
         from openemux.core.cover_sync import _download_cover
 
-        for url, content_type, expected_name in cases:
+        for url, content_type, payload, expected_name in cases:
             with TemporaryDirectory() as tmp_dir:
-                response = mock.MagicMock()
-                response.read.return_value = b"image-bytes"
-                response.headers.get_content_type.return_value = content_type
-                response.__enter__ = lambda s: s
-                response.__exit__ = lambda s, *a: False
+                response = _image_response(payload, content_type)
                 with patch(
-                    "openemux.core.cover_sync.urllib.request.urlopen",
+                    "urllib.request.urlopen",
                     return_value=response,
                 ):
                     ok = _download_cover(url, Path(tmp_dir) / "labels" / "Game.png")
                 self.assertTrue(ok, url)
                 written = sorted(p.name for p in (Path(tmp_dir) / "labels").iterdir())
                 self.assertEqual(written, [expected_name], url)
+
+    def test_the_extension_falls_back_to_the_url_then_the_content_type(self):
+        # What _source_extension answers when the bytes are not available --
+        # the path artwork_search still takes before it has read the body.
+        from openemux.core.cover_sync import _source_extension
+
+        cases = [
+            ("https://cdn.example/art/label.jpg", "text/plain", "jpg"),
+            ("https://cdn.example/art/label.jpeg", "text/plain", "jpg"),
+            ("https://cdn.example/art/label.webp", "text/plain", "webp"),
+            ("https://cdn.example/art/media?id=1", "image/jpeg", "jpg"),
+            ("https://cdn.example/art/media?id=1", "image/webp", "webp"),
+            ("https://cdn.example/art/media?id=1", "application/octet-stream", "png"),
+        ]
+        for url, content_type, expected in cases:
+            response = mock.MagicMock()
+            response.headers.get_content_type.return_value = content_type
+            self.assertEqual(_source_extension(url, response), expected, url)
+
+    def test_an_error_page_served_with_a_200_is_not_saved_as_a_cover(self):
+        # ScreenScraper answers some quota failures with a plain-text body and
+        # a 200; a captive portal answers everything with HTML. Whatever
+        # landed at that path became the ROM's art forever (issue #213).
+        from openemux.core.cover_sync import _download_cover
+
+        for payload in (
+            b"<html><body>Quota exceeded, please try again tomorrow</body></html>",
+            b"Erreur : quota de telechargement depasse pour aujourd'hui",
+            b"",
+            b"\x89PNG\r\n\x1a\n",  # a signature and nothing behind it
+        ):
+            with TemporaryDirectory() as tmp_dir:
+                response = _image_response(payload, "image/png")
+                with patch(
+                    "urllib.request.urlopen",
+                    return_value=response,
+                ):
+                    ok = _download_cover(
+                        "https://cdn.example/art/x.png", Path(tmp_dir) / "covers" / "Game.png"
+                    )
+                self.assertFalse(ok, payload[:20])
+                self.assertEqual(list((Path(tmp_dir) / "covers").glob("*")), [], payload[:20])
+
+    def test_a_failed_write_leaves_nothing_at_the_final_name(self):
+        from openemux.core.cover_sync import _download_cover
+
+        with TemporaryDirectory() as tmp_dir:
+            response = _image_response(_PNG_BYTES, "image/png")
+            with patch(
+                "urllib.request.urlopen", return_value=response
+            ):
+                with patch(
+                    "openemux.core.atomic_write.os.replace", side_effect=OSError("disk full")
+                ):
+                    ok = _download_cover(
+                        "https://cdn.example/art/x.png", Path(tmp_dir) / "covers" / "Game.png"
+                    )
+
+            self.assertFalse(ok)
+            self.assertEqual(list((Path(tmp_dir) / "covers").glob("*")), [])
+
+    def test_junk_art_from_an_older_version_is_cleared_and_re_fetched(self):
+        # The sticky half of issue #213: any file at that path counted as
+        # art, so the ROM was skipped on every later fill-in sync and only a
+        # blank card and a decode warning ever said otherwise.
+        from openemux.core.cover_sync import _process_rom
+
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir = Path(tmp_dir)
+            art_path = roms_dir / "PS" / "covers" / "Game.png"
+            art_path.parent.mkdir(parents=True, exist_ok=True)
+            art_path.write_bytes(b"<html>Quota exceeded</html>" * 4)
+
+            with (
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      return_value=[("libretro", "primary", "https://cdn.example/a.png")]),
+                patch("openemux.core.cover_sync._download_cover",
+                      side_effect=lambda url, dest: dest) as download_mock,
+            ):
+                result = _process_rom(
+                    "PS",
+                    {"name": "Game", "path": "/roms/PS/Game.cue"},
+                    roms_dir,
+                    "covers",
+                    "boxart",
+                    {},
+                    None,
+                    False,
+                    None,
+                    cover_sync._HostGates(),
+                )
+
+            self.assertEqual(result["status"], "downloaded")
+            download_mock.assert_called_once()
+            self.assertFalse(
+                art_path.exists() and art_path.read_bytes().startswith(b"<html>")
+            )
+
+    def test_real_art_already_there_is_still_left_alone(self):
+        from openemux.core.cover_sync import _process_rom
+
+        with TemporaryDirectory() as tmp_dir:
+            roms_dir = Path(tmp_dir)
+            art_path = roms_dir / "PS" / "covers" / "Game.png"
+            art_path.parent.mkdir(parents=True, exist_ok=True)
+            art_path.write_bytes(_PNG_BYTES)
+
+            with patch("openemux.core.cover_sync._download_cover") as download_mock:
+                result = _process_rom(
+                    "PS",
+                    {"name": "Game", "path": "/roms/PS/Game.cue"},
+                    roms_dir,
+                    "covers",
+                    "boxart",
+                    {},
+                    None,
+                    False,
+                    None,
+                    cover_sync._HostGates(),
+                )
+
+            self.assertEqual(result["status"], "skipped")
+            download_mock.assert_not_called()
+            self.assertEqual(art_path.read_bytes(), _PNG_BYTES)
+
+    def test_a_crashed_sync_still_reports_back(self):
+        # on_done is what clears the caller's "a sync is running" flag; a
+        # worker that dies without firing it wedges the app for the rest of
+        # the session (issue #214).
+        from openemux.core.cover_sync import sync_covers_async
+
+        done = threading.Event()
+        received = {}
+
+        def _on_done(summary):
+            received.update(summary)
+            done.set()
+
+        with patch("openemux.core.cover_sync._sync_covers", side_effect=RuntimeError("boom")):
+            sync_covers_async(
+                library_by_console={},
+                covers_dir=Path("/tmp"),
+                scope="all",
+                selected_console=None,
+                on_done=_on_done,
+            )
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received["crashed"], "boom")
+        self.assertEqual(received["total"], 0)
+        self.assertFalse(received["cancelled"])
+
+    def test_a_crashed_artwork_sync_still_reports_back(self):
+        from openemux.core.cover_sync import sync_artwork_async
+
+        done = threading.Event()
+        received = {}
+
+        def _on_done(summary):
+            received.update(summary)
+            done.set()
+
+        with patch("openemux.core.cover_sync._sync_artwork", side_effect=RuntimeError("boom")):
+            sync_artwork_async(passes=[], covers_dir=Path("/tmp"), on_done=_on_done)
+
+        self.assertTrue(done.wait(5), "on_done never fired")
+        self.assertEqual(received["crashed"], "boom")
+        self.assertEqual(received["passes"], [])
 
     def test_cover_sync_reports_progress(self):
         library = {
@@ -838,9 +1015,11 @@ class StagedCandidateTests(unittest.TestCase):
     def test_provider_ladders_run_in_order(self):
         with patch("openemux.core.cover_sync._resolve_hash_stem",
                    return_value="Hash Stem (USA)"):
-            triples = cover_sync._staged_cover_candidates(
+            # Materialized inside the patch: the ladder is a generator, so a
+            # provider's block is not built until it is reached (issue #220).
+            triples = list(cover_sync._staged_cover_candidates(
                 "SFC", "Chrono Trigger", {}, rom_path="/tmp/ct.sfc"
-            )
+            ))
         stages = [(p, s) for p, s, _u in triples]
         # Default chain: libretro then openemux; each runs hash, exact, then
         # normalized before the next provider starts.
@@ -855,9 +1034,9 @@ class StagedCandidateTests(unittest.TestCase):
 
     def test_hash_stage_is_skipped_without_an_index_hit(self):
         with patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None):
-            triples = cover_sync._staged_cover_candidates(
+            triples = list(cover_sync._staged_cover_candidates(
                 "SFC", "Chrono Trigger", {}, rom_path="/tmp/ct.sfc"
-            )
+            ))
         self.assertTrue(all(s != "hash" for _p, s, _u in triples))
         self.assertEqual(triples[0][1], "exact")
 
@@ -924,7 +1103,8 @@ class ParallelSyncTests(unittest.TestCase):
                 in_flight[host] -= 1
             return True
 
-        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0,
+                    gates=None, quota=None):
             return [
                 ("libretro", "exact", f"https://thumbnails.libretro.com/x/{rom_name}.png"),
                 ("openemux", "exact", f"https://raw.githubusercontent.com/x/{rom_name}.webp"),
@@ -964,7 +1144,8 @@ class ParallelSyncTests(unittest.TestCase):
                 peak["now"] -= 1
             return True
 
-        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0,
+                    gates=None, quota=None):
             return [
                 ("openemux", "exact", f"https://raw.githubusercontent.com/x/{rom_name}.webp"),
             ]
@@ -994,7 +1175,8 @@ class ParallelSyncTests(unittest.TestCase):
             _time.sleep(0.03 - index * 0.005)
             return True
 
-        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0,
+                    gates=None, quota=None):
             index = rom_name.split()[-1]
             return [("openemux", "exact",
                      f"https://raw.githubusercontent.com/x/g-{int(index)}.webp")]
@@ -1030,7 +1212,8 @@ class ParallelSyncTests(unittest.TestCase):
                 done.set()  # first download lands, then the user cancels
             return True
 
-        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0, gates=None):
+        def _staged(console, rom_name, settings, rom_path=None, provider_rotation=0,
+                    gates=None, quota=None):
             return [("openemux", "exact",
                      f"https://raw.githubusercontent.com/x/{rom_name}.webp")]
 
@@ -1056,13 +1239,225 @@ class ParallelSyncTests(unittest.TestCase):
 
     def test_rotation_balances_the_equivalent_file_hosts(self):
         with patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None):
-            even = cover_sync._staged_cover_candidates(
+            even = list(cover_sync._staged_cover_candidates(
                 "SFC", "Chrono Trigger", {}, provider_rotation=0
-            )
-            odd = cover_sync._staged_cover_candidates(
+            ))
+            odd = list(cover_sync._staged_cover_candidates(
                 "SFC", "Chrono Trigger", {}, provider_rotation=1
-            )
+            ))
         self.assertEqual(even[0][0], "libretro")
         self.assertEqual(odd[0][0], "openemux")
         # Both rotations cover the same URL set: rotation changes order only.
         self.assertEqual({u for _p, _s, u in even}, {u for _p, _s, u in odd})
+
+
+class LazyScreenScraperTests(unittest.TestCase):
+    """The API is asked about the ROMs libretro missed, and no others (#220).
+
+    With ScreenScraper enabled the ladder is "libretro, then ScreenScraper" --
+    but the whole candidate list was built up front, and building the
+    ScreenScraper block *is* the ``jeuInfos`` round trip. So every ROM spent a
+    request off the daily quota and at least a second in the throttle, even
+    when the very first libretro candidate was about to work.
+    """
+
+    SETTINGS = {"cover_source": cover_sync.COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER}
+
+    def _library(self, count=3):
+        return {"SFC": [{"name": f"Game {i}", "path": f"/roms/SFC/Game {i}.sfc"}
+                        for i in range(count)]}
+
+    def _run(self, download, lookup):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
+                patch("openemux.core.cover_sync._screenscraper_credentials"),
+                patch("openemux.core.cover_sync.screenscraper.lookup_media_urls",
+                      side_effect=lookup) as lookup_mock,
+                patch("openemux.core.cover_sync._download_cover", side_effect=download),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings=self.SETTINGS,
+                    max_workers=1,
+                )
+        return summary, lookup_mock
+
+    def test_a_rom_libretro_serves_never_reaches_the_api(self):
+        summary, lookup = self._run(
+            download=lambda url, dest: Path(dest),
+            lookup=lambda **kwargs: [],
+        )
+        self.assertEqual(summary["downloaded"], 3)
+        self.assertEqual(lookup.call_count, 0)
+
+    def test_a_rom_libretro_misses_does_reach_the_api(self):
+        """The ladder still gets there; it is only the timing that changed."""
+        seen = []
+
+        def _download(url, dest):
+            seen.append(url)
+            return Path(dest) if "screenscraper" in url else False
+
+        summary, lookup = self._run(
+            download=_download,
+            lookup=lambda **kwargs: ["https://www.screenscraper.fr/media/x.png"],
+        )
+        self.assertEqual(summary["downloaded"], 3)
+        self.assertEqual(lookup.call_count, 3)
+        self.assertTrue(any("screenscraper" in url for url in seen))
+
+    def test_the_rom_is_not_hashed_when_the_first_candidate_answers(self):
+        """The CRC32 reads the whole ROM file; the ladder resolves it lazily.
+
+        Only the file-based providers have a hash stage, so on a chain that
+        leads with ScreenScraper the ROM is never opened when the API answers.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._resolve_hash_stem",
+                      return_value=None) as stem_mock,
+                patch("openemux.core.cover_sync._screenscraper_candidates",
+                      return_value=["https://www.screenscraper.fr/media/x.png"]),
+                patch("openemux.core.cover_sync.screenscraper.throttle"),
+                patch("openemux.core.cover_sync._download_cover",
+                      side_effect=lambda url, dest: Path(dest)),
+            ):
+                summary = _sync_covers(
+                    library_by_console=self._library(1),
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={"cover_source": cover_sync.COVER_SOURCE_SCREENSCRAPER},
+                    max_workers=1,
+                )
+        self.assertEqual(summary["downloaded"], 1)
+        self.assertEqual(stem_mock.call_count, 0)
+
+    def test_the_quota_latch_is_shared_by_the_whole_run(self):
+        """One 430 spares every remaining ROM a request and a throttle wait."""
+        calls = []
+
+        def _lookup(**kwargs):
+            quota = kwargs.get("quota")
+            calls.append(quota)
+            # What lookup_media_urls does on a 430, minus the network.
+            quota.note_status(430)
+            return []
+
+        summary, lookup = self._run(download=lambda url, dest: False, lookup=_lookup)
+        self.assertEqual(summary["downloaded"], 0)
+        # Every ROM was handed the *same* latch, so the second and third
+        # lookups return before doing anything.
+        self.assertEqual(len({id(q) for q in calls}), 1)
+        self.assertTrue(calls[0].closed)
+
+
+class DownloadStatusTests(unittest.TestCase):
+    """A 404 is "no cover"; a 429 or a 500 is not (#220)."""
+
+    def _fail_with(self, status, headers=None):
+        import urllib.error
+
+        return urllib.error.HTTPError(
+            "https://thumbnails.libretro.com/x.png", status, "nope",
+            headers or {}, None,
+        )
+
+    def test_a_404_is_a_miss_and_is_not_retried(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch("urllib.request.urlopen",
+                       side_effect=self._fail_with(404)) as open_mock:
+                written = cover_sync._download_cover(
+                    "https://thumbnails.libretro.com/x.png", Path(tmp_dir) / "a.png"
+                )
+        self.assertFalse(written)
+        self.assertEqual(open_mock.call_count, 1)
+
+    def test_a_rate_limit_is_retried_once(self):
+        responses = [self._fail_with(429), _image_response(_PNG_BYTES, "image/png")]
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.time.sleep") as sleep_mock,
+                patch("urllib.request.urlopen",
+                      side_effect=responses) as open_mock,
+            ):
+                written = cover_sync._download_cover(
+                    "https://thumbnails.libretro.com/x.png", Path(tmp_dir) / "a.png"
+                )
+        self.assertTrue(written)
+        self.assertEqual(open_mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 1)
+
+    def test_the_retry_is_not_endless(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.time.sleep"),
+                patch("urllib.request.urlopen",
+                      side_effect=self._fail_with(503)) as open_mock,
+            ):
+                written = cover_sync._download_cover(
+                    "https://thumbnails.libretro.com/x.png", Path(tmp_dir) / "a.png"
+                )
+        self.assertFalse(written)
+        self.assertEqual(open_mock.call_count, 2)
+
+    def test_retry_after_is_honoured_but_capped(self):
+        self.assertEqual(
+            cover_sync._retry_delay(self._fail_with(429, {"Retry-After": "2"})), 2.0
+        )
+        self.assertEqual(
+            cover_sync._retry_delay(self._fail_with(429, {"Retry-After": "600"})),
+            cover_sync._MAX_RETRY_DELAY_SECONDS,
+        )
+        # A host that says something unparseable gets the default.
+        self.assertEqual(
+            cover_sync._retry_delay(self._fail_with(429, {"Retry-After": "soon"})),
+            cover_sync._RETRY_DELAY_SECONDS,
+        )
+
+
+class ScreenScraperHostThrottleTests(unittest.TestCase):
+    """Media downloads owe the same interval the API call does (#220)."""
+
+    def test_a_screenscraper_media_url_waits_out_the_interval(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync.find_local_art", return_value=None),
+                patch("openemux.core.cover_sync._resolve_hash_stem", return_value=None),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      side_effect=lambda *a, **k: [
+                          ("screenscraper", "hash",
+                           "https://www.screenscraper.fr/media/x.png")
+                      ]),
+                patch("openemux.core.cover_sync._download_cover",
+                      side_effect=lambda url, dest: Path(dest)),
+                patch("openemux.core.cover_sync.screenscraper.throttle") as throttle_mock,
+            ):
+                _sync_covers(
+                    library_by_console={"SFC": [{"name": "Game", "path": "/roms/g.sfc"}]},
+                    covers_dir=tmp_dir,
+                    scope="console",
+                    selected_console="SFC",
+                    sync_settings={},
+                    max_workers=1,
+                )
+        self.assertEqual(throttle_mock.call_count, 1)
+
+    def test_a_libretro_url_does_not(self):
+        self.assertFalse(
+            cover_sync._is_screenscraper_host("https://thumbnails.libretro.com/x.png")
+        )
+        self.assertTrue(
+            cover_sync._is_screenscraper_host("https://www.screenscraper.fr/media/x.png")
+        )
+        self.assertTrue(
+            cover_sync._is_screenscraper_host("https://api.screenscraper.fr/api2/x")
+        )

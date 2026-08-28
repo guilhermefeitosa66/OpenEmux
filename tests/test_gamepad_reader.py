@@ -1,6 +1,7 @@
 import unittest
 
 from openemux.core import gamepad_reader as gr
+from tests.platform_marks import linux_only
 
 
 # A realistic-ish Xbox-style pad: face/shoulder/thumb/menu buttons, two sticks,
@@ -40,6 +41,7 @@ class BitmapParsingTests(unittest.TestCase):
         bits = gr.parse_bitmap("10000000000000 0")
         self.assertEqual(bits, {116})
 
+    @linux_only("the kernel prints its capability bitmaps as native longs")
     def test_zero_words_shift_the_offset(self):
         self.assertEqual(gr.parse_bitmap("1 0 0"), {128})
 
@@ -257,6 +259,7 @@ class RawByteStreamTests(unittest.TestCase):
         self.assertEqual(gr.joydev_token(0, -30000, gr.JS_EVENT_AXIS, 2), "-2")
         self.assertIsNone(gr.joydev_token(0, 100, gr.JS_EVENT_AXIS, 2))
 
+    @linux_only("struct input_event is the Linux kernel ABI")
     def test_struct_sizes_match_the_kernel_abi(self):
         self.assertEqual(gr.JS_EVENT_SIZE, 8)
         self.assertEqual(gr.INPUT_EVENT_SIZE, 24)

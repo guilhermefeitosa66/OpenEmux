@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#
+# Which window on the virtual display is the app's.
+#
+#   devbox-win                  the one to act on: the focused window when it
+#                               belongs to the app (that is the open dialog),
+#                               otherwise the most recently created one
+#   devbox-win --match <regex>  the newest whose title matches
+#   devbox-win --list           id, geometry and title of every one
+#
+# Every other tool goes through here, so "which window" is decided in one
+# place. Ownership by pid is the test, not the title: a dialog does not carry
+# "OpenEmux" in its title, and something that does is not necessarily the app.
+set -uo pipefail
+. /openemux/devkit/lib.sh
+
+# GTK's own helper windows -- the IME window and tooltips -- are real X windows
+# and would otherwise win "most recent" over the window somebody wants a
+# screenshot of.
+MIN_W=120
+MIN_H=60
+
+app_pids() {
+	# The pid this kit launched, when there is one: the container shares the
+	# host's PID namespace, so a bare pgrep for the app can match the copy the
+	# developer is running on their own desktop.
+	if [ -r "${DEVBOX_STATE}/app.pid" ]; then
+		local pid; pid=$(cat "${DEVBOX_STATE}/app.pid")
+		if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+			echo "${pid}"
+			return 0
+		fi
+	fi
+	return 1
+}
+
+candidates() {
+	local -a wins=()
+	local pid w geo width height name
+	if pid=$(app_pids); then
+		while read -r w; do [ -n "${w}" ] && wins+=("${w}"); done \
+			< <(xdotool search --onlyvisible --pid "${pid}" 2>/dev/null)
+	fi
+	# Fallback for a window whose _NET_WM_PID did not arrive, or an app started
+	# by hand inside the container. Safe here in a way it would not be on the
+	# host's display: nothing else has a window on :77.
+	if [ ${#wins[@]} -eq 0 ]; then
+		while read -r w; do [ -n "${w}" ] && wins+=("${w}"); done \
+			< <(xdotool search --onlyvisible --class '[Oo]pen[Ee]mux' 2>/dev/null)
+	fi
+	[ ${#wins[@]} -eq 0 ] && return 0
+
+	# Sorted by id, which grows with creation, so "newest" is the last line.
+	for w in $(printf '%s\n' "${wins[@]}" | sort -un); do
+		geo=$(xdotool getwindowgeometry "${w}" 2>/dev/null \
+			| sed -n 's/.*Geometry: \([0-9]*\)x\([0-9]*\).*/\1 \2/p')
+		read -r width height <<<"${geo}"
+		[ -n "${width:-}" ] && [ -n "${height:-}" ] || continue
+		[ "${width}" -ge "${MIN_W}" ] && [ "${height}" -ge "${MIN_H}" ] || continue
+		name=$(xdotool getwindowname "${w}" 2>/dev/null)
+		printf '%s\t%s\t%s\n' "${w}" "${width}x${height}" "${name}"
+	done
+}
+
+case "${1:-}" in
+	--list)
+		candidates | awk -F'\t' '{printf "%-12s %-12s %s\n", $1, $2, $3}'
+		;;
+	--match)
+		re=${2:?--match needs a regex}
+		candidates | awk -F'\t' -v re="${re}" '$3 ~ re {last=$1} END {if (last) print last}'
+		;;
+	'')
+		# The focused window is the right answer whenever there is one: with a
+		# dialog open it is the dialog that has to receive the keystroke, and
+		# the dialog is neither the largest window nor reliably the newest.
+		active=$(xdotool getactivewindow 2>/dev/null || true)
+		# Not `candidates | grep -q`: grep -q closes the pipe on the first
+		# match, the producer dies of SIGPIPE and pipefail turns the hit into
+		# a miss -- which here means quietly targeting the wrong window.
+		mine=$(candidates | cut -f1)
+		if [ -n "${active}" ] && grep -qx "${active}" <<<"${mine}"; then
+			echo "${active}"
+		else
+			candidates | tail -1 | cut -f1
+		fi
+		;;
+	*)
+		sed -n '3,9p' "$0" >&2
+		exit 2
+		;;
+esac

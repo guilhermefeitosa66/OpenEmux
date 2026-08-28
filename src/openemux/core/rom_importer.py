@@ -6,6 +6,7 @@ mirroring the threading pattern used by :mod:`openemux.core.cover_sync`.
 
 import hashlib
 import logging
+import os
 import shutil
 import zipfile
 from pathlib import Path
@@ -17,6 +18,7 @@ from openemux.core.archives import (
     is_archive,
     loads_archives_natively,
 )
+from openemux.core.dir_walk import walk_files
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions
 
 logger = logging.getLogger(__name__)
@@ -98,7 +100,10 @@ def _expand_paths(paths):
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
-            for child in sorted(path.rglob("*")):
+            # Follows symlinked subdirectories, which rglob does not: dropping
+            # a folder whose contents live on another disk imported nothing
+            # (issue #228).
+            for child in sorted(walk_files(path)):
                 if child.is_file() and _is_importable(child):
                     files.append(child)
         elif path.is_file():
@@ -120,6 +125,39 @@ def _same_contents(source, dest):
     return _file_digest(source) == _file_digest(dest)
 
 
+def _link_or_equivalent(source, dest):
+    """Link ``dest`` to ``source``, degrading rather than failing.
+
+    The symlink is absolute, and to the file as given: a link relative to the
+    library would break the moment either side moved, and resolving the source
+    would follow a link the user made on purpose somewhere else.
+
+    Windows only lets an unprivileged process create a symlink when Developer
+    Mode is on, so ``symlink_to`` raises there for most users. A hard link is
+    the honest substitute -- same bytes, no second copy, no privilege needed --
+    and it fails in turn when the two paths are on different volumes, which is
+    common for a ROM library on a second drive. Copying is what is left; the
+    user asked not to duplicate, so say which strategy actually ran rather than
+    letting them believe a link was made.
+
+    Returns the strategy used: ``"symlink"``, ``"hardlink"`` or ``"copy"``.
+    """
+    try:
+        dest.symlink_to(source.absolute())
+        return "symlink"
+    except OSError as exc:
+        logger.info("rom_import: symlink unavailable for %s (%s); trying a hard link", dest, exc)
+
+    try:
+        os.link(str(source), str(dest))
+        return "hardlink"
+    except OSError as exc:
+        logger.info("rom_import: hard link unavailable for %s (%s); copying instead", dest, exc)
+
+    shutil.copy2(str(source), str(dest))
+    return "copy"
+
+
 def _unique_destination(dest):
     """Return ``dest`` or a ``name (2).ext`` style sibling that does not exist."""
     if not dest.exists():
@@ -133,8 +171,27 @@ def _unique_destination(dest):
         counter += 1
 
 
-def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides=None, forced_console=None):
-    """Copy (or move) ROM files into ``<roms_dir>/<CONSOLE>/``.
+#: How an imported ROM gets into the library.
+IMPORT_COPY = "copy"
+IMPORT_MOVE = "move"
+IMPORT_LINK = "link"
+IMPORT_MODES = (IMPORT_COPY, IMPORT_MOVE, IMPORT_LINK)
+
+
+def normalize_import_mode(value):
+    value = str(value or "").strip().lower()
+    return value if value in IMPORT_MODES else IMPORT_COPY
+
+
+def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides=None,
+                forced_console=None, mode=None):
+    """Bring ROM files into ``<roms_dir>/<CONSOLE>/``.
+
+    ``mode`` is ``copy`` (the default), ``move``, or ``link`` -- a symbolic
+    link pointing at where the ROM already lives, for a collection that is
+    shared with other applications or too large to duplicate (issue #298).
+    The scanner sees a symlinked *file* exactly like a real one; a symlinked
+    *directory* is a different question, and #228's.
 
     ``console_overrides`` maps a lowercase extension to a console id, letting the
     UI resolve an ambiguous extension once and apply it to the whole batch.
@@ -143,6 +200,7 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
 
     Returns ``{"imported": [...], "skipped": [...], "unknown": [...], "errors": [...]}``.
     """
+    mode = normalize_import_mode(mode or (IMPORT_MOVE if move else IMPORT_COPY))
     roms_dir = Path(roms_dir)
     overrides = {str(k).lower(): v for k, v in (console_overrides or {}).items()}
 
@@ -174,6 +232,9 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
             # Cores that need a real file on disk cannot read a ROM out of an
             # archive, so unpack rather than copying the container across.
             if is_archive(source) and not loads_archives_natively(console):
+                # An archive the core cannot read has to become real files, so
+                # there is nothing for a link to point at: link mode extracts
+                # like copy mode does.
                 extracted = extract_archive(
                     source, target_dir, extensions=get_supported_extensions(console)
                 )
@@ -182,7 +243,7 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
                     result["unknown"].append(str(source))
                     _emit(on_progress, index, total, source, console, "unknown")
                     continue
-                if move:
+                if mode == IMPORT_MOVE:
                     source.unlink(missing_ok=True)
                 for path in extracted:
                     result["imported"].append(str(path))
@@ -205,11 +266,13 @@ def import_roms(paths, roms_dir, on_progress=None, move=False, console_overrides
                 continue
 
             dest = _unique_destination(dest)
-            if move:
+            if mode == IMPORT_MOVE:
                 shutil.move(str(source), str(dest))
+            elif mode == IMPORT_LINK:
+                _link_or_equivalent(source, dest)
             else:
                 shutil.copy2(str(source), str(dest))
-            logger.info("rom_import: imported %s -> %s", source, dest)
+            logger.info("rom_import: imported %s -> %s (%s)", source, dest, mode)
             result["imported"].append(str(dest))
             _emit(on_progress, index, total, source, console, "imported")
         except OSError as exc:
@@ -256,7 +319,8 @@ def collect_ambiguous_extensions(paths):
     return ambiguous
 
 
-def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False, console_overrides=None, forced_console=None):
+def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False,
+                      console_overrides=None, forced_console=None, mode=None):
     """Run :func:`import_roms` on a background thread (see ``sync_covers_async``)."""
 
     def _worker():
@@ -267,6 +331,7 @@ def import_roms_async(paths, roms_dir, on_done, on_progress=None, move=False, co
             move=move,
             console_overrides=console_overrides,
             forced_console=forced_console,
+            mode=mode,
         )
         if on_done:
             on_done(summary)

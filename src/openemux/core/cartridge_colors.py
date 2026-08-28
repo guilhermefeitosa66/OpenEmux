@@ -17,10 +17,12 @@ from pathlib import Path
 
 import yaml
 
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.paths import store_path
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CARTRIDGE_COLORS_FILE = DEFAULT_CONFIG_DIR / "cartridge_colors.config"
+DEFAULT_CARTRIDGE_COLORS_FILE = store_path("cartridge_colors")
 
 #: The shell as authored -- the absence of a color, not a color of its own.
 DEFAULT_COLOR_ID = "default"
@@ -91,8 +93,32 @@ def order_color_ids(color_ids):
 class CartridgeColorStore:
     def __init__(self, config_file=DEFAULT_CARTRIDGE_COLORS_FILE):
         self.config_file = Path(config_file).expanduser()
+        # The parsed file, keyed on its (mtime_ns, size). get_effective_color
+        # calls load() twice per card -- once for the ROM override, once for
+        # the console default -- so a 500-ROM page was 1000 file reads and
+        # YAML parses on the GTK main thread, repeated on every zoom, sort and
+        # view-mode change (issue #231). Same key shape as the cover cache.
+        self._cache = (None, None)
+
+    def _stamp(self):
+        try:
+            stat = self.config_file.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
 
     def load(self):
+        stamp = self._stamp()
+        cached_stamp, cached = self._cache
+        if stamp is not None and cached_stamp == stamp and cached is not None:
+            # A deep copy on the way out, for the same reason the parse takes
+            # one: a caller that mutates the result must not edit the cache.
+            return copy.deepcopy(cached)
+        data = self._load_uncached()
+        self._cache = (stamp, copy.deepcopy(data))
+        return data
+
+    def _load_uncached(self):
         # Deep copies for the same reason the shader store takes them: the
         # nested dicts must never alias the module-level default.
         if not self.config_file.exists():
@@ -100,31 +126,34 @@ class CartridgeColorStore:
 
         try:
             raw = yaml.safe_load(self.config_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+            if not isinstance(raw, dict):
+                raise ValueError(f"not a mapping: {type(raw).__name__}")
+
+            data = copy.deepcopy(DEFAULT_CARTRIDGE_COLOR_CONFIG)
+            data["version"] = int(raw.get("version", 1))
+
+            defaults = {}
+            for key, value in (raw.get("console_defaults") or {}).items():
+                canonical = resolve_system_id(key)
+                if canonical not in SYSTEM_IDS:
+                    continue
+                color = normalize_color_id(value)
+                if color != DEFAULT_COLOR_ID:
+                    defaults[canonical] = color
+            data["console_defaults"] = defaults
+
+            overrides = {}
+            for key, value in (raw.get("rom_overrides") or {}).items():
+                if not key:
+                    continue
+                color = normalize_color_id(value)
+                if color != DEFAULT_COLOR_ID:
+                    overrides[str(key)] = color
+            data["rom_overrides"] = overrides
+            return data
+        except Exception as exc:
+            quarantine_state_file(self.config_file, exc)
             return copy.deepcopy(DEFAULT_CARTRIDGE_COLOR_CONFIG)
-
-        data = copy.deepcopy(DEFAULT_CARTRIDGE_COLOR_CONFIG)
-        data["version"] = int(raw.get("version", 1))
-
-        defaults = {}
-        for key, value in (raw.get("console_defaults") or {}).items():
-            canonical = resolve_system_id(key)
-            if canonical not in SYSTEM_IDS:
-                continue
-            color = normalize_color_id(value)
-            if color != DEFAULT_COLOR_ID:
-                defaults[canonical] = color
-        data["console_defaults"] = defaults
-
-        overrides = {}
-        for key, value in (raw.get("rom_overrides") or {}).items():
-            if not key:
-                continue
-            color = normalize_color_id(value)
-            if color != DEFAULT_COLOR_ID:
-                overrides[str(key)] = color
-        data["rom_overrides"] = overrides
-        return data
 
     def save(self, settings):
         payload = copy.deepcopy(DEFAULT_CARTRIDGE_COLOR_CONFIG)
@@ -139,8 +168,10 @@ class CartridgeColorStore:
             for key, color in ((settings or {}).get("rom_overrides") or {}).items()
             if key and normalize_color_id(color) != DEFAULT_COLOR_ID
         }
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        self.config_file.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
+        # Our own writes are the one case the stamp cannot be trusted for: a
+        # rewrite of the same length inside one filesystem clock tick.
+        self._cache = (None, None)
         return payload
 
     # -- per-console defaults ---------------------------------------------

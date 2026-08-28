@@ -1,16 +1,29 @@
-import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Graphene, Pango, Gio
+"""The cover grid: what it shows, how it is laid out, and what is selected.
+
+`RomGrid` is a `Gtk.GridView` over a filtered list model, so a library of
+several thousand ROMs costs a screenful of widgets rather than one per game
+(issue #219). It owns the model and the filter, the column packing GTK's own
+does not do, the keyboard and gamepad focus plumbing, and the selection --
+including the rubber band drawn over it.
+
+The card it recycles is `ui/rom_card.py`; the sizes both measure themselves
+against are in `ui/card_layout.py` (issue #238). The names those two used to
+live under here are re-exported, since the window, the artwork manager and the
+tests already import them from this module.
+"""
+
 import logging
 
-from openemux.core import cartridge_render, cover_cache
-from openemux.core.selection import SelectionModel
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gdk, GLib, Gio, Gtk
+
+from openemux.core import cartridge_render
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
-    LIST_ROW_MIN_WIDTH,
     is_grid_view,
-    list_thumb_column_width,
     list_thumb_size,
     normalize_view_mode,
     normalize_zoom,
@@ -18,979 +31,64 @@ from openemux.core.library_view import (
     scale_length,
     scale_spacing,
 )
-from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
-from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
-from openemux.core.systems import get_system_display_name
-from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
+from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
+    ACTIVATION_DEBOUNCE_US,
+    CARTRIDGE_RENDER_SCALE,
+    CONSOLE_COVER_ASPECTS,
+    DEFAULT_COVER_ASPECT,
+    DEFAULT_ITEM_SIZE,
+    FIXED_ITEM_WIDTH,
+    GRID_MARGIN,
+    GRID_SPACING,
+    LIST_MARGIN,
+    LIST_ROW_SPACING,
+    FixedSizePicture,
+    card_size_for,
+    cartridge_frame_svg,
+    columns_and_slack,
+    cover_size_for_console,
+    default_item_size,
+)
+from openemux.ui.context_menu import dismiss_context_popover
+from openemux.ui.grid_selection import GridSelection
+from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
+    CardContext,
+    RomEntry,
+    RomItem,
+    entry_matches,
+)
 
 logger = logging.getLogger(__name__)
 
-# The composite is rendered above the logical card size so it stays sharp on
-# HiDPI displays; GTK scales the texture down when it is not needed.
-CARTRIDGE_RENDER_SCALE = 2
 
+class RomGrid(Gtk.GridView):
+    """The library grid: a GtkGridView over the page's ROMs.
 
-DEFAULT_ITEM_SIZE = (200, 200)
-FIXED_ITEM_WIDTH = 200
+    Virtualized on purpose (issue #219). The previous GtkFlowBox built one
+    live widget per ROM -- roughly twenty widgets each -- and mapped every one
+    of them, so opening "All consoles" on a few thousand games spent seconds
+    building widgets before the first frame and then held a decoded texture
+    per card for as long as the page existed. A GridView builds only what is
+    on screen and re-binds those few cards as the view scrolls.
 
-#: Gap between cards, and the grid's padding inside the viewport.
-GRID_SPACING = 24
-GRID_MARGIN = 28
+    What that costs, and where it is paid:
 
-#: The same, for the compact list: rows sit close together and closer to the
-#: edges, like a file manager's list view.
-LIST_ROW_SPACING = 4
-LIST_MARGIN = 12
-
-# Box art proportions (width / height) per console, so a card matches the shape
-# of the artwork it holds instead of forcing every console into a square.
-# Measured as the median of libretro Named_Boxarts samples per system (~30
-# scans each), which is where synced covers come from.
-DEFAULT_COVER_ASPECT = 1.0
-CONSOLE_COVER_ASPECTS = {
-    "A2600": 0.73,
-    "A5200": 0.73,
-    "A7800": 0.73,
-    "CV": 0.73,
-    "FC": 0.73,
-    "FDS": 0.98,
-    "GB": 1.00,
-    "GBA": 1.00,
-    "GBC": 1.00,
-    "GC": 0.71,
-    "GG": 0.71,
-    "INTV": 0.72,
-    "LYNX": 1.12,
-    "MCD": 0.71,
-    "MD": 0.70,
-    "N64": 1.37,
-    "NDS": 1.11,
-    "NGP": 0.88,
-    "O2": 0.74,
-    "PCE": 1.03,
-    "PCECD": 1.00,
-    "PS": 1.00,
-    "PSP": 0.58,
-    "S32X": 0.73,
-    "SATURN": 1.00,
-    "SFC": 1.41,
-    "SG1000": 0.73,
-    "SMS": 0.71,
-    "VB": 1.00,
-    "VECTREX": 0.74,
-    "WS": 0.81,
-}
-
-
-def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
-    """Card size for a console when no cartridge frame is drawn."""
-    width = scale_length(FIXED_ITEM_WIDTH, zoom)
-    aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
-    height = int(round(width / aspect)) if aspect > 0 else width
-    return width, max(1, height)
-
-
-def default_item_size(zoom=DEFAULT_ZOOM):
-    """The uniform square box pages that mix consoles lay their covers in."""
-    return scale_length(DEFAULT_ITEM_SIZE[0], zoom), scale_length(DEFAULT_ITEM_SIZE[1], zoom)
-
-
-def card_size_for(cover_size, mixed_consoles=False, compact=False):
-    """Full card size for a cover: the artwork plus the caption below it.
-
-    The grid needs this to lay out its columns and the card needs it to pin its
-    own size, so it is computed in one place. Pages that mix consoles carry a
-    second caption line for the console name.
-
-    A compact row puts the caption *beside* the thumbnail instead, so its
-    height is the thumbnail's and its width is only a minimum -- the row
-    stretches to the viewport.
-    """
-    if compact:
-        return LIST_ROW_MIN_WIDTH, cover_size[1]
-    caption_height = 44 + (18 if mixed_consoles else 0)
-    return cover_size[0], cover_size[1] + caption_height
-
-
-def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
-    """How many cards fit on a line, and the width left over after them.
-
-    ``available`` is the viewport width minus the grid's margins. The leftover
-    is what the caller hands to the end margin so GtkFlowBox has nothing to
-    justify with -- see RomGrid._retune_columns.
-
-    A page with fewer cards than fit on a line is sized for the cards it
-    actually has, otherwise those few get spread across the full width.
-    """
-    if available < card_width:
-        columns = 1
-    else:
-        columns = max(1, (available + spacing) // (card_width + spacing))
-    filled = max(1, min(columns, item_count))
-    used = filled * card_width + (filled - 1) * spacing
-    return columns, max(0, available - used)
-
-
-def cartridge_frame_svg(console, color=None):
-    """The pre-render frame for a console, when one was authored as SVG.
-
-    ``color`` picks a shell variant when one exists on disk; the default (and
-    any color with no file) is the authored ``<CONSOLE>.svg``.
-    """
-    return cartridge_render.cartridge_frame(console, color=color)
-
-
-class FixedSizePicture(Gtk.Picture):
-    """A Picture that measures as the slot it sits in, not as its image.
-
-    Gtk.Picture reports its paintable's pixel size as the natural size, and
-    set_size_request only raises the minimum. Two places need the slot to win
-    instead:
-
-    * the cartridge composite is rendered at CARTRIDGE_RENDER_SCALE for HiDPI,
-      and would blow the card up by that factor;
-    * a list thumbnail asked to fit a fixed height reports the width its aspect
-      implies, so each console would indent its titles differently.
-
-    Reporting the slot directly fixes both, and GTK still draws from the
-    full-resolution image.
+    * per-ROM state moved to ``RomEntry`` -- selection and the resolved
+      artwork state would otherwise follow a recycled widget to another game;
+    * filtering is a ``Gtk.FilterListModel`` over that model rather than a
+      walk that hides child wrappers;
+    * focus memory remembers the *entry*, and restores it through
+      ``scroll_to``, because the widget it was on may be showing something
+      else by then;
+    * the rubber band reads the bounds of the cards that exist, which is
+      sound because the band is drawn inside the viewport and everything the
+      viewport shows is realized.
     """
 
-    __gtype_name__ = "OpenEmuxFixedSizePicture"
+    #: The widget a bound item is. GridSelection asks so it can tell a card
+    #: from the empty page under the pointer without importing the card.
+    card_class = RomItem
 
-    def __init__(self, width, height):
-        super().__init__()
-        self._slot_size = (width, height)
-
-    def do_measure(self, orientation, for_size):
-        size = (
-            self._slot_size[0]
-            if orientation == Gtk.Orientation.HORIZONTAL
-            else self._slot_size[1]
-        )
-        return size, size, -1, -1
-
-
-class RomItem(Gtk.Box):
-    NAME_PREVIEW_LIMIT = 30
-
-    def __init__(
-        self,
-        rom,
-        on_launch_callback,
-        on_toggle_favorite,
-        on_reveal_in_files,
-        on_choose_cover,
-        on_remove_cover,
-        is_favorite,
-        has_local_cover,
-        t,
-        roms_dir,
-        cover_size,
-        cartridge_frame_path=None,
-        mixed_consoles=False,
-        on_rename_rom=None,
-        on_delete_rom=None,
-        on_toggle_selection=None,
-        compact=False,
-        zoom=DEFAULT_ZOOM,
-        context_services=None,
-        on_artwork_state=None,
-    ):
-        super().__init__(
-            orientation=(
-                Gtk.Orientation.HORIZONTAL if compact else Gtk.Orientation.VERTICAL
-            ),
-            spacing=(12 if compact else 8),
-        )
-        self.rom = rom
-        self.on_launch_callback = on_launch_callback
-        self.on_toggle_favorite = on_toggle_favorite
-        self.on_reveal_in_files = on_reveal_in_files
-        self.on_choose_cover = on_choose_cover
-        self.on_remove_cover = on_remove_cover
-        self.on_rename_rom = on_rename_rom
-        self.on_delete_rom = on_delete_rom
-        # Builds the data-driven submenus (shader, and later core/collection).
-        self.context_services = context_services
-        # Artwork state settles asynchronously, so the "without artwork"
-        # filter has to be re-applied when it does (issue #127).
-        self.on_artwork_state = on_artwork_state
-        # Selection lives in the grid (it spans cards); the card only reports
-        # the ctrl-click that toggles it.
-        self.on_toggle_selection = on_toggle_selection
-        self.selected = False
-        self.is_favorite = is_favorite
-        self.has_local_cover = has_local_cover
-        self.t = t
-        self.roms_dir = roms_dir
-        # A compact row is the same card laid out sideways: a thumbnail, the
-        # title beside it, and the badges at the far end instead of stacked on
-        # the artwork, where they would swallow a 64px thumbnail.
-        self.compact = compact
-        self.zoom = normalize_zoom(zoom)
-        self.cover_width, self.cover_height = cover_size
-        # When set, the card shows a single pre-rendered image: the cover is
-        # already composited into the cartridge, so there is no overlay to
-        # stack and no geometry to compute here.
-        self.cartridge_frame_path = cartridge_frame_path
-        # Pages that mix consoles cannot size the card to one box art shape, so
-        # the cover is centred at its own proportions over a uniform backdrop.
-        self.mixed_consoles = mixed_consoles
-        self._backdrop = None
-        # Inside a cartridge frame the label sticker is what belongs there, so
-        # prefer it and fall back to the box art when none was configured.
-        self._art_kinds = (
-            (LABEL_ART, COVER_ART) if cartridge_frame_path else (COVER_ART,)
-        )
-        # A label sticker is only meaningful for a console that has a cartridge
-        # to put it on, whether or not the cartridge look is switched on now.
-        self.supports_label = cartridge_frame_svg(rom["console"]) is not None
-        self.add_css_class("rom-card")
-        if compact:
-            self.add_css_class("rom-row")
-        # Fixed card size. The grid also pins each FlowBoxChild to this size, so
-        # a page with a single row cannot stretch the cell (and with it the
-        # focus ring) over the whole viewport.
-        self.card_size = card_size_for(
-            (self.cover_width, self.cover_height), mixed_consoles, compact=compact
-        )
-        self.set_size_request(*self.card_size)
-        # Centred rather than START-aligned: the card fills its cell exactly, so
-        # its contents sit centred inside the focus/selection ring. A row is the
-        # exception: it spans the viewport, so it fills horizontally.
-        self.set_halign(Gtk.Align.FILL if compact else Gtk.Align.CENTER)
-        self.set_valign(Gtk.Align.CENTER)
-        self.set_hexpand(bool(compact))
-        self.set_vexpand(False)
-
-        # Click gesture
-        gesture = Gtk.GestureClick()
-        # Listen to all mouse buttons (primary + secondary for context menu).
-        gesture.set_button(0)
-        gesture.connect("released", self.on_click)
-        self.add_controller(gesture)
-
-        # Hover effects
-        motion = Gtk.EventControllerMotion()
-        motion.connect("enter", self._on_hover_enter)
-        motion.connect("leave", self._on_hover_leave)
-        self.add_controller(motion)
-
-        # Cover art overlay (image + play button on hover)
-        self.cover_overlay = Gtk.Overlay()
-        self.cover_overlay.set_size_request(self.cover_width, self.cover_height)
-        if compact:
-            # Pin the thumbnail column: GTK propagates a child's hexpand up, so
-            # without this the artwork column absorbs the row's spare width.
-            # The width is the column's, not this cover's, so every title in the
-            # list starts at the same indent.
-            self.cover_overlay.set_size_request(
-                list_thumb_column_width(self.zoom), self.cover_height
-            )
-            self.cover_overlay.set_hexpand(False)
-            self.cover_overlay.set_halign(Gtk.Align.START)
-
-        # Cover image (placeholder initially)
-        self.cover_image = (
-            FixedSizePicture(*self._cover_target_size())
-            if (cartridge_frame_path or compact)
-            else Gtk.Picture()
-        )
-        self.cover_image.set_size_request(*self._cover_target_size())
-        self.cover_image.set_content_fit(
-            Gtk.ContentFit.CONTAIN
-            if (mixed_consoles or cartridge_frame_path or compact)
-            else Gtk.ContentFit.COVER
-        )
-        self.cover_image.set_can_shrink(True)
-        self.cover_image.add_css_class("rom-cover")
-        self._setup_cover_host()
-        self._set_placeholder()
-
-        # Play button overlay (hidden by default)
-        self.play_overlay = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.play_overlay.set_valign(Gtk.Align.FILL)
-        self.play_overlay.set_halign(Gtk.Align.FILL)
-        self.play_overlay.set_hexpand(True)
-        self.play_overlay.set_vexpand(True)
-        self.play_overlay.set_size_request(self.cover_width, self.cover_height)
-        self.play_overlay.add_css_class("play-overlay")
-        self.play_overlay.set_visible(False)
-
-        play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        play_icon.set_pixel_size(scale_length(40, self.zoom))
-        play_icon.set_halign(Gtk.Align.CENTER)
-        play_icon.set_valign(Gtk.Align.CENTER)
-        play_icon.add_css_class("play-icon")
-        play_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        play_center.set_hexpand(True)
-        play_center.set_vexpand(True)
-        play_center.set_halign(Gtk.Align.CENTER)
-        play_center.set_valign(Gtk.Align.CENTER)
-        play_center.append(play_icon)
-        self.play_overlay.append(play_center)
-
-        self.cover_overlay.add_overlay(self.play_overlay)
-
-        # Favouriting is one click away, on the card itself. The star stays
-        # visible on a favourite (it is the badge that marks it) and otherwise
-        # appears on hover, like the menu button on the other corner.
-        self.favorite_button = Gtk.Button.new_from_icon_name("starred-symbolic")
-        # Pointer-only: a focusable button here would be a focus stop *inside*
-        # the card, so an arrow key would step through the badges instead of
-        # moving to the next game. Ctrl+D does the same thing from the keyboard.
-        self.favorite_button.set_focusable(False)
-        self.favorite_button.set_can_focus(False)
-        self.favorite_button.add_css_class("rom-menu-button")
-        self.favorite_button.add_css_class("circular")
-        self.favorite_button.add_css_class("favorite-badge")
-        self.favorite_button.set_halign(Gtk.Align.START)
-        self.favorite_button.set_valign(Gtk.Align.CENTER if compact else Gtk.Align.START)
-        if not compact:
-            self.favorite_button.set_margin_top(6)
-            self.favorite_button.set_margin_start(6)
-        self.favorite_button.connect("clicked", self._on_favorite_button_clicked)
-        self._sync_favorite_button(self.is_favorite(self.rom))
-        if not compact:
-            self.cover_overlay.add_overlay(self.favorite_button)
-
-        # "This ROM has no artwork" must be visible in *every* view mode. In
-        # the default cartridge shelf a cover-less ROM renders as a blank
-        # cartridge rather than the generic placeholder, so nothing
-        # distinguished it from one whose art simply had not loaded (#127).
-        # None until the fetch resolves; the badge only appears on False.
-        self.has_artwork = None
-        self.artwork_badge = Gtk.Image.new_from_icon_name("image-missing-symbolic")
-        self.artwork_badge.add_css_class("artwork-missing-badge")
-        self.artwork_badge.set_tooltip_text(self.t("rom.artwork.missing"))
-        self.artwork_badge.set_visible(False)
-        self.artwork_badge.set_halign(Gtk.Align.END)
-        self.artwork_badge.set_valign(Gtk.Align.END)
-        if not compact:
-            self.artwork_badge.set_margin_bottom(6)
-            self.artwork_badge.set_margin_end(6)
-            self.cover_overlay.add_overlay(self.artwork_badge)
-
-        # Right-click is not obvious to everyone, so the same menu is one click
-        # away from a button that appears on hover.
-        self.menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
-        # Pointer-only, same as the star: the Menu key opens this menu from the
-        # keyboard without turning the button into a focus stop inside the card.
-        self.menu_button.set_focusable(False)
-        self.menu_button.set_can_focus(False)
-        self.menu_button.add_css_class("rom-menu-button")
-        self.menu_button.add_css_class("circular")
-        self.menu_button.set_halign(Gtk.Align.END)
-        self.menu_button.set_valign(Gtk.Align.CENTER if compact else Gtk.Align.START)
-        if not compact:
-            self.menu_button.set_margin_top(6)
-            self.menu_button.set_margin_end(6)
-        self.menu_button.set_tooltip_text(self.t("context.more_options"))
-        self.menu_button.set_visible(False)
-        self.menu_button.connect("clicked", self._on_menu_button_clicked)
-        if not compact:
-            self.cover_overlay.add_overlay(self.menu_button)
-
-        # List rows carry the inbox idiom: a checkbox at the start of the row,
-        # always visible, reflecting and driving this ROM's selection
-        # (issue #78). Clicking it must never launch the game.
-        self.select_check = None
-        if compact:
-            self.select_check = Gtk.CheckButton()
-            self.select_check.set_valign(Gtk.Align.CENTER)
-            self.select_check.set_tooltip_text(self.t("selection.row_checkbox"))
-            self._select_check_guard = False
-            self.select_check.connect("toggled", self._on_select_check_toggled)
-            self.append(self.select_check)
-
-        self.append(self.cover_overlay)
-
-        full_name = rom["name"]
-        # A card only has its own width for the title, so the caption is cut to
-        # what fits -- which is a function of the zoom, or a zoomed-out card
-        # would be stretched wider by its own label. A row has the whole
-        # viewport to run the title along and is ellipsized instead.
-        preview_limit = max(8, int(round(self.NAME_PREVIEW_LIMIT * self.zoom)))
-        display_name = full_name if compact else self._truncate_name(full_name, preview_limit)
-        self.set_tooltip_text(full_name)
-
-        # ROM name, plus the console it belongs to when the page mixes consoles
-        # -- always in a row, where it reads as the platform column.
-        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        text_box.set_valign(Gtk.Align.CENTER)
-        text_box.set_hexpand(bool(compact))
-        label_align = Gtk.Align.START if compact else Gtk.Align.CENTER
-        self.name_label = Gtk.Label(label=display_name)
-        self.name_label.set_halign(label_align)
-        self.name_label.set_xalign(0.0 if compact else 0.5)
-        if compact:
-            self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
-        else:
-            self.name_label.set_max_width_chars(preview_limit + 3)
-            self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
-        self.name_label.set_tooltip_text(full_name)
-        self.name_label.add_css_class("rom-title")
-        text_box.append(self.name_label)
-
-        self.console_label = None
-        if mixed_consoles or compact:
-            self.console_label = Gtk.Label(label=get_system_display_name(rom["console"]))
-            self.console_label.set_halign(label_align)
-            self.console_label.set_xalign(0.0 if compact else 0.5)
-            if not compact:
-                self.console_label.set_max_width_chars(preview_limit + 3)
-            self.console_label.set_ellipsize(Pango.EllipsizeMode.END)
-            self.console_label.add_css_class("caption")
-            self.console_label.add_css_class("dim-label")
-            self.console_label.add_css_class("rom-console")
-            text_box.append(self.console_label)
-
-        self.append(text_box)
-
-        if compact:
-            # Badges at the end of the row: the star stays put (it marks a
-            # favourite) and the menu button appears on hover, as on a card.
-            badges = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            badges.set_valign(Gtk.Align.CENTER)
-            badges.append(self.favorite_button)
-            badges.append(self.menu_button)
-            self.append(badges)
-
-        # Deferred to the map signal rather than fired here: a card that is
-        # filtered out of the view is never mapped, so it queues no work until
-        # it is actually shown.
-        #
-        # Measured, because it is easy to assume otherwise: Gtk.FlowBox does
-        # *not* virtualize scrolling -- children below the fold are still
-        # mapped -- so this is not a substitute for virtualization, which is
-        # out of scope for this issue. What keeps a big library responsive is
-        # the bounded pool and the decode moving off the main thread (#128).
-        self._cover_fetch_started = False
-        self.connect("map", self._on_first_map)
-
-        self._context_popover = None
-
-    def _on_first_map(self, *_args):
-        if self._cover_fetch_started:
-            return
-        self._cover_fetch_started = True
-        fetch_cover(
-            self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds
-        )
-
-    @classmethod
-    def _truncate_name(cls, name, limit=None):
-        limit = cls.NAME_PREVIEW_LIMIT if limit is None else limit
-        if len(name) <= limit:
-            return name
-        return f"{name[:limit]}..."
-
-    def _set_placeholder(self):
-        """Show a styled placeholder with console-specific icon."""
-        icon_name = "applications-games-symbolic"
-
-        placeholder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        placeholder.set_valign(Gtk.Align.CENTER)
-        placeholder.set_halign(Gtk.Align.CENTER)
-        placeholder.set_hexpand(True)
-        placeholder.set_vexpand(True)
-        placeholder.set_size_request(*self._cover_target_size())
-        placeholder.add_css_class("rom-cover-placeholder")
-
-        icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(scale_length(48, self.zoom))
-        icon.set_halign(Gtk.Align.CENTER)
-        icon.set_valign(Gtk.Align.CENTER)
-        icon.add_css_class("placeholder-icon")
-        placeholder_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        placeholder_center.set_hexpand(True)
-        placeholder_center.set_vexpand(True)
-        placeholder_center.set_halign(Gtk.Align.CENTER)
-        placeholder_center.set_valign(Gtk.Align.CENTER)
-        placeholder_center.append(icon)
-
-        # The empty cover is exactly where someone notices art is missing, so
-        # the fix starts there rather than through the context menu. Reuses
-        # the artwork manager that already ships a name search and a CRC32
-        # search -- no new dialog, and no editing filenames by hand (#127).
-        if not self.compact and self.context_services is not None:
-            search_btn = Gtk.Button(label=self.t("rom.artwork.search"))
-            search_btn.add_css_class("flat")
-            search_btn.add_css_class("artwork-search-button")
-            # Pointer-only, like the other in-card buttons: a focus stop here
-            # would make an arrow key step through the card's insides.
-            search_btn.set_focusable(False)
-            search_btn.set_can_focus(False)
-            search_btn.set_halign(Gtk.Align.CENTER)
-            search_btn.connect("clicked", self._on_search_artwork_clicked)
-            placeholder_center.append(search_btn)
-
-        placeholder.append(placeholder_center)
-
-        # Replace cover image with placeholder in the configured cover area.
-        self.cover_image.set_visible(False)
-        self._set_cover_widget(placeholder)
-        self._placeholder_widget = placeholder
-
-    def _on_cover_fetched(self, rom, cover_path):
-        """Called on a worker thread once the cover path is resolved.
-
-        The decode happens *here*, not in the idle callback. It used to be
-        handed to the main thread, which serialised every JPEG/PNG decode and
-        rescale in the library onto the one thread that cannot afford it
-        (issue #128). Only assigning the result to a widget has to be on the
-        main loop, and that is all the idle callback does now.
-        """
-        # Recorded before the composite branch, so it is right in cartridge
-        # mode too -- where a cover-less ROM still takes the normal image
-        # path and would otherwise look identical to one with art (#127).
-        self.has_artwork = bool(cover_path)
-        GLib.idle_add(self._sync_artwork_state)
-        if self.cartridge_frame_path:
-            # Compose the cover into the cartridge (cached on disk, so this
-            # only costs anything the first time). A ROM with no cover renders
-            # as a blank cartridge instead of the generic icon, keeping the
-            # shelf consistent.
-            composite = cartridge_render.render_cartridge(
-                cover_path,
-                self.cartridge_frame_path,
-                rom["console"],
-                rom["name"],
-                width=self.cover_width,
-                scale=CARTRIDGE_RENDER_SCALE,
-            )
-            if composite:
-                # Full resolution: the composite is already the card's shape,
-                # and the full-size art is what keeps it sharp on HiDPI.
-                pixbuf = cover_cache.load_cover(str(composite))
-                if pixbuf is not None:
-                    GLib.idle_add(self._apply_cover_pixbuf, pixbuf, True)
-                    return
-        if cover_path:
-            width, height = self._cover_target_size()
-            pixbuf = cover_cache.load_cover(cover_path, width, height)
-            if pixbuf is not None:
-                GLib.idle_add(self._apply_cover_pixbuf, pixbuf, False)
-                return
-        # No cover, or one that would not decode -- cover_cache logs the
-        # latter, so a corrupt file is no longer indistinguishable from a
-        # missing one.
-        GLib.idle_add(self._restore_placeholder)
-
-    def _restore_placeholder(self):
-        self._set_placeholder()
-        return False
-
-    def _on_search_artwork_clicked(self, _button):
-        if self.context_services is None:
-            return
-        logger.info("rom artwork: search from empty cover rom=%s", self.rom.get("name"))
-        self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
-
-    def _sync_artwork_state(self):
-        """Reflect the resolved artwork state (main thread only)."""
-        self.artwork_badge.set_visible(self.has_artwork is False)
-        if self.on_artwork_state:
-            self.on_artwork_state(self)
-        return False
-
-    def _apply_cover_pixbuf(self, pixbuf, full_resolution):
-        """Hand an already-decoded cover to the widget (main thread only)."""
-        try:
-            if full_resolution:
-                self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-            else:
-                if self.mixed_consoles and not self.compact:
-                    # Shrink the widget to the scaled art so the rounded
-                    # corners and shadow hug the cover, not the empty area
-                    # around it. Not in a row: there the thumbnail box is a
-                    # column shared with every other row, and resizing it per
-                    # cover would stagger the titles.
-                    self.cover_image.set_size_request(
-                        pixbuf.get_width(), pixbuf.get_height()
-                    )
-                self.cover_image.set_pixbuf(pixbuf)
-            self.cover_image.set_visible(True)
-            # Remove placeholder if present
-            if hasattr(self, "_placeholder_widget"):
-                self._set_cover_widget(self.cover_image)
-                del self._placeholder_widget
-            if getattr(self, "_fade_next_apply", False):
-                self._fade_next_apply = False
-                self._animate_cover_reveal()
-        except Exception:
-            logger.exception("cover: could not attach art to the card")
-        return False  # Don't repeat idle callback
-
-    def _cover_target_size(self):
-        if self.compact:
-            # The shared column, so a wide cover can use all of it and a narrow
-            # one is centred in it rather than shrinking the slot.
-            return list_thumb_column_width(self.zoom), self.cover_height
-        return self.cover_width, self.cover_height
-
-    def _setup_cover_host(self):
-        # A row never gets the backdrop: it exists to fill a uniform *card* box
-        # on pages that mix consoles, and inside a horizontal row its expanding
-        # child makes the whole thumbnail column stretch, shoving every title to
-        # a different indent.
-        if self.mixed_consoles and not self.compact:
-            # Uniform box: the cover keeps its own shape and the leftover area
-            # is filled by a subtle backdrop instead of cropping the art.
-            self._backdrop = Gtk.Box()
-            self._backdrop.set_size_request(self.cover_width, self.cover_height)
-            self._backdrop.add_css_class("rom-cover-backdrop")
-            self.cover_overlay.set_child(self._backdrop)
-            self._set_cover_widget(self.cover_image)
-            return
-
-        self.cover_overlay.set_child(self.cover_image)
-
-    def _set_cover_widget(self, widget):
-        if self._backdrop is not None:
-            child = self._backdrop.get_first_child()
-            if child:
-                self._backdrop.remove(child)
-            # The expands hand the child the whole box; the aligns then centre it
-            # inside that space. Without the expands a Gtk.Box packs it left.
-            widget.set_hexpand(True)
-            widget.set_vexpand(True)
-            widget.set_halign(Gtk.Align.CENTER)
-            widget.set_valign(Gtk.Align.CENTER)
-            self._backdrop.append(widget)
-            return
-        self.cover_overlay.set_child(widget)
-
-    def _sync_favorite_button(self, is_favorite):
-        self._is_favorite_now = bool(is_favorite)
-        self.favorite_button.set_icon_name(
-            "starred-symbolic" if is_favorite else "non-starred-symbolic"
-        )
-        self.favorite_button.set_tooltip_text(
-            self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add")
-        )
-        if is_favorite:
-            self.favorite_button.add_css_class("favorite-on")
-        else:
-            self.favorite_button.remove_css_class("favorite-on")
-        # A favourite says so even when the pointer is elsewhere.
-        self.favorite_button.set_visible(
-            self._is_favorite_now or self.has_css_class("rom-card-hover")
-        )
-
-    def _on_favorite_button_clicked(self, _button):
-        self._act_toggle_favorite(None, None)
-
-    def set_selected(self, selected):
-        self.selected = bool(selected)
-        if self.selected:
-            self.add_css_class("rom-card-selected")
-        else:
-            self.remove_css_class("rom-card-selected")
-        # Keep the list-row checkbox honest without re-entering the toggle
-        # handler (the guard breaks the feedback loop).
-        if self.select_check is not None and self.select_check.get_active() != self.selected:
-            self._select_check_guard = True
-            self.select_check.set_active(self.selected)
-            self._select_check_guard = False
-
-    def _on_select_check_toggled(self, check):
-        if self._select_check_guard:
-            return
-        if self.on_toggle_selection:
-            # A checkbox is a plain toggle: no range semantics.
-            self.on_toggle_selection(self, True, False)
-
-    def _on_hover_enter(self, controller, x, y):
-        self.play_overlay.set_visible(True)
-        self.menu_button.set_visible(True)
-        self.favorite_button.set_visible(True)
-        self.add_css_class("rom-card-hover")
-
-    def _on_hover_leave(self, controller):
-        self.play_overlay.set_visible(False)
-        # Keep the button around while its own menu is open, otherwise it
-        # vanishes from under the pointer the moment the popover takes over.
-        if self._context_popover is None:
-            self.menu_button.set_visible(False)
-        self.favorite_button.set_visible(self._is_favorite_now)
-        self.remove_css_class("rom-card-hover")
-
-    def set_focus_visual(self, focused):
-        """Mirror the hover affordances for keyboard/gamepad focus.
-
-        Driven by the grid: focus lands on the FlowBoxChild wrapper, which is
-        this card's *parent*, so a focus controller on the card itself would
-        never see it.
-        """
-        if focused:
-            self.play_overlay.set_visible(True)
-            self.menu_button.set_visible(True)
-            self.favorite_button.set_visible(True)
-            return
-        if self.has_css_class("rom-card-hover"):
-            return  # the pointer is still on the card; leave hover in charge
-        self.play_overlay.set_visible(False)
-        if self._context_popover is None:
-            self.menu_button.set_visible(False)
-        self.favorite_button.set_visible(self._is_favorite_now)
-
-    def _on_menu_button_clicked(self, button):
-        # Anchor the menu under the button. Coordinates are relative to the
-        # card, which is what the popover is parented to.
-        ok, bounds = button.compute_bounds(self)
-        if ok:
-            self._show_context_menu(
-                bounds.get_x() + bounds.get_width() / 2,
-                bounds.get_y() + bounds.get_height(),
-            )
-        else:
-            self._show_context_menu()
-
-    def on_click(self, gesture, n_press, x, y):
-        button = gesture.get_current_button()
-        logger.info(
-            "rom card click: button=%s presses=%s rom=%s console=%s path=%s x=%.1f y=%.1f",
-            button,
-            n_press,
-            self.rom.get("name"),
-            self.rom.get("console"),
-            self.rom.get("path"),
-            x,
-            y,
-        )
-        if button == Gdk.BUTTON_SECONDARY:
-            self._show_context_menu(x, y)
-            return
-        if button != Gdk.BUTTON_PRIMARY:
-            return
-        # Modifier clicks build the selection (issue #78): Ctrl toggles this
-        # card, Shift ranges from the anchor, Ctrl+Shift adds the range. A
-        # modifier click must never launch the game.
-        state = gesture.get_current_event_state()
-        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
-        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
-        if self.on_toggle_selection:
-            self.on_toggle_selection(self, ctrl, shift)
-        # A plain click launches through the FlowBox's child activation
-        # (grid._on_child_activated) -- launching here too fired the game
-        # twice per click, the second attempt bouncing off "already running".
-
-    def _ensure_action_group(self):
-        if getattr(self, "_action_group", None) is not None:
-            return
-        group = Gio.SimpleActionGroup()
-        for name, handler in (
-            ("toggle-favorite", self._act_toggle_favorite),
-            ("reveal-in-files", self._act_reveal_in_files),
-            ("choose-cover", self._act_choose_cover),
-            ("remove-cover", self._act_remove_cover),
-            ("choose-label", self._act_choose_label),
-            ("remove-label", self._act_remove_label),
-            ("sync-cover", self._act_sync_cover),
-            ("sync-label", self._act_sync_label),
-            ("manage-cover", self._act_manage_cover),
-            ("manage-label", self._act_manage_label),
-            ("rename", self._act_rename),
-            ("delete", self._act_delete),
-        ):
-            action = Gio.SimpleAction.new(name, None)
-            action.connect("activate", handler)
-            group.add_action(action)
-        self.insert_action_group("rom", group)
-        self._action_group = group
-
-    def _show_context_menu(self, x=None, y=None):
-        logger.info(
-            "rom context menu open: rom=%s console=%s path=%s",
-            self.rom.get("name"),
-            self.rom.get("console"),
-            self.rom.get("path"),
-        )
-        self._ensure_action_group()
-        if self._context_popover is not None:
-            self._context_popover.popdown()
-            self._context_popover = None
-
-        is_favorite = self.is_favorite(self.rom)
-        entries = [
-            (
-                self.t("context.favorite.remove") if is_favorite else self.t("context.favorite.add"),
-                "rom.toggle-favorite",
-                "starred-symbolic" if is_favorite else "non-starred-symbolic",
-            ),
-        ]
-        # One artwork kind at a time, following what the card is actually
-        # showing: the label inside a cartridge, the box art everywhere else
-        # (issue #77).
-        #
-        # Everything that acts on that artwork lives in one submenu. Choose,
-        # remove and manage were three sibling rows at the top level, which is
-        # most of the menu's length spent on something that is not the common
-        # case. Sync stays outside: it is the one-click "just fetch it".
-        showing_label = bool(self.cartridge_frame_path) and self.supports_label
-        if showing_label:
-            kind, art_dir = "label", LABEL_ART
-        else:
-            kind, art_dir = "cover", COVER_ART
-
-        if self.context_services is not None:
-            entries.append(
-                (
-                    self.t(f"context.{kind}.sync"),
-                    f"rom.sync-{kind}",
-                    "folder-download-symbolic",
-                )
-            )
-
-        artwork_entries = []
-        if self.context_services is not None:
-            artwork_entries.append(
-                (
-                    self.t(f"context.{kind}.manage"),
-                    f"rom.manage-{kind}",
-                    "document-properties-symbolic",
-                )
-            )
-        artwork_entries.append(
-            (
-                self.t(f"context.{kind}.choose"),
-                f"rom.choose-{kind}",
-                "insert-image-symbolic" if showing_label else "image-x-generic-symbolic",
-            )
-        )
-        if self.has_local_cover(self.rom, art_dir):
-            artwork_entries.append(
-                (
-                    self.t(f"context.{kind}.remove"),
-                    f"rom.remove-{kind}",
-                    "user-trash-symbolic",
-                )
-            )
-        entries.append(
-            Submenu(
-                self.t(f"context.{kind}.artwork"),
-                artwork_entries,
-                "image-x-generic-symbolic",
-            )
-        )
-        # Data-driven submenus (shader today; core/collection later). Their own
-        # section, between the cover rows and the file actions.
-        if self.context_services is not None:
-            extra = self.context_services.build_submenus(self.rom)
-            if extra:
-                entries.append(SEPARATOR)
-                entries.extend(extra)
-        # Own section: these act on the file on disk, not on the library entry.
-        entries.append(SEPARATOR)
-        entries.append((self.t("context.reveal"), "rom.reveal-in-files", "folder-open-symbolic"))
-        if self.on_rename_rom:
-            entries.append((self.t("context.rename"), "rom.rename", "document-edit-symbolic"))
-        if self.on_delete_rom:
-            entries.append((self.t("context.delete"), "rom.delete", "user-trash-symbolic"))
-
-        popover = build_context_popover(entries)
-        popover.set_parent(self)
-        if x is not None and y is not None:
-            popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
-        popover.connect("closed", self._on_context_popover_closed)
-        self._context_popover = popover
-        popover.popup()
-
-    def _on_context_popover_closed(self, popover):
-        if self._context_popover is popover:
-            self._context_popover = None
-        # The pointer may have left the card while the menu was up.
-        if not self.has_css_class("rom-card-hover"):
-            self.menu_button.set_visible(False)
-        GLib.idle_add(popover.unparent)
-
-    def _act_toggle_favorite(self, _action, _param):
-        logger.info("rom context action: toggle_favorite rom=%s", self.rom.get("name"))
-        self._sync_favorite_button(self.on_toggle_favorite(self.rom))
-
-    def _act_rename(self, _action, _param):
-        logger.info("rom context action: rename rom=%s", self.rom.get("name"))
-        if self.on_rename_rom:
-            self.on_rename_rom(self.rom)
-
-    def _act_delete(self, _action, _param):
-        logger.info("rom context action: delete rom=%s", self.rom.get("name"))
-        if self.on_delete_rom:
-            self.on_delete_rom([self.rom])
-
-    def _act_reveal_in_files(self, _action, _param):
-        logger.info("rom context action: reveal_in_files rom=%s", self.rom.get("name"))
-        self.on_reveal_in_files(self.rom)
-
-    def _act_choose_cover(self, _action, _param):
-        logger.info("rom context action: choose_cover rom=%s", self.rom.get("name"))
-        self.on_choose_cover(self.rom, self._refresh_cover_after_change, COVER_ART)
-
-    def _act_remove_cover(self, _action, _param):
-        logger.info("rom context action: remove_cover rom=%s", self.rom.get("name"))
-        self.on_remove_cover(self.rom, self._refresh_cover_after_change, COVER_ART)
-
-    def _act_choose_label(self, _action, _param):
-        logger.info("rom context action: choose_label rom=%s", self.rom.get("name"))
-        self.on_choose_cover(self.rom, self._refresh_cover_after_change, LABEL_ART)
-
-    def _act_remove_label(self, _action, _param):
-        logger.info("rom context action: remove_label rom=%s", self.rom.get("name"))
-        self.on_remove_cover(self.rom, self._refresh_cover_after_change, LABEL_ART)
-
-    def _act_sync_cover(self, _action, _param):
-        logger.info("rom context action: sync_cover rom=%s", self.rom.get("name"))
-        if self.context_services is not None:
-            self.context_services.win.sync_rom_artwork(self.rom, COVER_ART_TYPE_BOXART)
-
-    def _act_sync_label(self, _action, _param):
-        logger.info("rom context action: sync_label rom=%s", self.rom.get("name"))
-        if self.context_services is not None:
-            self.context_services.win.sync_rom_artwork(self.rom, COVER_ART_TYPE_CARTRIDGE_LABEL)
-
-    def _act_manage_cover(self, _action, _param):
-        logger.info("rom context action: manage_cover rom=%s", self.rom.get("name"))
-        if self.context_services is not None:
-            self.context_services.win.open_artwork_manager(self.rom, COVER_ART)
-
-    def _act_manage_label(self, _action, _param):
-        logger.info("rom context action: manage_label rom=%s", self.rom.get("name"))
-        if self.context_services is not None:
-            self.context_services.win.open_artwork_manager(self.rom, LABEL_ART)
-
-
-    def _refresh_cover_after_change(self, fade=False):
-        # ``fade`` cross-fades the card when the new art lands (issue #187):
-        # what separates covers "filling in" during a sync from glitchy
-        # popping. Off for every other refresh path.
-        self._fade_next_apply = bool(fade)
-        fetch_cover(self.rom, self.roms_dir, self._on_cover_fetched, kinds=self._art_kinds)
-
-    def _animate_cover_reveal(self):
-        self.set_opacity(0.0)
-        target = Adw.PropertyAnimationTarget.new(self, "opacity")
-        animation = Adw.TimedAnimation.new(self, 0.0, 1.0, 280, target)
-        # Held on the card: the animation object must outlive this frame.
-        self._reveal_animation = animation
-        animation.play()
-
-    def set_cartridge_frame(self, frame_path):
-        """Swap the shell SVG and re-compose the card (per-ROM color change).
-
-        Only meaningful on a card already drawn as a cartridge; the geometry is
-        identical across a console's shell variants, so the card size holds.
-        """
-        if not self.cartridge_frame_path or not frame_path:
-            return
-        if str(frame_path) == str(self.cartridge_frame_path):
-            return
-        self.cartridge_frame_path = frame_path
-        self._refresh_cover_after_change()
-
-
-class RomGrid(Gtk.FlowBox):
     def __init__(
         self,
         console,
@@ -1012,6 +110,9 @@ class RomGrid(Gtk.FlowBox):
         context_services=None,
         frame_color_for_rom=None,
     ):
+        # Before anything else: the GObject has to exist before this widget
+        # can be configured. The model and the factory are attached at the
+        # end, once everything they call back into is in place.
         super().__init__()
         self.console = console
         self.context_services = context_services
@@ -1023,35 +124,26 @@ class RomGrid(Gtk.FlowBox):
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
         self.on_selection_changed = on_selection_changed
-        self._items = []
-        # Focus memory: coming back from the sidebar restores this card.
-        self._last_focused_child = None
-        # Rubber band state: the rectangle being dragged, and the selection it
-        # started from so a ctrl-drag can extend instead of replace.
-        self._band = None
-        self._band_origin = None
-        self._band_base = ()
-        # One selection model shared by every input method (issue #78); the
-        # key detects when the search filter changed the visible set.
-        self._selection_model = SelectionModel(0)
-        self._selection_key = None
+        # Focus memory: coming back from the sidebar restores this game. The
+        # entry, not the widget -- the widget may be showing another game by
+        # then (issue #219).
+        self._focused_entry = None
+        # One selection shared by every input method (issue #78), and the
+        # rubber band that is another way of driving it (issue #238).
+        self.selection = GridSelection(self, on_changed=on_selection_changed)
         # Coalesces the burst of artwork-state callbacks into one filter pass.
         self._artwork_filter_pending = False
         # Columns are recomputed from the viewport width; see _retune_columns.
         self._column_state = None
         self._measured_card_width = None
-        self._hadjustment = None
-        # Rows pack to the top. Filling the viewport instead would hand the
-        # spare height to the flow box, which shares it out *between* the rows
-        # (measured: 259px steps for a 173px card) rather than leaving it at the
-        # bottom.
-        self.set_valign(Gtk.Align.START)
-        self.set_vexpand(True)
-        self.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.set_homogeneous(False)
-        # Zeroes the theme's padding on the child wrappers, so a cell is exactly
-        # the card and the gaps are exactly GRID_SPACING.
-        self.add_css_class("rom-grid")
+        # (path, monotonic microseconds) of the last launch this grid started.
+        self._last_activation = (None, 0)
+        # The cards that exist right now, by the entry each is showing.
+        self._bound = {}
+        # Focus is followed from the window; see _watch_root_focus.
+        self._focused_card = None
+        self._focus_root = None
+        self._root_focus_handler = None
 
         self.view_mode = normalize_view_mode(self.ui_settings.get("view_mode"))
         self.compact = not is_grid_view(self.view_mode)
@@ -1062,23 +154,12 @@ class RomGrid(Gtk.FlowBox):
         self._spacing = scale_spacing(
             LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
         )
-
-        if self.compact:
-            # One row per line, filling the width. The column maths below is
-            # for cards; a row has no columns to fit.
-            self.set_row_spacing(self._spacing)
-            self.set_column_spacing(0)
-            self.set_min_children_per_line(1)
-            self.set_max_children_per_line(1)
-            margin = LIST_MARGIN
-        else:
-            self.set_row_spacing(self._spacing)
-            self.set_column_spacing(self._spacing)
-            margin = GRID_MARGIN
-        self.set_margin_top(margin)
-        self.set_margin_bottom(margin)
-        self.set_margin_start(margin)
-        self.set_margin_end(margin)
+        # GtkGridView has no row/column spacing of its own: the horizontal gap
+        # comes from a cell being one gap wider than the card centred in it,
+        # and the vertical gap from half of it on each card. The grid's own
+        # margin gives back the half-gap that leaves at the four edges.
+        self._card_margin = self._spacing // 2
+        self._margin = max(0, (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin)
 
         cartridge_frame_path = None
         # One fixed card size for the whole page, so the grid lays out on an
@@ -1107,47 +188,240 @@ class RomGrid(Gtk.FlowBox):
         # The console's authored shell; per-ROM colors swap in a variant of it.
         self._base_frame_path = cartridge_frame_path
 
-        for rom in roms:
-            item = RomItem(
-                rom,
-                self.on_launch_callback,
-                on_toggle_favorite,
-                on_reveal_in_files,
-                on_choose_cover,
-                on_remove_cover,
-                is_favorite,
-                has_local_cover,
-                t,
-                self.roms_dir,
-                cover_size,
-                cartridge_frame_path=self._frame_path_for_rom(rom),
-                mixed_consoles=mixed_consoles,
-                on_rename_rom=on_rename_rom,
-                on_delete_rom=on_delete_rom,
-                on_toggle_selection=self._toggle_item_selection,
-                compact=self.compact,
-                zoom=self.zoom,
-                context_services=self.context_services,
-                on_artwork_state=self._on_item_artwork_state,
-            )
-            self._items.append(item)
-            self.append(item)
-            self._prepare_child(item)
+        self._card_ctx = CardContext(
+            t=t,
+            roms_dir=roms_dir,
+            cover_size=cover_size,
+            card_size=self._card_size,
+            mixed_consoles=mixed_consoles,
+            compact=self.compact,
+            zoom=self.zoom,
+            cartridge=bool(cartridge_frame_path),
+            frame_for_rom=self._frame_path_for_rom,
+            context_services=context_services,
+            on_launch=self._launch_rom,
+            on_toggle_favorite=on_toggle_favorite,
+            on_reveal_in_files=on_reveal_in_files,
+            on_choose_cover=on_choose_cover,
+            on_remove_cover=on_remove_cover,
+            is_favorite=is_favorite,
+            has_local_cover=has_local_cover,
+            on_rename_rom=on_rename_rom,
+            on_delete_rom=on_delete_rom,
+            on_toggle_selection=self.selection.toggle_entry,
+            on_artwork_state=self._on_entry_artwork_state,
+        )
 
-        self.connect("child-activated", self._on_child_activated)
+        # -- the model ------------------------------------------------------
+        self._entries = [RomEntry(rom) for rom in roms]
+        self._by_path = {entry.path: entry for entry in self._entries}
+        self._store = Gio.ListStore.new(RomEntry)
+        self._store.splice(0, 0, self._entries)
+        self._query = ""
+        self._only_missing_artwork = False
+        self._filter = Gtk.CustomFilter.new(self._match_entry)
+        self._filtered = Gtk.FilterListModel(model=self._store, filter=self._filter)
+        self._visible_cache = None
+        self._filtered.connect("items-changed", self._on_filtered_changed)
 
-        # Menu key / Shift+F10 opens the focused card's context menu, the
-        # keyboard counterpart of the right click.
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_factory_setup)
+        factory.connect("bind", self._on_factory_bind)
+        factory.connect("unbind", self._on_factory_unbind)
+        factory.connect("teardown", self._on_factory_teardown)
+
+        self.set_factory(factory)
+        self.set_model(Gtk.NoSelection(model=self._filtered))
+        # Zeroes the theme's padding on the item wrappers, so a cell is exactly
+        # the card and the gaps are exactly _spacing.
+        self.add_css_class("rom-grid")
+        self.set_margin_top(self._margin)
+        self.set_margin_bottom(self._margin)
+        self.set_margin_start(self._margin)
+        self.set_margin_end(self._margin)
+        # One column until the viewport is known. The default is seven, which
+        # would lay the page out in a shape it is about to lose -- and bind a
+        # screenful of cards for that shape first.
+        self.set_max_columns(1)
+        self.set_min_columns(1)
+
+        # Menu key / Shift+F10 opens the focused card's context menu, and
+        # Return launches it: the keyboard counterparts of the pointer. Both
+        # used to come free with GtkFlowBox's own child activation.
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", self._on_grid_key_pressed)
         self.add_controller(key)
 
-        # The rubber band attaches to the ScrolledWindow on map (see
-        # _attach_band_gesture): the grid only covers the card rows, and a
-        # band naturally starts from the empty page space below or beside
-        # them, which belongs to the scroller.
-        self._band_scroller = None
-        self.connect("map", self._watch_viewport)
+        # A page switch replaces the whole grid. A context menu still up is
+        # parented to a card that is about to be disposed, so close it while
+        # its anchor is still alive (issue #275). "unmap" and not "unroot":
+        # GtkWidget's unroot is a vfunc with no signal behind it, and
+        # connecting to a name GObject does not know raises -- which is how
+        # this took the whole grid down with it (issue #286).
+        self.connect("map", self._on_map)
+        self.connect("unmap", self._on_unmap)
+
+    def _on_map(self, *_args):
+        # Both want an ancestry that only exists once the grid is in a window.
+        self._watch_root_focus()
+        self.selection.attach()
+
+    def _on_unmap(self, *_args):
+        self._unwatch_root_focus()
+        dismiss_context_popover()
+
+    # -- the model ---------------------------------------------------------
+
+    def _match_entry(self, entry):
+        """The filter predicate, run by GtkFilterListModel per entry."""
+        return entry_matches(entry, self._query, self._only_missing_artwork)
+
+    def set_filter(self, query="", only_missing_artwork=False):
+        """Restrict the page to what the search and the artwork filter allow.
+
+        The window decides *what* the filter is; matching happens here, over
+        the model, because a virtualized grid has no widget to hide for a ROM
+        that is off screen.
+        """
+        query = (query or "").lower()
+        only_missing = bool(only_missing_artwork)
+        if (query, only_missing) == (self._query, self._only_missing_artwork):
+            # Still re-seed: a card's artwork state may have settled since.
+            self.sync_visible_selection()
+            return
+        self._query = query
+        self._only_missing_artwork = only_missing
+        self._filter.changed(Gtk.FilterChange.DIFFERENT)
+        self.sync_visible_selection()
+
+    def _on_filtered_changed(self, *_args):
+        self._visible_cache = None
+
+    def entries(self):
+        """Every ROM on this page, in model order."""
+        return list(self._entries)
+
+    def visible_entries(self):
+        """The ROMs the filter currently lets through, in visual order."""
+        if self._visible_cache is None:
+            self._visible_cache = [
+                self._filtered.get_item(index)
+                for index in range(self._filtered.get_n_items())
+            ]
+        return self._visible_cache
+
+    def card_for(self, entry):
+        """The card showing ``entry`` right now, or None when it is off screen."""
+        return self._bound.get(entry)
+
+    def card_at(self, position):
+        """The card at ``position`` in the visible order, when it is realized."""
+        visible = self.visible_entries()
+        if not 0 <= position < len(visible):
+            return None
+        return self._bound.get(visible[position])
+
+    def _position_of(self, entry):
+        if entry is None:
+            return None
+        try:
+            return self.visible_entries().index(entry)
+        except ValueError:
+            return None
+
+    # -- the factory -------------------------------------------------------
+
+    def _on_factory_setup(self, _factory, list_item):
+        card = RomItem(self._card_ctx)
+        # GtkGridView has no row spacing of its own, so the vertical gap is
+        # half of it on each card. The horizontal gap comes from the cell
+        # being one gap wider than the card centred in it.
+        card.set_margin_top(self._card_margin)
+        card.set_margin_bottom(self._card_margin)
+        # Neither: GtkListItemWidget claims a press on the whole cell when it
+        # is activatable or selectable, and the cell includes the gap around
+        # the card -- which would swallow the press that starts a rubber band,
+        # and the card's own click gesture with it. Selection and launching
+        # are ours anyway; only focus is left to GTK.
+        list_item.set_activatable(False)
+        list_item.set_selectable(False)
+        list_item.set_child(card)
+
+    def _on_factory_bind(self, _factory, list_item):
+        card = list_item.get_child()
+        entry = list_item.get_item()
+        if card is None or entry is None:
+            return
+        card.bind(entry)
+        self._bound[entry] = card
+        if self._focused_card is card:
+            # It kept the focus through the rebind, so this is where the user
+            # stands now.
+            self._focused_entry = entry
+
+    def _on_factory_unbind(self, _factory, list_item):
+        card = list_item.get_child()
+        if card is None:
+            return
+        entry = card.entry
+        if entry is not None and self._bound.get(entry) is card:
+            del self._bound[entry]
+        card.unbind()
+
+    def _on_factory_teardown(self, _factory, list_item):
+        card = list_item.get_child()
+        if card is not None:
+            entry = card.entry
+            if entry is not None and self._bound.get(entry) is card:
+                del self._bound[entry]
+            card.unbind()
+        list_item.set_child(None)
+
+    def _watch_root_focus(self, *_args):
+        """Follow focus from the window, not from the cards.
+
+        Focus lands on the list-item wrapper, which is the card's *parent*, so
+        a controller on the card never sees it -- and one on the wrapper is not
+        an option: GtkGridView recycles those, and adding a controller to one
+        from the factory's bind handler crashes the item manager mid-layout
+        (it walks tiles whose widgets it is still moving around). The window
+        already publishes where focus is, and one signal on it covers every
+        card this grid will ever build.
+
+        Connected on map and dropped on unmap: the window outlives the grid,
+        and a handler left on it would keep this grid, its cards and their
+        textures alive for good -- the leak #218 was about, on a longer-lived
+        object.
+        """
+        root = self.get_root()
+        if root is None or self._root_focus_handler is not None:
+            return
+        self._focus_root = root
+        self._root_focus_handler = root.connect(
+            "notify::focus-widget", self._on_root_focus_changed
+        )
+        self._on_root_focus_changed(root, None)
+
+    def _unwatch_root_focus(self):
+        if self._root_focus_handler is not None and self._focus_root is not None:
+            self._focus_root.disconnect(self._root_focus_handler)
+        self._root_focus_handler = None
+        self._focus_root = None
+        self._focused_card = None
+
+    def _on_root_focus_changed(self, root, _param):
+        card = self.item_for_widget(root.get_focus())
+        if card is not None and card.ctx is not self._card_ctx:
+            card = None  # another page's grid; not ours to paint
+        previous = self._focused_card
+        if previous is not None and previous is not card:
+            previous.set_focus_visual(False)
+        self._focused_card = card
+        if card is None:
+            return
+        if card.entry is not None:
+            self._focused_entry = card.entry
+        card.set_focus_visual(True)
 
     # -- cartridge shells ----------------------------------------------------
 
@@ -1161,332 +435,302 @@ class RomGrid(Gtk.FlowBox):
         return cartridge_frame_svg(rom["console"], color) or self._base_frame_path
 
     def refresh_rom_frame(self, rom):
-        """Re-resolve one card's shell after its cartridge color changed."""
-        path = str(rom.get("path", ""))
-        if not path or not self._base_frame_path:
-            return
-        for item in self._items:
-            if str(item.rom.get("path", "")) == path:
-                item.set_cartridge_frame(self._frame_path_for_rom(item.rom))
-                return
+        """Re-resolve one card's shell after its cartridge color changed.
+
+        A ROM with no card on screen needs nothing done: the colour is read
+        from the config when its card is next bound.
+        """
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None or not self._base_frame_path:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card.set_cartridge_frame(self._frame_path_for_rom(entry.rom))
+        return True
 
     def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one card's artwork after a cover or label file changed."""
-        path = str(rom.get("path", ""))
-        for item in self._items:
-            if str(item.rom.get("path", "")) == path:
-                item._refresh_cover_after_change(fade=fade)
-                return
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card._refresh_cover_after_change(fade=fade)
+        else:
+            # Off screen: the state is stale until something shows it again,
+            # and the cover cache is keyed by mtime, so the next bind re-reads
+            # the new file by itself.
+            entry.has_artwork = None
+        return True
 
     # -- layout ------------------------------------------------------------
 
-    def do_size_allocate(self, width, height, baseline):
-        self._retune_columns()
-        Gtk.FlowBox.do_size_allocate(self, width, height, baseline)
-
-    def _watch_viewport(self, *_args):
-        """Recompute when the viewport resizes, not just when we do.
-
-        Our own allocation is pinned by the end margin, so the viewport can
-        change width -- a scrollbar appearing or going away is enough -- without
-        this widget being re-allocated, and the column maths would keep using a
-        stale width. The horizontal adjustment's page size *is* the viewport
-        width, and it notifies.
-        """
-        if self._hadjustment is not None:
-            return
-        scroller = self.get_ancestor(Gtk.ScrolledWindow)
-        if scroller is None:
-            return
-        self._hadjustment = scroller.get_hadjustment()
-        self._hadjustment.connect("notify::page-size", lambda *_a: self._retune_columns())
-        self._attach_band_gesture(scroller)
-
-    def _attach_band_gesture(self, scroller):
-        """Put the rubber band on the whole page, not just the card rows.
-
-        The FlowBox packs to the top and left, so most of a page's empty space
-        -- below the last row, beside the last column -- belongs to the
-        viewport, out of reach of a gesture on the grid itself. Pages keep
-        their ScrolledWindow across re-renders while the grid is rebuilt, so
-        the previous grid's gesture is dropped before this one attaches.
-        """
-        # The viewport, not the scrolled window: empty-page presses target the
-        # viewport, and a press must reach the gesture's own widget (or a
-        # descendant) at press time for the drag to begin there.
-        host = self.get_ancestor(Gtk.Viewport) or scroller
-        previous = getattr(host, "_openemux_band_gesture", None)
-        if previous is not None:
-            host.remove_controller(previous)
-        drag = Gtk.GestureDrag()
-        drag.set_button(Gdk.BUTTON_PRIMARY)
-        drag.connect("drag-begin", self._on_band_begin)
-        drag.connect("drag-update", self._on_band_update)
-        drag.connect("drag-end", self._on_band_end)
-        host.add_controller(drag)
-        host._openemux_band_gesture = drag
-        self._band_scroller = host
-
-        # A stationary press never reliably reaches drag-begin, so the plain
-        # click on empty space -- which must clear the selection, like a file
-        # manager -- gets its own click gesture on the same host.
-        previous_click = getattr(host, "_openemux_clear_gesture", None)
-        if previous_click is not None:
-            host.remove_controller(previous_click)
-        click = Gtk.GestureClick()
-        click.set_button(Gdk.BUTTON_PRIMARY)
-        click.connect(
-            "pressed", lambda _g, _n, x, y: setattr(self, "_clear_press_at", (x, y))
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.VERTICAL and 0 <= for_size < self._card_size[0]:
+            # Asked how tall the page is at a width no card fits in -- which
+            # the content stack does for a frame while it swaps pages.
+            # GtkGridView divides that width between its columns and measures
+            # every card for what is left, so a zero here becomes a screenful
+            # of "needs at least 216" warnings and a negative for_size once the
+            # card's padding comes off. -1 is the honest answer: the width is
+            # not known yet.
+            for_size = -1
+        minimum, natural, min_baseline, nat_baseline = Gtk.GridView.do_measure(
+            self, orientation, for_size
         )
-        click.connect("released", self._on_background_click_released)
-        host.add_controller(click)
-        host._openemux_clear_gesture = click
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            # A width has no baseline, and GTK says so out loud when one is
+            # reported. Chaining up through PyGObject hands back whatever was
+            # in the out parameters, so they are cleared here.
+            min_baseline = nat_baseline = -1
+        return minimum, natural, min_baseline, nat_baseline
 
-    def _on_background_click_released(self, gesture, _n_press, x, y):
-        """A plain click on empty page space clears the selection.
-
-        Not after a drag (that is the rubber band, whose result must survive
-        its own release), not with Ctrl/Shift held (selection gestures), and
-        only on true background (no card under the pointer).
-        """
-        pressed_at = getattr(self, "_clear_press_at", None)
-        self._clear_press_at = None
-        if pressed_at is not None and abs(x - pressed_at[0]) + abs(y - pressed_at[1]) > 8:
+    def do_size_allocate(self, width, height, baseline):
+        if width <= 0 or height <= 0:
+            # A degenerate allocation, which the content stack hands out for a
+            # frame while it swaps pages. GtkGridView divides its width by its
+            # columns, so passing it on gives every card a zero-width cell and
+            # a screenful of "needs at least 216" warnings; there is nothing to
+            # lay out at this size, and the real allocation follows.
             return
-        state = gesture.get_current_event_state()
-        if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK):
-            return
-        if not self._is_background(x, y):
-            return
-        if any(item.selected for item in self._items):
-            self.clear_selection()
+        # Before the chain-up, so the cards are laid out on the column count
+        # this width actually calls for. Deciding afterwards means GtkGridView
+        # lays the page out twice, and the cards it built for the first shape
+        # are allocated an empty cell on the way to the second.
+        self._retune_columns(width)
+        Gtk.GridView.do_size_allocate(self, width, height, baseline)
 
-    def _to_grid_coords(self, x, y):
-        """Scroller-space -> grid-space (the band maths live in grid space)."""
-        if self._band_scroller is None:
-            return x, y
-        ok, point = self._band_scroller.compute_point(self, Graphene.Point().init(x, y))
-        return (point.x, point.y) if ok else (x, y)
-
-    def _retune_columns(self):
+    def _retune_columns(self, width=None):
         """Pack the cards left-to-right with fixed gaps, like an icon view.
 
-        GtkFlowBox always justifies: whatever width is left over on a line is
-        shared out *between* the children, so cards drift apart as the window
-        widens (measured: 292px steps for a 216px card and a 24px gap). It has
-        no mode that packs to the start.
+        GtkGridView splits its width evenly between its columns, so cards
+        drift apart as the window widens unless the width divides evenly. The
+        fix is to leave it nothing to spread: the number of columns that fit is
+        computed here and the leftover handed to the end margin, so the grid is
+        allocated exactly ``columns`` cells of one card plus one gap.
 
-        The fix is to leave it nothing to share. The number of columns that fit
-        is computed here, and the leftover is handed to the end margin, so the
-        flow box is allocated exactly ``columns`` cards plus their gaps.
-
-        The available width is read from the viewport, never from this widget's
-        own allocation: the end margin changes that allocation, so feeding it
-        back in would make the two oscillate.
+        The width fed in is the viewport's, never the reduced one: the end
+        margin changes our own allocation, so feeding that back in would make
+        the two oscillate. What the margin took is added back below.
         """
         if self.compact:
             # One row per line, and the row itself absorbs the width: there is
             # no slack to hand to the margin.
             return
+        available = self._available_width(width)
+        if available <= 0:
+            return
         columns, slack = columns_and_slack(
-            self._viewport_width() - 2 * GRID_MARGIN,
+            available,
             self._card_allocation_width(),
-            len(self._items),
+            len(self._entries),
             spacing=self._spacing,
         )
-        if self._column_state == (columns, slack):
+        filled = max(1, min(columns, len(self._entries) or 1))
+        if self._column_state == (filled, slack):
             return
-        self._column_state = (columns, slack)
-        self.set_max_children_per_line(columns)
+        self._column_state = (filled, slack)
+        # Order matters: max_columns must never be asked to sit below
+        # min_columns, which GTK refuses.
+        if filled >= self.get_min_columns():
+            self.set_max_columns(filled)
+            self.set_min_columns(filled)
+        else:
+            self.set_min_columns(filled)
+            self.set_max_columns(filled)
         # Deferred: this runs from size-allocate, and changing a margin there
         # re-enters allocation.
-        GLib.idle_add(self.set_margin_end, GRID_MARGIN + slack)
+        GLib.idle_add(self.set_margin_end, self._margin + slack)
+
+    def _available_width(self, width=None):
+        """The width the cells may use: the viewport, less the base margins.
+
+        Never our own reduced allocation fed back in -- the end margin changes
+        it, so the two would oscillate. What the allocation is missing is
+        exactly the slack parked on that margin, so it is added back.
+        """
+        if width is None:
+            width = self.get_width()
+        if width <= 0:
+            return 0
+        # ``width`` is what is left after our own margins, so the viewport's
+        # inner width is that plus both of them -- and the space the cells may
+        # use is the viewport's minus the base margin on each side. Only the
+        # slack we parked on the end margin has to be added back.
+        return width + max(0, self.get_margin_end() - self._margin)
 
     def _card_allocation_width(self):
         """How wide a card really is, CSS padding included.
 
         ``_card_size`` is the artwork plus caption; the theme then adds the
         card's own padding on top, so laying columns out on the raw value packs
-        them tighter than they fit and the flow box wraps a column early.
+        them tighter than they fit and the grid wraps a column early.
         """
         if self._measured_card_width is None:
-            if not self._items:
+            card = next(iter(self._bound.values()), None)
+            if card is None:
+                # Before the first card exists; recomputed once one does.
                 return self._card_size[0]
-            child = self._items[0].get_parent() or self._items[0]
             self._measured_card_width = max(
-                self._card_size[0], child.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+                self._card_size[0], card.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
             )
         return self._measured_card_width
 
-    def _viewport_width(self):
-        parent = self.get_parent()
-        width = parent.get_width() if parent is not None else 0
-        # Before the first allocation fall back to our own width, so the very
-        # first layout is not built on a zero.
-        return width or self.get_width()
-
     # -- keyboard / gamepad focus -----------------------------------------
 
-    def _prepare_child(self, item):
-        """Set up the FlowBoxChild wrapping ``item`` as the focus target.
+    def _launch_rom(self, rom):
+        """Start a game, once per click.
 
-        The wrapper is what GTK focuses and activates, so it carries the
-        focusable flag and the focus controller. It is also pinned to the
-        card's size: a FlowBoxChild defaults to FILL in both directions, and on
-        a page with a single row it would otherwise absorb the whole viewport
-        height -- dragging the focus ring out with it.
+        Activation is on a single click, so a double-click asks twice. The
+        second launch is correctly refused -- but the refusal is an error
+        toast, so anyone who habitually double-clicks got "a game is already
+        running" on every launch (issue #236).
         """
-        child = item.get_parent()
-        if child is None:
+        if rom is None or not self.on_launch_callback:
             return
-        child.set_focusable(True)
-        child.set_size_request(*item.card_size)
-        # A row spans the viewport, so it fills; a card is pinned to its own
-        # size and centred in its cell.
-        child.set_halign(Gtk.Align.FILL if self.compact else Gtk.Align.CENTER)
-        child.set_valign(Gtk.Align.CENTER)
-        child.set_hexpand(bool(self.compact))
-        child.set_vexpand(False)
-
-        focus = Gtk.EventControllerFocus()
-        focus.connect("enter", self._on_child_focus_enter, child, item)
-        focus.connect("leave", self._on_child_focus_leave, item)
-        child.add_controller(focus)
-
-    def _on_child_focus_enter(self, _controller, child, item):
-        self._last_focused_child = child
-        item.set_focus_visual(True)
-
-    def _on_child_focus_leave(self, _controller, item):
-        item.set_focus_visual(False)
-
-    def _on_child_activated(self, _box, child):
-        item = child.get_child()
-        if not (isinstance(item, RomItem) and self.on_launch_callback):
+        path = rom.get("path")
+        now = GLib.get_monotonic_time()
+        if self._is_repeat_activation(path, now):
             return
-        # A modifier click is a selection gesture (issue #78): the card's own
-        # click handler already toggled or extended the selection, but the
-        # FlowBox still emits child-activated for the same click -- launching
-        # here would fire the game on every Ctrl/Shift+click.
-        if self._selection_modifier_held():
-            return
-        self.on_launch_callback(item.rom)
+        self._last_activation = (path, now)
+        self.on_launch_callback(rom)
 
-    def _selection_modifier_held(self):
-        """Whether Ctrl or Shift is down right now (selection, not launch)."""
-        display = self.get_display()
-        seat = display.get_default_seat() if display else None
-        keyboard = seat.get_keyboard() if seat else None
-        if keyboard is None:
-            return False
-        state = keyboard.get_modifier_state()
-        return bool(state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
+    def _is_repeat_activation(self, path, now):
+        """Whether this activation is the second half of a double-click."""
+        last_path, last_at = self._last_activation
+        return last_path == path and (now - last_at) < ACTIVATION_DEBOUNCE_US
 
     def _on_grid_key_pressed(self, _controller, keyval, _keycode, state):
         is_menu_key = keyval == Gdk.KEY_Menu or (
             keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK
         )
-        if not is_menu_key:
+        launches = keyval in (
+            Gdk.KEY_Return,
+            Gdk.KEY_KP_Enter,
+            Gdk.KEY_ISO_Enter,
+            Gdk.KEY_space,
+            Gdk.KEY_KP_Space,
+        ) and not (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
+        if not (is_menu_key or launches):
             return False
         root = self.get_root()
-        item = self.item_for_widget(root.get_focus()) if root else None
-        if item is None:
+        card = self.item_for_widget(root.get_focus()) if root else None
+        if card is None or card.entry is None:
             return False
-        item._show_context_menu()
+        if is_menu_key:
+            card.show_context_menu()
+        else:
+            self._launch_rom(card.rom)
         return True
 
     @staticmethod
     def item_for_widget(widget):
         """The RomItem for ``widget``, whether it is inside one or wraps one.
 
-        Keyboard/gamepad focus sits on the FlowBoxChild, whose RomItem is its
-        *child*; a pointer press lands on a widget *inside* the RomItem. Both
-        have to resolve, so the walk checks downwards at the wrapper and
-        upwards everywhere else.
+        Keyboard/gamepad focus sits on the list-item wrapper, whose RomItem is
+        its *child*; a pointer press lands on a widget *inside* the RomItem.
+        Both have to resolve, so the walk checks downwards at every step and
+        upwards until it runs out of parents.
         """
         node = widget
         while node is not None:
             if isinstance(node, RomItem):
                 return node
-            if isinstance(node, Gtk.FlowBoxChild):
-                child = node.get_child()
-                return child if isinstance(child, RomItem) else None
+            if isinstance(node.get_first_child(), RomItem):
+                return node.get_first_child()
             node = node.get_parent()
         return None
 
-    def _first_visible_child(self):
-        child = self.get_first_child()
-        while child is not None:
-            if child.get_visible():
-                return child
-            child = child.get_next_sibling()
-        return None
-
     def focus_first_card(self):
-        child = self._first_visible_child()
-        if child is not None:
-            child.grab_focus()
-            return True
-        return False
+        return self._focus_position(0)
 
     def focus_restore(self):
         """Focus the last card the user was on, else the first one."""
-        child = self._last_focused_child
-        if child is not None and child.get_visible() and child.get_parent() is self:
-            child.grab_focus()
+        position = self._position_of(self._focused_entry)
+        if position is not None and self._focus_position(position):
             return True
         return self.focus_first_card()
+
+    def _focus_position(self, position):
+        """Focus the card at ``position``, scrolling it into view if need be.
+
+        A card that is off screen has no widget to grab -- that is the whole
+        point of a virtualized grid -- so the view is asked to bring it in and
+        take the focus with it, and the grab is retried once the item exists.
+        """
+        visible = self.visible_entries()
+        if not 0 <= position < len(visible):
+            return False
+        entry = visible[position]
+        if self._grab_focus_on(entry):
+            return True
+        self.scroll_to(position, Gtk.ListScrollFlags.FOCUS, None)
+        GLib.idle_add(self._grab_focus_when_realized, entry)
+        return True
+
+    def _grab_focus_on(self, entry):
+        card = self._bound.get(entry)
+        wrapper = card.get_parent() if card is not None else None
+        if wrapper is None:
+            return False
+        return wrapper.grab_focus()
+
+    def _grab_focus_when_realized(self, entry):
+        """One retry, once the scroll has built the card. Never repeats."""
+        self._grab_focus_on(entry)
+        return False
 
     # -- selection ---------------------------------------------------------
     #
     # Mouse, keyboard and gamepad all drive the pure SelectionModel
-    # (core/selection.py); this section maps items to indices over the
-    # *visible* cards and paints the result. The search filter hides cards in
-    # place, so the model is re-seeded whenever the visible set changed.
+    # (core/selection.py) through GridSelection, which maps entries to indices
+    # over the *visible* ones and paints whichever of them has a card on
+    # screen. These stay here because the window and the navigation
+    # controller call them on the grid.
 
     def selected_roms(self):
-        return [item.rom for item in self._items if item.selected]
+        return self.selection.selected_roms()
 
     def clear_selection(self):
-        model, items = self._model_and_items()
-        model.clear()
-        self._paint_selection(model, items)
+        self.selection.clear()
 
     def select_all(self):
-        model, items = self._model_and_items()
-        model.select_all()
-        self._paint_selection(model, items)
+        self.selection.select_all()
 
     def toggle_select_all(self):
-        """Select every visible ROM, or clear when everything already is."""
-        model, items = self._model_and_items()
-        if model.all_selected():
-            model.clear()
-        else:
-            model.select_all()
-        self._paint_selection(model, items)
-
-    def _visible_items(self):
-        return [
-            item
-            for item in self._items
-            if (parent := item.get_parent()) is not None and parent.get_visible()
-        ]
+        self.selection.toggle_select_all()
 
     def sync_visible_selection(self):
-        """Re-seed the selection model after the visible set changed.
+        self.selection.sync_visible()
 
-        Filtering by hand and skipping this is how selection desyncs: the
-        model would still hold indices into the previous visible list.
+    def extend_selection_to(self, item, additive=False):
+        self.selection.extend_to(item, additive=additive)
+
+    def begin_range_from(self, item):
+        self.selection.begin_range_from(item)
+
+    def toggle_item(self, item):
+        self.selection.toggle_item(item)
+
+    def select_item(self, item):
+        self.selection.select_item(item)
+
+    def note_cursor(self, item, keep_anchor=False):
+        self.selection.note_cursor(item, keep_anchor=keep_anchor)
+
+    def bound_cards(self):
+        """``(entry, card)`` for every card currently on screen.
+
+        The grid recycles cards, so this is a screenful, not the library --
+        which is exactly the set the rubber band measures against.
         """
-        model, items = self._model_and_items()
-        self._paint_selection(model, items)
+        return list(self._bound.items())
 
-    def _on_item_artwork_state(self, _item):
-        """A card resolved its artwork state; the filter may need re-applying.
+    def _on_entry_artwork_state(self, _entry):
+        """A ROM resolved its artwork state; the filter may need re-applying.
 
         Coalesced onto one idle pass: a page of cards resolves as a burst and
-        re-filtering per card would walk the whole grid N times (#127).
+        re-filtering per card would walk the whole page N times (#127).
         """
         if self._artwork_filter_pending:
             return
@@ -1495,201 +739,14 @@ class RomGrid(Gtk.FlowBox):
 
     def _flush_artwork_filter(self):
         self._artwork_filter_pending = False
+        if self._only_missing_artwork:
+            self._filter.changed(Gtk.FilterChange.DIFFERENT)
+            self.sync_visible_selection()
         win = getattr(self.context_services, "win", None)
         if win is not None and hasattr(win, "apply_library_filters"):
             win.apply_library_filters()
         return False
 
-    def _model_and_items(self):
-        """The model, re-seeded when the visible set changed (search filter)."""
-        items = self._visible_items()
-        key = tuple(id(item) for item in items)
-        if key != self._selection_key:
-            self._selection_key = key
-            self._selection_model.reset(len(items))
-            self._selection_model.replace(
-                [index for index, item in enumerate(items) if item.selected]
-            )
-        return self._selection_model, items
-
-    def _paint_selection(self, model, items):
-        selected = {items[index] for index in model.selected}
-        self._apply_selection(selected)
-
-    def _apply_selection(self, items):
-        chosen = set(items)
-        changed = False
-        for item in self._items:
-            wanted = item in chosen
-            if item.selected != wanted:
-                item.set_selected(wanted)
-                changed = True
-        if changed and self.on_selection_changed:
-            self.on_selection_changed(self.selected_roms())
-
-    def _toggle_item_selection(self, item, ctrl=True, shift=False):
-        """A card's click gesture: Ctrl toggles, Shift ranges (issue #78).
-
-        A plain click (no modifier) does not touch the selection -- it
-        launches, elsewhere -- but it does move the anchor, so a Shift+click
-        right after ranges from the game the user just clicked, the way a
-        file manager roots ranges at the last click.
-        """
-        model, items = self._model_and_items()
-        if item not in items:
-            return
-        index = items.index(item)
-        if shift and ctrl:
-            model.extend_additive(index)
-        elif shift:
-            model.extend(index)
-        elif ctrl:
-            model.toggle(index)
-        else:
-            model.move_cursor(index)
-            return
-        self._paint_selection(model, items)
-
-    def extend_selection_to(self, item, additive=False):
-        """Shift+arrows: grow the range from the anchor to ``item``."""
-        model, items = self._model_and_items()
-        if item not in items:
-            return
-        index = items.index(item)
-        if additive:
-            model.extend_additive(index)
-        else:
-            model.extend(index)
-        self._paint_selection(model, items)
-
-    def begin_range_from(self, item):
-        """Root a keyboard Shift-range at the focused card (issue #78).
-
-        Plain arrows move the *focus* without the model hearing about it, so
-        without this the first Shift+arrow would range from wherever the
-        anchor last was -- some earlier click -- instead of from the card the
-        user is standing on, the way a file manager ranges. Called with the
-        pre-move focus: when it differs from the model's cursor a new Shift
-        sequence is starting there and the anchor re-roots; when it matches,
-        the sequence is already running and the anchor must hold so the range
-        keeps growing from the same root.
-        """
-        model, items = self._model_and_items()
-        if item not in items:
-            return
-        index = items.index(item)
-        if index != model.cursor:
-            model.move_cursor(index)
-
-    def toggle_item(self, item):
-        """Ctrl+Space / gamepad Ⓐ in selection mode: flip one card."""
-        self._toggle_item_selection(item)
-
-    def select_item(self, item):
-        """Make ``item`` the whole selection (entering gamepad selection mode)."""
-        model, items = self._model_and_items()
-        if item not in items:
-            return
-        model.select(items.index(item))
-        self._paint_selection(model, items)
-
-    def note_cursor(self, item, keep_anchor=False):
-        """Follow plain/Ctrl movement so the next Shift range roots correctly."""
-        model, items = self._model_and_items()
-        if item in items:
-            model.move_cursor(items.index(item), keep_anchor=keep_anchor)
-
-    def _sync_model_from_view(self):
-        """Adopt a selection made outside the model (the rubber band)."""
-        model, items = self._model_and_items()
-        model.replace([index for index, item in enumerate(items) if item.selected])
-
-    def _is_background(self, x, y):
-        """True when (x, y) -- in scroller space -- is empty page, not a card.
-
-        The scrollbars count as "not background" too: a drag on one must keep
-        scrolling, never start a band.
-        """
-        host = self._band_scroller or self
-        target = host.pick(x, y, Gtk.PickFlags.DEFAULT)
-        while target is not None and target is not host:
-            if isinstance(target, (RomItem, Gtk.Scrollbar)):
-                return False
-            target = target.get_parent()
-        return True
-
-    def _on_band_begin(self, gesture, start_x, start_y):
-        if not self._is_background(start_x, start_y):
-            gesture.set_state(Gtk.EventSequenceState.DENIED)
-            return
-        state = gesture.get_current_event_state()
-        # Ctrl keeps what was already picked, so a band can be added to it.
-        self._band_base = tuple(item for item in self._items if item.selected) if (
-            state & Gdk.ModifierType.CONTROL_MASK
-        ) else ()
-        self._band_origin = self._to_grid_coords(start_x, start_y)
-        self._band = None
-        if not self._band_base:
-            # A plain press on empty space clears -- which also makes a plain
-            # *click* there clear the selection, the file-manager behavior.
-            self._apply_selection(())
-
-    def _on_band_update(self, gesture, offset_x, offset_y):
-        if self._band_origin is None:
-            return
-        start_x, start_y = self._band_origin
-        self._band = (
-            min(start_x, start_x + offset_x),
-            min(start_y, start_y + offset_y),
-            abs(offset_x),
-            abs(offset_y),
-        )
-        self._apply_selection(list(self._band_base) + self._items_in_band())
-        self.queue_draw()
-
-    def _on_band_end(self, gesture, offset_x, offset_y):
-        self._band = None
-        self._band_origin = None
-        self._band_base = ()
-        # The band bypassed the model; adopt its result so a Shift range or
-        # Ctrl toggle right after behaves as if the band had used it.
-        self._sync_model_from_view()
-        self.queue_draw()
-
-    def _items_in_band(self):
-        if self._band is None:
-            return []
-        bx, by, bw, bh = self._band
-        hits = []
-        for item in self._items:
-            ok, bounds = item.compute_bounds(self)
-            if not ok:
-                continue
-            if (
-                bounds.get_x() < bx + bw
-                and bx < bounds.get_x() + bounds.get_width()
-                and bounds.get_y() < by + bh
-                and by < bounds.get_y() + bounds.get_height()
-            ):
-                hits.append(item)
-        return hits
-
     def do_snapshot(self, snapshot):
-        Gtk.FlowBox.do_snapshot(self, snapshot)
-        if self._band is None:
-            return
-        x, y, width, height = self._band
-        if width < 1 or height < 1:
-            return
-        fill = Gdk.RGBA()
-        fill.parse("rgba(53, 132, 228, 0.18)")
-        edge = Gdk.RGBA()
-        edge.parse("rgba(53, 132, 228, 0.75)")
-        snapshot.append_color(fill, Graphene.Rect().init(x, y, width, height))
-        for rect in (
-            (x, y, width, 1),
-            (x, y + height - 1, width, 1),
-            (x, y, 1, height),
-            (x + width - 1, y, 1, height),
-        ):
-            snapshot.append_color(edge, Graphene.Rect().init(*rect))
+        Gtk.GridView.do_snapshot(self, snapshot)
+        self.selection.draw(snapshot)

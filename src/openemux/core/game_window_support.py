@@ -94,6 +94,26 @@ def embedding_possible():
     return True
 
 
+def session_is_wayland():
+    """True when the user's session is Wayland, whatever backend GTK is on.
+
+    Deliberately not "is GTK on Wayland": by the time anything asks, the
+    pre-GTK backend pick in ``main.py`` may already have forced
+    ``GDK_BACKEND=x11`` precisely *because* the game window is on -- so GTK's
+    own answer is X11 on exactly the session this question is about. What is
+    being asked is what the compositor is, and ``WAYLAND_DISPLAY`` survives
+    the override because the session sets it, not us.
+
+    The consequence worth telling the user about: with the game window on,
+    the whole library UI renders through XWayland for the entire run, not
+    just while a game is up. GTK4 cannot pick a backend per window, so there
+    is no arrangement where the wrapper is on X11 and the library is native.
+    """
+    if (os.environ.get("WAYLAND_DISPLAY") or "").strip():
+        return True
+    return (os.environ.get("XDG_SESSION_TYPE") or "").strip().lower() == "wayland"
+
+
 def embedding_ready():
     """True when *this* launch can embed: capability, display and no failure.
 

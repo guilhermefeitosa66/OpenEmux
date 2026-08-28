@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Resize the virtual screen, without restarting anything.
+#
+#   devbox-res                 the current size and the modes on offer
+#   devbox-res 1600x1000
+#   devbox-res 720x900         narrow, to watch the split view collapse
+#
+# The narrow case is the point of this tool: the QA checklist asks for the
+# adaptive layout at a width where Adw.NavigationSplitView folds, and resizing
+# the *screen* is closer to what a small display does than resizing the window
+# inside a large one.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+require_display
+
+OUTPUT=$(xrandr | awk '/ connected/ {print $1; exit}')
+[ -n "${OUTPUT}" ] || die "no video output -- is Xvnc up? (devbox-x status)"
+
+if [ $# -eq 0 ]; then
+	printf 'output   %s\n' "${OUTPUT}"
+	printf 'current  %s\n' "$(xdotool getdisplaygeometry | tr ' ' x)"
+	printf 'modes\n'
+	xrandr | grep -E '^\s+[0-9]+x[0-9]+' | awk '{print "  " $1}'
+	exit 0
+fi
+
+MODE=$1
+[[ "${MODE}" =~ ^([0-9]+)x([0-9]+)$ ]] || die "expected WIDTHxHEIGHT, got '${MODE}'"
+W=${BASH_REMATCH[1]}
+H=${BASH_REMATCH[2]}
+
+# Xvnc advertises a fixed list of modes and the useful ones for testing a
+# layout are rarely on it. The modeline below is synthetic on purpose: there is
+# no monitor to drive, so the timings are ignored and only the dimensions
+# matter -- which saves pulling in the whole xserver-xorg-core package just for
+# the `cvt` that would compute them.
+modes=$(xrandr)
+if ! grep -qE "^[[:space:]]+${MODE}\b" <<<"${modes}"; then
+	xrandr --newmode "${MODE}" 100.00 \
+		"${W}" "$((W + 8))" "$((W + 24))" "$((W + 56))" \
+		"${H}" "$((H + 2))" "$((H + 6))" "$((H + 14))" -hsync +vsync 2>/dev/null || true
+	xrandr --addmode "${OUTPUT}" "${MODE}" 2>/dev/null || true
+fi
+xrandr --output "${OUTPUT}" --mode "${MODE}"
+
+# The app does not follow the screen: a window sized for 1600x1000 keeps that
+# size on a 720x900 screen and hangs off the edge, which reads as the layout
+# failing to adapt when it is only the window never having been told.
+#
+# xdotool and not wmctrl, even though wmctrl is the friendlier tool for this:
+# `wmctrl -i` wants a window id in hex and devbox-win hands out the decimal one
+# xdotool speaks, so the pair silently did nothing at all -- the screen shrank,
+# the window did not, and the capture came out cropped instead of narrow.
+wid=$(devbox-win 2>/dev/null || true)
+if [ -n "${wid}" ]; then
+	xdotool windowstate --remove MAXIMIZED_VERT "${wid}" 2>/dev/null || true
+	xdotool windowstate --remove MAXIMIZED_HORZ "${wid}" 2>/dev/null || true
+	xdotool windowmove "${wid}" 0 0 2>/dev/null || true
+	xdotool windowsize "${wid}" "${W}" "${H}" 2>/dev/null || true
+	sleep 1
+fi
+
+printf '%s\n' "$(xdotool getdisplaygeometry | tr ' ' x)"

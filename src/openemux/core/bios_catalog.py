@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from openemux.core.platform import normalize_core_filename
 from openemux.core.systems import get_runtime_core_candidates, resolve_system_id
 
 # Requirement entries:
@@ -146,7 +147,11 @@ def _core_matches_entry(entry, core_filename):
     cores = entry.get("cores", [])
     if not cores:
         return True
-    return core_filename in cores
+    # The catalog above spells every core ".so". Normalize both sides so the
+    # same entries match a ".dll" on Windows, instead of duplicating ~20 core
+    # lists per platform (issue #118).
+    normalized = normalize_core_filename(core_filename)
+    return normalized in {normalize_core_filename(core) for core in cores}
 
 
 def get_console_bios_requirements(console):

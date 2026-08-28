@@ -11,15 +11,28 @@ Widget-free on purpose: the window drives this from worker threads.
 
 import hashlib
 import logging
-import urllib.error
-import urllib.request
+import os
 from pathlib import Path
 from threading import Thread
 
 from openemux.core import cover_sync, screenscraper
+from openemux.core.atomic_write import atomic_write_bytes
+from openemux.core.scraper import image_format, is_image
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+def artwork_temp_root():
+    """Where each artwork-manager session gets its scratch directory.
+
+    ``$XDG_CACHE_HOME/openemux/artwork-manager``, the same path
+    ``GLib.get_user_cache_dir()`` resolves to, worked out here so the sweep in
+    ``core.housekeeping`` can find it without a GTK import (issue #221).
+    """
+    cache_home = os.environ.get("XDG_CACHE_HOME") or ""
+    base = Path(cache_home) if cache_home.startswith("/") else Path.home() / ".cache"
+    return base / "openemux" / "artwork-manager"
+
 
 #: Stop after this many distinct images per provider: candidate URL lists are
 #: name variants of the same file, so distinct hits beyond a few are unlikely
@@ -69,6 +82,12 @@ def provider_candidates(console, rom_name, sync_settings, art_kind, rom_path=Non
 
 
 def _download(url, dest_dir, index):
+    # Imported here, not at module scope: urllib.request brings http.client
+    # and ssl with it -- ~13 ms of every launch -- and this is the only
+    # thing in the module that speaks HTTP (issue #364).
+    import urllib.error
+    import urllib.request
+
     try:
         with urllib.request.urlopen(url, timeout=12) as resp:  # nosec B310
             data = resp.read()
@@ -79,11 +98,18 @@ def _download(url, dest_dir, index):
         logger.debug("artwork search download failed: url=%s error=%s",
                      screenscraper.redact(url), screenscraper.redact(exc))
         return None, None
-    if not data:
+    if not is_image(data):
+        # Same junk the sync path rejects (issue #213): here it would show up
+        # as a blank tile the user could pick and make permanent.
+        logger.debug(
+            "artwork search rejected non-image body: url=%s bytes=%d",
+            screenscraper.redact(url),
+            len(data or b""),
+        )
         return None, None
+    ext = image_format(data) or ext
     target = Path(dest_dir) / f"candidate-{index:03d}.{ext}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    atomic_write_bytes(target, data)
     return target, hashlib.sha1(data).hexdigest()  # nosec B324 - dedup, not security
 
 
@@ -132,7 +158,13 @@ def search_artwork_async(on_done=None, **kwargs):
     """Run :func:`search_artwork` on a background thread."""
 
     def _worker():
-        results = search_artwork(**kwargs)
+        results = []
+        try:
+            results = search_artwork(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            # on_done is what takes the dialog off its spinner; a worker that
+            # dies without firing it leaves it spinning forever (issue #214).
+            logger.exception("artwork search crashed: %s", screenscraper.redact(exc))
         if on_done:
             on_done(results)
 
@@ -198,7 +230,11 @@ def suggest_artwork_async(on_done=None, **kwargs):
     """Run :func:`suggest_artwork` on a background thread."""
 
     def _worker():
-        mode, results = suggest_artwork(**kwargs)
+        mode, results = None, []
+        try:
+            mode, results = suggest_artwork(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("artwork suggestions crashed: %s", screenscraper.redact(exc))
         if on_done:
             on_done(mode, results)
 

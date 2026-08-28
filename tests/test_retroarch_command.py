@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from openemux.core.retroarch_command import (
+    DEFAULT_NETWORK_CMD_PORT,
     DEFAULT_VOLUME_DB,
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
@@ -12,6 +13,7 @@ from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
     clamp_volume_db,
+    pick_free_udp_port,
     volume_steps,
 )
 
@@ -51,6 +53,10 @@ class CommandClientTests(unittest.TestCase):
             server.settimeout(2)
             port = server.getsockname()[1]
             client = RetroArchCommandClient(port)
+            # The client keeps one reusable UDP socket; without this the test
+            # ends holding it and the run reports an unclosed-socket
+            # ResourceWarning after the summary (issue #244).
+            self.addCleanup(client.close)
 
             self.assertTrue(client.send("MUTE"))
             data, _addr = server.recvfrom(64)
@@ -63,6 +69,7 @@ class CommandClientTests(unittest.TestCase):
 
     def test_empty_command_is_refused(self):
         client = RetroArchCommandClient(1)
+        self.addCleanup(client.close)
         self.assertFalse(client.send(""))
         self.assertFalse(client.send(None))
 
@@ -138,6 +145,68 @@ class PacedDeliveryTests(unittest.TestCase):
             client.send_repeated("VOLUME_UP", 4)
         self.assertEqual(sleep.call_count, 0)
         client.close()
+
+
+class SettlingWalkTests(unittest.TestCase):
+    """A step that never left must not abandon the walk (issue #284)."""
+
+    class _Client:
+        def __init__(self, failures=()):
+            self.sent = []
+            self._failures = list(failures)
+
+        def send(self, command):
+            self.sent.append(command)
+            if self._failures and self._failures.pop(0):
+                return False
+            return True
+
+    def _pacer(self, client, level=0.0):
+        return VolumePacer(client, level=level, sleep=lambda _s: None, interval=0)
+
+    def test_a_lost_step_is_retried_and_the_walk_continues(self):
+        client = self._Client(failures=[False, True, False, False])
+        pacer = self._pacer(client)
+        pacer.set_target(-2.0)
+        pacer.join(2)
+        # 4 steps of 0.5 dB, plus the one retry of the step that failed.
+        self.assertEqual(len(client.sent), 5)
+        self.assertAlmostEqual(pacer.level, -2.0)
+
+    def test_a_step_that_fails_twice_stops_the_walk_where_it_landed(self):
+        client = self._Client(failures=[False, True, True])
+        pacer = self._pacer(client)
+        pacer.set_target(-5.0)
+        pacer.join(2)
+        self.assertAlmostEqual(pacer.level, -0.5)
+        # The tracker holds what actually landed, so the UI can reconcile.
+        self.assertTrue(pacer.settling)
+
+    def test_settling_is_false_once_the_level_reaches_the_target(self):
+        pacer = self._pacer(self._Client())
+        self.assertFalse(pacer.settling)
+        pacer.set_target(-3.0)
+        pacer.join(2)
+        self.assertFalse(pacer.settling)
+
+
+class FreePortTests(unittest.TestCase):
+    """Each launch gets a port of its own (issue #227)."""
+
+    def test_the_picked_port_is_free_and_usable(self):
+        port = pick_free_udp_port()
+        self.assertGreater(port, 0)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.bind(("127.0.0.1", port))  # nothing else holds it
+
+    def test_successive_picks_do_not_collide(self):
+        ports = {pick_free_udp_port() for _ in range(5)}
+        self.assertNotIn(0, ports)
+
+    def test_a_failed_probe_falls_back_to_the_default(self):
+        # A broken channel still beats refusing to launch.
+        with patch("openemux.core.retroarch_command.socket.socket", side_effect=OSError("no")):
+            self.assertEqual(pick_free_udp_port(), DEFAULT_NETWORK_CMD_PORT)
 
 
 if __name__ == "__main__":

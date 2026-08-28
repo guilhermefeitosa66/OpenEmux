@@ -26,16 +26,13 @@ by default**: the user configures their own credentials in Preferences, and when
 anything is missing or fails we return no candidates so the caller falls back to
 libretro. Nothing in here ever raises into the sync loop.
 """
-import hashlib
 import json
 import logging
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 
-from openemux.core.hasher import compute_crc32
+from openemux.core.hasher import rom_digests
 from openemux.core.systems import resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -128,14 +125,81 @@ _rate_limit_lock = threading.Lock()
 _last_request_at = [0.0]
 
 
-def _throttle():
-    """Serialise requests and keep MIN_REQUEST_INTERVAL_SECONDS between them."""
+def throttle():
+    """Serialise requests and keep MIN_REQUEST_INTERVAL_SECONDS between them.
+
+    Public because the *media* downloads go to a ScreenScraper host too and
+    used to skip this entirely: the API call for a ROM waited its second and
+    then the image fetch that followed it did not (issue #220).
+    """
     with _rate_limit_lock:
         elapsed = time.monotonic() - _last_request_at[0]
         wait = MIN_REQUEST_INTERVAL_SECONDS - elapsed
         if wait > 0:
             time.sleep(wait)
         _last_request_at[0] = time.monotonic()
+
+
+#: Consecutive 429s before ScreenScraper is given up on for the rest of a run.
+#: 429 means "too many simultaneous threads", which is transient -- the sync
+#: already serialises API calls, so seeing it repeatedly means something else
+#: is using the account, and asking faster will not help.
+MAX_CONSECUTIVE_THROTTLES = 3
+
+
+class QuotaLatch:
+    """Remembers that the API said it is done answering, for one sync run.
+
+    Every quota answer used to cost the same as a successful one: the client
+    logged the 429/430 and returned "no candidates" without remembering it, so
+    after the daily quota ran out each remaining ROM still waited its second in
+    the throttle and still spent a request (issue #220).
+
+    430 (daily quota exhausted) closes the latch at once -- nothing later in
+    the run can change that answer. 429 (thread limit) is transient and only
+    closes it after MAX_CONSECUTIVE_THROTTLES in a row; a successful request
+    forgets them.
+
+    Thread-safe: the sync fans out across ROMs and they share one latch.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._closed = False
+        self._throttles = 0
+
+    @property
+    def closed(self):
+        with self._lock:
+            return self._closed
+
+    def note_status(self, status):
+        """Record an HTTP status. Returns True when this closed the latch."""
+        with self._lock:
+            if self._closed:
+                return False
+            if status == 430:
+                self._closed = True
+                self._throttles = 0
+                logger.warning(
+                    "screenscraper giving up for this run: daily quota exhausted (status=430)"
+                )
+                return True
+            if status == 429:
+                self._throttles += 1
+                if self._throttles >= MAX_CONSECUTIVE_THROTTLES:
+                    self._closed = True
+                    logger.warning(
+                        "screenscraper giving up for this run: %d consecutive thread-limit"
+                        " refusals (status=429)",
+                        self._throttles,
+                    )
+                    return True
+            return False
+
+    def note_success(self):
+        with self._lock:
+            self._throttles = 0
 
 
 def redact(text):
@@ -194,11 +258,7 @@ def region_priority_for(region_priority=None):
 def compute_md5(rom_path, chunk_size=65536):
     """MD5 of a ROM file as an uppercase hex string, or None if unreadable."""
     try:
-        digest = hashlib.md5()  # nosec B324 - content fingerprint, not security
-        with open(rom_path, "rb") as handle:
-            while chunk := handle.read(chunk_size):
-                digest.update(chunk)
-        return digest.hexdigest().upper()
+        return rom_digests(rom_path, chunk_size)[1]
     except OSError as exc:
         logger.debug("screenscraper md5 unavailable: error=%s", exc)
         return None
@@ -207,7 +267,7 @@ def compute_md5(rom_path, chunk_size=65536):
 def compute_crc(rom_path):
     """CRC32 of a ROM file as an uppercase hex string, or None if unreadable."""
     try:
-        return compute_crc32(rom_path)
+        return rom_digests(rom_path)[0]
     except OSError as exc:
         logger.debug("screenscraper crc unavailable: error=%s", exc)
         return None
@@ -319,9 +379,15 @@ def parse_media_urls(payload, art_kind=DEFAULT_ART_KIND, region_priority=None):
     return urls
 
 
-def _fetch_json(url, opener=None):
+def _fetch_json(url, opener=None, quota=None):
     """GET `url` and decode JSON. Returns None on any failure."""
-    _throttle()
+    # Imported here, not at module scope: urllib.request brings http.client
+    # and ssl with it -- ~13 ms of every launch -- and this is the only
+    # thing in the module that speaks HTTP (issue #364).
+    import urllib.error
+    import urllib.request
+
+    throttle()
     try:
         open_url = opener or urllib.request.urlopen
         # url is always built by build_jeu_infos_url against a fixed https host.
@@ -333,12 +399,17 @@ def _fetch_json(url, opener=None):
                 "screenscraper quota/throttle: status=%s (see webapi2.php: 429 thread limit, 430 daily quota)",
                 exc.code,
             )
+            if quota is not None:
+                quota.note_status(exc.code)
         else:
             logger.info("screenscraper http_error: status=%s", exc.code)
         return None
     except Exception as exc:  # noqa: BLE001 - never escape into the sync loop
         logger.warning("screenscraper request_error: error=%s", redact(exc))
         return None
+
+    if quota is not None:
+        quota.note_success()
 
     if isinstance(raw, bytes):
         text = raw.decode("utf-8", errors="replace")
@@ -362,14 +433,24 @@ def lookup_media_urls(
     art_kind=DEFAULT_ART_KIND,
     region_priority=None,
     opener=None,
+    quota=None,
 ):
     """Look a ROM up and return candidate media URLs. Never raises.
 
     Returns [] whenever the source is unusable: no credentials, unmapped
     console, HTTP/quota error, malformed JSON, or no matching media.
+
+    ``quota`` is a QuotaLatch shared by one sync run. Once it is closed this
+    returns immediately -- no hash, no throttle wait, no request -- which is
+    the difference between a library finishing after the quota runs out and
+    one spending a second per remaining ROM to be told the same thing again.
     """
     if credentials is None or not credentials.is_usable():
         logger.debug("screenscraper skipped: credentials not configured")
+        return []
+
+    if quota is not None and quota.closed:
+        logger.debug("screenscraper skipped: quota exhausted earlier in this run")
         return []
 
     systemeid = get_screenscraper_system_id(console)
@@ -408,7 +489,7 @@ def lookup_media_urls(
         rom_name,
         redact(url),
     )
-    payload = _fetch_json(url, opener=opener)
+    payload = _fetch_json(url, opener=opener, quota=quota)
     if payload is None:
         return []
 

@@ -11,20 +11,28 @@ from openemux.i18n import (
 
 class I18nTests(unittest.TestCase):
     def test_unknown_locale_falls_back_to_english(self):
+        # "settings.title" used to stand in here; it was retired with the
+        # other 33 keys the Preferences refactor left unreachable (issue
+        # #232), so this asserts against a key the app still shows.
         self.assertEqual(normalize_locale("unknown"), "en")
-        self.assertEqual(tr("unknown", "settings.title"), "Settings")
+        self.assertEqual(tr("unknown", "prefs.game_window.title"),
+                         "Play in an OpenEmux window")
 
     def test_missing_key_in_locale_uses_english(self):
         # This used to lean on German being incomplete. Every locale is
         # complete now (and a test enforces it), so the fallback is exercised
         # with a locale that genuinely lacks the key instead.
-        from openemux.i18n import LOCALE_TRANSLATIONS
+        from openemux.i18n import LOCALE_TRANSLATIONS, reset_translation_cache
 
         original = LOCALE_TRANSLATIONS["de"].pop("context.cover.remove")
+        # The merged tables are memoized, so a catalog edited at runtime has
+        # to say so (issue #231).
+        reset_translation_cache()
         try:
             self.assertEqual(tr("de", "context.cover.remove"), "Remove cover image")
         finally:
             LOCALE_TRANSLATIONS["de"]["context.cover.remove"] = original
+            reset_translation_cache()
 
     def test_a_translated_key_is_not_taken_from_english(self):
         self.assertEqual(tr("de", "context.cover.remove"), "Coverbild entfernen")
@@ -108,3 +116,33 @@ class ProgressLabelTests(unittest.TestCase):
                         text,
                         f"{locale}/{key} embeds {placeholder}; _refresh_banner already renders it",
                     )
+
+
+class TranslationTableCacheTests(unittest.TestCase):
+    """The merged tables are built once per locale (issue #231)."""
+
+    def test_a_caller_cannot_edit_the_shared_table(self):
+        from openemux.i18n import merged_translations
+
+        table = merged_translations("de")
+        table["settings.title"] = "clobbered"
+        self.assertNotEqual(tr("de", "settings.title"), "clobbered")
+
+    def test_the_merge_is_reused_across_lookups(self):
+        from openemux.i18n import _merged_table
+
+        first = _merged_table("pt_BR")
+        second = _merged_table("pt_BR")
+        self.assertIs(first, second)
+
+    def test_resetting_rebuilds_it(self):
+        from openemux.i18n import _merged_table, reset_translation_cache
+
+        first = _merged_table("es")
+        reset_translation_cache()
+        self.assertIsNot(_merged_table("es"), first)
+
+
+if __name__ == "__main__":
+    unittest.main()
+

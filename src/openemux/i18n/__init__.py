@@ -1,4 +1,6 @@
 import os
+import sys
+from functools import lru_cache
 
 from openemux.i18n.locales import de, en, es, fr, ja, pt_BR, zh_CN
 
@@ -95,27 +97,102 @@ def detect_system_locale(environ=None):
     the process locale is "C" unless something calls setlocale, while these
     variables carry what the user actually picked in their session. ``LANGUAGE``
     holds a colon-separated preference list, which is walked in order.
+
+    Windows sets none of those variables, so it falls back to asking the OS
+    (:func:`_windows_ui_locale`). Without that every Windows user silently gets
+    English -- and the bug hides during development, because the MSYS2 login
+    shell *does* export ``LANG``: it only appears once the app is launched from
+    Explorer or the Start Menu, which is to say only in the shipped build.
     """
     env = os.environ if environ is None else environ
+    environment_named_a_language = False
     for name in LOCALE_ENV_VARS:
         for candidate in (env.get(name) or "").split(":"):
             matched = match_locale(candidate)
             if matched:
                 return matched
+            if _canonical_locale_tag(candidate):
+                # A real locale we simply do not ship, e.g. ru_RU.
+                environment_named_a_language = True
+
+    # Two conditions, both necessary.
+    #
+    # ``environ is None``: an explicitly passed mapping means "evaluate against
+    # exactly this", not "and then ask the OS". Without it every caller that
+    # supplies an environment -- the whole test suite included -- would inherit
+    # the host's Windows display language, so the same test would pass on an
+    # English Windows and fail on a Portuguese one.
+    #
+    # ``not environment_named_a_language``: a desktop that says "ru_RU" has
+    # stated a preference we understand and cannot honour, so it gets English.
+    # Overriding that with the Windows UI language would ignore an explicit
+    # choice; only silence should fall through.
+    if environ is None and not environment_named_a_language:
+        matched = match_locale(_windows_ui_locale())
+        if matched:
+            return matched
+
     return DEFAULT_LOCALE
 
 
-def merged_translations(locale):
-    selected = normalize_locale(locale)
+def _windows_ui_locale():
+    """The Windows UI language as a ``pt_BR``-style string, or ``""``.
+
+    ``GetUserDefaultUILanguage`` returns the language of the user's Windows
+    display language, which is what "the desktop's language" means here --
+    ``locale.getlocale()`` reports the *formatting* locale, which a user can
+    and does set independently (English Windows with Brazilian number formats
+    is a common pairing).
+    """
+    if sys.platform != "win32":
+        return ""
+    try:
+        import ctypes
+
+        lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+        # LOCALE_SNAME gives a BCP-47 tag such as "pt-BR"; the rest of this
+        # module speaks the POSIX "pt_BR" form.
+        buffer = ctypes.create_unicode_buffer(85)
+        # 0x0000005C == LOCALE_SNAME
+        if ctypes.windll.kernel32.GetLocaleInfoW(lang_id, 0x0000005C, buffer, 85):
+            return buffer.value.replace("-", "_")
+    except Exception:  # noqa: BLE001 - a language guess must never break startup
+        pass
+    return ""
+
+
+@lru_cache(maxsize=None)
+def _merged_table(selected):
+    """The locale's table over English, built once per locale.
+
+    The tables are module constants, so the merge can only ever produce the
+    same dict. Rebuilding it per lookup copied 2x591 entries every time, and
+    the hot callers are per ROM card and per progress event (issue #231).
+    """
     base = dict(LOCALE_TRANSLATIONS["en"])
     if selected != "en":
         base.update(LOCALE_TRANSLATIONS.get(selected, {}))
     return base
 
 
+def merged_translations(locale):
+    """A caller-owned copy of the locale's table."""
+    return dict(_merged_table(normalize_locale(locale)))
+
+
+def reset_translation_cache():
+    """Forget the merged tables.
+
+    The catalogs are module constants and the cache assumes it: anything that
+    edits ``LOCALE_TRANSLATIONS`` at runtime -- which in practice is only a
+    test simulating a locale that lacks a key -- has to call this afterwards.
+    """
+    _merged_table.cache_clear()
+
+
 def tr(locale, key, **kwargs):
     selected = normalize_locale(locale)
-    merged = merged_translations(selected)
+    merged = _merged_table(selected)
     text = merged.get(key, LOCALE_TRANSLATIONS["en"].get(key, key))
     if kwargs:
         return text.format(**kwargs)

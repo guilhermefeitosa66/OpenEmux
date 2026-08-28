@@ -3,11 +3,12 @@ import logging
 import threading
 import time
 
-from openemux.core import save_states
+from openemux.core import retroarch_log, save_states
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     VolumePacer,
     clamp_volume_db,
+    pick_free_udp_port,
 )
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from openemux.core.systems import resolve_system_id
@@ -31,6 +32,10 @@ QUIT_GRACE_SECONDS = 2.0
 TERM_GRACE_SECONDS = 2.0
 STOP_POLL_INTERVAL = 0.05
 
+#: Under this many seconds, a nonzero exit is a launch that never got off the
+#: ground rather than a game the user quit (issue #226).
+STARTUP_FAILURE_SECONDS = 3.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,19 +46,42 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager, sleep=time.sleep):
+    def __init__(self, project_root, config_manager, sleep=time.sleep, dispatch=None, clock=time.monotonic):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
         self._sleep = sleep
+        self._clock = clock
+        # When the running game started, so a poll can tell "the user quit"
+        # from "it never came up" (issue #226).
+        self._launched_at = None
+        # How a background thread hands work back to the GTK main loop
+        # (``GLib.idle_add``). The debounced volume write used to run on the
+        # Timer thread and mutate the very config dict the main thread was
+        # editing; routed through here it happens where every other config
+        # write happens (issue #208). Without one -- tests, headless -- the
+        # write stays on the calling thread, which is what it always did.
+        self._dispatch = dispatch
         self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
+        # Something the last successful launch has to tell the user -- today
+        # only "this console's shader has no preset your video driver can
+        # load" (issue #366). A (key, kwargs) pair for tr(), or None.
+        self.launch_notice = None
         # The live volume tracker (issue #69): RetroArch only steps relative
         # over UDP, so the absolute slider walks from this locally known level.
         # Seeded at launch from the same config value the launcher writes as
         # audio_volume, which is what keeps the tracker honest.
         self._volume_db = clamp_volume_db(self.config_manager.get_master_volume_db())
         self._command_client_cache = None
+        # The port this launch's channel runs on. Resolved at launch so the
+        # config's "0" (pick a free one) and the override RetroArch reads can
+        # never disagree.
+        self._network_cmd_port = None
+        # The last launch as it would have to be repeated, and whether the
+        # unpacked retry has already been spent on it (issue #248).
+        self._launch_request = None
+        self._fuse_retry_done = False
         self._pacer = None
         self._persist_lock = threading.Lock()
         self._persist_timer = None
@@ -68,6 +96,18 @@ class RuntimeManager:
     # arrive and the tracker has to come from the pacer rather than being
     # optimistically set to the target (issue #125).
     @property
+    def volume_settling(self):
+        """Is the emulator's real level still walking toward the last target?
+
+        RetroArch has no absolute set-volume command, so a drag becomes a
+        walk of 0.5 dB steps paced at one per command-poll -- seconds, for a
+        long drag. The UI asks this so it can say the level is still moving
+        instead of showing a number the game has not reached (issue #284).
+        """
+        pacer = self._pacer
+        return bool(pacer is not None and pacer.settling)
+
+    @property
     def volume_db(self):
         if self._pacer is not None:
             return self._pacer.level
@@ -79,21 +119,51 @@ class RuntimeManager:
         if self._pacer is not None:
             self._pacer.reset(self._volume_db)
 
-    def launch(self, rom_path, console, state_slot=None):
+    def launch(self, rom_path, console, state_slot=None, force_extract=False):
+        """Start a game. ``force_extract`` is the FUSE retry, not a user option.
+
+        See :meth:`_retry_unpacked`: when the AppImage runtime cannot mount
+        itself the same launch is repeated unpacked, and that repeat comes
+        back through here (issue #248).
+        """
         system_id = resolve_system_id(console)
         if self.is_running():
-            return False, "A game is already running. Close it before launching another one."
+            # A translation key, not a sentence. Core has no locale and no
+            # business having one; the UI runs whatever comes back through
+            # tr(), which is the identity for anything that is not a key --
+            # so the launcher's own free-text failures still pass through
+            # unchanged (issue #232).
+            return False, "toast.launch.already_running"
 
         mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
         if mode == "retroarch_wrapper":
+            port = self._resolve_network_cmd_port()
             proc, error_msg = self.retroarch_launcher.launch_process(
-                rom_path, system_id, state_slot=state_slot
+                rom_path, system_id, state_slot=state_slot, network_cmd_port=port,
+                force_extract=force_extract,
             )
             if not proc:
                 return False, error_msg
+            # A launch that started but has something to say. Not an error --
+            # the game is up -- so it cannot travel in the error slot; the UI
+            # reads it after a successful launch (issue #366).
+            self.launch_notice = getattr(
+                self.retroarch_launcher, "last_shader_notice", None
+            )
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
+            # What a retry has to repeat, and whether one is still owed. A
+            # fresh launch re-arms it; the retry itself does not, so a game
+            # that cannot start gets exactly one second attempt.
+            self._launch_request = {
+                "path": rom_path,
+                "console": system_id,
+                "state_slot": state_slot,
+            }
+            self._fuse_retry_done = force_extract
+            self._launched_at = self._clock()
+            self._network_cmd_port = port
             self.volume_db = self.config_manager.get_master_volume_db()
             self.muted = False
             return True, None
@@ -107,7 +177,19 @@ class RuntimeManager:
         return False, f"Unsupported runtime mode: {mode}"
 
     def is_running(self):
-        return bool(self.active_process and self.active_process.poll() is None)
+        """Is a game up right now?
+
+        The attribute is read **once**. It used to be read twice, and the
+        gamepad reader thread calls this several times a second while the main
+        thread's one-second poll clears it at game exit: a clear landing
+        between the two reads raised ``AttributeError: 'NoneType' object has
+        no attribute 'poll'`` on the reader thread, which ended it -- gamepad
+        navigation silently stopped working for the rest of the session, every
+        time the race hit (issue #223). Same shape in ``poll_active`` and
+        ``stop_active`` below, for the same reason.
+        """
+        proc = self.active_process
+        return bool(proc and proc.poll() is None)
 
     def stop_active(self, block=False):
         """Quit the running game, escalating until the process is really gone.
@@ -124,10 +206,10 @@ class RuntimeManager:
         process and would leave the game behind on the way out. Everywhere
         else it walks on its own thread so a closing window is not held up.
         """
-        if not self.active_process:
+        proc = self.active_process
+        if not proc:
             return False, "No active game process."
 
-        proc = self.active_process
         if proc.poll() is not None:
             self._clear_active()
             return False, "No active game process."
@@ -173,9 +255,24 @@ class RuntimeManager:
         return proc.poll() is not None
 
     # -- live control (issue #69) ------------------------------------------
+    def _resolve_network_cmd_port(self):
+        """The port this launch will use: the pinned one, or a free one.
+
+        RetroArch binds its command socket with the reuse flags set, so a
+        standalone RetroArch on the default 55355 binds it too and the kernel
+        picks which of the two hears each datagram. A port of our own is the
+        only way our commands are guaranteed to reach our own game (#227).
+        """
+        configured = int(self.config_manager.get_network_cmd_port())
+        if configured > 0:
+            return configured
+        return pick_free_udp_port()
+
     def _command_client(self):
         """The command client, reused so the pacer keeps one socket."""
-        port = int(self.config_manager.get_network_cmd_port())
+        port = self._network_cmd_port
+        if port is None:
+            port = self._resolve_network_cmd_port()
         client = self._command_client_cache
         if client is None or client.port != port:
             if client is not None:
@@ -224,10 +321,31 @@ class RuntimeManager:
             if self._persist_timer is not None:
                 self._persist_timer.cancel()
             self._persist_timer = threading.Timer(
-                VOLUME_PERSIST_DEBOUNCE, self.flush_volume_db
+                VOLUME_PERSIST_DEBOUNCE, self._flush_volume_db_on_main_loop
             )
             self._persist_timer.daemon = True
             self._persist_timer.start()
+
+    def _flush_volume_db_on_main_loop(self):
+        """The debounce timer firing, from its own thread.
+
+        Hands the write to the main loop when there is one so the config is
+        only ever mutated from a single thread. ``flush_volume_db`` itself
+        stays synchronous: atexit calls it after the loop has stopped, and a
+        write posted to a dead main loop would simply never happen.
+        """
+        if self._dispatch is None:
+            self.flush_volume_db()
+            return
+
+        def _write_once():
+            self.flush_volume_db()
+            # False is GLib.SOURCE_REMOVE: flush_volume_db returns True when
+            # it wrote something, and handing that straight to idle_add would
+            # keep the source alive and re-run it forever.
+            return False
+
+        self._dispatch(_write_once)
 
     def flush_volume_db(self):
         """Write any debounced volume level out now."""
@@ -243,9 +361,18 @@ class RuntimeManager:
         return True
 
     def toggle_mute(self):
-        """Toggle RetroArch's mute; returns the new (locally tracked) state."""
-        if self.send_command("MUTE"):
-            self.muted = not self.muted
+        """Toggle RetroArch's mute; returns the new (locally tracked) state.
+
+        Write-only: the vendored RetroArch answers ``GET_CONFIG_PARAM
+        audio_mute_enable`` with "unsupported", so nothing can correct this
+        tracker afterwards and a single dropped packet would leave the button
+        inverted for the rest of the session. One retry -- a send only reports
+        failure when the datagram never left, so re-sending cannot toggle
+        twice (issue #284).
+        """
+        if not self.send_command("MUTE") and not self.send_command("MUTE"):
+            return self.muted
+        self.muted = not self.muted
         return self.muted
 
     # -- live input apply (issue #129) -------------------------------------
@@ -359,22 +486,108 @@ class RuntimeManager:
         return self.send_command("LOAD_STATE")
 
     def poll_active(self):
-        if not self.active_process:
+        """Has the game ended? ``None`` while it runs, a result once it has.
+
+        A game that exits within a couple of seconds with a nonzero code never
+        got as far as running -- a missing library, a core that would not load.
+        The only account of it is the launch log, and the app used to answer
+        "finished (exit code 1)", which is what a clean quit looks like too
+        (issue #226). When it looks like that, the reason comes back with the
+        result so the caller can show it instead.
+        """
+        proc = self.active_process
+        if not proc:
             return None
 
-        exit_code = self.active_process.poll()
+        exit_code = proc.poll()
         if exit_code is None:
             return None
 
         rom = self.active_rom
+        log_path = getattr(proc, "_openemux_log_path", None)
+        ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
-        return {"exit_code": exit_code, "rom": rom}
+
+        result = {
+            "exit_code": exit_code,
+            "rom": rom,
+            "ran_for": ran_for,
+            "log_path": log_path,
+        }
+        if self._died_on_startup(exit_code, ran_for):
+            # An AppImage that could not mount itself never reached
+            # RetroArch, so this is not a game that failed -- it is a launch
+            # that has not happened yet. Unpacking needs no FUSE at all, so
+            # try that once before telling the user anything (issue #248).
+            if self._retry_unpacked(log_path):
+                return None
+            reason = retroarch_log.read_failure_reason(log_path)
+            result["failure_reason"] = reason
+            logger.warning(
+                "game died on startup: exit_code=%s ran_for=%.2fs reason=%s log=%s",
+                exit_code,
+                ran_for,
+                reason,
+                log_path,
+            )
+        return result
+
+    def _retry_unpacked(self, log_path):
+        """Relaunch the game that just died, unpacked instead of FUSE-mounted.
+
+        True when a retry actually started, and then the caller must report
+        nothing: from the user's side the game is simply still coming up.
+        False for everything else -- a non-AppImage RetroArch, a death the
+        log does not blame on FUSE, or a retry already spent (issue #248).
+        """
+        if self._fuse_retry_done:
+            return False
+        request = self._launch_request
+        if not request:
+            return False
+        if not self.retroarch_launcher.launches_an_appimage():
+            return False
+        if not retroarch_log.read_is_fuse_failure(log_path):
+            return False
+        logger.warning(
+            "the RetroArch AppImage could not mount itself; retrying unpacked: log=%s",
+            log_path,
+        )
+        started, error = self.launch(
+            request["path"],
+            request["console"],
+            state_slot=request.get("state_slot"),
+            force_extract=True,
+        )
+        if not started:
+            logger.warning("unpacked retry did not start: %s", error)
+        return bool(started)
+
+    @staticmethod
+    def _died_on_startup(exit_code, ran_for):
+        """A nonzero exit this soon is a launch that never started."""
+        return bool(exit_code) and ran_for < STARTUP_FAILURE_SECONDS
 
     def _clear_active(self):
-        if self.active_process and hasattr(self.active_process, "_openemux_log_handle"):
+        proc = self.active_process
+        if proc is not None and hasattr(proc, "_openemux_log_handle"):
             try:
-                self.active_process._openemux_log_handle.close()
+                proc._openemux_log_handle.close()
             except Exception:
                 pass
+        # The command channel talked to the game that just ended, and the next
+        # launch picks a port of its own (issue #227), so the cached client is
+        # already destined for replacement. Closing it here means the UDP
+        # socket does not outlive the game it was for -- which is also what
+        # made the suite report an unclosed socket after its summary, from the
+        # QUIT that stop_active sends (issue #244).
+        client = self._command_client_cache
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+            self._command_client_cache = None
+            self._pacer = None
         self.active_process = None
         self.active_rom = None

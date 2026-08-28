@@ -12,24 +12,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        # Only ruff, at the version the dev lock pins -- so a new ruff release
+        # cannot fail CI on code nobody touched, and linting does not drag in
+        # pycairo and PyGObject, which would need the whole GTK toolchain
+        # installed to build from sdist for a job that never imports them.
+        run: |
+          pin=$(grep -iE '^ruff==' requirements-dev.lock)
+          test -n "$pin"
+          python -m pip install "$pin"
+
+      - name: Ruff (correctness rules only)
+        # Undefined names, unused imports, f-string mistakes, shadowing: the
+        # class of defect a test only finds if it happens to execute the line,
+        # and the UI modules sit around 10-13% coverage (issue #243). No
+        # formatting rules -- see [tool.ruff] in pyproject.toml.
+        run: ruff check --output-format=github .
+
   unittest:
-    name: Unit tests
+    name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     permissions:
       # contents: write is only exercised by the badge step below, which
       # force-pushes coverage.json to the unprotected `badges` branch.
       contents: write
+    strategy:
+      # One version failing is information about that version; cancelling the
+      # rest hides which ones are actually affected.
+      fail-fast: false
+      matrix:
+        # pyproject declares requires-python = ">=3.10" and the .rpm requires
+        # python3 >= 3.10, but CI only ever ran 3.12 -- so code that needed
+        # 3.12 passed CI and broke the maintainer's own 3.10 venv, and nothing
+        # covered the newer interpreters the docs promise (Fedora 42, Ubuntu
+        # 25.04, GNOME runtime 50). The suite takes ~30 s (issue #242).
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
         run: make install-sys-deps
+
+      - name: Install a virtual X server
+        # A handful of tests build real GTK widgets, which needs a display --
+        # without one GDK segfaults instead of failing, taking the whole run
+        # down with no failing test to point at. Under xvfb they run; without
+        # it they skip themselves (tests/gtk_display.py).
+        run: sudo apt-get install -y xvfb
 
       - name: Create virtualenv and install Python dependencies
         run: |
@@ -37,8 +84,11 @@ jobs:
           make setup-dev
 
       - name: Run unit tests under coverage
+        # `coverage report` enforces fail_under from pyproject.toml, so a PR
+        # that drops the total below the floor fails here rather than moving
+        # the badge quietly.
         run: |
-          PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
+          xvfb-run -a env PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
           .venv/bin/python -m coverage report
 
       # The README's coverage badge is a shields.io endpoint badge fed by
@@ -46,7 +96,12 @@ jobs:
       # infrastructure: force-pushed to a single commit on every push to
       # develop, never merged anywhere.
       - name: Publish the coverage badge data
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        # One version owns the badge; four jobs force-pushing the same branch
+        # would race for no gain.
+        if: |
+          matrix.python-version == '3.12'
+          && github.event_name == 'push'
+          && github.ref == 'refs/heads/develop'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -55,7 +110,10 @@ jobs:
           elif [ "$total" -ge 75 ]; then color=green
           elif [ "$total" -ge 60 ]; then color=yellowgreen
           elif [ "$total" -ge 45 ]; then color=yellow
-          else                          color=orange
+          elif [ "$total" -ge 30 ]; then color=orange
+          # The ladder used to bottom out at orange, so the badge had no way
+          # to say "this is a problem" however far coverage fell (issue #242).
+          else                          color=red
           fi
           dir=$(mktemp -d)
           printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
@@ -67,3 +125,89 @@ jobs:
           git -C "$dir" commit -q -m "coverage: ${total}%"
           git -C "$dir" push -q --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+
+  windows:
+    name: Unit tests (Windows / MSYS2)
+    runs-on: windows-latest
+    # The suite is `unittest` over `TemporaryDirectory`, so most of it is
+    # already portable -- and what is *not* is exactly what a Windows port has
+    # to find: a hardcoded "/", a path built with os.path.join on a POSIX
+    # assumption, a temp file opened twice. None of that shows on Linux, and
+    # before this job the only way to see it was to build the bundle and run
+    # the app by hand (issue #118).
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up MSYS2 (MINGW64)
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: MINGW64
+          update: true
+          # The same stack the bundle ships (packaging/windows/msys2_packages.py
+          # and `make install-sys-deps-windows`): PyGObject cannot be pip-built
+          # under MSYS2, so pacman owns the whole dependency set. SDL2 is here
+          # for the gamepad backend, which loads it with ctypes.
+          install: >-
+            make
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-cairo
+            mingw-w64-x86_64-python-yaml
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-libadwaita
+            mingw-w64-x86_64-gobject-introspection-runtime
+            mingw-w64-x86_64-librsvg
+            mingw-w64-x86_64-adwaita-icon-theme
+            mingw-w64-x86_64-hicolor-icon-theme
+            mingw-w64-x86_64-gsettings-desktop-schemas
+            mingw-w64-x86_64-SDL2
+
+      - name: Show what is installed
+        run: |
+          python --version
+          python -c "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk; print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())"
+
+      - name: Run the unit tests
+        # No coverage here: the floor is enforced by the Linux matrix, and a
+        # second reporter would only race it for the badge. Tests that need to
+        # build real widgets skip themselves when no display opened
+        # (tests/gtk_display.py), so this job never segfaults on a runner
+        # without an interactive desktop.
+        run: PYTHONPATH=src python -m unittest discover -s tests -v
+
+  smoke:
+    name: Headless start-up
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
+        run: make install-sys-deps
+
+      - name: Install a virtual X server
+        run: sudo apt-get install -y xvfb
+
+      - name: Create virtualenv and install Python dependencies
+        run: |
+          make venv
+          make setup
+
+      - name: Start the app and wait for its window
+        # `unittest discover` never constructs the Adw.Application or the
+        # window, and main.py does real work at import time, so a crash in
+        # start-up or in window construction used to pass CI and be caught by
+        # hand on release day. RT-001, run headlessly (issue #242).
+        # The script prints the tail of the start-up log itself when it fails:
+        # its throwaway HOME goes away with the process, so a later step would
+        # find nothing to read.
+        run: xvfb-run -a .venv/bin/python scripts/smoke_start.py

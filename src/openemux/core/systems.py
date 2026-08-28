@@ -1,3 +1,5 @@
+from openemux.core.platform import normalize_core_filename
+
 SYSTEMS = [
     {
         "id": "A2600",
@@ -56,7 +58,7 @@ SYSTEMS = [
     {
         "id": "FC",
         "display_name": "Nintendo (NES) / Famicom",
-        "aliases": ["nes", "NES"],
+        "aliases": ["nes"],
         "extensions": [".nes"],
         "thumbnail_system": "Nintendo - Nintendo Entertainment System",
         "runtime_core_candidates": ["nestopia_libretro.so", "fceumm_libretro.so", "mesen_libretro.so"],
@@ -83,7 +85,7 @@ SYSTEMS = [
     {
         "id": "GBA",
         "display_name": "Game Boy Advance",
-        "aliases": ["gba", "Gba"],
+        "aliases": [],
         "extensions": [".gba"],
         "thumbnail_system": "Nintendo - Game Boy Advance",
         "runtime_core_candidates": ["mgba_libretro.so", "gpsp_libretro.so"],
@@ -227,7 +229,7 @@ SYSTEMS = [
     {
         "id": "SFC",
         "display_name": "Super Nintendo (SNES)",
-        "aliases": ["snes", "SNES"],
+        "aliases": ["snes"],
         "extensions": [".sfc", ".smc"],
         "thumbnail_system": "Nintendo - Super Nintendo Entertainment System",
         "runtime_core_candidates": ["snes9x_libretro.so", "bsnes_libretro.so"],
@@ -324,10 +326,17 @@ def get_supported_extensions(value):
 
 
 def get_runtime_core_candidates(value):
+    """Core filenames to try for ``value``, with the extension this platform uses.
+
+    ``SYSTEMS`` above spells every candidate ``.so``. That stays the canonical
+    form and the extension is corrected here, because this is the only reader of
+    those 31 lists -- rewriting them per platform would be the same information
+    stored twice, and one of the copies would drift (issue #118).
+    """
     system = get_system(value)
     if not system:
         return []
-    return list(system.get("runtime_core_candidates", []))
+    return [normalize_core_filename(name) for name in system.get("runtime_core_candidates", [])]
 
 
 def get_thumbnail_system(value):

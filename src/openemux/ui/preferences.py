@@ -13,12 +13,22 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Gdk, GLib
+from threading import Thread
 
-from openemux.core import game_window_support
+from gi.repository import Adw, Gio, Gtk, Gdk, GLib
+
+from openemux.core import (
+    core_options,
+    game_window_support,
+    retroachievements,
+    rom_importer,
+    save_backup,
+)
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
-from openemux.core.gamepad_reader import GamepadCaptureReader, describe_token, list_gamepads
+from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
+from openemux.core.gamepad_reader import describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
+from openemux.core.platform import IS_WINDOWS
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -37,13 +47,36 @@ from openemux.core.input_profiles import (
     device_type_for,
     player_for_device,
 )
+from openemux.core.input_capture import InputCaptureSession
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.theme import THEMES
 from openemux.ui import theming
+from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
+
+
+def game_window_subtitle(t):
+    """The game-window switch's subtitle, with the Wayland cost spelled out.
+
+    The setting reads as "show the game inside OpenEmux", and on a Wayland
+    session it also decides how the *library* is drawn. The embed is
+    ``XReparentWindow`` between two X clients, so ``main.py`` forces
+    ``GDK_BACKEND=x11`` before GTK is imported, and GTK4 cannot pick a backend
+    per window: the whole UI renders through XWayland for the entire run, not
+    only while a game is up. That costs fractional-scaling sharpness and
+    Wayland-native behaviour for the time the user spends browsing rather than
+    playing, and nothing in the UI used to say so (issue #258).
+
+    A module-level function rather than a method so it can be tested without a
+    display -- constructing the row it feeds segfaults on a headless box.
+    """
+    subtitle = t("prefs.game_window.subtitle")
+    if game_window_support.session_is_wayland():
+        return f"{subtitle} {t('prefs.game_window.subtitle.xwayland')}"
+    return subtitle
 
 
 class OpenEmuxPreferences(Adw.PreferencesDialog):
@@ -61,13 +94,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # Input-capture state (self-contained; mirrors the old window logic).
         self._input_buttons = {}
         self._input_rows = {}
-        self._bindings_buffer = {}
         self._loaded_profile = None
         self._visible_actions = list(ACTION_ORDER)
-        self._capture_sequence_actions = list(ACTION_ORDER)
-        self._capture_active_action = None
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
+        # The bindings being edited and which action is listening: a plain
+        # state machine, with no widget in it (issue #238).
+        self._capture = InputCaptureSession()
+        self._capture.load({}, ACTION_ORDER)
         self._gamepad_reader = None
 
         self._key_controller = Gtk.EventControllerKey()
@@ -142,6 +174,24 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         open_btn.connect("clicked", lambda _b: self.win._open_roms_folder())
         self._roms_path_row.add_suffix(open_btn)
         folder_group.add(self._roms_path_row)
+
+        # Copy or link (issue #298). A link keeps one copy of a collection
+        # that other applications also read, and costs nothing on a drive
+        # that cannot hold a second one.
+        self._import_modes = [rom_importer.IMPORT_COPY, rom_importer.IMPORT_LINK]
+        self._import_mode_row = Adw.ComboRow(
+            title=self.t("settings.library.import_mode.title"),
+            subtitle=self.t("settings.library.import_mode.subtitle"),
+        )
+        self._import_mode_row.set_model(
+            Gtk.StringList.new([self.t(f"import_mode.{m}") for m in self._import_modes])
+        )
+        current_mode = self.config.get_import_mode()
+        self._import_mode_row.set_selected(
+            self._import_modes.index(current_mode) if current_mode in self._import_modes else 0
+        )
+        self._import_mode_row.connect("notify::selected", self._on_import_mode_changed)
+        folder_group.add(self._import_mode_row)
         page.add(folder_group)
 
         maint_group = Adw.PreferencesGroup(title=self.t("prefs.group.maintenance"))
@@ -393,7 +443,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 subtitle=f"{present}/{total}",
             )
             # The row names a console, so show its icon like everywhere else.
-            expander.add_prefix(self.win._build_console_icon(console_id))
+            expander.add_prefix(console_icon(console_id))
             open_btn = Gtk.Button(icon_name="folder-open-symbolic")
             open_btn.add_css_class("flat")
             open_btn.set_valign(Gtk.Align.CENTER)
@@ -444,7 +494,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 box.remove(child)
             item = list_item.get_item()
             console_id = item.get_string() if item else ""
-            box.append(self.win._build_console_icon(console_id))
+            box.append(console_icon(console_id))
             label = Gtk.Label(label=f"{console_id} — {get_system_display_name(console_id)}")
             label.set_halign(Gtk.Align.START)
             label.set_xalign(0)
@@ -965,12 +1015,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._visible_actions = list(visible_actions)
         # Map-all never demands the optional actions (turbo): forcing a user
         # through binding a modifier they may not want defeats the flow.
-        self._capture_sequence_actions = [
-            action for action in visible_actions if action not in OPTIONAL_ACTIONS
-        ]
-        self._bindings_buffer = {
-            action: str(bindings.get(action, "")).strip().lower() for action in visible_actions
-        }
+        self._capture.load(
+            {
+                action: str(bindings.get(action, "")).strip().lower()
+                for action in visible_actions
+            },
+            [action for action in visible_actions if action not in OPTIONAL_ACTIONS],
+        )
         is_extra_port = device_id in EXTRA_PORT_DEVICE_IDS
         self._port_enabled_switch.set_visible(is_extra_port)
         if is_extra_port:
@@ -988,7 +1039,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             subtitle = self._input_action_subtitle(action)
             if subtitle:
                 row.set_subtitle(subtitle)
-            button = Gtk.Button(label=self._binding_display(self._bindings_buffer.get(action, "")))
+            button = Gtk.Button(label=self._binding_display(self._capture.binding_for(action)))
             button.set_valign(Gtk.Align.CENTER)
             button.set_size_request(150, -1)
             button.connect("clicked", self._on_binding_clicked, action)
@@ -1016,8 +1067,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # very buttons being mapped (B, A, the D-pad) are also the ones that
         # drive the interface, and they would close this dialog mid-capture.
         self._set_exclusive_input(True)
-        self._capture_active_action = action
-        self._capture_sequence_mode = sequence_mode
+        self._capture.start(action, sequence_mode)
         self._set_active_row(action)
 
         is_gamepad = self._current_device() != "keyboard"
@@ -1038,8 +1088,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _device_for_port(self, port):
         """Pick the physical pad to listen on for RetroArch port ``port``.
 
-        Pads are taken in /dev/input/event* order, which is the same ordering
-        RetroArch's udev driver enumerates, so port N listens on the Nth pad.
+        Pads are taken in the backend's own enumeration order -- the
+        /dev/input/event* order under evdev, the SDL device-index order under
+        SDL2 -- which is the order the matching RetroArch joypad driver
+        assigns ports in, so port N listens on the Nth pad.
         Returns ``(device, error_key)``; ``device=None`` with no error means
         "let the reader choose", which only happens for port 1.
         """
@@ -1057,7 +1109,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._cancel_capture()
             self._toast(self.t(error_key, port=port), timeout=6)
             return
-        self._gamepad_reader = GamepadCaptureReader(
+        self._gamepad_reader = make_capture_reader(
             on_token=lambda token: GLib.idle_add(self._on_gamepad_token, token),
             on_error=lambda reason: GLib.idle_add(self._on_gamepad_error, reason),
             device=device,
@@ -1073,14 +1125,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _on_gamepad_token(self, token):
         # The reader runs on its own thread; capture may have been cancelled
         # between the press and this idle callback.
-        if not self._capture_active_action or self._current_device() == "keyboard":
+        if not self._capture.capturing or self._current_device() == "keyboard":
             return False
         self._gamepad_reader = None
         self._commit_capture(token)
         return False
 
     def _on_gamepad_error(self, reason):
-        if not self._capture_active_action:
+        if not self._capture.capturing:
             return False
         self._gamepad_reader = None
         self._cancel_capture()
@@ -1105,42 +1157,52 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _cancel_capture(self, show_toast=False):
         self._stop_gamepad_reader()
         self._set_exclusive_input(False)
-        if self._capture_active_action in self._input_buttons:
-            action = self._capture_active_action
-            self._input_buttons[action].set_label(
-                self._binding_display(self._bindings_buffer.get(action, ""))
+        cancelled = self._capture.cancel()
+        if cancelled.action in self._input_buttons:
+            self._input_buttons[cancelled.action].set_label(
+                self._binding_display(self._capture.binding_for(cancelled.action))
             )
-        self._capture_active_action = None
-        was_sequence = self._capture_sequence_mode
-        self._capture_sequence_mode = False
-        self._capture_sequence_index = -1
         self._set_active_row(None)
         if hasattr(self, "_bindings_group"):
             self._set_capture_prompt(None)
-        if show_toast and was_sequence:
+        if show_toast and cancelled.was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
     def _start_map_all(self):
-        if not self._capture_sequence_actions:
-            return
         self._cancel_capture()
-        self._capture_sequence_mode = True
-        self._capture_sequence_index = 0
-        self._start_capture(self._capture_sequence_actions[0], sequence_mode=True)
+        first = self._capture.begin_sequence()
+        if first is None:
+            return
+        self._start_capture(first, sequence_mode=True)
 
     def _set_binding(self, action, value):
-        value = (value or "").strip().lower()
-        if value:
-            for other_action, other_value in list(self._bindings_buffer.items()):
-                if other_action == action:
-                    continue
-                if other_value == value:
-                    self._bindings_buffer[other_action] = ""
-                    if other_action in self._input_buttons:
-                        self._input_buttons[other_action].set_label(self._binding_display(""))
-        self._bindings_buffer[action] = value
+        """Store a binding through the session, then render what it did."""
+        released = self._capture.set_binding(action, value)
+        self._render_binding(action, released)
+        return released
+
+    def _render_binding(self, action, released):
+        """Repaint the rows a stored binding touched, and say what it took."""
+        for other_action in released:
+            if other_action in self._input_buttons:
+                self._input_buttons[other_action].set_label(self._binding_display(""))
+        value = self._capture.binding_for(action)
         if action in self._input_buttons:
             self._input_buttons[action].set_label(self._binding_display(value))
+        # Say what was taken away. The row going blank on its own read as a
+        # glitch, and the value came back on the next visit anyway; now it
+        # really is released, so the message is the whole story. Not during
+        # map-all: one toast per button is noise, not information.
+        if released and not self._capture.sequence_mode:
+            self._toast(
+                self.t(
+                    "toast.input_released",
+                    binding=self._binding_display(value),
+                    actions=", ".join(
+                        self._input_action_label(other) for other in released
+                    ),
+                )
+            )
 
     @staticmethod
     def _normalize_key(keyval):
@@ -1160,30 +1222,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         Shared by keyboard and gamepad capture.
         """
-        action = self._capture_active_action
-        if not action:
+        outcome = self._capture.commit(value)
+        if outcome is None:
             return
-        self._set_binding(action, value)
-        if not self._capture_sequence_mode:
-            self._cancel_capture()
+        self._render_binding(outcome.action, outcome.released)
+        if outcome.next_action is not None:
+            self._start_capture(outcome.next_action, sequence_mode=True)
             return
-        self._capture_sequence_index += 1
-        if self._capture_sequence_index >= len(self._capture_sequence_actions):
-            self._cancel_capture()
+        self._cancel_capture()
+        if outcome.finished:
             self._toast(self.t("input.capture.completed"))
-            return
-        next_action = self._capture_sequence_actions[self._capture_sequence_index]
-        self._start_capture(next_action, sequence_mode=True)
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
-        if not self._capture_active_action:
+        if not self._capture.capturing:
             return False
         key_name = self._normalize_key(keyval)
-        action = self._capture_active_action
+        action = self._capture.active_action
 
         # Escape always aborts, for both device types.
         if key_name == "escape":
-            if self._capture_sequence_mode:
+            if self._capture.sequence_mode:
                 self._cancel_capture(show_toast=True)
             else:
                 self._set_binding(action, "")
@@ -1217,7 +1275,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         valid_actions = get_actions_for_console(console_id)
         existing = device.get("bindings") or {}
         device["bindings"] = {
-            a: self._bindings_buffer.get(a, existing.get(a, "")) for a in valid_actions
+            a: self._capture.bindings.get(a, existing.get(a, "")) for a in valid_actions
         }
         if device_id in EXTRA_PORT_DEVICE_IDS:
             # Ports 2-4 are opt-in and never take over player 1.
@@ -1225,7 +1283,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         else:
             profile["active_device"] = device_id
         self.config.save_input_profile(console_id, profile)
-        self._loaded_profile = profile
+        # Read the rows back from what was actually stored. The buffer is what
+        # the user asked for; the profile is what the store kept, and the two
+        # used to be allowed to disagree silently until the dialog was
+        # reopened (issue #281).
+        self._refresh_bindings()
         self._toast(self.t("toast.input_saved", console=console_id))
         # A remap saved mid-game reaches the running game through the
         # state-carrying relaunch (#129) -- but only when the profile being
@@ -1324,7 +1386,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         group = Adw.PreferencesGroup(title=self.t("prefs.group.game_window"))
         self._game_window_row = Adw.SwitchRow(
             title=self.t("prefs.game_window.title"),
-            subtitle=self.t("prefs.game_window.subtitle"),
+            subtitle=game_window_subtitle(self.t),
         )
         self._game_window_row.set_active(self.config.get_game_window_enabled())
         if game_window_support.embedding_possible():
@@ -1335,7 +1397,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             # sandbox on Wayland). The row stays visible and says why, rather
             # than silently disappearing on some machines.
             self._game_window_row.set_sensitive(False)
-            self._game_window_row.set_subtitle(self.t("prefs.game_window.unavailable"))
+            # "needs X11 or XWayland" is actionable advice on Linux and
+            # misleading on Windows, where it reads as "install an X server and
+            # this will work". It will not: the embed is X11 reparenting, which
+            # has no Windows equivalent, so say that instead (issue #118).
+            reason = (
+                "prefs.game_window.unavailable_windows"
+                if IS_WINDOWS
+                else "prefs.game_window.unavailable"
+            )
+            self._game_window_row.set_subtitle(self.t(reason))
         group.add(self._game_window_row)
         return group
 
@@ -1378,7 +1449,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=f"{console_id} — {get_system_display_name(console_id)}"
             )
             # The row names a console, so show its icon here too.
-            row.add_prefix(self.win._build_console_icon(console_id))
+            row.add_prefix(console_icon(console_id))
             row.set_model(Gtk.StringList.new(labels))
             row.set_selected(ids.index(selected) if selected in ids else 0)
             row._shader_ids = ids
@@ -1428,7 +1499,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             if not cores:
                 # Nothing installed: say so rather than offer an empty picker.
                 row = Adw.ActionRow(title=title, subtitle=self.t("settings.cores.none"))
-                row.add_prefix(self.win._build_console_icon(console_id))
+                row.add_prefix(console_icon(console_id))
                 row.set_sensitive(False)
                 group.add(row)
                 continue
@@ -1442,14 +1513,80 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=title,
                 subtitle=self.t("settings.cores.auto_resolves", core=auto_label),
             )
-            row.add_prefix(self.win._build_console_icon(console_id))
+            row.add_prefix(console_icon(console_id))
             row.set_model(Gtk.StringList.new(labels))
             override = self.config.get_console_core_override(console_id)
             row.set_selected(filenames.index(override) if override in filenames else 0)
             row._core_filenames = filenames
             row.connect("notify::selected", self._on_core_changed, console_id)
             group.add(row)
+
+        # Settings the core itself understands, which do not travel in the
+        # config file the launch appends (issue #296). Only for the cores that
+        # have any, so this group is empty on most libraries.
+        self._core_options_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.core_options"),
+            description=self.t("prefs.group.core_options.description"),
+        )
+        page.add(self._core_options_group)
+        self._core_options_rows = []
+        self._refresh_core_options()
         return page
+
+    def _resolved_core_for(self, console_id):
+        """The core this console would launch with right now."""
+        override = self.config.get_console_core_override(console_id)
+        if override:
+            return override
+        cores = self.win.core_catalog.cores_for_console(console_id)
+        return cores[0].filename if cores else None
+
+    def _refresh_core_options(self):
+        """Rebuild the Advanced group for whichever cores are chosen now.
+
+        Rebuilt rather than built once: changing a console's core changes
+        which options it has, and a stale group would offer settings the new
+        core never heard of.
+        """
+        for row in self._core_options_rows:
+            self._core_options_group.remove(row)
+        self._core_options_rows = []
+
+        store = self.config.core_options
+        any_rows = False
+        for console_id in SYSTEM_IDS:
+            core_filename = self._resolved_core_for(console_id)
+            options = core_options.options_for_core(core_filename)
+            if not options:
+                continue
+            chosen = store.get_for_console(console_id, core_filename)
+            for option in options:
+                labels = [core_options.value_label(v) for v in option.values]
+                row = Adw.ComboRow(
+                    title=self.t(option.label_key),
+                    subtitle=f"{console_id} — {get_system_display_name(console_id)}",
+                )
+                row.add_prefix(console_icon(console_id))
+                row.set_model(Gtk.StringList.new(labels))
+                current = chosen.get(option.key, option.default)
+                row.set_selected(
+                    option.values.index(current) if current in option.values else 0
+                )
+                row._core_option = (console_id, core_filename, option)
+                row.connect("notify::selected", self._on_core_option_changed)
+                self._core_options_group.add(row)
+                self._core_options_rows.append(row)
+                any_rows = True
+        self._core_options_group.set_visible(any_rows)
+
+    def _on_core_option_changed(self, row, _param):
+        console_id, core_filename, option = row._core_option
+        idx = row.get_selected()
+        if not (0 <= idx < len(option.values)):
+            return
+        self.config.core_options.set_for_console(
+            console_id, core_filename, option.key, option.values[idx]
+        )
 
     def _on_core_changed(self, row, _param, console_id):
         filenames = getattr(row, "_core_filenames", [])
@@ -1460,6 +1597,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self.config.set_console_core_override(console_id, chosen)
         if chosen:
             self.win._warn_missing_bios_for_core(console_id, chosen)
+        # The new core has its own options, or none at all.
+        self._refresh_core_options()
+
+    def _on_import_mode_changed(self, row, *_a):
+        idx = row.get_selected()
+        if 0 <= idx < len(self._import_modes):
+            self.config.set_import_mode(self._import_modes[idx])
 
     # ----- System page ----------------------------------------------------
     def _build_system_page(self):
@@ -1545,6 +1689,36 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         welcome_group.add(open_welcome_row)
         page.add(welcome_group)
 
+        saves_group = Adw.PreferencesGroup(title=self.t("prefs.group.saves"))
+        export_row = Adw.ActionRow(
+            title=self.t("settings.system.saves.export.title"),
+            subtitle=self.t("settings.system.saves.export.subtitle"),
+        )
+        export_row.set_activatable(True)
+        export_row.add_prefix(Gtk.Image.new_from_icon_name("media-floppy-symbolic"))
+        export_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        export_row.connect("activated", self._on_export_saves)
+        saves_group.add(export_row)
+
+        import_row = Adw.ActionRow(
+            title=self.t("settings.system.saves.import.title"),
+            subtitle=self.t("settings.system.saves.import.subtitle"),
+        )
+        import_row.set_activatable(True)
+        import_row.add_prefix(Gtk.Image.new_from_icon_name("folder-download-symbolic"))
+        import_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        import_row.connect("activated", self._on_import_saves)
+        saves_group.add(import_row)
+        page.add(saves_group)
+
+        self._achievements_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.achievements"),
+            description=self.t("prefs.group.achievements.description"),
+        )
+        page.add(self._achievements_group)
+        self._achievements_rows = []
+        self._refresh_achievements()
+
         setup_group = Adw.PreferencesGroup(title=self.t("prefs.group.setup"))
         state = self.config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1576,6 +1750,192 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         setup_group.add(retry_row)
         page.add(setup_group)
         return page
+
+    # ----- RetroAchievements (issue #300) ---------------------------------
+    def _refresh_achievements(self):
+        """Rebuild the group for whichever state the account is in.
+
+        Signed out it asks for one; signed in it says who, and offers the two
+        switches that only mean anything with an account.
+        """
+        for row in self._achievements_rows:
+            self._achievements_group.remove(row)
+        self._achievements_rows = []
+        store = self.config.achievements
+
+        def add(row):
+            self._achievements_group.add(row)
+            self._achievements_rows.append(row)
+
+        if store.is_signed_in():
+            account = Adw.ActionRow(
+                title=self.t("settings.achievements.signed_in", user=store.get_username()),
+            )
+            sign_out = Gtk.Button(label=self.t("settings.achievements.signout"))
+            sign_out.set_valign(Gtk.Align.CENTER)
+            sign_out.add_css_class("flat")
+            sign_out.connect("clicked", self._on_achievements_sign_out)
+            account.add_suffix(sign_out)
+            add(account)
+
+            enable = Adw.SwitchRow(
+                title=self.t("settings.achievements.enable.title"),
+                subtitle=self.t("settings.achievements.enable.subtitle"),
+            )
+            enable.set_active(store.get_enabled())
+            enable.connect(
+                "notify::active", lambda row, *_a: store.set_enabled(row.get_active())
+            )
+            add(enable)
+
+            hardcore = Adw.SwitchRow(
+                title=self.t("settings.achievements.hardcore.title"),
+                subtitle=self.t("settings.achievements.hardcore.subtitle"),
+            )
+            hardcore.set_active(store.get_hardcore())
+            hardcore.connect(
+                "notify::active", lambda row, *_a: store.set_hardcore(row.get_active())
+            )
+            add(hardcore)
+            return
+
+        self._cheevos_user_row = Adw.EntryRow(
+            title=self.t("settings.achievements.username")
+        )
+        self._cheevos_user_row.set_text(store.get_username())
+        add(self._cheevos_user_row)
+
+        self._cheevos_password_row = Adw.PasswordEntryRow(
+            title=self.t("settings.achievements.password")
+        )
+        add(self._cheevos_password_row)
+
+        sign_in_row = Adw.ActionRow(title=self.t("settings.achievements.signed_out"))
+        self._cheevos_sign_in = Gtk.Button(label=self.t("settings.achievements.signin"))
+        self._cheevos_sign_in.set_valign(Gtk.Align.CENTER)
+        self._cheevos_sign_in.add_css_class("suggested-action")
+        self._cheevos_sign_in.connect("clicked", self._on_achievements_sign_in)
+        sign_in_row.add_suffix(self._cheevos_sign_in)
+        add(sign_in_row)
+
+    def _on_achievements_sign_in(self, _button):
+        username = self._cheevos_user_row.get_text().strip()
+        password = self._cheevos_password_row.get_text()
+        self._cheevos_sign_in.set_sensitive(False)
+
+        def _worker():
+            try:
+                token = retroachievements.login(username, password)
+            except retroachievements.LoginError as exc:
+                GLib.idle_add(self._on_achievements_login_failed, str(exc))
+                return
+            GLib.idle_add(self._on_achievements_login_ok, username, token)
+
+        Thread(target=_worker, daemon=True).start()
+
+    def _on_achievements_login_ok(self, username, token):
+        self.config.achievements.set_account(username, token)
+        # Asking to sign in is asking for achievements; the switch is there to
+        # turn them off again, not a second thing to remember.
+        self.config.achievements.set_enabled(True)
+        self._refresh_achievements()
+        self._toast(self.t("toast.achievements.signed_in", user=username))
+        return False
+
+    def _on_achievements_login_failed(self, message):
+        self._cheevos_sign_in.set_sensitive(True)
+        # The password entry is left alone: retyping it after a typo in the
+        # username is the annoying half.
+        self._toast(self.t("toast.achievements.failed", error=message), timeout=5)
+        return False
+
+    def _on_achievements_sign_out(self, _button):
+        self.config.achievements.sign_out()
+        self._refresh_achievements()
+        self._toast(self.t("toast.achievements.signed_out"))
+
+    # ----- saves backup (issue #293) --------------------------------------
+    def _saves_filter(self):
+        zip_filter = Gtk.FileFilter()
+        zip_filter.set_name(self.t("saves.dialog.filter"))
+        zip_filter.add_pattern("*.zip")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(zip_filter)
+        return filters, zip_filter
+
+    def _on_export_saves(self, _row):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("saves.export.dialog.title"))
+        dialog.set_modal(True)
+        dialog.set_initial_name(save_backup.default_backup_name())
+        filters, default = self._saves_filter()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.save(self, None, self._on_export_target_chosen)
+
+    def _on_export_target_chosen(self, dialog, result):
+        try:
+            target = dialog.save_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if target is None or not target.get_path():
+            return
+        save_backup.export_saves_async(
+            target.get_path(),
+            self.config.get_states_dir(),
+            self.config.get_roms_path(),
+            on_done=lambda summary: GLib.idle_add(self._on_export_done, summary),
+        )
+
+    def _on_export_done(self, summary):
+        if summary.get("error"):
+            self._toast(self.t("toast.saves.failed", error=summary["error"]))
+            return False
+        self._toast(
+            self.t(
+                "toast.saves.exported",
+                states=summary.get("states", 0),
+                saves=summary.get("saves", 0),
+            )
+        )
+        return False
+
+    def _on_import_saves(self, _row):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("saves.import.dialog.title"))
+        dialog.set_modal(True)
+        filters, default = self._saves_filter()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.open(self, None, self._on_import_source_chosen)
+
+    def _on_import_source_chosen(self, dialog, result):
+        try:
+            source = dialog.open_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if source is None or not source.get_path():
+            return
+        save_backup.import_saves_async(
+            source.get_path(),
+            self.config.get_states_dir(),
+            self.config.get_roms_path(),
+            on_done=lambda outcome: GLib.idle_add(self._on_import_done, outcome),
+        )
+
+    def _on_import_done(self, outcome):
+        errors = outcome.get("errors") or []
+        if errors and not outcome.get("restored"):
+            self._toast(self.t("toast.saves.failed", error=errors[0]["error"]))
+            return False
+        self._toast(
+            self.t(
+                "toast.saves.imported",
+                restored=outcome.get("restored", 0),
+                skipped=outcome.get("skipped", 0),
+            )
+        )
+        return False
 
     def _on_theme_changed(self, row, *_a):
         idx = row.get_selected()

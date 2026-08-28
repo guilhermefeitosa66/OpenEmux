@@ -42,7 +42,7 @@ class TipCatalogTests(unittest.TestCase):
     def test_tips_render_in_every_locale_and_stay_short(self):
         for locale in SUPPORTED_LOCALES:
             for key in TIP_KEYS:
-                text = render_tip(lambda k, **kw: tr(locale, k, **kw), key)
+                text = render_tip(lambda k, _loc=locale, **kw: tr(_loc, k, **kw), key)
                 self.assertNotIn("{", text, f"{locale}/{key} has an unresolved placeholder")
                 self.assertLessEqual(len(text), 70, f"{locale}/{key} is too long: {text!r}")
 

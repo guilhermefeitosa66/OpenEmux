@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+#
+# The container's own graphical session: an X server nobody is looking at.
+#
+#   devbox-x start|stop|restart|status
+#
+# Xvnc (not Xvfb) because "nobody is looking" has to be a choice, not a
+# limitation: the session is headless by default and `make devbox-view` opens
+# a viewer on it when the developer actually wants to watch. Xvfb would make
+# that impossible, and Xephyr would put a window on the very desktop this is
+# meant to keep free.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+
+# The X server accepts connections before it finishes registering extensions,
+# so the wait below is for the extension, not for the socket. Generous ceiling:
+# xkbcomp takes seconds on its own, and more when the machine is busy building
+# something else.
+X_WAIT=120   # x 0.5s = 60s
+
+start_x() {
+	if display_is_ours; then
+		info "display ${DEVBOX_DISPLAY} already up"
+		return 0
+	fi
+
+	# Not answering is not the same as not there, and the difference decides
+	# whether starting a server is even allowed. The X lock file names the pid
+	# holding the display, which settles it exactly -- and /tmp is the host's,
+	# so that pid can perfectly well be a server outside this container.
+	local lock="/tmp/.X${DEVBOX_DISPLAY#:}-lock"
+	if [ -e "${lock}" ]; then
+		local holder comm owner
+		holder=$(tr -d ' \n' <"${lock}" 2>/dev/null || true)
+		if [ -z "${holder}" ] || ! kill -0 "${holder}" 2>/dev/null; then
+			warn "stale ${lock} (no process ${holder:-?}) -- removing it"
+			rm -f "${lock}"
+		else
+			comm=$(cat "/proc/${holder}/comm" 2>/dev/null || echo '?')
+			owner=$(stat -c %u "/proc/${holder}" 2>/dev/null || echo -1)
+			if [ "${comm}" = Xvnc ] && [ "${owner}" = "$(id -u)" ]; then
+				# An Xvnc of ours that is up but unreachable -- a cookie
+				# regenerated under a running server does this. The old cookie
+				# is gone, so the only way back to the display is to restart it.
+				warn "an Xvnc (pid ${holder}) holds ${DEVBOX_DISPLAY} but does not answer -- restarting it"
+				kill "${holder}" 2>/dev/null || true
+				sleep 1
+				kill -9 "${holder}" 2>/dev/null || true
+				rm -f "${lock}" "${DEVBOX_STATE}/xvnc.pid"
+			else
+				die "${DEVBOX_DISPLAY} belongs to pid ${holder} (${comm}), which this kit did not start.
+    That is somebody else's display -- very possibly the developer's. Pick
+    another number instead: DEVBOX_DISPLAY=:78."
+			fi
+		fi
+	fi
+
+	# A cookie of our own. Without it the tools below would be talking to an
+	# unauthenticated server, which some Xlib builds refuse outright -- and
+	# python3-xlib, which the app itself imports, is one of the fussy ones.
+	# Written only once it is certain a server is about to be started: replacing
+	# it under a running one is what produced the unreachable display above.
+	rm -f "${XAUTHORITY}"
+	touch "${XAUTHORITY}"
+	xauth -f "${XAUTHORITY}" add "${DEVBOX_DISPLAY}" MIT-MAGIC-COOKIE-1 "$(mcookie)"
+
+	info "Xvnc ${DEVBOX_GEOMETRY} on ${DEVBOX_DISPLAY} (vnc ${DEVBOX_VNC_HOST}:${DEVBOX_VNC_PORT})"
+	Xvnc "${DEVBOX_DISPLAY}" \
+		-geometry "${DEVBOX_GEOMETRY}" -depth 24 \
+		-auth "${XAUTHORITY}" \
+		-rfbport "${DEVBOX_VNC_PORT}" -rfbauth /dev/null -SecurityTypes None \
+		-localhost=1 -AlwaysShared -AcceptSetDesktopSize=1 \
+		-desktop "openemux-devbox" \
+		>"${DEVBOX_STATE}/xvnc.log" 2>&1 &
+	echo $! >"${DEVBOX_STATE}/xvnc.pid"
+
+	local waited=0
+	while [ "${waited}" -lt "${X_WAIT}" ]; do
+		display_is_ours && break
+		sleep 0.5
+		waited=$((waited + 1))
+	done
+	if ! display_is_ours; then
+		cat "${DEVBOX_STATE}/xvnc.log" >&2 || true
+		die "${DEVBOX_DISPLAY} never advertised the VNC extension in $((X_WAIT / 2))s.
+    'server already running' in the log above means something else holds that
+    display number -- pick another with DEVBOX_DISPLAY=:78."
+	fi
+}
+
+start_wm() {
+	wm_running && return 0
+	# A window manager is not decoration here. Without one there is no EWMH, so
+	# wmctrl cannot see the window at all and GTK has nobody to mediate a resize
+	# request -- it keeps its old allocation and the X window is merely clipped,
+	# so every "narrow layout" capture silently comes out as the wide one with
+	# the right-hand side cut off. openbox costs ~2 MB and leaves GTK4's
+	# client-side decorations alone.
+	openbox --sm-disable >"${DEVBOX_STATE}/openbox.log" 2>&1 &
+	echo $! >"${DEVBOX_STATE}/wm.pid"
+
+	local waited=0
+	while [ "${waited}" -lt 40 ]; do
+		wm_running && break
+		sleep 0.25
+		waited=$((waited + 1))
+	done
+	if ! wm_running; then
+		cat "${DEVBOX_STATE}/openbox.log" >&2 || true
+		die "no window manager took ${DEVBOX_DISPLAY} after 10s -- see the log above"
+	fi
+	# Flat background, no screensaver, no blanking: a wallpaper or a blanked
+	# screen behind a window is the classic way to ruin an hour of captures.
+	xsetroot -solid '#241f31' 2>/dev/null || true
+	xset s off -dpms s noblank 2>/dev/null || true
+}
+
+start_bus() {
+	if [ -r "${DEVBOX_STATE}/bus" ] && [ -r "${DEVBOX_STATE}/bus.pid" ] \
+		&& kill -0 "$(cat "${DEVBOX_STATE}/bus.pid")" 2>/dev/null; then
+		return 0
+	fi
+	local out
+	out=$(dbus-daemon --session --fork --print-address=1 --print-pid=1)
+	printf '%s' "$(echo "${out}" | sed -n 1p)" >"${DEVBOX_STATE}/bus"
+	printf '%s' "$(echo "${out}" | sed -n 2p)" >"${DEVBOX_STATE}/bus.pid"
+}
+
+stop_pid() {
+	local file=$1 name=$2 pid
+	[ -r "${file}" ] || return 0
+	pid=$(cat "${file}")
+	# Only ever a pid this kit wrote down. The container shares the host's PID
+	# namespace, so a pkill by name in here would reach across and kill the
+	# developer's own processes.
+	if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+		kill "${pid}" 2>/dev/null || true
+		info "stopped ${name} (pid ${pid})"
+	fi
+	rm -f "${file}"
+}
+
+case "${1:-status}" in
+	start)
+		start_x
+		start_wm
+		start_bus
+		info "session ready: DISPLAY=${DEVBOX_DISPLAY} $(xdotool getdisplaygeometry | tr ' ' x)"
+		;;
+	stop)
+		devbox-app stop >/dev/null 2>&1 || true
+		stop_pid "${DEVBOX_STATE}/wm.pid" openbox
+		stop_pid "${DEVBOX_STATE}/bus.pid" dbus
+		stop_pid "${DEVBOX_STATE}/xvnc.pid" Xvnc
+		;;
+	restart)
+		"$0" stop
+		sleep 1
+		"$0" start
+		;;
+	status)
+		if display_is_ours; then
+			printf 'display   %s  %s\n' "${DEVBOX_DISPLAY}" "$(xdotool getdisplaygeometry | tr ' ' x)"
+			printf 'vnc       %s:%s\n' "${DEVBOX_VNC_HOST}" "${DEVBOX_VNC_PORT}"
+			wm_running \
+				&& printf 'wm        managing %s\n' "${DEVBOX_DISPLAY}" \
+				|| printf 'wm        \033[1;31mnone -- resizes will be ignored\033[0m\n'
+			printf 'bus       %s\n' "$(cat "${DEVBOX_STATE}/bus" 2>/dev/null || echo '<none>')"
+		else
+			printf 'display   %s  down\n' "${DEVBOX_DISPLAY}"
+			exit 1
+		fi
+		;;
+	*)
+		sed -n '3,5p' "$0"
+		exit 2
+		;;
+esac

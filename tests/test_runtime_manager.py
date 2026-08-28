@@ -7,7 +7,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
-from openemux.core.runtime_manager import HOT_APPLY_STATE_SLOT, RuntimeManager
+from openemux.core.runtime_manager import (
+    HOT_APPLY_STATE_SLOT,
+    STARTUP_FAILURE_SECONDS,
+    RuntimeManager,
+)
 
 
 class _DummyConfig:
@@ -307,8 +311,10 @@ class CommandDispatchTests(unittest.TestCase):
             manager, _config = _manager(tmp_dir)
             launched = {}
 
-            def _fake_launch(rom_path, console, state_slot=None):
+            def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None,
+                             force_extract=False):
                 launched["args"] = (rom_path, console)
+                launched["port"] = network_cmd_port
                 return _FakeProcess(), None
 
             manager.retroarch_launcher.launch_process = _fake_launch
@@ -317,6 +323,8 @@ class CommandDispatchTests(unittest.TestCase):
             )
             self.assertTrue(success, error)
             self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
+            # The launch owns the port; RetroArch and the client must agree.
+            self.assertTrue(launched["port"] > 0)
 
     def test_relaunch_rom_refuses_without_a_rom(self):
         with TemporaryDirectory() as tmp_dir:
@@ -526,6 +534,365 @@ class HotApplyTests(unittest.TestCase):
             manager, _config, client = self._running_manager(tmp_dir)
             client.fail_after = 0
             self.assertIsNone(manager.snapshot_active())
+
+
+class MuteAndSettlingTests(unittest.TestCase):
+    """The write-only half of the audio controls (issue #284)."""
+
+    def test_a_mute_that_never_left_does_not_flip_the_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+
+            dead = _FakeClient(fail_after=0)
+            manager._command_client_cache = dead
+            attempts = []
+            dead.send = lambda command: (attempts.append(command), False)[1]
+
+            self.assertFalse(manager.toggle_mute())
+            # Tried twice before believing it: a send only reports failure
+            # when the datagram never left, so a retry cannot toggle twice.
+            self.assertEqual(attempts, ["MUTE", "MUTE"])
+
+    def test_a_mute_that_landed_flips_the_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+            manager._command_client_cache = _FakeClient()
+            self.assertTrue(manager.toggle_mute())
+            self.assertFalse(manager.toggle_mute())
+
+    def test_settling_is_false_without_a_pacer(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            self.assertFalse(manager.volume_settling)
+
+
+class CommandPortTests(unittest.TestCase):
+    """Each launch owns its command port (issue #227)."""
+
+    def test_a_pinned_port_is_honoured(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 54321
+            self.assertEqual(manager._resolve_network_cmd_port(), 54321)
+
+    def test_zero_means_pick_a_free_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 0
+            port = manager._resolve_network_cmd_port()
+            self.assertGreater(port, 0)
+            self.assertNotEqual(port, 0)
+
+    def test_the_client_talks_to_the_port_the_launch_chose(self):
+        # Not to whatever the config says now: the running RetroArch was told
+        # one number, and the client has to keep using it.
+        with TemporaryDirectory() as tmp_dir:
+            manager, config = _manager(tmp_dir)
+            config.port = 0
+            manager._network_cmd_port = 51234
+            self.assertEqual(manager._command_client().port, 51234)
+
+
+class _Clock:
+    """A monotonic clock the test moves by hand."""
+
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
+class StartupFailureTests(unittest.TestCase):
+    """A game that never came up must not read as a game the user quit (#226)."""
+
+    def _running(self, tmp_dir, clock, log_path=None):
+        config = _DummyConfig(tmp_dir)
+        manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), clock=clock)
+        proc = _FakeProcess()
+        if log_path is not None:
+            proc._openemux_log_path = str(log_path)
+        manager.active_process = proc
+        manager.active_rom = {"path": "/roms/PS/game.chd", "console": "PS"}
+        manager._launched_at = clock()
+        return manager, proc
+
+    def test_a_game_still_running_reports_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, _ = self._running(tmp_dir, clock)
+            self.assertIsNone(manager.poll_active())
+
+    def test_an_instant_nonzero_exit_carries_the_reason_from_the_log(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "[INFO] starting\ndlopen(): error loading libfuse.so.2\n", encoding="utf-8"
+            )
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+
+            clock.advance(0.4)
+            proc.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_long_session_that_ends_badly_is_not_a_startup_failure(self):
+        # A game the user played for an hour and that crashed on the way out
+        # is not a launch that failed; the finished toast is the right one.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text("[ERROR] something late\n", encoding="utf-8")
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+
+            clock.advance(3600.0)
+            proc.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertIsNone(result.get("failure_reason"))
+
+    def test_a_clean_instant_exit_is_not_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock)
+            clock.advance(0.2)
+            proc.exit_code = 0
+            result = manager.poll_active()
+
+        self.assertIsNone(result.get("failure_reason"))
+
+    def test_a_startup_failure_with_an_unreadable_log_still_reports_the_exit(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=Path(tmp_dir) / "gone.log")
+            clock.advance(0.1)
+            proc.exit_code = 127
+            result = manager.poll_active()
+
+        self.assertEqual(result["exit_code"], 127)
+        self.assertIsNone(result["failure_reason"])
+
+    def test_the_threshold_is_what_separates_the_two(self):
+        self.assertTrue(RuntimeManager._died_on_startup(1, 0.5))
+        self.assertFalse(RuntimeManager._died_on_startup(0, 0.5))
+        self.assertFalse(RuntimeManager._died_on_startup(1, STARTUP_FAILURE_SECONDS + 0.1))
+
+
+class UnpackedRetryTests(unittest.TestCase):
+    """A launch that died mounting gets one unpacked second chance (#248).
+
+    The AppImage runtime failing to mount itself is not a game that failed --
+    it is a launch that never happened. Unpacking needs no FUSE at all, so
+    the same launch is repeated that way before the user is told anything.
+    """
+
+    def _manager(self, tmp_dir, clock, appimage=True):
+        config = _DummyConfig(tmp_dir)
+        manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), clock=clock)
+        manager.retroarch_launcher.launches_an_appimage = lambda: appimage
+        return manager
+
+    def _stub_launcher(self, manager, log_path):
+        """Record every launch and hand back a process with that log."""
+        calls = []
+
+        def _launch(rom_path, console, state_slot=None, network_cmd_port=None,
+                    force_extract=False):
+            calls.append(
+                {
+                    "rom": rom_path,
+                    "console": console,
+                    "state_slot": state_slot,
+                    "force_extract": force_extract,
+                }
+            )
+            proc = _FakeProcess()
+            proc._openemux_log_path = str(log_path)
+            return proc, None
+
+        manager.retroarch_launcher.launch_process = _launch
+        return calls
+
+    @staticmethod
+    def _log(tmp_dir, text):
+        log_path = Path(tmp_dir) / "launch.log"
+        log_path.write_text(text, encoding="utf-8")
+        return log_path
+
+    def test_a_mount_failure_is_retried_unpacked(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS", state_slot=3)
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            # Nothing is reported: as far as the user can tell the game is
+            # still coming up.
+            self.assertIsNone(manager.poll_active())
+
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(calls[0]["force_extract"])
+            self.assertTrue(calls[1]["force_extract"])
+            # ...and it is the same launch, slot included.
+            self.assertEqual(calls[1]["rom"], "/roms/PS/game.chd")
+            self.assertEqual(calls[1]["console"], "PS")
+            self.assertEqual(calls[1]["state_slot"], 3)
+            self.assertTrue(manager.is_running())
+
+    def test_the_second_chance_is_spent_only_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            manager.poll_active()
+
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 2, "the retry looped instead of giving up")
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_fresh_launch_re_arms_the_retry(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            for _ in range(2):
+                manager.launch("/roms/PS/game.chd", "PS")
+                clock.advance(0.4)
+                manager.active_process.exit_code = 1
+                manager.poll_active()
+                manager.stop_active()
+                manager._clear_active()
+
+        # Two user launches, each with its own retry.
+        self.assertEqual([call["force_extract"] for call in calls],
+                         [False, True, False, True])
+
+    def test_a_native_retroarch_is_never_retried(self):
+        # The log of a wrapper script can say anything; there is no AppImage
+        # to unpack, so a second launch would only fail the same way.
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock, appimage=False)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_a_death_the_log_does_not_blame_on_fuse_is_reported_at_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "[ERROR] Failed to open libretro core\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(0.4)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("libretro core", result["failure_reason"])
+
+    def test_a_game_the_user_played_and_quit_is_never_relaunched(self):
+        with TemporaryDirectory() as tmp_dir:
+            clock = _Clock()
+            manager = self._manager(tmp_dir, clock)
+            log_path = self._log(tmp_dir, "dlopen(): error loading libfuse.so.2\n")
+            calls = self._stub_launcher(manager, log_path)
+
+            manager.launch("/roms/PS/game.chd", "PS")
+            clock.advance(3600.0)
+            manager.active_process.exit_code = 1
+            result = manager.poll_active()
+
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(result.get("failure_reason"))
+
+
+class ClearedMidReadTests(unittest.TestCase):
+    """Reading ``active_process`` twice is what the race needs (#223).
+
+    The reader thread calls ``is_running`` several times a second; the main
+    thread's one-second poll clears ``active_process`` at game exit. The old
+    ``bool(self.active_process and self.active_process.poll() is None)`` reads
+    the attribute once for the truth test and again for the call -- a clear
+    landing between the two raised ``AttributeError: 'NoneType' object has no
+    attribute 'poll'`` on the reader thread, which ended it. Gamepad and
+    keyboard-hint navigation then silently stopped for the rest of the session.
+
+    ``_ClearsWhenTested`` puts the clear exactly there: its ``__bool__`` is the
+    truth test, and it drops the manager's reference as it answers. Snapshot
+    the attribute once and this is a non-event; read it twice and every one of
+    these raises.
+    """
+
+    class _ClearsWhenTested:
+        def __init__(self, manager):
+            self.manager = manager
+            self.terminated = False
+            self.killed = False
+
+        def __bool__(self):
+            self.manager.active_process = None
+            return True
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+    def _armed(self, tmp_dir):
+        manager, _config = _manager(tmp_dir)
+        manager.active_process = self._ClearsWhenTested(manager)
+        return manager
+
+    def test_is_running_survives_a_clear_between_reads(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertTrue(self._armed(tmp_dir).is_running())
+
+    def test_poll_active_survives_the_same_clear(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(self._armed(tmp_dir).poll_active())
+
+    def test_stop_active_survives_the_same_clear(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._armed(tmp_dir)
+            manager._command_client_cache = _FakeClient()
+
+            stopped, error = manager.stop_active(block=True)
+
+        self.assertTrue(stopped, error)
 
 
 if __name__ == "__main__":

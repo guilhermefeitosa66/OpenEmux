@@ -7,9 +7,10 @@ the UI stuttered (issue #128):
    a handful of ``stat()`` calls and handed the real cost -- JPEG/PNG decode
    plus a rescale -- back through ``GLib.idle_add``, serialised on the one
    thread that cannot afford it.
-2. **One OS thread per ROM, unbounded.** ``Gtk.FlowBox`` does not
-   virtualize, so every card on the page is built eagerly; a 500-ROM console
-   spawned 500 threads to run 500 ``stat()`` calls.
+2. **One OS thread per ROM, unbounded.** The grid did not virtualize back
+   then, so every card on the page was built eagerly; a 500-ROM console
+   spawned 500 threads to run 500 ``stat()`` calls. It does virtualize now
+   (issue #219), which bounds the *callers* too.
 3. **Nothing was cached**, and a zoom, sort or view-mode change rebuilds the
    whole grid, re-decoding every cover from scratch.
 
@@ -36,10 +37,16 @@ logger = logging.getLogger(__name__)
 #: Bump when the decode itself changes so stale entries are not reused.
 COVER_CACHE_VERSION = 1
 
-#: Entry bound for the LRU. Covers are already downscaled to their target
-#: size, so a few hundred is a modest amount of memory and comfortably more
-#: than one screenful across a couple of zoom levels.
-MAX_CACHED_COVERS = 256
+#: Memory bound for the LRU, in bytes. Counting *entries* was the wrong unit:
+#: the rationale was that covers are downscaled to their target size, which is
+#: not true of the cartridge branch -- it decodes the composite at full
+#: resolution on purpose, roughly 1.8 MB an entry at zoom 2.0, so a 256-entry
+#: cap permitted several hundred megabytes (issue #219). A pixbuf knows how
+#: many bytes it occupies, so the bound is stated in the unit that matters.
+#:
+#: 128 MiB holds well over a screenful of cards at any zoom, which is what
+#: makes a sort, a zoom or a page switch cheap -- the reason the cache exists.
+MAX_CACHE_BYTES = 128 * 1024 * 1024
 
 #: One worker per core. The point is to *bound* the pool: the old code span
 #: one OS thread per ROM, which is what pinned a core on a big library.
@@ -49,6 +56,7 @@ _pool = None
 _pool_lock = threading.Lock()
 
 _cache = OrderedDict()
+_cache_bytes = 0
 _cache_lock = threading.Lock()
 
 
@@ -99,24 +107,48 @@ def _cache_get(key):
         return _cache[key]
 
 
+def _pixbuf_bytes(pixbuf):
+    """How much memory this pixbuf holds, as GdkPixbuf itself reports it."""
+    try:
+        return int(pixbuf.get_byte_length())
+    except (AttributeError, TypeError):  # pragma: no cover - defensive
+        return pixbuf.get_rowstride() * pixbuf.get_height()
+
+
 def _cache_put(key, pixbuf):
     if key is None or pixbuf is None:
         return
+    global _cache_bytes
+    size = _pixbuf_bytes(pixbuf)
     with _cache_lock:
+        previous = _cache.pop(key, None)
+        if previous is not None:
+            _cache_bytes -= _pixbuf_bytes(previous)
         _cache[key] = pixbuf
-        _cache.move_to_end(key)
-        while len(_cache) > MAX_CACHED_COVERS:
-            _cache.popitem(last=False)
+        _cache_bytes += size
+        # Never down to empty: one entry larger than the whole budget is still
+        # worth keeping while it is the one being looked at.
+        while _cache_bytes > MAX_CACHE_BYTES and len(_cache) > 1:
+            _evicted_key, evicted = _cache.popitem(last=False)
+            _cache_bytes -= _pixbuf_bytes(evicted)
 
 
 def cache_clear():
+    global _cache_bytes
     with _cache_lock:
         _cache.clear()
+        _cache_bytes = 0
 
 
 def cache_size():
     with _cache_lock:
         return len(_cache)
+
+
+def cache_bytes():
+    """How much memory the cached covers hold right now."""
+    with _cache_lock:
+        return _cache_bytes
 
 
 def load_cover(path, target_w=None, target_h=None):

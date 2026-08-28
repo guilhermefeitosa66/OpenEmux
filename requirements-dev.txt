@@ -1,3 +1,13 @@
 # Development-only dependencies — used by `make coverage` and CI, never shipped
 # in any package (the AppImage/deb/rpm/Flatpak builds install requirements.txt).
-coverage
+# The [toml] extra, not bare `coverage`: the settings live in pyproject.toml,
+# and reading TOML needs tomli below Python 3.11 (3.11+ has tomllib built in).
+# Without it coverage on 3.10 exits with "Can't read 'pyproject.toml' without
+# TOML support" -- so it silently ignored fail_under and source= wherever the
+# extra happened to be missing (issue #242).
+coverage[toml]
+
+# Correctness-only linter (issue #243). Pinned to a minor line: ruff adds rules
+# between releases, and a rule appearing on its own would fail CI on code
+# nobody touched.
+ruff~=0.16.4

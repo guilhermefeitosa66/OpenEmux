@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# Is this container actually able to run and drive the app? Exits non-zero with
+# a list of what is missing, so a failure names the cause instead of surfacing
+# later as a screenshot of nothing.
+#
+#   devbox-verify
+set -u
+set +o pipefail   # `grep -q` kills its producer with SIGPIPE, which would read as a failure
+. /openemux/devkit/lib.sh
+
+FAILED=0
+step() { printf '\n\033[1m-- %s\033[0m\n' "$*"; }
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; FAILED=$((FAILED + 1)); }
+note() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+step "the container"
+[ -d "${DEVBOX_REPO}/src/openemux" ] \
+	&& ok "checkout at ${DEVBOX_REPO}" \
+	|| bad "no checkout at ${DEVBOX_REPO} -- recreate the container"
+[ "${HOME}" != "${DISTROBOX_HOST_HOME:-/nonexistent}" ] \
+	&& ok "own home at ${HOME}" \
+	|| bad "HOME is the developer's real home -- everything here would write into it"
+. /etc/os-release 2>/dev/null && ok "${PRETTY_NAME}"
+
+step "the display"
+if display_is_ours; then
+	ok "${DEVBOX_DISPLAY} is our Xvnc -- $(xdotool getdisplaygeometry | tr ' ' x)"
+	ok "vnc on ${DEVBOX_VNC_HOST}:${DEVBOX_VNC_PORT} (loopback only)"
+elif xdpyinfo -display "${DEVBOX_DISPLAY}" >/dev/null 2>&1; then
+	# The dangerous case, and the reason display_is_ours asks about the VNC
+	# extension rather than about whether anything answers.
+	bad "${DEVBOX_DISPLAY} answers but is NOT our Xvnc -- that is somebody else's screen; stop and pick another DEVBOX_DISPLAY"
+else
+	note "${DEVBOX_DISPLAY} is down (devbox-x start)"
+fi
+# Asked of the display, not of the process table -- see wm_running in lib.sh.
+if wm_running; then
+	ok "window manager on ${DEVBOX_DISPLAY}"
+else
+	note "no window manager on ${DEVBOX_DISPLAY} -- resizes will be ignored (devbox-x start)"
+fi
+
+step "the tools"
+for tool in Xvnc openbox xdotool wmctrl xdpyinfo xrandr import convert ffmpeg; do
+	have "${tool}" && ok "${tool}" || bad "${tool} missing -- rerun provisioning"
+done
+
+step "the GTK stack"
+have "${DEVBOX_PYTHON}" && ok "$("${DEVBOX_PYTHON}" --version)" || bad "${DEVBOX_PYTHON} missing"
+# Spelled out rather than `python3`: the host's pyenv shim comes through on
+# PATH, and the point of the check is the interpreter the app will actually use.
+"${DEVBOX_PYTHON}" - <<-'PY' && ok "gi + Gtk 4 + Adw 1 + yaml + Xlib import" || bad "the GTK stack does not import -- rerun provisioning"
+	import gi
+	gi.require_version("Gtk", "4.0")
+	gi.require_version("Adw", "1")
+	from gi.repository import Adw, Gtk  # noqa: F401
+	import yaml, Xlib  # noqa: F401
+PY
+shadow=$(command -v python3 || true)
+[ "${shadow}" = "${DEVBOX_PYTHON}" ] \
+	|| note "PATH resolves python3 to ${shadow} (leaked in from the host); every tool here uses ${DEVBOX_PYTHON} regardless"
+
+step "the library"
+if [ -f "${HOME}/.openemux/config.yaml" ]; then
+	roms=$("${DEVBOX_PYTHON}" -c "import yaml,sys;print(yaml.safe_load(open(sys.argv[1]))['roms_path'])" \
+		"${HOME}/.openemux/config.yaml" 2>/dev/null)
+	count=$(find "${roms}" -type f 2>/dev/null | wc -l)
+	[ "${count}" -gt 0 ] \
+		&& ok "${count} ROMs under ${roms}" \
+		|| note "${roms} is empty -- the app will open on empty states (devbox-seed)"
+else
+	note "no config yet (devbox-seed, or devbox-app start does it)"
+fi
+
+step "the app"
+if devbox-app status >/dev/null 2>&1; then
+	ok "running -- $(devbox-win --list | head -1)"
+else
+	note "not running (devbox-app start)"
+fi
+
+echo
+if [ "${FAILED}" -eq 0 ]; then
+	printf '\033[32mReady.\033[0m\n\n'
+else
+	printf '\033[31m%d check(s) failed.\033[0m\n\n' "${FAILED}"
+	exit 1
+fi

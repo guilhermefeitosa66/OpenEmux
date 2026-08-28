@@ -61,10 +61,13 @@ class InputActionsTests(unittest.TestCase):
         self.assertEqual(overrides["input_load_state"], '"f4"')
         self.assertEqual(overrides["input_toggle_fast_forward"], '"f6"')
 
-    def test_overrides_exclude_buttons_not_supported_by_console(self):
+    def test_buttons_not_supported_by_console_are_bound_to_nothing(self):
+        # Not simply omitted: RetroArch falls back to the pad's autoconfig for
+        # any bind id the config leaves unset, so an omitted id keeps the stock
+        # mapping and one press fires two libretro buttons (issue #281).
         overrides = to_retroarch_overrides({"x": "s", "a": "z"}, "keyboard", console="GBA")
-        self.assertIn("input_player1_a", overrides)
-        self.assertNotIn("input_player1_x", overrides)
+        self.assertEqual(overrides["input_player1_a"], '"z"')
+        self.assertEqual(overrides["input_player1_x"], '"nul"')
 
     # ----- multi-port -------------------------------------------------
     def test_base_keys_table_still_describes_player_one(self):
@@ -708,3 +711,68 @@ class VolumeAndSlotHotkeyTests(unittest.TestCase):
         self.assertEqual(defaults["state_slot_decrease"], "pagedown")
         gamepad = default_bindings_for_device("gamepad", console="SFC")
         self.assertEqual(gamepad["volume_up"], "")
+
+
+class ReleasedBindingTests(unittest.TestCase):
+    """A binding the user released stays released (issue #281).
+
+    "" used to mean both "never set" and "the user cleared this", so a button
+    remapped onto a token something else held came back on the next save, and
+    the physical button ended up firing two commands.
+    """
+
+    def test_an_action_present_and_empty_is_left_unbound(self):
+        profile = default_bindings_for_device("gamepad", console="GBA")
+        profile["b"] = "2"          # the Xbox X button
+        profile["save_state"] = ""  # released by that remap
+        normalized = normalize_bindings(profile, "gamepad", console="GBA")
+        self.assertEqual(normalized["b"], "2")
+        self.assertEqual(normalized["save_state"], "")
+
+    def test_an_absent_action_is_still_filled_from_the_defaults(self):
+        # The #124 repair path: a partial profile has its hotkeys handed back.
+        normalized = normalize_bindings({"a": "1", "b": "0"}, "gamepad", console="SFC")
+        self.assertEqual(normalized["save_state"], "2")
+        self.assertEqual(normalized["enable_hotkey"], "6")
+
+    def test_only_one_action_ends_up_on_the_remapped_button(self):
+        profile = default_bindings_for_device("gamepad", console="GBA")
+        profile["b"] = "2"
+        profile["save_state"] = ""
+        overrides = to_retroarch_overrides(profile, "gamepad", console="GBA")
+        on_two = [key for key, value in overrides.items() if value == '"2"']
+        self.assertEqual(on_two, ["input_player1_b_btn"])
+        self.assertNotIn("input_save_state_btn", overrides)
+
+    def test_a_button_the_console_does_not_use_is_bound_to_nothing(self):
+        # Omitting the bind id leaves RetroArch's autoconfig in charge of it,
+        # so the pad's stock mapping fires alongside ours.
+        profile = default_bindings_for_device("gamepad", console="GBA")
+        overrides = to_retroarch_overrides(profile, "gamepad", console="GBA")
+        self.assertEqual(overrides["input_player1_x_btn"], '"nul"')
+        self.assertEqual(overrides["input_player1_y_btn"], '"nul"')
+
+    def test_clearing_a_face_button_kills_it_rather_than_freeing_it(self):
+        profile = default_bindings_for_device("gamepad", console="SFC")
+        token = profile["x"]
+        profile["b"] = token
+        profile["x"] = ""
+        overrides = to_retroarch_overrides(profile, "gamepad", console="SFC")
+        self.assertEqual(overrides["input_player1_b_btn"], f'"{token}"')
+        self.assertEqual(overrides["input_player1_x_btn"], '"nul"')
+
+    def test_the_hotkeys_and_the_stick_are_never_nulled(self):
+        # Nothing autoconfigures those behind our back, and nulling an unbound
+        # optional action would undo the pad's declared axes.
+        profile = default_bindings_for_device("gamepad", console="N64")
+        overrides = to_retroarch_overrides(profile, "gamepad", console="N64")
+        nulled = {key for key, value in overrides.items() if value == '"nul"'}
+        for key in nulled:
+            self.assertTrue(key.startswith("input_player1_"), key)
+        self.assertNotIn("input_player1_turbo_btn", nulled)
+        self.assertNotIn("input_player1_l_x_minus_btn", nulled)
+
+
+if __name__ == "__main__":
+    unittest.main()
+

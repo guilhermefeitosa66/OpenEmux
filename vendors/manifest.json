@@ -1,0 +1,81 @@
+{
+  "_comment": [
+    "Provenance for everything under vendors/. Managed by scripts/vendor_retroarch.py.",
+    "",
+    "Both RetroArch builds are gitignored and fetched on demand: 193 MiB for",
+    "Windows and 171 MiB for Linux. Neither belongs in git history, which every",
+    "clone on every platform pays for.",
+    "",
+    "Both are also directory trees rather than single files -- RetroArch dlopens",
+    "its cores and resolves libGL and the host's audio stack from the host, so",
+    "no platform gets a single portable binary. 'sha256' pins the download and",
+    "'tree_sha256' pins what unpacking it produced, which is what actually",
+    "ships and is the only one --verify can still check once the download cache",
+    "is gone.",
+    "",
+    "libretro publishes no checksums, so a null hash is filled in on first fetch",
+    "(trust on first use). Review and commit the recorded hashes: from then on any",
+    "drift in the upstream file is a hard failure instead of a silent swap.",
+    "",
+    "RetroArch's own licence text is not inside any of these artifacts -- the",
+    "Windows archive carries only assets/COPYING (CC-BY-4.0, for the assets).",
+    "GPLv3 redistribution requires shipping it, so vendors/RetroArch-COPYING is",
+    "committed here, taken from the upstream tag the binary was built from."
+  ],
+  "manifest_version": 1,
+  "artifacts": {
+    "win64": {
+      "description": "RetroArch portable build for Windows x86_64",
+      "kind": "archive-7z",
+      "version": "1.22.2",
+      "released": "2025-11-17",
+      "url": "https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z",
+      "size": 202509078,
+      "sha256": "b2139b1d0f9d4526dc6b5ce23cbb3efdc766096fa6f2c3df016818b486ac6372",
+      "tree_sha256": "18771b36285ddc0e4762d8dce91ab3af66aa7458737895cd345d6c592f4fa667",
+      "dest": "vendors/RetroArch-Win64",
+      "entrypoint": "retroarch.exe",
+      "committed": false,
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/libretro/RetroArch"
+    },
+    "linux-x86_64": {
+      "description": "RetroArch portable build for Linux x86_64",
+      "kind": "appimage-in-7z",
+      "version": "1.22.2",
+      "released": "2025-11-20",
+      "url": "https://buildbot.libretro.com/stable/1.22.2/linux/x86_64/RetroArch.7z",
+      "size": 179361448,
+      "sha256": "7d62da9a21397d6e1b9490785cedbeafd262781b50115076736fbe8a77ef30e9",
+      "tree_sha256": "bf942295254a9ce738d62c4cea2678694fde291542a5354a8f587b47e3802c66",
+      "dest": "vendors/RetroArch-Linux-x86_64",
+      "entrypoint": "usr/bin/retroarch",
+      "committed": false,
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/libretro/RetroArch",
+      "_note": [
+        "The archive holds an AppImage plus a 390 MiB .home tree of assets and",
+        "shaders; only the AppImage is extracted, and it is then unwrapped into",
+        "the portable tree it already contains (issue #328). Same upstream",
+        "bytes, no FUSE, no unpacking at launch.",
+        "",
+        "libretro publishes no ARM build -- stable/<version>/linux/ lists x86",
+        "and x86_64 and nothing else -- so there is no linux-aarch64 entry here",
+        "and the ARM packages use the distribution's RetroArch (issue #119)."
+      ]
+    }
+  },
+  "retroarch_licence": {
+    "description": "RetroArch's own licence text, shipped beside every vendored binary",
+    "path": "vendors/RetroArch-COPYING",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "source": "https://raw.githubusercontent.com/libretro/RetroArch/v1.22.2/COPYING",
+    "license": "GPL-3.0-or-later",
+    "_note": [
+      "Committed rather than fetched at build time: the build already has one",
+      "network dependency too many, and a licence that has to download is a",
+      "licence that can be missing from a release. Refresh it when the",
+      "vendored RetroArch version changes, from that version's own tag."
+    ]
+  }
+}

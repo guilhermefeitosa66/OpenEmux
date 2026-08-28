@@ -1,0 +1,223 @@
+name: Packages
+
+# A broken package used to surface on release day, in the middle of the release
+# process, because nothing built one until then (issue #241). Everything needed
+# was already in the repo: `packaging/build.sh <target>` is self-contained, runs
+# in a pinned Docker image, and each format's script ends with its own install
+# smoke test. This workflow only wires it up.
+#
+# No secrets are involved. Without a local `.env`, `_EMBEDDED_BLOB` stays empty
+# and the artifacts carry no ScreenScraper credential -- by design, so a CI
+# build is a build anybody could reproduce.
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    # Only the paths that can actually break a package. A UI-only PR does not
+    # need 20 minutes of Docker to prove the .deb still installs.
+    paths:
+      - 'packaging/**'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - 'requirements.lock'
+      - 'Makefile'
+      - 'src/openemux/data/**'
+      - 'src/openemux/__init__.py'
+      - '.github/workflows/packages.yml'
+      # What every bundled emulator is fetched from. A manifest bump or a
+      # change to the fetcher can break three formats at once (issue #328).
+      - 'vendors/manifest.json'
+      - 'scripts/vendor_retroarch.py'
+  push:
+    branches: [ main ]
+  schedule:
+    # Monday morning: catches the formats that PRs do not build, and any rot in
+    # the base images the Dockerfiles pin.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Which formats to build'
+        type: choice
+        default: all
+        options:
+          - all
+          - deb+rpm
+          - appimage
+          - flatpak
+          - windows
+          # Every Linux format, ARM only: the leg nobody builds by hand.
+          - aarch64
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Pick the formats
+    runs-on: ubuntu-latest
+    outputs:
+      jobs: ${{ steps.pick.outputs.jobs }}
+    steps:
+      - name: Pick the formats
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          CHOICE: ${{ inputs.targets }}
+        # Each entry is a format *and* an architecture, because every Linux
+        # format is built for the machine it is built on -- an AppDir of
+        # foreign-arch debs runs nowhere else, and dpkg and rpmbuild stamp what
+        # they are running on (issue #119). The Windows bundle is cross-built
+        # from Linux and exists on x86_64 only.
+        run: |
+          python3 - "$EVENT" "$CHOICE" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+
+          event, choice = sys.argv[1], sys.argv[2]
+          LINUX = ["deb", "rpm", "appimage", "flatpak"]
+          RUNNER = {"x86_64": "ubuntu-latest", "aarch64": "ubuntu-24.04-arm"}
+
+          def entries(targets, arches=("x86_64",)):
+              out = []
+              for target in targets:
+                  for arch in arches:
+                      # Nothing cross-builds a Windows bundle from ARM, and
+                      # nobody is asking for one.
+                      if target == "windows" and arch != "x86_64":
+                          continue
+                      out.append({"target": target, "arch": arch,
+                                  "runs-on": RUNNER[arch]})
+              return out
+
+          if event == "pull_request":
+              # The two cheapest builds, on both architectures: the ARM leg is
+              # the one that regresses silently, since nobody builds it by hand.
+              jobs = entries(["deb", "rpm"], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice == "deb+rpm":
+              jobs = entries(["deb", "rpm"], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice in LINUX:
+              jobs = entries([choice], ("x86_64", "aarch64"))
+          elif event == "workflow_dispatch" and choice == "windows":
+              jobs = entries(["windows"])
+          elif event == "workflow_dispatch" and choice == "aarch64":
+              jobs = entries(LINUX, ("aarch64",))
+          else:
+              jobs = entries(LINUX, ("x86_64", "aarch64")) + entries(["windows"])
+
+          print("jobs=" + json.dumps(jobs))
+          print(json.dumps(jobs, indent=2), file=sys.stderr)
+          PY
+
+  build:
+    name: ${{ matrix.target }} (${{ matrix.arch }})
+    needs: plan
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 180
+    strategy:
+      # One broken format should not hide the state of the other four, and one
+      # broken architecture must not hide the other.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.jobs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Reclaim runner disk space
+        # The AppImage and the Flatpak pull a whole GTK stack (and, for the
+        # Flatpak, the GNOME SDK) into the container, and the Windows build
+        # unpacks RetroArch *and* a MINGW64 GTK stack. A stock runner has
+        # ~14 GB free, which the SDK alone can eat; the preinstalled toolchains
+        # below are worth ~25 GB and nothing here uses them.
+        if: matrix.target != 'deb' && matrix.target != 'rpm'
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
+
+      - name: Load the fuse module
+        # appimage-builder mounts squashfs and flatpak-builder runs bubblewrap;
+        # both are handed /dev/fuse by packaging/build.sh, so the module has to
+        # be up on the host first.
+        if: matrix.target == 'appimage' || matrix.target == 'flatpak'
+        run: sudo modprobe fuse
+
+      # Every format that bundles an emulator has to fetch it first: nothing is
+      # committed to git (issue #328), so the Windows bundle needs 193 MiB and
+      # the three x86_64 Linux formats 171 MiB before their container can
+      # start. The Flatpak needs none -- it launches the host's
+      # org.libretro.RetroArch -- and aarch64 has none published at all, so
+      # the ARM legs skip this too (issue #119).
+      #
+      # Cached on the manifest's own contents: a RetroArch bump changes the key
+      # and re-downloads, and nothing else does.
+      - name: Does this build bundle a RetroArch?
+        id: bundles
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$TARGET:$ARCH" in
+            windows:*)                       echo "artifact=win64" ;;
+            appimage:x86_64|deb:x86_64|rpm:x86_64) echo "artifact=linux-x86_64" ;;
+            *)                               echo "artifact=" ;;
+          esac >> "$GITHUB_OUTPUT"
+
+      - name: Restore the vendored RetroArch download
+        if: steps.bundles.outputs.artifact != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendors/.cache
+          key: retroarch-${{ steps.bundles.outputs.artifact }}-${{ hashFiles('vendors/manifest.json') }}
+
+      - name: Install 7-Zip
+        # scripts/vendor_retroarch.py unpacks RetroArch.7z with the 7-Zip CLI:
+        # py7zr cannot read BCJ2, which is 7-Zip's default filter for x86
+        # executables and therefore most of that archive.
+        if: steps.bundles.outputs.artifact != ''
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends 7zip
+
+      - name: Fetch the vendored RetroArch
+        # Named, not inferred: `make vendor-retroarch` takes the artifact for
+        # the host it runs on, and the Windows bundle is cross-built from Linux.
+        # Verifies against the hashes in vendors/manifest.json, so a changed
+        # upstream file fails here instead of shipping.
+        if: steps.bundles.outputs.artifact != ''
+        run: |
+          if [ "${{ steps.bundles.outputs.artifact }}" = "win64" ]; then
+            make vendor-retroarch-win64
+          else
+            make vendor-retroarch
+          fi
+
+      - name: Build the ${{ matrix.target }}
+        run: ./packaging/build.sh ${{ matrix.target }}
+
+      - name: Show what was produced
+        # always(): a build that fails *after* producing something is the one
+        # worth looking at, and `ls` is the cheapest way to see whether it got
+        # that far (issue #119).
+        if: always()
+        run: ls -lh dist/ || true
+
+      - name: Upload the ${{ matrix.target }}
+        # So a release candidate can be tested from a CI run instead of a local
+        # build. The Flatpak also leaves an ostree repo behind; only the
+        # single-file bundle in dist/ is worth carrying.
+        # On failure too: an artifact that built and then failed its own smoke
+        # test is exactly the one somebody needs in their hands to find out
+        # why, and a job that throws it away makes every diagnosis another
+        # twenty-minute round trip.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openemux-${{ matrix.target }}-${{ matrix.arch }}
+          path: dist/
+          # Not an error when the build never got as far as producing one.
+          if-no-files-found: ${{ job.status == 'success' && 'error' || 'ignore' }}
+          retention-days: 14

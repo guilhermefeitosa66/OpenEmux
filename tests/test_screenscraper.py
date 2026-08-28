@@ -3,6 +3,7 @@ import json
 import unittest
 import urllib.error
 import urllib.parse
+from unittest import mock
 from unittest.mock import patch
 
 from openemux.core import screenscraper
@@ -115,7 +116,7 @@ class _FakeResponse:
 class UrlBuildTests(unittest.TestCase):
     def setUp(self):
         # Keep the throttle from slowing the suite down.
-        patcher = patch("openemux.core.screenscraper._throttle")
+        patcher = patch("openemux.core.screenscraper.throttle")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -246,7 +247,7 @@ class MediaParsingTests(unittest.TestCase):
 
 class LookupTests(unittest.TestCase):
     def setUp(self):
-        patcher = patch("openemux.core.screenscraper._throttle")
+        patcher = patch("openemux.core.screenscraper.throttle")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -371,7 +372,7 @@ class RedactionTests(unittest.TestCase):
 
     def test_lookup_never_logs_credentials(self):
         with self.assertLogs("openemux.core.screenscraper", level="DEBUG") as logs:
-            with patch("openemux.core.screenscraper._throttle"):
+            with patch("openemux.core.screenscraper.throttle"):
                 lookup_media_urls(
                     credentials=_creds(),
                     console="SFC",
@@ -383,6 +384,71 @@ class RedactionTests(unittest.TestCase):
             self.assertNotIn(secret, joined)
 
 
+class QuotaLatchTests(unittest.TestCase):
+    """Once the API says it is done, stop asking for the rest of the run (#220).
+
+    Each quota answer used to cost exactly what a successful one did: a second
+    in the throttle and a request off a quota that was already gone.
+    """
+
+    def test_a_daily_quota_refusal_closes_it_at_once(self):
+        latch = screenscraper.QuotaLatch()
+        self.assertFalse(latch.closed)
+        self.assertTrue(latch.note_status(430))
+        self.assertTrue(latch.closed)
+
+    def test_a_thread_limit_needs_a_run_of_them(self):
+        """429 is "too many at once", which the next request may not see."""
+        latch = screenscraper.QuotaLatch()
+        for _ in range(screenscraper.MAX_CONSECUTIVE_THROTTLES - 1):
+            latch.note_status(429)
+            self.assertFalse(latch.closed)
+        latch.note_status(429)
+        self.assertTrue(latch.closed)
+
+    def test_a_success_forgets_the_throttles(self):
+        latch = screenscraper.QuotaLatch()
+        for _ in range(screenscraper.MAX_CONSECUTIVE_THROTTLES - 1):
+            latch.note_status(429)
+        latch.note_success()
+        latch.note_status(429)
+        self.assertFalse(latch.closed)
+
+    def test_a_closed_latch_answers_without_a_request(self):
+        latch = screenscraper.QuotaLatch()
+        latch.note_status(430)
+        opener = mock.MagicMock()
+        with patch("openemux.core.screenscraper.throttle") as throttle_mock:
+            urls = screenscraper.lookup_media_urls(
+                credentials=_creds(),
+                console="SFC",
+                rom_name="Chrono Trigger (USA).sfc",
+                opener=opener,
+                quota=latch,
+            )
+        self.assertEqual(urls, [])
+        self.assertEqual(opener.call_count, 0)
+        # Not even the wait: that second per ROM is most of the cost.
+        self.assertEqual(throttle_mock.call_count, 0)
+
+    def test_a_quota_error_latches_through_the_real_lookup(self):
+        latch = screenscraper.QuotaLatch()
+
+        def _opener(url, timeout=None):
+            raise urllib.error.HTTPError(url, 430, "quota", {}, None)
+
+        with patch("openemux.core.screenscraper.throttle"):
+            urls = screenscraper.lookup_media_urls(
+                credentials=_creds(),
+                console="SFC",
+                rom_name="Chrono Trigger (USA).sfc",
+                opener=_opener,
+                quota=latch,
+            )
+        self.assertEqual(urls, [])
+        self.assertTrue(latch.closed)
+
+
 class ThrottleTests(unittest.TestCase):
     def test_requests_are_spaced_by_the_minimum_interval(self):
         sleeps = []
@@ -391,8 +457,8 @@ class ThrottleTests(unittest.TestCase):
             patch("openemux.core.screenscraper.time.monotonic", side_effect=[100.0, 100.0, 100.1, 100.1]),
         ):
             screenscraper._last_request_at[0] = 0.0
-            screenscraper._throttle()
-            screenscraper._throttle()
+            screenscraper.throttle()
+            screenscraper.throttle()
         # The second call had to wait out the remainder of the interval.
         self.assertTrue(any(value > 0 for value in sleeps))
 

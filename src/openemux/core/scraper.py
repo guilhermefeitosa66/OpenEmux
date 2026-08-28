@@ -15,6 +15,65 @@ from openemux.core import cover_cache
 
 SUPPORTED_COVER_EXTS = ("png", "jpg", "jpeg", "webp")
 
+#: What an image of each supported format starts with. Sniffed rather than
+#: trusted from the Content-Type or the URL, because the bodies that caused
+#: issue #213 arrive with a 200 and a plausible header and are not images at
+#: all: ScreenScraper answers some quota failures with a plain-text message,
+#: and a captive portal answers everything with HTML.
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"\xff\xd8\xff", "jpg"),
+    (b"GIF87a", "gif"),
+    (b"GIF89a", "gif"),
+)
+
+#: The smallest thing that could plausibly be a cover. Below this it is a
+#: truncated download or an error page, whatever the bytes say.
+MIN_IMAGE_BYTES = 64
+
+
+def image_format(data):
+    """The format ``data`` really is, or None when it is not an image.
+
+    Returns one of the names in :data:`SUPPORTED_COVER_EXTS` (plus ``gif``,
+    which GdkPixbuf renders); an image we recognise but do not want to store
+    is still better identified than mislabelled.
+    """
+    if not data or len(data) < MIN_IMAGE_BYTES:
+        return None
+    for signature, name in _IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            return name
+    # RIFF....WEBP -- the size field sits between the two markers.
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def is_image(data):
+    """Whether these bytes are an image we can actually render."""
+    return image_format(data) is not None
+
+
+def is_image_file(path):
+    """Whether the file at ``path`` is an image, from its first bytes.
+
+    Reads a header, not the file: this is asked once per ROM on a fill-in
+    sync, and the answer only needs the magic number. A file we cannot read
+    is not called junk -- an unreadable file may just be on a drive that is
+    not mounted, and deleting art on that basis would be its own bug.
+    """
+    try:
+        with open(path, "rb") as handle:
+            header = handle.read(_HEADER_READ_BYTES)
+    except OSError:
+        return True
+    return is_image(header)
+
+
+#: Enough for every signature plus the size check.
+_HEADER_READ_BYTES = 512
+
 COVER_ART = "covers"
 LABEL_ART = "labels"
 
@@ -34,10 +93,18 @@ def find_local_art(
     return None
 
 
-def remove_local_art(roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART) -> int:
+def remove_local_art(
+    roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART, keep=None
+) -> int:
+    """Delete this ROM's art in ``kind``, optionally sparing one file.
+
+    ``keep`` is how ``save_local_art`` clears the other extensions *after*
+    writing the new file rather than before (issue #234).
+    """
+    keep = Path(keep) if keep is not None else None
     removed = 0
     for candidate in get_art_path_candidates(roms_dir, console, rom_name, kind):
-        if not candidate.exists():
+        if candidate == keep or not candidate.exists():
             continue
         try:
             candidate.unlink()
@@ -55,10 +122,14 @@ def save_local_art(
     if ext not in SUPPORTED_COVER_EXTS:
         raise ValueError(f"Unsupported cover extension: {source.suffix}")
 
-    remove_local_art(roms_dir, console, rom_name, kind)
     target = Path(roms_dir) / console / kind / f"{rom_name}.{ext}"
     target.parent.mkdir(parents=True, exist_ok=True)
+    # Copy first, clean up after -- the order cover_sync already uses. Removing
+    # the old art up front meant a copy that failed (full disk, source gone,
+    # permissions) left the ROM with no art at all, having had a perfectly
+    # good cover a moment earlier (issue #234).
     shutil.copy2(source, target)
+    remove_local_art(roms_dir, console, rom_name, kind, keep=target)
     return target
 
 

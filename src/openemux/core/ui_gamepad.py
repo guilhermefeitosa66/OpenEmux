@@ -17,11 +17,13 @@ menu, Y favourites, L1/R1 switch console. Tokens use the udev numbering that
 """
 
 import errno
+import logging
 import os
 import select
 import struct
 import threading
 import time
+from collections import namedtuple
 
 from openemux.core.gamepad_reader import (
     EV_ABS,
@@ -32,6 +34,8 @@ from openemux.core.gamepad_reader import (
     _read_axis_ranges,
     list_gamepads,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Fixed token -> UI action map (RetroArch menu convention, udev numbering).
 #: Directions come from the D-pad hat and from the left stick (axes 0/1).
@@ -86,7 +90,10 @@ REPEAT_INTERVAL = 0.12
 #: How long a holdable button must stay down to fire its hold action.
 LONG_PRESS_DELAY = 0.5
 
-#: How often to rescan for pads when none is connected (seconds).
+#: How often to rescan for pads (seconds). Applies whether or not one is
+#: already open: the scan used to run only while ``pads`` was empty, so a
+#: second controller plugged in next to a working one was invisible to UI
+#: navigation until the first was unplugged (issue #223).
 RESCAN_INTERVAL = 1.0
 
 #: select() timeout when idle; also bounds cancel latency.
@@ -251,8 +258,21 @@ class RepeatClock:
         return max(0.0, min(self._next_fire.values()) - self._now())
 
 
-class GamepadNavigator:
-    """Reads every connected gamepad and emits UI navigation actions.
+class OpenPad(namedtuple("OpenPad", "tracker name path")):
+    """One pad this reader holds open: its decoder, its name and its node."""
+
+    __slots__ = ()
+
+
+class NavigatorCore:
+    """Everything a navigator does apart from reading a device.
+
+    The thread, the callbacks, the suspend check and the token-to-action state
+    machine -- auto-repeat, long press, the held triggers -- are the same
+    whichever backend produced the ``(token, pressed)`` transitions. Only the
+    reading differs: :class:`GamepadNavigator` below reads evdev,
+    ``gamepad_sdl.SdlNavigator`` reads SDL2 (issue #118). Subclasses implement
+    ``_run`` and call ``_dispatch`` for every transition.
 
     ``on_action(action)`` fires for each press (and for repeats of held
     directions). ``on_connected(name)`` / ``on_disconnected()`` report hotplug.
@@ -262,6 +282,9 @@ class GamepadNavigator:
     are drained and dropped (a running game owns the pad, and the preferences
     switch can turn UI navigation off without tearing the thread down).
     """
+
+    #: Name of the reader thread, so `top -H` and a traceback say which backend.
+    THREAD_NAME = "gamepad-nav"
 
     def __init__(self, on_action, on_connected=None, on_disconnected=None, should_suspend=None):
         self._on_action = on_action
@@ -276,7 +299,7 @@ class GamepadNavigator:
         if self._thread is not None:
             return
         self._cancel.clear()
-        self._thread = threading.Thread(target=self._run, name="gamepad-nav", daemon=True)
+        self._thread = threading.Thread(target=self._run, name=self.THREAD_NAME, daemon=True)
         self._thread.start()
 
     def stop(self, join_timeout=1.0):
@@ -286,16 +309,71 @@ class GamepadNavigator:
         if thread is not None and thread.is_alive():
             thread.join(timeout=join_timeout)
 
+    def _run(self):  # pragma: no cover - every subclass overrides it
+        raise NotImplementedError
+
     # -- internals
     def _emit(self, callback, *args):
         if callback and not self._cancel.is_set():
             callback(*args)
 
-    def _open_pads(self):
-        """Open every readable pad; returns {fd: (tracker, name)}."""
+    def _suspended(self):
+        """The suspend flag, with a failure counted as "suspended".
+
+        The callback reaches into the window and the runtime manager, and this
+        is a bare thread: an exception here is not caught by anything above and
+        simply ends the reader, taking gamepad navigation down for the rest of
+        the session (issue #223). Suspended is the safe answer -- navigation
+        pauses for one loop rather than stopping forever, and the next call
+        gets another chance.
+        """
+        try:
+            return bool(self._should_suspend())
+        except Exception:  # noqa: BLE001 - a caller's bug must not end the thread
+            logger.warning("gamepad navigation: suspend check failed", exc_info=True)
+            return True
+
+    def _dispatch(self, token, pressed, repeat, hold, suspended):
+        """Turn one ``(token, pressed)`` transition into UI actions."""
+        action = action_for_token(token)
+        if action is None:
+            return
+        if action in STATEFUL_ACTIONS:
+            # Held state matters (the triggers): report both edges.
+            if not suspended:
+                self._emit(self._on_action, f"{action}_{'on' if pressed else 'off'}")
+            return
+        if not pressed:
+            repeat.release(action)
+            if action in HOLDABLE_ACTIONS:
+                # The tap fires on release -- unless the long press already
+                # fired its hold action instead.
+                if hold.release(action) and not suspended:
+                    self._emit(self._on_action, action)
+            return
+        if suspended:
+            return
+        if action in HOLDABLE_ACTIONS:
+            hold.press(action)
+            return
+        if action in REPEATABLE_ACTIONS:
+            repeat.press(action)
+        self._emit(self._on_action, action)
+
+
+class GamepadNavigator(NavigatorCore):
+    """Reads every connected gamepad through evdev (Linux)."""
+
+    def _open_pads(self, already_open=()):
+        """Open every readable pad not already open; returns {fd: OpenPad}.
+
+        ``already_open`` is the set of device paths this reader is holding, so
+        a rescan next to a live pad adds the new one instead of opening a
+        second descriptor onto the same device.
+        """
         opened = {}
         for device in list_gamepads():
-            if not device.event_path:
+            if not device.event_path or device.event_path in already_open:
                 continue
             try:
                 fd = os.open(device.event_path, os.O_RDONLY | os.O_NONBLOCK)
@@ -306,7 +384,7 @@ class GamepadNavigator:
                 device.abs_codes,
                 axis_ranges=_read_axis_ranges(fd, device.abs_codes),
             )
-            opened[fd] = (tracker, device.name)
+            opened[fd] = OpenPad(tracker, device.name, device.event_path)
         return opened
 
     def _close_all(self, pads):
@@ -323,25 +401,32 @@ class GamepadNavigator:
         hold = HoldClock()
         connected_announced = False
         was_suspended = False
+        next_rescan = 0.0
         try:
             while not self._cancel.is_set():
+                # Rescan on a cadence rather than only when nothing is open, so
+                # a pad plugged in next to a working one is picked up (#223).
+                if time.monotonic() >= next_rescan:
+                    next_rescan = time.monotonic() + RESCAN_INTERVAL
+                    found = self._open_pads({pad.path for pad in pads.values()})
+                    if found:
+                        pads.update(found)
                 if not pads:
                     if connected_announced:
                         connected_announced = False
                         repeat.clear()
                         self._emit(self._on_disconnected)
-                    pads = self._open_pads()
-                    if not pads:
-                        self._cancel.wait(RESCAN_INTERVAL)
-                        continue
+                    self._cancel.wait(RESCAN_INTERVAL)
+                    continue
+                if not connected_announced:
                     connected_announced = True
-                    self._emit(self._on_connected, next(iter(pads.values()))[1])
+                    self._emit(self._on_connected, next(iter(pads.values())).name)
 
-                suspended = self._should_suspend()
+                suspended = self._suspended()
                 if suspended and not was_suspended:
                     # Drop held state so nothing "sticks" across a game session.
-                    for tracker, _name in pads.values():
-                        tracker.release_all()
+                    for pad in pads.values():
+                        pad.tracker.release_all()
                     repeat.clear()
                     hold.clear()
                 was_suspended = suspended
@@ -356,11 +441,24 @@ class GamepadNavigator:
                     self._close_all(pads)
                     continue
 
+                # Re-read after the block, not before it. select() waits up to
+                # 200 ms, and the events it just reported arrived *during* that
+                # wait: a button pressed within that window of an input capture
+                # starting was both bound and acted on -- the double-handling
+                # exclusive capture exists to prevent (issue #223).
+                if readable:
+                    suspended = self._suspended()
+                    if suspended and not was_suspended:
+                        for pad in pads.values():
+                            pad.tracker.release_all()
+                        repeat.clear()
+                        hold.clear()
+                    was_suspended = suspended
+
                 for fd in readable:
                     if not self._read_fd(fd, pads, repeat, hold, suspended):
                         # Device gone: close it and drop its repeats.
-                        tracker, _name = pads.pop(fd)
-                        tracker.release_all()
+                        pads.pop(fd).tracker.release_all()
                         try:
                             os.close(fd)
                         except OSError:
@@ -378,13 +476,24 @@ class GamepadNavigator:
 
     def _read_fd(self, fd, pads, repeat, hold, suspended):
         """Read pending events from one pad. False when the device is gone."""
-        tracker, _name = pads[fd]
+        tracker = pads[fd].tracker
         try:
             data = os.read(fd, INPUT_EVENT_SIZE * 64)
         except BlockingIOError:
             return True
         except OSError as exc:
-            return exc.errno not in (errno.ENODEV, errno.EIO, errno.EBADF)
+            # Anything other than "try again" drops the descriptor. Keeping it
+            # in the select set on an unrecognised errno was a spin: select
+            # reports it readable, the read raises, and around again at full
+            # speed on one core (issue #223). The rescan re-opens the device if
+            # it is still there, so a transient error costs a second at worst.
+            if exc.errno not in (errno.ENODEV, errno.EIO, errno.EBADF):
+                logger.warning(
+                    "gamepad navigation: dropping %s after an unexpected read error: %s",
+                    pads[fd].name,
+                    exc,
+                )
+            return False
         if not data:
             return False
 
@@ -392,28 +501,5 @@ class GamepadNavigator:
             chunk = data[offset:offset + INPUT_EVENT_SIZE]
             _sec, _usec, ev_type, code, value = struct.unpack(INPUT_EVENT_FORMAT, chunk)
             for token, pressed in tracker.feed(ev_type, code, value):
-                action = action_for_token(token)
-                if action is None:
-                    continue
-                if action in STATEFUL_ACTIONS:
-                    # Held state matters (the triggers): report both edges.
-                    if not suspended:
-                        self._emit(self._on_action, f"{action}_{'on' if pressed else 'off'}")
-                    continue
-                if not pressed:
-                    repeat.release(action)
-                    if action in HOLDABLE_ACTIONS:
-                        # The tap fires on release -- unless the long press
-                        # already fired its hold action instead.
-                        if hold.release(action) and not suspended:
-                            self._emit(self._on_action, action)
-                    continue
-                if suspended:
-                    continue
-                if action in HOLDABLE_ACTIONS:
-                    hold.press(action)
-                    continue
-                if action in REPEATABLE_ACTIONS:
-                    repeat.press(action)
-                self._emit(self._on_action, action)
+                self._dispatch(token, pressed, repeat, hold, suspended)
         return True

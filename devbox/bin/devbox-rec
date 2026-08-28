@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# Record the virtual display to a video file.
+#
+#   devbox-rec start [out.mp4]
+#   devbox-rec stop
+#   devbox-rec status
+#
+# For a flow that a still cannot show -- a transition, a progress banner, a
+# state that only appears for a second. Decupe it afterwards with:
+#   ffmpeg -i out.mp4 -vf fps=1/2 frames/f_%03d.png
+set -euo pipefail
+. /openemux/devkit/lib.sh
+
+PIDFILE="${DEVBOX_STATE}/rec.pid"
+OUTFILE="${DEVBOX_STATE}/rec.out"
+
+recording() {
+	[ -r "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null
+}
+
+case "${1:-status}" in
+	start)
+		require_display
+		recording && { info "already recording: $(cat "${OUTFILE}")"; exit 0; }
+		out=${2:-${DEVBOX_OUT}/recording.mp4}
+		mkdir -p "$(dirname "${out}")"
+		geom=$(xdotool getdisplaygeometry | tr ' ' x)
+		nohup ffmpeg -y -loglevel error -f x11grab -framerate 10 \
+			-video_size "${geom}" -i "${DEVBOX_DISPLAY}" \
+			-c:v libx264 -preset ultrafast -pix_fmt yuv420p "${out}" \
+			>/dev/null 2>&1 &
+		echo $! >"${PIDFILE}"
+		printf '%s' "${out}" >"${OUTFILE}"
+		info "recording ${geom} -> ${out}"
+		;;
+	stop)
+		recording || die "not recording"
+		# SIGINT, not SIGKILL: ffmpeg has to write the moov atom or the file is
+		# unplayable and the whole run is lost.
+		kill -INT "$(cat "${PIDFILE}")" 2>/dev/null || true
+		sleep 1.5
+		printf '%s\n' "$(cat "${OUTFILE}")"
+		rm -f "${PIDFILE}"
+		;;
+	status)
+		recording && printf 'recording %s\n' "$(cat "${OUTFILE}")" || { printf 'idle\n'; exit 1; }
+		;;
+	*)
+		sed -n '3,7p' "$0"
+		exit 2
+		;;
+esac

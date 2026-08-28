@@ -1,11 +1,23 @@
 import copy
+import logging
 import shutil
-from datetime import datetime
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.platform import (
+    BUILDBOT_ARCH,
+    BUILDBOT_ARCHES,
+    BUILDBOT_OS,
+    BUILDBOT_OSES,
+    LEGACY_VENDORED_RETROARCH,
+    VENDORED_RETROARCH,
+)
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
     DEFAULT_ZOOM,
@@ -19,9 +31,11 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import default_config_dir, get_real_home, store_path, is_running_in_flatpak
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
+from openemux.core.core_options import CoreOptionsStore
+from openemux.core.retroachievements import AchievementsStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
@@ -31,17 +45,139 @@ from openemux.core.update_checker import (
     DEFAULT_TIMEOUT as DEFAULT_UPDATE_TIMEOUT,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _utc_stamp():
+    """An ISO-8601 UTC timestamp ending in ``Z``.
+
+    ``datetime.utcnow()`` returned a naive value that the callers labelled UTC
+    by appending the ``Z`` themselves; it is deprecated since Python 3.12 --
+    the version CI runs and the one Ubuntu 24.04 and Fedora 40 ship -- and is
+    slated for removal (issue #235). The string is byte-for-byte what the old
+    call produced, so timestamps already written to config.yaml keep parsing.
+    """
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _try_mkdir(directory, failures):
+    """Create ``directory``; record it in ``failures`` if that is not possible.
+
+    The library layout is 93 directories on a path the user chooses, which
+    can be a read-only mount, a full disk, or a drive that went away. None of
+    that is a reason for the app to stop (issue #234).
+    """
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        logger.warning("directory not created: path=%s error=%s", directory, exc)
+        failures.append(directory)
+        return False
+
 # Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
-DEFAULT_CONFIG_DIR = Path.home() / ".openemux"
-DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
+# Derived from paths.store_path, which is the one place that knows where the
+# config directory is -- see the note there (issue #239).
+DEFAULT_CONFIG_DIR = default_config_dir()
+DEFAULT_CONFIG_FILE = store_path("config")
 DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
-DEFAULT_PLAYLISTS_DIR = DEFAULT_CONFIG_DIR / "playlists"
-DEFAULT_INPUT_DIR = DEFAULT_CONFIG_DIR / "input"
-DEFAULT_RUNTIME_DIR = DEFAULT_CONFIG_DIR / "runtime"
+DEFAULT_PLAYLISTS_DIR = store_path("playlists")
+DEFAULT_INPUT_DIR = store_path("input")
+DEFAULT_RUNTIME_DIR = store_path("runtime")
 # Save states live under OpenEmux's own tree (issue #73), one directory per
 # console, so the app can list and manage them instead of RetroArch's default.
-DEFAULT_STATES_DIR = DEFAULT_CONFIG_DIR / "states"
+DEFAULT_STATES_DIR = store_path("states")
 MIGRATION_VERSION = 2
+
+# The buildbot serves cores per platform *and* per architecture: .so under
+# nightly/linux/x86_64, .dll under nightly/windows/x86_64, and a smaller set of
+# .so under nightly/linux/aarch64. One constant rather than the three copies of
+# this literal that used to live in DEFAULT_CONFIG, the migration and the
+# getter -- three copies of a platform-dependent value is three chances to fix
+# only two of them. The info/shader URLs below are platform-neutral.
+BUILDBOT_CORES_URL = "https://buildbot.libretro.com/nightly/{os}/{arch}/latest/"
+
+DEFAULT_CORES_BASE_URL = BUILDBOT_CORES_URL.format(os=BUILDBOT_OS, arch=BUILDBOT_ARCH)
+
+#: Every buildbot cores URL this project has ever written as a default. A
+#: stored URL that is one of these was not chosen by anybody -- it is the
+#: default of whatever machine wrote the config -- so it may be corrected to
+#: this machine's. Anything else is the user's own and is left alone.
+KNOWN_CORES_BASE_URLS = frozenset(
+    BUILDBOT_CORES_URL.format(os=os_name, arch=arch)
+    for os_name in BUILDBOT_OSES
+    for arch in BUILDBOT_ARCHES
+)
+
+
+def migrate_cores_base_url(stored):
+    """Point a config at this machine's cores, or leave it alone.
+
+    A library copied from an x86_64 desktop to a Pi -- or a config written
+    before OpenEmux knew about ARM at all -- names the x86_64 tree, and cores
+    from it download perfectly and then fail to load, with nothing in the UI to
+    say why (issue #119). The same applies in reverse, and between Linux and
+    Windows.
+
+    Only a URL this project itself would have written is replaced. A user who
+    pointed the updater at their own mirror keeps it: that is a choice, and
+    silently overwriting it would be the worse bug.
+    """
+    if not stored:
+        return DEFAULT_CORES_BASE_URL
+    if stored in KNOWN_CORES_BASE_URLS and stored != DEFAULT_CORES_BASE_URL:
+        return DEFAULT_CORES_BASE_URL
+    return stored
+
+
+def migrate_retroarch_binary(stored):
+    """Point a config at the vendored RetroArch as it is shipped now.
+
+    Every install created before issue #328 has ``runtime.retroarch.binary``
+    naming the vendored *AppImage*, which the update replaces with the portable
+    tree it always contained. The file is gone after the update -- removed by
+    dpkg/rpm, or by the pull in a checkout -- so a config still naming it
+    resolves to nothing and every launch falls through to a distribution
+    RetroArch or to the error, on a machine that has a perfectly good one
+    bundled.
+
+    Only a path this project itself would have written is replaced, and only
+    the relative one it wrote: a user who pointed the setting at an AppImage of
+    their own keeps it, and keeps the ``--appimage-extract-and-run`` handling
+    that goes with it.
+    """
+    if not stored:
+        return VENDORED_RETROARCH
+    if stored in LEGACY_VENDORED_RETROARCH:
+        return VENDORED_RETROARCH
+    return stored
+
+
+#: Everything the RetroArch buildbot updater needs, in one place.
+#:
+#: These URLs and timeouts used to be spelled out three times over -- in
+#: DEFAULT_CONFIG, in the setdefault calls of _migrate_runtime_config, and in
+#: the fallbacks of get_retroarch_updater_settings. Changing a URL meant
+#: changing it in triplicate, or the copies drifted apart in silence
+#: (issue #239).
+#:
+#: ``enabled`` is the one value that is not simply a default: a fresh config
+#: turns the updater off inside Flatpak, where core management belongs to the
+#: RetroArch Flatpak's own updater and OpenEmux must not download cores. A
+#: config that already exists keeps whatever it says, and an older one that
+#: predates the key is read as on -- which is what it was.
+UPDATER_DEFAULTS = {
+    "mode": "buildbot_all_cores",
+    "enabled": True,
+    "core_dir": None,
+    "cores_base_url": DEFAULT_CORES_BASE_URL,
+    "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
+    "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
+    "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
+    "request_timeout_sec": 30,
+    "retries": 3,
+    "parallel_downloads": 4,
+}
 
 # Bumped when a UI default changes in a way that should reach configs written
 # before it. Only the switch to the new default is forced, once: whatever the
@@ -173,8 +309,11 @@ DEFAULT_CONFIG = {
     "runtime": {
         "mode": "retroarch_wrapper",
         # RetroArch's UDP command channel (issue #69): written into every
-        # runtime override so the running game can be controlled live.
-        "network_cmd_port": 55355,
+        # runtime override so the running game can be controlled live. 0 picks
+        # a free port per launch, which is the only way to be sure the commands
+        # reach *our* RetroArch and not a standalone one the user is also
+        # running (issue #227). A non-zero value pins the port.
+        "network_cmd_port": 0,
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
         "master_volume_db": 0.0,
@@ -185,7 +324,7 @@ DEFAULT_CONFIG = {
         "game_window": DEFAULT_GAME_WINDOW,
         "console_backend": {system_id: "retroarch_wrapper" for system_id in SYSTEM_IDS},
         "retroarch": {
-            "binary": "vendors/RetroArch-Linux-x86_64.AppImage",
+            "binary": VENDORED_RETROARCH,
             "extra_flags": [],
             # Which audio driver RetroArch is told to use (issue #176).
             # "auto" picks one the host actually offers, because the global
@@ -194,20 +333,21 @@ DEFAULT_CONFIG = {
             # emulation by. "inherit" restores the pre-#176 behaviour; any
             # other value is passed through for deliberate JACK/ALSA setups.
             "audio_driver": "auto",
+            # Which video driver RetroArch is told to use (issue #366).
+            # "auto" names d3d11 on Windows -- the driver RetroArch picks for
+            # itself there -- and writes nothing on Linux, where the default is
+            # gl. It matters because a shader preset belongs to a driver:
+            # .glslp is gl-only and .slangp is for the Vulkan-era drivers, so a
+            # backend picked without knowing the driver is a shader that never
+            # loads and never says why. Any other value is passed through, for
+            # a deliberate vulkan/glcore setup.
+            "video_driver": "auto",
             "cores": {system_id: [] for system_id in SYSTEM_IDS},
             "updater": {
-                "mode": "buildbot_all_cores",
+                **UPDATER_DEFAULTS,
                 # In Flatpak, core management is delegated to the RetroArch
                 # Flatpak's own updater; OpenEmux must not download cores.
                 "enabled": not is_running_in_flatpak(),
-                "core_dir": None,
-                "cores_base_url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
-                "core_info_base_url": "https://buildbot.libretro.com/assets/frontend/info.zip",
-                "shader_glsl_url": "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-                "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-                "request_timeout_sec": 30,
-                "retries": 3,
-                "parallel_downloads": 4,
             },
         },
     },
@@ -253,6 +393,9 @@ DEFAULT_CONFIG = {
     "library": {
         "playlists_dir": str(DEFAULT_PLAYLISTS_DIR),
         "auto_scan_on_first_open": True,
+        # How an imported ROM gets into the library: a copy, or a symbolic
+        # link to where it already lives (issue #298).
+        "import_mode": "copy",
         "migration": {"version": 0},
     },
     "setup": {
@@ -305,27 +448,72 @@ def _merge_defaults(defaults, data):
 
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
-        self.config_file = config_file
-        self.input_profiles = InputProfileManager(DEFAULT_INPUT_DIR)
-        self.shaders = ShaderConfigStore()
-        self.cores = CoreConfigStore()
-        self.cartridge_colors = CartridgeColorStore()
+        self.config_file = Path(config_file)
+        # Every store sits beside config.yaml, wherever that is. They used to
+        # default to ~/.openemux independently of it, so a ConfigManager
+        # pointed elsewhere -- as every test points it -- still read and wrote
+        # input profiles, shaders, per-ROM cores, cartridge colours and play
+        # history under the user's real home (issue #239).
+        self.config_dir = self.config_file.parent
+        # One writer at a time: save_config runs from the GTK main thread, the
+        # volume-persist timer, the bootstrap worker and atexit (issue #208).
+        self._save_lock = threading.RLock()
+        self.input_profiles = InputProfileManager(self.store_path("input"))
+        self.shaders = ShaderConfigStore(self.store_path("shaders"))
+        self.cores = CoreConfigStore(self.store_path("cores"))
+        self.cartridge_colors = CartridgeColorStore(self.store_path("cartridge_colors"))
+        # Per-console core options (issue #296), beside the per-console core
+        # and shader choices they sit next to in the UI.
+        self.core_options = CoreOptionsStore(self.store_path("core_options"))
+        # The RetroAchievements account (issue #300). Its own file, owner-only:
+        # it holds a token, and config.yaml is not a credential store.
+        self.achievements = AchievementsStore(self.store_path("achievements"))
         self.config = self.load_config()
 
+    def store_path(self, name):
+        """The default path of one store, beside this manager's config file.
+
+        ``name`` is a key of :data:`openemux.core.paths.STORE_FILENAMES`.
+        """
+        return store_path(name, config_dir=self.config_dir)
+
+    def get_play_history_file(self):
+        """Where the last-played timestamps live (issue #239).
+
+        On the manager rather than as a module default, so a history opened
+        against a throwaway config directory stays in it.
+        """
+        return self.store_path("play_history")
+
     def load_config(self):
+        """Read ``config.yaml``, keeping it if it cannot be read.
+
+        A YAML syntax error or a file that parses to something that is not a
+        mapping used to end in ``create_default_config()``, which writes the
+        defaults straight over the broken file: the ROM path, the credentials,
+        the locale and the per-console cores destroyed by the recovery rather
+        than by whatever damaged the file. The unreadable file is set aside as
+        ``config.yaml.broken-<timestamp>`` first, so it can still be opened
+        and read back (issue #209).
+        """
         if not self.config_file.exists():
             return self.create_default_config()
 
         try:
             with open(self.config_file, "r", encoding="utf-8") as f:
                 raw = yaml.safe_load(f) or {}
-                config = _merge_defaults(DEFAULT_CONFIG, raw)
-                config = self._migrate_runtime_config(config)
-                if config != raw:
-                    self.save_config(config)
-                return config
+            if not isinstance(raw, dict):
+                # A scalar or a list: _merge_defaults would raise on it, and
+                # there is nothing here to merge. Corrupt, not empty.
+                raise ValueError(f"config.yaml is not a mapping: {type(raw).__name__}")
+            config = _merge_defaults(DEFAULT_CONFIG, raw)
+            config = self._migrate_runtime_config(config)
+            if config != raw:
+                self.save_config(config)
+            return config
         except Exception as e:
-            print(f"Error loading config: {e}")
+            logger.error("config unreadable: %s", e)
+            quarantine_state_file(self.config_file, e)
             return self.create_default_config()
 
     def create_default_config(self):
@@ -337,34 +525,33 @@ class ConfigManager:
     def _migrate_runtime_config(self, config):
         runtime = config.get("runtime", {})
         runtime.setdefault("mode", "retroarch_wrapper")
+        # 55355 is RetroArch's own default, which is exactly the port a
+        # standalone RetroArch is already listening on -- both bind it and the
+        # kernel decides which one hears us. Nobody chose that number, so it
+        # migrates to "pick a free one per launch" (issue #227). A port the
+        # user actually set is left alone.
+        from openemux.core.retroarch_command import (
+            AUTO_NETWORK_CMD_PORT,
+            DEFAULT_NETWORK_CMD_PORT,
+        )
+
+        if runtime.get("network_cmd_port") == DEFAULT_NETWORK_CMD_PORT:
+            runtime["network_cmd_port"] = AUTO_NETWORK_CMD_PORT
         runtime.setdefault("console_backend", {})
         runtime.setdefault("retroarch", {})
-        runtime["retroarch"].setdefault("binary", "vendors/RetroArch-Linux-x86_64.AppImage")
+        # Not a setdefault: the key is present and names a file this version no
+        # longer ships (issue #328).
+        runtime["retroarch"]["binary"] = migrate_retroarch_binary(
+            runtime["retroarch"].get("binary")
+        )
         runtime["retroarch"].setdefault("extra_flags", [])
         runtime["retroarch"].setdefault("cores", {})
-        runtime["retroarch"].setdefault("updater", {})
-        runtime["retroarch"]["updater"].setdefault("mode", "buildbot_all_cores")
-        runtime["retroarch"]["updater"].setdefault("enabled", True)
-        runtime["retroarch"]["updater"].setdefault("core_dir", None)
-        runtime["retroarch"]["updater"].setdefault(
-            "cores_base_url",
-            "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "core_info_base_url",
-            "https://buildbot.libretro.com/assets/frontend/info.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "shader_glsl_url",
-            "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault(
-            "shader_slang_url",
-            "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-        )
-        runtime["retroarch"]["updater"].setdefault("request_timeout_sec", 30)
-        runtime["retroarch"]["updater"].setdefault("retries", 3)
-        runtime["retroarch"]["updater"].setdefault("parallel_downloads", 4)
+        updater = runtime["retroarch"].setdefault("updater", {})
+        for key, value in UPDATER_DEFAULTS.items():
+            updater.setdefault(key, value)
+        # Not a setdefault: the key is present and wrong, naming another
+        # architecture's cores (issue #119).
+        updater["cores_base_url"] = migrate_cores_base_url(updater.get("cores_base_url"))
 
         migrated_backend = {}
         for key, mode in runtime.get("console_backend", {}).items():
@@ -479,6 +666,7 @@ class ConfigManager:
         library = config.get("library", {})
         library.setdefault("playlists_dir", str(DEFAULT_PLAYLISTS_DIR))
         library.setdefault("auto_scan_on_first_open", True)
+        library.setdefault("import_mode", "copy")
         library.setdefault("migration", {})
         library["migration"].setdefault("version", 0)
         config["library"] = library
@@ -502,15 +690,27 @@ class ConfigManager:
         return config
 
     def save_config(self, config=None):
-        if config:
-            self.config = config
+        """Persist the config, atomically and one writer at a time.
 
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                yaml.safe_dump(self.config, f)
-        except Exception as e:
-            print(f"Error saving config: {e}")
+        Two things used to go wrong here (issue #208). A crash mid-write left
+        a truncated ``config.yaml`` behind, taking the ROM path, the
+        credentials and the bootstrap state with it -- ``atomic_write_text``
+        answers that. And ``save_config`` is called from four threads (the GTK
+        main thread on every preference change, the volume-persist timer, the
+        bootstrap worker, the atexit flush), so two dumps could interleave
+        into the same file and ``yaml.safe_dump`` could iterate ``self.config``
+        while another thread mutated it. The lock serialises the writers, and
+        the snapshot is taken under it so the dump reads a dict nobody else
+        holds.
+        """
+        with self._save_lock:
+            if config:
+                self.config = config
+            snapshot = copy.deepcopy(self.config)
+            try:
+                atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
+            except Exception as e:
+                logger.error("config not saved: %s", e)
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
@@ -739,10 +939,11 @@ class ConfigManager:
         return DEFAULT_STATES_DIR / resolve_system_id(console)
 
     def get_network_cmd_port(self):
+        """The pinned command port, or 0 to pick a free one per launch."""
         try:
-            return int(self.config.get("runtime", {}).get("network_cmd_port", 55355))
+            return int(self.config.get("runtime", {}).get("network_cmd_port", 0))
         except (TypeError, ValueError):
-            return 55355
+            return 0
 
     def get_master_volume_db(self):
         from openemux.core.retroarch_command import clamp_volume_db
@@ -795,6 +996,22 @@ class ConfigManager:
     def auto_scan_on_first_open(self):
         return bool(self.config.get("library", {}).get("auto_scan_on_first_open", True))
 
+    def get_import_mode(self):
+        """``copy`` or ``link`` -- how an import puts a ROM in the library."""
+        from openemux.core.rom_importer import normalize_import_mode
+
+        return normalize_import_mode(
+            self.config.get("library", {}).get("import_mode", "copy")
+        )
+
+    def set_import_mode(self, mode):
+        from openemux.core.rom_importer import normalize_import_mode
+
+        library = self.config.setdefault("library", {})
+        library["import_mode"] = normalize_import_mode(mode)
+        self.save_config()
+        return library["import_mode"]
+
     def get_controls_profile(self, console):
         canonical = resolve_system_id(console)
         return self.config.get("controls", {}).get("profiles", {}).get(canonical, {})
@@ -823,6 +1040,14 @@ class ConfigManager:
             self.config.get("runtime", {})
             .get("retroarch", {})
             .get("audio_driver", "auto")
+        )
+
+    def get_retroarch_video_driver(self):
+        """The raw ``video_driver`` setting; see core/video_driver.py (#366)."""
+        return (
+            self.config.get("runtime", {})
+            .get("retroarch", {})
+            .get("video_driver", "auto")
         )
 
     def get_retroarch_core_hints(self, console):
@@ -856,31 +1081,17 @@ class ConfigManager:
         return self.cores.forget_rom(rom_path)
 
     def get_retroarch_updater_settings(self):
+        """The updater's settings, with :data:`UPDATER_DEFAULTS` behind them."""
         updater = self.config.get("runtime", {}).get("retroarch", {}).get("updater", {})
-        return {
-            "mode": updater.get("mode", "buildbot_all_cores"),
-            "enabled": bool(updater.get("enabled", True)),
-            "core_dir": updater.get("core_dir"),
-            "cores_base_url": updater.get(
-                "cores_base_url",
-                "https://buildbot.libretro.com/nightly/linux/x86_64/latest/",
-            ),
-            "core_info_base_url": updater.get(
-                "core_info_base_url",
-                "https://buildbot.libretro.com/assets/frontend/info.zip",
-            ),
-            "shader_glsl_url": updater.get(
-                "shader_glsl_url",
-                "https://buildbot.libretro.com/assets/frontend/shaders_glsl.zip",
-            ),
-            "shader_slang_url": updater.get(
-                "shader_slang_url",
-                "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
-            ),
-            "request_timeout_sec": int(updater.get("request_timeout_sec", 30)),
-            "retries": int(updater.get("retries", 3)),
-            "parallel_downloads": int(updater.get("parallel_downloads", 4)),
+        resolved = {
+            key: updater.get(key, value) for key, value in UPDATER_DEFAULTS.items()
         }
+        # The three the caller relies on being the right type: a hand-edited
+        # config can put a string where a number belongs.
+        resolved["enabled"] = bool(resolved["enabled"])
+        for key in ("request_timeout_sec", "retries", "parallel_downloads"):
+            resolved[key] = int(resolved[key])
+        return resolved
 
     def get_shaders_config_file(self):
         return self.shaders.config_file
@@ -948,7 +1159,7 @@ class ConfigManager:
     def start_bootstrap_run(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "running"
-        bootstrap["started_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["started_at"] = _utc_stamp()
         bootstrap["finished_at"] = None
         bootstrap["failed_step"] = None
         bootstrap["last_error"] = None
@@ -965,7 +1176,7 @@ class ConfigManager:
     def finish_bootstrap_success(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "completed"
-        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["finished_at"] = _utc_stamp()
         bootstrap["failed_step"] = None
         bootstrap["last_error"] = None
         bootstrap["retry_requested"] = False
@@ -974,7 +1185,7 @@ class ConfigManager:
     def finish_bootstrap_failure(self, step_id, error_message):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "failed"
-        bootstrap["finished_at"] = datetime.utcnow().isoformat() + "Z"
+        bootstrap["finished_at"] = _utc_stamp()
         bootstrap["failed_step"] = step_id
         bootstrap["last_error"] = str(error_message)
         bootstrap["retry_requested"] = False
@@ -988,23 +1199,47 @@ class ConfigManager:
         self.save_config()
 
     def ensure_rom_directories(self):
+        """Lay out the library: three directories per console, plus its own.
+
+        Returns the paths it could not create. Every call site can carry on
+        without them -- the app shows an empty library rather than failing --
+        and one of them is the "change ROMs folder" handler, where the
+        exception escaped into the GTK main loop and took the window's
+        callback down with it (issue #234). A folder the user picked on an
+        unwritable disk is a thing to report, not to crash on.
+
+        The loop used to run twice, before and after the migration; the
+        migration creates whatever it moves into, so once, after it, is
+        enough.
+        """
         base_path = self.get_roms_path()
-        self.get_playlists_dir().mkdir(parents=True, exist_ok=True)
-        self.get_runtime_dir().mkdir(parents=True, exist_ok=True)
+        failed = []
+        _try_mkdir(self.get_playlists_dir(), failed)
+        _try_mkdir(self.get_runtime_dir(), failed)
+
+        try:
+            self._run_library_migration_if_needed(base_path)
+        except OSError as exc:
+            logger.warning("library migration could not run: error=%s", exc)
+            failed.append(base_path)
 
         for system_id in SYSTEM_IDS:
-            self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_covers_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_bios_dir(system_id).mkdir(parents=True, exist_ok=True)
+            _try_mkdir(self.get_console_dir(system_id), failed)
+            _try_mkdir(self.get_console_covers_dir(system_id), failed)
+            _try_mkdir(self.get_console_bios_dir(system_id), failed)
 
-        self._run_library_migration_if_needed(base_path)
+        try:
+            self.ensure_input_profiles()
+        except OSError as exc:
+            logger.warning("input profiles could not be seeded: error=%s", exc)
 
-        for system_id in SYSTEM_IDS:
-            self.get_console_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_covers_dir(system_id).mkdir(parents=True, exist_ok=True)
-            self.get_console_bios_dir(system_id).mkdir(parents=True, exist_ok=True)
-
-        self.ensure_input_profiles()
+        if failed:
+            logger.warning(
+                "library layout incomplete: unwritable=%d first=%s",
+                len(failed),
+                failed[0],
+            )
+        return failed
 
     def _run_library_migration_if_needed(self, base_path):
         migration = self.config.setdefault("library", {}).setdefault("migration", {})

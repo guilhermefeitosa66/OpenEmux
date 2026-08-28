@@ -13,10 +13,17 @@ import logging
 import time
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.paths import store_path
+from openemux.core.state_recovery import quarantine_state_file
+
 logger = logging.getLogger(__name__)
 
-#: Written next to config.yaml, like the playlists and input profiles.
-DEFAULT_HISTORY_FILE = Path.home() / ".openemux" / "play_history.json"
+#: Written next to config.yaml, like the playlists and input profiles. The
+#: default is only for a caller with no ConfigManager to ask; the app passes
+#: ``config.get_play_history_file()``, so a manager pointed at a throwaway
+#: directory keeps its history there (issue #239).
+DEFAULT_HISTORY_FILE = store_path("play_history")
 
 
 class PlayHistory:
@@ -32,12 +39,14 @@ class PlayHistory:
         try:
             with open(self.history_file, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as exc:
-            logger.info("play history unreadable, starting empty: %s", exc)
-            return {}
-        if not isinstance(data, dict):
+            # "Recently played" is rebuilt by playing again, but only the
+            # file knows what was played before -- keep it (issue #209).
+            quarantine_state_file(self.history_file, exc)
             return {}
         entries = {}
         for path, entry in data.items():
@@ -50,9 +59,10 @@ class PlayHistory:
 
     def save(self):
         try:
-            self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, "w", encoding="utf-8") as handle:
-                json.dump(self._entries, handle, indent=2, sort_keys=True)
+            atomic_write_text(
+                self.history_file,
+                json.dumps(self._entries, indent=2, sort_keys=True),
+            )
         except OSError as exc:
             logger.info("play history not saved: %s", exc)
 

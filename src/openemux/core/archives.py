@@ -17,7 +17,11 @@ Two classes of console matter:
 
 import logging
 import zipfile
-from pathlib import Path
+import zlib
+from collections import Counter
+from pathlib import Path, PurePosixPath
+
+from openemux.core.atomic_write import atomic_write_stream
 
 logger = logging.getLogger(__name__)
 
@@ -145,38 +149,141 @@ def _safe_target(dest_dir, member_name):
     return target
 
 
+def plan_extraction(members):
+    """Where each member goes, relative to the destination, in member order.
+
+    Flat by default: disc sets reference sibling tracks by bare filename, so a
+    nested layout would break the ``.cue`` references. But a multi-disc
+    archive has ``Disc 1/track01.bin`` *and* ``Disc 2/track01.bin``, and
+    flattening those onto one name used to write the first and silently report
+    the second as extracted too -- the import then offered a disc 2 holding
+    disc 1's data (issue #229).
+
+    So the colliding entries keep the folder they came from instead. Each
+    ``.cue`` still sits beside its own tracks, one directory down, which is
+    the layout that makes the references resolve. Anything left ambiguous
+    after that (a zip really can carry the same path twice) gets a
+    ``name (2).ext`` sibling rather than being dropped.
+    """
+    names = [PurePosixPath(info.filename).name for info in members]
+    collisions = {name for name, count in Counter(names).items() if count > 1}
+
+    planned = []
+    used = set()
+    for info, name in zip(members, names):
+        if name in collisions:
+            folder = PurePosixPath(info.filename).parent.name
+            relative = f"{folder}/{name}" if folder else name
+        else:
+            relative = name
+        relative = _unique_relative(relative, used)
+        used.add(relative.casefold())
+        planned.append(relative)
+    return planned
+
+
+def _unique_relative(relative, used):
+    if relative.casefold() not in used:
+        return relative
+    path = PurePosixPath(relative)
+    counter = 2
+    while True:
+        candidate = str(path.with_name(f"{path.stem} ({counter}){path.suffix}"))
+        if candidate.casefold() not in used:
+            return candidate
+        counter += 1
+
+
+def _unique_target(target):
+    """``target`` or a ``name (2).ext`` sibling that is not taken."""
+    counter = 2
+    while True:
+        candidate = target.with_name(f"{target.stem} ({counter}){target.suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def _crc32_of(path, chunk_size=1024 * 1024):
+    checksum = 0
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            checksum = zlib.crc32(chunk, checksum)
+    return checksum & 0xFFFFFFFF
+
+
+def _starts_the_same(path, archive, info, length, chunk_size=1024 * 1024):
+    """True when the first ``length`` bytes of ``path`` are the entry's."""
+    with open(path, "rb") as existing, archive.open(info) as src:
+        remaining = length
+        while remaining > 0:
+            want = min(chunk_size, remaining)
+            here = existing.read(want)
+            there = src.read(want)
+            if not here or here != there:
+                return False
+            remaining -= len(here)
+    return True
+
+
+def _existing_verdict(target, archive, info):
+    """What the file already sitting at ``target`` is: the entry, half of it,
+    or something else entirely."""
+    try:
+        size = target.stat().st_size
+    except OSError:
+        return "different"
+    if size == info.file_size:
+        return "same" if _crc32_of(target) == info.CRC else "different"
+    if size < info.file_size and _starts_the_same(target, archive, info, size):
+        # An extraction of this very entry that was cut short. Before the
+        # write became atomic this was how a truncated ROM got left at its
+        # final name -- and "skip existing" then blessed it forever.
+        return "partial"
+    return "different"
+
+
 def extract_archive(archive_path, dest_dir, extensions=None):
     """Extract an archive into ``dest_dir``, flattening any inner folders.
 
     Returns the list of extracted file paths. ``extensions`` limits extraction
     to matching entries plus their sidecars (a ``.cue`` needs its ``.bin``), so
     passing None extracts everything that is not junk.
+
+    Each entry is written through a temporary file and renamed into place, so
+    an interrupted extraction leaves nothing at the final path rather than a
+    truncated ROM that every later import would skip as already there.
     """
     dest_dir = Path(dest_dir)
     extracted = []
     try:
         with zipfile.ZipFile(archive_path) as archive:
-            members = [info for info in archive.infolist() if not info.is_dir()]
-            for info in members:
-                if _is_junk(info.filename):
-                    continue
-                # Flatten: disc sets reference sibling tracks by bare filename,
-                # so a nested folder layout would break the .cue references.
-                flat_name = Path(info.filename).name
-                target = _safe_target(dest_dir, flat_name)
+            members = [
+                info
+                for info in archive.infolist()
+                if not info.is_dir() and not _is_junk(info.filename)
+            ]
+            for info, relative in zip(members, plan_extraction(members)):
+                target = _safe_target(dest_dir, relative)
                 if target is None:
                     continue
                 if target.exists():
-                    logger.info("archives extract skip existing: path=%s", target)
-                    extracted.append(target)
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(info) as src, open(target, "wb") as dst:
-                    while True:
-                        chunk = src.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        dst.write(chunk)
+                    verdict = _existing_verdict(target, archive, info)
+                    if verdict == "same":
+                        logger.info("archives extract skip existing: path=%s", target)
+                        extracted.append(target)
+                        continue
+                    if verdict == "different":
+                        # Somebody else's file under the same name. Never
+                        # overwrite it, and never report it as this entry.
+                        target = _unique_target(target)
+                    else:
+                        logger.info("archives extract repairs partial: path=%s", target)
+                with archive.open(info) as src:
+                    atomic_write_stream(target, src)
                 extracted.append(target)
                 logger.info("archives extracted: archive=%s entry=%s -> %s", archive_path, info.filename, target)
     except Exception as exc:

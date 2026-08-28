@@ -1,0 +1,44 @@
+/*
+ * Resources compiled into OpenEmux.exe by x86_64-w64-mingw32-windres.
+ *
+ * Two things Windows reads straight off the binary: the icon shown in Explorer,
+ * the taskbar and the Alt-Tab switcher, and the version block shown on the
+ * Details tab of the file's properties. Without them the launcher appears as a
+ * nameless generic executable, which is what an unsigned installer least needs.
+ *
+ * OPENEMUX_VERSION and OPENEMUX_VERSION_COMMA are passed with -D by build.sh,
+ * from src/openemux/__init__.py -- the single place the version is edited.
+ */
+
+#include <windows.h>
+
+/* Must be the lowest-numbered icon resource: that is the one Windows uses as
+ * the application icon. */
+1 ICON "openemux.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     OPENEMUX_VERSION_COMMA
+PRODUCTVERSION  OPENEMUX_VERSION_COMMA
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        /* 0409 = US English, 04B0 = Unicode. */
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Guilherme Feitoza"
+            VALUE "FileDescription",  "OpenEmux"
+            VALUE "FileVersion",      OPENEMUX_VERSION
+            VALUE "InternalName",     "OpenEmux"
+            VALUE "LegalCopyright",   "MIT Licensed. See LICENSE."
+            VALUE "OriginalFilename", "OpenEmux.exe"
+            VALUE "ProductName",      "OpenEmux"
+            VALUE "ProductVersion",   OPENEMUX_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

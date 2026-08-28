@@ -9,11 +9,17 @@ Skipped wherever /dev/uinput is not writable (CI, containers, hosts where the
 user is not in the input group).
 """
 
-import fcntl
 import os
 import struct
 import time
 import unittest
+
+from tests.platform_marks import IS_LINUX
+
+if not IS_LINUX:  # noqa: E402 - the imports below do not exist off Linux
+    raise unittest.SkipTest("uinput and evdev are Linux kernel interfaces")
+
+import fcntl
 
 from openemux.core.gamepad_reader import list_gamepads
 from openemux.core.ui_gamepad import GamepadNavigator
@@ -50,12 +56,17 @@ def uinput_available():
 
 
 class VirtualGamepad:
-    def __init__(self, name=PAD_NAME):
+    def __init__(self, name=PAD_NAME, axes=()):
+        """``axes`` adds full-range ABS codes beside the hat, for a pad with sticks."""
         self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
         for bit in (EV_KEY, EV_ABS, EV_SYN):
             fcntl.ioctl(self.fd, UI_SET_EVBIT, bit)
         for code in BUTTONS:
             fcntl.ioctl(self.fd, UI_SET_KEYBIT, code)
+        for code in axes:
+            fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
+            fcntl.ioctl(self.fd, UI_ABS_SETUP,
+                        struct.pack("H2x6i", code, 0, -32768, 32767, 0, 0, 0))
         for code in (ABS_HAT0X, ABS_HAT0Y):
             fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
             # struct uinput_abs_setup { __u16 code; struct input_absinfo; }

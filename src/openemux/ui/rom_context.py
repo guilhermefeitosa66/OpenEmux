@@ -1,15 +1,101 @@
-"""Extra ROM context-menu entries that need more than a flat action row.
+"""A ROM card's context menu: every row of it, and the services behind them.
 
-The grid builds the basic rows (favorite, cover, rename, delete) itself. The
-richer, data-driven submenus -- picking a shader for a single game today, and a
-core or a collection later -- are assembled here so the grid does not have to
-know about every subsystem. One service, one place for the ``if`` that decides
-whether an entry applies.
+Two halves that only made sense together. The data-driven submenus -- a
+shader, a core, a save state, a collection for a single game -- have been
+assembled here from the start, so the card does not have to know about every
+subsystem. The rest of the menu (favourite, the artwork submenu, reveal,
+rename, delete) was built inside the card itself, which is how a card widget
+came to own a hundred lines of menu policy (issue #238). Both are here now.
+
+The card is read, never driven: :func:`card_menu_entries` asks it what it is
+showing and returns rows. Presenting them is still the card's business, since
+the popover is parented to it.
 """
 
 from openemux.core import cartridge_colors, cartridge_render
 from openemux.core.library_view import renders_cartridge
+from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.ui.context_menu import SEPARATOR, Submenu
+from openemux.ui.scopes import is_collection_scope
+
+
+def card_menu_entries(card):
+    """Every row of ``card``'s context menu, in order.
+
+    ``card`` supplies the strings and the answers: what it is showing, whether
+    the ROM is a favourite, whether there is local artwork to remove, and
+    which of rename/delete the grid was given a handler for.
+    """
+    t = card.t
+    rom = card.rom
+    is_favorite = card.is_favorite(rom)
+    entries = [
+        (
+            t("context.favorite.remove") if is_favorite else t("context.favorite.add"),
+            "rom.toggle-favorite",
+            "starred-symbolic" if is_favorite else "non-starred-symbolic",
+        ),
+    ]
+
+    # One artwork kind at a time, following what the card is actually
+    # showing: the label inside a cartridge, the box art everywhere else
+    # (issue #77).
+    #
+    # Everything that acts on that artwork lives in one submenu. Choose,
+    # remove and manage were three sibling rows at the top level, which is
+    # most of the menu's length spent on something that is not the common
+    # case. Sync stays outside: it is the one-click "just fetch it".
+    showing_label = bool(card.cartridge_frame_path) and card.supports_label()
+    kind, art_dir = ("label", LABEL_ART) if showing_label else ("cover", COVER_ART)
+
+    services = card.context_services
+    if services is not None:
+        entries.append(
+            (t(f"context.{kind}.sync"), f"rom.sync-{kind}", "folder-download-symbolic")
+        )
+
+    artwork_entries = []
+    if services is not None:
+        artwork_entries.append(
+            (
+                t(f"context.{kind}.manage"),
+                f"rom.manage-{kind}",
+                "document-properties-symbolic",
+            )
+        )
+    artwork_entries.append(
+        (
+            t(f"context.{kind}.choose"),
+            f"rom.choose-{kind}",
+            "insert-image-symbolic" if showing_label else "image-x-generic-symbolic",
+        )
+    )
+    if card.has_local_cover(rom, art_dir):
+        artwork_entries.append(
+            (t(f"context.{kind}.remove"), f"rom.remove-{kind}", "user-trash-symbolic")
+        )
+    entries.append(
+        Submenu(
+            t(f"context.{kind}.artwork"), artwork_entries, "image-x-generic-symbolic"
+        )
+    )
+
+    # Data-driven submenus. Their own section, between the artwork rows and
+    # the file actions.
+    if services is not None:
+        extra = services.build_submenus(rom)
+        if extra:
+            entries.append(SEPARATOR)
+            entries.extend(extra)
+
+    # Own section: these act on the file on disk, not on the library entry.
+    entries.append(SEPARATOR)
+    entries.append((t("context.reveal"), "rom.reveal-in-files", "folder-open-symbolic"))
+    if card.on_rename_rom:
+        entries.append((t("context.rename"), "rom.rename", "document-edit-symbolic"))
+    if card.on_delete_rom:
+        entries.append((t("context.delete"), "rom.delete", "user-trash-symbolic"))
+    return entries
 
 
 class RomContextMenuServices:
@@ -23,7 +109,9 @@ class RomContextMenuServices:
         # while filing a game away is housekeeping. The add/remove collection
         # pair stays adjacent -- they are two halves of the same thing.
         entries = []
-        entries.append(self._load_state_submenu(rom))
+        load_state = self._load_state_submenu(rom)
+        if load_state is not None:
+            entries.append(load_state)
         core = self._core_submenu(rom)
         if core is not None:
             entries.append(core)
@@ -64,8 +152,6 @@ class RomContextMenuServices:
 
     def _remove_from_collection_entry(self, rom):
         # Only while viewing a collection: removing here never touches the file.
-        from openemux.ui.window import is_collection_scope
-
         if not is_collection_scope(self.win.current_console):
             return None
         return (
@@ -185,10 +271,19 @@ class RomContextMenuServices:
 
         from openemux.core import save_states
 
+        console = rom.get("console")
+        path = rom.get("path")
+        # Guarded like every sibling submenu: both are keys into per-console
+        # and per-ROM state, and this one used to index them directly, so a
+        # ROM dict missing either raised KeyError straight out of the
+        # right-click (issue #245).
+        if not console or not path:
+            return None
+
         t = self.win.t
-        states_dir = self.win.config_manager.get_console_states_dir(rom["console"])
+        states_dir = self.win.config_manager.get_console_states_dir(console)
         entries = []
-        for slot, mtime in save_states.slot_entries(states_dir, rom["path"]):
+        for slot, mtime in save_states.slot_entries(states_dir, path):
             if mtime is None:
                 label = t("states.slot_empty", slot=slot)
                 entries.append((label, None, None))

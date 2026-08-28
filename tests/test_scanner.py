@@ -93,7 +93,9 @@ class ArchiveScannerTests(unittest.TestCase):
         self.assertEqual(roms[0]["name"], "Super Mario Bros")
         self.assertEqual(roms[0]["path"], str(archive))
         self.assertEqual(roms[0]["console"], "FC")
-        self.assertIsNotNone(roms[0]["rom_id"])
+        # No rom_id: nothing ever read it, and producing it meant a full-file
+        # CRC32 of every ROM on every scan and every playlist load (issue #216).
+        self.assertNotIn("rom_id", roms[0])
 
     def test_zip_without_matching_rom_is_skipped(self):
         with TemporaryDirectory() as tmp_dir:
@@ -156,6 +158,89 @@ class ArchiveScannerTests(unittest.TestCase):
             roms = RomScanner(base).scan_console("PS")
 
         self.assertEqual(roms, [])
+
+
+class SymlinkedDirectoryTests(unittest.TestCase):
+    """ROMs behind a symlinked directory have to be found (issue #228).
+
+    The standard "big files live on another disk, symlink them in" layout was
+    invisible: ``Path.rglob`` yields the link itself, ``is_file()`` is false
+    for it, and everything inside is skipped -- no error, nothing in the log.
+    """
+
+    def test_a_symlinked_subdirectory_is_descended_into(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir) / "roms"
+            elsewhere = Path(tmp_dir) / "storage" / "ps1"
+            elsewhere.mkdir(parents=True)
+            (elsewhere / "Final Fantasy VII.cue").write_bytes(b"cue")
+            (base / "PS").mkdir(parents=True)
+            (base / "PS" / "discs").symlink_to(elsewhere, target_is_directory=True)
+
+            roms = RomScanner(base).scan_console("PS")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Final Fantasy VII"])
+
+    def test_a_symlinked_console_directory_still_works(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir) / "roms"
+            base.mkdir(parents=True)
+            elsewhere = Path(tmp_dir) / "storage" / "snes"
+            elsewhere.mkdir(parents=True)
+            (elsewhere / "Super Metroid.sfc").write_bytes(b"rom")
+            (base / "SFC").symlink_to(elsewhere, target_is_directory=True)
+
+            roms = RomScanner(base).scan_console("SFC")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Super Metroid"])
+
+    def test_a_symlink_loop_does_not_hang_the_scan(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir) / "roms"
+            console = base / "FC"
+            console.mkdir(parents=True)
+            (console / "Contra.nes").write_bytes(b"rom")
+            nested = console / "sub"
+            nested.mkdir()
+            # Points back at its own parent: rglob would not follow it, and a
+            # naive followlinks walk would descend forever.
+            (nested / "loop").symlink_to(console, target_is_directory=True)
+
+            roms = RomScanner(base).scan_console("FC")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Contra"])
+
+    def test_a_cue_behind_a_symlink_still_hides_its_bin(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir) / "roms"
+            elsewhere = Path(tmp_dir) / "storage" / "ps1"
+            elsewhere.mkdir(parents=True)
+            (elsewhere / "Tekken 3.cue").write_text(
+                'FILE "Tekken 3.bin" BINARY\n', encoding="utf-8"
+            )
+            (elsewhere / "Tekken 3.bin").write_bytes(b"track")
+            (base / "PS").mkdir(parents=True)
+            (base / "PS" / "discs").symlink_to(elsewhere, target_is_directory=True)
+
+            roms = RomScanner(base).scan_console("PS")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Tekken 3"])
+
+    def test_an_unreadable_subdirectory_does_not_stop_the_scan(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir) / "roms"
+            console = base / "FC"
+            console.mkdir(parents=True)
+            (console / "Contra.nes").write_bytes(b"rom")
+            locked = console / "locked"
+            locked.mkdir()
+            locked.chmod(0o000)
+            try:
+                roms = RomScanner(base).scan_console("FC")
+            finally:
+                locked.chmod(0o755)
+
+        self.assertEqual([rom["name"] for rom in roms], ["Contra"])
 
 
 if __name__ == "__main__":

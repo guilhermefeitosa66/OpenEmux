@@ -51,6 +51,23 @@ vendors/nestopia/build/
 vendors/mgba/build/
 vendors/snes9x/gtk/build/
 
+# Fetched vendors (issues #118, #328). Neither RetroArch is committed: the
+# Windows build is ~193 MiB and the Linux one ~171 MiB to download, and both
+# unpack into directory trees of loose binaries that git history would carry
+# forever -- see vendors/manifest.json and 'make vendor-retroarch'.
+vendors/RetroArch-Win64/
+vendors/RetroArch-Linux-x86_64/
+vendors/RetroArch-Linux-aarch64/
+vendors/.cache/
+vendors/*.7z
+vendors/*.AppImage
+
+# Windows bundle staging (packaging/windows)
+build/win/
+# Derived from src/openemux/ui/assets/images/logo.png during the build, and
+# removed again; only ever present if a build was interrupted mid-way.
+packaging/windows/openemux.ico
+
 # Parallel development worktrees
 .worktree/
 
@@ -62,3 +79,9 @@ release/NOTAS_DE_RELEASE_*.md
 flatpak-repo/
 .flatpak-build-dir/
 .flatpak-builder/
+
+# Backups a build (or an editor) may drop beside a source file. Builds stage
+# their inputs instead of editing the tree, but an untracked *.orig must never
+# become committable by accident -- it is exactly where a baked ScreenScraper
+# credential would sit (issue #250).
+*.orig

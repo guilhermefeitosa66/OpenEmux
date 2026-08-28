@@ -8,9 +8,9 @@ running another program at arm's length does not make the calling program a
 derivative work, so OpenEmux's own code can be — and is — MIT-licensed.
 
 When OpenEmux **redistributes** third-party software (for example, the vendored
-RetroArch AppImage bundled inside the OpenEmux AppImage, or libretro cores it
-downloads), those components remain under **their own licenses**. This is a
-"mere aggregation" of independently-licensed works. The notices below cover the
+RetroArch bundled inside every Linux package, or libretro cores it downloads),
+those components remain under **their own licenses**. This is a "mere
+aggregation" of independently-licensed works. The notices below cover the
 components OpenEmux ships or fetches.
 
 ---
@@ -21,8 +21,11 @@ components OpenEmux ships or fetches.
 - **Copyright:** The RetroArch / libretro team and contributors
 - **Source:** https://github.com/libretro/RetroArch
 - **How OpenEmux uses it:** invoked as a separate process. The official,
-  unmodified RetroArch AppImage may be vendored (`vendors/`) and bundled into
-  the OpenEmux AppImage for convenience.
+  unmodified RetroArch build may be vendored (`vendors/`) and bundled into the
+  OpenEmux packages for convenience. On Linux that is the contents of
+  libretro's own AppImage, unwrapped into the portable directory it already
+  was — the same bytes, shipped without the image around them, so no FUSE is
+  needed to run it (issue #328).
 - **Obligation when redistributing:** the GPLv3 terms apply to the RetroArch
   binary. Because it is redistributed **unmodified**, pointing to the upstream
   corresponding source above satisfies the source-availability requirement.
@@ -45,6 +48,96 @@ components OpenEmux ships or fetches.
   RetroArch Buildbot (https://buildbot.libretro.com/) into the user's own
   configuration directory. OpenEmux does not redistribute cores in this
   repository. Each core is governed by its individual license.
+
+---
+
+## The Windows bundle
+
+The Linux packages depend on the distribution's GTK stack and install nothing of
+it. The Windows installer and portable zip have nowhere to depend on, so they
+**redistribute** a Windows build of that whole stack, taken unmodified from the
+MSYS2 MINGW64 repository (https://repo.msys2.org/mingw/mingw64/). The exact
+package set and versions are pinned in
+[`packaging/windows/packages.lock`](packaging/windows/packages.lock), which is
+the authoritative list of what any given build shipped.
+
+The components are redistributed as unmodified dynamic libraries, and OpenEmux
+links none of them statically.
+
+### GTK 4, libadwaita, GLib, Pango, gdk-pixbuf, librsvg
+
+- **License:** GNU Lesser General Public License, v2.1 or later (LGPL-2.1+)
+- **Source:** https://gitlab.gnome.org/GNOME/ — and, for the exact Windows
+  builds shipped, the MSYS2 packages named in `packages.lock`, whose own
+  sources are at https://github.com/msys2/MINGW-packages
+- **Obligation when redistributing:** the LGPL requires that a user be able to
+  replace these libraries with their own versions. The bundle satisfies this by
+  shipping them as ordinary, separate `.dll` files in `bin\`, which the user can
+  substitute; nothing is statically linked and no relinking is required.
+
+### GStreamer (core and base libraries)
+
+- **License:** GNU Lesser General Public License, v2.1 or later (LGPL-2.1+)
+- **Source:** https://gitlab.freedesktop.org/gstreamer/gstreamer
+- **How OpenEmux uses it:** it does not. GTK 4 declares it as a dependency for
+  its optional media-playback backend, so it arrives with the GTK packages and
+  is shipped rather than second-guessed. Only the core and base *libraries* are
+  included — none of the plugin sets whose licences vary.
+
+### Python
+
+- **License:** Python Software Foundation License 2.0
+- **Source:** https://www.python.org/
+- **How OpenEmux uses it:** the bundled interpreter runs the application.
+
+### PyGObject and pycairo
+
+- **License:** LGPL-2.1+ (PyGObject), LGPL-2.1 / MPL-1.1 (pycairo)
+- **Source:** https://gitlab.gnome.org/GNOME/pygobject ,
+  https://github.com/pygobject/pycairo
+
+### SDL2
+
+- **License:** zlib License
+- **Source:** https://www.libsdl.org/
+- **How OpenEmux uses it:** the gamepad backend on Windows, where Linux's
+  evdev interface does not exist.
+
+### Adwaita icon theme, Cantarell, Source Code Pro
+
+- **License:** CC-BY-SA-3.0 (icon theme), SIL Open Font License 1.1 (fonts)
+- **Source:** https://gitlab.gnome.org/GNOME/adwaita-icon-theme ,
+  https://gitlab.gnome.org/GNOME/cantarell-fonts ,
+  https://github.com/adobe-fonts/source-code-pro
+
+### RetroArch (bundled, Windows only)
+
+The Windows artifacts ship the official, unmodified RetroArch Windows x86_64
+build so that OpenEmux works without a separate install. This is a
+redistribution of a GPLv3 binary and carries the obligations in the RetroArch
+section above: the version is pinned in
+[`vendors/manifest.json`](vendors/manifest.json), RetroArch's own licence text
+ships beside the executable inside the bundle, and the corresponding source is
+the upstream tag at https://github.com/libretro/RetroArch.
+
+That licence text does not come from the archive. The upstream `RetroArch.7z`
+contains no `COPYING` of its own -- only `assets/COPYING`, which is CC-BY-4.0
+and covers the assets -- so
+[`vendors/RetroArch-COPYING`](vendors/RetroArch-COPYING) is the `COPYING` from
+the same upstream tag, committed here and recorded in the manifest with its
+hash. Refresh it whenever the vendored RetroArch version changes.
+
+### RetroArch assets (bundled, Windows only)
+
+- **License:** CC-BY-4.0
+- **Source:** https://github.com/libretro/retroarch-assets
+- **How OpenEmux uses it:** it does not, directly. The assets directory travels
+  inside the bundled RetroArch, which reads its own menu artwork and fonts from
+  it. Its licence ships with it, as `assets/COPYING`.
+
+**libretro cores are not included.** They are downloaded from the buildbot on
+first launch, exactly as on Linux, which keeps their many different licences out
+of the installer entirely.
 
 ---
 

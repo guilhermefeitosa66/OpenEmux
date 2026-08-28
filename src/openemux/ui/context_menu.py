@@ -58,6 +58,69 @@ def build_context_popover(entries):
     return popover
 
 
+#: The one context menu that may be open. Every context popover in the app is a
+#: separate widget owned by whatever it hangs off -- a ROM card, a sidebar row,
+#: the sidebar's empty area -- and none of them can see the others. Autohide
+#: serialises the pointer, but the keyboard (Menu, Shift+F10) and the gamepad
+#: open a menu without a click, so two could be up at once. The second one's
+#: modal grab then shadows the first: a click outside is consumed by one, and
+#: the other stays until a row is activated, which is issue #275.
+_open_popover = None
+
+
+def present_context_popover(popover):
+    """Pop ``popover`` up as *the* context menu, closing whatever was open."""
+    global _open_popover
+    current = _open_popover
+    # Cleared before popdown: closing emits "closed", and the handler must not
+    # find a stale entry -- nor clear the one we are about to install.
+    _open_popover = None
+    if current is not None and current is not popover:
+        logger.info("context menu replaced while open")
+        current.popdown()
+    _open_popover = popover
+    popover.connect("closed", _forget_context_popover)
+    popover.popup()
+
+
+def dismiss_context_popover():
+    """Close the open context menu, if any. Returns whether there was one.
+
+    Called when the widget a menu hangs off is about to go away: the grid is
+    rebuilt on every playlist switch, and a popover outliving its parent leaves
+    the queued unparent running against a disposed widget.
+    """
+    global _open_popover
+    current = _open_popover
+    _open_popover = None
+    if current is None:
+        return False
+    current.popdown()
+    return True
+
+
+def _forget_context_popover(popover):
+    global _open_popover
+    if _open_popover is popover:
+        _open_popover = None
+
+
+def unparent_when_idle(popover):
+    """Drop ``popover`` from its parent once GTK is done closing it.
+
+    Unparenting from inside "closed" tears the surface down mid-teardown, so it
+    waits for an idle -- by which time the parent may itself be gone (a grid
+    rebuild), and unparenting a widget that has no parent is a GTK critical.
+    """
+
+    def _unparent():
+        if popover.get_parent() is not None:
+            popover.unparent()
+        return False
+
+    GLib.idle_add(_unparent)
+
+
 def _build_menu_box(entries, root_popover):
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     box.add_css_class("context-menu-box")

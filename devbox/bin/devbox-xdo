@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# xdotool, already aimed at the app's window.
+#
+#   devbox-xdo key ctrl+f
+#   devbox-xdo type 'sonic'
+#   devbox-xdo click 1
+#   devbox-xdo win                    id, title and geometry of the target
+#   devbox-xdo list                   every window the app has open
+#   devbox-xdo --any key Escape       do not steal focus first
+#   devbox-xdo --match 'Preferences' key Escape
+#
+# Keyboard first, coordinates last. Tab/Return/accelerators survive a layout
+# change and a different window size; a click at (412, 260) does not, and it
+# also proves nothing about whether the UI can be driven from the keyboard.
+set -euo pipefail
+. /openemux/devkit/lib.sh
+require_display
+
+FOCUS=1
+MATCH=''
+while :; do
+	case "${1:-}" in
+		--any)   FOCUS=0; shift ;;
+		--match) MATCH=${2:?--match needs a regex}; shift 2 ;;
+		*) break ;;
+	esac
+done
+
+target() {
+	if [ -n "${MATCH}" ]; then devbox-win --match "${MATCH}"; else devbox-win; fi
+}
+
+case "${1:-}" in
+	list)
+		devbox-win --list
+		exit 0
+		;;
+	win)
+		w=$(target)
+		[ -n "${w}" ] || die "no app window${MATCH:+ matching ${MATCH}}"
+		printf 'id     %s\n' "${w}"
+		printf 'title  %s\n' "$(xdotool getwindowname "${w}")"
+		xdotool getwindowgeometry "${w}" | sed -n '2,3p'
+		exit 0
+		;;
+esac
+
+if [ "${FOCUS}" = 1 ]; then
+	w=$(target || true)
+	if [ -n "${w}" ]; then
+		xdotool windowactivate --sync "${w}" 2>/dev/null \
+			|| xdotool windowfocus "${w}" 2>/dev/null || true
+	else
+		warn "no app window${MATCH:+ matching ${MATCH}} -- sending it unfocused"
+	fi
+fi
+
+exec xdotool "$@"

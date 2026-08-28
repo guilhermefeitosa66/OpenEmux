@@ -1,11 +1,13 @@
+import ctypes
 import os
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from openemux.core import game_window_support
+from openemux.core import core_options, game_window_support, retroachievements
+from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
@@ -26,22 +28,94 @@ from openemux.core.input_profiles import (
     player_for_device,
 )
 from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.platform import (
+    IS_WINDOWS,
+    MACHINE,
+    VENDORED_RETROARCH,
+    bundled_core_dir,
+    cfg_path,
+    popen_kwargs,
+    user_retroarch_dirs,
+)
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
+from openemux.core.video_driver import (
+    AUTO as VIDEO_DRIVER_AUTO,
+    effective_video_driver,
+    preset_backends,
+    resolve_video_driver,
+)
 
 logger = logging.getLogger(__name__)
+
+
+#: The AppImage runtime's own "do not mount me" switch.
+APPIMAGE_EXTRACT_AND_RUN = "--appimage-extract-and-run"
+
+
+def is_appimage(binary_path):
+    """Is this path a (type-2) AppImage rather than a plain binary?"""
+    return str(binary_path).lower().endswith(".appimage")
+
+
+def appimage_flags(binary_path, libfuse_available=None, force=False):
+    """The flags an AppImage needs to run on *this* host, if any.
+
+    OpenEmux no longer ships one -- the vendored RetroArch is a plain binary in
+    a portable tree since issue #328 -- but ``runtime.retroarch.binary`` may
+    still name an AppImage the user downloaded themselves, and that is the case
+    every line below exists for.
+
+    ``--appimage-extract-and-run`` unpacks the image to a temp dir instead of
+    mounting it, which is slower but needs no FUSE at all. Only used when
+    ``libfuse.so.2`` is genuinely missing: on a host that has it, mounting is
+    both faster and what the AppImage is built to do (issue #226).
+
+    ``force`` is the retry after a launch that died mounting anyway. The
+    ``libfuse.so.2`` probe answers "can this library be loaded", which is not
+    the same question as "can this host mount a FUSE filesystem": a machine
+    with the library but no ``/dev/fuse``, no ``fusermount``, or a
+    ``fusermount`` that is not setuid passes the probe and still fails at the
+    mount. That failure is only visible after the fact, in the launch log,
+    so the retry is the only thing that can act on it (issue #248).
+    """
+    if not is_appimage(binary_path):
+        return []
+    if force:
+        logger.info(
+            "retrying the AppImage with --appimage-extract-and-run after a FUSE failure"
+        )
+        return [APPIMAGE_EXTRACT_AND_RUN]
+    if libfuse_available is None:
+        libfuse_available = RetroArchLauncher.libfuse2_available()
+    if libfuse_available:
+        return []
+    logger.info(
+        "libfuse.so.2 is missing; running the AppImage with --appimage-extract-and-run"
+    )
+    return [APPIMAGE_EXTRACT_AND_RUN]
+
 
 # A RetroArch installed as a Flatpak keeps its cores here; still worth searching.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
 
-DEFAULT_CORE_DIRS = [
-    "/usr/lib/libretro",
-    "/usr/lib64/libretro",
-    "/usr/lib/x86_64-linux-gnu/libretro",
-    "/usr/local/lib/libretro",
-]
+# Distro-packaged core locations. Empty on Windows, which has no equivalent
+# convention -- cores there come from the bundled portable RetroArch.
+# The Debian multiarch directory is named after the host triplet, so it is the
+# one entry here that changes with the architecture -- and it is the one Ubuntu
+# and Debian actually use for the libretro packages (issue #119).
+DEFAULT_CORE_DIRS = (
+    []
+    if IS_WINDOWS
+    else [
+        "/usr/lib/libretro",
+        "/usr/lib64/libretro",
+        f"/usr/lib/{MACHINE}-linux-gnu/libretro",
+        "/usr/local/lib/libretro",
+    ]
+)
 
 # Runtime OSD policy:
 # - Hide startup/runtime noise (content/core/autoconfig/override/remap/etc).
@@ -95,8 +169,12 @@ class RetroArchLauncher:
             project_root=self.project_root,
         )
         self.core_catalog = CoreCatalog(project_root=self.project_root)
+        #: Why the last launch has no shader, or ``None``. Set on every launch
+        #: so the UI can say it out loud instead of leaving the only trace in a
+        #: log file (issue #366).
+        self.last_shader_notice = None
 
-    def _launch_prefix(self):
+    def _launch_prefix(self, force_extract=False):
         """Return (argv_prefix, error).
 
         Inside a Flatpak, delegate to the RetroArch Flatpak on the host via
@@ -134,11 +212,54 @@ class RetroArchLauncher:
 
         retroarch_path = self._resolve_retroarch_binary()
         if not retroarch_path:
+            # Last resort before giving up: a RetroArch Flatpak on this same
+            # machine. The message that follows is what the user sees, so it
+            # names every way out rather than only the vendored one.
+            flatpak_prefix = self._flatpak_fallback_prefix()
+            if flatpak_prefix:
+                return flatpak_prefix, None
             return None, (
-                "RetroArch binary not found. Set runtime.retroarch.binary "
-                "or add RetroArch AppImage under vendors/."
+                "RetroArch was not found. Install it from your distribution, "
+                "or with `flatpak install flathub org.libretro.RetroArch`, or "
+                "set runtime.retroarch.binary to a RetroArch of your own."
             )
-        return [retroarch_path], None
+        return [retroarch_path, *appimage_flags(retroarch_path, force=force_extract)], None
+
+    def launches_an_appimage(self):
+        """Would a launch right now go through an AppImage?
+
+        Asked before retrying a failed launch unpacked: outside an AppImage
+        there is nothing to unpack, so a FUSE-looking line in the log (a
+        wrapper script echoing one, say) must not buy a second launch
+        (issue #248). False for everything OpenEmux ships since issue #328;
+        true when the user pointed the setting at an AppImage of their own.
+        """
+        if is_running_in_flatpak():
+            return False
+        return is_appimage(self._resolve_retroarch_binary() or "")
+
+    @staticmethod
+    def libfuse2_available(loader=None):
+        """Whether the AppImage runtime's ``libfuse.so.2`` can be loaded.
+
+        A type-2 AppImage mounts itself with FUSE 2. Several current
+        distributions ship only FUSE 3 (or nothing), and there a RetroArch
+        AppImage *starts* -- Popen succeeds -- and its runtime exits within a
+        second with ``dlopen(): error loading libfuse.so.2`` written only to
+        the launch log. Every launch died instantly and the app just said
+        "finished (exit code 1)" (issue #226). That was the vendored AppImage
+        then; since issue #328 it can only be a user's own.
+
+        Asked the same way the runtime asks: by name, not by guessing from a
+        package list. libfuse3 does not answer to this name and must not, or
+        we would skip the fallback on a host that needs it.
+        """
+        loader = loader or ctypes.CDLL
+        try:
+            loader("libfuse.so.2")
+            return True
+        except OSError:
+            return False
 
     def _resolve_retroarch_binary(self):
         configured = self.config_manager.get_retroarch_binary()
@@ -159,7 +280,11 @@ class RetroArchLauncher:
             return resolved
 
         vendor_candidates = [
-            self.project_root / "vendors" / "RetroArch-Linux-x86_64.AppImage",
+            # The vendored build for this platform comes first. Both are
+            # portable trees fetched by scripts/vendor_retroarch.py: on Windows
+            # retroarch.exe beside its DLLs, on Linux usr/bin/retroarch beside
+            # the libraries it finds through RUNPATH (issue #328).
+            self.project_root / VENDORED_RETROARCH,
             self.project_root / "vendors" / "retroarch.AppImage",
             self.project_root / "vendors" / "retroarch-assets" / "bin" / "retroarch",
         ]
@@ -167,7 +292,42 @@ class RetroArchLauncher:
             if candidate.exists():
                 return str(candidate)
 
+        # Nothing vendored. On x86_64 that means `make vendor-retroarch` has
+        # not run yet in this checkout; libretro publishes no ARM build at all,
+        # so on aarch64 it is the normal case and dead-ending here would mean an
+        # install that can never launch a game (issue #119). Both of these are
+        # real RetroArch installs a user is likely to already have, and both
+        # are how the ARM packages are expected to work until there is a
+        # vendored build for them.
+        packaged = shutil.which("retroarch")
+        if packaged:
+            return packaged
         return None
+
+    def _flatpak_fallback_prefix(self):
+        """``flatpak run org.libretro.RetroArch``, when that is all there is.
+
+        Distinct from the Flatpak branch in ``_launch_prefix``: that one is
+        OpenEmux running *inside* a sandbox and reaching the host through
+        flatpak-spawn. This is OpenEmux running natively with no RetroArch of
+        its own, on a machine where the only one installed is a Flatpak --
+        which on aarch64, where libretro publishes no binary and
+        ``org.libretro.RetroArch`` is on Flathub, is a likely shape.
+        """
+        if not shutil.which("flatpak"):
+            return None
+        try:
+            listed = subprocess.run(
+                ["flatpak", "info", RETROARCH_FLATPAK_ID],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if listed.returncode != 0:
+            return None
+        return ["flatpak", "run", "--die-with-parent", RETROARCH_FLATPAK_ID]
 
     def _core_search_dirs(self):
         real_home = get_real_home()
@@ -176,6 +336,13 @@ class RetroArchLauncher:
             real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
             self.project_root / "vendors" / "retroarch-assets" / "cores",
         ]
+        # Where the bundled portable RetroArch keeps its cores, and where the
+        # updater downloads them, on Windows.
+        bundled = bundled_core_dir(self.project_root)
+        if bundled:
+            home_dirs.append(bundled)
+        # A RetroArch the user installed themselves: searched, never written to.
+        home_dirs.extend(user_retroarch_dirs())
         return [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
 
     def _resolve_core_name(self, core_filename):
@@ -226,9 +393,86 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None):
+        """Assemble this launch's ``--appendconfig`` file and return its path.
+
+        Seven concerns, one file. They used to be one 170-line function whose
+        every block carried its own comment explaining which concern it was --
+        which is structure standing in for a name (issue #238). Each is a
+        helper returning a dict now, and this is the thin writer that merges
+        them, in the order a later key should win.
+        """
+        runtime_dir = self.config_manager.get_runtime_dir()
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+        # Save states live in OpenEmux's own per-console tree (issue #73), so
+        # the app can list and manage them.
+        states_dir = self.config_manager.get_console_states_dir(console)
+        states_dir.mkdir(parents=True, exist_ok=True)
+
+        overrides = {}
+        overrides.update(self._input_overrides(console))
+        overrides.update(self._joypad_driver_overrides())
+        overrides.update(self._desktop_ui_overrides())
+        overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
+        overrides.update(self._bios_overrides(console, core_filename))
+        overrides.update(self._shader_overrides(shader_path, shader_enabled))
+        overrides.update(self._session_overrides(network_cmd_port))
+        overrides.update(self._av_overrides())
+        overrides.update(self._savestate_overrides(states_dir, state_slot))
+        overrides.update(self._embed_overrides())
+        # RetroAchievements does its own work inside RetroArch; what it needs
+        # from us is the account (issue #300).
+        overrides.update(
+            retroachievements.runtime_overrides(
+                getattr(self.config_manager, "achievements", None)
+            )
+        )
+
+        # Core options live in their own file, not in the config, so
+        # --appendconfig cannot carry them (issue #296). What it can carry is
+        # the path RetroArch reads them from.
+        options_path = self._write_core_options(
+            console, core_filename, runtime_dir, timestamp
+        )
+        if options_path:
+            overrides["core_options_path"] = f'"{cfg_path(options_path)}"'
+
+        override_path = runtime_dir / f"runtime_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+
+        lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
+        override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(override_path)
+
+    # ----- the pieces of the override file --------------------------------
+
+    def _input_overrides(self, console):
+        """Bindings, hotkeys, analog modes, controller types, tuning, turbo.
+
+        Everything that comes out of the console's input profile, for every
+        port it covers.
+        """
         profile = self.config_manager.get_input_profile(console)
         devices = profile.get("devices", {}) or {}
+        # A pad's D-pad can stand in for the left stick (issue #156).
+        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
+
+        def _bindings_for(device, device_type):
+            bindings = device.get("bindings", {})
+            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
+            # pointing the arrows at it too would just be noise (issue #158).
+            if dpad_as_analog and device_type == "gamepad":
+                return with_dpad_as_analog(bindings)
+            return bindings
+
+        def _enabled_extra_ports():
+            for device_id in EXTRA_PORT_DEVICE_IDS:
+                extra = devices.get(device_id) or {}
+                if extra.get("enabled"):
+                    yield device_id, extra
+
+        overrides = {}
         # Port 1 gets *both* device maps, not just the "active" one.
         #
         # RetroArch keeps keyboard and joypad binds under separate keys --
@@ -239,37 +483,22 @@ class RetroArchLauncher:
         # analog stick axes. It still appeared to work because RetroArch's
         # own autoconfig maps the buttons, which is what made it so hard to
         # notice (issue #150).
-        # A pad's D-pad can stand in for the left stick (issue #156).
-        dpad_as_analog = bool(profile.get("dpad_drives_analog"))
-
-        def _bindings_for(device_id, device, device_type):
-            bindings = device.get("bindings", {})
-            # Gamepads only: a keyboard already has the stick on i/j/k/l, and
-            # pointing the arrows at it too would just be noise (issue #158).
-            if dpad_as_analog and device_type == "gamepad":
-                return with_dpad_as_analog(bindings)
-            return bindings
-
-        overrides = {}
         for device_id in PLAYER1_DEVICE_IDS:
             device = devices.get(device_id) or {}
             device_type = device_type_for(device_id)
             overrides.update(
                 to_retroarch_overrides(
-                    _bindings_for(device_id, device, device_type),
+                    _bindings_for(device, device_type),
                     device_type,
                     console=console,
                 )
             )
         # Ports 2-4 are opt-in; when none is enabled the output is unchanged.
-        for device_id in EXTRA_PORT_DEVICE_IDS:
-            extra = devices.get(device_id) or {}
-            if not extra.get("enabled"):
-                continue
+        for device_id, extra in _enabled_extra_ports():
             extra_type = extra.get("type", "gamepad")
             overrides.update(
                 to_retroarch_overrides(
-                    _bindings_for(device_id, extra, extra_type),
+                    _bindings_for(extra, extra_type),
                     extra_type,
                     console=console,
                     player=player_for_device(device_id),
@@ -279,6 +508,7 @@ class RetroArchLauncher:
         # sitting on a key we just bound would still fire alongside ours --
         # `m` would mute and cycle the shader at the same time (issue #146).
         overrides.update(conflicting_stock_hotkeys(overrides))
+
         # Fold the analog stick onto the D-pad where the console wants it
         # (issue #71): RetroArch's native analog_dpad_mode, per port, so both
         # the stick and the D-pad steer without re-remapping.
@@ -286,11 +516,10 @@ class RetroArchLauncher:
             profile.get("analog_dpad_mode"), console
         )
         overrides["input_player1_analog_dpad_mode"] = f'"{analog_mode}"'
-        for device_id in EXTRA_PORT_DEVICE_IDS:
-            extra = devices.get(device_id) or {}
-            if extra.get("enabled"):
-                player = player_for_device(device_id)
-                overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+        for device_id, _extra in _enabled_extra_ports():
+            player = player_for_device(device_id)
+            overrides[f"input_player{player}_analog_dpad_mode"] = f'"{analog_mode}"'
+
         # Which controller the core is told is in each port (issue #151).
         # Left out entirely when unset, so the core keeps its own default --
         # PlayStation boots as a digital pad, and an analog game needs
@@ -300,17 +529,17 @@ class RetroArchLauncher:
         )
         if controller_type is not None:
             overrides["input_libretro_device_p1"] = f'"{controller_type}"'
-            for device_id in EXTRA_PORT_DEVICE_IDS:
-                extra = devices.get(device_id) or {}
-                if extra.get("enabled"):
-                    player = player_for_device(device_id)
-                    overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
+            for device_id, _extra in _enabled_extra_ports():
+                player = player_for_device(device_id)
+                overrides[f"input_libretro_device_p{player}"] = f'"{controller_type}"'
+
         # Deadzone, sensitivity, rumble, latency (issues #154, #155). Global
         # rather than per console: a worn stick drifts the same everywhere.
         # Only values that differ from RetroArch's own defaults are written.
         overrides.update(
             input_tuning.to_retroarch_overrides(self.config_manager.get_input_tuning())
         )
+
         # Turbo timing (issue #72): global RetroArch knobs; the turbo modifier
         # itself is a normal binding ("turbo" action) emitted per port above,
         # so without one bound these just restate the defaults.
@@ -318,102 +547,251 @@ class RetroArchLauncher:
         overrides["input_turbo_period"] = f'"{turbo["period"]}"'
         overrides["input_turbo_duty_cycle"] = f'"{turbo["duty_cycle"]}"'
         overrides["input_turbo_mode"] = f'"{turbo["mode"]}"'
+
         # Select doubles as the gamepad hotkey modifier (issue #124), so a
         # *tap* has to still reach the game as Select while a *hold* opens a
         # hotkey. This is how many frames RetroArch waits before deciding;
         # without it Select feels unresponsive in games that use it.
         overrides["input_hotkey_block_delay"] = '"5"'
-        overrides.update(DEFAULT_NOTIFICATION_OVERRIDES)
-        required_for_core = get_required_for_core(console, core_filename) if core_filename else []
-        if required_for_core:
-            bios_dir = self.config_manager.get_console_bios_dir(console)
-            overrides["system_directory"] = f'"{bios_dir}"'
+        return overrides
+
+    def _bios_overrides(self, console, core_filename):
+        """Point the core at this console's BIOS folder, if it needs one."""
+        if not core_filename or not get_required_for_core(console, core_filename):
+            return {}
+        bios_dir = self.config_manager.get_console_bios_dir(console)
+        return {"system_directory": f'"{cfg_path(bios_dir)}"'}
+
+    @staticmethod
+    def _shader_overrides(shader_path, shader_enabled):
+        """Turn the console's shader on, or say plainly that there is none."""
         if shader_enabled and shader_path:
-            overrides["video_shader_enable"] = '"true"'
-            overrides["video_shader"] = f'"{shader_path}"'
-        else:
-            overrides["video_shader_enable"] = '"false"'
+            return {
+                "video_shader_enable": '"true"',
+                "video_shader": f'"{cfg_path(shader_path)}"',
+            }
+        return {"video_shader_enable": '"false"'}
 
-        # The UDP command channel (issue #69): loopback-only, and what lets
-        # the in-app volume control reach the running game. The persisted
-        # master volume seeds audio_volume so the level survives launches and
-        # the live stepping starts from a known point.
-        overrides["network_cmd_enable"] = '"true"'
-        overrides["network_cmd_port"] = f'"{self.config_manager.get_network_cmd_port()}"'
-        overrides["audio_volume"] = f'"{self.config_manager.get_master_volume_db():.1f}"'
+    def _session_overrides(self, network_cmd_port):
+        """The command channel, the volume, and keeping this launch's own.
 
-        # Nothing this file injects may outlive the launch that asked for it.
-        # RetroArch saves its configuration on exit by default, and by then
-        # the --appendconfig values *are* the configuration: every OpenEmux
-        # launch was quietly writing its own launch-scoped settings into the
-        # user's retroarch.cfg. That is how the game window's borderless
-        # override made every later standalone RetroArch window borderless,
-        # how the fullscreen hotkey ended up permanently unbound ("nul"), and
-        # how OpenEmux's save-state directory became RetroArch's own. Core
-        # options, remaps, saves, states and playlists live in their own
-        # files and are unaffected -- only the global settings this launch
-        # imposes stop being written back.
-        overrides["config_save_on_exit"] = '"false"'
+        The UDP command channel (issue #69) is loopback-only, and what lets
+        the in-app volume control reach the running game. The persisted
+        master volume seeds audio_volume so the level survives launches and
+        the live stepping starts from a known point.
+        """
+        # The port is the caller's: it is picked per launch so a standalone
+        # RetroArch cannot share it with us (issue #227), and both sides of
+        # the channel have to agree on the same number.
+        if network_cmd_port is None:
+            network_cmd_port = self.config_manager.get_network_cmd_port()
+        return {
+            "network_cmd_enable": '"true"',
+            "network_cmd_port": f'"{int(network_cmd_port)}"',
+            "audio_volume": f'"{self.config_manager.get_master_volume_db():.1f}"',
+            # Nothing this file injects may outlive the launch that asked for
+            # it. RetroArch saves its configuration on exit by default, and by
+            # then the --appendconfig values *are* the configuration: every
+            # OpenEmux launch was quietly writing its own launch-scoped
+            # settings into the user's retroarch.cfg. That is how the game
+            # window's borderless override made every later standalone
+            # RetroArch window borderless, how the fullscreen hotkey ended up
+            # permanently unbound ("nul"), and how OpenEmux's save-state
+            # directory became RetroArch's own. Core options, remaps, saves,
+            # states and playlists live in their own files and are unaffected
+            # -- only the global settings this launch imposes stop being
+            # written back.
+            "config_save_on_exit": '"false"',
+            # ...and what makes the QUIT command on that channel actually
+            # quit. RetroArch defaults quit_press_twice to true, and the
+            # network QUIT goes through the very same "quit key" path as the
+            # hotkey: the first one only arms a two-second "press again to
+            # exit" window, so the command the game window sends when it
+            # closes was a no-op and the game kept playing. Measured against
+            # RetroArch 1.22.2: with the default, a single QUIT datagram
+            # leaves the process alive; with this override it exits cleanly
+            # (0), flushing battery saves on the way. The stock RetroArch
+            # config is untouched -- this is per launch.
+            "quit_press_twice": '"false"',
+        }
 
-        # ...and what makes the QUIT command on that channel actually quit.
-        # RetroArch defaults quit_press_twice to true, and the network QUIT
-        # goes through the very same "quit key" path as the hotkey: the first
-        # one only arms a two-second "press again to exit" window, so the
-        # command the game window sends when it closes was a no-op and the
-        # game kept playing. Measured against RetroArch 1.22.2: with the
-        # default, a single QUIT datagram leaves the process alive; with this
-        # override it exits cleanly (0), flushing battery saves on the way.
-        # The stock RetroArch config is untouched -- this is per launch.
-        overrides["quit_press_twice"] = '"false"'
+    @staticmethod
+    def _joypad_driver_overrides():
+        """Pin the joypad driver on Windows so both ends agree on the numbers.
 
-        # Which audio driver RetroArch is told to use (issue #176). The global
-        # retroarch.cfg may name one the RetroArch we launch was not built
-        # with -- "pipewire" is the common case, and the vendored build has no
-        # such driver. RetroArch then falls back to alsa, which fails on a
-        # PipeWire host, and audio never starts. That reads to the user as
-        # *speed*, not silence: emulation is paced off the audio clock, so
-        # without it the game runs at the display's refresh rate.
+        A binding token is an *index* -- ``"3"`` is "the fourth button as this
+        driver counts them" -- so the driver that produced it and the driver
+        that reads it have to be the same one. On Linux they already are:
+        OpenEmux reads evdev with udev's numbering and RetroArch defaults to
+        its ``udev`` joypad driver.
+
+        On Windows RetroArch defaults to ``xinput``, whose button order is its
+        own, while OpenEmux reads the pad through SDL2 (``gamepad_sdl``). Left
+        alone, a remap captured in OpenEmux would bind a different button in
+        the game. Naming the driver here costs nothing when the numbering
+        happens to agree and is the difference between working and silently
+        wrong when it does not.
+
+        Launch-scoped like every other value in this file: ``--appendconfig``
+        with ``config_save_on_exit = false``, so a user's own RetroArch keeps
+        whatever driver they chose (issue #118).
+        """
+        if not IS_WINDOWS:
+            return {}
+        return {"input_joypad_driver": '"sdl2"'}
+
+    @staticmethod
+    def _desktop_ui_overrides():
+        """Keep RetroArch's own desktop UI out of a game OpenEmux launched.
+
+        On Windows the win32 UI companion starts with every launch and draws a
+        menu bar across the game's window, and the Qt "WIMP" desktop menu is
+        initialised behind it. Both are on by default -- the vendored build's
+        own retroarch.default.cfg documents `ui_companion_start_on_boot = true`
+        and `desktop_menu_enable = true` -- and OpenEmux never said otherwise,
+        so a game opened from the library came up wearing the emulator's
+        interface (issue #367).
+
+        Windows-only for the same reason the joypad driver above is: the
+        vendored Linux build has no WIMP UI to start, so writing it there would
+        be a line that reads as if it were load-bearing and is not.
+
+        This is not the game window. That wrapper -- pause, save state, volume
+        -- is X11 reparenting and has no Windows equivalent; Preferences says
+        so there (issue #118). This only stops RetroArch from putting its own
+        menu in front of the game.
+
+        Launch-scoped like everything else in this file: ``--appendconfig``
+        with ``config_save_on_exit = false``, so a user's own RetroArch keeps
+        whatever they chose.
+        """
+        if not IS_WINDOWS:
+            return {}
+        return {
+            "ui_companion_start_on_boot": '"false"',
+            "desktop_menu_enable": '"false"',
+        }
+
+    def _av_overrides(self):
+        """Which audio and video drivers RetroArch is told to use.
+
+        Audio (issue #176): the global retroarch.cfg may name one the RetroArch
+        we launch was not built with -- "pipewire" is the common case, and the
+        vendored build has no such driver. RetroArch then falls back to alsa,
+        which fails on a PipeWire host, and audio never starts. That reads to
+        the user as *speed*, not silence: emulation is paced off the audio
+        clock, so without it the game runs at the display's refresh rate.
+
+        Video (issue #366): naming the driver is what lets the shader backend
+        follow it. Only ``gl`` loads .glslp and only the Vulkan-era drivers
+        load .slangp, so a preset resolved without knowing the driver is a
+        shader RetroArch drops without a word -- which is what every Windows
+        launch did. Written on Windows, where the answer is d3d11; left unsaid
+        on Linux, where it is gl and saying so would restate a default.
+        """
+        overrides = {}
         audio_driver = resolve_audio_driver(
             self.config_manager.get_retroarch_audio_driver()
         )
         if audio_driver:
             overrides["audio_driver"] = f'"{audio_driver}"'
+        video_driver = resolve_video_driver(self._video_driver_setting())
+        if video_driver:
+            overrides["video_driver"] = f'"{video_driver}"'
+        return overrides
 
-        # Save states live in OpenEmux's own per-console tree (issue #73), so
-        # the app can list and manage them; thumbnails give the manager
-        # something to show. state_slot seeds "play from this state" launches.
-        states_dir = self.config_manager.get_console_states_dir(console)
-        states_dir.mkdir(parents=True, exist_ok=True)
-        overrides["savestate_directory"] = f'"{states_dir}"'
-        overrides["savestate_thumbnail_enable"] = '"true"'
-        # The slot the save/load hotkeys start on. A "load this save" launch
-        # names it; every other launch starts at 0 and moves from there with
-        # the slot hotkeys, which is why the setting that used to pin it is
-        # gone (issue #198).
-        overrides["state_slot"] = f'"{int(state_slot or 0)}"'
+    def _shader_notice(self, shader_id, shader_path, video_driver):
+        """Why this launch has no shader, as a message the UI can show.
+
+        ``None`` when there is nothing to say -- the shader is off, or a preset
+        was found. Otherwise a translation key and its arguments: core has no
+        locale (issue #232), so it names the string rather than writing it.
+
+        Two different "no": a driver with no shader pipeline at all can never
+        have one, while a driver that reads presets simply has none installed
+        for this shader -- most likely because the buildbot pack for its
+        backend did not arrive at first boot.
+        """
+        if shader_id == "disabled" or shader_path:
+            return None
+        label = self.shader_catalog.label_for_shader(shader_id)
+        if not preset_backends(video_driver):
+            key = "toast.shader.driver_has_no_presets"
+        else:
+            key = "toast.shader.preset_missing"
+        return key, {"shader": label, "driver": video_driver}
+
+    @staticmethod
+    def _log_header(console, video_driver, shader_id, shader_path):
+        """The line OpenEmux writes at the top of a launch log."""
+        if shader_id == "disabled":
+            shader = "disabled"
+        elif shader_path:
+            shader = f"{shader_id} -> {shader_path}"
+        else:
+            shader = f"{shader_id} -> no preset for this driver"
+        return (
+            f"[openemux] console={console} video_driver={video_driver} "
+            f"shader={shader}\n"
+        )
+
+    def _video_driver_setting(self):
+        """The raw ``runtime.retroarch.video_driver`` setting.
+
+        Read through getattr because the launcher is handed stub config
+        managers in the suite, and a missing accessor means "auto" rather than
+        a launch that raises.
+        """
+        getter = getattr(self.config_manager, "get_retroarch_video_driver", None)
+        return getter() if callable(getter) else VIDEO_DRIVER_AUTO
+
+    @staticmethod
+    def _savestate_overrides(states_dir, state_slot):
+        """Park the states in OpenEmux's own tree, on the asked-for slot.
+
+        Thumbnails give the state manager something to show. The slot is the
+        one the save/load hotkeys start on: a "load this save" launch names
+        it; every other launch starts at 0 and moves from there with the slot
+        hotkeys, which is why the setting that used to pin it is gone
+        (issue #198).
+        """
+        return {
+            "savestate_directory": f'"{cfg_path(states_dir)}"',
+            "savestate_thumbnail_enable": '"true"',
+            "state_slot": f'"{int(state_slot or 0)}"',
+        }
+
+    def _embed_overrides(self):
+        """What the game window needs, or what heals a config it polluted.
+
+        Keyed off the same answer the UI uses (issue #199): written without a
+        wrapper to own the window, they would leave the game floating
+        borderless.
+        """
+        if not game_window_support.game_window_active(self.config_manager):
+            # Stated rather than left alone, because earlier versions leaked
+            # the block below into the user's own retroarch.cfg: a game
+            # launched without a wrapper came up borderless and never paused
+            # when it lost focus, and turning the setting off did not fix it.
+            # Writing RetroArch's defaults back heals a config that was
+            # already polluted. (The fullscreen hotkey heals itself: with no
+            # wrapper the input profile's own binding is written above.)
+            return {
+                "video_window_show_decorations": '"true"',
+                "pause_nonactive": '"true"',
+            }
 
         # The game window needs RetroArch in a plain windowed window it can
         # re-parent -- no fullscreen, no decorations, and no saving back the
         # position we impose. pause_nonactive off because X keyboard focus
         # moves between our window and the embedded one, and every such hop
-        # would otherwise pause the game. Keyed off the same answer the UI
-        # uses (issue #199): written without a wrapper to own the window, they
-        # would leave the game floating borderless.
-        if game_window_support.game_window_active(self.config_manager):
-            overrides["video_fullscreen"] = '"false"'
-            overrides["video_windowed_fullscreen"] = '"false"'
-            overrides["video_window_show_decorations"] = '"false"'
-            overrides["video_window_save_positions"] = '"false"'
-            overrides["pause_nonactive"] = '"false"'
-            # The wrapper owns the window: RetroArch toggling fullscreen on
-            # a reparented child recreates/unparents its window and breaks
-            # the embed, so the hotkey is unbound while embedded -- on the
-            # pad as well as the keyboard. Only the keyboard one was unbound
-            # before, and the gamepad binding written from the input profile
-            # (input_toggle_fullscreen_btn) survived: one press of that
-            # button destroyed a working embed (issue #267).
-            for suffix in ("", "_btn", "_axis"):
-                overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
+        # would otherwise pause the game.
+        overrides = {
+            "video_fullscreen": '"false"',
+            "video_windowed_fullscreen": '"false"',
+            "video_window_show_decorations": '"false"',
+            "video_window_save_positions": '"false"',
+            "pause_nonactive": '"false"',
             # Which backend RetroArch talks to is the whole embed: an X
             # client can only reparent another X client. Dropping the
             # Wayland socket from its environment (see launch_process) is
@@ -423,46 +801,126 @@ class RetroArchLauncher:
             # neutralizes a saved pin without imposing one. Not "x11": that
             # is not a registered ident (the real one is "x"), and naming a
             # context a build lacks would leave the game with no video at all.
-            overrides["video_context_driver"] = '""'
+            "video_context_driver": '""',
             # Keep RetroArch's output in the log file the launcher opened for
             # it. With log_to_file on, RetroArch writes to its own file
             # instead, our runtime log stays empty, and the game window loses
             # the one early signal that tells it RetroArch is not an X client.
-            overrides["log_to_file"] = '"false"'
-        else:
-            # Stated rather than left alone, because earlier versions leaked
-            # the block above into the user's own retroarch.cfg: a game
-            # launched without a wrapper came up borderless and never paused
-            # when it lost focus, and turning the setting off did not fix it.
-            # Writing RetroArch's defaults back heals a config that was
-            # already polluted. (The fullscreen hotkey heals itself: with no
-            # wrapper the input profile's own binding is written above.)
-            overrides["video_window_show_decorations"] = '"true"'
-            overrides["pause_nonactive"] = '"true"'
+            "log_to_file": '"false"',
+        }
+        # The wrapper owns the window: RetroArch toggling fullscreen on a
+        # reparented child recreates/unparents its window and breaks the
+        # embed, so the hotkey is unbound while embedded -- on the pad as
+        # well as the keyboard. Only the keyboard one was unbound before, and
+        # the gamepad binding written from the input profile
+        # (input_toggle_fullscreen_btn) survived: one press of that button
+        # destroyed a working embed (issue #267).
+        for suffix in ("", "_btn", "_axis"):
+            overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
+        return overrides
 
-        runtime_dir = self.config_manager.get_runtime_dir()
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        override_path = runtime_dir / f"runtime_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+    def _write_core_options(self, console, core_filename, runtime_dir, timestamp):
+        """This launch's core-options file, or ``None`` when there is nothing to say.
 
-        lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
-        override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return str(override_path)
+        Written only when the user actually chose something: pointing
+        RetroArch at our file replaces the one it would have read, and doing
+        that for a console nobody configured would quietly drop whatever they
+        set inside RetroArch itself. What they set there is carried over
+        anyway -- ours go on top of it, not instead of it.
+        """
+        store = getattr(self.config_manager, "core_options", None)
+        if store is None or not core_filename:
+            return None
+        chosen = store.get_for_console(resolve_system_id(console), core_filename)
+        if not chosen:
+            return None
+        inherited = self._inherited_core_options(core_filename)
+        path = runtime_dir / f"coreopts_{resolve_system_id(console).lower()}_{timestamp}.cfg"
+        try:
+            path.write_text(
+                core_options.render_options_file(chosen, inherited), encoding="utf-8"
+            )
+        except OSError as exc:
+            logger.warning("core options: cannot write %s: %s", path, exc)
+            return None
+        logger.info(
+            "core options written: console=%s core=%s count=%d path=%s",
+            console, core_filename, len(chosen), path,
+        )
+        return str(path)
 
-    def launch_process(self, rom_path, console, state_slot=None):
+    def _inherited_core_options(self, core_filename):
+        """What the user already configured for this core inside RetroArch.
+
+        RetroArch files those per core under ``config/<Core Name>/<Core
+        Name>.opt``, and the display name is its own lookup -- but every
+        option a core owns is prefixed with the core's own name, so the file
+        can be recognised by its contents instead.
+        """
+        prefix = core_options.option_prefix(core_filename)
+        if not prefix:
+            return {}
+        config_root = Path.home() / ".config" / "retroarch" / "config"
+        if not config_root.is_dir():
+            return {}
+        try:
+            candidates = sorted(config_root.glob("*/*.opt"))
+        except OSError:
+            return {}
+        for candidate in candidates:
+            values = core_options.read_options_file(candidate)
+            if any(key.startswith(prefix) for key in values):
+                return values
+        return {}
+
+    def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
+                       force_extract=False):
+        """Start the game, or say why it could not start.
+
+        Everything before the ``Popen`` writes to disk -- the states dir, the
+        runtime dir, the ``--appendconfig`` override, an input profile being
+        normalised on load -- and none of it used to be guarded. A full disk or
+        a read-only home raised out of here into the GTK click handler, where
+        PyGObject prints a traceback and swallows it: the button simply did
+        nothing, with no toast (issue #226). Every failure has to come back as
+        a message, because a message is the only thing the caller can show.
+        """
+        try:
+            return self._launch_process(
+                rom_path, console, state_slot, network_cmd_port, force_extract
+            )
+        except Exception as exc:
+            logger.exception("retroarch launch failed before starting the process")
+            return None, f"Could not start the game: {exc}"
+
+    def _launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
+                        force_extract=False):
         system_id = resolve_system_id(console)
-        launch_prefix, prefix_error = self._launch_prefix()
+        launch_prefix, prefix_error = self._launch_prefix(force_extract=force_extract)
         if prefix_error:
             return None, prefix_error
 
         core_path = self._find_core_path(system_id, rom_path=rom_path)
         if not core_path:
             candidates = ", ".join(DEFAULT_CORE_CANDIDATES.get(system_id, []))
-            return None, (
+            message = (
                 f"No RetroArch core found for {system_id}. "
-                f"Tried common core dirs and these core names: {candidates}. "
-                "Configure runtime.retroarch.cores in config.yaml."
+                f"Tried common core dirs and these core names: {candidates}."
             )
+            if MACHINE == "x86_64":
+                message += " Configure runtime.retroarch.cores in config.yaml."
+            else:
+                # The buildbot builds 153 cores for aarch64 against 217 for
+                # x86_64, so on ARM "not installed" and "does not exist" look
+                # identical from here -- and telling somebody to configure a
+                # core that was never built for their machine sends them
+                # looking for a file they cannot get (issue #119).
+                message += (
+                    f" The libretro buildbot builds fewer cores for {MACHINE}"
+                    " than for x86_64, so this console may have none at all."
+                    " Settings \u2192 Cores lists what is installed."
+                )
+            return None, message
         core_filename = Path(core_path).name
         missing_bios = find_missing_required_for_core(self.config_manager, system_id, core_filename)
         if missing_bios:
@@ -479,7 +937,15 @@ class RetroArchLauncher:
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_rom(rom_path, system_id))
         elif hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
-        shader_path = self.shader_catalog.resolve_shader_path(shader_id)
+        # The driver decides which preset format is loadable at all, so it is
+        # resolved before the preset and not after (issue #366).
+        video_driver = effective_video_driver(self._video_driver_setting())
+        shader_path = self.shader_catalog.resolve_shader_path(
+            shader_id, video_driver=video_driver
+        )
+        self.last_shader_notice = self._shader_notice(
+            shader_id, shader_path, video_driver
+        )
 
         cmd = [*launch_prefix, "-L", core_path]
         runtime_override = self._write_runtime_override(
@@ -488,27 +954,56 @@ class RetroArchLauncher:
             shader_path=shader_path,
             shader_enabled=bool(shader_path),
             state_slot=state_slot,
+            network_cmd_port=network_cmd_port,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
             cmd.extend(["--set-shader", shader_path])
-        elif shader_id != "disabled":
-            logger.info("shader preset not found, running without shader: console=%s shader=%s", system_id, shader_id)
+        elif self.last_shader_notice:
+            # A warning, not an info line: a console configured with a shader
+            # that launches without one is a failure the user can see on screen
+            # and could not previously see anywhere else (issue #366).
+            logger.warning(
+                "no shader preset for this video driver, running without one: "
+                "console=%s shader=%s video_driver=%s",
+                system_id,
+                shader_id,
+                video_driver,
+            )
         extra_flags = list(self.config_manager.get_retroarch_extra_flags())
         if "--verbose" not in extra_flags and "-v" not in extra_flags:
             extra_flags.append("--verbose")
         cmd.extend(extra_flags)
         cmd.append(rom_path)
 
+        log_handle = None
         try:
             runtime_dir = self.config_manager.get_runtime_dir()
             runtime_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
             log_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.log"
             cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")
             log_handle = open(log_path, "w", encoding="utf-8")
-            env = os.environ.copy()
+            # One line of ours above RetroArch's own, naming the driver and
+            # what was resolved for it. Issue #366 was diagnosed from a launch
+            # log with no shader line in it at all -- not a load, not a
+            # failure, nothing -- so "what did OpenEmux ask for" was the one
+            # question the log could not answer. Now it can.
+            log_handle.write(
+                self._log_header(system_id, video_driver, shader_id, shader_path)
+            )
+            log_handle.flush()
+            # The session's environment, not this process's. Running from an
+            # AppImage, everything started under $APPDIR -- and the vendored
+            # RetroArch is -- is handed the bundle's loader path, LD_PRELOAD,
+            # PYTHONHOME and GTK/GI/pixbuf caches, so RetroArch resolved its
+            # libraries against the stack bundled for a GTK4 app rather than
+            # its own (issue #249). Outside an AppImage this is a plain copy.
+            # LD_LIBRARY_PATH outranks RUNPATH, and RUNPATH is how the vendored
+            # tree finds its own 56 libraries, so dropping it is what keeps the
+            # unwrapped RetroArch loading its own (issue #328).
+            env = host_env(os.environ)
             # On a Wayland session RetroArch would pick its native wayland
             # driver, whose window no X client can reparent. Stripped of the
             # Wayland pointers it falls back to X11 and lands on XWayland,
@@ -521,6 +1016,9 @@ class RetroArchLauncher:
                 env=env,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
+                # CREATE_NO_WINDOW on Windows, nothing on Linux: without it a
+                # console window flashes up behind the game on every launch.
+                **popen_kwargs(),
             )
             # Keep a reference attached to process object to avoid GC closing the file descriptor too early.
             proc._openemux_log_handle = log_handle
@@ -535,6 +1033,14 @@ class RetroArchLauncher:
             )
             return proc, None
         except Exception as exc:
+            # Popen raising (the binary vanished, ENOEXEC) left this handle
+            # open: one leaked descriptor per failed launch.
+            if log_handle is not None:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+            logger.warning("retroarch launch failed: error=%s", exc)
             return None, f"Failed to launch RetroArch: {exc}"
 
     # -- stopping a launched game ------------------------------------------
@@ -542,7 +1048,16 @@ class RetroArchLauncher:
     # here rather than there because what a signal actually reaches depends on
     # how the process was launched, which is this module's business.
     def terminate_process(self, proc):
-        """SIGTERM the launched process; True when the signal went out."""
+        """SIGTERM the launched process; True when the signal went out.
+
+        On Windows ``terminate()`` is ``TerminateProcess``, which is immediate
+        and gives RetroArch no chance to flush a battery save -- there is no
+        SIGTERM to deliver. That is survivable because this is not the first
+        thing tried: ``RuntimeManager.stop_active`` sends the UDP ``QUIT``
+        command first (``network_cmd_enable`` is set in the runtime override),
+        which exits RetroArch cleanly with saves written. This stays the
+        escalation for a game that ignored it.
+        """
         try:
             proc.terminate()
             return True

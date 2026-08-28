@@ -2,6 +2,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.input_actions import (
     default_gamepad_bindings,
     default_keyboard_bindings,
@@ -131,13 +133,16 @@ def normalize_turbo_settings(value):
 
 
 def clear_unreachable_gamepad_buttons(bindings):
-    """Blank pad bindings pointing at a button the hardware does not have.
+    """Drop pad bindings pointing at a button the hardware does not have.
 
     Profiles written before version 3 bound the hotkeys to buttons 11-15
     (issue #124). Since ``enable_hotkey`` gates every other hotkey in
     RetroArch, one unreachable modifier silently disabled the whole set.
-    Blanking the token is enough: ``normalize_bindings`` refills it from the
-    current defaults on the same pass, so the repair needs no manual reset.
+    Dropping the action is enough: ``normalize_bindings`` refills anything
+    *absent* from the current defaults on the same pass, so the repair needs
+    no manual reset. It has to be a drop rather than a blank -- an action
+    left present with an empty value now means "the user released this"
+    (issue #281), which is exactly what must not be assumed here.
 
     Only bare button indices are considered -- axis (``+2``) and hat
     (``h0up``) tokens are a different namespace and never out of range.
@@ -148,7 +153,6 @@ def clear_unreachable_gamepad_buttons(bindings):
     for action, value in bindings.items():
         token = str(value).strip()
         if token.isdigit() and int(token) >= FIRST_UNREACHABLE_GAMEPAD_BUTTON:
-            cleaned[action] = ""
             continue
         cleaned[action] = value
     return cleaned
@@ -384,7 +388,13 @@ class InputProfileManager:
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+            if not isinstance(data, dict):
+                raise ValueError(f"not an object: {type(data).__name__}")
+        except Exception as exc:
+            # _normalize_profile fills the defaults and save_profile writes
+            # them back: the console's whole custom binding set, replaced by
+            # a parse error nobody was told about (issue #209).
+            quarantine_state_file(path, exc)
             data = {}
 
         profile = self._normalize_profile(system_id, data)
@@ -397,7 +407,7 @@ class InputProfileManager:
         system_id = resolve_system_id(console)
         normalized = self._normalize_profile(system_id, profile)
         path = self.profile_path(system_id)
-        path.write_text(json.dumps(normalized, indent=2, sort_keys=True), encoding="utf-8")
+        atomic_write_text(path, json.dumps(normalized, indent=2, sort_keys=True))
         return normalized
 
     def reset_console(self, console):

@@ -137,7 +137,7 @@ Every release ships a `SHA256SUMS` file. Download it next to the artifact and ch
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-`OpenEmux-1.9.0-x86_64.AppImage: OK` means the file is intact. Anything else means the download is corrupt or has been tampered with — do not run it.
+A line ending in `: OK` — `OpenEmux-<version>-x86_64.AppImage: OK` — means the file is intact. Anything else means the download is corrupt or has been tampered with — do not run it.
 
 ---
 
@@ -277,7 +277,7 @@ another program at arm's length, so OpenEmux's own code stays MIT. For reference
 RetroArch is [GPLv3](https://github.com/libretro/RetroArch) while the libretro
 API itself is MIT.
 
-When OpenEmux **bundles and redistributes** RetroArch (the vendored AppImage) or
+When OpenEmux **bundles and redistributes** RetroArch (the vendored build) or
 downloads libretro cores, those components keep their own licenses (GPLv3 and
 others) — a "mere aggregation" of independently-licensed software. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details. *(Informational,

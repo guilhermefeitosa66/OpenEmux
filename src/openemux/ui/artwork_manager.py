@@ -24,9 +24,11 @@ from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
 from openemux.core import artwork_search
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core import cover_cache
 from openemux.core.hasher import compute_crc32
 from openemux.core.library_view import ZOOM_LEVELS, scale_spacing
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, save_local_art
+from openemux.ui.file_dialogs import image_filters
 from openemux.ui.grid import GRID_SPACING, FixedSizePicture, cover_size_for_console
 from threading import Thread
 
@@ -162,20 +164,36 @@ class _SearchTab(Gtk.Box):
             art_kind=self.art_kind,
             dest_dir=dest,
             rom_path=rom.get("path") if by_hash else None,
-            on_result=lambda cand, s=seq: GLib.idle_add(self._add_result, s, cand),
+            on_result=lambda cand, s=seq: self._decode_result(s, cand),
             should_cancel=lambda s=seq: s != self._search_seq or self.manager.closed,
             on_done=lambda results, s=seq: GLib.idle_add(self._search_done, s, len(results)),
         )
 
-    def _add_result(self, seq, candidate):
+    def _decode_result(self, seq, candidate):
+        """Decode on the search thread, then hand the pixbuf to the UI.
+
+        ``on_result`` already runs on a worker, and a burst of full-size box
+        art decoded back-to-back inside an idle callback is exactly the load
+        the library grid was moved off the main thread to avoid (issue #231).
+        The shared cover cache does the decode and the scaling, so a result
+        the grid has already shown costs nothing.
+        """
+        if seq != self._search_seq or self.manager.closed:
+            return
+        width, height = cover_size_for_console(self.manager.rom.get("console"), _RESULT_ZOOM)
+        pixbuf = cover_cache.load_cover(candidate.path, width, height)
+        if pixbuf is None:
+            return
+        GLib.idle_add(self._add_result, seq, candidate, pixbuf, width, height)
+
+    def _add_result(self, seq, candidate, pixbuf, width, height):
         if seq != self._search_seq:
             return False
         try:
-            texture = Gdk.Texture.new_from_filename(str(candidate.path))
+            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
         except GLib.Error:
             return False
 
-        width, height = cover_size_for_console(self.manager.rom.get("console"), _RESULT_ZOOM)
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("rom-card")
 
@@ -292,7 +310,7 @@ class _SearchTab(Gtk.Box):
             console=rom["console"],
             query=self.name_entry.get_text().strip() or rom["name"],
             dest_dir=dest,
-            on_result=lambda cand, s=seq: GLib.idle_add(self._add_result, s, cand),
+            on_result=lambda cand, s=seq: self._decode_result(s, cand),
             should_cancel=lambda s=seq: s != self._search_seq or self.manager.closed,
             on_done=lambda mode, results, s=seq: GLib.idle_add(
                 self._suggestions_done, s, mode, len(results)
@@ -623,30 +641,30 @@ class _ImportTab(Gtk.Box):
 
     # -- loading -----------------------------------------------------------
     def _choose_file(self):
-        chooser = Gtk.FileChooserDialog(
-            title=self.manager.t("artwork.import.add"),
-            transient_for=self.manager,
-            modal=True,
-            action=Gtk.FileChooserAction.OPEN,
+        # Gtk.FileDialog goes through the XDG portal where one exists; the
+        # deprecated Gtk.FileChooserDialog it replaces never did, so under
+        # Flatpak this picker could not see anything outside the sandbox
+        # (issue #235).
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.manager.t("artwork.import.add"))
+        dialog.set_accept_label(self.manager.t("dialog.start"))
+        dialog.set_modal(True)
+        filters, default_filter = image_filters(
+            self.manager.t("dialog.filter.images")
         )
-        chooser.add_button(self.manager.t("dialog.cancel"), Gtk.ResponseType.CANCEL)
-        chooser.add_button(self.manager.t("dialog.start"), Gtk.ResponseType.ACCEPT)
-        img_filter = Gtk.FileFilter()
-        img_filter.set_name("Images")
-        for ext in SUPPORTED_COVER_EXTS:
-            img_filter.add_pattern(f"*.{ext}")
-            img_filter.add_pattern(f"*.{ext.upper()}")
-        chooser.add_filter(img_filter)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default_filter)
 
-        def _on_response(dialog, response):
-            if response == Gtk.ResponseType.ACCEPT:
-                selected = dialog.get_file()
-                if selected and selected.get_path():
-                    self.load_file(selected.get_path())
-            dialog.destroy()
+        def _on_chosen(dlg, result):
+            try:
+                selected = dlg.open_finish(result)
+            except GLib.Error:
+                # Dismissed by the user; nothing to report.
+                return
+            if selected is not None and selected.get_path():
+                self.load_file(selected.get_path())
 
-        chooser.connect("response", _on_response)
-        chooser.show()
+        dialog.open(self.manager, None, _on_chosen)
 
     def _on_drop(self, _target, value, _x, _y):
         files = value.get_files() if isinstance(value, Gdk.FileList) else []
@@ -711,9 +729,7 @@ class ArtworkManagerWindow(Adw.Window):
         self.t = win.t
         self.closed = False
         self.sync_settings = win.config_manager.get_cover_sync_settings()
-        self.temp_dir = (
-            Path(GLib.get_user_cache_dir()) / "openemux" / "artwork-manager" / uuid.uuid4().hex
-        )
+        self.temp_dir = artwork_search.artwork_temp_root() / uuid.uuid4().hex
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
         self.set_title(self.t("artwork.window.title", name=rom.get("name", "")))
