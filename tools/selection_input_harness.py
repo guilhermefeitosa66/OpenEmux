@@ -43,6 +43,7 @@ import os
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 import gi
 
@@ -162,8 +163,12 @@ class Harness(Adw.Application):
         win.set_child(scroll)
         win.present()
         # The production keyboard routing, wired to this window: the
-        # controller only needs the grid registry and scope attributes.
-        win._grids = {"SFC": grid}
+        # controller only needs the grid registry and scope attributes. It
+        # reads the registry through the window's LibraryPages collaborator
+        # (issue #237) -- with the grids still hung on the window itself, as
+        # they were before the split, every keyboard check resolved its
+        # context to CTX_OTHER and selected nothing.
+        win.pages = SimpleNamespace(grid_for=lambda scope: grid if scope == "SFC" else None)
         win.current_console = "SFC"
         self.nav = NavigationController(win)
 
