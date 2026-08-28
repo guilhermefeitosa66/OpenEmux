@@ -109,6 +109,26 @@ test -f "$BUNDLE/THIRD_PARTY_NOTICES.md"
 # for a bundle that had one. stage.py writes it as COPYING whatever it was
 # called upstream, precisely so this can be a plain test.
 test -f "$BUNDLE/vendors/RetroArch-Win64/COPYING"
+# The four Qt5 DLLs are named in retroarch.exe's PE import table, so Windows
+# resolves them before the process starts. They look like dead weight -- the
+# WIMP desktop menu they exist for is switched off at launch (issue #367), and
+# issue #365 proposed dropping them for the 20 MB -- but removing them stops
+# RetroArch from launching at all. This is the gate that says so out loud.
+for dll in Qt5Core Qt5Gui Qt5Network Qt5Widgets; do
+  test -f "$BUNDLE/vendors/RetroArch-Win64/$dll.dll"
+done
+# What the prune of issue #365 must not have taken with it: ozone is the menu
+# driver the vendored build runs, its fonts live in assets/pkg, and the
+# languages the app is translated into keep their GTK strings.
+test -d "$BUNDLE/vendors/RetroArch-Win64/assets/ozone"
+test -f "$BUNDLE/vendors/RetroArch-Win64/assets/pkg/osd-font.ttf"
+test -f "$BUNDLE/share/locale/pt_BR/LC_MESSAGES/gtk40.mo"
+test -f "$BUNDLE/share/locale/ja/LC_MESSAGES/gtk40.mo"
+# ...and what it must have: the axis is file count, not bytes (issue #365).
+test ! -d "$BUNDLE/share/terminfo"
+test ! -d "$BUNDLE/lib/terminfo"
+test ! -d "$BUNDLE/share/zoneinfo"
+test ! -d "$BUNDLE/vendors/RetroArch-Win64/assets/xmb"
 
 # Nothing in the bundle may point at the machine that built it. An absolute
 # MSYS2 path baked into a config or cache means a file that resolves on a
