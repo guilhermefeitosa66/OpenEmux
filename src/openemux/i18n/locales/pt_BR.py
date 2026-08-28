@@ -231,6 +231,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Não foi possível salvar o estado do jogo — as alterações valem na próxima vez que ele abrir.",
     "toast.finished": "{name} finalizado (código {code})",
     "toast.launch_failed": "Não foi possível iniciar o jogo: {error}",
+    "toast.shader.preset_missing": "Nenhum preset {shader} instalado para o driver de vídeo {driver} — rodando sem shader",
+    "toast.shader.driver_has_no_presets": "O driver de vídeo {driver} não carrega presets de shader — {shader} não foi aplicado",
     "toast.launch.already_running": "Já há um jogo em execução. Feche-o antes de iniciar outro.",
     "toast.launch_died": "{name} fechou na hora — {reason}",
     "toast.input_saved": "Mapeamento salvo para {console}",

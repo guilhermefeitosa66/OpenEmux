@@ -229,6 +229,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Impossible de sauvegarder l’état du jeu — les modifications s’appliqueront au prochain démarrage.",
     "toast.finished": "{name} terminé (code {code})",
     "toast.launch_failed": "Impossible de démarrer le jeu : {error}",
+    "toast.shader.preset_missing": "Aucun préréglage {shader} installé pour le pilote vidéo {driver} — lancement sans shader",
+    "toast.shader.driver_has_no_presets": "Le pilote vidéo {driver} ne charge aucun préréglage de shader — {shader} n’a pas été appliqué",
     "toast.launch.already_running": "Un jeu est déjà en cours. Fermez-le avant d’en lancer un autre.",
     "toast.launch_died": "{name} s'est fermé aussitôt — {reason}",
     "toast.input_saved": "Configuration des commandes enregistrée pour {console}",

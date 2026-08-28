@@ -11,6 +11,7 @@ from unittest.mock import patch
 from openemux.core import retroarch_buildbot_updater
 from openemux.core.platform import CORE_SUFFIX
 from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
+from openemux.core.shaders import ShaderCatalog
 
 
 class _FakeConfigManager:
@@ -217,6 +218,68 @@ class RetroArchBuildbotUpdaterTests(unittest.TestCase):
             # Two shader packs, tens of megabytes each, and neither zip is
             # ever read again (issue #221).
             self.assertEqual(list(updater.cache_dir.iterdir()), [])
+
+    def test_a_real_shaped_slang_pack_reaches_the_catalogue(self):
+        """Download, extract, resolve -- the whole chain, on this platform.
+
+        Issue #366 had two candidate causes, and one of them was "the pack
+        never extracted on Windows": the member-name guard from #222 is written
+        against POSIX paths, and the buildbot's slang pack nests presets six
+        directories deep with names far longer than the glsl one. This test
+        runs wherever the suite runs, which since #118 includes the Windows
+        job -- so the answer for Windows is measured there rather than inferred
+        from Linux.
+        """
+        deep = (
+            "shaders_slang/crt/shaders/crt-royale/src/"
+            "crt-royale-first-pass-linearize-and-bloom-horizontal.slangp"
+        )
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+
+            glsl_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(glsl_zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_glsl/handheld/dot.glslp", b"dot")
+            glsl_zip_bytes = glsl_zip_buffer.getvalue()
+
+            slang_zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(slang_zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("shaders_slang/handheld/dot.slangp", b"dot")
+                archive.writestr(deep, b"royale")
+                # A directory entry, which the buildbot packs do carry.
+                archive.writestr("shaders_slang/crt/", b"")
+            slang_zip_bytes = slang_zip_buffer.getvalue()
+
+            def _fake_urlopen(url, timeout=5):
+                url_str = str(url)
+                if url_str.endswith("shaders_glsl.zip"):
+                    return _FakeResponse(glsl_zip_bytes)
+                if url_str.endswith("shaders_slang.zip"):
+                    return _FakeResponse(slang_zip_bytes)
+                raise AssertionError(f"unexpected url: {url}")
+
+            with patch("openemux.core.retroarch_buildbot_updater.urllib.request.urlopen", side_effect=_fake_urlopen):
+                summary = updater.download_shader_packs_if_missing()
+
+            self.assertEqual(summary["failed"], 0)
+            landed = updater.shader_slang_dir.joinpath(
+                "crt/shaders/crt-royale/src/"
+                "crt-royale-first-pass-linearize-and-bloom-horizontal.slangp"
+            )
+            self.assertTrue(landed.exists(), f"{landed} did not extract")
+
+            # And the catalogue finds it for a driver that reads slang, which
+            # is the half of the chain issue #366 actually fixed.
+            catalog = ShaderCatalog(runtime_dir=updater.runtime_dir)
+            self.assertEqual(
+                catalog.resolve_shader_path("dot", video_driver="d3d11"),
+                str(updater.shader_slang_dir / "handheld" / "dot.slangp"),
+            )
+            self.assertEqual(
+                catalog.resolve_shader_path("dot", video_driver="gl"),
+                str(updater.shader_glsl_dir / "handheld" / "dot.glslp"),
+            )
 
     def test_shader_archive_refuses_members_that_escape_the_target(self):
         # Zip-slip: a member name is attacker-controlled data, and the three

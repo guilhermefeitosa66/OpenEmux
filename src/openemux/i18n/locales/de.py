@@ -229,6 +229,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Der Spielstand konnte nicht gesichert werden – Änderungen greifen beim nächsten Start.",
     "toast.finished": "{name} beendet (Code {code})",
     "toast.launch_failed": "Das Spiel konnte nicht gestartet werden: {error}",
+    "toast.shader.preset_missing": "Kein {shader}-Preset für den Videotreiber {driver} installiert — läuft ohne Shader",
+    "toast.shader.driver_has_no_presets": "Der Videotreiber {driver} lädt keine Shader-Presets — {shader} wurde nicht angewendet",
     "toast.launch.already_running": "Es läuft bereits ein Spiel. Schließe es, bevor du ein anderes startest.",
     "toast.launch_died": "{name} wurde sofort beendet — {reason}",
     "toast.input_saved": "Tastenbelegung für {console} gespeichert",

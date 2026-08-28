@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.shaders import ShaderCatalog, ShaderConfigStore
+from tests.platform_marks import IS_WINDOWS
 
 
 class ShaderConfigStoreTests(unittest.TestCase):
@@ -76,23 +77,88 @@ class ShaderConfigStoreTests(unittest.TestCase):
 
 
 class ShaderCatalogTests(unittest.TestCase):
-    def test_resolve_prefers_glsl_then_slang(self):
+    """Which preset a driver gets. The backend is not a preference (issue #366).
+
+    ``.glslp`` is loadable only by ``gl`` and ``.slangp`` only by the
+    Vulkan-era drivers, so "prefer glsl, fall back to slang" was right on Linux
+    by accident and wrong on every Windows install, where RetroArch runs
+    ``d3d11`` and quietly dropped the ``.glslp`` it was handed.
+    """
+
+    def _catalog_with_both_presets(self, tmp_dir, shader_id):
+        runtime_dir = Path(tmp_dir) / "runtime"
+        glsl_file = runtime_dir / "shaders_glsl" / "handheld" / f"{shader_id}.glslp"
+        slang_file = runtime_dir / "shaders_slang" / "handheld" / f"{shader_id}.slangp"
+        glsl_file.parent.mkdir(parents=True, exist_ok=True)
+        slang_file.parent.mkdir(parents=True, exist_ok=True)
+        glsl_file.write_text("glsl", encoding="utf-8")
+        slang_file.write_text("slang", encoding="utf-8")
+        return runtime_dir, glsl_file, slang_file
+
+    def test_the_gl_driver_gets_the_glsl_preset(self):
         with TemporaryDirectory() as tmp_dir:
-            runtime_dir = Path(tmp_dir) / "runtime"
             shader_id = "openemux-dot-test"
-            glsl_file = runtime_dir / "shaders_glsl" / "handheld" / f"{shader_id}.glslp"
-            slang_file = runtime_dir / "shaders_slang" / "handheld" / f"{shader_id}.slangp"
-            glsl_file.parent.mkdir(parents=True, exist_ok=True)
-            slang_file.parent.mkdir(parents=True, exist_ok=True)
-            glsl_file.write_text("glsl", encoding="utf-8")
-            slang_file.write_text("slang", encoding="utf-8")
-
+            runtime_dir, glsl_file, _ = self._catalog_with_both_presets(tmp_dir, shader_id)
             catalog = ShaderCatalog(runtime_dir=runtime_dir)
-            self.assertEqual(catalog.resolve_shader_path(shader_id), str(glsl_file))
+            self.assertEqual(
+                catalog.resolve_shader_path(shader_id, video_driver="gl"),
+                str(glsl_file),
+            )
 
+    def test_a_d3d11_host_gets_the_slang_preset(self):
+        with TemporaryDirectory() as tmp_dir:
+            shader_id = "openemux-dot-test"
+            runtime_dir, _, slang_file = self._catalog_with_both_presets(tmp_dir, shader_id)
+            catalog = ShaderCatalog(runtime_dir=runtime_dir)
+            for driver in ("d3d11", "d3d12", "vulkan", "glcore"):
+                with self.subTest(driver=driver):
+                    self.assertEqual(
+                        catalog.resolve_shader_path(shader_id, video_driver=driver),
+                        str(slang_file),
+                    )
+
+    def test_a_driver_never_gets_the_other_backend_as_a_fallback(self):
+        # The old glsl-then-slang order made this look like a graceful
+        # fallback. It is not: RetroArch discards the preset without a word,
+        # which is the whole of issue #366.
+        with TemporaryDirectory() as tmp_dir:
+            shader_id = "openemux-dot-test"
+            runtime_dir, glsl_file, slang_file = self._catalog_with_both_presets(
+                tmp_dir, shader_id
+            )
+            slang_file.unlink()
+            catalog = ShaderCatalog(runtime_dir=runtime_dir)
+            self.assertIsNone(
+                catalog.resolve_shader_path(shader_id, video_driver="d3d11")
+            )
+
+            slang_file.write_text("slang", encoding="utf-8")
             glsl_file.unlink()
             catalog = ShaderCatalog(runtime_dir=runtime_dir)
-            self.assertEqual(catalog.resolve_shader_path(shader_id), str(slang_file))
+            self.assertIsNone(catalog.resolve_shader_path(shader_id, video_driver="gl"))
+
+    def test_a_driver_with_no_shader_pipeline_gets_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            shader_id = "openemux-dot-test"
+            runtime_dir, _, _ = self._catalog_with_both_presets(tmp_dir, shader_id)
+            catalog = ShaderCatalog(runtime_dir=runtime_dir)
+            # An empty string is "nobody said", not "a driver with no
+            # pipeline": that case is the next test.
+            for driver in ("sdl2", "null", "d3d9"):
+                with self.subTest(driver=driver):
+                    self.assertIsNone(
+                        catalog.resolve_shader_path(shader_id, video_driver=driver)
+                    )
+
+    def test_no_driver_named_means_the_one_this_platform_runs(self):
+        with TemporaryDirectory() as tmp_dir:
+            shader_id = "openemux-dot-test"
+            runtime_dir, glsl_file, slang_file = self._catalog_with_both_presets(
+                tmp_dir, shader_id
+            )
+            catalog = ShaderCatalog(runtime_dir=runtime_dir)
+            expected = slang_file if IS_WINDOWS else glsl_file
+            self.assertEqual(catalog.resolve_shader_path(shader_id), str(expected))
 
     def test_get_options_short_list_includes_disabled(self):
         catalog = ShaderCatalog(runtime_dir=Path("/tmp/does-not-matter"))

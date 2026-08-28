@@ -229,6 +229,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "No se pudo guardar el estado del juego: los cambios se aplicarán la próxima vez que se inicie.",
     "toast.finished": "{name} finalizado (código {code})",
     "toast.launch_failed": "No se pudo iniciar el juego: {error}",
+    "toast.shader.preset_missing": "No hay ningún preset {shader} instalado para el controlador de vídeo {driver}: se ejecuta sin shader",
+    "toast.shader.driver_has_no_presets": "El controlador de vídeo {driver} no carga presets de shader: {shader} no se aplicó",
     "toast.launch.already_running": "Ya hay un juego en ejecución. Ciérralo antes de iniciar otro.",
     "toast.launch_died": "{name} se cerró de inmediato — {reason}",
     "toast.input_saved": "Asignación de controles guardada para {console}",

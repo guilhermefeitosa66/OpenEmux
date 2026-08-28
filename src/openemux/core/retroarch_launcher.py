@@ -39,6 +39,12 @@ from openemux.core.platform import (
 )
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
+from openemux.core.video_driver import (
+    AUTO as VIDEO_DRIVER_AUTO,
+    effective_video_driver,
+    preset_backends,
+    resolve_video_driver,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +169,10 @@ class RetroArchLauncher:
             project_root=self.project_root,
         )
         self.core_catalog = CoreCatalog(project_root=self.project_root)
+        #: Why the last launch has no shader, or ``None``. Set on every launch
+        #: so the UI can say it out loud instead of leaving the only trace in a
+        #: log file (issue #366).
+        self.last_shader_notice = None
 
     def _launch_prefix(self, force_extract=False):
         """Return (argv_prefix, error).
@@ -663,19 +673,77 @@ class RetroArchLauncher:
         }
 
     def _av_overrides(self):
-        """Which audio driver RetroArch is told to use (issue #176).
+        """Which audio and video drivers RetroArch is told to use.
 
-        The global retroarch.cfg may name one the RetroArch we launch was not
-        built with -- "pipewire" is the common case, and the vendored build
-        has no such driver. RetroArch then falls back to alsa, which fails on
-        a PipeWire host, and audio never starts. That reads to the user as
-        *speed*, not silence: emulation is paced off the audio clock, so
-        without it the game runs at the display's refresh rate.
+        Audio (issue #176): the global retroarch.cfg may name one the RetroArch
+        we launch was not built with -- "pipewire" is the common case, and the
+        vendored build has no such driver. RetroArch then falls back to alsa,
+        which fails on a PipeWire host, and audio never starts. That reads to
+        the user as *speed*, not silence: emulation is paced off the audio
+        clock, so without it the game runs at the display's refresh rate.
+
+        Video (issue #366): naming the driver is what lets the shader backend
+        follow it. Only ``gl`` loads .glslp and only the Vulkan-era drivers
+        load .slangp, so a preset resolved without knowing the driver is a
+        shader RetroArch drops without a word -- which is what every Windows
+        launch did. Written on Windows, where the answer is d3d11; left unsaid
+        on Linux, where it is gl and saying so would restate a default.
         """
+        overrides = {}
         audio_driver = resolve_audio_driver(
             self.config_manager.get_retroarch_audio_driver()
         )
-        return {"audio_driver": f'"{audio_driver}"'} if audio_driver else {}
+        if audio_driver:
+            overrides["audio_driver"] = f'"{audio_driver}"'
+        video_driver = resolve_video_driver(self._video_driver_setting())
+        if video_driver:
+            overrides["video_driver"] = f'"{video_driver}"'
+        return overrides
+
+    def _shader_notice(self, shader_id, shader_path, video_driver):
+        """Why this launch has no shader, as a message the UI can show.
+
+        ``None`` when there is nothing to say -- the shader is off, or a preset
+        was found. Otherwise a translation key and its arguments: core has no
+        locale (issue #232), so it names the string rather than writing it.
+
+        Two different "no": a driver with no shader pipeline at all can never
+        have one, while a driver that reads presets simply has none installed
+        for this shader -- most likely because the buildbot pack for its
+        backend did not arrive at first boot.
+        """
+        if shader_id == "disabled" or shader_path:
+            return None
+        label = self.shader_catalog.label_for_shader(shader_id)
+        if not preset_backends(video_driver):
+            key = "toast.shader.driver_has_no_presets"
+        else:
+            key = "toast.shader.preset_missing"
+        return key, {"shader": label, "driver": video_driver}
+
+    @staticmethod
+    def _log_header(console, video_driver, shader_id, shader_path):
+        """The line OpenEmux writes at the top of a launch log."""
+        if shader_id == "disabled":
+            shader = "disabled"
+        elif shader_path:
+            shader = f"{shader_id} -> {shader_path}"
+        else:
+            shader = f"{shader_id} -> no preset for this driver"
+        return (
+            f"[openemux] console={console} video_driver={video_driver} "
+            f"shader={shader}\n"
+        )
+
+    def _video_driver_setting(self):
+        """The raw ``runtime.retroarch.video_driver`` setting.
+
+        Read through getattr because the launcher is handed stub config
+        managers in the suite, and a missing accessor means "auto" rather than
+        a launch that raises.
+        """
+        getter = getattr(self.config_manager, "get_retroarch_video_driver", None)
+        return getter() if callable(getter) else VIDEO_DRIVER_AUTO
 
     @staticmethod
     def _savestate_overrides(states_dir, state_slot):
@@ -869,7 +937,15 @@ class RetroArchLauncher:
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_rom(rom_path, system_id))
         elif hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
-        shader_path = self.shader_catalog.resolve_shader_path(shader_id)
+        # The driver decides which preset format is loadable at all, so it is
+        # resolved before the preset and not after (issue #366).
+        video_driver = effective_video_driver(self._video_driver_setting())
+        shader_path = self.shader_catalog.resolve_shader_path(
+            shader_id, video_driver=video_driver
+        )
+        self.last_shader_notice = self._shader_notice(
+            shader_id, shader_path, video_driver
+        )
 
         cmd = [*launch_prefix, "-L", core_path]
         runtime_override = self._write_runtime_override(
@@ -883,8 +959,17 @@ class RetroArchLauncher:
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
             cmd.extend(["--set-shader", shader_path])
-        elif shader_id != "disabled":
-            logger.info("shader preset not found, running without shader: console=%s shader=%s", system_id, shader_id)
+        elif self.last_shader_notice:
+            # A warning, not an info line: a console configured with a shader
+            # that launches without one is a failure the user can see on screen
+            # and could not previously see anywhere else (issue #366).
+            logger.warning(
+                "no shader preset for this video driver, running without one: "
+                "console=%s shader=%s video_driver=%s",
+                system_id,
+                shader_id,
+                video_driver,
+            )
         extra_flags = list(self.config_manager.get_retroarch_extra_flags())
         if "--verbose" not in extra_flags and "-v" not in extra_flags:
             extra_flags.append("--verbose")
@@ -900,6 +985,15 @@ class RetroArchLauncher:
             cmd_path = runtime_dir / f"retroarch_{resolve_system_id(console).lower()}_{timestamp}.cmd"
             cmd_path.write_text(" ".join(cmd), encoding="utf-8")
             log_handle = open(log_path, "w", encoding="utf-8")
+            # One line of ours above RetroArch's own, naming the driver and
+            # what was resolved for it. Issue #366 was diagnosed from a launch
+            # log with no shader line in it at all -- not a load, not a
+            # failure, nothing -- so "what did OpenEmux ask for" was the one
+            # question the log could not answer. Now it can.
+            log_handle.write(
+                self._log_header(system_id, video_driver, shader_id, shader_path)
+            )
+            log_handle.flush()
             # The session's environment, not this process's. Running from an
             # AppImage, everything started under $APPDIR -- and the vendored
             # RetroArch is -- is handed the bundle's loader path, LD_PRELOAD,

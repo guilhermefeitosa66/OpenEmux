@@ -231,6 +231,8 @@ TRANSLATIONS = {
     "toast.input_apply.no_state": "Couldn't snapshot the game — changes apply the next time it starts.",
     "toast.finished": "{name} finished (code {code})",
     "toast.launch_failed": "Could not start the game: {error}",
+    "toast.shader.preset_missing": "No {shader} preset installed for the {driver} video driver — running without a shader",
+    "toast.shader.driver_has_no_presets": "The {driver} video driver loads no shader presets — {shader} was not applied",
     "toast.launch.already_running": "A game is already running. Close it before launching another one.",
     "toast.launch_died": "{name} closed straight away — {reason}",
     "toast.input_saved": "Input mapping saved for {console}",
