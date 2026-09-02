@@ -179,6 +179,12 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Wed Sep 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.13.0-1
+- "Favorites" appears in the sidebar with the first starred game and goes with the last
+- The library reopens on the view it was closed on, remembered in a session file of its own
+- "All", "Favorites" and the collections group their games by console instead of one flat A-Z pile
+- The cartridge shelf reaches those pages too: each group is drawn in its own console's frame
+- Consoles can be reordered by dragging a sidebar row, with Ctrl+Up/Down and from Preferences
 * Fri Aug 28 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.12.0-1
 - OpenEmux runs on Windows: an installer, a portable bundle and gamepads read through SDL2
 - Linux packages are built for aarch64 as well as x86_64, in every format

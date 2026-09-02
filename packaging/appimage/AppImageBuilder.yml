@@ -77,7 +77,7 @@ AppDir:
     # place the version is duplicated. appimage/build.sh refuses to build when
     # the two disagree, and tests/test_reproducible_builds.py fails on develop
     # (issue #255).
-    version: "1.12.0"
+    version: "1.13.0"
     exec: usr/bin/openemux-launcher
   runtime:
     # Belt and braces alongside the launcher script: these are the paths the
