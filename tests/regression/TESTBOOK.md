@@ -1184,12 +1184,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-PROBE
 - **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
   `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter.
-- **Steps:** As a QA person: open a console with a few dozen games, then open "All consoles" on a
-  library of a few thousand, and watch how long the page takes to appear.
+- **Steps:** As a QA person: open a console with a few dozen games, then open a console with a few
+  thousand, and watch how long the page takes to appear.
 - **Expected:** Both pages appear at once, and the big one costs no more than the small one: the
   grid builds only the cards on screen and re-binds them as it scrolls, so the number of live
   cards is the same on both (issue #219). Before virtualization the page held one live card and
   one decoded cover texture per ROM, for as long as it existed.
+  The guarantee is per *grid*. Since issue #384 a mixed page ("All", "Favorites", a collection) is
+  one grid per console stacked in the page's scroller, and each of those is allocated its natural
+  height — so a mixed page builds a card per ROM. Grouping and virtualizing across sections at the
+  same time needs a layout GtkGridView does not have; the console pages, where a single console's
+  thousands of ROMs live, are unaffected.
 - **Check:**
   ```bash
   Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
@@ -1211,6 +1216,89 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   old 256-entry cap permitted several hundred megabytes.
 - **Check:** `tests/test_cover_cache.py` — the byte-budget eviction, one big cover evicting several
   small ones, and a cover larger than the whole budget still being kept.
+
+### RT-301 — "All", "Favorites" and the collections group by console
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with at least two consoles, two
+  favorites on different consoles and a collection holding games from two consoles.
+- **Steps:**
+  1. Open "All".
+  2. Open "Favorites".
+  3. Open the collection.
+- **Expected:** Each page draws one group per console, under a header carrying the console's icon,
+  its name and the number of games in that group, and the groups follow **the order the consoles
+  have in the sidebar**. A console with no games on the page has no group and no header. The cards
+  inside a group follow that console's box-art proportions and no longer print the console's name
+  under every title — the header above them says it (issue #384). A single-console page is
+  unchanged.
+- **Check:** a screenshot per page; the group headers read in the same order as the sidebar rows;
+  the window subtitle counts the whole page. Suite files `tests/test_library_groups.py` and
+  `tests/test_grid_group.py`.
+- **Restore:** none.
+
+### RT-302 — Grouping follows the given console order and drops empty groups
+- **Area:** Views
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: import a console the stored order has never seen, and look at where
+  its group lands on "All".
+- **Expected:** The groups come out in the order they were asked for; a console with no games on
+  the page produces no group; a console the order does not know comes after the ones it does,
+  rather than at a position nobody chose; and the order *inside* a group is the page's sort order,
+  untouched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.library_groups import group_roms_by_console
+
+  def rom(name, console):
+      return {"name": name, "console": console, "path": f"/roms/{console}/{name}"}
+
+  roms = [rom("Aladdin", "MD"), rom("Chrono", "SFC"), rom("Sonic", "MD"), rom("Zelda", "SFC")]
+  groups = group_roms_by_console(roms, ["SFC", "GB", "MD"])
+  assert [c for c, _ in groups] == ["SFC", "MD"], "an empty group was kept"
+  assert [r["name"] for r in dict(groups)["SFC"]] == ["Chrono", "Zelda"], "order moved"
+
+  # A console the order has never seen comes after the ones it knows.
+  assert [c for c, _ in group_roms_by_console(roms, ["SFC"])] == ["SFC", "MD"]
+  assert sum(len(g) for _, g in groups) == len(roms), "a game was lost"
+  print("RT-302 OK")
+  EOF
+  ```
+- **Restore:** none.
+
+### RT-303 — The grouped page behaves as one grid
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on "All", with games on at least three consoles.
+- **Steps:**
+  1. Press `Ctrl+F` and type a word that matches games on two consoles only.
+  2. Clear the search.
+  3. Switch to list view and tick "Select all".
+  4. Switch back to cover view, focus the grid and hold `Down` past the bottom of the first group.
+- **Expected:** Step 1 leaves only the matching groups, each header's count following the search;
+  the groups the query empties are hidden, headers and all. Step 2 brings them all back. Step 3
+  selects **every** game on the page and the selection bar says so — one group full is not the
+  page full. Step 4 walks out of the first group and into the next one instead of stopping at its
+  last row; `Up` walks back into the previous group's last card (issue #384).
+- **Check:** a screenshot per step; the selection bar's count equals the window subtitle's; suite
+  file `tests/test_grid_group.py`.
+- **Restore:** clear the selection and the search; step 4 leaves nothing behind.
+
+### RT-304 — "Platform" is not offered where it would do nothing
+- **Area:** Views
+- **Mode:** AUTO-SUITE
+- **Preconditions:** App running.
+- **Steps:**
+  1. Open "All" and open the view-mode menu's "Sort by" submenu.
+  2. Open a console page and do the same.
+- **Expected:** "Platform" is absent on the grouped page — every game already sits under its
+  console's header, so picking it would change nothing the user can see (issue #384). The console
+  page still lists it.
+- **Check:** suite file `tests/test_grid_group.py` (`SortOrdersOnAGroupedPageTests`); by hand, a
+  screenshot of each submenu.
+- **Restore:** none.
 
 ## Favorites & collections
 

@@ -29,6 +29,18 @@
     font-size: 0.95rem;
 }
 
+/* The heading over each console's group on "All", "Favorites" and the
+   collections (issue #384). The count sits beside the name rather than under
+   it, so the header costs one line and the games stay the tallest thing on
+   the page. */
+.console-group-header {
+    margin-bottom: 2px;
+}
+
+.console-group-header label.heading {
+    font-weight: 700;
+}
+
 /* GtkGridView paints the theme's view background, which GtkFlowBox did not.
    The library page already has one, and the grid is only as wide as the columns
    its cards fill -- so the theme's panel showed up as a white box ending in the

@@ -450,7 +450,7 @@ class NavigationController:
         while node is not None and node is not self.window:
             if node is getattr(self.window, "console_list", None):
                 return CTX_SIDEBAR
-            if node is self._current_grid():
+            if self._is_current_grid(node):
                 if getattr(self.window, "selection_mode_active", False):
                     return CTX_GRID_SELECTION
                 return CTX_GRID
@@ -464,6 +464,20 @@ class NavigationController:
         if pages is None:
             return None
         return pages.grid_for(self.window.current_console)
+
+    def _is_current_grid(self, node):
+        """Whether ``node`` is the page's grid -- or one of them.
+
+        A grouped page is several grids behind one façade (issue #384), so
+        walking up from the focused widget can no longer end in an identity
+        check against a single object.
+        """
+        grid = self._current_grid()
+        if grid is None:
+            return False
+        if getattr(grid, "is_group", False):
+            return grid.holds_widget(node)
+        return node is grid
 
     # ----- dispatch --------------------------------------------------------
 
@@ -555,6 +569,34 @@ class NavigationController:
             self._cmd_focus_grid()
             return
         scope.child_focus(_GTK_DIRECTIONS[direction])
+        self._cross_group_if_stuck(direction, focus)
+
+    def _cross_group_if_stuck(self, direction, previous_focus):
+        """Arrowing off the bottom of a group enters the next one (issue #384).
+
+        A grouped page is one grid per console, and GtkGridView keeps the
+        focus at its own last row rather than handing it on -- so Down at the
+        bottom of "FC" stopped there instead of reaching "GB". Only when the
+        move really did not land anywhere: a move inside a group must not be
+        second-guessed.
+        """
+        if direction not in ("down", "up"):
+            return
+        if self._focus_widget() is not previous_focus:
+            return
+        group = self._current_grid()
+        if group is None or not getattr(group, "is_group", False):
+            return
+        item = group.item_for_widget(previous_focus)
+        owner = group.grid_for_item(item) if item is not None else None
+        if owner is None:
+            return
+        if direction == "down":
+            target = group.grid_after(owner)
+            return target.focus_first_card() if target is not None else None
+        target = group.grid_before(owner)
+        if target is not None:
+            target.focus_last_card()
 
     def _cmd_move_or_sidebar(self):
         focus = self._focus_widget()
