@@ -1684,6 +1684,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # The pages are still the right pages; their contents may not be.
             self.pages.invalidate_contents()
             self.sidebar.sync_footer()
+            self.sidebar.sync_favorites_row()
             target = preferred_view or previous_visible or self.current_console
             if self.pages.has(target):
                 self.current_console = target
@@ -1748,6 +1749,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.visible_consoles,
             target_view,
             [c["slug"] for c in self.collection_manager.list_collections()],
+            has_favorites=self.playlist_manager.has_favorites(),
         )
         if desired != LIBRARY_EMPTY_ID:
             if not self.sidebar.select(desired):
@@ -1797,9 +1799,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.content_stack.set_visible_child_name(self.current_console)
         self.search_entry.set_text("")
         self._update_window_title(self.current_console)
+        # Navigating away is when a "Favorites" row kept alive only to show
+        # its empty state is dropped (issue #382). On idle: the list is
+        # mid-selection here, and removing a row from under it is not.
+        GLib.idle_add(self._sync_favorites_row_idle)
         # On a collapsed (narrow) layout, reveal the content pane.
         if self.split_view.get_collapsed():
             self.split_view.set_show_content(True)
+
+    def _sync_favorites_row_idle(self):
+        self.sidebar.sync_favorites_row()
+        return GLib.SOURCE_REMOVE
 
     def _set_search_enabled(self, enabled):
         if not enabled:
@@ -2072,6 +2082,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_favorites_loaded()
         elif self.pages.grid_for(FAVORITES_ID) is not None:
             self.pages.ensure_favorites_loaded()
+        # The first star puts the row in the sidebar, the last one takes it
+        # out -- unless the user is standing on the page (issue #382).
+        self.sidebar.sync_favorites_row()
         return is_now_favorite
 
     def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
@@ -2220,6 +2233,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("toast.rom.deleted", count=deleted))
         self._on_selection_changed([])
         self._reload_current_page()
+        # forget_rom drops the ROM from FAVORITES.list too, so the last
+        # favorite can go this way as well as through the star.
+        self.sidebar.sync_favorites_row()
 
     def _sync_covers_for_selection(self):
         selected = list(self._selected_roms)

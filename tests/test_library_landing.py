@@ -14,14 +14,18 @@ from openemux.ui.scopes import (
     FAVORITES_ID,
     LIBRARY_EMPTY_ID,
     collection_scope,
+    default_landing_view,
     landing_view,
     sidebar_row_ids,
 )
 
 
 class SidebarRowsTests(unittest.TestCase):
+    """The rows a library with favorites gets. See FavoritesRowTests for
+    the library that has none."""
+
     def _rows(self, consoles, slugs=()):
-        return sidebar_row_ids(consoles, slugs)
+        return sidebar_row_ids(consoles, slugs, has_favorites=True)
 
     def test_an_empty_library_gets_no_rows_at_all(self):
         self.assertEqual(self._rows([]), [])
@@ -53,7 +57,7 @@ class SidebarRowsTests(unittest.TestCase):
 
 class LandingViewTests(unittest.TestCase):
     def _landing(self, consoles, target):
-        return landing_view(consoles, target)
+        return landing_view(consoles, target, has_favorites=True)
 
     def test_an_empty_library_lands_on_the_onboarding_page(self):
         self.assertEqual(self._landing([], None), LIBRARY_EMPTY_ID)
@@ -87,7 +91,7 @@ class CollectionSurvivesARescanTests(unittest.TestCase):
     """
 
     def _landing(self, target, slugs=("best-of-snes",)):
-        return landing_view(["FC", "SFC"], target, slugs)
+        return landing_view(["FC", "SFC"], target, slugs, has_favorites=True)
 
     def test_a_collection_that_still_exists_is_kept(self):
         scope = collection_scope("best-of-snes")
@@ -104,7 +108,12 @@ class CollectionSurvivesARescanTests(unittest.TestCase):
 
     def test_an_empty_library_still_wins_over_a_collection(self):
         self.assertEqual(
-            landing_view([], collection_scope("best-of-snes"), ["best-of-snes"]),
+            landing_view(
+                [],
+                collection_scope("best-of-snes"),
+                ["best-of-snes"],
+                has_favorites=True,
+            ),
             LIBRARY_EMPTY_ID,
         )
 
@@ -112,6 +121,82 @@ class CollectionSurvivesARescanTests(unittest.TestCase):
         self.assertEqual(self._landing("SFC"), "SFC")
         self.assertEqual(self._landing(ALL_CONSOLES_ID), ALL_CONSOLES_ID)
         self.assertEqual(self._landing(FAVORITES_ID), FAVORITES_ID)
+
+
+class FavoritesRowTests(unittest.TestCase):
+    """"Favorites" exists because something is in it (issue #382).
+
+    The row was offered on every library, including one where nothing has
+    ever been starred, and it led to "No favorites yet: right-click a game
+    and choose Add to favorites" -- a view over ROMs the user does not have
+    in it, sitting above every console that does.
+    """
+
+    def test_no_favorites_means_no_row(self):
+        self.assertNotIn(
+            FAVORITES_ID, sidebar_row_ids(["FC", "SFC"], (), has_favorites=False)
+        )
+
+    def test_the_first_star_puts_it_back_after_all(self):
+        self.assertEqual(
+            sidebar_row_ids(["FC", "SFC"], (), has_favorites=True)[:2],
+            [ALL_CONSOLES_ID, FAVORITES_ID],
+        )
+
+    def test_a_library_with_no_favorites_keeps_everything_else(self):
+        self.assertEqual(
+            sidebar_row_ids(["FC", "SFC"], ["best-of-snes"], has_favorites=False),
+            [ALL_CONSOLES_ID, collection_scope("best-of-snes"), "FC", "SFC"],
+        )
+
+    def test_a_collection_shows_while_empty_and_favorites_does_not(self):
+        # Not the same case: the user made the collection and would have
+        # nowhere to drop games; nobody asked for Favorites.
+        rows = sidebar_row_ids(["FC"], ["empty-one"], has_favorites=False)
+        self.assertIn(collection_scope("empty-one"), rows)
+        self.assertNotIn(FAVORITES_ID, rows)
+
+    def test_the_default_is_no_row(self):
+        # A caller that has not looked gets no row, never a phantom one.
+        self.assertNotIn(FAVORITES_ID, sidebar_row_ids(["FC"]))
+
+    def test_an_empty_library_has_no_rows_favorites_or_not(self):
+        self.assertEqual(sidebar_row_ids([], (), has_favorites=True), [])
+
+
+class LandingWithoutFavoritesTests(unittest.TestCase):
+    """The fallback cannot be a row that is not in the sidebar (#382)."""
+
+    def test_the_default_view_is_all_without_favorites(self):
+        self.assertEqual(default_landing_view(False), ALL_CONSOLES_ID)
+
+    def test_the_default_view_is_favorites_with_them(self):
+        self.assertEqual(default_landing_view(True), FAVORITES_ID)
+
+    def test_a_console_that_is_gone_falls_back_to_all(self):
+        self.assertEqual(landing_view(["FC"], "SFC", has_favorites=False), ALL_CONSOLES_ID)
+
+    def test_no_remembered_view_falls_back_to_all(self):
+        self.assertEqual(landing_view(["FC"], None, has_favorites=False), ALL_CONSOLES_ID)
+
+    def test_a_deleted_collection_falls_back_to_all(self):
+        self.assertEqual(
+            landing_view(["FC"], collection_scope("gone"), (), has_favorites=False),
+            ALL_CONSOLES_ID,
+        )
+
+    def test_favorites_itself_is_not_a_destination_without_favorites(self):
+        # Emptying the list while the app was closed: the row is gone, so
+        # landing on it would land nowhere at all.
+        self.assertEqual(
+            landing_view(["FC"], FAVORITES_ID, has_favorites=False), ALL_CONSOLES_ID
+        )
+
+    def test_a_console_that_is_there_is_still_honoured(self):
+        self.assertEqual(landing_view(["FC"], "FC", has_favorites=False), "FC")
+
+    def test_an_empty_library_still_lands_on_onboarding(self):
+        self.assertEqual(landing_view([], None, has_favorites=False), LIBRARY_EMPTY_ID)
 
 
 class _QueueStub:

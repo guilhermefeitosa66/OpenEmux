@@ -20,6 +20,54 @@ class _DummyConfig:
         return self._roms_path
 
 
+class HasFavoritesTests(unittest.TestCase):
+    """Whether anything is starred at all -- the sidebar row's condition (#382)."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        roms_dir.mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_library_with_no_favorites_file_has_none(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertFalse(manager.has_favorites())
+
+    def test_an_empty_favorites_file_still_counts_as_none(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            manager.get_favorites_playlist_path().parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            manager.get_favorites_playlist_path().write_text("\n", encoding="utf-8")
+            self.assertFalse(manager.has_favorites())
+
+    def test_starring_and_unstarring_flips_it(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = {"path": str(base / "roms" / "SFC" / "Chrono Trigger.sfc")}
+
+            manager.toggle_favorite(rom)
+            self.assertTrue(manager.has_favorites())
+
+            manager.toggle_favorite(rom)
+            self.assertFalse(manager.has_favorites())
+
+    def test_an_unreachable_favorite_still_counts(self):
+        # A favorite on an unplugged drive is missing, not gone -- so the row
+        # stays and the games come back with the drive (issue #210).
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            manager.toggle_favorite(
+                {"path": str(base / "media" / "usb" / "roms" / "PS" / "FF7.chd")}
+            )
+            self.assertTrue(manager.has_favorites())
+
+
 class PlaylistManagerTests(unittest.TestCase):
     def test_scan_and_rebuild_all_playlists_rewrites_empty_and_non_empty(self):
         with TemporaryDirectory() as tmp_dir:

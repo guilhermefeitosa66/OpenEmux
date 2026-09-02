@@ -158,10 +158,42 @@ class ConsoleSidebar:
             self.list_box.remove(child)
 
         slugs = [c["slug"] for c in self.win.collection_manager.list_collections()]
-        for row_id in sidebar_row_ids(consoles, slugs):
+        for row_id in sidebar_row_ids(consoles, slugs, self._wants_favorites_row()):
             self._append_row(row_id)
 
-    def _append_row(self, console_id):
+    def _wants_favorites_row(self):
+        """Whether "Favorites" belongs in the list right now (issue #382).
+
+        Anything favorited, yes. Nothing favorited but the user is *standing*
+        on the page, also yes: un-starring the last game should not yank the
+        row out from under them -- the empty state is what explains what just
+        happened. The row goes on the next navigation away.
+        """
+        if self.win.playlist_manager.has_favorites():
+            return True
+        return self.win.current_console == FAVORITES_ID
+
+    def sync_favorites_row(self):
+        """Insert or remove just the "Favorites" row, keeping the selection.
+
+        Every path that mutates the favorites set ends here: the card badge,
+        the context menu, ``Ctrl+D``, the gamepad's Y, deleting a ROM, and the
+        pruning the page does on every visit. A full :meth:`rebuild` per
+        toggle would cost the whole list and lose the highlight.
+        """
+        wanted = self._wants_favorites_row()
+        row = self.find_row(FAVORITES_ID)
+        if wanted == (row is not None):
+            return
+        if not wanted:
+            self.list_box.remove(row)
+            return
+        if self.find_row(ALL_CONSOLES_ID) is None:
+            # No "All" row means an empty library, which has no rows at all.
+            return
+        self._append_row(FAVORITES_ID, position=1)
+
+    def _append_row(self, console_id, position=None):
         row = Gtk.ListBoxRow()
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.set_margin_top(10)
@@ -204,7 +236,10 @@ class ConsoleSidebar:
         row.set_child(box)
         row.id = console_id
         self._install_context_menu(row, console_id)
-        self.list_box.append(row)
+        if position is None:
+            self.list_box.append(row)
+        else:
+            self.list_box.insert(row, position)
 
     def find_row(self, console_id):
         row = self.list_box.get_first_child()
