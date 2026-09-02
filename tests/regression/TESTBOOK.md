@@ -1140,7 +1140,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. In the header bar, switch through the three view segments: cartridge shelf, cover grid,
      compact list.
-- **Expected:** Each mode renders the same games; no blank canvas, no crash.
+- **Expected:** Each mode renders the same games; no blank canvas, no crash. On "All", "Favorites"
+  and a collection too — picking "Cartridge" there used to change nothing at all (issue #385); see
+  RT-305.
 - **Check:** One screenshot per mode. Locate the three-segment switcher on a probe capture first —
   its position moves as the header evolves.
 - **Restore:** Return to the mode that was active at the start (record it on the first capture).
@@ -1298,6 +1300,41 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   page still lists it.
 - **Check:** suite file `tests/test_grid_group.py` (`SortOrdersOnAGroupedPageTests`); by hand, a
   screenshot of each submenu.
+- **Restore:** none.
+
+### RT-305 — The cartridge shelf reaches "All", "Favorites" and the collections
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with games on several consoles, at least one of
+  which has cartridge art and one of which (a disc system — PlayStation, Saturn, PSP) has none.
+- **Steps:**
+  1. Open "All" and choose "Cartridge Grid".
+  2. Scroll through two or three groups.
+  3. Zoom in twice (`Ctrl++`), then reset (`Ctrl+0`).
+  4. Restart the app.
+  5. Right-click a game in a group whose console has more than one shell colour.
+- **Expected:** Step 1 draws each group's games in **that group's console cartridge** — the shelf
+  is the look the app ships with, and it was exactly the look those pages could not have (issue
+  #385). Step 2 shows each console's own shell and its own proportions, one group after another,
+  and the group of the disc system falls back to covers without costing the rest of the page its
+  shelf. Step 3 scales the frames as it does on a console page. Step 4 comes back in cartridge
+  view: the mode is remembered per scope. Step 5 offers "Cartridge color", and picking one
+  re-composes that card alone.
+- **Check:** a screenshot per step; suite file `tests/test_cartridge_on_mixed_pages.py`;
+  `cartridge_colors.config` gains a `rom_overrides` entry for the ROM picked in step 5 and no other.
+- **Restore:** clear the colour picked in step 5 ("Default"); return the page to the view mode it
+  started in.
+
+### RT-306 — A console with no cartridge art draws covers, on any page
+- **Area:** Views
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open "All" in cartridge view on a library that has a PlayStation
+  group.
+- **Expected:** That group shows box art and every other group shows cartridges — the same
+  fallback a console page has always had, applied per group (issue #385). List view never draws a
+  frame on any page: at thumbnail size it is an unreadable smudge.
+- **Check:** suite file `tests/test_cartridge_on_mixed_pages.py`.
 - **Restore:** none.
 
 ## Favorites & collections

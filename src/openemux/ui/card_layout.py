@@ -16,6 +16,7 @@ from openemux.core import cartridge_render
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     LIST_ROW_MIN_WIDTH,
+    renders_cartridge,
     scale_length,
 )
 
@@ -135,6 +136,26 @@ def cartridge_frame_svg(console, color=None):
     any color with no file) is the authored ``<CONSOLE>.svg``.
     """
     return cartridge_render.cartridge_frame(console, color=color)
+
+
+def cartridge_frame_for(console, view_mode, mixed_consoles=False, compact=False):
+    """The shell a grid of ``console`` draws in, or ``None`` for plain covers.
+
+    The rule the card shape comes from, in one place so it can be stated
+    without a display:
+
+    * only in a cartridge view mode -- a cover grid draws box art;
+    * never in list view: a frame at thumbnail size is an unreadable smudge;
+    * never on a grid that mixes consoles, because the card shape comes from
+      the frame art and a ``GtkGridView`` lays out on a single lattice. Since
+      issue #384 the mixed pages are one grid *per console*, which is what
+      makes the shelf reachable there at all (issue #385);
+    * and only for a console someone actually drew a cartridge for. The rest
+      fall back to covers, on a mixed page exactly as on their own.
+    """
+    if mixed_consoles or compact or not renders_cartridge(view_mode):
+        return None
+    return cartridge_frame_svg(console)
 
 
 class FixedSizePicture(Gtk.Picture):
