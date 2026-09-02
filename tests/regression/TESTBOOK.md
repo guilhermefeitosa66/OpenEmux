@@ -1337,6 +1337,85 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_cartridge_on_mixed_pages.py`.
 - **Restore:** none.
 
+### RT-307 — A console can be dragged into place, and stays there
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with at least three consoles.
+- **Steps:**
+  1. Drag the last console row and drop it above the first one.
+  2. Read `~/.openemux/config.yaml` in the container.
+  3. Restart the app.
+  4. Open "All".
+- **Expected:** Step 1 shows a line where the console will land while the pointer is over a row,
+  and the row moves on release. The order was the declaration order of a Python list before —
+  something nobody chose and nobody could change (issue #386). Step 2 shows `ui.console_order` with
+  the new arrangement, written **once**, on the drop and not per motion event. Step 3 comes back to
+  the same order. Step 4 shows the console groups in it too, since both read the same list (#384).
+  "All", "Favorites" and the playlists stay above the consoles throughout and can be neither
+  dragged nor displaced.
+- **Check:** a screenshot mid-drag showing the drop line and one after the drop; the log carries one
+  `sidebar reorder: console=<id> before=<id>` line for the drop; `ui.console_order` in `config.yaml`;
+  suite file `tests/test_console_order.py`.
+- **Restore:** Settings → Library → "Restore default order".
+
+### RT-308 — The order is reachable without a pointer
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, focus in the sidebar on a console row.
+- **Steps:**
+  1. Press `Ctrl+Up` twice, then `Ctrl+Down` once.
+  2. Right-click the topmost console row and read the menu.
+  3. Open Settings → Library → "Console Order" and use the arrows, then "Restore default order".
+- **Expected:** Step 1 moves the console and **keeps the focus on it**, and it stops at the top of
+  the consoles rather than climbing above "All", "Favorites" or the playlists. Drag-and-drop is
+  unusable with a keyboard or a gamepad and both drive this sidebar, so the keyboard path is not
+  optional (issue #386). Step 2 offers "Move up" / "Move down", and the topmost console is offered
+  only "Move down" — an entry that can only do nothing is worse than no entry. Step 3 shows the
+  same order, edits it, and the sidebar follows immediately with no restart and no rescan;
+  "Restore default order" brings back the `SYSTEMS` order.
+- **Check:** a screenshot per step; `ui.console_order` after step 3 is `[]`; suite file
+  `tests/test_console_order.py`.
+- **Restore:** step 3 ends on the default order.
+
+### RT-309 — A console with no games keeps its place in the arrangement
+- **Area:** Views
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: arrange the consoles, delete every ROM of one of them, restart, then
+  import one of its games again.
+- **Expected:** It comes back where it was. The stored order is the user's arrangement, not a
+  snapshot of the library, so a console with nothing in it right now keeps its slot; a console the
+  order has never seen lands after the ones it knows, and stays put once moved (issue #386).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.console_order import (
+      apply_console_order,
+      merge_visible_into_order,
+      normalize_console_order,
+  )
+  from openemux.core.systems import SYSTEM_IDS
+
+  # The arrangement survives the console going away and coming back.
+  stored = ["MD", "FC", "SFC"]
+  assert apply_console_order(["FC", "SFC"], stored) == ["FC", "SFC"]
+  assert apply_console_order(["SFC", "MD", "FC"], stored) == stored
+
+  # A drag rearranges only what is visible; the absent console keeps its slot.
+  assert merge_visible_into_order(stored, ["SFC", "FC"]) == ["MD", "SFC", "FC"]
+
+  # A console the order has never seen comes after the ones it knows.
+  assert merge_visible_into_order(["FC"], ["FC", "GB"]) == ["FC", "GB"]
+
+  # Garbage never reorders anything into something nobody asked for.
+  assert normalize_console_order(["SNES", "nope", 7, "SNES"]) == ["SFC"]
+  fallback = apply_console_order(["SFC", "FC"], "nonsense")
+  assert fallback == [c for c in SYSTEM_IDS if c in {"SFC", "FC"}]
+  print("RT-309 OK")
+  EOF
+  ```
+- **Restore:** none.
+
 ## Favorites & collections
 
 ### RT-040 — Favorite toggle round-trip

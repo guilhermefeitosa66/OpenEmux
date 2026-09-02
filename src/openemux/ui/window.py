@@ -56,6 +56,12 @@ from openemux.core.shaders import ShaderCatalog
 from openemux.core.state_recovery import quarantined_files, reset_quarantine_log
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
+from openemux.core.console_order import (
+    apply_console_order,
+    merge_visible_into_order,
+    move_console,
+    place_console,
+)
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.gamepad_backend import make_navigator
@@ -1794,6 +1800,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._update_window_title(None)
 
     def _discover_visible_consoles(self):
+        """The consoles that have games, in the order the user put them in.
+
+        The walk is over SYSTEM_IDS because that is where the ROMs are looked
+        up; the *order* is the user's (issue #386), applied at the end so the
+        sidebar, the console groups on the mixed pages and the console cycling
+        all read the same list.
+        """
         visible = []
         for console in SYSTEM_IDS:
             if self.playlist_manager.playlist_exists(console):
@@ -1804,7 +1817,45 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if roms:
                 visible.append(console)
                 self._initial_roms[console] = roms
-        return visible
+        return apply_console_order(visible, self.config_manager.get_console_order())
+
+    def reorder_consoles(self, order):
+        """Store a new console order and show it, without a rescan.
+
+        The sidebar's drag, its Ctrl+Up/Ctrl+Down and Preferences all end here.
+        Written once per settled arrangement -- never per motion event.
+        """
+        stored = self.config_manager.set_console_order(order)
+        self.visible_consoles = apply_console_order(self.visible_consoles, stored)
+        self.sidebar.rebuild(self.visible_consoles)
+        self.sidebar.reselect_current()
+        # The groups on "All", "Favorites" and the collections follow the same
+        # order (issue #384), so their pages have to be built again.
+        self.pages.invalidate_contents()
+        self._reload_current_page()
+        return stored
+
+    def move_console_in_order(self, console, delta):
+        """Move one console up or down; True when it actually moved."""
+        current = list(self.visible_consoles)
+        moved = move_console(current, console, delta)
+        if moved == current:
+            return False
+        self.reorder_consoles(merge_visible_into_order(
+            self.config_manager.get_console_order(), moved
+        ))
+        return True
+
+    def place_console_in_order(self, console, before):
+        """Drop ``console`` just above ``before`` (``None`` puts it last)."""
+        current = list(self.visible_consoles)
+        moved = place_console(current, console, before)
+        if moved == current:
+            return False
+        self.reorder_consoles(merge_visible_into_order(
+            self.config_manager.get_console_order(), moved
+        ))
+        return True
 
     def _on_console_selected(self, _listbox, row):
         if not row:

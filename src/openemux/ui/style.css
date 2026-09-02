@@ -29,6 +29,21 @@
     font-size: 0.95rem;
 }
 
+/* Dragging a console row into place (issue #386): the line it would land on,
+   and the row that is travelling. Drawn with a box-shadow inset rather than a
+   border, so the row keeps its height and the list below it does not jump. */
+.console-drop-above {
+    box-shadow: inset 0 2px 0 0 @accent_bg_color;
+}
+
+.console-drop-below {
+    box-shadow: inset 0 -2px 0 0 @accent_bg_color;
+}
+
+.console-row-dragging {
+    opacity: 0.45;
+}
+
 /* The heading over each console's group on "All", "Favorites" and the
    collections (issue #384). The count sits beside the name rather than under
    it, so the header costs one line and the games stay the tallest thing on
