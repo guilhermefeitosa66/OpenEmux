@@ -27,7 +27,6 @@ from openemux.core.library_view import (
     list_thumb_size,
     normalize_view_mode,
     normalize_zoom,
-    renders_cartridge,
     scale_length,
     scale_spacing,
 )
