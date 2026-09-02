@@ -120,6 +120,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.pages = LibraryPages(self)
         self.play_history = PlayHistory(self.config_manager.get_play_history_file())
         self.visible_consoles = []
+        # The queued "remember this view" idle, so a sweep through the sidebar
+        # is one write and not one per row (issue #383).
+        self._remember_view_source = None
         self._cover_sync_running = False
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
@@ -226,6 +229,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
+        # The last word on where the library was left (issue #383). The
+        # per-navigation write is what survives a crash or a session logout;
+        # this one catches a view changed by something other than the sidebar.
+        self.connect("close-request", self._on_close_remember_view)
 
         self._install_escape_handler()
 
@@ -235,7 +242,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._click_debug_controller.connect("pressed", self._on_global_click_pressed)
         self.add_controller(self._click_debug_controller)
 
-        self.refresh_library()
+        # Open where the user left it (issue #383). A stored view that is gone
+        # by now -- a console with no ROMs any more, a deleted collection, the
+        # favorites emptied -- is landing_view()'s problem, and it falls back
+        # to Favorites or All by the same rule a rescan uses.
+        self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
         self._start_update_check()
@@ -1803,6 +1814,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # its empty state is dropped (issue #382). On idle: the list is
         # mid-selection here, and removing a row from under it is not.
         GLib.idle_add(self._sync_favorites_row_idle)
+        self._remember_view_soon()
         # On a collapsed (narrow) layout, reveal the content pane.
         if self.split_view.get_collapsed():
             self.split_view.set_show_content(True)
@@ -1810,6 +1822,38 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _sync_favorites_row_idle(self):
         self.sidebar.sync_favorites_row()
         return GLib.SOURCE_REMOVE
+
+    def _remember_view_soon(self):
+        """Queue a write of the current view, at most one per idle turn.
+
+        Writing from the close handler alone loses the view whenever the
+        process does not exit cleanly -- a crash, a pkill, a session logout --
+        and the file is a few dozen bytes written atomically, so it is written
+        as the view changes instead. Coalesced on an idle so a gamepad
+        sweeping the sidebar does not write once per row (issue #383).
+        """
+        if self._remember_view_source is not None:
+            return
+        self._remember_view_source = GLib.idle_add(self._remember_view_idle)
+
+    def _remember_view_idle(self):
+        self._remember_view_source = None
+        self._remember_current_view()
+        return GLib.SOURCE_REMOVE
+
+    def _remember_current_view(self):
+        """Store where the library is now, if it is anywhere at all."""
+        view = self.current_console
+        if not view or view == LIBRARY_EMPTY_ID:
+            # An empty library has its own landing page and nothing to
+            # remember; overwriting the stored view with it would throw away
+            # the console the user was on before the drive went missing.
+            return
+        self.config_manager.session.set_last_view(view)
+
+    def _on_close_remember_view(self, *_args):
+        self._remember_current_view()
+        return False
 
     def _set_search_enabled(self, enabled):
         if not enabled:

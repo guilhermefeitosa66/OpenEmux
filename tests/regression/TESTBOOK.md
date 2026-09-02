@@ -1066,6 +1066,71 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `tests/test_context_menu.py` (the ownership rule and the guarded unparent); the UI
   half is the human's, and the launch log must gain no `Gtk-CRITICAL`.
 
+### RT-299 — The library opens where it was left
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library.
+- **Steps:**
+  1. Select "SFC - Super Nintendo (SNES)" in the sidebar.
+  2. Note the modification time of `~/.openemux/config.yaml` in the container.
+  3. Restart the app (`make devbox-app ACTION=restart`).
+  4. Repeat with "All", and with a collection.
+- **Expected:** The app opens on SNES, with the sidebar row selected and the header reading
+  "SFC — Super Nintendo (SNES)". Nothing was remembered before: the landing page was computed from
+  what was on screen right now, and at startup that is nothing (issue #383). `config.yaml` is
+  **untouched** — the view is written to `session.json`, a file of its own, because it is rewritten
+  on every navigation and the ROM path, the credentials, the per-console cores and the input
+  profiles are not.
+- **Check:** a screenshot after the restart; the log's last `ui view changed` line reads
+  `visible_view=SFC current_console=SFC`; `cat ~/.openemux/session.json` in the container shows
+  `"last_view": "SFC"`; `config.yaml`'s mtime is unchanged across steps 1-3.
+- **Restore:** none — the next navigation stores the next view.
+
+### RT-300 — A missing, stale or corrupt session file never costs a launch
+- **Area:** Navigation
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (the probe works inside `$SCRATCH`).
+- **Steps:** As a QA person: delete `session.json` and start the app; then put garbage in it and
+  start again; then store a console, delete its ROMs, and start again.
+- **Expected:** No session file opens on "Favorites" when `FAVORITES.list` has entries and on "All"
+  otherwise. A stored view that is gone falls back by the same rule. A corrupt file is set aside as
+  `session.json.broken-<timestamp>` and the app opens on the default — never a crash, and never a
+  silent overwrite of something readable (issue #209).
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import shutil
+  from pathlib import Path
+  from openemux.core import state_recovery
+  from openemux.core.session_store import SessionStore
+  from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, landing_view
+
+  base = Path("$SCRATCH") / "rt300"
+  shutil.rmtree(base, ignore_errors=True)
+  base.mkdir(parents=True)
+  path = base / "session.json"
+
+  assert SessionStore(path).get_last_view() is None, "a fresh install remembers nothing"
+  assert not path.exists(), "reading must not create the file"
+
+  SessionStore(path).set_last_view("SFC")
+  assert SessionStore(path).get_last_view() == "SFC", "the view did not survive"
+
+  # A stored console with no ROMs any more.
+  assert landing_view(["FC"], "SFC", has_favorites=True) == FAVORITES_ID
+  assert landing_view(["FC"], "SFC", has_favorites=False) == ALL_CONSOLES_ID
+
+  state_recovery.reset_quarantine_log()
+  path.write_text("{not json", encoding="utf-8")
+  assert SessionStore(path).get_last_view() is None, "a corrupt file must not crash"
+  kept = state_recovery.quarantined_files()
+  assert len(kept) == 1 and Path(kept[0]["kept_as"]).exists(), "nothing was set aside"
+  assert Path(kept[0]["kept_as"]).read_text(encoding="utf-8") == "{not json"
+  print("RT-300 OK")
+  EOF
+  ```
+- **Restore:** none — everything happens inside `$SCRATCH`.
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render

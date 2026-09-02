@@ -65,6 +65,7 @@ class NothingLeaksIntoTheRealHomeTests(unittest.TestCase):
             "core options": self.config.core_options.config_file,
             "achievements": self.config.achievements.config_file,
             "play history": self.config.get_play_history_file(),
+            "session": self.config.session.session_file,
         }
         for name, path in stores.items():
             with self.subTest(store=name):
@@ -88,7 +89,7 @@ class NothingLeaksIntoTheRealHomeTests(unittest.TestCase):
             self.assertIsNone(other.get_rom_core_override("/roms/SFC/game.sfc"))
 
     def test_the_store_names_it_asks_for_are_all_known(self):
-        for name in ("config", "input", "shaders", "cores", "play_history"):
+        for name in ("config", "input", "shaders", "cores", "play_history", "session"):
             with self.subTest(store=name):
                 self.assertIn(name, STORE_FILENAMES)
 
