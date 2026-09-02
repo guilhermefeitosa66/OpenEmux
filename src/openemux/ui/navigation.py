@@ -68,6 +68,7 @@ def resolve(context, action):
       ("open-menu",)             open the window's primary (hamburger) menu
       ("favorite",)              toggle favourite on the focused card
       ("console-delta", n)       select previous/next console (wraps)
+      ("move-console", n)        move the focused console up/down the sidebar
       ("close-search",)          leave search mode if it is open
       ("noop",)                  nothing sensible in this context
     """
@@ -203,8 +204,16 @@ def pane_key_command(context, keyval, shift=False, ctrl=False):
     if context == CTX_SIDEBAR:
         if keyval in (Gdk.KEY_Right, Gdk.KEY_KP_Right) or forward_tab:
             return ("focus-grid",)
-        # Up/Down are left alone: the list box moves *and* selects, which is
-        # what makes the page follow the highlighted console.
+        # Ctrl+Up/Ctrl+Down move the console itself (issue #386). The sidebar
+        # is driven by the keyboard and the gamepad as much as by the pointer,
+        # and drag-and-drop is unusable from either -- so the arrangement has
+        # to be reachable without one.
+        if ctrl and keyval in (Gdk.KEY_Up, Gdk.KEY_KP_Up):
+            return ("move-console", -1)
+        if ctrl and keyval in (Gdk.KEY_Down, Gdk.KEY_KP_Down):
+            return ("move-console", 1)
+        # Plain Up/Down are left alone: the list box moves *and* selects, which
+        # is what makes the page follow the highlighted console.
         return None
 
     if context in (CTX_GRID, CTX_GRID_SELECTION):
@@ -699,6 +708,26 @@ class NavigationController:
         if was_in_grid:
             # The page was just (re)rendered; focus its grid on the next tick.
             GLib.idle_add(self._cmd_focus_grid)
+
+    def _cmd_move_console(self, delta):
+        """Ctrl+Up / Ctrl+Down: move the focused console row (issue #386).
+
+        The keyboard path is not optional. Drag-and-drop is unusable with a
+        keyboard or a gamepad, and both drive this sidebar.
+        """
+        window = self.window
+        row = window.console_list.get_selected_row()
+        console = getattr(row, "id", None)
+        if console is None or console not in window.visible_consoles:
+            # "All", "Favorites" and the collections stay above the consoles
+            # and are not part of the arrangement.
+            return
+        if not window.move_console_in_order(console, delta):
+            return
+        # The list was rebuilt; keep the user on the console they just moved.
+        moved = window.sidebar.find_row(console)
+        if moved is not None:
+            moved.grab_focus()
 
     # ----- hint bar --------------------------------------------------------
 

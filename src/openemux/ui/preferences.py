@@ -25,6 +25,7 @@ from openemux.core import (
     save_backup,
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
+from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
 from openemux.core.gamepad_reader import describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
@@ -215,9 +216,101 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         sync_row.connect("activated", lambda _r: self.win._show_sync_covers_dialog())
         maint_group.add(sync_row)
         page.add(maint_group)
+        page.add(self._build_console_order_group())
         page.add(self._build_artwork_providers_group())
         page.add(self._build_screenscraper_group())
         return page
+
+    # ----- Console order ---------------------------------------------------
+    def _build_console_order_group(self):
+        """The sidebar's console order, for anyone who is not going to drag.
+
+        Drag-and-drop is unusable with a keyboard or a gamepad, and both drive
+        the sidebar -- so the arrangement is reachable here too (issue #386).
+        Same shape as the artwork providers above: one uniform row per console
+        with move up/down on the right.
+
+        The list is the *arrangement*, not the library: a console the stored
+        order knows keeps its row even with no games right now, because that
+        slot is what brings it back where the user put it.
+        """
+        self._console_order_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.console_order"),
+            description=self.t("prefs.console_order.description"),
+        )
+        restore = Gtk.Button(label=self.t("prefs.console_order.restore"))
+        restore.set_valign(Gtk.Align.CENTER)
+        restore.add_css_class("flat")
+        restore.connect("clicked", lambda _b: self._restore_console_order())
+        self._console_order_group.set_header_suffix(restore)
+        self._console_order_rows = []
+        self._rebuild_console_order_rows()
+        return self._console_order_group
+
+    def _console_order_list(self):
+        """Every console in the arrangement: the ones with games, plus the ones
+        the stored order remembers."""
+        stored = self.config.get_console_order()
+        present = list(getattr(self.win, "visible_consoles", []) or [])
+        known = list(dict.fromkeys(present + stored))
+        return apply_console_order(known, stored), set(present)
+
+    def _rebuild_console_order_rows(self):
+        for row in self._console_order_rows:
+            self._console_order_group.remove(row)
+        self._console_order_rows = []
+        consoles, present = self._console_order_list()
+        if not consoles:
+            row = Adw.ActionRow(
+                title=self.t("prefs.console_order.empty"),
+                subtitle=self.t("prefs.console_order.empty.subtitle"),
+            )
+            self._console_order_group.add(row)
+            self._console_order_rows.append(row)
+            return
+        for index, console in enumerate(consoles):
+            row = self._make_console_order_row(
+                console, index, len(consoles), console in present
+            )
+            self._console_order_group.add(row)
+            self._console_order_rows.append(row)
+
+    def _make_console_order_row(self, console, index, count, has_games):
+        row = Adw.ActionRow(
+            title=f"{console} - {get_system_display_name(console)}",
+            subtitle="" if has_games else self.t("prefs.console_order.no_games"),
+        )
+        row.add_prefix(console_icon(console))
+
+        up = Gtk.Button(icon_name="go-up-symbolic")
+        up.set_tooltip_text(self.t("sidebar.move_up"))
+        up.set_valign(Gtk.Align.CENTER)
+        up.add_css_class("flat")
+        up.set_sensitive(index > 0)
+        up.connect("clicked", lambda _b, c=console: self._move_console(c, -1))
+        row.add_suffix(up)
+
+        down = Gtk.Button(icon_name="go-down-symbolic")
+        down.set_tooltip_text(self.t("sidebar.move_down"))
+        down.set_valign(Gtk.Align.CENTER)
+        down.add_css_class("flat")
+        down.set_sensitive(index < count - 1)
+        down.connect("clicked", lambda _b, c=console: self._move_console(c, +1))
+        row.add_suffix(down)
+        return row
+
+    def _move_console(self, console, delta):
+        consoles, _ = self._console_order_list()
+        moved = move_console(consoles, console, delta)
+        if moved == consoles:
+            return
+        self.win.reorder_consoles(moved)
+        self._rebuild_console_order_rows()
+
+    def _restore_console_order(self):
+        self.config.clear_console_order()
+        self.win.reorder_consoles([])
+        self._rebuild_console_order_rows()
 
     # ----- Artwork providers ----------------------------------------------
     def _build_artwork_providers_group(self):
