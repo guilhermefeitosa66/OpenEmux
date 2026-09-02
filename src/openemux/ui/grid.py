@@ -27,7 +27,6 @@ from openemux.core.library_view import (
     list_thumb_size,
     normalize_view_mode,
     normalize_zoom,
-    renders_cartridge,
     scale_length,
     scale_spacing,
 )
@@ -44,6 +43,7 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     LIST_ROW_SPACING,
     FixedSizePicture,
     card_size_for,
+    cartridge_frame_for,
     cartridge_frame_svg,
     columns_and_slack,
     cover_size_for_console,
@@ -56,6 +56,7 @@ from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
     RomEntry,
     RomItem,
     entry_matches,
+    item_for_widget,
 )
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,9 @@ class RomGrid(Gtk.GridView):
     #: from the empty page under the pointer without importing the card.
     card_class = RomItem
 
+    #: One console's grid, not a page of several (see ui/grid_group.py).
+    is_group = False
+
     def __init__(
         self,
         console,
@@ -109,6 +113,7 @@ class RomGrid(Gtk.GridView):
         on_selection_changed=None,
         context_services=None,
         frame_color_for_rom=None,
+        band_host=None,
     ):
         # Before anything else: the GObject has to exist before this widget
         # can be configured. The model and the factory are attached at the
@@ -120,6 +125,12 @@ class RomGrid(Gtk.GridView):
         # Resolves a ROM's cartridge shell color (issue #79); None keeps every
         # card on the authored shell.
         self._frame_color_for_rom = frame_color_for_rom
+        # Where the rubber band and the click-on-empty-space gesture live.
+        # Normally the page's scroller, so a drag anywhere on the page starts
+        # a band; a grid that shares its scroller with the other groups of a
+        # mixed page (issue #384) hands its own widget instead, or the last
+        # group to be mapped would take the gesture from all the others.
+        self.band_host = band_host
         self.on_launch_callback = on_launch_callback
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
@@ -161,7 +172,6 @@ class RomGrid(Gtk.GridView):
         self._card_margin = self._spacing // 2
         self._margin = max(0, (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin)
 
-        cartridge_frame_path = None
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. Per console it follows that console's box-art
         # proportions; pages mixing consoles have no single shape to follow, so
@@ -171,13 +181,16 @@ class RomGrid(Gtk.GridView):
             if mixed_consoles
             else cover_size_for_console(console, self.zoom)
         )
-        if not mixed_consoles and not self.compact and renders_cartridge(self.view_mode):
-            # The card shape comes from the frame art itself: fixed width, and
-            # the height that keeps the cartridge's own proportions.
-            cartridge_frame_path = cartridge_frame_svg(console)
-            if cartridge_frame_path:
-                frame = cartridge_render.load_frame(cartridge_frame_path)
-                cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+        # The card shape comes from the frame art itself: fixed width, and the
+        # height that keeps the cartridge's own proportions. Since issue #384 a
+        # mixed page is one grid per console, so this reaches "All", "Favorites"
+        # and the collections too (issue #385).
+        cartridge_frame_path = cartridge_frame_for(
+            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
+        )
+        if cartridge_frame_path:
+            frame = cartridge_render.load_frame(cartridge_frame_path)
+            cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
 
         if self.compact:
             # Rows show the box art itself, never a cartridge: a frame drawn at
@@ -300,6 +313,10 @@ class RomGrid(Gtk.GridView):
     def entries(self):
         """Every ROM on this page, in model order."""
         return list(self._entries)
+
+    def count(self):
+        """How many ROMs this grid is showing -- what the filter lets through."""
+        return len(self.visible_entries())
 
     def visible_entries(self):
         """The ROMs the filter currently lets through, in visual order."""
@@ -625,24 +642,23 @@ class RomGrid(Gtk.GridView):
 
     @staticmethod
     def item_for_widget(widget):
-        """The RomItem for ``widget``, whether it is inside one or wraps one.
+        """The RomItem for ``widget``, whether it is inside one or wraps one."""
+        return item_for_widget(widget)
 
-        Keyboard/gamepad focus sits on the list-item wrapper, whose RomItem is
-        its *child*; a pointer press lands on a widget *inside* the RomItem.
-        Both have to resolve, so the walk checks downwards at every step and
-        upwards until it runs out of parents.
+    def has_focus_memory(self):
+        """Whether this grid remembers a card the user was last on.
+
+        A grouped page asks each of its grids in turn, so coming back from the
+        sidebar lands in the group the user actually left (issue #384).
         """
-        node = widget
-        while node is not None:
-            if isinstance(node, RomItem):
-                return node
-            if isinstance(node.get_first_child(), RomItem):
-                return node.get_first_child()
-            node = node.get_parent()
-        return None
+        return self._focused_entry is not None
 
     def focus_first_card(self):
         return self._focus_position(0)
+
+    def focus_last_card(self):
+        """The last card the filter lets through; for entering from below."""
+        return self._focus_position(len(self.visible_entries()) - 1)
 
     def focus_restore(self):
         """Focus the last card the user was on, else the first one."""

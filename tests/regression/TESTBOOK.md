@@ -907,12 +907,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Put a ROM in the library folder and launch it again.
 - **Expected:** Step 1 shows "Your library is empty", the drag-and-drop line and the "Import
   ROMs…" / "Choose a folder instead" buttons, with an **empty sidebar**. That page could never be
-  reached before: the Favorites row is always first in the list, the list selects its first row as
+  reached before: the Favorites row was always first in the list, the list selects its first row as
   soon as it takes focus, and the user was met with "No favorites yet — right-click a game and
-  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the whole
-  sidebar back ("All", "Favorites", the console) and lands on "Favorites" as usual.
+  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the sidebar
+  back — "All" and the console, and **no "Favorites"**: nothing has been starred yet, so the row
+  does not exist (issue #382) — and lands on "All".
 - **Check:** a screenshot per step; the launch log's last `ui view changed` line reads
-  `visible_view=library-empty` for step 1 and `visible_view=__favorites__` for step 2; suite file
+  `visible_view=library-empty` for step 1 and `visible_view=__all__` for step 2; suite file
   `tests/test_library_landing.py`.
 - **Restore:** delete the throwaway `HOME`.
 
@@ -924,15 +925,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   open a collection at launch — the startup scan rescans on every single launch.
 - **Expected:** You stay in the collection, with its scroll position. Collection scopes were never
   in the set of places a rebuilt library would land, so every rescan threw the user into Favorites
-  (issue #225). A collection deleted since the rescan started still falls back to Favorites, the
-  way a console that is gone does.
+  (issue #225). A collection deleted since the rescan started still falls back the way a console
+  that is gone does — to "Favorites" on a library that has some, to "All" on one that has none
+  (issue #382).
 - **Check:**
   ```bash
   SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
   import os, shutil
   from pathlib import Path
   from openemux.core.collections import CollectionManager
-  from openemux.ui.scopes import FAVORITES_ID, collection_scope, landing_view
+  from openemux.ui.scopes import (
+      ALL_CONSOLES_ID,
+      FAVORITES_ID,
+      collection_scope,
+      landing_view,
+  )
 
   base = Path(os.environ["SCRATCH"]) / "rt027"
   shutil.rmtree(base, ignore_errors=True)
@@ -943,7 +950,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
   scope = collection_scope("hard-games")
   assert landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
-  assert landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
+  gone = collection_scope("gone")
+  assert landing_view(["FC"], gone, slugs, has_favorites=True) == FAVORITES_ID
+  assert landing_view(["FC"], gone, slugs, has_favorites=False) == ALL_CONSOLES_ID
   print("RT-027 OK")
   EOF
   ```
@@ -1057,6 +1066,71 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `tests/test_context_menu.py` (the ownership rule and the guarded unparent); the UI
   half is the human's, and the launch log must gain no `Gtk-CRITICAL`.
 
+### RT-299 — The library opens where it was left
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library.
+- **Steps:**
+  1. Select "SFC - Super Nintendo (SNES)" in the sidebar.
+  2. Note the modification time of `~/.openemux/config.yaml` in the container.
+  3. Restart the app (`make devbox-app ACTION=restart`).
+  4. Repeat with "All", and with a collection.
+- **Expected:** The app opens on SNES, with the sidebar row selected and the header reading
+  "SFC — Super Nintendo (SNES)". Nothing was remembered before: the landing page was computed from
+  what was on screen right now, and at startup that is nothing (issue #383). `config.yaml` is
+  **untouched** — the view is written to `session.json`, a file of its own, because it is rewritten
+  on every navigation and the ROM path, the credentials, the per-console cores and the input
+  profiles are not.
+- **Check:** a screenshot after the restart; the log's last `ui view changed` line reads
+  `visible_view=SFC current_console=SFC`; `cat ~/.openemux/session.json` in the container shows
+  `"last_view": "SFC"`; `config.yaml`'s mtime is unchanged across steps 1-3.
+- **Restore:** none — the next navigation stores the next view.
+
+### RT-300 — A missing, stale or corrupt session file never costs a launch
+- **Area:** Navigation
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (the probe works inside `$SCRATCH`).
+- **Steps:** As a QA person: delete `session.json` and start the app; then put garbage in it and
+  start again; then store a console, delete its ROMs, and start again.
+- **Expected:** No session file opens on "Favorites" when `FAVORITES.list` has entries and on "All"
+  otherwise. A stored view that is gone falls back by the same rule. A corrupt file is set aside as
+  `session.json.broken-<timestamp>` and the app opens on the default — never a crash, and never a
+  silent overwrite of something readable (issue #209).
+- **Check:**
+  ```bash
+  SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import shutil
+  from pathlib import Path
+  from openemux.core import state_recovery
+  from openemux.core.session_store import SessionStore
+  from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, landing_view
+
+  base = Path("$SCRATCH") / "rt300"
+  shutil.rmtree(base, ignore_errors=True)
+  base.mkdir(parents=True)
+  path = base / "session.json"
+
+  assert SessionStore(path).get_last_view() is None, "a fresh install remembers nothing"
+  assert not path.exists(), "reading must not create the file"
+
+  SessionStore(path).set_last_view("SFC")
+  assert SessionStore(path).get_last_view() == "SFC", "the view did not survive"
+
+  # A stored console with no ROMs any more.
+  assert landing_view(["FC"], "SFC", has_favorites=True) == FAVORITES_ID
+  assert landing_view(["FC"], "SFC", has_favorites=False) == ALL_CONSOLES_ID
+
+  state_recovery.reset_quarantine_log()
+  path.write_text("{not json", encoding="utf-8")
+  assert SessionStore(path).get_last_view() is None, "a corrupt file must not crash"
+  kept = state_recovery.quarantined_files()
+  assert len(kept) == 1 and Path(kept[0]["kept_as"]).exists(), "nothing was set aside"
+  assert Path(kept[0]["kept_as"]).read_text(encoding="utf-8") == "{not json"
+  print("RT-300 OK")
+  EOF
+  ```
+- **Restore:** none — everything happens inside `$SCRATCH`.
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
@@ -1066,7 +1140,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. In the header bar, switch through the three view segments: cartridge shelf, cover grid,
      compact list.
-- **Expected:** Each mode renders the same games; no blank canvas, no crash.
+- **Expected:** Each mode renders the same games; no blank canvas, no crash. On "All", "Favorites"
+  and a collection too — picking "Cartridge" there used to change nothing at all (issue #385); see
+  RT-305.
 - **Check:** One screenshot per mode. Locate the three-segment switcher on a probe capture first —
   its position moves as the header evolves.
 - **Restore:** Return to the mode that was active at the start (record it on the first capture).
@@ -1110,12 +1186,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-PROBE
 - **Preconditions:** `Xephyr` installed (`xserver-xephyr`). Nothing in `tests/` can build a
   `RomGrid`: without a display, constructing a GTK widget segfaults the interpreter.
-- **Steps:** As a QA person: open a console with a few dozen games, then open "All consoles" on a
-  library of a few thousand, and watch how long the page takes to appear.
+- **Steps:** As a QA person: open a console with a few dozen games, then open a console with a few
+  thousand, and watch how long the page takes to appear.
 - **Expected:** Both pages appear at once, and the big one costs no more than the small one: the
   grid builds only the cards on screen and re-binds them as it scrolls, so the number of live
   cards is the same on both (issue #219). Before virtualization the page held one live card and
   one decoded cover texture per ROM, for as long as it existed.
+  The guarantee is per *grid*. Since issue #384 a mixed page ("All", "Favorites", a collection) is
+  one grid per console stacked in the page's scroller, and each of those is allocated its natural
+  height — so a mixed page builds a card per ROM. Grouping and virtualizing across sections at the
+  same time needs a layout GtkGridView does not have; the console pages, where a single console's
+  thousands of ROMs live, are unaffected.
 - **Check:**
   ```bash
   Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
@@ -1138,6 +1219,203 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** `tests/test_cover_cache.py` — the byte-budget eviction, one big cover evicting several
   small ones, and a cover larger than the whole budget still being kept.
 
+### RT-301 — "All", "Favorites" and the collections group by console
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with at least two consoles, two
+  favorites on different consoles and a collection holding games from two consoles.
+- **Steps:**
+  1. Open "All".
+  2. Open "Favorites".
+  3. Open the collection.
+- **Expected:** Each page draws one group per console, under a header carrying the console's icon,
+  its name and the number of games in that group, and the groups follow **the order the consoles
+  have in the sidebar**. A console with no games on the page has no group and no header. The cards
+  inside a group follow that console's box-art proportions and no longer print the console's name
+  under every title — the header above them says it (issue #384). A single-console page is
+  unchanged.
+- **Check:** a screenshot per page; the group headers read in the same order as the sidebar rows;
+  the window subtitle counts the whole page. Suite files `tests/test_library_groups.py` and
+  `tests/test_grid_group.py`.
+- **Restore:** none.
+
+### RT-302 — Grouping follows the given console order and drops empty groups
+- **Area:** Views
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: import a console the stored order has never seen, and look at where
+  its group lands on "All".
+- **Expected:** The groups come out in the order they were asked for; a console with no games on
+  the page produces no group; a console the order does not know comes after the ones it does,
+  rather than at a position nobody chose; and the order *inside* a group is the page's sort order,
+  untouched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.library_groups import group_roms_by_console
+
+  def rom(name, console):
+      return {"name": name, "console": console, "path": f"/roms/{console}/{name}"}
+
+  roms = [rom("Aladdin", "MD"), rom("Chrono", "SFC"), rom("Sonic", "MD"), rom("Zelda", "SFC")]
+  groups = group_roms_by_console(roms, ["SFC", "GB", "MD"])
+  assert [c for c, _ in groups] == ["SFC", "MD"], "an empty group was kept"
+  assert [r["name"] for r in dict(groups)["SFC"]] == ["Chrono", "Zelda"], "order moved"
+
+  # A console the order has never seen comes after the ones it knows.
+  assert [c for c, _ in group_roms_by_console(roms, ["SFC"])] == ["SFC", "MD"]
+  assert sum(len(g) for _, g in groups) == len(roms), "a game was lost"
+  print("RT-302 OK")
+  EOF
+  ```
+- **Restore:** none.
+
+### RT-303 — The grouped page behaves as one grid
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on "All", with games on at least three consoles.
+- **Steps:**
+  1. Press `Ctrl+F` and type a word that matches games on two consoles only.
+  2. Clear the search.
+  3. Switch to list view and tick "Select all".
+  4. Switch back to cover view, focus the grid and hold `Down` past the bottom of the first group.
+- **Expected:** Step 1 leaves only the matching groups, each header's count following the search;
+  the groups the query empties are hidden, headers and all. Step 2 brings them all back. Step 3
+  selects **every** game on the page and the selection bar says so — one group full is not the
+  page full. Step 4 walks out of the first group and into the next one instead of stopping at its
+  last row; `Up` walks back into the previous group's last card (issue #384).
+- **Check:** a screenshot per step; the selection bar's count equals the window subtitle's; suite
+  file `tests/test_grid_group.py`.
+- **Restore:** clear the selection and the search; step 4 leaves nothing behind.
+
+### RT-304 — "Platform" is not offered where it would do nothing
+- **Area:** Views
+- **Mode:** AUTO-SUITE
+- **Preconditions:** App running.
+- **Steps:**
+  1. Open "All" and open the view-mode menu's "Sort by" submenu.
+  2. Open a console page and do the same.
+- **Expected:** "Platform" is absent on the grouped page — every game already sits under its
+  console's header, so picking it would change nothing the user can see (issue #384). The console
+  page still lists it.
+- **Check:** suite file `tests/test_grid_group.py` (`SortOrdersOnAGroupedPageTests`); by hand, a
+  screenshot of each submenu.
+- **Restore:** none.
+
+### RT-305 — The cartridge shelf reaches "All", "Favorites" and the collections
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with games on several consoles, at least one of
+  which has cartridge art and one of which (a disc system — PlayStation, Saturn, PSP) has none.
+- **Steps:**
+  1. Open "All" and choose "Cartridge Grid".
+  2. Scroll through two or three groups.
+  3. Zoom in twice (`Ctrl++`), then reset (`Ctrl+0`).
+  4. Restart the app.
+  5. Right-click a game in a group whose console has more than one shell colour.
+- **Expected:** Step 1 draws each group's games in **that group's console cartridge** — the shelf
+  is the look the app ships with, and it was exactly the look those pages could not have (issue
+  #385). Step 2 shows each console's own shell and its own proportions, one group after another,
+  and the group of the disc system falls back to covers without costing the rest of the page its
+  shelf. Step 3 scales the frames as it does on a console page. Step 4 comes back in cartridge
+  view: the mode is remembered per scope. Step 5 offers "Cartridge color", and picking one
+  re-composes that card alone.
+- **Check:** a screenshot per step; suite file `tests/test_cartridge_on_mixed_pages.py`;
+  `cartridge_colors.config` gains a `rom_overrides` entry for the ROM picked in step 5 and no other.
+- **Restore:** clear the colour picked in step 5 ("Default"); return the page to the view mode it
+  started in.
+
+### RT-306 — A console with no cartridge art draws covers, on any page
+- **Area:** Views
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open "All" in cartridge view on a library that has a PlayStation
+  group.
+- **Expected:** That group shows box art and every other group shows cartridges — the same
+  fallback a console page has always had, applied per group (issue #385). List view never draws a
+  frame on any page: at thumbnail size it is an unreadable smudge.
+- **Check:** suite file `tests/test_cartridge_on_mixed_pages.py`.
+- **Restore:** none.
+
+### RT-307 — A console can be dragged into place, and stays there
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with at least three consoles.
+- **Steps:**
+  1. Drag the last console row and drop it above the first one.
+  2. Read `~/.openemux/config.yaml` in the container.
+  3. Restart the app.
+  4. Open "All".
+- **Expected:** Step 1 shows a line where the console will land while the pointer is over a row,
+  and the row moves on release. The order was the declaration order of a Python list before —
+  something nobody chose and nobody could change (issue #386). Step 2 shows `ui.console_order` with
+  the new arrangement, written **once**, on the drop and not per motion event. Step 3 comes back to
+  the same order. Step 4 shows the console groups in it too, since both read the same list (#384).
+  "All", "Favorites" and the playlists stay above the consoles throughout and can be neither
+  dragged nor displaced.
+- **Check:** a screenshot mid-drag showing the drop line and one after the drop; the log carries one
+  `sidebar reorder: console=<id> before=<id>` line for the drop; `ui.console_order` in `config.yaml`;
+  suite file `tests/test_console_order.py`.
+- **Restore:** Settings → Library → "Restore default order".
+
+### RT-308 — The order is reachable without a pointer
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, focus in the sidebar on a console row.
+- **Steps:**
+  1. Press `Ctrl+Up` twice, then `Ctrl+Down` once.
+  2. Right-click the topmost console row and read the menu.
+  3. Open Settings → Library → "Console Order" and use the arrows, then "Restore default order".
+- **Expected:** Step 1 moves the console and **keeps the focus on it**, and it stops at the top of
+  the consoles rather than climbing above "All", "Favorites" or the playlists. Drag-and-drop is
+  unusable with a keyboard or a gamepad and both drive this sidebar, so the keyboard path is not
+  optional (issue #386). Step 2 offers "Move up" / "Move down", and the topmost console is offered
+  only "Move down" — an entry that can only do nothing is worse than no entry. Step 3 shows the
+  same order, edits it, and the sidebar follows immediately with no restart and no rescan;
+  "Restore default order" brings back the `SYSTEMS` order.
+- **Check:** a screenshot per step; `ui.console_order` after step 3 is `[]`; suite file
+  `tests/test_console_order.py`.
+- **Restore:** step 3 ends on the default order.
+
+### RT-309 — A console with no games keeps its place in the arrangement
+- **Area:** Views
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: arrange the consoles, delete every ROM of one of them, restart, then
+  import one of its games again.
+- **Expected:** It comes back where it was. The stored order is the user's arrangement, not a
+  snapshot of the library, so a console with nothing in it right now keeps its slot; a console the
+  order has never seen lands after the ones it knows, and stays put once moved (issue #386).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.console_order import (
+      apply_console_order,
+      merge_visible_into_order,
+      normalize_console_order,
+  )
+  from openemux.core.systems import SYSTEM_IDS
+
+  # The arrangement survives the console going away and coming back.
+  stored = ["MD", "FC", "SFC"]
+  assert apply_console_order(["FC", "SFC"], stored) == ["FC", "SFC"]
+  assert apply_console_order(["SFC", "MD", "FC"], stored) == stored
+
+  # A drag rearranges only what is visible; the absent console keeps its slot.
+  assert merge_visible_into_order(stored, ["SFC", "FC"]) == ["MD", "SFC", "FC"]
+
+  # A console the order has never seen comes after the ones it knows.
+  assert merge_visible_into_order(["FC"], ["FC", "GB"]) == ["FC", "GB"]
+
+  # Garbage never reorders anything into something nobody asked for.
+  assert normalize_console_order(["SNES", "nope", 7, "SNES"]) == ["SFC"]
+  fallback = apply_console_order(["SFC", "FC"], "nonsense")
+  assert fallback == [c for c in SYSTEM_IDS if c in {"SFC", "FC"}]
+  print("RT-309 OK")
+  EOF
+  ```
+- **Restore:** none.
+
 ## Favorites & collections
 
 ### RT-040 — Favorite toggle round-trip
@@ -1148,10 +1426,69 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Focus the game and press `Ctrl+D`.
   2. Open "Favorites" in the sidebar and confirm the game is listed.
   3. Press `Ctrl+D` on it again.
-- **Expected:** The game enters and then leaves "Favorites"; the star indicator follows.
+- **Expected:** The game enters and then leaves "Favorites"; the star indicator follows. The
+  sidebar row is no longer a fixture of the list — see RT-297 for when it appears and goes.
 - **Check:** Screenshot with the game in "Favorites", and `FAVORITES.list` gaining and losing the
   ROM's path (`grep -c "<rom filename>" ~/.openemux/playlists/FAVORITES.list`).
 - **Restore:** Step 3 is the restore; verify the count is back to the initial value.
+
+### RT-297 — "Favorites" is in the sidebar only while something is favorited
+- **Area:** Favorites
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with **no** favorites
+  (`rm -f ~/.openemux/playlists/FAVORITES.list` inside the container, then
+  `make devbox-app ACTION=restart`).
+- **Steps:**
+  1. Look at the sidebar.
+  2. Focus a game and press `Ctrl+D`.
+  3. Open "Favorites", then go back to the console.
+  4. Press `Ctrl+D` on the same game again, while standing on "Favorites".
+  5. Select another row in the sidebar.
+- **Expected:** Step 1 lists "All", the collections and the consoles — no "Favorites". A place to
+  go should exist because there is something there, and the row led only to "No favorites yet:
+  right-click a game and choose Add to favorites" (issue #382). Step 2 makes the row appear
+  immediately, between "All" and the collections, with no rescan and no restart. Step 4 keeps the
+  row while it is the page being looked at, showing that empty state so the user can see what just
+  happened; step 5 is when it goes.
+- **Check:** a screenshot of the sidebar per step; `FAVORITES.list` present after step 2 and empty
+  after step 4; suite files `tests/test_library_landing.py` (`FavoritesRowTests`,
+  `LandingWithoutFavoritesTests`) and `tests/test_playlist_manager.py` (`HasFavoritesTests`).
+- **Restore:** step 4 already unstars the game; delete `FAVORITES.list` in the container if it is
+  left behind.
+
+### RT-298 — With no favorites, a library that lost its view lands on "All"
+- **Area:** Favorites
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: browse a console, delete its ROMs from outside the app and press `F5`
+  — the view you were on is gone and the library has to land somewhere.
+- **Expected:** "All". The fallback used to be "Favorites" unconditionally, which is now a row that
+  may not be in the sidebar at all — `sidebar.select()` would find nothing and the library would
+  land nowhere (issue #382). With favorites, "Favorites" is still the default.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.ui.scopes import (
+      ALL_CONSOLES_ID,
+      FAVORITES_ID,
+      default_landing_view,
+      landing_view,
+      sidebar_row_ids,
+  )
+
+  assert default_landing_view(False) == ALL_CONSOLES_ID
+  assert default_landing_view(True) == FAVORITES_ID
+  # A console that is gone, and "Favorites" itself over an empty list.
+  assert landing_view(["FC"], "SFC", has_favorites=False) == ALL_CONSOLES_ID
+  assert landing_view(["FC"], FAVORITES_ID, has_favorites=False) == ALL_CONSOLES_ID
+  assert landing_view(["FC"], FAVORITES_ID, has_favorites=True) == FAVORITES_ID
+  # And the row the fallback would select really is there, or really is not.
+  assert FAVORITES_ID not in sidebar_row_ids(["FC"], (), has_favorites=False)
+  assert FAVORITES_ID in sidebar_row_ids(["FC"], (), has_favorites=True)
+  print("RT-298 OK")
+  EOF
+  ```
+- **Restore:** none.
 
 ### RT-043 — A favorite on an unreachable drive survives a toggle
 - **Area:** Favorites

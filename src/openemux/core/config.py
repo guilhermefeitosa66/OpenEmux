@@ -32,10 +32,12 @@ from openemux.core.library_view import (
 )
 from openemux.core.input_profiles import InputProfileManager
 from openemux.core.paths import default_config_dir, get_real_home, store_path, is_running_in_flatpak
+from openemux.core.console_order import normalize_console_order
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.retroachievements import AchievementsStore
+from openemux.core.session_store import SessionStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
@@ -363,6 +365,9 @@ DEFAULT_CONFIG = {
         "gamepad_navigation": True,
         # Light, dark, or whatever the desktop is doing (issue #198).
         "theme": DEFAULT_THEME,
+        # The user's own order for the console rows (issue #386). Empty means
+        # the SYSTEMS order, which is what everyone had before.
+        "console_order": [],
     },
     "updates": {
         "check_on_startup": True,
@@ -468,6 +473,9 @@ class ConfigManager:
         # The RetroAchievements account (issue #300). Its own file, owner-only:
         # it holds a token, and config.yaml is not a credential store.
         self.achievements = AchievementsStore(self.store_path("achievements"))
+        # Which view the library was left on (issue #383). Its own file: it is
+        # rewritten on every navigation, and config.yaml holds the settings.
+        self.session = SessionStore(self.store_path("session"))
         self.config = self.load_config()
 
     def store_path(self, name):
@@ -904,6 +912,32 @@ class ConfigManager:
     def set_gamepad_navigation(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["gamepad_navigation"] = bool(enabled)
+        self.save_config()
+
+    def get_console_order(self):
+        """The user's console order, cleaned (issue #386).
+
+        A list of console ids. Empty means "the SYSTEMS order" -- the arrangement
+        nobody chose, which is still the right default.
+        """
+        return normalize_console_order(self.config.get("ui", {}).get("console_order"))
+
+    def set_console_order(self, order):
+        """Store the console order; returns what was actually kept.
+
+        Written once per drop, not once per motion event: the caller decides
+        when the arrangement has settled.
+        """
+        cleaned = normalize_console_order(order)
+        ui = self.config.setdefault("ui", {})
+        ui["console_order"] = list(cleaned)
+        self.save_config()
+        return cleaned
+
+    def clear_console_order(self):
+        """Back to the SYSTEMS order ("Restore default order")."""
+        ui = self.config.setdefault("ui", {})
+        ui["console_order"] = []
         self.save_config()
 
     def get_show_welcome_on_startup(self):

@@ -234,13 +234,15 @@ class GridSelection:
         item wrappers deny presses -- see RomGrid._on_factory_setup.
         """
         grid = self.grid
-        scroller = grid.get_ancestor(Gtk.ScrolledWindow)
-        if scroller is None:
-            return
-        # A GtkGridView is a scrollable, so the ScrolledWindow gives it the
-        # viewport directly rather than wrapping it in a GtkViewport. The
-        # ancestor lookup keeps working either way.
-        host = grid.get_ancestor(Gtk.Viewport) or scroller
+        host = getattr(grid, "band_host", None)
+        if host is None:
+            scroller = grid.get_ancestor(Gtk.ScrolledWindow)
+            if scroller is None:
+                return
+            # A GtkGridView is a scrollable, so the ScrolledWindow gives it the
+            # viewport directly rather than wrapping it in a GtkViewport. The
+            # ancestor lookup keeps working either way.
+            host = grid.get_ancestor(Gtk.Viewport) or scroller
         self._host = host
 
         previous = getattr(host, "_openemux_band_gesture", None)

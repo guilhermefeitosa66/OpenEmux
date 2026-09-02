@@ -88,6 +88,19 @@
   </keywords>
 
   <releases>
+    <release version="1.13.0" date="2026-09-02">
+      <description>
+        <p>The library becomes the user's own: it remembers where it was left, it groups what it shows, and the consoles sit in the order the user puts them in.</p>
+        <ul>
+          <li>"Favorites" is in the sidebar only while something is favorited, appearing with the first star and going with the last</li>
+          <li>The library reopens on the view it was closed on, stored in a small session file of its own</li>
+          <li>"All", "Favorites" and the collections group their games by console, each group under its own header and count</li>
+          <li>The cartridge shelf works on those pages: every group is drawn in its own console's frame, with per-ROM cartridge colours</li>
+          <li>Consoles can be reordered by dragging a sidebar row, with Ctrl+Up and Ctrl+Down, or from Preferences</li>
+          <li>A console with no games right now keeps its place in the arrangement for when it comes back</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.12.0" date="2026-08-28">
       <description>
         <p>OpenEmux arrives on Windows and on ARM, and the library it manages is faster and safer than it has ever been.</p>

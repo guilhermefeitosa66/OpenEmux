@@ -54,6 +54,9 @@ STORE_FILENAMES = {
     "core_options": "core_options.config",
     "achievements": "cheevos.config",
     "play_history": "play_history.json",
+    # Where the library was left (issue #383). Its own file because it is
+    # written on every view change; config.yaml is not.
+    "session": "session.json",
     "artwork_index": "artwork-index",
     "cartridge_cache": "cache/cartridges",
 }

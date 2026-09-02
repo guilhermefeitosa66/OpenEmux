@@ -17,7 +17,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, Gtk
+from gi.repository import Adw, Gdk, Gio, GObject, Gtk
 
 from openemux.core.library_view import VIEW_MODES, normalize_view_mode
 from openemux.core.shaders import normalize_shader_id
@@ -63,6 +63,9 @@ class ConsoleSidebar:
         #: window, so the actions read the console from here.
         self._menu_console = None
         self._action_group = None
+        #: The row a console is being dragged over, and the one being dragged.
+        self._hint_row = None
+        self._dragging_row = None
         self.page = self._build()
 
     # ----- construction ---------------------------------------------------
@@ -158,10 +161,42 @@ class ConsoleSidebar:
             self.list_box.remove(child)
 
         slugs = [c["slug"] for c in self.win.collection_manager.list_collections()]
-        for row_id in sidebar_row_ids(consoles, slugs):
+        for row_id in sidebar_row_ids(consoles, slugs, self._wants_favorites_row()):
             self._append_row(row_id)
 
-    def _append_row(self, console_id):
+    def _wants_favorites_row(self):
+        """Whether "Favorites" belongs in the list right now (issue #382).
+
+        Anything favorited, yes. Nothing favorited but the user is *standing*
+        on the page, also yes: un-starring the last game should not yank the
+        row out from under them -- the empty state is what explains what just
+        happened. The row goes on the next navigation away.
+        """
+        if self.win.playlist_manager.has_favorites():
+            return True
+        return self.win.current_console == FAVORITES_ID
+
+    def sync_favorites_row(self):
+        """Insert or remove just the "Favorites" row, keeping the selection.
+
+        Every path that mutates the favorites set ends here: the card badge,
+        the context menu, ``Ctrl+D``, the gamepad's Y, deleting a ROM, and the
+        pruning the page does on every visit. A full :meth:`rebuild` per
+        toggle would cost the whole list and lose the highlight.
+        """
+        wanted = self._wants_favorites_row()
+        row = self.find_row(FAVORITES_ID)
+        if wanted == (row is not None):
+            return
+        if not wanted:
+            self.list_box.remove(row)
+            return
+        if self.find_row(ALL_CONSOLES_ID) is None:
+            # No "All" row means an empty library, which has no rows at all.
+            return
+        self._append_row(FAVORITES_ID, position=1)
+
+    def _append_row(self, console_id, position=None):
         row = Gtk.ListBoxRow()
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.set_margin_top(10)
@@ -204,7 +239,111 @@ class ConsoleSidebar:
         row.set_child(box)
         row.id = console_id
         self._install_context_menu(row, console_id)
-        self.list_box.append(row)
+        self._install_row_drag(row, console_id)
+        if position is None:
+            self.list_box.append(row)
+        else:
+            self.list_box.insert(row, position)
+
+    # ----- dragging a console into place (issue #386) ----------------------
+    #
+    # Only the console rows take part. "All", "Favorites" and the collections
+    # are neither draggable nor drop targets, so a console cannot be dropped
+    # above them and they cannot be displaced: they are views over the ROMs,
+    # not part of the hardware arrangement.
+    #
+    # The payload is the console id as a string. The window already accepts
+    # dropped *files* on the content stack and on the artwork manager; a
+    # string target matches neither, so the two cannot swallow each other.
+
+    def _is_console_row(self, console_id):
+        return console_id in self.win.visible_consoles
+
+    def _install_row_drag(self, row, console_id):
+        if not self._is_console_row(console_id):
+            return
+
+        source = Gtk.DragSource()
+        source.set_actions(Gdk.DragAction.MOVE)
+        # Primary button only, so the right-click menu and the hover "..."
+        # button keep their presses.
+        source.set_exclusive(False)
+        source.connect(
+            "prepare",
+            lambda _s, _x, _y, cid=console_id: Gdk.ContentProvider.new_for_value(cid),
+        )
+        source.connect("drag-begin", lambda _s, _drag, r=row: self._on_drag_begin(r))
+        source.connect("drag-end", lambda _s, _drag, _del: self._clear_drop_hint())
+        source.connect("drag-cancel", lambda *_a: self._clear_drop_hint() or False)
+        row.add_controller(source)
+
+        target = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+        target.connect(
+            "motion", lambda _t, _x, y, r=row: self._on_drop_motion(r, y)
+        )
+        target.connect("leave", lambda _t, r=row: self._on_drop_leave(r))
+        target.connect(
+            "drop",
+            lambda _t, value, _x, y, r=row: self._on_row_drop(value, r, y),
+        )
+        row.add_controller(target)
+
+    def _on_drag_begin(self, row):
+        self._dragging_row = row
+        row.add_css_class("console-row-dragging")
+
+    def _on_drop_motion(self, row, y):
+        """Paint the line the console would land on, above or below this row."""
+        above = y < row.get_height() / 2
+        self._set_drop_hint(row, above)
+        return Gdk.DragAction.MOVE
+
+    def _on_drop_leave(self, row):
+        if self._hint_row is row:
+            self._clear_drop_hint()
+
+    def _set_drop_hint(self, row, above):
+        if self._hint_row is not row:
+            self._clear_drop_hint()
+        self._hint_row = row
+        row.remove_css_class("console-drop-below" if above else "console-drop-above")
+        row.add_css_class("console-drop-above" if above else "console-drop-below")
+
+    def _clear_drop_hint(self):
+        row = self._hint_row
+        self._hint_row = None
+        if row is not None:
+            row.remove_css_class("console-drop-above")
+            row.remove_css_class("console-drop-below")
+        dragging = self._dragging_row
+        self._dragging_row = None
+        if dragging is not None:
+            dragging.remove_css_class("console-row-dragging")
+
+    def _on_row_drop(self, value, row, y):
+        """One write per drop, never one per motion event."""
+        self._clear_drop_hint()
+        console = value if isinstance(value, str) else None
+        target = getattr(row, "id", None)
+        if not console or not self._is_console_row(console):
+            return False
+        if not self._is_console_row(target):
+            return False
+        above = y < row.get_height() / 2
+        before = target if above else self._console_after(target)
+        if console == before:
+            return True
+        logger.info("sidebar reorder: console=%s before=%s", console, before)
+        self.win.place_console_in_order(console, before)
+        return True
+
+    def _console_after(self, console_id):
+        """The console below ``console_id``, or None when it is the last one."""
+        consoles = list(self.win.visible_consoles)
+        if console_id not in consoles:
+            return None
+        index = consoles.index(console_id) + 1
+        return consoles[index] if index < len(consoles) else None
 
     def find_row(self, console_id):
         row = self.list_box.get_first_child()
@@ -337,7 +476,34 @@ class ConsoleSidebar:
         entries.append(
             (t("context.open_folder"), "sidebar.open-folder", "folder-open-symbolic")
         )
+        # The arrangement, for anyone who is not going to drag (issue #386).
+        move_entries = self._move_entries(console_id)
+        if move_entries:
+            entries.append(SEPARATOR)
+            entries.extend(move_entries)
         self._present(build_context_popover(entries), row, x, y)
+
+    def _move_entries(self, console_id):
+        """"Move up" / "Move down", when there is anywhere to move to.
+
+        A console with nothing above it gets no "Move up": an entry that can
+        only do nothing is worse than no entry.
+        """
+        t = self.win.t
+        consoles = list(self.win.visible_consoles)
+        if console_id not in consoles or len(consoles) < 2:
+            return []
+        index = consoles.index(console_id)
+        entries = []
+        if index > 0:
+            entries.append(
+                (t("sidebar.move_up"), "sidebar.move-up", "go-up-symbolic")
+            )
+        if index < len(consoles) - 1:
+            entries.append(
+                (t("sidebar.move_down"), "sidebar.move-down", "go-down-symbolic")
+            )
+        return entries
 
     def _show_collection_menu(self, row, scope, x, y):
         t = self.win.t
@@ -523,6 +689,8 @@ class ConsoleSidebar:
             ("sync-covers", self._act_sync_covers),
             ("controller", self._act_controller),
             ("open-folder", self._act_open_folder),
+            ("move-up", self._act_move_up),
+            ("move-down", self._act_move_down),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -559,3 +727,15 @@ class ConsoleSidebar:
         console = self._menu_console
         logger.info("sidebar context action: open_folder console=%s", console)
         self.win._open_path_in_file_manager(self.win.roms_path / console)
+
+    def _act_move_up(self, _action, _param):
+        self._move_menu_console(-1)
+
+    def _act_move_down(self, _action, _param):
+        self._move_menu_console(1)
+
+    def _move_menu_console(self, delta):
+        console = self._menu_console
+        logger.info("sidebar context action: move console=%s delta=%d", console, delta)
+        if console:
+            self.win.move_console_in_order(console, delta)

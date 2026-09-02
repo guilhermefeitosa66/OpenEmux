@@ -150,6 +150,16 @@ class PlaylistManager:
         # No copy: this is the per-card call.
         return str(Path(rom_path)) in self._favorite_paths()
 
+    def has_favorites(self):
+        """Whether anything is favorited at all.
+
+        The sidebar asks this on every toggle to decide whether the
+        "Favorites" row belongs in the list (issue #382), so it goes through
+        the same parsed-once cache the per-card ``is_favorite`` uses -- never
+        a fresh read of the file per keystroke.
+        """
+        return bool(self._favorite_paths())
+
     def toggle_favorite(self, rom):
         rom_path = str(Path(rom["path"]))
         playlist_path = self.get_favorites_playlist_path()

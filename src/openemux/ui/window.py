@@ -16,6 +16,7 @@ from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
     SORT_ORDERS_NEEDING_FILE_STAT,
+    SORT_PLATFORM,
     SORT_ORDERS_NEEDING_HISTORY,
     VIEW_MODES,
     can_zoom,
@@ -55,13 +56,19 @@ from openemux.core.shaders import ShaderCatalog
 from openemux.core.state_recovery import quarantined_files, reset_quarantine_log
 from openemux.core.tips import TIP_ICON, TIP_KEYS, pick_next_tip, render_tip
 from openemux import __version__
+from openemux.core.console_order import (
+    apply_console_order,
+    merge_visible_into_order,
+    move_console,
+    place_console,
+)
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.gamepad_backend import make_navigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
-from openemux.ui.library_pages import LibraryPages
+from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
 from openemux.ui.console_sidebar import ConsoleSidebar
@@ -120,6 +127,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.pages = LibraryPages(self)
         self.play_history = PlayHistory(self.config_manager.get_play_history_file())
         self.visible_consoles = []
+        # The queued "remember this view" idle, so a sweep through the sidebar
+        # is one write and not one per row (issue #383).
+        self._remember_view_source = None
         self._cover_sync_running = False
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
@@ -226,6 +236,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
+        # The last word on where the library was left (issue #383). The
+        # per-navigation write is what survives a crash or a session logout;
+        # this one catches a view changed by something other than the sidebar.
+        self.connect("close-request", self._on_close_remember_view)
 
         self._install_escape_handler()
 
@@ -235,7 +249,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._click_debug_controller.connect("pressed", self._on_global_click_pressed)
         self.add_controller(self._click_debug_controller)
 
-        self.refresh_library()
+        # Open where the user left it (issue #383). A stored view that is gone
+        # by now -- a console with no ROMs any more, a deleted collection, the
+        # favorites emptied -- is landing_view()'s problem, and it falls back
+        # to Favorites or All by the same rule a rescan uses.
+        self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
         self._start_update_check()
@@ -617,7 +635,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Sorting sits behind a submenu: six orders as a flat list would bury
         # the three view modes above them.
         sort_menu = Gio.Menu()
-        for order in SORT_ORDERS:
+        for order in self._sort_orders_for_scope():
             sort_menu.append(self.t(f"sort_order.{order}"), f"win.sort-order::{order}")
         sort_section = Gio.Menu()
         sort_section.append_submenu(self.t("header.sort_by"), sort_menu)
@@ -821,6 +839,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._write_scope_display("sort_order", order)
         self._reload_current_page()
         self._toast(self.t("toast.sorted", order=self.t(f"sort_order.{order}")), timeout=2)
+
+    def _sort_orders_for_scope(self):
+        """The orders worth offering on the page the user is on.
+
+        "Platform" is dropped from the grouped pages (issue #384): every game
+        already sits under its console's header, so picking it would change
+        nothing the user can see. Console pages keep the full list -- the
+        order is equally inert there, but it has always been, and this issue
+        is not the place to change what a console page offers.
+        """
+        if self._scope_groups_by_console():
+            return [order for order in SORT_ORDERS if order != SORT_PLATFORM]
+        return list(SORT_ORDERS)
+
+    def _scope_groups_by_console(self):
+        """Whether the page on screen draws its games in per-console groups."""
+        return is_mixed_scope(self._current_scope())
 
     def _sorted_roms(self, roms, order=None):
         """Apply the chosen order, reading the disk only when it is needed.
@@ -1417,11 +1452,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         subtitle = ""
         grid = self.pages.grid_for(console_id)
         if grid is not None:
-            count = 0
-            child = grid.get_first_child()
-            while child:
-                count += 1
-                child = child.get_next_sibling()
+            # What the page holds, asked of the model. It used to be a walk
+            # over the grid's child widgets, which on a virtualized view is a
+            # screenful, and on a grouped page (issue #384) is not a grid at
+            # all.
+            count = grid.count()
             if count == 0:
                 subtitle = self.t("header.subtitle.no_games")
             elif count == 1:
@@ -1684,6 +1719,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # The pages are still the right pages; their contents may not be.
             self.pages.invalidate_contents()
             self.sidebar.sync_footer()
+            self.sidebar.sync_favorites_row()
             target = preferred_view or previous_visible or self.current_console
             if self.pages.has(target):
                 self.current_console = target
@@ -1748,6 +1784,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.visible_consoles,
             target_view,
             [c["slug"] for c in self.collection_manager.list_collections()],
+            has_favorites=self.playlist_manager.has_favorites(),
         )
         if desired != LIBRARY_EMPTY_ID:
             if not self.sidebar.select(desired):
@@ -1763,6 +1800,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._update_window_title(None)
 
     def _discover_visible_consoles(self):
+        """The consoles that have games, in the order the user put them in.
+
+        The walk is over SYSTEM_IDS because that is where the ROMs are looked
+        up; the *order* is the user's (issue #386), applied at the end so the
+        sidebar, the console groups on the mixed pages and the console cycling
+        all read the same list.
+        """
         visible = []
         for console in SYSTEM_IDS:
             if self.playlist_manager.playlist_exists(console):
@@ -1773,7 +1817,45 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if roms:
                 visible.append(console)
                 self._initial_roms[console] = roms
-        return visible
+        return apply_console_order(visible, self.config_manager.get_console_order())
+
+    def reorder_consoles(self, order):
+        """Store a new console order and show it, without a rescan.
+
+        The sidebar's drag, its Ctrl+Up/Ctrl+Down and Preferences all end here.
+        Written once per settled arrangement -- never per motion event.
+        """
+        stored = self.config_manager.set_console_order(order)
+        self.visible_consoles = apply_console_order(self.visible_consoles, stored)
+        self.sidebar.rebuild(self.visible_consoles)
+        self.sidebar.reselect_current()
+        # The groups on "All", "Favorites" and the collections follow the same
+        # order (issue #384), so their pages have to be built again.
+        self.pages.invalidate_contents()
+        self._reload_current_page()
+        return stored
+
+    def move_console_in_order(self, console, delta):
+        """Move one console up or down; True when it actually moved."""
+        current = list(self.visible_consoles)
+        moved = move_console(current, console, delta)
+        if moved == current:
+            return False
+        self.reorder_consoles(merge_visible_into_order(
+            self.config_manager.get_console_order(), moved
+        ))
+        return True
+
+    def place_console_in_order(self, console, before):
+        """Drop ``console`` just above ``before`` (``None`` puts it last)."""
+        current = list(self.visible_consoles)
+        moved = place_console(current, console, before)
+        if moved == current:
+            return False
+        self.reorder_consoles(merge_visible_into_order(
+            self.config_manager.get_console_order(), moved
+        ))
+        return True
 
     def _on_console_selected(self, _listbox, row):
         if not row:
@@ -1797,9 +1879,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.content_stack.set_visible_child_name(self.current_console)
         self.search_entry.set_text("")
         self._update_window_title(self.current_console)
+        # Navigating away is when a "Favorites" row kept alive only to show
+        # its empty state is dropped (issue #382). On idle: the list is
+        # mid-selection here, and removing a row from under it is not.
+        GLib.idle_add(self._sync_favorites_row_idle)
+        self._remember_view_soon()
         # On a collapsed (narrow) layout, reveal the content pane.
         if self.split_view.get_collapsed():
             self.split_view.set_show_content(True)
+
+    def _sync_favorites_row_idle(self):
+        self.sidebar.sync_favorites_row()
+        return GLib.SOURCE_REMOVE
+
+    def _remember_view_soon(self):
+        """Queue a write of the current view, at most one per idle turn.
+
+        Writing from the close handler alone loses the view whenever the
+        process does not exit cleanly -- a crash, a pkill, a session logout --
+        and the file is a few dozen bytes written atomically, so it is written
+        as the view changes instead. Coalesced on an idle so a gamepad
+        sweeping the sidebar does not write once per row (issue #383).
+        """
+        if self._remember_view_source is not None:
+            return
+        self._remember_view_source = GLib.idle_add(self._remember_view_idle)
+
+    def _remember_view_idle(self):
+        self._remember_view_source = None
+        self._remember_current_view()
+        return GLib.SOURCE_REMOVE
+
+    def _remember_current_view(self):
+        """Store where the library is now, if it is anywhere at all."""
+        view = self.current_console
+        if not view or view == LIBRARY_EMPTY_ID:
+            # An empty library has its own landing page and nothing to
+            # remember; overwriting the stored view with it would throw away
+            # the console the user was on before the drive went missing.
+            return
+        self.config_manager.session.set_last_view(view)
+
+    def _on_close_remember_view(self, *_args):
+        self._remember_current_view()
+        return False
 
     def _set_search_enabled(self, enabled):
         if not enabled:
@@ -2072,6 +2195,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_favorites_loaded()
         elif self.pages.grid_for(FAVORITES_ID) is not None:
             self.pages.ensure_favorites_loaded()
+        # The first star puts the row in the sidebar, the last one takes it
+        # out -- unless the user is standing on the page (issue #382).
+        self.sidebar.sync_favorites_row()
         return is_now_favorite
 
     def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
@@ -2220,6 +2346,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._toast(self.t("toast.rom.deleted", count=deleted))
         self._on_selection_changed([])
         self._reload_current_page()
+        # forget_rom drops the ROM from FAVORITES.list too, so the last
+        # favorite can go this way as well as through the star.
+        self.sidebar.sync_favorites_row()
 
     def _sync_covers_for_selection(self):
         selected = list(self._selected_roms)
