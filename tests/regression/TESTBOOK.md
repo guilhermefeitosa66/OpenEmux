@@ -907,12 +907,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Put a ROM in the library folder and launch it again.
 - **Expected:** Step 1 shows "Your library is empty", the drag-and-drop line and the "Import
   ROMs…" / "Choose a folder instead" buttons, with an **empty sidebar**. That page could never be
-  reached before: the Favorites row is always first in the list, the list selects its first row as
+  reached before: the Favorites row was always first in the list, the list selects its first row as
   soon as it takes focus, and the user was met with "No favorites yet — right-click a game and
-  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the whole
-  sidebar back ("All", "Favorites", the console) and lands on "Favorites" as usual.
+  choose Add to favorites", about a game they do not have (issue #224). Step 2 brings the sidebar
+  back — "All" and the console, and **no "Favorites"**: nothing has been starred yet, so the row
+  does not exist (issue #382) — and lands on "All".
 - **Check:** a screenshot per step; the launch log's last `ui view changed` line reads
-  `visible_view=library-empty` for step 1 and `visible_view=__favorites__` for step 2; suite file
+  `visible_view=library-empty` for step 1 and `visible_view=__all__` for step 2; suite file
   `tests/test_library_landing.py`.
 - **Restore:** delete the throwaway `HOME`.
 
@@ -924,15 +925,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   open a collection at launch — the startup scan rescans on every single launch.
 - **Expected:** You stay in the collection, with its scroll position. Collection scopes were never
   in the set of places a rebuilt library would land, so every rescan threw the user into Favorites
-  (issue #225). A collection deleted since the rescan started still falls back to Favorites, the
-  way a console that is gone does.
+  (issue #225). A collection deleted since the rescan started still falls back the way a console
+  that is gone does — to "Favorites" on a library that has some, to "All" on one that has none
+  (issue #382).
 - **Check:**
   ```bash
   SCRATCH="$SCRATCH" PYTHONPATH=src .venv/bin/python - <<'EOF'
   import os, shutil
   from pathlib import Path
   from openemux.core.collections import CollectionManager
-  from openemux.ui.scopes import FAVORITES_ID, collection_scope, landing_view
+  from openemux.ui.scopes import (
+      ALL_CONSOLES_ID,
+      FAVORITES_ID,
+      collection_scope,
+      landing_view,
+  )
 
   base = Path(os.environ["SCRATCH"]) / "rt027"
   shutil.rmtree(base, ignore_errors=True)
@@ -943,7 +950,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 
   scope = collection_scope("hard-games")
   assert landing_view(["FC"], scope, slugs) == scope, "a rescan left the collection"
-  assert landing_view(["FC"], collection_scope("gone"), slugs) == FAVORITES_ID
+  gone = collection_scope("gone")
+  assert landing_view(["FC"], gone, slugs, has_favorites=True) == FAVORITES_ID
+  assert landing_view(["FC"], gone, slugs, has_favorites=False) == ALL_CONSOLES_ID
   print("RT-027 OK")
   EOF
   ```
@@ -1148,10 +1157,69 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Focus the game and press `Ctrl+D`.
   2. Open "Favorites" in the sidebar and confirm the game is listed.
   3. Press `Ctrl+D` on it again.
-- **Expected:** The game enters and then leaves "Favorites"; the star indicator follows.
+- **Expected:** The game enters and then leaves "Favorites"; the star indicator follows. The
+  sidebar row is no longer a fixture of the list — see RT-297 for when it appears and goes.
 - **Check:** Screenshot with the game in "Favorites", and `FAVORITES.list` gaining and losing the
   ROM's path (`grep -c "<rom filename>" ~/.openemux/playlists/FAVORITES.list`).
 - **Restore:** Step 3 is the restore; verify the count is back to the initial value.
+
+### RT-297 — "Favorites" is in the sidebar only while something is favorited
+- **Area:** Favorites
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, with **no** favorites
+  (`rm -f ~/.openemux/playlists/FAVORITES.list` inside the container, then
+  `make devbox-app ACTION=restart`).
+- **Steps:**
+  1. Look at the sidebar.
+  2. Focus a game and press `Ctrl+D`.
+  3. Open "Favorites", then go back to the console.
+  4. Press `Ctrl+D` on the same game again, while standing on "Favorites".
+  5. Select another row in the sidebar.
+- **Expected:** Step 1 lists "All", the collections and the consoles — no "Favorites". A place to
+  go should exist because there is something there, and the row led only to "No favorites yet:
+  right-click a game and choose Add to favorites" (issue #382). Step 2 makes the row appear
+  immediately, between "All" and the collections, with no rescan and no restart. Step 4 keeps the
+  row while it is the page being looked at, showing that empty state so the user can see what just
+  happened; step 5 is when it goes.
+- **Check:** a screenshot of the sidebar per step; `FAVORITES.list` present after step 2 and empty
+  after step 4; suite files `tests/test_library_landing.py` (`FavoritesRowTests`,
+  `LandingWithoutFavoritesTests`) and `tests/test_playlist_manager.py` (`HasFavoritesTests`).
+- **Restore:** step 4 already unstars the game; delete `FAVORITES.list` in the container if it is
+  left behind.
+
+### RT-298 — With no favorites, a library that lost its view lands on "All"
+- **Area:** Favorites
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: browse a console, delete its ROMs from outside the app and press `F5`
+  — the view you were on is gone and the library has to land somewhere.
+- **Expected:** "All". The fallback used to be "Favorites" unconditionally, which is now a row that
+  may not be in the sidebar at all — `sidebar.select()` would find nothing and the library would
+  land nowhere (issue #382). With favorites, "Favorites" is still the default.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.ui.scopes import (
+      ALL_CONSOLES_ID,
+      FAVORITES_ID,
+      default_landing_view,
+      landing_view,
+      sidebar_row_ids,
+  )
+
+  assert default_landing_view(False) == ALL_CONSOLES_ID
+  assert default_landing_view(True) == FAVORITES_ID
+  # A console that is gone, and "Favorites" itself over an empty list.
+  assert landing_view(["FC"], "SFC", has_favorites=False) == ALL_CONSOLES_ID
+  assert landing_view(["FC"], FAVORITES_ID, has_favorites=False) == ALL_CONSOLES_ID
+  assert landing_view(["FC"], FAVORITES_ID, has_favorites=True) == FAVORITES_ID
+  # And the row the fallback would select really is there, or really is not.
+  assert FAVORITES_ID not in sidebar_row_ids(["FC"], (), has_favorites=False)
+  assert FAVORITES_ID in sidebar_row_ids(["FC"], (), has_favorites=True)
+  print("RT-298 OK")
+  EOF
+  ```
+- **Restore:** none.
 
 ### RT-043 — A favorite on an unreachable drive survives a toggle
 - **Area:** Favorites

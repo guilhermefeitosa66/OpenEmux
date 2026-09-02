@@ -236,7 +236,10 @@ class LibraryPages:
         if not self.has(FAVORITES_ID):
             return
         playlists = self.win.playlist_manager
-        playlists.remove_missing_favorites()
+        if playlists.remove_missing_favorites():
+            # Pruning can empty the list, and an empty list has no sidebar
+            # row (issue #382).
+            self.win.sidebar.sync_favorites_row()
         self.render(FAVORITES_ID, playlists.load_favorites_playlist())
         self.mark_loaded(FAVORITES_ID)
 

@@ -882,8 +882,16 @@ class RomItem(Gtk.Box):
         return self._context_popover
 
     def toggle_favorite(self):
-        """Star or unstar this card's ROM, as the context entry would."""
-        self.toggle_favorite()
+        """Star or unstar this card's ROM, as the context entry would.
+
+        Public because the star badge, the grid's ``Ctrl+D`` and the gamepad's
+        Ⓨ all come through here rather than through the menu action.
+
+        It called *itself* from the split in issue #238 -- so every one of
+        those three paths died with a RecursionError instead of favoriting
+        anything, and only the context-menu entry still worked (issue #382).
+        """
+        self._act_toggle_favorite(None, None)
 
     def _show_context_menu(self, x=None, y=None):
         rom = self.rom
