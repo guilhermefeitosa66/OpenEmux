@@ -20,7 +20,11 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
-from openemux.ui.grid import LIST_MARGIN, RomGrid
+from openemux.core.library_groups import group_roms_by_console
+from openemux.core.systems import get_system_display_name
+from openemux.ui.console_icons import console_icon
+from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
+from openemux.ui.grid_group import GridGroup, GridSection
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
@@ -28,6 +32,16 @@ from openemux.ui.scopes import (
     collection_slug,
     is_collection_scope,
 )
+
+
+def is_mixed_scope(scope):
+    """Whether ``scope`` is a page that draws games from several consoles.
+
+    "All", "Favorites" and every collection. They are the pages grouped by
+    console (issue #384); a console page has one group by definition and is
+    left exactly as it was.
+    """
+    return scope in (ALL_CONSOLES_ID, FAVORITES_ID) or is_collection_scope(scope)
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +119,15 @@ class LibraryPages:
         return self._grids.get(scope)
 
     def grids(self):
-        return list(self._grids.values())
+        """Every real ``RomGrid`` on every page, groups flattened.
+
+        The window's per-ROM refreshes (artwork, cartridge shells) walk this,
+        and a grouped page is several grids behind one façade (issue #384).
+        """
+        grids = []
+        for grid in self._grids.values():
+            grids.extend(grid.grids() if getattr(grid, "is_group", False) else [grid])
+        return grids
 
     def is_loaded(self, scope):
         return bool(self._loaded.get(scope))
@@ -314,6 +336,33 @@ class LibraryPages:
                 win._update_window_title(console)
             return
 
+        if is_mixed_scope(console):
+            grid, child = self._build_grouped(console, roms, display_settings)
+        else:
+            grid = self._build_grid(console, roms, display_settings)
+            child = grid
+        self._grids[console] = grid
+        # The page was rebuilt, so whatever was selected on it is gone; the
+        # gamepad selection mode goes with it.
+        win._on_selection_changed([])
+        win.leave_selection_mode(clear=False)
+        # The pinned master-checkbox header belongs to list view only.
+        page.header.set_visible(grid.compact)
+        scroll.set_child(child)
+        if console == win.current_console:
+            win._update_window_title(console)
+
+    def _build_grid(
+        self,
+        console,
+        roms,
+        display_settings,
+        mixed_consoles=False,
+        on_selection_changed=None,
+        band_host_is_self=False,
+        allow_cartridge=True,
+    ):
+        win = self.win
         grid = RomGrid(
             console,
             roms,
@@ -327,24 +376,100 @@ class LibraryPages:
             win.t,
             win.roms_path,
             ui_settings=display_settings,
-            mixed_consoles=console in (ALL_CONSOLES_ID, FAVORITES_ID)
-            or is_collection_scope(console),
+            mixed_consoles=mixed_consoles,
             on_rename_rom=win._rename_rom_from_ui,
             on_delete_rom=win._confirm_delete_roms,
-            on_selection_changed=win._on_selection_changed,
+            on_selection_changed=on_selection_changed or win._on_selection_changed,
             context_services=win._rom_context_services,
             frame_color_for_rom=win._cartridge_color_for_rom,
+            allow_cartridge=allow_cartridge,
         )
-        self._grids[console] = grid
-        # The page was rebuilt, so whatever was selected on it is gone; the
-        # gamepad selection mode goes with it.
-        win._on_selection_changed([])
-        win.leave_selection_mode(clear=False)
-        # The pinned master-checkbox header belongs to list view only.
-        page.header.set_visible(grid.compact)
-        scroll.set_child(grid)
-        if console == win.current_console:
-            win._update_window_title(console)
+        if band_host_is_self:
+            grid.band_host = grid
+        return grid
+
+    def _build_grouped(self, scope, roms, display_settings):
+        """One grid per console, stacked, in the sidebar's order (issue #384).
+
+        The page's sort order was already applied to the whole list, so
+        grouping never moves a game past another game of the same console --
+        it only gathers them.
+
+        Each grid is bound to a single console, which is what lets it follow
+        that console's box-art proportions and drop the console caption the
+        flat page had to print on every card. The cartridge frame stays off
+        here; drawing each group in its console's shell is issue #385.
+        """
+        win = self.win
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        group = GridGroup(on_selection_changed=win._on_selection_changed)
+        for console, group_roms in group_roms_by_console(roms, win.visible_consoles):
+            grid = self._build_grid(
+                console,
+                group_roms,
+                display_settings,
+                on_selection_changed=group.on_child_selection_changed,
+                band_host_is_self=True,
+                allow_cartridge=False,
+            )
+            header, set_count = self._group_header(console, len(group_roms), grid.compact)
+            container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            container.append(header)
+            container.append(grid)
+            box.append(container)
+            group.add_section(
+                GridSection(console, grid, container, header, set_count=set_count)
+            )
+        # Every group follows the scope's own layout, so the first one answers
+        # for the page: list view pins the master checkbox above the scroller.
+        group.compact = bool(group.sections) and group.sections[0].grid.compact
+        return group, box
+
+    def _group_header(self, console, count, compact):
+        """A group's heading: the console's icon, its name and its game count.
+
+        Returns the row and a setter for the count, which the search moves --
+        a header that says "9 games" over the two the query left is worse than
+        no count at all.
+        """
+        t = self.win.t
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row.add_css_class("console-group-header")
+        margin = LIST_MARGIN if compact else GRID_MARGIN
+        row.set_margin_start(margin)
+        row.set_margin_end(margin)
+        row.set_margin_top(12)
+        row.set_margin_bottom(2)
+
+        row.append(console_icon(console))
+
+        name = Gtk.Label(label=self._group_title(console))
+        name.set_halign(Gtk.Align.START)
+        name.add_css_class("heading")
+        row.append(name)
+
+        games = Gtk.Label()
+        games.set_halign(Gtk.Align.START)
+        games.set_hexpand(True)
+        games.add_css_class("dim-label")
+        games.add_css_class("caption")
+        row.append(games)
+
+        def set_count(value):
+            games.set_label(
+                t("header.subtitle.one_game")
+                if value == 1
+                else t("header.subtitle.games", count=value)
+            )
+
+        set_count(count)
+        return row, set_count
+
+    @staticmethod
+    def _group_title(console):
+        if not console:
+            return "?"
+        return f"{console} - {get_system_display_name(console)}"
 
     def _empty_page_for(self, console):
         t = self.win.t

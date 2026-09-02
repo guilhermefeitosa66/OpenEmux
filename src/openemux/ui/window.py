@@ -16,6 +16,7 @@ from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
     SORT_ORDERS_NEEDING_FILE_STAT,
+    SORT_PLATFORM,
     SORT_ORDERS_NEEDING_HISTORY,
     VIEW_MODES,
     can_zoom,
@@ -61,7 +62,7 @@ from openemux.core.gamepad_backend import make_navigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
-from openemux.ui.library_pages import LibraryPages
+from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
 from openemux.ui.console_sidebar import ConsoleSidebar
@@ -628,7 +629,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Sorting sits behind a submenu: six orders as a flat list would bury
         # the three view modes above them.
         sort_menu = Gio.Menu()
-        for order in SORT_ORDERS:
+        for order in self._sort_orders_for_scope():
             sort_menu.append(self.t(f"sort_order.{order}"), f"win.sort-order::{order}")
         sort_section = Gio.Menu()
         sort_section.append_submenu(self.t("header.sort_by"), sort_menu)
@@ -832,6 +833,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._write_scope_display("sort_order", order)
         self._reload_current_page()
         self._toast(self.t("toast.sorted", order=self.t(f"sort_order.{order}")), timeout=2)
+
+    def _sort_orders_for_scope(self):
+        """The orders worth offering on the page the user is on.
+
+        "Platform" is dropped from the grouped pages (issue #384): every game
+        already sits under its console's header, so picking it would change
+        nothing the user can see. Console pages keep the full list -- the
+        order is equally inert there, but it has always been, and this issue
+        is not the place to change what a console page offers.
+        """
+        if self._scope_groups_by_console():
+            return [order for order in SORT_ORDERS if order != SORT_PLATFORM]
+        return list(SORT_ORDERS)
+
+    def _scope_groups_by_console(self):
+        """Whether the page on screen draws its games in per-console groups."""
+        return is_mixed_scope(self._current_scope())
 
     def _sorted_roms(self, roms, order=None):
         """Apply the chosen order, reading the disk only when it is needed.
@@ -1428,11 +1446,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         subtitle = ""
         grid = self.pages.grid_for(console_id)
         if grid is not None:
-            count = 0
-            child = grid.get_first_child()
-            while child:
-                count += 1
-                child = child.get_next_sibling()
+            # What the page holds, asked of the model. It used to be a walk
+            # over the grid's child widgets, which on a virtualized view is a
+            # screenful, and on a grouped page (issue #384) is not a grid at
+            # all.
+            count = grid.count()
             if count == 0:
                 subtitle = self.t("header.subtitle.no_games")
             elif count == 1:
