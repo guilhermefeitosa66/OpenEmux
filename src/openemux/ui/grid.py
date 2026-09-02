@@ -44,6 +44,7 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     LIST_ROW_SPACING,
     FixedSizePicture,
     card_size_for,
+    cartridge_frame_for,
     cartridge_frame_svg,
     columns_and_slack,
     cover_size_for_console,
@@ -113,7 +114,6 @@ class RomGrid(Gtk.GridView):
         on_selection_changed=None,
         context_services=None,
         frame_color_for_rom=None,
-        allow_cartridge=True,
         band_host=None,
     ):
         # Before anything else: the GObject has to exist before this widget
@@ -173,7 +173,6 @@ class RomGrid(Gtk.GridView):
         self._card_margin = self._spacing // 2
         self._margin = max(0, (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin)
 
-        cartridge_frame_path = None
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. Per console it follows that console's box-art
         # proportions; pages mixing consoles have no single shape to follow, so
@@ -183,18 +182,16 @@ class RomGrid(Gtk.GridView):
             if mixed_consoles
             else cover_size_for_console(console, self.zoom)
         )
-        if (
-            allow_cartridge
-            and not mixed_consoles
-            and not self.compact
-            and renders_cartridge(self.view_mode)
-        ):
-            # The card shape comes from the frame art itself: fixed width, and
-            # the height that keeps the cartridge's own proportions.
-            cartridge_frame_path = cartridge_frame_svg(console)
-            if cartridge_frame_path:
-                frame = cartridge_render.load_frame(cartridge_frame_path)
-                cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+        # The card shape comes from the frame art itself: fixed width, and the
+        # height that keeps the cartridge's own proportions. Since issue #384 a
+        # mixed page is one grid per console, so this reaches "All", "Favorites"
+        # and the collections too (issue #385).
+        cartridge_frame_path = cartridge_frame_for(
+            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
+        )
+        if cartridge_frame_path:
+            frame = cartridge_render.load_frame(cartridge_frame_path)
+            cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
 
         if self.compact:
             # Rows show the box art itself, never a cartridge: a frame drawn at

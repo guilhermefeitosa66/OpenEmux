@@ -360,7 +360,6 @@ class LibraryPages:
         mixed_consoles=False,
         on_selection_changed=None,
         band_host_is_self=False,
-        allow_cartridge=True,
     ):
         win = self.win
         grid = RomGrid(
@@ -382,7 +381,6 @@ class LibraryPages:
             on_selection_changed=on_selection_changed or win._on_selection_changed,
             context_services=win._rom_context_services,
             frame_color_for_rom=win._cartridge_color_for_rom,
-            allow_cartridge=allow_cartridge,
         )
         if band_host_is_self:
             grid.band_host = grid
@@ -396,9 +394,9 @@ class LibraryPages:
         it only gathers them.
 
         Each grid is bound to a single console, which is what lets it follow
-        that console's box-art proportions and drop the console caption the
-        flat page had to print on every card. The cartridge frame stays off
-        here; drawing each group in its console's shell is issue #385.
+        that console's box-art proportions, draw that console's cartridge
+        shell (issue #385) and drop the console caption the flat page had to
+        print on every card.
         """
         win = self.win
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -410,7 +408,6 @@ class LibraryPages:
                 display_settings,
                 on_selection_changed=group.on_child_selection_changed,
                 band_host_is_self=True,
-                allow_cartridge=False,
             )
             header, set_count = self._group_header(console, len(group_roms), grid.compact)
             container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -431,6 +428,14 @@ class LibraryPages:
         Returns the row and a setter for the count, which the search moves --
         a header that says "9 games" over the two the query left is worse than
         no count at all.
+
+        The header's own margins are what set the rhythm between groups, and
+        they are the same whatever the group is: each console's cartridge has
+        its own aspect (issue #385), so the *cards* above a header are taller
+        in one group than in the next, and a spacing derived from them would
+        make the page breathe unevenly. The gap below the last row is the
+        grid's own margin, which is uniform per view mode and scales with the
+        zoom like everything else.
         """
         t = self.win.t
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
