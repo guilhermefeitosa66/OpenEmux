@@ -10,6 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 
+from openemux.core.appimage_env import host_env
 from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
 from openemux.core.cores import CoreCatalog
 from openemux.core.library_view import (
@@ -2080,7 +2081,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         except Exception:
             pass
         try:
-            subprocess.Popen(["xdg-open", str(path)])
+            # host_env, for the same reason RetroArch gets it (issue #249):
+            # xdg-open is a `#!/bin/sh` script, and inheriting the bundle's
+            # LD_LIBRARY_PATH loads the *host's* shell against Ubuntu-noble
+            # libraries. On Arch that is a bash built for readline 8.3 handed
+            # readline 8.2, so the child died with "undefined symbol:
+            # rl_print_keybinding" -- after Popen had already succeeded, which
+            # is why "Open folder" simply did nothing and no toast appeared.
+            subprocess.Popen(["xdg-open", str(path)], env=host_env(os.environ))
             return
         except Exception as exc:
             self._toast_open_failed(path, exc)
