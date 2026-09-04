@@ -2286,6 +2286,69 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`),
   `tests/test_game_window.py` (`FollowRelaunchTests`).
 
+### RT-314 — Every packaged icon is the size its directory claims
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: install the `.deb`, `.rpm` or Arch package, then look for OpenEmux in
+  the desktop's application menu — the small-icon view, not the launcher grid — and in the
+  software centre.
+- **Expected:** The icon is drawn sharp at every size, and no generic placeholder appears. The
+  packages used to install the 735x776 source logo verbatim into `hicolor/512x512/apps`, and
+  rendered the rest with `-resize NxN`, which preserves aspect ratio: the six installed files
+  measured 30x32, 45x48, 61x64, 121x128, 242x256 and 735x776, not one of them the size it was
+  filed under. The ladder also began at 32, so the 16, 22 and 24 pixel entries a Plasma menu and
+  a GNOME list row ask for did not exist at all and were scaled down from something far larger.
+- **Check:** suite file `tests/test_icon_sizes.py` — it stages the icons for real and measures
+  every PNG, because this is a bug that exists only in the output.
+
+### RT-311 — The AppImage starts where the host's shell is newer than the bundle
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on Arch (or any rolling distribution whose `/bin/sh` is newer than
+  Ubuntu 24.04), download `OpenEmux-<version>-x86_64.AppImage`, `chmod +x` it and run it from a
+  terminal.
+- **Expected:** The window opens. It used to die instantly with
+  `/bin/sh: symbol lookup error: /bin/sh: undefined symbol: rl_print_keybinding` and nothing
+  else — the bundle's entry point is a `#!/bin/sh` script, so the kernel loads the *host's*
+  shell under the bundle's `LD_LIBRARY_PATH`, and an Arch bash built against readline 8.3 was
+  handed the bundled readline 8.2. The launcher now parks that path and leaves the shell only
+  the one directory holding appimage-builder's exec hook, which `openemux-run` restores one
+  exec before the interpreter that actually needs it.
+- **Check:** suite file `tests/test_appimage_launcher.py`.
+
+### RT-312 — The AppImage trusts the machine's own CA certificates
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a non-Debian distribution (Arch, Fedora, openSUSE), run the
+  AppImage with a fresh `~/.openemux` and let first-time setup run to the end. Then sync covers.
+- **Expected:** The cores download and setup completes. It used to stop at
+  *"Initial setup incomplete (step: retroarch_download_all_cores)"*, with
+  `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` in the log — the bundled
+  OpenSSL is Ubuntu's, compiled with `OPENSSLDIR=/usr/lib/ssl`, a path only Debian derivatives
+  have, so the trust store loaded **zero** certificates and every HTTPS request in the app
+  failed with it (cover sync, ScreenScraper and the update check included). The entry point now
+  points `SSL_CERT_FILE` at the host's own bundle, and leaves a value the user set alone.
+- **Check:** suite file `tests/test_appimage_launcher.py`.
+
+### RT-313 — The Arch package installs, runs and removes cleanly
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Docker, and the vendored RetroArch (`make vendor-retroarch`).
+- **Steps:** As a QA person: run `make arch`, then on an Arch machine
+  `sudo pacman -U dist/openemux-<version>-1-x86_64.pkg.tar.zst`, launch OpenEmux from the menu,
+  play a game, and `sudo pacman -Rns openemux`.
+- **Expected:** pacman resolves the dependencies on its own (`webp-pixbuf-loader` among them, so
+  synced covers are not blank), the menu entry starts `/usr/bin/openemux`, the bundled RetroArch
+  under `/opt/openemux/vendors/` launches the game, and the removal leaves nothing of the
+  package behind. The vendored emulator must survive packaging unstripped: makepkg rewrites
+  every ELF it finds by default, which would take the `$ORIGIN/../lib` RUNPATH its 56 libraries
+  are found through with it.
+- **Check:** suite file `tests/test_arch_package.py`; the container build itself
+  (`make arch`) installs, verifies and removes the package as its last steps.
+
 ### RT-279 — The native packages need no FUSE at all
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE
@@ -3370,6 +3433,34 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** Screenshot of the translated UI.
 - **Restore:** Quit, `cp $SCRATCH/config.bak ~/.openemux/config.yaml`, relaunch if the run
   continues with UI scenarios.
+
+### RT-310 — Tamil is offered and translates the interface
+- **Area:** i18n
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open "Settings" → "System" → "Language", pick "தமிழ்", and look at
+  the sidebar header, the main menu and the bottom hint bar.
+- **Expected:** Tamil appears in the language list with its own native name, the interface
+  redraws in Tamil, and no raw key (`menu.preferences`) is visible anywhere. A desktop already
+  set to `ta_IN.UTF-8` gets Tamil on first launch without touching the setting.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.i18n import (LANGUAGE_META, LOCALE_TRANSLATIONS, SUPPORTED_LOCALES,
+                             detect_system_locale, tr)
+
+  assert "ta" in SUPPORTED_LOCALES, "Tamil is not offered"
+  assert LANGUAGE_META["ta"]["native_name"] == "தமிழ்", "Tamil is not named in Tamil"
+  english = set(LOCALE_TRANSLATIONS["en"])
+  assert set(LOCALE_TRANSLATIONS["ta"]) == english, "the Tamil catalogue is not complete"
+  # A desktop in Tamil lands in Tamil, with or without the region.
+  for value in ("ta_IN.UTF-8", "ta"):
+      assert detect_system_locale({"LANG": value}) == "ta", value
+  # Translated, not passed through: the sidebar header is the cheapest proof.
+  assert tr("ta", "sidebar.header") != tr("en", "sidebar.header")
+  print("RT-310 OK")
+  EOF
+  ```
 
 ### RT-111 — Translation catalogs are complete
 - **Area:** i18n
