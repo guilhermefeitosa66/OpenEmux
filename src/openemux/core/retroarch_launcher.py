@@ -317,11 +317,21 @@ class RetroArchLauncher:
         if not shutil.which("flatpak"):
             return None
         try:
+            # host_env, like the launch itself (issue #249). This runs the
+            # *host's* flatpak, and inheriting the bundle's LD_LIBRARY_PATH
+            # resolves its libraries against Ubuntu noble's. Measured from
+            # inside the 1.13.0 AppImage on Arch, `flatpak --version` alone
+            # produced three loader errors --
+            #   libcrypto.so.3: version `OPENSSL_3.4.0' not found
+            #     (required by /usr/lib/libostree-1.so.1)
+            # -- so this probe exited non-zero and the app said "RetroArch was
+            # not found" on a machine with the RetroArch Flatpak installed.
             listed = subprocess.run(
                 ["flatpak", "info", RETROARCH_FLATPAK_ID],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=10,
+                env=host_env(os.environ),
             )
         except (OSError, subprocess.SubprocessError):
             return None
@@ -1095,6 +1105,10 @@ class RetroArchLauncher:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=10,
+                # A no-op under Flatpak, where this normally runs; correct if
+                # it is ever reached from the AppImage, where handing the
+                # host's flatpak the bundle's loader path breaks it.
+                env=host_env(os.environ),
             )
             logger.info("stopped the RetroArch Flatpak instance on the host")
             return True
