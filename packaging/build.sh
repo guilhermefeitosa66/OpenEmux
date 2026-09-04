@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared entry point for the packaging builds: `packaging/build.sh <target>`,
-# where <target> is appimage, deb or rpm. Every build runs in the container
+# where <target> is appimage, deb, rpm or arch. Every build runs in the container
 # defined by packaging/docker/<target>.Dockerfile, so the host only needs
 # Docker, and artifacts land in dist/.
 #
@@ -10,9 +10,9 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|flatpak|windows) ;;
+  appimage|deb|rpm|arch|flatpak|windows) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|flatpak|windows}" >&2
+    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows}" >&2
     exit 2
     ;;
 esac
@@ -61,7 +61,7 @@ fi
 # The check is which architectures are *supported*, then, rather than which one
 # the host is.
 case "$TARGET" in
-  appimage|deb|rpm)
+  appimage|deb|rpm|arch)
     # The container's architecture, which PLATFORM overrides.
     ARCH="$(uname -m)"
     case "${PLATFORM:-}" in
@@ -75,6 +75,21 @@ case "$TARGET" in
         exit 1
         ;;
     esac
+    # ...except the Arch one on ARM. The recipe itself is architecture-neutral
+    # and `makepkg` builds it fine on Arch Linux ARM -- what does not exist is
+    # a container to build it in: the official `archlinux` image publishes
+    # amd64 only (Arch Linux ARM is a separate distribution with its own
+    # images). Said here rather than as a confusing `docker build` failure.
+    if [ "$TARGET" = "arch" ]; then
+      case "$ARCH" in
+        aarch64|arm64)
+          echo "The Arch build image (archlinux:base-devel) is amd64-only." >&2
+          echo "On an ARM machine, build packaging/arch/PKGBUILD with makepkg" >&2
+          echo "directly -- the recipe supports aarch64, the container does not." >&2
+          exit 1
+          ;;
+      esac
+    fi
     ;;
 esac
 
@@ -91,13 +106,13 @@ if [ "$TARGET" = "windows" ]; then
   fi
 fi
 
-# The three Linux formats that bundle an emulator. The Flatpak does not -- it
+# The Linux formats that bundle an emulator. The Flatpak does not -- it
 # launches the host's org.libretro.RetroArch -- and on aarch64 there is nothing
 # to bundle, since libretro publishes no ARM build (issue #119).
-# ARCH is set by the architecture gate above, which only runs for these three
+# ARCH is set by the architecture gate above, which only runs for these four
 # targets; ${ARCH:-} keeps `set -u` out of it for the other two.
 case "$TARGET:${ARCH:-}" in
-  appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64)
+  appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64|arch:x86_64|arch:amd64)
     if [ ! -x vendors/RetroArch-Linux-x86_64/usr/bin/retroarch ]; then
       echo "vendors/RetroArch-Linux-x86_64/usr/bin/retroarch is missing." >&2
       echo "Run 'make vendor-retroarch' first, or 'make $TARGET', which" >&2

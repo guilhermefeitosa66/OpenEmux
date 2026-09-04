@@ -101,7 +101,19 @@ Requires **Fedora 40 or newer** (libadwaita ≥ 1.5):
 sudo dnf install ./openemux-*.x86_64.rpm
 ```
 
-The `.deb` and `.rpm` install OpenEmux under `/opt/openemux` and add an `openemux` launcher plus a desktop entry, so it shows up in your application menu.
+### Arch Linux (`.pkg.tar.zst`)
+
+Arch is a rolling release, so there is no minimum version:
+
+```bash
+sudo pacman -U ./openemux-*-x86_64.pkg.tar.zst
+```
+
+`pacman` resolves the GTK4/Adwaita dependencies for you. On Arch Linux ARM, build the package
+from the recipe instead — `makepkg` in `packaging/arch/` — since the emulator is bundled only
+for x86_64.
+
+The `.deb`, `.rpm` and Arch package install OpenEmux under `/opt/openemux` and add an `openemux` launcher plus a desktop entry, so it shows up in your application menu.
 
 ### Flatpak
 

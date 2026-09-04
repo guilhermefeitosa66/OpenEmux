@@ -28,13 +28,15 @@ class PackagesWorkflowTests(unittest.TestCase):
         self.data, self.text = _workflow("packages.yml")
 
     def test_every_format_the_release_ships_is_built(self):
-        # Derived from the tree, not from a list kept here: a sixth format
+        # Derived from the tree, not from a list kept here: a seventh format
         # added under packaging/ with no CI job should fail this.
         formats = {
             path.parent.name
             for path in (REPO_ROOT / "packaging").glob("*/build.sh")
         }
-        self.assertEqual(formats, {"appimage", "deb", "rpm", "flatpak", "windows"})
+        self.assertEqual(
+            formats, {"appimage", "deb", "rpm", "arch", "flatpak", "windows"}
+        )
         for fmt in sorted(formats):
             with self.subTest(format=fmt):
                 self.assertIn(f'"{fmt}"', self.text)
@@ -70,6 +72,9 @@ class PackagesWorkflowTests(unittest.TestCase):
             ("deb", "x86_64"), ("deb", "aarch64"),
             ("flatpak", "x86_64"), ("flatpak", "aarch64"),
             ("rpm", "x86_64"), ("rpm", "aarch64"),
+            # x86_64 only: the official archlinux image is amd64-only, and
+            # nothing cross-builds a Windows bundle from ARM.
+            ("arch", "x86_64"),
             ("windows", "x86_64"),
         ]))
         self.assertIn("schedule", self.text)
@@ -80,6 +85,15 @@ class PackagesWorkflowTests(unittest.TestCase):
                               ("workflow_dispatch", "aarch64")):
             with self.subTest(event=event, choice=choice):
                 self.assertNotIn(("windows", "aarch64"), self._plan(event, choice))
+
+    def test_there_is_no_arch_package_for_arm(self):
+        # The PKGBUILD itself declares aarch64 and `makepkg` builds it on Arch
+        # Linux ARM; what does not exist is a container to build it in --
+        # the official `archlinux` image publishes amd64 only.
+        for event, choice in (("schedule", ""), ("workflow_dispatch", "all"),
+                              ("workflow_dispatch", "aarch64")):
+            with self.subTest(event=event, choice=choice):
+                self.assertNotIn(("arch", "aarch64"), self._plan(event, choice))
 
     def test_a_dispatch_can_ask_for_arm_alone(self):
         self.assertEqual(

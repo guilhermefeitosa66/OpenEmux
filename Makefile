@@ -247,6 +247,11 @@ deb: vendor-retroarch
 rpm: vendor-retroarch
 	./packaging/build.sh rpm
 
+# Arch package (.pkg.tar.zst) — built with makepkg and install-tested with
+# pacman in an archlinux:base-devel container.
+arch: vendor-retroarch
+	./packaging/build.sh arch
+
 # Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
 # Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).
 flatpak:
@@ -273,7 +278,7 @@ checksums:
 # `windows` comes before `checksums` for the same reason every other target
 # does: SHA256SUMS is written over whatever is in dist/ at that moment, so an
 # artifact built afterwards would ship unverifiable.
-packages: appimage deb rpm flatpak windows checksums
+packages: appimage deb rpm arch flatpak windows checksums
 
 appimage-clean:
 	rm -rf AppDir AppDir.squashfs appimage-build appimage-builder-cache dist/*.AppImage dist/*.zsync
@@ -286,7 +291,7 @@ windows-clean:
 
 # Remove every packaged artifact
 packages-clean: appimage-clean windows-clean
-	rm -rf dist/*.deb dist/*.rpm dist/*.flatpak dist/SHA256SUMS flatpak-repo
+	rm -rf dist/*.deb dist/*.rpm dist/*.pkg.tar.* dist/*.flatpak dist/SHA256SUMS flatpak-repo
 	@# The flatpak build runs as root inside its container, so the tree it
 	@# leaves behind is root-owned and rm(1) on the host cannot touch it.
 	@# Delete it the way it was created rather than reaching for sudo.
