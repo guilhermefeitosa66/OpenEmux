@@ -104,6 +104,7 @@ gap here is easy to write:
 - Workflows run with a read-only `GITHUB_TOKEN` by default, and no workflow
   uses `pull_request_target`. Workflows from an outside contributor require
   approval before they run.
-- Bandit and `pip-audit` run on every push, on every pull request, and weekly.
+- Bandit and `pip-audit` run on every push to `develop` and `main`, on every
+  pull request against them, and weekly on a schedule.
 
 Found a gap in that list? It is in scope. Report it the same way.

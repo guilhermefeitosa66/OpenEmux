@@ -127,9 +127,12 @@ they can be verified in review; a closing keyword skips that step.
 
 ## Code conventions
 
-- **User interface and logic stay apart.** GTK and libadwaita code lives in
-  `src/openemux/ui/`, everything else in `src/openemux/core/`. A core module
-  must never import `gi`.
+- **User interface and logic stay apart.** Widget code — anything that touches
+  `Gtk` or `Adw` — lives in `src/openemux/ui/`, everything else in
+  `src/openemux/core/`. A core module may still use the non-widget half of the
+  GI stack, and several do: `GLib`, `Gio`, `GdkPixbuf` and `Rsvg`, for file
+  handling and image decoding. What a core module must never do is build a
+  widget.
 - PEP 8 naming: `snake_case` for functions and variables, `PascalCase` for
   classes.
 - **No formatter is configured, and lint carries no style rules.** Do not
