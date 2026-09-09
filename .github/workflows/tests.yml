@@ -36,8 +36,8 @@ jobs:
 
       - name: Ruff (correctness rules only)
         # Undefined names, unused imports, f-string mistakes, shadowing: the
-        # class of defect a test only finds if it happens to execute the line,
-        # and the UI modules sit around 10-13% coverage (issue #243). No
+        # class of defect a test only finds if it happens to execute the line
+        # (issue #243), which is cheaper to catch here than to cover. No
         # formatting rules -- see [tool.ruff] in pyproject.toml.
         run: ruff check --output-format=github .
 
