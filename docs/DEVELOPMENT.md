@@ -251,14 +251,19 @@ family instead, which is the better shape once a module carries several
 independent behaviours.
 
 `make coverage` runs the same suite under [coverage.py](https://coverage.readthedocs.io/)
-(configured in `pyproject.toml`, measuring all of `src/openemux` — untested UI
-modules count as 0%, so the total reflects the whole app). `fail_under` in
+(configured in `pyproject.toml`, measuring all of `src/openemux` — an untested
+module counts as 0%, so the total reflects the whole app). `fail_under` in
 `[tool.coverage.report]` is a **floor, not a target**: raise it as coverage
 rises, never lower it to make a red run pass. When a PR adds tests that move
 the total, raise the floor to the new total in the same PR — that is what
 keeps it a ratchet rather than a number nobody looks at. CI does the same and, on every
 push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
+
+**Run it under a display.** The UI is measured like everything else, and the
+tests that build real widgets skip themselves on a headless box, so
+`make coverage` on its own reports far less than the suite covers. `xvfb-run -a
+make coverage` is the honest number, and the one CI enforces.
 
 `make smoke` runs [`scripts/smoke_start.py`](../scripts/smoke_start.py), which
 is the one check the unit suite cannot make: it constructs the real
@@ -288,8 +293,8 @@ variable captured by a closure.
 **No formatting rules, deliberately.** This project has no formatter and is not
 getting one: nothing in that list has an opinion about quotes, line length,
 import order or whitespace. What it does catch is the class of mistake a test
-only finds if it happens to execute the line — and the UI modules sit around
-10–13% coverage.
+only finds if it happens to execute the line — cheaper than a test for the
+whole class, and it still holds for the lines coverage does not reach.
 
 An import that exists for its side effect rather than its name is kept with a
 `# noqa: F401` and a sentence saying why (`main.py` imports `Gtk` because

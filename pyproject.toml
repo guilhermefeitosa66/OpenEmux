@@ -36,9 +36,9 @@ where = ["src"]
 [tool.ruff]
 # Correctness only. This project deliberately has no formatter and that stays:
 # nothing here has an opinion about quotes, line length, import order or
-# whitespace. What it does catch is the class of mistake the suite cannot,
-# because a test has to execute the line to find it -- and the UI modules sit
-# around 10-13% coverage (issue #243).
+# whitespace. What it does catch is the class of mistake a test only finds by
+# executing the line -- cheaper than a test for the whole class of defect, and
+# it still holds for the lines coverage does not reach.
 target-version = "py310"
 extend-exclude = ["AppDir", "appimage-build", "vendors", "flatpak-repo", "_local"]
 
@@ -65,7 +65,18 @@ relative_files = true
 # a PR that deleted tests, or added a module nothing exercises, stayed green
 # and the badge quietly moved (issue #242). Raise it as coverage rises; never
 # lower it to make a red run pass.
-fail_under = 53
+#
+# One point below the total the suite actually reaches, not level with it: the
+# matrix runs four interpreters, and a `try`/`except` a newer stdlib no longer
+# takes moves the number by a fraction. A floor that has to be re-pinned on
+# every patch release is a floor nobody raises.
+#
+# The UI is measured too, and most of it needs a display: the tests that build
+# real widgets skip themselves without one (see tests/gtk_display.py), so a
+# headless run lands far below this floor. CI runs the suite under
+# `xvfb-run -a`, which is what makes the number honest -- and `make coverage`
+# on a desktop matches it.
+fail_under = 92
 
 [tool.setuptools.package-data]
 # Every non-Python file the app reads at runtime. Only the pip-installed
