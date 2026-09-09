@@ -16,28 +16,23 @@ check is off in the config and `sync_artwork_async` is replaced wherever a
 test reaches it.
 """
 
-import shutil
-import tempfile
 import unittest
-from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
-from tests.isolated_home import IsolatedHome
+from tests.window_harness import REAL_STARTUP_SCAN, WindowCase
 
 if HAVE_DISPLAY:
     import gi
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+    from gi.repository import Adw, Gdk, GLib, Gtk
 
     Adw.init()
 
-    from openemux.core.playlist_manager import PlaylistManager
     from openemux.core.rom_actions import RomActionError
-    from openemux.core.scanner import RomScanner
     from openemux.core.scraper import COVER_ART, LABEL_ART
     from openemux.ui import window as window_module
     from openemux.ui.scopes import (
@@ -49,131 +44,8 @@ if HAVE_DISPLAY:
     from openemux.ui.window import OpenEmuxWindow
 
 
-#: The real startup scan, kept before the patch in `_WindowCase` replaces it.
-_REAL_STARTUP_SCAN = OpenEmuxWindow._start_startup_scan if HAVE_DISPLAY else None
-
-
-#: The synthetic library every case opens on: two consoles, three games.
-_LIBRARY = {
-    "SFC": ["Chrono Trigger.sfc", "Super Metroid.sfc"],
-    "FC": ["Metroid.nes"],
-}
-
-
-class _WindowCase(unittest.TestCase):
-    """A real window over a throwaway home, with the threads held back."""
-
-    library = _LIBRARY
-
-    def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
-        self.home = IsolatedHome(self.tmp / "home")
-        self.config = self.home.start()
-        self.addCleanup(self.home.stop)
-
-        for console, roms in self.library.items():
-            for name in roms:
-                self.home.add_rom(console, name)
-        # The window reads playlists, not the directory tree: build them once
-        # here so construction has a library to open on without a scan thread.
-        PlaylistManager(
-            self.config, RomScanner(self.config.get_roms_path())
-        ).scan_and_rebuild_all_playlists()
-
-        # One application for the whole module: a second registration under
-        # the same id collides on the session bus, and an id per test would
-        # leak one exported object per case.
-        self.app = _shared_application()
-        self.app.config_manager = self.config
-
-        navigator_patch = mock.patch.object(
-            window_module, "make_navigator", lambda **kwargs: mock.Mock()
-        )
-        navigator_patch.start()
-        self.addCleanup(navigator_patch.stop)
-        # The startup rescan is a thread; it is tested on its own instead.
-        scan_patch = mock.patch.object(OpenEmuxWindow, "_start_startup_scan")
-        scan_patch.start()
-        self.addCleanup(scan_patch.stop)
-
-        self.win = OpenEmuxWindow(self.app)
-        self.addCleanup(self.win.destroy)
-
-        self.toasts = []
-        toast_patch = mock.patch.object(
-            self.win.toast_overlay,
-            "add_toast",
-            lambda toast: self.toasts.append(toast.get_title()),
-        )
-        toast_patch.start()
-        self.addCleanup(toast_patch.stop)
-
-    # -- helpers ----------------------------------------------------------
-    @contextmanager
-    def caught_dialog(self):
-        """Catch the `Adw.AlertDialog` the window is about to show.
-
-        The prompts are built and presented in one call, and none of them is
-        parented anywhere a test could find it, so presenting is where they
-        are intercepted -- which also keeps every dialog off the screen.
-        """
-        caught = []
-        with mock.patch.object(
-            Adw.AlertDialog, "present", lambda dialog, *args: caught.append(dialog)
-        ):
-            yield caught
-
-    def rom(self, console="SFC", index=0):
-        return self.win.playlist_manager.load_playlist(console)[index]
-
-    def said(self, key, **kwargs):
-        """The translated text of a message, for comparing against a toast."""
-        return self.win.t(key, **kwargs)
-
-    def pump(self):
-        """Run whatever the window queued on the idle loop."""
-        context = GLib.MainContext.default()
-        while context.pending():
-            context.iteration(False)
-
-
-if HAVE_DISPLAY:
-
-    class _Application(Adw.Application):
-        """The one thing the window needs from its application.
-
-        NON_UNIQUE so the registration never tries to hand the run over to a
-        copy of OpenEmux the developer happens to have open.
-        """
-
-        def __init__(self):
-            super().__init__(
-                application_id="io.github.openemux.WindowTests",
-                flags=Gio.ApplicationFlags.NON_UNIQUE,
-            )
-            self.config_manager = None
-
-
-_APPLICATION = None
-
-
-def _shared_application():
-    """The module's single registered application.
-
-    Registering exports an object on the session bus under the application id;
-    doing that twice fails, so the application is built once and each test
-    points it at its own throwaway config.
-    """
-    global _APPLICATION
-    if _APPLICATION is None:
-        _APPLICATION = _Application()
-        _APPLICATION.register()
-    return _APPLICATION
-
-
 @needs_display
-class TheWindowOpensOnALibraryTests(_WindowCase):
+class TheWindowOpensOnALibraryTests(WindowCase):
     def test_the_consoles_with_games_are_the_visible_ones(self):
         self.assertEqual(sorted(self.win.visible_consoles), ["FC", "SFC"])
 
@@ -232,7 +104,7 @@ class TheWindowOpensOnALibraryTests(_WindowCase):
 
 
 @needs_display
-class AnEmptyLibraryTests(_WindowCase):
+class AnEmptyLibraryTests(WindowCase):
     library = {}
 
     def test_the_empty_state_is_what_the_window_shows(self):
@@ -263,7 +135,7 @@ class AnEmptyLibraryTests(_WindowCase):
 
 
 @needs_display
-class TheLayoutControlsTests(_WindowCase):
+class TheLayoutControlsTests(WindowCase):
     def setUp(self):
         super().setUp()
         self.win.sidebar.select("SFC")
@@ -346,7 +218,7 @@ class TheLayoutControlsTests(_WindowCase):
 
 
 @needs_display
-class TheFollowGlobalToggleTests(_WindowCase):
+class TheFollowGlobalToggleTests(WindowCase):
     def setUp(self):
         super().setUp()
         self.win.sidebar.select("SFC")
@@ -376,7 +248,7 @@ class TheFollowGlobalToggleTests(_WindowCase):
 
 
 @needs_display
-class TheZoomStepperTests(_WindowCase):
+class TheZoomStepperTests(WindowCase):
     def test_the_label_shows_the_current_percentage(self):
         self.assertEqual(
             self.win.zoom_label.get_label(),
@@ -419,7 +291,7 @@ class TheZoomStepperTests(_WindowCase):
 
 
 @needs_display
-class TheThemeButtonTests(_WindowCase):
+class TheThemeButtonTests(WindowCase):
     def test_the_icon_offers_the_appearance_the_click_would_give(self):
         with mock.patch.object(window_module.theming, "is_dark", return_value=True):
             self.win._sync_theme_button()
@@ -452,7 +324,7 @@ class TheThemeButtonTests(_WindowCase):
 
 
 @needs_display
-class TheSelectionBarTests(_WindowCase):
+class TheSelectionBarTests(WindowCase):
     def test_it_stays_hidden_until_something_is_selected(self):
         self.assertFalse(self.win.selection_bar.get_reveal_child())
 
@@ -514,7 +386,7 @@ class TheSelectionBarTests(_WindowCase):
 
 
 @needs_display
-class TheEscapeKeyTests(_WindowCase):
+class TheEscapeKeyTests(WindowCase):
     def test_a_key_that_is_not_escape_is_left_alone(self):
         self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_a, 0, 0))
 
@@ -532,7 +404,7 @@ class TheEscapeKeyTests(_WindowCase):
 
 
 @needs_display
-class TheTipBarTests(_WindowCase):
+class TheTipBarTests(WindowCase):
     def test_a_tip_is_showing_from_the_start(self):
         self.assertTrue(self.win.tip_label.get_text())
 
@@ -592,7 +464,7 @@ class TheTipBarTests(_WindowCase):
 
 
 @needs_display
-class TheSearchFieldTests(_WindowCase):
+class TheSearchFieldTests(WindowCase):
     def test_disabling_search_empties_and_locks_the_field(self):
         self.win.search_entry.set_text("metroid")
         self.win._set_search_enabled(False)
@@ -646,7 +518,7 @@ class TheSearchFieldTests(_WindowCase):
 
 
 @needs_display
-class TheConsoleOrderTests(_WindowCase):
+class TheConsoleOrderTests(WindowCase):
     def test_reordering_stores_the_arrangement_and_shows_it(self):
         reversed_order = list(reversed(self.win.visible_consoles))
         self.win.reorder_consoles(reversed_order)
@@ -674,7 +546,7 @@ class TheConsoleOrderTests(_WindowCase):
 
 
 @needs_display
-class NavigatingTheSidebarTests(_WindowCase):
+class NavigatingTheSidebarTests(WindowCase):
     def test_selecting_a_console_shows_its_page_and_titles_the_window(self):
         self.win.sidebar.select("FC")
         self.assertEqual(self.win.current_console, "FC")
@@ -735,7 +607,7 @@ class NavigatingTheSidebarTests(_WindowCase):
 
 
 @needs_display
-class RefreshingTheLibraryTests(_WindowCase):
+class RefreshingTheLibraryTests(WindowCase):
     def test_a_refresh_that_finds_the_same_consoles_keeps_the_pages(self):
         # Issue #230: tearing the whole stack down for an unchanged library
         # threw every page away and rebuilt it, twice on startup.
@@ -767,7 +639,7 @@ class RefreshingTheLibraryTests(_WindowCase):
 
 
 @needs_display
-class CollectionsTests(_WindowCase):
+class CollectionsTests(WindowCase):
     def setUp(self):
         super().setUp()
         self.slug = self.win.collection_manager.create("RPGs")
@@ -826,7 +698,7 @@ class CollectionsTests(_WindowCase):
 
 
 @needs_display
-class TheCollectionPromptsTests(_WindowCase):
+class TheCollectionPromptsTests(WindowCase):
     """The dialogs are built and answered, never shown to anyone."""
 
     def test_creating_a_collection_from_the_prompt_adds_it_to_the_sidebar(self):
@@ -938,7 +810,7 @@ class TheCollectionPromptsTests(_WindowCase):
 
 
 @needs_display
-class RenamingAndDeletingRomsTests(_WindowCase):
+class RenamingAndDeletingRomsTests(WindowCase):
     def test_renaming_moves_the_file_and_repaths_everything_that_knew_it(self):
         rom = self.rom()
         old_path = rom["path"]
@@ -1074,7 +946,7 @@ class RenamingAndDeletingRomsTests(_WindowCase):
 
 
 @needs_display
-class FavoritesTests(_WindowCase):
+class FavoritesTests(WindowCase):
     def test_starring_a_rom_says_so_and_records_it(self):
         rom = self.rom()
         self.assertTrue(self.win._toggle_favorite_from_ui(rom))
@@ -1108,7 +980,7 @@ class FavoritesTests(_WindowCase):
 
 
 @needs_display
-class PerRomOverridesTests(_WindowCase):
+class PerRomOverridesTests(WindowCase):
     def test_choosing_a_core_for_one_rom_is_stored_and_announced(self):
         rom = self.rom()
         self.win.set_rom_core(rom, "snes9x_libretro.so")
@@ -1186,7 +1058,7 @@ class PerRomOverridesTests(_WindowCase):
 
 
 @needs_display
-class CoverFilesTests(_WindowCase):
+class CoverFilesTests(WindowCase):
     def _write_cover(self, rom, kind=COVER_ART):
         target = self.home.roms / rom["console"] / kind / f"{rom['name']}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1222,7 +1094,7 @@ class CoverFilesTests(_WindowCase):
 
 
 @needs_display
-class TheCoverPickerTests(_WindowCase):
+class TheCoverPickerTests(WindowCase):
     """The picker itself never opens; only what it hands back matters."""
 
     def setUp(self):
@@ -1298,7 +1170,7 @@ class TheCoverPickerTests(_WindowCase):
 
 
 @needs_display
-class TheRomsFolderPickerTests(_WindowCase):
+class TheRomsFolderPickerTests(WindowCase):
     def _chosen(self, path):
         selected = mock.Mock()
         selected.get_path.return_value = str(path) if path is not None else ""
@@ -1362,7 +1234,7 @@ class TheRomsFolderPickerTests(_WindowCase):
 
 
 @needs_display
-class OpeningFoldersTests(_WindowCase):
+class OpeningFoldersTests(WindowCase):
     def test_the_roms_folder_is_opened_by_path(self):
         with mock.patch.object(self.win, "_open_path_in_file_manager") as open_path:
             self.win._open_roms_folder()
@@ -1428,7 +1300,7 @@ class OpeningFoldersTests(_WindowCase):
 
 
 @needs_display
-class TheRescanPlumbingTests(_WindowCase):
+class TheRescanPlumbingTests(WindowCase):
     def test_a_rescan_of_one_console_runs_and_refreshes_the_library(self):
         summary = {"console": "SFC", "roms": 2}
         self.assertFalse(
@@ -1530,7 +1402,7 @@ class TheRescanPlumbingTests(_WindowCase):
         # The method itself is held back during construction (it is a thread),
         # so it is called here against the real implementation.
         with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
-            _REAL_STARTUP_SCAN(self.win)
+            REAL_STARTUP_SCAN(self.win)
         rescan.assert_called_once_with(show_toast=False)
 
     def test_the_refresh_button_rescans_the_console_it_is_on(self):
@@ -1555,7 +1427,7 @@ class TheRescanPlumbingTests(_WindowCase):
 
 
 @needs_display
-class TheScanAndSyncDialogsTests(_WindowCase):
+class TheScanAndSyncDialogsTests(WindowCase):
     def test_the_scan_dialog_starts_a_whole_library_rescan_on_all(self):
         with self.caught_dialog() as caught:
             self.win._show_scan_roms_dialog()
@@ -1618,7 +1490,7 @@ class TheScanAndSyncDialogsTests(_WindowCase):
 
 
 @needs_display
-class TheConsoleDropdownTests(_WindowCase):
+class TheConsoleDropdownTests(WindowCase):
     def test_it_can_offer_an_all_entry_above_the_consoles(self):
         dropdown = self.win._build_console_dropdown(["SFC", "FC"], include_all=True)
         self.assertEqual(dropdown._console_ids, [ALL_CONSOLES_ID, "SFC", "FC"])
@@ -1652,7 +1524,7 @@ class TheConsoleDropdownTests(_WindowCase):
 
 
 @needs_display
-class TheArtworkSyncTests(_WindowCase):
+class TheArtworkSyncTests(WindowCase):
     def setUp(self):
         super().setUp()
         patcher = mock.patch.object(window_module, "sync_artwork_async")
@@ -1756,7 +1628,7 @@ class TheArtworkSyncTests(_WindowCase):
 
 
 @needs_display
-class TheIncrementalCoverRevealTests(_WindowCase):
+class TheIncrementalCoverRevealTests(WindowCase):
     """Issue #187: covers appear while the sync is still running."""
 
     def setUp(self):
@@ -1820,7 +1692,7 @@ class TheIncrementalCoverRevealTests(_WindowCase):
 
 
 @needs_display
-class TheUpdateBannerTests(_WindowCase):
+class TheUpdateBannerTests(WindowCase):
     def test_the_check_stays_off_when_the_config_says_so(self):
         with mock.patch.object(window_module, "check_for_update_async") as check:
             self.win._start_update_check()
@@ -1878,7 +1750,7 @@ class TheUpdateBannerTests(_WindowCase):
 
 
 @needs_display
-class TheDialogsAndMenusTests(_WindowCase):
+class TheDialogsAndMenusTests(WindowCase):
     def test_preferences_opens_and_is_remembered(self):
         with mock.patch.object(window_module.OpenEmuxPreferences, "present"):
             self.win._open_preferences()
@@ -1922,7 +1794,7 @@ class TheDialogsAndMenusTests(_WindowCase):
 
 
 @needs_display
-class RecoveredStateTests(_WindowCase):
+class RecoveredStateTests(WindowCase):
     def test_nothing_quarantined_means_nothing_to_report(self):
         with mock.patch.object(window_module, "quarantined_files", return_value=[]):
             with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
@@ -1957,7 +1829,7 @@ class RecoveredStateTests(_WindowCase):
 
 
 @needs_display
-class BootstrapReportingTests(_WindowCase):
+class BootstrapReportingTests(WindowCase):
     def test_a_clean_bootstrap_state_warns_about_nothing(self):
         self.win._maybe_show_bootstrap_warning()
         self.assertEqual(self.toasts, [])
@@ -2015,7 +1887,7 @@ class BootstrapReportingTests(_WindowCase):
 
 
 @needs_display
-class TheGameAndInputHandoffTests(_WindowCase):
+class TheGameAndInputHandoffTests(WindowCase):
     def test_launching_a_rom_goes_through_the_session(self):
         rom = self.rom()
         with mock.patch.object(self.win.game, "launch") as launch:
@@ -2075,7 +1947,7 @@ class TheGameAndInputHandoffTests(_WindowCase):
 
 
 @needs_display
-class SortingTests(_WindowCase):
+class SortingTests(WindowCase):
     def test_the_scope_order_is_what_a_page_sorts_by(self):
         roms = self.win.playlist_manager.load_playlist("SFC")
         with mock.patch.object(window_module, "sort_roms", return_value=roms) as sort:
@@ -2137,7 +2009,7 @@ class WindowGeometryTests(unittest.TestCase):
 
 
 @needs_display
-class TheLanguageChangeTests(_WindowCase):
+class TheLanguageChangeTests(WindowCase):
     def test_changing_the_language_stores_it_and_rebuilds_every_label(self):
         with mock.patch.object(self.win, "refresh_library") as refresh:
             self.win._apply_language_change("pt_BR")
@@ -2154,7 +2026,7 @@ class TheLanguageChangeTests(_WindowCase):
 
 
 @needs_display
-class ClickLoggingTests(_WindowCase):
+class ClickLoggingTests(WindowCase):
     """The debugging aid behind a DEBUG root logger (issue #221)."""
 
     def test_a_click_is_described_without_raising(self):
