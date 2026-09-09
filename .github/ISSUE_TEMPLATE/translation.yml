@@ -1,0 +1,49 @@
+name: Translation
+description: Add a language, or fix the wording in one that already ships
+labels: ["i18n"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenEmux ships German, English, Spanish, French, Japanese, Brazilian
+        Portuguese, Tamil and Simplified Chinese. Each locale is one flat
+        Python `dict` in `src/openemux/i18n/locales/`, keyed by string id, with
+        English as the source of truth — so a translation is one file, and you
+        do not need to touch anything else.
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: The name and the locale code.
+      placeholder: "Italian (it), or: Brazilian Portuguese (pt_BR)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change is this?
+      options:
+        - A new language OpenEmux does not have yet
+        - A wrong or awkward translation in a language that ships
+        - Text that is missing a translation and shows in English
+        - Text that does not fit its button or label on screen
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a fix, say where the text appears, what it says now and what it should say. A screenshot of the wrong string is the fastest way to point at it.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: ownership
+    attributes:
+      label: Are you translating it yourself?
+      options:
+        - label: Yes, I want to open the pull request for this.
+          required: false

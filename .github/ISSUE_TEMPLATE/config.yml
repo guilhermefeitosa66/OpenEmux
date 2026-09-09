@@ -1,0 +1,18 @@
+# Blank issues are off on purpose. Every report that arrives through a form
+# carries the version, the distribution and the package format, which is the
+# difference between a report that can be reproduced and one that costs three
+# round trips before it can even be read.
+blank_issues_enabled: false
+contact_links:
+  - name: Question about using OpenEmux
+    url: https://github.com/guilhermefeitosa66/OpenEmux/discussions/categories/q-a
+    about: How do I set up a console, where do covers come from, why will this ROM not launch — ask in Discussions, not in the tracker.
+  - name: Idea you want to talk through first
+    url: https://github.com/guilhermefeitosa66/OpenEmux/discussions/categories/ideas
+    about: Not sure it is a feature request yet? Float it in Ideas and see what other people think.
+  - name: The OpenEmux community on Reddit
+    url: https://www.reddit.com/r/OpenEmux/
+    about: Share your setup, follow what is coming next, and help other people with theirs.
+  - name: Security vulnerability
+    url: https://github.com/guilhermefeitosa66/OpenEmux/security/advisories/new
+    about: Never report a vulnerability in a public issue. Use the private advisory form.
