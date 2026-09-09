@@ -1,0 +1,111 @@
+name: Bug report
+description: Something in OpenEmux is broken or behaves the wrong way
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        A quick note on what this tracker covers: OpenEmux launches RetroArch,
+        it does not emulate anything itself. If the game runs but looks or
+        sounds wrong, or a core crashes mid-game, that is usually RetroArch or
+        the core rather than OpenEmux. Report it here anyway if you are not
+        sure — being wrong about which project owns a bug costs nothing.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the existing issues, open and closed, and did not find this one.
+          required: true
+        - label: I am on the latest release, or I checked the release notes and the fix is not in them.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenEmux version
+      description: The primary menu, then "About OpenEmux". If you build from source, the commit works too.
+      placeholder: "1.13.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      description: Each format bundles a different set of libraries, and several bugs have only ever appeared in one of them.
+      options:
+        - AppImage
+        - Debian / Ubuntu package (.deb)
+        - Fedora / RHEL package (.rpm)
+        - Flatpak
+        - Arch Linux package
+        - Windows installer (.exe)
+        - Windows portable (.zip)
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Distribution and version
+      placeholder: "Fedora 42, Ubuntu 24.04, Arch, Windows 11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: session
+    attributes:
+      label: Desktop session
+      description: Not applicable on Windows — pick "I do not know".
+      options:
+        - Wayland
+        - X11
+        - I do not know
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected to see instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Number them, starting from a freshly opened app. The narrower the path, the sooner this gets fixed.
+      value: |
+        1. Open OpenEmux
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Start-up log
+      description: |
+        The last 50 or so lines of `~/.openemux/runtime/openemux_startup.log`,
+        captured right after reproducing the problem. On Windows the same file
+        sits under your user profile. This is pasted as a code block
+        automatically, so no backticks needed.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, a screen recording, the console it happens on, the gamepad model. Drag files straight into this box.
+    validations:
+      required: false

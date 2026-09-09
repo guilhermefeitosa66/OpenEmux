@@ -239,10 +239,58 @@ class TestsWorkflowTests(unittest.TestCase):
         self.assertIs(self.data["jobs"]["unittest"]["strategy"]["fail-fast"], False)
 
     def test_only_one_version_publishes_the_badge(self):
-        # Four jobs force-pushing the same branch would race for no gain.
+        # Four jobs computing and uploading the same payload would race for no
+        # gain. Every badge step in the matrix job carries the condition, not
+        # just the first one.
         steps = self.data["jobs"]["unittest"]["steps"]
-        badge = next(s for s in steps if "badge" in s["name"].lower())
-        self.assertIn("matrix.python-version == '3.12'", badge["if"])
+        badge = [s for s in steps if "badge" in s["name"].lower()]
+        self.assertTrue(badge, "nothing in the test job produces the badge data")
+        for step in badge:
+            with self.subTest(step=step["name"]):
+                self.assertIn("matrix.python-version == '3.12'", step["if"])
+
+    def test_the_workflow_is_read_only_by_default(self):
+        # Stated in the file rather than inherited from a repository setting
+        # somebody could flip without touching this workflow.
+        self.assertEqual(self.data["permissions"], {"contents": "read"})
+
+    def test_the_badge_push_does_not_share_a_job_with_the_test_run(self):
+        # `contents: write` used to sit on the whole unittest job, so the token
+        # that can force-push to this repository was held while that job
+        # installed the pull request's dependencies and ran its test suite. A
+        # fork gets a read-only token whatever the workflow asks for, but an
+        # internal branch does not, and there is no reason to run anybody's
+        # code next to a write token. The push now lives in a job that checks
+        # nothing out and never runs on a pull request.
+        jobs = self.data["jobs"]
+        self.assertNotIn(
+            "write",
+            str(jobs["unittest"].get("permissions", "")),
+            "the job that runs the suite must not hold a write token",
+        )
+
+        badge = jobs["badge"]
+        self.assertEqual(badge["permissions"], {"contents": "write"})
+        self.assertIn("github.event_name == 'push'", badge["if"])
+        self.assertIn("refs/heads/develop", badge["if"])
+        self.assertFalse(
+            any("actions/checkout" in str(s.get("uses", "")) for s in badge["steps"]),
+            "the badge job must not check the repository out",
+        )
+
+    def test_the_badge_data_reaches_the_job_that_pushes_it(self):
+        # The two halves are joined by an artifact name; a rename on one side
+        # alone would leave the badge silently frozen at its last value.
+        upload = next(
+            s for s in self.data["jobs"]["unittest"]["steps"]
+            if str(s.get("uses", "")).startswith("actions/upload-artifact")
+        )
+        download = next(
+            s for s in self.data["jobs"]["badge"]["steps"]
+            if str(s.get("uses", "")).startswith("actions/download-artifact")
+        )
+        self.assertEqual(upload["with"]["name"], download["with"]["name"])
+        self.assertEqual(self.data["jobs"]["badge"]["needs"], "unittest")
 
     def test_the_badge_has_a_band_that_reports_a_problem(self):
         # The ladder bottomed out at orange, so however far coverage fell the
