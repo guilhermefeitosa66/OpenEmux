@@ -61,6 +61,22 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
+### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
+
+Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage
+could not start on Arch at all, and that on every distribution that is not Debian-derived not one
+HTTPS request succeeded — so first-time setup stopped before it could download a single core. Then
+chased it down and sent the fix,
+[#395](https://github.com/guilhermefeitosa66/OpenEmux/pull/395): four instances of the same shape,
+the bundle handing its own Ubuntu environment to a process that is not part of it, each measured
+against the released 1.13.0 AppImage rather than reasoned about. The structural test that came with
+it — every `subprocess` call in the app must pass an explicit environment — is what stops it
+happening a fifth time.
+
+The same work brought the native **Arch Linux package**, the packaged icons finally being the size
+the folder they sit in claims, and **தமிழ் (Tamil)**, the project's first locale contributed by
+someone other than the maintainer.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

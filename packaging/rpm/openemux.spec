@@ -179,12 +179,21 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Wed Sep 09 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.13.1-1
+- The AppImage starts on Arch and every distribution whose /bin/sh is newer than the bundle
+- HTTPS works outside Debian: the bundle uses the machine's own CA store, so first boot completes
+- "Open folder", the RetroArch Flatpak probe and the PulseAudio probe no longer inherit the bundle
+- Every packaged icon is square and exactly the size its directory claims, from 16 to 512
+- A native Arch Linux package (.pkg.tar.zst), built and install-tested like every other format
+- Tamil joins the interface languages
+
 * Wed Sep 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.13.0-1
 - "Favorites" appears in the sidebar with the first starred game and goes with the last
 - The library reopens on the view it was closed on, remembered in a session file of its own
 - "All", "Favorites" and the collections group their games by console instead of one flat A-Z pile
 - The cartridge shelf reaches those pages too: each group is drawn in its own console's frame
 - Consoles can be reordered by dragging a sidebar row, with Ctrl+Up/Down and from Preferences
+
 * Fri Aug 28 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.12.0-1
 - OpenEmux runs on Windows: an installer, a portable bundle and gamepads read through SDL2
 - Linux packages are built for aarch64 as well as x86_64, in every format

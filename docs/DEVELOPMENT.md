@@ -855,8 +855,8 @@ that were surprising enough to write down.
 
 ## How the packages are laid out
 
-The `.deb` and `.rpm` share one install layout, assembled by
-[`packaging/common/stage_tree.sh`](../packaging/common/stage_tree.sh):
+The `.deb`, the `.rpm` and the Arch package share one install layout, assembled
+by [`packaging/common/stage_tree.sh`](../packaging/common/stage_tree.sh):
 
 - **`/opt/openemux/`** — the app "project root": `src/` plus the vendored
   RetroArch. The launcher sets `OPENEMUX_PROJECT_ROOT` to this path.

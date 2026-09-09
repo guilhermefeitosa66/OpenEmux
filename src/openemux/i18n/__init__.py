@@ -2,9 +2,9 @@ import os
 import sys
 from functools import lru_cache
 
-from openemux.i18n.locales import de, en, es, fr, ja, pt_BR, zh_CN
+from openemux.i18n.locales import de, en, es, fr, ja, pt_BR, ta, zh_CN
 
-SUPPORTED_LOCALES = ["en", "de", "ja", "fr", "zh_CN", "pt_BR", "es"]
+SUPPORTED_LOCALES = ["en", "de", "ja", "fr", "zh_CN", "pt_BR", "es", "ta"]
 
 #: Fallback locale when nothing else matches.
 DEFAULT_LOCALE = "en"
@@ -32,6 +32,7 @@ LANGUAGE_META = {
     "zh_CN": {"name": "Mandarin", "native_name": "简体中文", "flag": "🇨🇳"},
     "pt_BR": {"name": "Portuguese (Brazil)", "native_name": "Português (Brasil)", "flag": "🇧🇷"},
     "es": {"name": "Spanish", "native_name": "Español", "flag": "🇪🇸"},
+    "ta": {"name": "Tamil", "native_name": "தமிழ்", "flag": "🇮🇳"},
 }
 
 LOCALE_TRANSLATIONS = {
@@ -42,6 +43,7 @@ LOCALE_TRANSLATIONS = {
     "zh_CN": zh_CN.TRANSLATIONS,
     "pt_BR": pt_BR.TRANSLATIONS,
     "es": es.TRANSLATIONS,
+    "ta": ta.TRANSLATIONS,
 }
 
 

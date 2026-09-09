@@ -88,6 +88,19 @@
   </keywords>
 
   <releases>
+    <release version="1.13.1" date="2026-09-09">
+      <description>
+        <p>OpenEmux runs on distributions that are not Debian-derived: the AppImage starts, and it can reach the network.</p>
+        <ul>
+          <li>The AppImage starts on Arch and on any distribution whose shell is newer than the bundle's libraries</li>
+          <li>HTTPS works everywhere: the bundle trusts the machine's own certificate store, so first-time setup finishes</li>
+          <li>"Open folder", the RetroArch Flatpak probe and the audio probe are no longer handed the bundle's environment</li>
+          <li>Every packaged icon is exactly the size its directory claims, with the small sizes desktops ask for</li>
+          <li>A native Arch Linux package, built and install-tested like every other format</li>
+          <li>Tamil is available as an interface language</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.13.0" date="2026-09-02">
       <description>
         <p>The library becomes the user's own: it remembers where it was left, it groups what it shows, and the consoles sit in the order the user puts them in.</p>

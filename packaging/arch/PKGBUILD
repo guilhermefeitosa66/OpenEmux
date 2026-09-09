@@ -1,0 +1,86 @@
+# Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
+#
+# Built from a source tarball, like the .rpm and for the same reason: the
+# recipe must not need this checkout to be bind-mounted anywhere in
+# particular, so it can be handed to the AUR or to `makepkg` on a real Arch
+# box (packaging/arch/build.sh packs the tarball and templates `pkgver`).
+#
+# `pkgver` is a placeholder in the tracked file. src/openemux/__init__.py is
+# the single source of truth and build.sh resolves it into the copy makepkg
+# sees, so a bump touches one file. tests/test_arch_package.py checks that the
+# placeholder is still a placeholder here.
+
+pkgname=openemux
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu"
+# Nothing in the app is architecture-specific; what is, is the vendored
+# RetroArch, and on ARM there is none to vendor -- libretro publishes no ARM
+# build -- so the package depends on the distribution's instead (see below).
+arch=('x86_64' 'aarch64')
+url="https://github.com/guilhermefeitosa66/OpenEmux"
+license=('MIT')
+
+depends=(
+  'python>=3.10'
+  'python-gobject'
+  'python-cairo'
+  'gtk4>=4.6'
+  'libadwaita>=1.5'
+  'python-yaml'
+  # The game window reparents RetroArch's X11 window into ours (issue #199).
+  'python-xlib'
+  'librsvg'
+  # Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
+  # decoder for it. Declared rather than inherited from someone else's
+  # optdepends: without it every synced cover decodes to nothing and the card
+  # renders blank, with one "cover decode failed" line in the log (issue #251).
+  'webp-pixbuf-loader'
+  # Every symbolic icon in the HIG UI comes from here.
+  'adwaita-icon-theme'
+  'hicolor-icon-theme'
+)
+makedepends=('imagemagick' 'desktop-file-utils' 'appstream')
+
+# RetroArch is bundled on x86_64 and absent on ARM, so the dependency exists
+# on exactly one of them. A hard one, not optional: a frontend with no
+# emulator behind it is not a working install, and `retroarch` is in Arch's
+# own `extra` on the architectures that have it.
+if [ "$CARCH" = 'aarch64' ]; then
+  depends+=('retroarch')
+else
+  optdepends=('retroarch: use the distribution RetroArch instead of the bundled one')
+fi
+
+source=("$pkgname-$pkgver.tar.gz")
+# The tarball is packed from the working tree by packaging/arch/build.sh
+# moments before makepkg runs, so there is no published checksum to pin it to.
+sha256sums=('SKIP')
+
+# !strip and !debug: what ships beside the app is a redistributed RetroArch --
+# an ELF plus 56 libraries -- and stripping it would mean the tree is no longer
+# the bytes libretro published, which the vendor manifest's tree_sha256 exists
+# to state. !lto and !buildflags because nothing here is compiled at all.
+options=('!strip' '!debug' '!lto' '!buildflags')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  # The install layout the .deb and .rpm already share: the app runs from
+  # /opt/openemux, /usr/bin/openemux launches it, and the desktop entry plus
+  # icons register it. Reused rather than restated -- a second copy of it is a
+  # path that gets fixed in one packaging format and not the others.
+  DESTDIR="$pkgdir" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
+
+  # stage_tree.sh writes the Debian location for the licence text,
+  # /usr/share/doc/openemux/copyright. On Arch that belongs under
+  # /usr/share/licenses/$pkgname, and leaving the Debian copy behind is a
+  # namcap finding on a path nothing else owns.
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # Not a duplicate of LICENSE: about a third of what ships is third-party
+  # (the OpenEmu console icons, the Adwaita symbolic icons, the vendored
+  # RetroArch) and this is where their terms are recorded (issue #233).
+  install -Dm644 packaging/common/copyright \
+    "$pkgdir/usr/share/licenses/$pkgname/copyright"
+  rm -rf "$pkgdir/usr/share/doc/openemux"
+}
