@@ -185,6 +185,7 @@ fi
 - "All", "Favorites" and the collections group their games by console instead of one flat A-Z pile
 - The cartridge shelf reaches those pages too: each group is drawn in its own console's frame
 - Consoles can be reordered by dragging a sidebar row, with Ctrl+Up/Down and from Preferences
+
 * Fri Aug 28 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.12.0-1
 - OpenEmux runs on Windows: an installer, a portable bundle and gamepads read through SDL2
 - Linux packages are built for aarch64 as well as x86_64, in every format

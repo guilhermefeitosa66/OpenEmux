@@ -40,6 +40,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from openemux.core.appimage_env import host_env
 from openemux.core.paths import is_running_in_flatpak
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,10 @@ def host_has_pulse_through_flatpak():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=HOST_PROBE_TIMEOUT,
+            # A no-op under Flatpak, where this normally runs. It matters if
+            # it is ever reached from the AppImage: `sh` here is the *host's*
+            # shell, and the bundle's loader path is what kills it.
+            env=host_env(os.environ),
         )
     except Exception as exc:  # noqa: BLE001 - a probe must never break a launch
         logger.info("could not ask the host about PulseAudio: %s", exc)

@@ -76,18 +76,11 @@ grep -q '^TryExec=' "$DESTDIR/usr/share/applications/$APP_ID.desktop" ||
   sed -i '/^Exec=/a TryExec=/usr/bin/openemux' \
     "$DESTDIR/usr/share/applications/$APP_ID.desktop"
 
-# Icons: the themed hicolor entry is what a modern menu uses. Several sizes are
-# installed because menus that do not scale pick the nearest exact match, and
-# /usr/share/pixmaps is the fallback older Cinnamon/MATE/XFCE menus still read.
-install -Dm644 "$LOGO" "$DESTDIR/usr/share/icons/hicolor/512x512/apps/$APP_ID.png"
-if command -v convert >/dev/null 2>&1; then
-  for size in 32 48 64 128 256; do
-    install -d "$DESTDIR/usr/share/icons/hicolor/${size}x${size}/apps"
-    convert "$LOGO" -resize "${size}x${size}" \
-      "$DESTDIR/usr/share/icons/hicolor/${size}x${size}/apps/$APP_ID.png"
-  done
-fi
-install -Dm644 "$LOGO" "$DESTDIR/usr/share/pixmaps/$APP_ID.png"
+# Icons, at every size the desktop asks for. Its own script because the sizes
+# have to be *measured* to be trusted -- see stage_icons.sh for the six that
+# were each filed under a size they were not.
+DESTDIR="$DESTDIR" APP_ID="$APP_ID" LOGO="$LOGO" \
+  sh "$ROOT_DIR/packaging/common/stage_icons.sh"
 
 # The packaged copyright file. Not a copy of LICENSE: about a third of what
 # ships is third-party (the OpenEmu console icons, the Adwaita symbolic icons,

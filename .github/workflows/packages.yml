@@ -44,6 +44,7 @@ on:
           - all
           - deb+rpm
           - appimage
+          - arch
           - flatpak
           - windows
           # Every Linux format, ARM only: the leg nobody builds by hand.
@@ -79,6 +80,10 @@ jobs:
 
           event, choice = sys.argv[1], sys.argv[2]
           LINUX = ["deb", "rpm", "appimage", "flatpak"]
+          # Built in the official archlinux image, which is amd64-only
+          # (Arch Linux ARM is a separate distribution), so this one
+          # sits with the Windows bundle rather than in LINUX.
+          X86_ONLY = ["arch", "windows"]
           RUNNER = {"x86_64": "ubuntu-latest", "aarch64": "ubuntu-24.04-arm"}
 
           def entries(targets, arches=("x86_64",)):
@@ -87,7 +92,7 @@ jobs:
                   for arch in arches:
                       # Nothing cross-builds a Windows bundle from ARM, and
                       # nobody is asking for one.
-                      if target == "windows" and arch != "x86_64":
+                      if target in X86_ONLY and arch != "x86_64":
                           continue
                       out.append({"target": target, "arch": arch,
                                   "runs-on": RUNNER[arch]})
@@ -101,12 +106,12 @@ jobs:
               jobs = entries(["deb", "rpm"], ("x86_64", "aarch64"))
           elif event == "workflow_dispatch" and choice in LINUX:
               jobs = entries([choice], ("x86_64", "aarch64"))
-          elif event == "workflow_dispatch" and choice == "windows":
-              jobs = entries(["windows"])
+          elif event == "workflow_dispatch" and choice in X86_ONLY:
+              jobs = entries([choice])
           elif event == "workflow_dispatch" and choice == "aarch64":
               jobs = entries(LINUX, ("aarch64",))
           else:
-              jobs = entries(LINUX, ("x86_64", "aarch64")) + entries(["windows"])
+              jobs = entries(LINUX, ("x86_64", "aarch64")) + entries(X86_ONLY)
 
           print("jobs=" + json.dumps(jobs))
           print(json.dumps(jobs, indent=2), file=sys.stderr)
@@ -164,7 +169,7 @@ jobs:
         run: |
           case "$TARGET:$ARCH" in
             windows:*)                       echo "artifact=win64" ;;
-            appimage:x86_64|deb:x86_64|rpm:x86_64) echo "artifact=linux-x86_64" ;;
+            appimage:x86_64|deb:x86_64|rpm:x86_64|arch:x86_64) echo "artifact=linux-x86_64" ;;
             *)                               echo "artifact=" ;;
           esac >> "$GITHUB_OUTPUT"
 
