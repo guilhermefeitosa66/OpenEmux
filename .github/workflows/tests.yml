@@ -11,6 +11,12 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only by default, stated here rather than inherited from a repository
+# setting that somebody could flip without touching this file. The `badge` job
+# is the only one that raises it, and only for a push to develop.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
@@ -44,10 +50,6 @@ jobs:
   unittest:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    permissions:
-      # contents: write is only exercised by the badge step below, which
-      # force-pushes coverage.json to the unprotected `badges` branch.
-      contents: write
     strategy:
       # One version failing is information about that version; cancelling the
       # rest hides which ones are actually affected.
@@ -92,18 +94,19 @@ jobs:
           .venv/bin/python -m coverage report
 
       # The README's coverage badge is a shields.io endpoint badge fed by
-      # badges/coverage.json on the `badges` branch. The branch is CI-owned
-      # infrastructure: force-pushed to a single commit on every push to
-      # develop, never merged anywhere.
-      - name: Publish the coverage badge data
-        # One version owns the badge; four jobs force-pushing the same branch
-        # would race for no gain.
+      # badges/coverage.json on the `badges` branch. This job only *computes*
+      # the payload and hands it over as an artifact; the `badge` job below is
+      # what pushes it. That split is the point: pushing needs `contents:
+      # write`, and this job runs the pull request's own code -- its
+      # dependency install and its test suite -- so it must not be holding a
+      # token that can write to the repository while it does.
+      - name: Build the coverage badge data
+        # One version owns the badge; four jobs computing it would race for no
+        # gain.
         if: |
           matrix.python-version == '3.12'
           && github.event_name == 'push'
           && github.ref == 'refs/heads/develop'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           total=$(.venv/bin/python -m coverage report --format=total)
           if   [ "$total" -ge 90 ]; then color=brightgreen
@@ -115,15 +118,54 @@ jobs:
           # to say "this is a problem" however far coverage fell (issue #242).
           else                          color=red
           fi
-          dir=$(mktemp -d)
+          mkdir -p badge
           printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
-            "$total" "$color" > "$dir/coverage.json"
-          git -C "$dir" init -q -b badges
-          git -C "$dir" config user.name "github-actions[bot]"
-          git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$dir" add coverage.json
-          git -C "$dir" commit -q -m "coverage: ${total}%"
-          git -C "$dir" push -q --force \
+            "$total" "$color" > badge/coverage.json
+          cat badge/coverage.json
+
+      - name: Upload the coverage badge data
+        if: |
+          matrix.python-version == '3.12'
+          && github.event_name == 'push'
+          && github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-badge
+          path: badge/
+          # Consumed by the next job and never needed again.
+          retention-days: 1
+
+  badge:
+    name: Publish the coverage badge
+    needs: unittest
+    # Push to develop only. A pull request never reaches this job, which is
+    # what keeps `contents: write` away from code that came in from outside.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      # The one job in this workflow that writes anything. It force-pushes a
+      # single JSON file to the unprotected, CI-owned `badges` branch, which is
+      # never merged anywhere, and it runs no repository code at all -- there
+      # is no checkout here on purpose.
+      contents: write
+    steps:
+      - name: Download the coverage badge data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: coverage-badge
+          path: badge
+
+      - name: Force-push it to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          total=$(python3 -c 'import json;print(json.load(open("badge/coverage.json"))["message"])')
+          git -C badge init -q -b badges
+          git -C badge config user.name "github-actions[bot]"
+          git -C badge config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C badge add coverage.json
+          git -C badge commit -q -m "coverage: ${total}"
+          git -C badge push -q --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   windows:
