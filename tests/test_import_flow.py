@@ -28,6 +28,15 @@ if HAVE_DISPLAY:
     from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID
 
 
+def _local_path(path):
+    """The same path as GIO would spell it back.
+
+    `Gio.File.get_path()` answers in the platform's own separators, so a POSIX
+    literal is not what the flow receives on Windows.
+    """
+    return Gio.File.new_for_path(path).get_path()
+
+
 def _summary(imported=(), skipped=(), unknown=(), errors=(), extracted=()):
     return {
         "imported": list(imported),
@@ -200,7 +209,7 @@ class DroppingFilesTests(_ImportCase):
         self.assertTrue(
             self.flow._on_drop(None, self._file_list("/tmp/a.sfc"), 0, 0)
         )
-        self.assertEqual(self.run_args()["paths"], ["/tmp/a.sfc"])
+        self.assertEqual(self.run_args()["paths"], [_local_path("/tmp/a.sfc")])
         self.assertFalse(self.win.content_stack.has_css_class("rom-drop-active"))
 
     def test_a_drop_carrying_no_local_path_imports_nothing(self):
@@ -240,7 +249,10 @@ class TheFilePickerTests(_ImportCase):
 
     def test_chosen_files_start_an_import(self):
         self._answer("/tmp/a.sfc", "/tmp/b.nes")
-        self.assertEqual(self.run_args()["paths"], ["/tmp/a.sfc", "/tmp/b.nes"])
+        self.assertEqual(
+            self.run_args()["paths"],
+            [_local_path("/tmp/a.sfc"), _local_path("/tmp/b.nes")],
+        )
 
     def test_a_dismissed_picker_imports_nothing(self):
         source = mock.Mock()
