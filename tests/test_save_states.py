@@ -138,21 +138,31 @@ class WhatIsNotAStateTests(unittest.TestCase):
         self.assertEqual([state.slot for state in states], [1])
 
     def test_a_file_that_vanishes_mid_scan_is_skipped(self):
-        # The states directory is written by RetroArch while OpenEmux reads it.
+        # RetroArch writes into this directory while OpenEmux reads it, so an
+        # entry that was listed a moment ago may be gone by the stat.
+        class _Vanishing:
+            stem = "Chrono Trigger (USA)"
+            suffix = ".state2"
+
+            def is_file(self):
+                return True
+
+            def is_dir(self):
+                return False
+
+            def stat(self):
+                raise OSError("gone")
+
         with TemporaryDirectory() as tmp_dir:
-            console = self._states(
-                tmp_dir, "Chrono Trigger (USA).state1", "Chrono Trigger (USA).state2"
-            )
-            gone = console / "Chrono Trigger (USA).state2"
-            real_stat = Path.stat
+            self._states(tmp_dir, "Chrono Trigger (USA).state1")
+            real_entries = save_states._entries
 
-            def _stat(self, *args, **kwargs):
-                if self == gone:
-                    raise OSError("gone")
-                return real_stat(self, *args, **kwargs)
+            def _entries(directory):
+                return list(real_entries(directory)) + [_Vanishing()]
 
-            with mock.patch.object(Path, "stat", _stat):
+            with mock.patch.object(save_states, "_entries", _entries):
                 states = save_states.list_states(tmp_dir, ROM)
+
         self.assertEqual([state.slot for state in states], [1])
 
     def test_the_newest_copy_of_a_slot_is_the_one_that_counts(self):

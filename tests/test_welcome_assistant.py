@@ -231,6 +231,9 @@ class TheSlideshowTimerTests(_WelcomeCase):
             welcome_module.GLib, "timeout_add", return_value=7
         ) as timeout:
             self.assistant._start_slideshow(slide_id)
+        # 7 is not a source anybody registered; leaving it on the assistant
+        # would have its teardown hand it to the real GLib.source_remove.
+        self.addCleanup(setattr, self.assistant, "_slideshow_timer", None)
         advance = timeout.call_args[0][1]
         first = stack.get_visible_child_name()
         self.assertTrue(advance())

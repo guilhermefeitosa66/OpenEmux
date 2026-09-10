@@ -10,6 +10,7 @@ from openemux.i18n import (
     normalize_locale,
     tr,
 )
+from tests.platform_marks import posix_only
 
 
 class I18nTests(unittest.TestCase):
@@ -171,6 +172,7 @@ class TheWindowsDisplayLanguageTests(unittest.TestCase):
         ):
             self.assertEqual(detect_system_locale(), "en")
 
+    @posix_only("there is a real GetUserDefaultUILanguage to answer on Windows")
     def test_nothing_is_asked_of_the_os_on_linux(self):
         self.assertEqual(i18n._windows_ui_locale(), "")
 
@@ -202,6 +204,7 @@ class TheWindowsDisplayLanguageTests(unittest.TestCase):
         ):
             self.assertEqual(i18n._windows_ui_locale(), "")
 
+    @posix_only("ctypes.windll exists on Windows, so the call succeeds there")
     def test_an_os_call_that_raises_is_swallowed(self):
         with mock.patch.object(i18n.sys, "platform", "win32"):
             # No ctypes.windll at all on this platform: the import itself is

@@ -10,6 +10,7 @@ from openemux.core.paths import (
     is_running_in_appimage,
     resolve_project_path,
 )
+from tests.platform_marks import posix_only
 
 
 class PathsTests(unittest.TestCase):
@@ -175,6 +176,7 @@ class TheFlatpakSandboxTests(unittest.TestCase):
         with patch.object(paths, "is_running_in_flatpak", return_value=False):
             self.assertEqual(paths.get_real_home(), Path.home())
 
+    @posix_only("the passwd database; Windows has no pwd module")
     def test_inside_one_the_real_home_comes_from_the_passwd_entry(self):
         # $HOME points at the per-app private dir; the ROM library does not.
         entry = type("Entry", (), {"pw_dir": "/home/real"})()
@@ -182,11 +184,13 @@ class TheFlatpakSandboxTests(unittest.TestCase):
             with patch("pwd.getpwuid", return_value=entry):
                 self.assertEqual(paths.get_real_home(), Path("/home/real"))
 
+    @posix_only("the passwd database; Windows has no pwd module")
     def test_a_passwd_entry_that_cannot_be_read_falls_back_to_home(self):
         with patch.object(paths, "is_running_in_flatpak", return_value=True):
             with patch("pwd.getpwuid", side_effect=KeyError("no such uid")):
                 self.assertEqual(paths.get_real_home(), Path.home())
 
+    @posix_only("the passwd database; Windows has no pwd module")
     def test_a_passwd_entry_with_no_directory_falls_back_too(self):
         entry = type("Entry", (), {"pw_dir": ""})()
         with patch.object(paths, "is_running_in_flatpak", return_value=True):
@@ -214,6 +218,7 @@ class WhereTheProjectRootIsTests(unittest.TestCase):
             with patch.object(paths, "is_running_in_flatpak", return_value=True):
                 self.assertEqual(get_project_root(), Path("/app"))
 
+    @posix_only("a rooted POSIX path; on Windows it takes the current drive")
     def test_an_absolute_path_is_returned_as_it_is(self):
         self.assertEqual(resolve_project_path("/opt/openemux"), Path("/opt/openemux"))
 

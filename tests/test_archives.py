@@ -338,14 +338,17 @@ class WhatIsAlreadyAtTheTargetTests(unittest.TestCase):
             extracted = extract_archive(archive, dest)
             self.assertEqual([path.name for path in extracted], ["Kirby (2).gb"])
 
-    def test_a_file_that_vanishes_between_the_check_and_the_stat_is_rewritten(self):
+    def test_a_file_that_vanishes_between_the_check_and_the_stat_is_something_else(self):
+        # The archive is walked while the destination is a live directory, so
+        # "it existed a moment ago" is all the exists() check ever proves.
         with tempfile.TemporaryDirectory() as tmp_dir:
-            archive, dest = self._setup(tmp_dir, b"whatever")
-            with unittest.mock.patch.object(
-                Path, "stat", side_effect=OSError("gone")
-            ):
-                extracted = extract_archive(archive, dest)
-            self.assertEqual([path.name for path in extracted], ["Kirby (2).gb"])
+            archive, dest = self._setup(tmp_dir, None)
+            with zipfile.ZipFile(archive) as zipped:
+                info = zipped.infolist()[0]
+                verdict = archives_module._existing_verdict(
+                    dest / "gone.gb", zipped, info
+                )
+        self.assertEqual(verdict, "different")
 
 
 if __name__ == "__main__":

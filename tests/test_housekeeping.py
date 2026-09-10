@@ -266,11 +266,22 @@ class WhatHousekeepingLeavesAloneTests(unittest.TestCase):
             self.assertTrue((root / "stray.png").exists())
 
     def test_a_session_directory_that_vanishes_mid_sweep_is_skipped(self):
+        # Another OpenEmux closing its artwork window between the listing and
+        # the age check. Staged rather than raced: a directory that answers
+        # is_dir() and then refuses to be stat()ed.
+        class _Vanishing:
+            def is_dir(self):
+                return True
+
+            def stat(self):
+                raise OSError("gone")
+
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "session-1").mkdir()
-            with mock.patch.object(Path, "stat", side_effect=OSError("gone")):
+            with mock.patch.object(Path, "iterdir", lambda _self: [_Vanishing()]):
                 self.assertEqual(sweep_artwork_temp_dirs(root), 0)
+            self.assertTrue((root / "session-1").is_dir())
 
     def test_a_session_directory_that_will_not_go_is_not_counted(self):
         with TemporaryDirectory() as tmp:

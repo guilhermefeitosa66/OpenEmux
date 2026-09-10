@@ -134,6 +134,12 @@ class WindowCase(unittest.TestCase):
         scan_patch.start()
         self.addCleanup(scan_patch.stop)
 
+        # Drained after the window is destroyed and before the throwaway home
+        # goes away: a window leaves idle callbacks behind, and one that runs
+        # later runs *inside another test*, against a directory that no longer
+        # exists. Cleanups are LIFO, so this one is registered first and runs
+        # after the destroy.
+        self.addCleanup(self.pump)
         self.win = OpenEmuxWindow(self.app)
         self.addCleanup(self.win.destroy)
 
