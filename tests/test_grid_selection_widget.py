@@ -32,9 +32,7 @@ class _SelectionCase(WindowCase):
 
     def setUp(self):
         super().setUp()
-        self.win.sidebar.select("SFC")
-        self.show()
-        self.grid = self.win.pages.grid_for("SFC")
+        self.grid = self.show_with_cards("SFC")
         self.selection = self.grid.selection
         self.entries = self.grid.entries()
 

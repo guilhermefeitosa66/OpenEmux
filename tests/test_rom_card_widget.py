@@ -42,9 +42,7 @@ class _CardCase(WindowCase):
 
     def setUp(self):
         super().setUp()
-        self.win.sidebar.select(self.console)
-        self.show()
-        self.grid = self.win.pages.grid_for(self.console)
+        self.grid = self.show_with_cards(self.console)
         self.entry = self.grid.entries()[0]
         self.card = self.grid.card_for(self.entry)
         if self.card is None:
@@ -358,9 +356,9 @@ class InAListRowTests(_CardCase):
     def setUp(self):
         super().setUp()
         self.win._apply_view_mode(VIEW_MODE_LIST)
-        self.pump()
         self.grid = self.win.pages.grid_for(self.console)
         self.entry = self.grid.entries()[0]
+        self.pump_until(lambda: self.grid.card_for(self.entry) is not None)
         self.card = self.grid.card_for(self.entry)
         if self.card is None or self.card.select_check is None:
             self.skipTest("the list page realized no row for the first game")

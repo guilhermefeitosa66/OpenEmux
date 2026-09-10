@@ -31,9 +31,7 @@ class _GridCase(WindowCase):
 
     def setUp(self):
         super().setUp()
-        self.win.sidebar.select("SFC")
-        self.show()
-        self.grid = self.win.pages.grid_for("SFC")
+        self.grid = self.show_with_cards("SFC")
         self.entries = self.grid.entries()
 
     def card(self, index=0):

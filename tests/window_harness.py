@@ -14,6 +14,7 @@ is off in the throwaway config).
 
 import shutil
 import tempfile
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -155,6 +156,23 @@ class WindowCase(unittest.TestCase):
         while context.pending():
             context.iteration(False)
 
+    def pump_until(self, predicate, timeout=5.0):
+        """Run the idle loop until ``predicate`` holds, or give up.
+
+        A fixed number of iterations is not enough: how many turns GTK needs
+        to lay a page out and realize its cards depends on what else the
+        machine is doing, and a whole-suite run is exactly when it needs more.
+        """
+        deadline = time.monotonic() + timeout
+        context = GLib.MainContext.default()
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            while context.pending():
+                context.iteration(False)
+            time.sleep(0.005)
+        return predicate()
+
     def show(self):
         """Map the window, for the tests that need real focus and geometry.
 
@@ -163,3 +181,21 @@ class WindowCase(unittest.TestCase):
         """
         self.win.present()
         self.pump()
+
+    def show_with_cards(self, console):
+        """Map the window and wait for that console's page to realize a card.
+
+        Returns the grid. A card exists only once GTK has laid the page out,
+        and that is what every test about a card, a selection or the focus
+        needs to be true before it starts.
+        """
+        self.win.sidebar.select(console)
+        self.show()
+        grid = self.win.pages.grid_for(console)
+        entries = grid.entries()
+        self.pump_until(
+            lambda: grid.count() == len(entries)
+            and bool(entries)
+            and grid.card_for(entries[0]) is not None
+        )
+        return grid
