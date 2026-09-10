@@ -359,6 +359,233 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class WhatTheListingIsMadeOfTests(unittest.TestCase):
+    """The manifest is scraped off an Apache index page."""
+
+    def _manifest(self, tmp_dir, html):
+        updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+        with patch(
+            "urllib.request.urlopen", return_value=_FakeResponse(html.encode("utf-8"))
+        ):
+            return updater.fetch_manifest()
+
+    def test_empty_and_directory_links_are_not_cores(self):
+        with TemporaryDirectory() as tmp_dir:
+            manifest = self._manifest(
+                tmp_dir,
+                '<a href="">nothing</a>'
+                '<a href="   ">blank</a>'
+                '<a href="subdir/">a folder</a>'
+                f'<a href="mgba_libretro{CORE_SUFFIX}.zip">mgba</a>',
+            )
+        self.assertEqual(
+            [entry["filename"] for entry in manifest],
+            [f"mgba_libretro{CORE_SUFFIX}.zip"],
+        )
+
+    def test_the_same_core_listed_twice_is_downloaded_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            manifest = self._manifest(
+                tmp_dir,
+                f'<a href="mgba_libretro{CORE_SUFFIX}.zip">mgba</a>'
+                f'<a href="mgba_libretro{CORE_SUFFIX}.zip">mgba again</a>',
+            )
+        self.assertEqual(len(manifest), 1)
+
+    def test_a_core_served_unzipped_is_taken_as_it_is(self):
+        with TemporaryDirectory() as tmp_dir:
+            manifest = self._manifest(
+                tmp_dir, f'<a href="mgba_libretro{CORE_SUFFIX}">mgba</a>'
+            )
+        self.assertEqual(manifest[0]["type"], "raw")
+        self.assertEqual(manifest[0]["core_name"], f"mgba_libretro{CORE_SUFFIX}")
+
+
+class AnUnzippedCoreTests(unittest.TestCase):
+    def test_it_is_streamed_straight_into_the_core_directory(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            manifest_html = f'<a href="mgba_libretro{CORE_SUFFIX}">mgba</a>'.encode("utf-8")
+
+            def _fake_urlopen(url, timeout=5):
+                if str(url).endswith("/buildbot/"):
+                    return _FakeResponse(manifest_html)
+                return _FakeResponse(b"core-binary")
+
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+                summary = updater.download_all()
+
+            core_path = updater.core_dir / f"mgba_libretro{CORE_SUFFIX}"
+            self.assertEqual(summary["downloaded"], 1)
+            self.assertEqual(core_path.read_bytes(), b"core-binary")
+            self.assertEqual(list(updater.cache_dir.iterdir()), [])
+
+    def test_a_cache_file_that_will_not_delete_is_not_a_failed_install(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            leftover = updater.cache_dir / "leftover.zip"
+            leftover.write_bytes(b"x")
+            with patch.object(Path, "unlink", side_effect=OSError("read-only")):
+                updater._discard(leftover)
+            self.assertTrue(leftover.exists())
+
+
+class ACoreArchiveWithNoCoreInItTests(unittest.TestCase):
+    def test_the_resource_forks_are_not_mistaken_for_the_core(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            archive_path = Path(tmp_dir) / "mgba.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("__MACOSX/._mgba_libretro" + CORE_SUFFIX, b"fork")
+                archive.writestr("readme/", b"")
+                archive.writestr("readme.txt", b"nothing here")
+
+            with self.assertRaises(RuntimeError):
+                updater._extract_zip_core(archive_path, "mgba_libretro")
+
+
+class TheShaderPacksTests(unittest.TestCase):
+    """One zip per backend, fetched only when the presets are not there."""
+
+    def _pack_zip(self, pack_name, extension, with_presets=True):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            if with_presets:
+                archive.writestr(f"{pack_name}/crt/crt-geom{extension}", b"preset")
+            else:
+                archive.writestr(f"{pack_name}/readme.txt", b"nothing playable")
+        return buffer.getvalue()
+
+    def _download(self, tmp_dir, payloads):
+        updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+        updater.ensure_environment()
+
+        def _fake_urlopen(url, timeout=5):
+            for marker, payload in payloads.items():
+                if marker in str(url):
+                    return _FakeResponse(payload)
+            raise AssertionError(f"unexpected url: {url}")
+
+        with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            return updater, updater.download_shader_packs_if_missing()
+
+    def test_both_packs_are_fetched_and_extracted(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater, summary = self._download(
+                tmp_dir,
+                {
+                    "shaders_glsl": self._pack_zip("shaders_glsl", ".glslp"),
+                    "shaders_slang": self._pack_zip("shaders_slang", ".slangp"),
+                },
+            )
+            self.assertEqual(summary["downloaded"], 2)
+            self.assertEqual(summary["failed"], 0)
+            self.assertTrue(list(updater.shader_glsl_dir.rglob("*.glslp")))
+            self.assertEqual(list(updater.cache_dir.iterdir()), [])
+
+    def test_a_pack_that_is_already_there_is_not_fetched_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            for directory, extension in (
+                (updater.shader_glsl_dir, ".glslp"),
+                (updater.shader_slang_dir, ".slangp"),
+            ):
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / f"crt-geom{extension}").write_text("preset")
+
+            with patch("urllib.request.urlopen", side_effect=AssertionError("no request")):
+                summary = updater.download_shader_packs_if_missing()
+
+            self.assertEqual(summary["skipped"], 2)
+            self.assertEqual(summary["downloaded"], 0)
+
+    def test_a_pack_that_carries_no_presets_is_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            _updater, summary = self._download(
+                tmp_dir,
+                {
+                    "shaders_glsl": self._pack_zip(
+                        "shaders_glsl", ".glslp", with_presets=False
+                    ),
+                    "shaders_slang": self._pack_zip(
+                        "shaders_slang", ".slangp", with_presets=False
+                    ),
+                },
+            )
+            self.assertEqual(summary["failed"], 2)
+            self.assertEqual(
+                [failure["artifact"] for failure in summary["failures"]],
+                ["shaders_glsl", "shaders_slang"],
+            )
+
+    def test_an_empty_archive_is_refused(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.ensure_environment()
+            archive_path = Path(tmp_dir) / "shaders_glsl.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("shaders_glsl/", b"")
+
+            with self.assertRaises(RuntimeError):
+                updater._extract_shader_archive(
+                    archive_path, "shaders_glsl", updater.shader_glsl_dir
+                )
+
+
+class WhereCoresAreDownloadedToTests(unittest.TestCase):
+    """Never into a RetroArch the user installed themselves (issue #118)."""
+
+    class _NoCoreDir(_FakeConfigManager):
+        def get_retroarch_updater_settings(self):
+            settings = super().get_retroarch_updater_settings()
+            settings.pop("core_dir")
+            return settings
+
+    def _updater(self, tmp_dir, home, bundled=None):
+        with patch.object(
+            retroarch_buildbot_updater, "platform_bundled_core_dir", return_value=bundled
+        ), patch.object(Path, "home", classmethod(lambda _cls: home)):
+            return RetroArchBuildbotUpdater(self._NoCoreDir(tmp_dir))
+
+    def test_the_windows_bundle_keeps_its_cores_beside_the_executable(self):
+        with TemporaryDirectory() as tmp_dir:
+            bundled = Path(tmp_dir) / "vendors" / "RetroArch-Win64" / "cores"
+            updater = self._updater(tmp_dir, Path(tmp_dir) / "home", bundled=bundled)
+        self.assertEqual(updater.core_dir, bundled)
+
+    def test_an_existing_retroarch_configuration_is_used_where_it_is(self):
+        with TemporaryDirectory() as tmp_dir:
+            home = Path(tmp_dir) / "home"
+            existing = home / ".config" / "retroarch" / "cores"
+            existing.mkdir(parents=True)
+            updater = self._updater(tmp_dir, home)
+        self.assertEqual(updater.core_dir, existing)
+
+    def test_with_no_retroarch_anywhere_the_standard_path_is_taken(self):
+        with TemporaryDirectory() as tmp_dir:
+            home = Path(tmp_dir) / "home"
+            updater = self._updater(tmp_dir, home)
+        self.assertEqual(updater.core_dir, home / ".config" / "retroarch" / "cores")
+
+
+class WhatIsAlreadyInstalledTests(unittest.TestCase):
+    def test_a_directory_that_is_not_there_holds_no_cores(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            self.assertFalse(updater.has_local_core_assets())
+
+    def test_a_directory_with_no_core_in_it_holds_no_cores(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.core_dir.mkdir(parents=True, exist_ok=True)
+            (updater.core_dir / "readme.txt").write_text("nothing here")
+            self.assertFalse(updater.has_local_core_assets())
+
+
 class DownloadPacingTests(unittest.TestCase):
     """Retries back off, and only happen when another try could differ (#240)."""
 
