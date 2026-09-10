@@ -2,7 +2,12 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from openemux.core.shaders import ShaderCatalog, ShaderConfigStore
+from openemux.core.shaders import (
+    DISABLED_SHADER_ID,
+    ShaderCatalog,
+    ShaderConfigStore,
+    resolve_default_shader_id,
+)
 from tests.platform_marks import IS_WINDOWS
 
 
@@ -165,6 +170,90 @@ class ShaderCatalogTests(unittest.TestCase):
         options = catalog.get_options(show_all=False)
         self.assertGreaterEqual(len(options), 2)
         self.assertEqual(options[0][0], "disabled")
+
+
+class WhatTheStoreRefusesToKeepTests(unittest.TestCase):
+    def _store(self, tmp_dir):
+        return ShaderConfigStore(config_file=Path(tmp_dir) / "shaders.config")
+
+    def test_a_console_that_does_not_exist_has_no_shader_of_its_own(self):
+        self.assertEqual(resolve_default_shader_id("DREAMCAST"), DISABLED_SHADER_ID)
+
+    def test_a_file_that_is_not_a_mapping_is_set_aside(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text("- crt\n", encoding="utf-8")
+            self.assertEqual(store.get_console_shader("FC"), "geom-crt")
+            self.assertEqual(
+                len(list(Path(tmp_dir).glob("shaders.config.broken-*"))), 1
+            )
+
+    def test_an_override_for_a_console_that_does_not_exist_is_dropped(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text(
+                "console_overrides:\n  DREAMCAST: crt\n  FC: crt\n", encoding="utf-8"
+            )
+            self.assertEqual(store.load()["console_overrides"], {"FC": "crt"})
+
+    def test_a_rom_override_with_no_path_is_dropped(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text(
+                'rom_overrides:\n  "": crt\n', encoding="utf-8"
+            )
+            self.assertEqual(store.load()["rom_overrides"], {})
+
+    def test_setting_a_shader_on_a_console_that_does_not_exist_stores_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_shader("DREAMCAST", "crt")
+            self.assertEqual(store.load()["console_overrides"], {})
+
+    def test_a_console_set_back_to_its_default_is_not_written_out(self):
+        # Stating the default pins it against a later change of default.
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.save({"console_overrides": {"FC": "geom-crt"}, "rom_overrides": {}})
+            self.assertEqual(store.load()["console_overrides"], {})
+
+    def test_a_rom_override_with_no_shader_is_not_written_out(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.save({"rom_overrides": {"/roms/SFC/Game.sfc": ""}})
+            self.assertEqual(store.load()["rom_overrides"], {})
+
+
+class TheFullShaderListTests(unittest.TestCase):
+    """"Show all" lists what is installed, each preset once (issue #366)."""
+
+    def test_a_preset_that_ships_in_both_backends_is_offered_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            runtime_dir = Path(tmp_dir) / "runtime"
+            for backend, suffix in (("shaders_glsl", ".glslp"), ("shaders_slang", ".slangp")):
+                target = runtime_dir / backend / "handheld" / f"zfast-lcd{suffix}"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("preset", encoding="utf-8")
+
+            options = ShaderCatalog(runtime_dir=runtime_dir).get_options(show_all=True)
+
+        ids = [shader_id for shader_id, _label in options]
+        self.assertEqual(ids.count("zfast-lcd"), 1)
+        self.assertEqual(ids[0], DISABLED_SHADER_ID)
+
+    def test_a_preset_named_like_the_off_switch_does_not_appear_twice(self):
+        # "none.slangp" ships in the RetroArch shader packs, and it normalises
+        # to the same id as the "Disabled" row that always heads the list.
+        with TemporaryDirectory() as tmp_dir:
+            runtime_dir = Path(tmp_dir) / "runtime"
+            target = runtime_dir / "shaders_slang" / "stock" / "none.slangp"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("preset", encoding="utf-8")
+
+            options = ShaderCatalog(runtime_dir=runtime_dir).get_options(show_all=True)
+
+        ids = [shader_id for shader_id, _label in options]
+        self.assertEqual(ids.count(DISABLED_SHADER_ID), 1)
 
 
 if __name__ == "__main__":
