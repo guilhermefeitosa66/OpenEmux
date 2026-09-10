@@ -14,6 +14,7 @@ from openemux.core.gamepad_reader import (
 
 ABS_HAT0Y = ABS_HAT0X + 1
 from openemux.core.ui_gamepad import (
+    STATEFUL_ACTIONS,
     NAV_TOKEN_ACTIONS,
     GamepadNavigator,
     HoldClock,
@@ -457,6 +458,277 @@ class StaleSuspendFlagTests(unittest.TestCase):
     def test_the_same_press_is_acted_on_while_not_suspended(self):
         self.assertEqual(self._drive_one_pass(flip_during_select=False),
                          ["prev_console"])
+
+
+class TheNavigatorLifecycleTests(unittest.TestCase):
+    def test_starting_runs_the_reader_on_a_thread_of_its_own(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        with patch.object(GamepadNavigator, "_run"):
+            nav.start()
+            nav.stop()
+
+    def test_a_second_start_does_not_add_a_second_thread(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        with patch("openemux.core.ui_gamepad.threading.Thread") as thread:
+            nav.start()
+            nav.start()
+            nav.stop()
+        thread.assert_called_once()
+
+
+class TheTriggerEdgesTests(unittest.TestCase):
+    """The triggers are the pad's Shift: both edges matter (issue #78)."""
+
+    def setUp(self):
+        self.actions = []
+        self.nav = GamepadNavigator(on_action=self.actions.append)
+
+    def _dispatch(self, token, pressed, suspended=False):
+        self.nav._dispatch(token, pressed, RepeatClock(), HoldClock(), suspended)
+
+    def test_a_token_no_action_maps_to_is_dropped(self):
+        self._dispatch("not-a-token", True)
+        self.assertEqual(self.actions, [])
+
+    def test_a_held_trigger_reports_both_edges(self):
+        stateful = next(iter(STATEFUL_ACTIONS))
+        token = next(
+            token for token, action in NAV_TOKEN_ACTIONS.items() if action == stateful
+        )
+        self._dispatch(token, True)
+        self._dispatch(token, False)
+        self.assertEqual(self.actions, [f"{stateful}_on", f"{stateful}_off"])
+
+    def test_a_trigger_is_not_reported_while_suspended(self):
+        stateful = next(iter(STATEFUL_ACTIONS))
+        token = next(
+            token for token, action in NAV_TOKEN_ACTIONS.items() if action == stateful
+        )
+        self._dispatch(token, True, suspended=True)
+        self.assertEqual(self.actions, [])
+
+
+@linux_only("it opens /dev/input nodes")
+class OpeningThePadsTests(unittest.TestCase):
+    def test_a_pad_with_no_event_node_is_skipped(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        device = _FakeDevice("Pad", None)
+        with patch("openemux.core.ui_gamepad.list_gamepads", lambda: [device]):
+            self.assertEqual(nav._open_pads(set()), {})
+
+    def test_a_pad_already_open_is_not_opened_twice(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        device = _FakeDevice("Pad", "/dev/input/event20")
+        with patch("openemux.core.ui_gamepad.list_gamepads", lambda: [device]):
+            self.assertEqual(nav._open_pads({"/dev/input/event20"}), {})
+
+    def test_a_node_that_cannot_be_opened_is_skipped(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        device = _FakeDevice("Pad", "/dev/input/event20")
+        with patch("openemux.core.ui_gamepad.list_gamepads", lambda: [device]), patch(
+            "openemux.core.ui_gamepad.os.open", side_effect=PermissionError()
+        ):
+            self.assertEqual(nav._open_pads(set()), {})
+
+    def test_a_descriptor_that_will_not_close_is_dropped_anyway(self):
+        nav = GamepadNavigator(on_action=lambda action: None)
+        pads = {7: OpenPad(make_tracker(), "Pad", "/dev/input/event20")}
+        with patch("openemux.core.ui_gamepad.os.close", side_effect=OSError("EBADF")):
+            nav._close_all(pads)
+        self.assertEqual(pads, {})
+
+
+@linux_only("it drives the evdev reader loop")
+class TheReaderLoopTests(unittest.TestCase):
+    """The loop, run for exactly one turn rather than on its own thread."""
+
+    def setUp(self):
+        self.actions = []
+        self.connected = []
+        self.disconnected = []
+        self.suspended = [False]
+        self.nav = GamepadNavigator(
+            on_action=self.actions.append,
+            on_connected=self.connected.append,
+            on_disconnected=lambda: self.disconnected.append(1),
+            should_suspend=lambda: self.suspended[0],
+        )
+
+    def _stop_after_one_turn(self):
+        def _wait(_timeout):
+            self.nav._cancel.set()
+            return True
+
+        return patch.object(self.nav._cancel, "wait", _wait)
+
+    def _select_once(self, readable):
+        """Answer select() once, and end the loop with the same call.
+
+        A turn that has a pad open blocks in select() rather than in wait(),
+        so that is where the run has to be stopped.
+        """
+
+        def _select(_r, _w, _x, _timeout):
+            self.nav._cancel.set()
+            return (readable, [], [])
+
+        return patch("openemux.core.ui_gamepad.select.select", _select)
+
+    def _pads_once(self, pads):
+        """Report ``pads`` the first time the loop scans, nothing after."""
+        found = [pads]
+
+        def _open(_navigator, _already_open):
+            return found.pop(0) if found else {}
+
+        return patch.object(GamepadNavigator, "_open_pads", _open)
+
+    def test_with_no_pad_at_all_the_loop_waits_for_one(self):
+        with patch.object(GamepadNavigator, "_open_pads", return_value={}):
+            with self._stop_after_one_turn():
+                self.nav._run()
+        self.assertEqual(self.actions, [])
+
+    def test_the_first_pad_found_is_announced_by_name(self):
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+        with self._pads_once(pads), self._select_once([]):
+            self.nav._run()
+        self.assertEqual(self.connected, ["Pad One"])
+
+    def test_a_select_that_fails_drops_every_descriptor(self):
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+
+        def _select(_r, _w, _x, _timeout):
+            self.nav._cancel.set()
+            raise OSError("EBADF")
+
+        with self._pads_once(pads), patch(
+            "openemux.core.ui_gamepad.select.select", _select
+        ), patch("openemux.core.ui_gamepad.os.close") as close:
+            self.nav._run()
+        self.assertEqual(self.connected, ["Pad One"])
+        close.assert_called_once_with(7)
+
+    def test_a_pad_that_goes_away_mid_read_is_closed_and_dropped(self):
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+        with self._pads_once(pads), self._select_once([7]), patch.object(
+            GamepadNavigator, "_read_fd", return_value=False
+        ), patch("openemux.core.ui_gamepad.os.close") as close:
+            self.nav._run()
+        close.assert_called_once_with(7)
+
+
+@linux_only("it drives the evdev reader loop")
+class WhenTheLastPadIsUnpluggedTests(unittest.TestCase):
+    """The disconnect is announced once, and the repeats stop with it."""
+
+    def setUp(self):
+        self.connected = []
+        self.disconnected = []
+        self.nav = GamepadNavigator(
+            on_action=lambda action: None,
+            on_connected=self.connected.append,
+            on_disconnected=lambda: self.disconnected.append(1),
+        )
+
+    def test_the_pad_going_away_is_announced_once(self):
+        # Turn one has the pad and announces it; select() then fails, which
+        # drops every descriptor, so turn two is the one with nothing open.
+        found = [{7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}]
+
+        def _open(_navigator, _already_open):
+            return found.pop(0) if found else {}
+
+        def _select(_r, _w, _x, _timeout):
+            raise OSError("EBADF")
+
+        def _wait(_timeout):
+            # The loop parks here once there is nothing left to read.
+            self.nav._cancel.set()
+            return True
+
+        with patch.object(GamepadNavigator, "_open_pads", _open), patch(
+            "openemux.core.ui_gamepad.select.select", _select
+        ), patch("openemux.core.ui_gamepad.os.close"), patch.object(
+            self.nav._cancel, "wait", _wait
+        ):
+            self.nav._run()
+        self.assertEqual(self.connected, ["Pad One"])
+        self.assertEqual(self.disconnected, [1])
+
+
+@linux_only("it reads /dev/input event bytes")
+class WhatTheReaderMakesOfTheBytesTests(unittest.TestCase):
+    def setUp(self):
+        self.actions = []
+        self.nav = GamepadNavigator(on_action=self.actions.append)
+        self.pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+
+    def _turns(self, *answers):
+        """Answer select() once per turn, and end the run on the last one.
+
+        A turn with a pad open blocks in select(), so that is the only place
+        the loop can be stopped -- but stopping it on the *first* call would
+        cut the turn short, and everything interesting happens after it.
+        """
+        remaining = list(answers)
+
+        def _select(_r, _w, _x, _timeout):
+            readable = remaining.pop(0)
+            if not remaining:
+                self.nav._cancel.set()
+            return (readable, [], [])
+
+        return _select
+
+    def _found_once(self, pads):
+        found = [pads]
+
+        def _open(_navigator, _already_open):
+            return found.pop(0) if found else {}
+
+        return _open
+
+    def test_an_empty_read_means_the_device_is_gone(self):
+        # A device unplugged mid-read returns nothing rather than raising.
+        with patch("openemux.core.ui_gamepad.os.read", return_value=b""):
+            self.assertFalse(
+                self.nav._read_fd(7, self.pads, RepeatClock(), HoldClock(), False)
+            )
+
+    def test_a_descriptor_that_will_not_close_is_dropped_anyway(self):
+        # close() failing must not leave a dead pad in the select set.
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+
+        def _wait(_timeout):
+            self.nav._cancel.set()
+            return True
+
+        with patch.object(
+            GamepadNavigator, "_open_pads", self._found_once(pads)
+        ), patch(
+            "openemux.core.ui_gamepad.select.select", self._turns([7], [])
+        ), patch.object(
+            GamepadNavigator, "_read_fd", return_value=False
+        ), patch(
+            "openemux.core.ui_gamepad.os.close", side_effect=OSError("EBADF")
+        ) as close, patch.object(self.nav._cancel, "wait", _wait):
+            self.nav._run()
+        close.assert_any_call(7)
+
+    def test_a_long_press_becomes_a_hold_action(self):
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+        fired = [["confirm"]]
+
+        with patch.object(
+            GamepadNavigator, "_open_pads", self._found_once(pads)
+        ), patch(
+            "openemux.core.ui_gamepad.select.select", self._turns([], [])
+        ), patch.object(
+            HoldClock, "due_actions", lambda _self: fired.pop(0) if fired else []
+        ):
+            self.nav._run()
+        self.assertIn("confirm_hold", self.actions)
 
 
 if __name__ == "__main__":
