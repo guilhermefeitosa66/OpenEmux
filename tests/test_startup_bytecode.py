@@ -117,6 +117,16 @@ class RedirectBytecodeCacheTests(unittest.TestCase):
         main._redirect_bytecode_cache(self.package)
         self.assertIsNone(sys.pycache_prefix)
 
+    def test_a_loader_with_no_bytecode_path_does_not_stop_the_redirect(self):
+        # A frozen or namespace loader has no .pyc to look for, which says
+        # nothing about whether the redirect is wanted.
+        self._make_read_only()
+        with mock.patch.object(
+            main.importlib.util, "cache_from_source", side_effect=NotImplementedError
+        ):
+            main._redirect_bytecode_cache(self.package)
+        self.assertIsNotNone(sys.pycache_prefix)
+
     def test_a_cache_dir_that_cannot_be_created_is_not_fatal(self):
         # A read-only home or a full disk. Recompiling every launch is slow;
         # refusing to start over a *cache* would be worse.
