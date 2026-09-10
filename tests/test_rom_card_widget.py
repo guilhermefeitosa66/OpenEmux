@@ -42,9 +42,7 @@ class _CardCase(WindowCase):
 
     def setUp(self):
         super().setUp()
-        self.win.sidebar.select(self.console)
-        self.show()
-        self.grid = self.win.pages.grid_for(self.console)
+        self.grid = self.show_with_cards(self.console)
         self.entry = self.grid.entries()[0]
         self.card = self.grid.card_for(self.entry)
         if self.card is None:
@@ -72,6 +70,14 @@ class WhatACardShowsTests(_CardCase):
     def test_a_long_name_is_cut_for_the_card_and_kept_in_the_tooltip(self):
         self.assertEqual(RomItem._truncate_name("short", 10), "short")
         self.assertEqual(RomItem._truncate_name("0123456789abc", 10), "0123456789...")
+
+    def test_a_card_with_its_menu_up_closes_it_before_letting_go(self):
+        # The card's anchor is about to show another game, and a popover
+        # parented to it would still be pointing at the old one.
+        self.card._show_context_menu()
+        self.assertIsNotNone(self.card._context_popover)
+        self.card.unbind()
+        self.assertIsNone(self.card._context_popover)
 
     def test_rebinding_to_another_game_replaces_every_piece_of_state(self):
         other = RomEntry(self.win.playlist_manager.load_playlist("FC")[0])
@@ -358,9 +364,9 @@ class InAListRowTests(_CardCase):
     def setUp(self):
         super().setUp()
         self.win._apply_view_mode(VIEW_MODE_LIST)
-        self.pump()
         self.grid = self.win.pages.grid_for(self.console)
         self.entry = self.grid.entries()[0]
+        self.pump_until(lambda: self.grid.card_for(self.entry) is not None)
         self.card = self.grid.card_for(self.entry)
         if self.card is None or self.card.select_check is None:
             self.skipTest("the list page realized no row for the first game")

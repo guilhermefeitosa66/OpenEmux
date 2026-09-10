@@ -2,6 +2,7 @@
 
 import threading
 import unittest
+import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -160,6 +161,94 @@ class CandidateDownloadTests(unittest.TestCase):
             self.assertIsNone(target)
             self.assertIsNone(digest)
             self.assertEqual(list(Path(tmp_dir).glob("*")), [])
+
+
+class ADownloadThatDoesNotArriveTests(unittest.TestCase):
+    """A 404 is the ordinary answer here: most mirrors do not have most games."""
+
+    def test_a_missing_cover_is_simply_not_a_candidate(self):
+        with TemporaryDirectory() as tmp_dir:
+            error = urllib.error.HTTPError(
+                "https://cdn.example/a.png", 404, "Not Found", None, None
+            )
+            with patch("urllib.request.urlopen", side_effect=error):
+                self.assertEqual(
+                    artwork_search._download(
+                        "https://cdn.example/a.png", Path(tmp_dir), 1
+                    ),
+                    (None, None),
+                )
+
+    def test_a_mirror_that_cannot_be_reached_at_all_is_logged_and_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch(
+                "urllib.request.urlopen", side_effect=OSError("network unreachable")
+            ):
+                self.assertEqual(
+                    artwork_search._download(
+                        "https://cdn.example/a.png", Path(tmp_dir), 1
+                    ),
+                    (None, None),
+                )
+
+
+class StoppingASearchHalfwayTests(unittest.TestCase):
+    """The dialog closes, or the user types again: the pass has to stop."""
+
+    def _hit(self, url, dest_dir, index):
+        target = Path(dest_dir) / f"candidate-{index:03d}.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(url.encode("utf-8"))
+        return target, url
+
+    def test_a_cancelled_search_stops_before_the_next_download(self):
+        pairs = [("libretro", "u1"), ("libretro", "u2")]
+        seen = []
+        with TemporaryDirectory() as tmp_dir, patch(
+            "openemux.core.artwork_search.provider_candidates", return_value=pairs
+        ), patch(
+            "openemux.core.artwork_search._download", side_effect=self._hit
+        ):
+            results = artwork_search.search_artwork(
+                console="SFC",
+                rom_name="Chrono Trigger",
+                sync_settings={},
+                art_kind=COVER_ART_TYPE_BOXART,
+                dest_dir=Path(tmp_dir),
+                on_result=seen.append,
+                should_cancel=lambda: len(seen) >= 1,
+            )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(seen), 1)
+
+    def test_a_cancelled_suggestion_pass_stops_the_same_way(self):
+        index = mock.Mock()
+        index.suggest.return_value = ["Chrono Trigger (USA)", "Chrono Trigger (Japan)"]
+        seen = []
+        with TemporaryDirectory() as tmp_dir, patch(
+            "openemux.core.artwork_search._download", side_effect=self._hit
+        ):
+            _mode, results = artwork_search.suggest_artwork(
+                console="SFC",
+                query="chrono",
+                dest_dir=Path(tmp_dir),
+                on_result=seen.append,
+                should_cancel=lambda: len(seen) >= 1,
+                index=index,
+            )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(seen), 1)
+
+    def test_without_an_index_the_shared_one_is_used(self):
+        index = mock.Mock()
+        index.suggest.return_value = []
+        with TemporaryDirectory() as tmp_dir, patch(
+            "openemux.core.cover_sync._get_name_index", return_value=index
+        ) as shared:
+            artwork_search.suggest_artwork(
+                console="SFC", query="chrono", dest_dir=Path(tmp_dir)
+            )
+        shared.assert_called_once()
 
 
 class CrashedWorkerTests(unittest.TestCase):

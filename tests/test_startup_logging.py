@@ -1,9 +1,12 @@
+import contextlib
 import faulthandler
+import io
 import logging
 import logging.handlers
 import sys
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -34,6 +37,45 @@ class StartupLoggingTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             path = get_startup_log_path(runtime_dir=tmp_dir)
             self.assertEqual(path, Path(tmp_dir) / "openemux_startup.log")
+
+
+class WhereTheLogGoesWhenTheHomeIsUnusableTests(unittest.TestCase):
+    """Refusing to start because a *log* cannot be written would be worse."""
+
+    def test_without_a_runtime_dir_it_lands_beside_the_other_state(self):
+        with mock.patch.object(
+            startup_logging, "store_path", return_value=Path("/tmp/openemux-store")
+        ) as store:
+            path = get_startup_log_path()
+        store.assert_called_once_with("runtime")
+        self.assertEqual(path.name, "openemux_startup.log")
+
+    def test_a_directory_that_cannot_be_created_falls_back_to_the_temp_dir(self):
+        with TemporaryDirectory() as tmp_dir:
+            real_mkdir = Path.mkdir
+            refused = Path(tmp_dir) / "runtime"
+
+            def _mkdir(self, *args, **kwargs):
+                if self == refused:
+                    raise OSError("read-only")
+                return real_mkdir(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "mkdir", _mkdir):
+                path = get_startup_log_path(runtime_dir=refused)
+
+        self.assertEqual(path.parent.name, "openemux")
+        self.assertEqual(path.name, "openemux_startup.log")
+
+    def test_an_error_that_cannot_be_written_anywhere_goes_to_stderr(self):
+        stderr = io.StringIO()
+        with mock.patch.object(
+            startup_logging, "get_startup_log_path", side_effect=OSError("read-only")
+        ), contextlib.redirect_stderr(stderr):
+            self.assertIsNone(
+                append_startup_error("startup failed", exc_text="traceback line")
+            )
+        self.assertIn("startup failed", stderr.getvalue())
+        self.assertIn("traceback line", stderr.getvalue())
 
 
 class RotatingStartupLogTests(unittest.TestCase):
@@ -72,6 +114,23 @@ class RotatingStartupLogTests(unittest.TestCase):
             if isinstance(handler, logging.handlers.RotatingFileHandler)
         )
 
+    def test_a_log_file_that_cannot_be_opened_still_leaves_a_console(self):
+        # A read-only runtime directory: the app starts, and everything it
+        # logs still reaches the terminal.
+        with TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(
+                logging.handlers,
+                "RotatingFileHandler",
+                side_effect=OSError("read-only"),
+            ):
+                configure_startup_logging(runtime_dir=tmp_dir)
+            self.assertFalse(
+                any(
+                    isinstance(handler, logging.handlers.RotatingFileHandler)
+                    for handler in logging.getLogger().handlers
+                )
+            )
+
     def test_the_file_handler_rotates(self):
         with TemporaryDirectory() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)
@@ -94,6 +153,61 @@ class RotatingStartupLogTests(unittest.TestCase):
             self.assertLessEqual(len(written), LOG_BACKUP_COUNT + 1)
             self.assertLess(sum(p.stat().st_size for p in written), 64 * 1024)
             self.assertTrue(log_path.exists())
+
+
+class TheCrashHandlersTests(unittest.TestCase):
+    """The difference between "segmentation fault" and knowing where."""
+
+    def setUp(self):
+        self._saved_excepthook = sys.excepthook
+        self._saved_thread_excepthook = threading.excepthook
+        self.addCleanup(setattr, sys, "excepthook", self._saved_excepthook)
+        self.addCleanup(
+            setattr, threading, "excepthook", self._saved_thread_excepthook
+        )
+        self.addCleanup(faulthandler.enable, sys.__stderr__, True)
+        self.addCleanup(startup_logging._release_crash_log)
+
+    def test_with_no_log_file_the_traces_still_go_to_the_terminal(self):
+        startup_logging.install_crash_handlers()
+        self.assertTrue(faulthandler.is_enabled())
+        self.assertIsNone(startup_logging._crash_log_handle)
+
+    def test_a_log_file_that_cannot_be_opened_is_not_fatal(self):
+        with mock.patch("builtins.open", side_effect=OSError("read-only")):
+            startup_logging.install_crash_handlers(Path("/nowhere/at/all.log"))
+        self.assertTrue(faulthandler.is_enabled())
+        self.assertIsNone(startup_logging._crash_log_handle)
+
+    def test_an_uncaught_exception_is_written_to_the_log(self):
+        startup_logging.install_crash_handlers()
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError:
+            info = sys.exc_info()
+        with self.assertLogs("openemux", level="CRITICAL") as caught:
+            sys.excepthook(*info)
+        self.assertIn("boom", "\n".join(caught.output))
+
+    def test_ctrl_c_is_left_to_python_rather_than_logged_as_a_crash(self):
+        startup_logging.install_crash_handlers()
+        called = []
+        with mock.patch.object(sys, "__excepthook__", lambda *a: called.append(a)):
+            sys.excepthook(KeyboardInterrupt, KeyboardInterrupt(), None)
+        self.assertEqual(len(called), 1)
+
+    def test_a_thread_that_dies_reports_through_the_same_hook(self):
+        startup_logging.install_crash_handlers()
+        try:
+            raise RuntimeError("boom in a worker")
+        except RuntimeError:
+            info = sys.exc_info()
+        args = threading.ExceptHookArgs(
+            [info[0], info[1], info[2], None]
+        )
+        with self.assertLogs("openemux", level="CRITICAL") as caught:
+            threading.excepthook(args)
+        self.assertIn("boom in a worker", "\n".join(caught.output))
 
 
 if __name__ == "__main__":

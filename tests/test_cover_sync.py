@@ -1461,3 +1461,358 @@ class ScreenScraperHostThrottleTests(unittest.TestCase):
         self.assertTrue(
             cover_sync._is_screenscraper_host("https://api.screenscraper.fr/api2/x")
         )
+
+
+class TheArticleVariantTests(unittest.TestCase):
+    """libretro's No-Intro names file "The" at the end; ROM sets rarely do."""
+
+    def test_a_leading_article_gets_a_trailing_variant(self):
+        self.assertEqual(cover_sync._the_variant("The Legend of Zelda"),
+                         "Legend of Zelda, The")
+
+    def test_a_trailing_article_gets_a_leading_variant(self):
+        self.assertEqual(cover_sync._the_variant("Legend of Zelda, The"),
+                         "The Legend of Zelda")
+
+    def test_a_name_with_no_article_gets_no_variant(self):
+        self.assertIsNone(cover_sync._the_variant("Chrono Trigger"))
+
+    def test_normalising_moves_a_trailing_article_to_the_front(self):
+        self.assertEqual(
+            cover_sync._normalize_rom_name("Legend of Zelda, The"),
+            "The Legend of Zelda",
+        )
+
+    def test_both_spellings_are_offered_as_candidates(self):
+        names = _candidate_names(
+            rom_name="The Legend of Zelda",
+            matching_mode="normalized_region_priority",
+            region_priority=["USA"],
+            name_cleanup=True,
+        )
+        self.assertTrue(any(name.endswith(", The") for name in names))
+
+    def test_an_empty_seed_is_never_offered(self):
+        names = _candidate_names(
+            rom_name="   ",
+            matching_mode="normalized_region_priority",
+            region_priority=["USA"],
+            name_cleanup=True,
+        )
+        self.assertNotIn("", names)
+
+    def test_turning_the_cleanup_off_keeps_the_name_as_it_is(self):
+        names = _candidate_names(
+            rom_name="Chrono Trigger (USA)",
+            matching_mode="normalized_region_priority",
+            region_priority=["USA"],
+            name_cleanup=False,
+        )
+        self.assertIn("Chrono Trigger (USA)", names)
+
+    def test_another_matching_mode_skips_the_region_expansion(self):
+        names = _candidate_names(
+            rom_name="Chrono Trigger",
+            matching_mode="exact",
+            region_priority=["USA"],
+            name_cleanup=True,
+        )
+        self.assertIn("Chrono Trigger", names)
+
+    def test_an_empty_metadata_tag_is_one(self):
+        self.assertTrue(cover_sync._is_metadata_tag("   "))
+
+
+class AConsoleWithNoThumbnailSystemTests(unittest.TestCase):
+    """libretro has no thumbnail repository for every console the app lists."""
+
+    def test_the_libretro_provider_offers_no_url(self):
+        with patch.object(cover_sync, "get_thumbnail_system", return_value=None):
+            self.assertEqual(
+                _libretro_candidates("SFC", "Chrono Trigger", {}), []
+            )
+
+    def test_the_mirror_provider_offers_none_either(self):
+        with patch.object(cover_sync, "get_thumbnail_system", return_value=None):
+            self.assertEqual(
+                cover_sync._openemux_candidates("SFC", "Chrono Trigger", {}), []
+            )
+
+    def test_the_hash_stage_resolves_nothing(self):
+        with patch.object(cover_sync, "get_thumbnail_system", return_value=None):
+            self.assertIsNone(
+                cover_sync._resolve_hash_stem("SFC", "/roms/a.sfc", {})
+            )
+
+    def test_the_fts_stage_offers_nothing(self):
+        with patch.object(cover_sync, "get_thumbnail_system", return_value=None):
+            self.assertEqual(
+                cover_sync._fts_stage_candidates("SFC", "Chrono Trigger", {}, set()),
+                [],
+            )
+
+
+class WhenAStageBreaksTests(unittest.TestCase):
+    """A name-database failure must cost the stage, never the sync."""
+
+    def test_a_hash_lookup_that_raises_is_logged_and_skipped(self):
+        with patch.object(
+            cover_sync, "_get_name_index", side_effect=RuntimeError("db gone")
+        ):
+            with self.assertLogs("openemux.core.cover_sync", level="WARNING"):
+                self.assertIsNone(
+                    cover_sync._resolve_hash_stem("SFC", "/roms/a.sfc", {})
+                )
+
+    def test_a_name_lookup_that_raises_is_logged_and_skipped(self):
+        with patch.object(
+            cover_sync, "_get_name_index", side_effect=RuntimeError("db gone")
+        ):
+            with self.assertLogs("openemux.core.cover_sync", level="WARNING"):
+                self.assertEqual(
+                    cover_sync._fts_stage_candidates(
+                        "SFC", "Chrono Trigger", {}, set()
+                    ),
+                    [],
+                )
+
+    def test_a_database_with_no_hash_index_resolves_nothing(self):
+        index = mock.Mock()
+        index.has_crc_index.return_value = False
+        with patch.object(cover_sync, "_get_name_index", return_value=index):
+            self.assertIsNone(
+                cover_sync._resolve_hash_stem("SFC", "/roms/a.sfc", {})
+            )
+
+    def test_the_api_provider_gains_nothing_from_a_filename_stem(self):
+        index = mock.Mock()
+        index.resolve_name.return_value = ("Chrono Trigger (USA)", "exact")
+        settings = {"providers": [{"id": "screenscraper", "enabled": True}]}
+        with patch.object(cover_sync, "_get_name_index", return_value=index):
+            self.assertEqual(
+                cover_sync._fts_stage_candidates(
+                    "SFC", "Chrono Trigger", settings, set()
+                ),
+                [],
+            )
+
+
+class ReplacingArtOnDiskTests(unittest.TestCase):
+    def test_a_keep_that_is_not_a_path_removes_nothing(self):
+        # Deleting here would risk taking the file just downloaded with it.
+        with TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "SFC" / "covers"
+            target.mkdir(parents=True)
+            (target / "Game.png").write_bytes(b"png")
+            cover_sync._drop_stale_art(tmp_dir, "SFC", "Game", "covers", keep=None)
+            self.assertTrue((target / "Game.png").exists())
+
+    def test_the_other_extensions_are_removed_and_the_kept_one_stays(self):
+        with TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "SFC" / "covers"
+            target.mkdir(parents=True)
+            keep = target / "Game.png"
+            keep.write_bytes(b"png")
+            (target / "Game.jpg").write_bytes(b"jpg")
+            cover_sync._drop_stale_art(tmp_dir, "SFC", "Game", "covers", keep=keep)
+            self.assertTrue(keep.exists())
+            self.assertFalse((target / "Game.jpg").exists())
+
+    def test_a_file_that_cannot_be_removed_is_reported_not_raised(self):
+        with TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "SFC" / "covers"
+            target.mkdir(parents=True)
+            keep = target / "Game.png"
+            keep.write_bytes(b"png")
+            (target / "Game.jpg").write_bytes(b"jpg")
+            with patch.object(Path, "unlink", side_effect=OSError("read-only")):
+                with self.assertLogs("openemux.core.cover_sync", level="WARNING"):
+                    cover_sync._drop_stale_art(
+                        tmp_dir, "SFC", "Game", "covers", keep=keep
+                    )
+
+
+class MoreOfTheSyncCornersTests(unittest.TestCase):
+    def test_the_libretro_provider_serves_box_art_only(self):
+        # The thumbnail repository carries no cartridge labels.
+        settings = {"cover_art_type": cover_sync.COVER_ART_TYPE_CARTRIDGE_LABEL}
+        self.assertEqual(
+            _libretro_candidates("SFC", "Chrono Trigger", settings), []
+        )
+
+    def test_a_developer_credential_of_the_users_own_wins(self):
+        settings = {
+            "screenscraper_devid": "mine",
+            "screenscraper_devpassword": "secret",
+        }
+        self.assertEqual(
+            cover_sync._resolve_dev_credentials(settings), ("mine", "secret")
+        )
+
+    def test_a_dropped_pass_says_which_kind_no_provider_serves(self):
+        # Reporting every ROM as an error would be the configuration speaking,
+        # not a bug.
+        settings = {
+            "providers": [
+                {
+                    "id": "libretro",
+                    "enabled": True,
+                    "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                }
+            ]
+        }
+        passes = [
+            (
+                cover_sync.COVER_ART_TYPE_CARTRIDGE_LABEL,
+                {"SFC": [{"name": "Chrono Trigger", "path": "/roms/a.sfc"}]},
+            )
+        ]
+        with self.assertLogs("openemux.core.cover_sync", level="INFO"):
+            summary = _sync_artwork(
+                passes=passes, covers_dir="/tmp", sync_settings=settings
+            )
+        self.assertEqual(summary["total"], 0)
+
+    def test_a_cancelled_pass_stops_the_ones_that_would_follow(self):
+        passes = [
+            (cover_sync.COVER_ART_TYPE_BOXART, {"SFC": [{"name": "A", "path": "/a"}]}),
+            (cover_sync.COVER_ART_TYPE_BOXART, {"FC": [{"name": "B", "path": "/b"}]}),
+        ]
+        with patch.object(
+            cover_sync, "_sync_covers",
+            return_value={
+                "total": 1, "downloaded": 0, "skipped": 0, "errors": 0,
+                "cancelled": True, "stages": {},
+            },
+        ) as sync:
+            summary = _sync_artwork(
+                passes=passes, covers_dir="/tmp",
+                sync_settings={
+                    "providers": [
+                        {
+                            "id": "libretro",
+                            "enabled": True,
+                            "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                        }
+                    ]
+                },
+            )
+        self.assertTrue(summary["cancelled"])
+        self.assertEqual(sync.call_count, 1)
+
+    def test_junk_art_that_cannot_be_removed_is_reported_not_raised(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "SFC" / "covers"
+            covers.mkdir(parents=True)
+            junk = covers / "Game.png"
+            junk.write_bytes(b"not an image")
+            rom = {"name": "Game", "path": str(Path(tmp_dir) / "SFC" / "Game.sfc")}
+            with patch.object(Path, "unlink", side_effect=OSError("read-only")):
+                with self.assertLogs("openemux.core.cover_sync", level="WARNING"):
+                    cover_sync._process_rom(
+                        "SFC", rom, Path(tmp_dir), "covers",
+                        cover_sync.COVER_ART_TYPE_BOXART,
+                        {"providers": []}, lambda: False, False, 0, {},
+                    )
+
+    def test_a_worker_that_dies_costs_one_rom_and_not_the_run(self):
+        settings = {
+            "providers": [
+                {
+                    "id": "libretro",
+                    "enabled": True,
+                    "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                }
+            ]
+        }
+        library = {"SFC": [{"name": "Game", "path": "/roms/SFC/Game.sfc"}]}
+        with patch.object(
+            cover_sync, "_process_rom", side_effect=RuntimeError("boom")
+        ):
+            with self.assertLogs("openemux.core.cover_sync", level="WARNING"):
+                summary = _sync_covers(
+                    library, "/tmp", scope="all", selected_console=None,
+                    sync_settings=settings,
+                )
+        self.assertEqual(summary["errors"], 1)
+
+
+class TheLastSyncCornersTests(unittest.TestCase):
+    def test_the_article_variant_is_offered_for_a_normalised_candidate_too(self):
+        # The names built by stripping tags get the same "…, The" treatment.
+        names = _candidate_names(
+            rom_name="The Legend of Zelda (USA) [!]",
+            matching_mode="normalized_region_priority",
+            region_priority=["USA"],
+            name_cleanup=True,
+        )
+        self.assertTrue(any(name.endswith(", The") for name in names))
+
+    def test_a_hash_index_that_knows_no_such_console_resolves_nothing(self):
+        index = mock.Mock()
+        index.has_crc_index.return_value = True
+        with patch.object(cover_sync, "_get_name_index", return_value=index), patch.object(
+            cover_sync, "get_thumbnail_system", return_value=None
+        ):
+            self.assertIsNone(
+                cover_sync._resolve_hash_stem("SFC", "/roms/a.sfc", {})
+            )
+
+    def test_the_api_provider_is_skipped_while_the_file_ones_are_asked(self):
+        index = mock.Mock()
+        index.resolve_name.return_value = ("Chrono Trigger (USA)", "exact")
+        settings = {
+            "providers": [
+                {
+                    "id": "screenscraper",
+                    "enabled": True,
+                    "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                },
+                {
+                    "id": "libretro",
+                    "enabled": True,
+                    "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                },
+            ]
+        }
+        with patch.object(cover_sync, "_get_name_index", return_value=index):
+            triples = cover_sync._fts_stage_candidates(
+                "SFC", "Chrono Trigger", settings, set()
+            )
+        self.assertTrue(triples)
+        self.assertTrue(all(name == "libretro" for name, _stage, _url in triples))
+
+    def test_a_cancel_mid_candidate_stops_that_rom_and_says_so(self):
+        with TemporaryDirectory() as tmp_dir:
+            rom = {"name": "Game", "path": str(Path(tmp_dir) / "SFC" / "Game.sfc")}
+            answers = iter([False, True])
+            settings = {
+                "providers": [
+                    {
+                        "id": "libretro",
+                        "enabled": True,
+                        "kinds": [cover_sync.COVER_ART_TYPE_BOXART],
+                    }
+                ]
+            }
+            with self.assertLogs("openemux.core.cover_sync", level="INFO"):
+                result = cover_sync._process_rom(
+                    "SFC", rom, Path(tmp_dir), "covers",
+                    cover_sync.COVER_ART_TYPE_BOXART,
+                    settings, lambda: next(answers, True), False, 0,
+                    cover_sync._HostGates(),
+                )
+        self.assertEqual(result["status"], "cancelled")
+
+
+class TheFuzzyCandidateNamesTests(unittest.TestCase):
+    """The last-resort names, offered when nothing else resolved (#175)."""
+
+    def test_an_article_gets_both_spellings(self):
+        names = cover_sync.fuzzy_candidate_names("The Legend of Zelda (USA)")
+        self.assertIn("The Legend of Zelda", names)
+        self.assertIn("Legend of Zelda, The", names)
+
+    def test_a_name_with_no_article_is_offered_as_it_is(self):
+        names = cover_sync.fuzzy_candidate_names("Chrono Trigger (USA)")
+        self.assertIn("Chrono Trigger", names)

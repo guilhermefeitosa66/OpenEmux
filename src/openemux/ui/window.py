@@ -2564,7 +2564,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         elif self.visible_consoles:
             default_scope = self.visible_consoles[0]
         if default_scope == "all":
-            default_scope = ALL_CONSOLES_ID
+            # Unreachable: the guard at the top of this method returns when
+            # there are no visible consoles, so the branch above always fires.
+            # Kept as the belt to that braces, and marked so it does not read
+            # as a gap in the coverage report.
+            default_scope = ALL_CONSOLES_ID  # pragma: no cover
         self._set_console_dropdown_active_id(combo, default_scope)
 
         # Adw.AlertDialog with an extra child, the same shape the import flow's

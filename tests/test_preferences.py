@@ -346,6 +346,20 @@ class TheBiosPageTests(_PreferencesCase):
         self.assertEqual(self.prefs._bios_rows[0].get_title(), "bios.no_requirements")
 
 
+def _console_box(root):
+    """The box the console factory built, wherever GTK parented it."""
+    stack = [root]
+    while stack:
+        widget = stack.pop()
+        child = widget.get_first_child()
+        while child is not None:
+            if isinstance(child, Gtk.Label) and " — " in child.get_label():
+                return child.get_parent()
+            stack.append(child)
+            child = child.get_next_sibling()
+    raise AssertionError("the console factory never ran")
+
+
 @needs_display
 class TheComboIconFactoriesTests(_PreferencesCase):
     """The list factories only run when GTK binds a real `Gtk.ListItem`.
@@ -394,6 +408,41 @@ class TheComboIconFactoriesTests(_PreferencesCase):
         self.assertEqual(
             icons, ["input-gaming-symbolic", "input-keyboard-symbolic"]
         )
+
+    def _closed_state_box(self, combo_row, strings, selections):
+        """The widget the closed row shows, after each of ``selections``.
+
+        A `Gtk.DropDown` binds one list item for its closed state and rebinds
+        that same widget whenever the selection changes, which is the only way
+        to reach the rebind from a test.
+        """
+        drop = Gtk.DropDown(
+            model=Gtk.StringList.new(strings), factory=combo_row.get_factory()
+        )
+        window = Gtk.Window()
+        self.addCleanup(window.destroy)
+        window.set_child(drop)
+        window.present()
+        context = GLib.MainContext.default()
+        for index in selections:
+            drop.set_selected(index)
+            while context.pending():
+                context.iteration(False)
+        return _console_box(drop)
+
+    def test_the_closed_row_is_rebuilt_on_every_change_not_appended_to(self):
+        # GTK rebinds the same widget, so without the clear the row would grow
+        # an icon and a label for every console ever selected.
+        box = self._closed_state_box(
+            self.prefs._console_combo, ["SFC", "FC", "MD"], [0, 1, 2]
+        )
+        children = []
+        child = box.get_first_child()
+        while child is not None:
+            children.append(child)
+            child = child.get_next_sibling()
+        self.assertEqual(len(children), 2)
+        self.assertTrue(children[-1].get_label().startswith("MD — "))
 
     def test_a_label_no_device_claims_falls_back_to_the_keyboard(self):
         boxes = self._bound_rows(self.prefs._device_combo, ["something else"])

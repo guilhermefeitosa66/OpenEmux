@@ -70,6 +70,43 @@ class CartridgeFrameTests(unittest.TestCase):
             # Rotated, so the bbox is wider than the rect's own 40x20.
             self.assertGreater(w1, 40)
 
+    def test_the_marker_is_found_by_id_before_the_inkscape_label(self):
+        # Authoring tools set one or the other; the id is the stable one.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">'
+                '<rect id="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            self.assertEqual(CartridgeFrame(svg).clip_id, "label-clip")
+
+    def test_a_marker_with_no_id_at_all_is_rejected(self):
+        # The id is what the second render pass hides the marker by.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg"'
+                ' xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+                ' width="100" height="50">'
+                '<rect inkscape:label="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            with self.assertRaises(CartridgeFrameError):
+                CartridgeFrame(svg)
+
+    def test_a_frame_with_no_size_of_its_own_is_rejected(self):
+        # Everything downstream scales from it, so there is nothing to do.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<rect id="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            with self.assertRaises(CartridgeFrameError):
+                CartridgeFrame(svg)
+
     def test_missing_marker_is_rejected(self):
         with TemporaryDirectory() as tmp:
             svg = Path(tmp) / "X.svg"
@@ -179,6 +216,160 @@ class RsvgUnavailableTests(unittest.TestCase):
         finally:
             cartridge_render.Rsvg = original
             cartridge_render._FRAMES.clear()
+
+
+class DroppingAGamesCompositesTests(unittest.TestCase):
+    """A renamed or deleted ROM would otherwise leave its cartridge behind."""
+
+    def test_a_console_with_no_cache_directory_has_nothing_to_drop(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(
+                cartridge_render.drop_cached("GB", "Kirby", cache_dir=Path(tmp_dir)), 0
+            )
+
+    def test_the_games_own_composites_go_and_the_rest_stay(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir) / "GB"
+            directory.mkdir(parents=True)
+            mine = directory / "Kirby.0123456789ab.png"
+            another = directory / "Zelda.0123456789ab.png"
+            not_a_composite = directory / "Kirby.txt"
+            for path in (mine, another, not_a_composite):
+                path.write_bytes(b"png")
+
+            dropped = cartridge_render.drop_cached(
+                "GB", "Kirby", cache_dir=Path(tmp_dir)
+            )
+
+            self.assertEqual(dropped, 1)
+            self.assertFalse(mine.exists())
+            self.assertTrue(another.exists())
+            self.assertTrue(not_a_composite.exists())
+
+    def test_a_cover_that_left_the_disk_renders_nothing(self):
+        # The key is content-addressed, so a cover that is gone has no key.
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(
+                render_cartridge(
+                    Path(tmp_dir) / "gone.png",
+                    FRAME,
+                    "GB",
+                    "Game",
+                    cache_dir=Path(tmp_dir),
+                )
+            )
+
+    def test_a_composite_that_will_not_delete_is_not_counted(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir) / "GB"
+            directory.mkdir(parents=True)
+            (directory / "Kirby.0123456789ab.png").write_bytes(b"png")
+
+            with unittest.mock.patch.object(
+                Path, "unlink", side_effect=OSError("read-only")
+            ):
+                dropped = cartridge_render.drop_cached(
+                    "GB", "Kirby", cache_dir=Path(tmp_dir)
+                )
+
+        self.assertEqual(dropped, 0)
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class ARenderThatGoesWrongTests(unittest.TestCase):
+    """It runs on the cover-fetch worker; an escape empties the card (#232)."""
+
+    def test_a_frame_that_raises_mid_render_falls_back_to_no_cartridge(self):
+        with TemporaryDirectory() as tmp_dir:
+            frame = load_frame(FRAME)
+            with unittest.mock.patch.object(
+                cartridge_render, "load_frame", return_value=frame
+            ), unittest.mock.patch.object(
+                frame, "render", side_effect=RuntimeError("no cairo bridge")
+            ):
+                with self.assertLogs("openemux.core.cartridge_render", level="WARNING"):
+                    self.assertIsNone(
+                        render_cartridge(
+                            None, FRAME, "GB", "Game", 100, cache_dir=Path(tmp_dir)
+                        )
+                    )
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class TheFramesOwnGeometryTests(unittest.TestCase):
+    def test_the_aspect_is_the_silhouettes_own(self):
+        frame = CartridgeFrame(FRAME)
+        self.assertAlmostEqual(frame.aspect, frame.width / frame.height)
+
+    def test_a_label_that_cannot_be_measured_is_reported(self):
+        frame = CartridgeFrame(FRAME)
+        with unittest.mock.patch.object(
+            frame._full, "get_geometry_for_layer", return_value=(False, None, None)
+        ):
+            with self.assertRaises(CartridgeFrameError):
+                frame._label_bbox(200, 200)
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class ACoverThatCannotBeScaledTests(unittest.TestCase):
+    def test_a_file_that_is_not_an_image_is_not_drawn(self):
+        with TemporaryDirectory() as tmp_dir:
+            not_an_image = Path(tmp_dir) / "cover.png"
+            not_an_image.write_bytes(b"not a png at all")
+            with self.assertLogs("openemux.core.cartridge_render", level="WARNING"):
+                self.assertIsNone(
+                    CartridgeFrame._scaled_cover(not_an_image, 100, 100)
+                )
+
+    def test_an_image_with_no_pixels_is_not_drawn(self):
+        pixbuf = unittest.mock.Mock()
+        pixbuf.get_width.return_value = 0
+        pixbuf.get_height.return_value = 0
+        with unittest.mock.patch.object(
+            cartridge_render.GdkPixbuf.Pixbuf, "new_from_file", return_value=pixbuf
+        ):
+            self.assertIsNone(CartridgeFrame._scaled_cover(Path("cover.png"), 100, 100))
+
+
+class TheBytesReaderTests(unittest.TestCase):
+    """cairo's PNG loader wants a file object; this is the whole of one."""
+
+    def test_a_read_with_no_size_returns_the_rest(self):
+        reader = cartridge_render._BytesReader(b"abcdef")
+        self.assertEqual(reader.read(2), b"ab")
+        self.assertEqual(reader.read(-1), b"cdef")
+        self.assertEqual(reader.read(None), b"")
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class ACoverThatWillNotConvertTests(unittest.TestCase):
+    def test_a_pixbuf_that_cannot_be_encoded_is_reported(self):
+        pixbuf = unittest.mock.Mock()
+        pixbuf.save_to_bufferv.return_value = (False, None)
+        with self.assertRaises(CartridgeFrameError):
+            cartridge_render._pixbuf_to_surface(pixbuf)
+
+
+class WithoutLibrsvgTests(unittest.TestCase):
+    """The typelib is optional; SVG frames simply stop being available."""
+
+    def test_the_module_still_imports_and_says_so(self):
+        import importlib
+
+        import gi
+
+        real_require = gi.require_version
+
+        def _refuse(namespace, version):
+            if namespace == "Rsvg":
+                raise ValueError("no typelib")
+            return real_require(namespace, version)
+
+        self.addCleanup(importlib.reload, cartridge_render)
+        with unittest.mock.patch.object(gi, "require_version", _refuse):
+            importlib.reload(cartridge_render)
+            self.assertIsNone(cartridge_render.Rsvg)
+            self.assertFalse(cartridge_render.rsvg_available())
 
 
 if __name__ == "__main__":
@@ -344,6 +535,21 @@ class DropStaleTests(unittest.TestCase):
             self.assertTrue(unrelated.exists())
             # In-flight temporaries from parallel renders are not .png.
             self.assertTrue(other_suffix.exists())
+
+    def test_a_stale_composite_that_will_not_delete_is_left_behind(self):
+        # Sweeping the cache is housekeeping; a file that will not go must not
+        # take the render that just succeeded down with it.
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            keep, stale, _, _ = self._populate(directory)
+
+            with unittest.mock.patch.object(
+                Path, "unlink", side_effect=OSError("read-only")
+            ):
+                cartridge_render._drop_stale(directory, "_blank", keep)
+
+            self.assertTrue(stale.exists())
+            self.assertTrue(keep.exists())
 
     def test_keeps_the_target_when_it_is_spelled_with_a_different_separator(self):
         # The exact Windows shape of the bug, reproduced explicitly so it is

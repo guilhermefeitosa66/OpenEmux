@@ -1,6 +1,7 @@
 import os
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -216,6 +217,85 @@ class RunStartupHousekeepingTests(unittest.TestCase):
         with self.assertLogs("openemux.core.housekeeping", level="ERROR"):
             summary = run_startup_housekeeping(Broken())
         self.assertEqual(summary["runtime_files"], 0)
+
+
+class WhatHousekeepingLeavesAloneTests(unittest.TestCase):
+    """It runs at every launch, over directories other things are using."""
+
+    def _two_launches(self, runtime):
+        for stamp in ("20200101120000", "20200201120000"):
+            for path in _launch_files(runtime, "sfc", stamp):
+                _touch(path, age_days=90)
+
+    def test_a_file_that_will_not_delete_is_not_counted_as_removed(self):
+        with TemporaryDirectory() as tmp:
+            runtime = Path(tmp)
+            self._two_launches(runtime)
+            with mock.patch.object(
+                Path, "unlink", side_effect=OSError("read-only")
+            ):
+                self.assertEqual(
+                    prune_runtime_files(runtime, max_age_days=7, keep_launches=1), 0
+                )
+
+    def test_a_launch_file_that_vanishes_mid_sweep_is_skipped(self):
+        # RetroArch writes into this directory while the sweep walks it.
+        with TemporaryDirectory() as tmp:
+            runtime = Path(tmp)
+            self._two_launches(runtime)
+            with mock.patch.object(Path, "stat", side_effect=OSError("gone")):
+                self.assertEqual(
+                    prune_runtime_files(runtime, max_age_days=7, keep_launches=1), 0
+                )
+
+    def test_a_directory_inside_the_buildbot_cache_is_left_where_it_is(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "cache"
+            (cache / "a-directory").mkdir(parents=True)
+            _touch(cache / "core.zip")
+
+            self.assertEqual(prune_buildbot_cache(cache), 1)
+            self.assertTrue((cache / "a-directory").is_dir())
+
+    def test_a_file_beside_the_artwork_session_directories_is_not_swept(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _touch(root / "stray.png", age_days=30)
+
+            self.assertEqual(sweep_artwork_temp_dirs(root, now=time.time()), 0)
+            self.assertTrue((root / "stray.png").exists())
+
+    def test_a_session_directory_that_vanishes_mid_sweep_is_skipped(self):
+        # Another OpenEmux closing its artwork window between the listing and
+        # the age check. Staged rather than raced: a directory that answers
+        # is_dir() and then refuses to be stat()ed.
+        class _Vanishing:
+            def is_dir(self):
+                return True
+
+            def stat(self):
+                raise OSError("gone")
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "session-1").mkdir()
+            with mock.patch.object(Path, "iterdir", lambda _self: [_Vanishing()]):
+                self.assertEqual(sweep_artwork_temp_dirs(root), 0)
+            self.assertTrue((root / "session-1").is_dir())
+
+    def test_a_session_directory_that_will_not_go_is_not_counted(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stale = root / "session-1"
+            stale.mkdir()
+            stamp = time.time() - 30 * DAY
+            os.utime(stale, (stamp, stamp))
+            with mock.patch(
+                "openemux.core.housekeeping.shutil.rmtree",
+                side_effect=OSError("in use"),
+            ):
+                self.assertEqual(sweep_artwork_temp_dirs(root), 0)
+            self.assertTrue(stale.is_dir())
 
 
 if __name__ == "__main__":

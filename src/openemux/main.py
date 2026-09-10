@@ -349,5 +349,5 @@ def main():
         logging.exception("Unhandled startup exception")
         raise
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - the console-script entry point
     sys.exit(main())

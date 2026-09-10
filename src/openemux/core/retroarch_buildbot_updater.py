@@ -99,7 +99,7 @@ class RetroArchBuildbotUpdater:
         seen = set()
         for href in HREF_PATTERN.findall(html):
             href = href.strip()
-            if not href:
+            if not href:  # pragma: no cover - HREF_PATTERN never matches empty
                 continue
             parsed_href = urllib.parse.unquote(href)
             filename = os.path.basename(parsed_href)

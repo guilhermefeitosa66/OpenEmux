@@ -45,6 +45,9 @@ pkgs=(
 
 	# The app's own runtime imports (requirements.txt).
 	python3-yaml python3-xlib
+	# coverage.py, so `make devbox-tests` can measure as well as run: the UI
+	# tests skip themselves without a display, so a host run under-reports.
+	python3-coverage
 
 	# GTK4 renders through GL and a virtual display has no GPU, so without
 	# the software rasteriser the app either falls back silently or aborts

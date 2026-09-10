@@ -32,9 +32,7 @@ class _SelectionCase(WindowCase):
 
     def setUp(self):
         super().setUp()
-        self.win.sidebar.select("SFC")
-        self.show()
-        self.grid = self.win.pages.grid_for("SFC")
+        self.grid = self.show_with_cards("SFC")
         self.selection = self.grid.selection
         self.entries = self.grid.entries()
 
@@ -309,6 +307,19 @@ class WhatCountsAsBackgroundTests(_SelectionCase):
             self.skipTest("the grid realized no card for the first game")
         host = mock.Mock()
         host.pick.return_value = card
+        self.selection._host = host
+        self.assertFalse(self.selection.is_background(1, 1))
+
+    def test_a_widget_inside_a_card_is_the_card(self):
+        # The pick lands on the cover picture, never on the card itself, so
+        # the answer has to come from walking up to its parent.
+        card = self.card(0)
+        if card is None:
+            self.skipTest("the grid realized no card for the first game")
+        inside = card.get_first_child()
+        self.assertIsNotNone(inside)
+        host = mock.Mock()
+        host.pick.return_value = inside
         self.selection._host = host
         self.assertFalse(self.selection.is_background(1, 1))
 

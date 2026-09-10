@@ -244,5 +244,35 @@ class SelectionModeResolveTests(unittest.TestCase):
         self.assertEqual(resolve(CTX_POPOVER, "confirm_hold"), ("noop",))
 
 
+class AnActionTheContextHasNoUseForTests(unittest.TestCase):
+    """The pad sends every action everywhere; most contexts ignore most."""
+
+    def test_the_grid_ignores_what_it_has_no_verb_for(self):
+        self.assertEqual(resolve(CTX_GRID, "not-an-action"), ("noop",))
+
+    def test_selection_mode_ignores_the_same_way(self):
+        self.assertEqual(resolve(CTX_GRID_SELECTION, "not-an-action"), ("noop",))
+
+
+class MovingAConsoleFromTheSidebarTests(unittest.TestCase):
+    """Issue #386: the order has to be reachable without a pointer."""
+
+    def test_ctrl_up_and_ctrl_down_move_the_console_itself(self):
+        self.assertEqual(
+            pane_key_command(CTX_SIDEBAR, Gdk.KEY_Up, ctrl=True), ("move-console", -1)
+        )
+        self.assertEqual(
+            pane_key_command(CTX_SIDEBAR, Gdk.KEY_Down, ctrl=True), ("move-console", 1)
+        )
+        self.assertEqual(
+            pane_key_command(CTX_SIDEBAR, Gdk.KEY_KP_Down, ctrl=True),
+            ("move-console", 1),
+        )
+
+    def test_plain_arrows_are_left_to_the_list_box(self):
+        # It moves and selects in one go, which is what makes the page follow.
+        self.assertIsNone(pane_key_command(CTX_SIDEBAR, Gdk.KEY_Down, ctrl=False))
+
+
 if __name__ == "__main__":
     unittest.main()

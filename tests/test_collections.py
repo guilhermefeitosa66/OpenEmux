@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -93,6 +94,105 @@ class CollectionManagerTests(unittest.TestCase):
             entries = m.load_entries(slug)
             self.assertEqual(captured["paths"], ["/g/MD/a.md"])
             self.assertEqual(entries, [{"path": "/g/MD/a.md"}])
+
+
+class AnIndexThatCannotBeTrustedTests(unittest.TestCase):
+    """The .list files are the data; the index is only the display names."""
+
+    def _manager(self, tmp_dir, loader=None):
+        return CollectionManager(Path(tmp_dir) / "collections", entries_loader=loader)
+
+    def test_an_index_that_is_not_a_mapping_is_rebuilt_from_the_lists(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            slug = manager.create("Best of SNES")
+            manager.index_path.write_text("- oops\n", encoding="utf-8")
+
+            self.assertEqual(
+                [entry["slug"] for entry in manager.list_collections()], [slug]
+            )
+
+    def test_a_directory_that_cannot_be_listed_rebuilds_to_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            manager.create("Best of SNES")
+            manager.index_path.write_text("- oops\n", encoding="utf-8")
+            with mock.patch.object(
+                Path, "glob", side_effect=OSError("permission denied")
+            ):
+                self.assertEqual(manager.list_collections(), [])
+
+    def test_entries_that_are_not_collections_are_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            manager.collections_dir.mkdir(parents=True, exist_ok=True)
+            manager.index_path.write_text(
+                "collections:\n"
+                "  - just a string\n"
+                "  - slug: \"\"\n"
+                "    name: No slug\n"
+                "  - slug: rpgs\n"
+                "    name: RPGs\n"
+                "  - slug: rpgs\n"
+                "    name: RPGs again\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                manager.list_collections(), [{"slug": "rpgs", "name": "RPGs"}]
+            )
+
+
+class WhatACollectionAnswersWhenItHasNothingTests(unittest.TestCase):
+    def _manager(self, tmp_dir, loader=None):
+        return CollectionManager(Path(tmp_dir) / "collections", entries_loader=loader)
+
+    def test_a_collection_with_no_list_file_holds_no_paths(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._manager(tmp_dir).paths("never-created"), [])
+
+    def test_without_a_loader_there_are_no_entries_to_show(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            slug = manager.create("RPGs")
+            manager.add(slug, ["/g/SFC/a.sfc"])
+            self.assertEqual(manager.load_entries(slug), [])
+
+
+class NamesThatCollideTests(unittest.TestCase):
+    def _manager(self, tmp_dir):
+        return CollectionManager(Path(tmp_dir) / "collections")
+
+    def test_three_names_that_slugify_alike_all_coexist(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            slugs = [
+                manager.create("RPGs"),
+                manager.create("RPGs!"),
+                manager.create("RPGs?"),
+            ]
+            self.assertEqual(slugs, ["rpgs", "rpgs-2", "rpgs-3"])
+
+    def test_renaming_onto_another_collections_name_is_refused(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            manager.create("RPGs")
+            other = manager.create("Shooters")
+            with self.assertRaises(ValueError):
+                manager.rename(other, "rpgs")
+
+    def test_renaming_a_collection_that_is_not_there_is_refused(self):
+        with TemporaryDirectory() as tmp_dir:
+            with self.assertRaises(ValueError):
+                self._manager(tmp_dir).rename("never-created", "RPGs")
+
+    def test_a_rename_of_a_game_no_collection_holds_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            slug = manager.create("RPGs")
+            manager.add(slug, ["/g/SFC/a.sfc"])
+            manager.repath_rom("/g/SFC/b.sfc", "/g/SFC/c.sfc")
+            self.assertEqual(manager.paths(slug), ["/g/SFC/a.sfc"])
 
 
 if __name__ == "__main__":

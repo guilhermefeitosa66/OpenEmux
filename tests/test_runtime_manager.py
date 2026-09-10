@@ -5,6 +5,7 @@ import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
 from openemux.core.runtime_manager import (
@@ -893,6 +894,173 @@ class ClearedMidReadTests(unittest.TestCase):
             stopped, error = manager.stop_active(block=True)
 
         self.assertTrue(stopped, error)
+
+
+class WhichRuntimeAGameGoesToTests(unittest.TestCase):
+    """One backend today; the config already names others (issue #240)."""
+
+    def _manager_for(self, tmp_dir, mode):
+        manager, config = _manager(tmp_dir)
+        config.get_runtime_mode_for_console = lambda _console: mode
+        return manager
+
+    def test_the_integrated_core_is_named_as_not_written_yet(self):
+        with TemporaryDirectory() as tmp_dir:
+            started, error = self._manager_for(tmp_dir, "integrated_core").launch(
+                "/roms/SFC/Game.sfc", "SFC"
+            )
+        self.assertFalse(started)
+        self.assertIn("not implemented", error)
+
+    def test_a_mode_nothing_knows_says_which_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            started, error = self._manager_for(tmp_dir, "dolphin").launch(
+                "/roms/GC/Game.iso", "GC"
+            )
+        self.assertFalse(started)
+        self.assertIn("dolphin", error)
+
+    def test_a_launcher_that_never_started_a_process_carries_its_reason(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.retroarch_launcher.launch_process = (
+                lambda *a, **k: (None, "RetroArch was not found.")
+            )
+
+            started, error = manager.launch("/roms/SFC/Game.sfc", "SFC")
+
+        self.assertFalse(started)
+        self.assertEqual(error, "RetroArch was not found.")
+
+
+class WritingTheVolumeFromTheMainLoopTests(unittest.TestCase):
+    """The config is mutated from one thread only (issue #125)."""
+
+    def test_the_debounced_write_is_handed_to_the_main_loop(self):
+        with TemporaryDirectory() as tmp_dir:
+            posted = []
+            config = _DummyConfig(tmp_dir)
+            manager = RuntimeManager(
+                tmp_dir, config, sleep=_RecordingSleep(), dispatch=posted.append
+            )
+            manager._pending_volume_db = -6.0
+
+            manager._flush_volume_db_on_main_loop()
+
+            self.assertEqual(len(posted), 1)
+            self.assertEqual(config.volume_writes, [])
+            # False is GLib.SOURCE_REMOVE: returning what flush_volume_db
+            # returns would keep the idle alive and re-run it forever.
+            self.assertFalse(posted[0]())
+            self.assertEqual(config.volume_writes, [-6.0])
+
+
+class TearingDownAFinishedGameTests(unittest.TestCase):
+    """Nothing the process left behind may outlive it (issue #244)."""
+
+    def test_a_log_handle_that_will_not_close_is_dropped_anyway(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            proc = _FakeProcess()
+            handle = mock.Mock()
+            handle.close.side_effect = OSError("already gone")
+            proc._openemux_log_handle = handle
+            manager.active_process = proc
+
+            manager._clear_active()
+
+            handle.close.assert_called_once()
+            self.assertIsNone(manager.active_process)
+
+    def test_a_command_client_that_will_not_close_is_dropped_anyway(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = mock.Mock()
+            client.close.side_effect = OSError("already gone")
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager._clear_active()
+
+            self.assertIsNone(manager._command_client_cache)
+
+
+class ARelaunchThatCannotStartTests(unittest.TestCase):
+    def test_a_game_that_could_not_be_stopped_is_not_relaunched(self):
+        # The process went away between the check and the stop: there is
+        # nothing to wait for an exit from, so there is nothing to relaunch.
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+            manager.active_rom = {"path": "/roms/SFC/Game.sfc", "console": "SFC"}
+
+            with mock.patch.object(
+                manager, "stop_active", return_value=(False, "No active game process.")
+            ):
+                rom, error = manager.relaunch_active()
+
+        self.assertIsNone(rom)
+        self.assertEqual(error, "No active game process.")
+
+    def test_the_unpacked_retry_says_so_when_it_does_not_start_either(self):
+        # The AppImage could not mount itself, and the retry found no
+        # RetroArch at all: two warnings and no game.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "dlopen(): error loading libfuse.so.2\n", encoding="utf-8"
+            )
+            manager, _config = _manager(tmp_dir)
+            manager._launch_request = {"path": "/roms/SFC/Game.sfc", "console": "SFC"}
+            manager.retroarch_launcher.launches_an_appimage = lambda: True
+            manager.retroarch_launcher.launch_process = (
+                lambda *a, **k: (None, "RetroArch was not found.")
+            )
+
+            with self.assertLogs("openemux.core.runtime_manager", level="WARNING"):
+                self.assertFalse(manager._retry_unpacked(log_path))
+
+
+class TheSaveStateHotkeysTests(unittest.TestCase):
+    def test_loading_the_active_slot_goes_over_the_command_channel(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager.load_state()
+
+        self.assertEqual(client.sent, ["LOAD_STATE"])
+
+
+class ThePacerIsBuiltOnceTests(unittest.TestCase):
+    def test_the_first_volume_change_builds_it_around_the_current_client(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager._command_client_cache = _FakeClient()
+            pacer = manager._volume_pacer()
+            self.assertIs(manager._volume_pacer(), pacer)
+            self.assertEqual(pacer.level, manager.volume_db)
+
+
+class WhatTheHotApplySnapshotAnswersTests(unittest.TestCase):
+    def test_without_a_marker_there_is_nothing_to_wait_for_or_discard(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            self.assertFalse(manager.snapshot_ready(None))
+            self.assertFalse(manager.discard_snapshot(None))
+
+    def test_loading_a_slot_leaves_the_hotkeys_where_they_were(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager.load_state_slot(9)
+
+        self.assertIn("LOAD_STATE_SLOT 9", client.sent)
 
 
 if __name__ == "__main__":

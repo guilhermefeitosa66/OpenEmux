@@ -117,5 +117,34 @@ class SelectionModelTests(unittest.TestCase):
         self.assertIsNone(self.model.cursor)
 
 
+class AnIndexOffTheEndOfThePageTests(unittest.TestCase):
+    """Every verb is handed a position; a stale one must change nothing.
+
+    The grid computes these from a page that may have been rebuilt under it,
+    so "row 12 of a page that now holds 3" is a real call, not a defensive
+    one.
+    """
+
+    def setUp(self):
+        self.model = SelectionModel(3)
+        self.model.select(1)
+
+    def test_an_additive_extend_past_the_end_is_ignored(self):
+        self.model.extend_additive(9)
+        self.assertEqual(self.model.selected, {1})
+        self.assertEqual(self.model.cursor, 1)
+
+    def test_moving_the_cursor_past_the_end_is_ignored(self):
+        self.model.move_cursor(9)
+        self.assertEqual(self.model.cursor, 1)
+
+    def test_an_additive_extend_with_no_anchor_roots_one(self):
+        # Ctrl+Shift+click as the very first thing done on a page.
+        fresh = SelectionModel(5)
+        fresh.extend_additive(2)
+        self.assertEqual(fresh.selected, {2})
+        self.assertEqual(fresh.anchor, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

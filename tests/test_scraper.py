@@ -1,9 +1,15 @@
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from openemux.core import cover_cache
 from openemux.core.scraper import (
     COVER_ART,
+    get_art_path_candidates,
+    fetch_cover,
+    get_cover_path_candidates,
+    rename_local_art,
     LABEL_ART,
     find_local_art,
     find_local_cover,
@@ -109,6 +115,76 @@ class ImageSniffingTests(unittest.TestCase):
     def test_is_image_agrees_with_image_format(self):
         self.assertTrue(is_image(self.PNG))
         self.assertFalse(is_image(b"not an image at all, just some words here"))
+
+
+class WhatTheArtworkHelpersRefuseTests(unittest.TestCase):
+    def test_a_file_that_is_not_an_image_extension_is_refused(self):
+        with TemporaryDirectory() as tmp_dir:
+            source = Path(tmp_dir) / "cover.tiff"
+            source.write_bytes(b"data")
+            with self.assertRaises(ValueError):
+                save_local_art(Path(tmp_dir), "SFC", "Game", source)
+
+    def test_the_cover_candidates_are_the_art_candidates_for_covers(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(
+                get_cover_path_candidates(Path(tmp_dir), "SFC", "Game"),
+                get_art_path_candidates(Path(tmp_dir), "SFC", "Game", COVER_ART),
+            )
+
+    def test_artwork_that_cannot_be_deleted_does_not_stop_the_rest(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir)
+            first = save_local_cover(roms, "SFC", "Game", self._png(roms, "a.png"))
+            real_unlink = Path.unlink
+
+            def _refuse(self, *args, **kwargs):
+                if self == first:
+                    raise OSError("read-only")
+                return real_unlink(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", _refuse):
+                self.assertEqual(remove_local_covers(roms, "SFC", "Game"), 0)
+            self.assertTrue(first.exists())
+
+    def test_artwork_that_cannot_be_renamed_does_not_stop_the_rest(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir)
+            cover = save_local_cover(roms, "SFC", "Game", self._png(roms, "a.png"))
+            with mock.patch.object(
+                Path, "replace", side_effect=OSError("read-only")
+            ):
+                self.assertEqual(rename_local_art(roms, "SFC", "Game", "Other"), 0)
+            self.assertTrue(cover.exists())
+
+    def _png(self, roms, name):
+        source = roms / name
+        source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 96)
+        return source
+
+
+class TheBackgroundCoverLookupTests(unittest.TestCase):
+    """Issue #128: it runs on the shared decode pool, not a thread per ROM."""
+
+    def test_the_first_kind_that_has_artwork_wins(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir)
+            source = roms / "a.png"
+            source.write_bytes(b"\x89PNG\r\n\x1a\n")
+            label = save_local_art(roms, "SFC", "Game", source, LABEL_ART)
+            save_local_art(roms, "SFC", "Game", source, COVER_ART)
+            told = []
+
+            fetch_cover(
+                {"console": "SFC", "name": "Game"},
+                roms,
+                lambda rom, path: told.append(path),
+                kinds=(LABEL_ART, COVER_ART),
+            )
+            cover_cache.pool().shutdown(wait=True)
+            cover_cache._pool = None
+
+        self.assertEqual(told, [str(label)])
 
 
 if __name__ == "__main__":

@@ -113,12 +113,24 @@ class TheVendoredTypelibsTests(_EnvironmentCase):
         (self.vendored / "Gtk-4.0.typelib").write_bytes(b"")
         (self.vendored / "Adw-1.typelib").write_bytes(b"")
 
+    def _system_probe(self, has_them):
+        """Answer only the three ``/usr`` probes, and leave the rest alone.
+
+        `os.path.exists` cannot be blanket-patched here: from Python 3.13 on
+        `Path.exists` is itself implemented on top of it, so a `lambda: False`
+        also hides the vendored typelibs the test just wrote.
+        """
+        real = os.path.exists
+
+        def _exists(path):
+            return has_them if str(path).startswith("/usr/lib") else real(path)
+
+        return mock.patch.object(main_module.os.path, "exists", _exists)
+
     def _ensure(self, system_has_them=False, project_root=None):
         with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
-        ), mock.patch.object(
-            main_module.os.path, "exists", lambda _p: system_has_them
-        ), mock.patch.object(
+        ), self._system_probe(system_has_them), mock.patch.object(
             main_module,
             "get_project_root",
             lambda: project_root if project_root is not None else self.tmp,
@@ -134,9 +146,9 @@ class TheVendoredTypelibsTests(_EnvironmentCase):
         self._vendor()
         with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
-        ), mock.patch.object(
-            main_module.os.path, "exists", lambda _p: False
-        ), mock.patch.object(main_module, "get_project_root", lambda: self.tmp):
+        ), self._system_probe(False), mock.patch.object(
+            main_module, "get_project_root", lambda: self.tmp
+        ):
             main_module._ensure_gtk_typelibs()
         self.assertEqual(os.environ["GI_TYPELIB_PATH"], str(self.vendored))
 
@@ -145,9 +157,9 @@ class TheVendoredTypelibsTests(_EnvironmentCase):
         os.environ["GI_TYPELIB_PATH"] = "/somewhere/else"
         with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
-        ), mock.patch.object(
-            main_module.os.path, "exists", lambda _p: False
-        ), mock.patch.object(main_module, "get_project_root", lambda: self.tmp):
+        ), self._system_probe(False), mock.patch.object(
+            main_module, "get_project_root", lambda: self.tmp
+        ):
             main_module._ensure_gtk_typelibs()
         self.assertEqual(
             os.environ["GI_TYPELIB_PATH"],
@@ -157,18 +169,16 @@ class TheVendoredTypelibsTests(_EnvironmentCase):
     def test_a_tree_with_no_vendored_typelibs_changes_nothing(self):
         with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
-        ), mock.patch.object(
-            main_module.os.path, "exists", lambda _p: False
-        ), mock.patch.object(main_module, "get_project_root", lambda: self.tmp):
+        ), self._system_probe(False), mock.patch.object(
+            main_module, "get_project_root", lambda: self.tmp
+        ):
             main_module._ensure_gtk_typelibs()
         self.assertNotIn("GI_TYPELIB_PATH", os.environ)
 
     def test_a_project_root_that_cannot_be_resolved_changes_nothing(self):
         with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
-        ), mock.patch.object(
-            main_module.os.path, "exists", lambda _p: False
-        ), mock.patch.object(
+        ), self._system_probe(False), mock.patch.object(
             main_module, "get_project_root", side_effect=RuntimeError("no root")
         ):
             main_module._ensure_gtk_typelibs()

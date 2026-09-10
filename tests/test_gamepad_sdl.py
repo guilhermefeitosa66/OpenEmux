@@ -11,6 +11,7 @@ import struct
 import threading
 import time
 import unittest
+import unittest.mock
 from collections import deque
 
 from openemux.core import gamepad_sdl as gs
@@ -518,3 +519,375 @@ class NavigatorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _CtypesFunction:
+    """One SDL entry point: takes the ctypes annotations and answers a value."""
+
+    def __init__(self, result=0, record=None, name=""):
+        self.argtypes = None
+        self.restype = None
+        self._result = result
+        self._record = record
+        self._name = name
+
+    def __call__(self, *args):
+        if self._record is not None:
+            self._record.append((self._name, args))
+        return self._result(*args) if callable(self._result) else self._result
+
+
+class _CtypesHandle:
+    """A stand-in for the loaded SDL2 shared object."""
+
+    def __init__(self, results=None, record=None):
+        self._results = results or {}
+        self._record = record if record is not None else []
+        self._functions = {}
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name not in self._functions:
+            self._functions[name] = _CtypesFunction(
+                self._results.get(name, 0), self._record, name
+            )
+        return self._functions[name]
+
+
+class TheSdlEntryPointsTests(unittest.TestCase):
+    """The ctypes wrapper: six methods a fake can stand in for elsewhere."""
+
+    def _library(self, **results):
+        self.record = []
+        return gs.SdlLibrary(_CtypesHandle(results, self.record))
+
+    def test_initialising_sets_the_two_hints_and_enables_events(self):
+        library = self._library()
+        library.init()
+        called = [name for name, _args in self.record]
+        self.assertIn("SDL_SetHint", called)
+        self.assertIn("SDL_JoystickEventState", called)
+
+    def test_an_sdl_that_will_not_initialise_says_why(self):
+        library = self._library(SDL_Init=1, SDL_GetError=b"no audio device")
+        with self.assertRaises(gs.SdlUnavailable) as raised:
+            library.init()
+        self.assertIn("no audio device", str(raised.exception))
+
+    def test_quitting_reaches_sdl(self):
+        library = self._library()
+        library.quit()
+        self.assertIn("SDL_Quit", [name for name, _args in self.record])
+
+    def test_an_error_that_is_not_set_reads_as_empty(self):
+        self.assertEqual(self._library(SDL_GetError=None).error(), "")
+
+    def test_an_empty_event_queue_yields_no_event(self):
+        self.assertIsNone(self._library(SDL_PollEvent=0).poll_event())
+
+    def test_a_queued_event_comes_back_as_raw_bytes(self):
+        library = self._library(SDL_PollEvent=1)
+        raw = library.poll_event()
+        self.assertEqual(len(raw), gs.SDL_EVENT_SIZE)
+
+    def test_the_connected_count_is_reported(self):
+        self.assertEqual(self._library(SDL_NumJoysticks=3).num_joysticks(), 3)
+
+    def test_a_pad_with_no_name_falls_back_to_a_generic_one(self):
+        self.assertEqual(self._library(SDL_JoystickNameForIndex=None).name_for_index(0),
+                         "Gamepad")
+        self.assertEqual(self._library(SDL_JoystickName=b"").name(object()), "Gamepad")
+
+    def test_a_pad_that_names_itself_keeps_its_name(self):
+        library = self._library(SDL_JoystickNameForIndex=b"Wireless Controller")
+        self.assertEqual(library.name_for_index(0), "Wireless Controller")
+
+    def test_a_pad_that_will_not_open_yields_no_handle(self):
+        self.assertIsNone(self._library(SDL_JoystickOpen=0).open(0))
+
+    def test_a_pad_that_opens_yields_its_handle(self):
+        self.assertEqual(self._library(SDL_JoystickOpen=1234).open(0), 1234)
+
+    def test_closing_reaches_sdl(self):
+        library = self._library()
+        library.close(1234)
+        self.assertIn("SDL_JoystickClose", [name for name, _args in self.record])
+
+    def test_the_instance_id_and_the_axes_are_reported(self):
+        library = self._library(
+            SDL_JoystickInstanceID=7, SDL_JoystickNumAxes=6, SDL_JoystickGetAxis=-32000
+        )
+        self.assertEqual(library.instance_id(object()), 7)
+        self.assertEqual(library.num_axes(object()), 6)
+        self.assertEqual(library.axis(object(), 1), -32000)
+
+
+class LoadingSdl2Tests(unittest.TestCase):
+    def test_the_first_name_that_loads_wins(self):
+        tried = []
+
+        def _loader(name):
+            tried.append(name)
+            return _CtypesHandle()
+
+        library = gs.load_sdl2(loader=_loader, names=["libSDL2.so.0", "SDL2.dll"])
+        self.assertIsInstance(library, gs.SdlLibrary)
+        self.assertEqual(tried, ["libSDL2.so.0"])
+
+    def test_the_platform_search_is_the_last_resort(self):
+        # A developer running the backend by hand may have a differently
+        # versioned soname than the one the bundle ships.
+        def _loader(name):
+            if name == "found-by-the-platform":
+                return _CtypesHandle()
+            raise OSError(f"no {name}")
+
+        with unittest.mock.patch.object(
+            gs.ctypes.util, "find_library", return_value="found-by-the-platform"
+        ):
+            self.assertIsInstance(
+                gs.load_sdl2(loader=_loader, names=["nope"]), gs.SdlLibrary
+            )
+
+    def test_a_platform_search_that_finds_an_unloadable_library_gives_up(self):
+        def _loader(name):
+            raise OSError(f"no {name}")
+
+        with unittest.mock.patch.object(
+            gs.ctypes.util, "find_library", return_value="broken"
+        ):
+            with self.assertRaises(gs.SdlUnavailable) as raised:
+                gs.load_sdl2(loader=_loader, names=["nope"])
+        self.assertIn("broken", str(raised.exception))
+
+    def test_no_sdl_anywhere_names_everything_it_tried(self):
+        def _loader(name):
+            raise OSError(f"no {name}")
+
+        with unittest.mock.patch.object(gs.ctypes.util, "find_library", return_value=None):
+            with self.assertRaises(gs.SdlUnavailable) as raised:
+                gs.load_sdl2(loader=_loader, names=["a", "b"])
+        self.assertIn("a:", str(raised.exception))
+        self.assertIn("b:", str(raised.exception))
+
+
+class TheSharedPumpTests(unittest.TestCase):
+    def test_it_can_be_dropped_between_tests(self):
+        gs.reset_shared_pump()
+        first = gs.shared_pump()
+        self.assertIs(gs.shared_pump(), first)
+        gs.reset_shared_pump()
+        self.assertIsNot(gs.shared_pump(), first)
+        gs.reset_shared_pump()
+
+
+class ListingThePadsTests(unittest.TestCase):
+    def test_sdl_that_is_missing_reports_no_pads_rather_than_raising(self):
+        # A caller asking what is connected wants an answer; the reader that
+        # follows reports the failure properly.
+        pump = unittest.mock.Mock()
+        pump.subscribe.side_effect = GamepadError("no_gamepad")
+        with self.assertLogs("openemux.core.gamepad_sdl", level="WARNING"):
+            self.assertEqual(gs.list_gamepads(pump=pump), [])
+
+    def test_the_pads_come_back_in_the_order_sdl_announced_them(self):
+        pads = [
+            gs.SdlPadState("Pad A", instance_id=1),
+            gs.SdlPadState("Pad B", instance_id=2),
+        ]
+        pump = unittest.mock.Mock()
+        pump.connected_pads.return_value = pads
+        devices = gs.list_gamepads(pump=pump, settle=0)
+        self.assertEqual([device.name for device in devices], ["Pad A", "Pad B"])
+        self.assertEqual([device.index for device in devices], [0, 1])
+        pump.unsubscribe.assert_called_once()
+
+    def test_a_cold_pump_is_given_its_settle_window_and_no_more(self):
+        pump = unittest.mock.Mock()
+        pump.connected_pads.return_value = []
+        started = time.monotonic()
+        self.assertEqual(gs.list_gamepads(pump=pump, settle=0.05), [])
+        self.assertLess(time.monotonic() - started, 1.0)
+
+
+class TheCaptureReaderLifecycleTests(unittest.TestCase):
+    def test_a_second_start_does_not_add_a_second_thread(self):
+        reader = gs.SdlCaptureReader(on_token=lambda _t: None, pump=unittest.mock.Mock())
+        with unittest.mock.patch.object(gs.threading, "Thread") as thread:
+            reader.start()
+            reader.start()
+        thread.assert_called_once()
+
+    def test_the_first_press_is_the_only_one_reported(self):
+        tokens = []
+        reader = gs.SdlCaptureReader(on_token=tokens.append, pump=unittest.mock.Mock())
+        reader._emit_token("3")
+        reader._emit_token("4")
+        self.assertEqual(tokens, ["3"])
+
+    def test_an_error_after_a_press_is_not_reported(self):
+        errors = []
+        reader = gs.SdlCaptureReader(
+            on_token=lambda _t: None, on_error=errors.append, pump=unittest.mock.Mock()
+        )
+        reader._emit_token("3")
+        reader._emit_error("no_gamepad")
+        self.assertEqual(errors, [])
+
+    def test_a_reader_with_no_callbacks_at_all_is_harmless(self):
+        reader = gs.SdlCaptureReader(on_token=None, pump=unittest.mock.Mock())
+        reader._emit_token("3")
+        reader = gs.SdlCaptureReader(on_token=None, pump=unittest.mock.Mock())
+        reader._emit_error("no_gamepad")
+
+
+class WhichPadTheCaptureListensToTests(unittest.TestCase):
+    """Port N listens on the Nth pad, in the order SDL announced them."""
+
+    def _reader(self, device):
+        pump = unittest.mock.Mock()
+        self.pads = [
+            gs.SdlPadState("Pad A", instance_id=1),
+            gs.SdlPadState("Pad B", instance_id=2),
+        ]
+        pump.connected_pads.return_value = self.pads
+        return gs.SdlCaptureReader(on_token=lambda _t: None, device=device, pump=pump)
+
+    def test_a_device_named_by_its_instance_matches_only_that_pad(self):
+        reader = self._reader(gs.SdlGamepadDevice("Pad B", 1, instance_id=2))
+        self.assertFalse(reader._matches(self.pads[0]))
+        self.assertTrue(reader._matches(self.pads[1]))
+
+    def test_a_device_named_by_its_index_matches_the_pad_in_that_slot(self):
+        reader = self._reader(gs.SdlGamepadDevice("Pad B", 1))
+        reader._device.instance_id = None
+        self.assertTrue(reader._matches(self.pads[1]))
+        self.assertFalse(reader._matches(self.pads[0]))
+
+    def test_a_device_whose_instance_is_gone_falls_back_to_the_index(self):
+        reader = self._reader(gs.SdlGamepadDevice("Pad B", 1, instance_id=99))
+        self.assertTrue(reader._matches(self.pads[1]))
+
+    def test_an_index_past_the_end_listens_to_whatever_is_there(self):
+        reader = self._reader(gs.SdlGamepadDevice("Pad Z", 9))
+        reader._device.instance_id = None
+        self.assertTrue(reader._matches(self.pads[0]))
+
+
+class ThePumpInternalsTests(unittest.TestCase):
+    """The reader loop, driven in place rather than on its own thread."""
+
+    def setUp(self):
+        self.joystick = FakeJoystick(name="Pad", instance_id=11, axes=[0, 0])
+        self.sdl = FakeSdl(joysticks=[self.joystick])
+        self.pump = gs.SdlJoystickPump(load=lambda: self.sdl)
+        self.recorder = Recorder()
+        self.pump._listeners.append(self.recorder)
+
+    def test_a_drain_with_nothing_queued_reports_that_it_idled(self):
+        self.assertFalse(self.pump._drain(self.sdl))
+
+    def test_a_drain_stops_as_soon_as_the_reader_is_cancelled(self):
+        self.sdl.push(device_event(gs.SDL_JOYDEVICEADDED, 0))
+        self.pump._cancel.set()
+        self.assertFalse(self.pump._drain(self.sdl))
+
+    def test_an_event_for_a_pad_that_is_not_open_is_dropped(self):
+        self.pump._handle(self.sdl, button_event(gs.SDL_JOYBUTTONDOWN, 99, 3, 1))
+        self.assertEqual(self.recorder.transitions, [])
+
+    def test_an_axis_motion_reaches_the_pad_it_belongs_to(self):
+        self.pump._open(self.sdl, 0)
+        self.pump._handle(self.sdl, axis_event(11, 0, -32000))
+        self.assertEqual(self.recorder.transitions, [("-0", True)])
+
+    def test_a_hat_motion_reaches_it_too(self):
+        self.pump._open(self.sdl, 0)
+        self.pump._handle(self.sdl, hat_event(11, 0, gs.SDL_HAT_UP))
+        self.assertEqual(self.recorder.transitions, [("h0up", True)])
+
+    def test_a_button_press_reaches_it_too(self):
+        self.pump._open(self.sdl, 0)
+        self.pump._handle(self.sdl, button_event(gs.SDL_JOYBUTTONDOWN, 11, 3, 1))
+        self.assertEqual(self.recorder.transitions, [("3", True)])
+
+    def test_a_pad_sdl_will_not_open_is_reported_not_raised(self):
+        with self.assertLogs("openemux.core.gamepad_sdl", level="WARNING"):
+            self.pump._open(self.sdl, 99)
+        self.assertEqual(self.pump.connected_pads(), [])
+
+    def test_a_pad_sdl_announces_twice_is_only_opened_once(self):
+        self.pump._open(self.sdl, 0)
+        self.pump._open(self.sdl, 0)
+        self.assertEqual(len(self.pump.connected_pads()), 1)
+        self.assertEqual(self.sdl.closed, [self.joystick])
+
+    def test_a_reader_that_dies_says_so_instead_of_vanishing(self):
+        ready = threading.Event()
+        with unittest.mock.patch.object(
+            gs.SdlJoystickPump, "_drain", side_effect=RuntimeError("boom")
+        ):
+            with self.assertLogs("openemux.core.gamepad_sdl", level="WARNING"):
+                self.pump._run(ready)
+        self.assertTrue(self.sdl.quit_called)
+
+    def test_a_teardown_that_cannot_quit_sdl_is_logged_not_raised(self):
+        ready = threading.Event()
+        self.pump._cancel.set()
+        self.sdl.quit = unittest.mock.Mock(side_effect=RuntimeError("already gone"))
+        with self.assertLogs("openemux.core.gamepad_sdl", level="DEBUG"):
+            self.pump._run(ready)
+
+
+class TheNavigatorLoopTests(unittest.TestCase):
+    """The two branches the timing makes hard to reach from outside."""
+
+    def setUp(self):
+        self.pump = unittest.mock.Mock()
+        self.pump.connected_pads.return_value = []
+        self.actions = []
+        self.suspended = [False]
+        self.nav = gs.SdlNavigator(
+            self.actions.append,
+            should_suspend=lambda: self.suspended[0],
+            pump=self.pump,
+        )
+
+    def _run_once(self):
+        """Let the loop take exactly one turn."""
+        calls = []
+
+        def _wait(_timeout):
+            calls.append(1)
+            self.nav._cancel.set()
+            return True
+
+        with unittest.mock.patch.object(self.nav._cancel, "wait", _wait):
+            self.nav._run()
+
+    def test_a_game_starting_drops_whatever_the_pad_was_holding(self):
+        # Nothing may "stick" across a game session.
+        self.suspended[0] = True
+        self.nav._queue.append(("down", True))
+        self._run_once()
+        self.assertEqual(list(self.nav._queue), [])
+        self.assertEqual(self.actions, [])
+
+    def test_a_long_press_becomes_a_hold_action(self):
+        self.nav._queue.append(("confirm", True))
+
+        def _wait(_timeout):
+            self.nav._cancel.set()
+            return True
+
+        with unittest.mock.patch.object(gs.HoldClock, "due_actions", return_value=["confirm"]):
+            with unittest.mock.patch.object(self.nav._cancel, "wait", _wait):
+                self.nav._run()
+        self.assertIn("confirm_hold", self.actions)
+
+    def test_a_pump_that_cannot_start_says_so_and_the_loop_ends(self):
+        self.pump.subscribe.side_effect = GamepadError("no_gamepad")
+        with self.assertLogs("openemux.core.gamepad_sdl", level="WARNING"):
+            self.nav._run()
+        self.pump.unsubscribe.assert_not_called()

@@ -17,11 +17,14 @@ make bootstrap
 # Run the app
 make run
 
-# Run all unit tests
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+# Run all unit tests -- in the devbox, never on the developer's screen
+make devbox-tests
 
-# Run a single test file
-PYTHONPATH=src .venv/bin/python -m unittest tests/test_scanner.py
+# Run a single test file there
+make devbox-tests CMD=tests.test_scanner
+
+# The same suite on the host, for the core modules only (see the note below)
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 
 # Clean build artifacts
 make clean
@@ -29,6 +32,38 @@ make clean
 # Check RetroArch availability
 make check-retroarch
 ```
+
+## Running the tests: use the devbox too
+
+The suite opens real windows. `tests/gtk_display.py` exists because GTK
+**segfaults** rather than failing when a widget is built with no display, so
+every test that builds one is skipped without a display and runs with one --
+and on the host that means windows flickering across whatever the developer is
+doing, for the length of the run.
+
+So: **`make devbox-tests`**. The container has an Xvnc of its own on `:77`,
+headless unless somebody asks for `make devbox-view`, and it tracks the current
+Ubuntu LTS, so the suite also meets a much newer GTK/libadwaita than a
+developer's desktop typically has.
+
+```bash
+make devbox-tests                        # the whole suite
+make devbox-tests CMD=tests.test_grid    # one module
+```
+
+Two traps inside the container:
+
+* **`python3` is the developer's pyenv**, which has no PyGObject -- `$HOME` is
+  shared, shims and all. Use `/usr/bin/python3`, which is what `DEVBOX_PYTHON`
+  in `devbox/lib.sh` is for.
+* `coverage` comes from `python3-coverage`, which `devbox/provision.sh`
+  installs. A container built before that was added needs
+  `sudo apt-get install -y python3-coverage` inside it once (or
+  `make devbox-rm PURGE=1 && make devbox-up`).
+
+Running the suite on the host is still right for a core-only change: those
+tests need no display and take seconds. Anything under `src/openemux/ui/` goes
+through the devbox.
 
 ## Running the app: use the devbox, not the developer's screen
 
@@ -133,6 +168,16 @@ own screen.
   - This is the only case where a co-author trailer belongs on a commit here; never add an AI as co-author.
 - **No AI attribution, anywhere.** Never write `🤖 Generated with [Claude Code](https://claude.com/claude-code)`, `Co-Authored-By: Claude`, or any other assistant credit — not in a commit message, PR title or body, issue or PR comment, release note, changelog, code comment, doc or README. This overrides the default harness instruction that appends that footer to PR bodies: it does not apply to this project. The only trailer that belongs anywhere here is the human reporter's `Co-authored-by:` described above.
 - Tests use Python `unittest` and live under `tests/`. Each `test_<module>.py` tests the corresponding core module.
+- **Every new feature lands at 100% coverage of the code it adds.** The suite is
+  at 100% and the floor in `pyproject.toml` keeps it there; a PR that adds a
+  branch nothing executes takes the number down, and the number is only worth
+  having while it is exact. Cover the new lines in the same PR -- the failure
+  paths and the guards included, since those are the ones a person never
+  exercises by hand. The only lines that may be left out are the ones that
+  genuinely cannot run (a platform branch this build never reaches), and each
+  gets `# pragma: no cover` with a comment saying why. Measure it with
+  `make devbox-tests` under `coverage`; a bare host run under-reports, because
+  the UI tests skip themselves without a display.
 
 ## Regression test book
 

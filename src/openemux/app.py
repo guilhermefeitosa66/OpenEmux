@@ -21,7 +21,10 @@ try:
     import gi
     gi.require_version('Gtk', '4.0')
     gi.require_version('Adw', '1')
-except Exception:
+except Exception:  # pragma: no cover - the import has already succeeded here
+    # Reachable only on a host without the introspection typelibs, which is
+    # to say only in a process where importing this module fails outright --
+    # never in one that has the suite running inside it.
     append_startup_error(
         "Failed to import GTK stack (gi/Gtk/Adw). On Debian/Ubuntu/Mint install "
         "the introspection typelibs: sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1 "

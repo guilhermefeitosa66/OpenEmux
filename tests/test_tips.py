@@ -106,3 +106,18 @@ class TipIconTests(unittest.TestCase):
     def test_tip_icon_is_the_lightbulb_emoji(self):
         # Adwaita ships no lightbulb icon, so the marker is an emoji.
         self.assertEqual(TIP_ICON, "\U0001F4A1")
+
+
+class KeyLabelFallbackTests(unittest.TestCase):
+    """The name of a key nothing in the table knows about."""
+
+    def test_a_plain_word_is_capitalised(self):
+        self.assertEqual(format_key_label("insert"), "Insert")
+
+    def test_a_two_word_binding_capitalises_both(self):
+        self.assertEqual(format_key_label("scroll lock"), "Scroll Lock")
+
+    def test_a_tip_with_no_key_renders_nothing_at_all(self):
+        # The caller asks for whatever tip is current; there may be none.
+        self.assertEqual(render_tip(lambda key, **_kw: key, ""), "")
+        self.assertEqual(render_tip(lambda key, **_kw: key, None), "")

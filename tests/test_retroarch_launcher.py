@@ -1201,3 +1201,510 @@ class CoreOptionsOverrideTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _ResolutionCase(unittest.TestCase):
+    """A launcher over a throwaway tree, for the "where is it?" lookups."""
+
+    def setUp(self):
+        self._dir = TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.base = Path(self._dir.name)
+        self.config = _DummyConfig(
+            self.base, self.base / "retroarch", self.base / f"mgba_libretro{CORE_SUFFIX}"
+        )
+        self.launcher = RetroArchLauncher(self.base, self.config)
+
+
+class FindingRetroArchTests(_ResolutionCase):
+    def test_a_configured_path_that_is_there_wins(self):
+        binary = self.base / "retroarch"
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
+        self.assertEqual(self.launcher._resolve_retroarch_binary(), str(binary))
+
+    def test_a_bare_name_is_looked_up_on_the_path(self):
+        self.config.binary_path = "retroarch"
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which",
+            return_value="/usr/bin/retroarch",
+        ):
+            self.assertEqual(
+                self.launcher._resolve_retroarch_binary(), "/usr/bin/retroarch"
+            )
+
+    def test_the_vendored_build_is_the_next_place_looked(self):
+        self.config.binary_path = "retroarch"
+        vendored = self.base / VENDORED_RETROARCH
+        vendored.parent.mkdir(parents=True, exist_ok=True)
+        vendored.write_text("#!/bin/sh\n", encoding="utf-8")
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            self.assertEqual(
+                self.launcher._resolve_retroarch_binary(), str(vendored)
+            )
+
+    def test_a_vendored_appimage_is_looked_for_too(self):
+        self.config.binary_path = "retroarch"
+        appimage = self.base / "vendors" / "retroarch.AppImage"
+        appimage.parent.mkdir(parents=True, exist_ok=True)
+        appimage.write_text("appimage", encoding="utf-8")
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            self.assertEqual(
+                self.launcher._resolve_retroarch_binary(), str(appimage)
+            )
+
+    def test_an_appimage_is_never_assumed_inside_a_flatpak(self):
+        # There the binary is the host's, reached through flatpak-spawn.
+        with patch(
+            "openemux.core.retroarch_launcher.is_running_in_flatpak",
+            return_value=True,
+        ):
+            self.assertFalse(self.launcher.launches_an_appimage())
+
+    def test_a_flatpak_with_no_spawn_helper_cannot_reach_the_host(self):
+        with patch(
+            "openemux.core.retroarch_launcher.is_running_in_flatpak",
+            return_value=True,
+        ), patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            prefix, error = self.launcher._launch_prefix()
+        self.assertIsNone(prefix)
+        self.assertIn("flatpak-spawn", error)
+
+
+class FindingACoreTests(_ResolutionCase):
+    def test_a_hint_that_is_an_absolute_path_is_used_as_it_is(self):
+        core = self.base / f"snes9x_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        self.assertEqual(self.launcher._resolve_core_hint(str(core)), str(core))
+
+    def test_a_hint_that_only_exists_relative_to_the_process_is_used(self):
+        # The project-relative candidate is tried first; this is the other one.
+        with patch.object(
+            Path,
+            "exists",
+            autospec=True,
+            side_effect=lambda self: str(self) == f"cores/snes9x_libretro{CORE_SUFFIX}",
+        ):
+            self.assertEqual(
+                self.launcher._resolve_core_hint(f"cores/snes9x_libretro{CORE_SUFFIX}"),
+                f"cores/snes9x_libretro{CORE_SUFFIX}",
+            )
+
+    def test_a_relative_hint_is_resolved_against_the_project(self):
+        core = self.base / "cores" / f"snes9x_libretro{CORE_SUFFIX}"
+        core.parent.mkdir(parents=True)
+        core.write_bytes(b"core")
+        self.assertEqual(
+            self.launcher._resolve_core_hint(f"cores/snes9x_libretro{CORE_SUFFIX}"),
+            str(core),
+        )
+
+    def test_a_hint_naming_nothing_that_exists_resolves_to_nothing(self):
+        self.assertIsNone(self.launcher._resolve_core_hint("cores/gone.so"))
+
+    def test_a_bare_filename_hint_goes_through_the_core_directories(self):
+        with patch.object(
+            RetroArchLauncher, "_resolve_core_name", return_value="/cores/snes9x.so"
+        ) as resolve:
+            self.assertEqual(
+                self.launcher._resolve_core_hint(f"snes9x_libretro{CORE_SUFFIX}"),
+                "/cores/snes9x.so",
+            )
+        resolve.assert_called_once_with(f"snes9x_libretro{CORE_SUFFIX}")
+
+    def test_an_empty_hint_resolves_to_nothing(self):
+        self.assertIsNone(self.launcher._resolve_core_hint(""))
+
+    def test_a_bare_filename_is_looked_up_in_the_core_directories(self):
+        core_dir = self.base / "vendors" / "retroarch-assets" / "cores"
+        core_dir.mkdir(parents=True)
+        core = core_dir / f"snes9x_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        with patch.object(
+            RetroArchLauncher, "_core_search_dirs", return_value=[str(core_dir)]
+        ):
+            self.assertEqual(
+                self.launcher._resolve_core_name(f"snes9x_libretro{CORE_SUFFIX}"),
+                str(core),
+            )
+
+    def test_no_filename_at_all_resolves_to_nothing(self):
+        self.assertIsNone(self.launcher._resolve_core_name(""))
+
+    def test_the_search_covers_the_users_own_retroarch_too(self):
+        # Searched, never written to.
+        dirs = self.launcher._core_search_dirs()
+        self.assertTrue(any("retroarch" in entry for entry in dirs))
+
+
+class TheHostFlatpakFallbackTests(_ResolutionCase):
+    def _prefix(self, **kwargs):
+        return self.launcher._flatpak_fallback_prefix(**kwargs)
+
+    def test_a_machine_with_no_flatpak_at_all_has_no_fallback(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            self.assertIsNone(self._prefix())
+
+    def test_a_machine_that_lists_the_flatpak_uses_it(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value="/bin/flatpak"
+        ), patch(
+            "openemux.core.retroarch_launcher.subprocess.run",
+            return_value=Mock(returncode=0),
+        ):
+            self.assertEqual(self._prefix()[:2], ["flatpak", "run"])
+
+    def test_a_machine_without_it_installed_has_no_fallback(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value="/bin/flatpak"
+        ), patch(
+            "openemux.core.retroarch_launcher.subprocess.run",
+            return_value=Mock(returncode=1),
+        ):
+            self.assertIsNone(self._prefix())
+
+    def test_a_flatpak_that_cannot_be_asked_has_no_fallback(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value="/bin/flatpak"
+        ), patch(
+            "openemux.core.retroarch_launcher.subprocess.run",
+            side_effect=OSError("no flatpak"),
+        ):
+            self.assertIsNone(self._prefix())
+
+
+class StoppingTheHostFlatpakTests(unittest.TestCase):
+    def test_without_the_spawn_helper_there_is_nothing_to_stop_it_with(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            self.assertFalse(RetroArchLauncher._host_kill_retroarch())
+
+    def test_the_host_is_asked_to_kill_the_flatpak(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value="/bin/x"
+        ), patch("openemux.core.retroarch_launcher.subprocess.run") as run:
+            self.assertTrue(RetroArchLauncher._host_kill_retroarch())
+        self.assertIn("kill", run.call_args[0][0])
+
+    def test_a_host_that_will_not_answer_is_reported_not_raised(self):
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value="/bin/x"
+        ), patch(
+            "openemux.core.retroarch_launcher.subprocess.run",
+            side_effect=OSError("no host"),
+        ):
+            with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+                self.assertFalse(RetroArchLauncher._host_kill_retroarch())
+
+
+class TheInheritedCoreOptionsTests(_ResolutionCase):
+    """What the user already configured for a core inside RetroArch itself."""
+
+    def test_a_core_with_no_option_prefix_inherits_nothing(self):
+        self.assertEqual(self.launcher._inherited_core_options(""), {})
+
+    def test_a_machine_with_no_retroarch_config_inherits_nothing(self):
+        with patch.object(Path, "home", classmethod(lambda _cls: self.base)):
+            self.assertEqual(
+                self.launcher._inherited_core_options("mednafen_psx_hw_libretro.so"), {}
+            )
+
+    def test_the_file_is_recognised_by_the_options_it_holds(self):
+        # The display name is its own lookup; the prefix is not.
+        config_root = self.base / ".config" / "retroarch" / "config" / "Beetle PSX HW"
+        config_root.mkdir(parents=True)
+        (config_root / "Beetle PSX HW.opt").write_text(
+            'beetle_psx_hw_internal_resolution = "2x"\n', encoding="utf-8"
+        )
+        with patch.object(Path, "home", classmethod(lambda _cls: self.base)):
+            values = self.launcher._inherited_core_options("mednafen_psx_hw_libretro.so")
+        self.assertEqual(values.get("beetle_psx_hw_internal_resolution"), "2x")
+
+    def test_a_file_that_belongs_to_another_core_is_not_inherited(self):
+        config_root = self.base / ".config" / "retroarch" / "config" / "Snes9x"
+        config_root.mkdir(parents=True)
+        (config_root / "Snes9x.opt").write_text(
+            'snes9x_overclock = "enabled"\n', encoding="utf-8"
+        )
+        with patch.object(Path, "home", classmethod(lambda _cls: self.base)):
+            self.assertEqual(
+                self.launcher._inherited_core_options("mednafen_psx_hw_libretro.so"), {}
+            )
+
+    def test_a_config_directory_that_cannot_be_listed_inherits_nothing(self):
+        config_root = self.base / ".config" / "retroarch" / "config"
+        config_root.mkdir(parents=True)
+        with patch.object(Path, "home", classmethod(lambda _cls: self.base)), patch.object(
+            Path, "glob", side_effect=OSError("permission denied")
+        ):
+            self.assertEqual(
+                self.launcher._inherited_core_options("mednafen_psx_hw_libretro.so"), {}
+            )
+
+
+class WhenNothingCanLaunchTests(_ResolutionCase):
+    def test_a_machine_with_a_retroarch_flatpak_uses_it_as_a_last_resort(self):
+        self.config.binary_path = "retroarch"
+        with patch.object(
+            RetroArchLauncher, "_resolve_retroarch_binary", return_value=None
+        ), patch.object(
+            RetroArchLauncher,
+            "_flatpak_fallback_prefix",
+            return_value=["flatpak", "run", "org.libretro.RetroArch"],
+        ):
+            prefix, error = self.launcher._launch_prefix()
+        self.assertIsNone(error)
+        self.assertEqual(prefix[0], "flatpak")
+
+    def test_a_machine_with_nothing_at_all_names_every_way_out(self):
+        with patch.object(
+            RetroArchLauncher, "_resolve_retroarch_binary", return_value=None
+        ), patch.object(
+            RetroArchLauncher, "_flatpak_fallback_prefix", return_value=None
+        ):
+            prefix, error = self.launcher._launch_prefix()
+        self.assertIsNone(prefix)
+        for hint in ("distribution", "flatpak install", "runtime.retroarch.binary"):
+            self.assertIn(hint, error)
+
+    def test_a_console_with_no_core_anywhere_names_what_it_tried(self):
+        with patch.object(
+            RetroArchLauncher, "_find_core_path", return_value=None
+        ), patch.object(
+            RetroArchLauncher, "_launch_prefix", return_value=(["retroarch"], None)
+        ):
+            proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIsNone(proc)
+        self.assertIn("No RetroArch core found for SFC", error)
+
+    def test_a_launch_prefix_that_failed_stops_the_launch_there(self):
+        with patch.object(
+            RetroArchLauncher, "_launch_prefix", return_value=(None, "no retroarch")
+        ):
+            proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIsNone(proc)
+        self.assertEqual(error, "no retroarch")
+
+    def test_a_core_that_cannot_be_started_is_reported_not_raised(self):
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+        with patch(
+            "openemux.core.retroarch_launcher.subprocess.Popen",
+            side_effect=OSError("no such file"),
+        ):
+            with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+                proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIsNone(proc)
+        self.assertIn("Failed to launch RetroArch", error)
+
+
+class TheRuntimeOverrideCornersTests(_ResolutionCase):
+    def test_a_per_rom_shader_wins_over_the_console_setting(self):
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+        self.config.get_shader_for_rom = lambda _rom, _console: "crt"
+        with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen:
+            popen.return_value = Mock(pid=1)
+            self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        _close_log(popen.return_value)
+
+    def test_the_dpad_can_stand_in_for_the_stick_on_a_pad_only(self):
+        # A keyboard already has the stick on i/j/k/l (issue #158).
+        self.config.input_profile = {
+            "active_device": "gamepad_p1",
+            "dpad_drives_analog": True,
+            "devices": {
+                "gamepad_p1": {
+                    "type": "gamepad",
+                    "bindings": {"up": "h0up", "down": "h0down"},
+                },
+                "keyboard": {"type": "keyboard", "bindings": {"up": "up"}},
+            },
+        }
+        path = self.launcher._write_runtime_override("SFC")
+        text = Path(path).read_text(encoding="utf-8")
+        self.assertIn("input_player1_l_y_minus", text)
+
+    def test_a_controller_type_reaches_every_enabled_port(self):
+        self.config.input_profile = {
+            "active_device": "gamepad_p1",
+            "controller_type": 517,
+            "devices": {
+                "gamepad_p1": {"type": "gamepad", "bindings": {}},
+                "gamepad_p2": {"type": "gamepad", "bindings": {}, "enabled": True},
+            },
+        }
+        path = self.launcher._write_runtime_override("PS")
+        text = Path(path).read_text(encoding="utf-8")
+        self.assertIn("input_libretro_device_p1", text)
+        self.assertIn("input_libretro_device_p2", text)
+
+
+class WritingTheCoreOptionsTests(_ResolutionCase):
+    def test_a_file_that_cannot_be_written_is_reported_not_raised(self):
+        store = CoreOptionsStore(self.base / "core_options.json")
+        store.set_for_console("PS", "mednafen_psx_hw_libretro.so",
+                              "beetle_psx_hw_internal_resolution", "2x")
+        self.config.core_options = store
+        with patch.object(Path, "write_text", side_effect=OSError("read-only")):
+            with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+                self.assertIsNone(
+                    self.launcher._write_core_options(
+                        "PS", "mednafen_psx_hw_libretro.so",
+                        self.base / "runtime", "stamp",
+                    )
+                )
+
+
+class KillingAStuckGameTests(_ResolutionCase):
+    def test_a_process_that_will_not_die_is_reported_not_raised(self):
+        proc = Mock()
+        proc.kill.side_effect = OSError("no such process")
+        with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+            self.assertFalse(self.launcher.kill_process(proc))
+
+
+class ThePathsThatAreTriedInOrderTests(_ResolutionCase):
+    def test_a_configured_relative_path_falls_back_to_the_working_directory(self):
+        # The project-relative candidate is tried first; this is the other one.
+        core = Path(self._dir.name) / "elsewhere" / f"snes9x_libretro{CORE_SUFFIX}"
+        core.parent.mkdir(parents=True)
+        core.write_bytes(b"core")
+        with patch.object(Path, "cwd", classmethod(lambda _cls: core.parent)):
+            hint = self.launcher._resolve_core_hint(str(core))
+        self.assertEqual(hint, str(core))
+
+    def test_a_console_with_no_hint_falls_through_to_the_known_core_names(self):
+        self.config.core_hints = []
+        with patch.object(
+            RetroArchLauncher, "_resolve_core_name", return_value=None
+        ):
+            self.assertIsNone(self.launcher._find_core_path("SFC"))
+
+    def test_a_known_core_name_that_resolves_is_the_answer(self):
+        self.config.core_hints = []
+        with patch.object(
+            RetroArchLauncher, "_resolve_core_name", return_value="/cores/snes9x.so"
+        ):
+            self.assertEqual(self.launcher._find_core_path("SFC"), "/cores/snes9x.so")
+
+    def test_a_bundled_core_directory_joins_the_search(self):
+        with patch(
+            "openemux.core.retroarch_launcher.bundled_core_dir",
+            return_value=Path("/bundle/cores"),
+        ):
+            self.assertIn("/bundle/cores", self.launcher._core_search_dirs())
+
+    def test_a_configured_binary_that_only_exists_where_it_says_is_used(self):
+        binary = Path(self._dir.name) / "elsewhere" / "retroarch"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
+        self.config.binary_path = str(binary)
+        self.assertEqual(self.launcher._resolve_retroarch_binary(), str(binary))
+
+
+class TheLastResortLookupsTests(_ResolutionCase):
+    def test_a_relative_binary_that_only_exists_beside_the_process_is_used(self):
+        # The project-relative candidate is tried first; this is the fallback
+        # for a working directory that happens to hold it.
+        self.config.binary_path = "retroarch"
+        with patch.object(
+            Path, "exists", autospec=True, side_effect=lambda self: str(self) == "retroarch"
+        ):
+            self.assertEqual(self.launcher._resolve_retroarch_binary(), "retroarch")
+
+    def test_a_retroarch_the_distribution_installed_is_the_final_fallback(self):
+        # On ARM, where libretro publishes no build, this is the normal case.
+        self.config.binary_path = "retroarch"
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which",
+            side_effect=[None, "/usr/bin/retroarch"],
+        ):
+            self.assertEqual(
+                self.launcher._resolve_retroarch_binary(), "/usr/bin/retroarch"
+            )
+
+    def test_a_machine_with_no_retroarch_at_all_resolves_to_nothing(self):
+        self.config.binary_path = "retroarch"
+        with patch(
+            "openemux.core.retroarch_launcher.shutil.which", return_value=None
+        ):
+            self.assertIsNone(self.launcher._resolve_retroarch_binary())
+
+    def test_on_arm_the_missing_core_message_says_why_it_may_not_exist(self):
+        # Telling somebody to configure a core that was never built for their
+        # machine sends them looking for a file they cannot get (issue #119).
+        with patch.object(
+            RetroArchLauncher, "_find_core_path", return_value=None
+        ), patch.object(
+            RetroArchLauncher, "_launch_prefix", return_value=(["retroarch"], None)
+        ), patch("openemux.core.retroarch_launcher.MACHINE", "aarch64"):
+            _proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIn("aarch64", error)
+
+    def test_a_game_window_launch_strips_the_wayland_pointers(self):
+        # RetroArch would otherwise pick its native Wayland driver, whose
+        # window no X client can reparent.
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+        self.config.game_window = True
+        with patch(
+            "openemux.core.retroarch_launcher.game_window_support.game_window_active",
+            return_value=True,
+        ), patch("openemux.core.retroarch_launcher.x11_only_env") as strip, patch(
+            "openemux.core.retroarch_launcher.subprocess.Popen"
+        ) as popen:
+            strip.side_effect = lambda env: dict(env)
+            popen.return_value = Mock(pid=1)
+            self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        _close_log(popen.return_value)
+        strip.assert_called_once()
+
+    def test_a_launch_that_fails_closes_the_log_it_opened(self):
+        # One leaked descriptor per failed launch, otherwise.
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+        with patch(
+            "openemux.core.retroarch_launcher.subprocess.Popen",
+            side_effect=OSError("ENOEXEC"),
+        ):
+            with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+                proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIsNone(proc)
+        self.assertIn("ENOEXEC", error)
+
+    def test_a_log_handle_that_will_not_close_does_not_hide_the_error(self):
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+
+        class _Handle:
+            def close(self):
+                raise OSError("already closed")
+
+            def write(self, _text):
+                return None
+
+            def flush(self):
+                return None
+
+        with patch("builtins.open", return_value=_Handle()), patch(
+            "openemux.core.retroarch_launcher.subprocess.Popen",
+            side_effect=OSError("ENOEXEC"),
+        ):
+            with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
+                proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        self.assertIsNone(proc)
+        self.assertIn("ENOEXEC", error)

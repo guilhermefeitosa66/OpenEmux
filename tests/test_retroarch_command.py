@@ -2,6 +2,7 @@
 
 import socket
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 from openemux.core.retroarch_command import (
@@ -207,6 +208,44 @@ class FreePortTests(unittest.TestCase):
         # A broken channel still beats refusing to launch.
         with patch("openemux.core.retroarch_command.socket.socket", side_effect=OSError("no")):
             self.assertEqual(pick_free_udp_port(), DEFAULT_NETWORK_CMD_PORT)
+
+
+class WhenTheSocketGoesBadTests(unittest.TestCase):
+    """A dead handle must not be kept: every later command would fail on it."""
+
+    def _client(self, sock):
+        client = RetroArchCommandClient(port=55555)
+        client._sock = sock
+        return client
+
+    def test_a_send_that_fails_drops_the_socket_and_says_no(self):
+        sock = mock.Mock()
+        sock.sendto.side_effect = OSError("no route to host")
+        client = self._client(sock)
+        with self.assertLogs("openemux.core.retroarch_command", level="WARNING"):
+            self.assertFalse(client.send("PAUSE_TOGGLE"))
+        self.assertIsNone(client._sock)
+        sock.close.assert_called_once()
+
+    def test_a_socket_that_will_not_close_is_dropped_anyway(self):
+        sock = mock.Mock()
+        sock.close.side_effect = OSError("already gone")
+        client = self._client(sock)
+        client._drop_socket()
+        self.assertIsNone(client._sock)
+
+
+class WhatThePacerIsAimingAtTests(unittest.TestCase):
+    def test_the_target_is_where_the_volume_is_heading(self):
+        # Read by the OSD while the walk is still on its way there.
+        client = RetroArchCommandClient(port=55555)
+        self.addCleanup(client._drop_socket)
+        pacer = VolumePacer(client, sleep=lambda _s: None)
+        pacer.reset(0.0)
+        self.assertEqual(pacer.target, 0.0)
+        pacer.set_target(-12.0)
+        pacer.join(2)
+        self.assertEqual(pacer.target, -12.0)
 
 
 if __name__ == "__main__":

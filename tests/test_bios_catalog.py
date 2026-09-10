@@ -8,6 +8,7 @@ does not exist or never asks for one it needs.
 """
 
 import unittest
+from unittest import mock
 
 from openemux.core.bios_catalog import (
     CONSOLE_BIOS_REQUIREMENTS,
@@ -212,6 +213,43 @@ class TheTableItselfTests(unittest.TestCase):
                     self._names(data, "required") & self._names(data, "optional"),
                     set(),
                 )
+
+
+class TheUnionOfACatalogWithRepeatsTests(unittest.TestCase):
+    """One console, several cores, and the same file asked for by each.
+
+    The union is what the BIOS page lists, so a file two cores both need has
+    to appear once rather than once per core.
+    """
+
+    TABLE = {
+        "required": [
+            {"file": "scph5501.bin", "cores": ["a_libretro.so"]},
+            {"file": "scph5501.bin", "cores": ["a_libretro.so"]},
+            {"any_of": ["b.rom", "c.rom"]},
+        ],
+        "optional": [
+            {"file": "extra.bin"},
+            {"file": "extra.bin"},
+        ],
+    }
+
+    def test_a_file_asked_for_twice_is_listed_once(self):
+        with mock.patch.dict(
+            CONSOLE_BIOS_REQUIREMENTS, {"PS": self.TABLE}, clear=False
+        ):
+            union = get_console_bios_union("PS")
+        self.assertEqual(
+            [entry.get("file") or entry["any_of"] for entry in union["required"]],
+            ["scph5501.bin", ["b.rom", "c.rom"]],
+        )
+
+    def test_the_optional_list_is_deduplicated_the_same_way(self):
+        with mock.patch.dict(
+            CONSOLE_BIOS_REQUIREMENTS, {"PS": self.TABLE}, clear=False
+        ):
+            union = get_console_bios_union("PS")
+        self.assertEqual([entry["file"] for entry in union["optional"]], ["extra.bin"])
 
 
 if __name__ == "__main__":

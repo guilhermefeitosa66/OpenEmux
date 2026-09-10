@@ -277,6 +277,15 @@ class GamepadActionsTests(_NavigationCase):
             self.assertFalse(self.nav.range_held)
         dispatch.assert_not_called()
 
+    def test_a_dispatch_runs_the_command_the_context_resolves_to(self):
+        # The whole pad path in one call: context, table, command, hints.
+        self.focus_on(self.win.console_list.get_row_at_index(0))
+        with mock.patch.object(self.nav, "_cmd_focus_grid") as focus_grid, \
+                mock.patch.object(self.nav, "refresh_hints") as refresh:
+            self.nav.dispatch("confirm")
+        focus_grid.assert_called_once()
+        refresh.assert_called_once()
+
     def test_an_unknown_command_is_executed_as_nothing(self):
         self.nav._execute(("not-a-command",))
 

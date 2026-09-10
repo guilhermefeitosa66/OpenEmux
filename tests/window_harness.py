@@ -14,6 +14,7 @@ is off in the throwaway config).
 
 import shutil
 import tempfile
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,7 +28,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gio, GLib
+    from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
     Adw.init()
 
@@ -99,13 +100,32 @@ class WindowCase(unittest.TestCase):
                 self.home.add_rom(console, name)
         # The window reads playlists, not the directory tree: build them once
         # here so construction has a library to open on without a scan thread.
-        PlaylistManager(
+        playlists = PlaylistManager(
             self.config, RomScanner(self.config.get_roms_path())
-        ).scan_and_rebuild_all_playlists()
+        )
+        summary = playlists.scan_and_rebuild_all_playlists()
+        for console, roms in self.library.items():
+            built = len(playlists.load_playlist(console))
+            if built != len(roms):
+                # The last line is not idle: a playlist reads back empty when
+                # the scan found nothing *and* when the entries were dropped
+                # for pointing at files that do not exist, and the two are
+                # different bugs.
+                rom_path = self.home.console_dir(console) / roms[0]
+                raise AssertionError(
+                    "the throwaway library came out wrong: "
+                    f"{console} has {built} of {len(roms)} games. "
+                    f"roms={self.config.get_roms_path()} "
+                    f"playlists={self.config.get_playlists_dir()} "
+                    f"on disk={sorted(p.name for p in self.home.console_dir(console).iterdir())} "
+                    f"failed={summary['failed']} "
+                    f"exists={rom_path.exists()}"
+                )
 
         self.app = shared_application()
         self.app.config_manager = self.config
 
+        self._release_style_providers()
         navigator_patch = mock.patch.object(
             window_module, "make_navigator", lambda **kwargs: mock.Mock()
         )
@@ -115,8 +135,14 @@ class WindowCase(unittest.TestCase):
         scan_patch.start()
         self.addCleanup(scan_patch.stop)
 
+        # Drained after the window is destroyed and before the throwaway home
+        # goes away: a window leaves idle callbacks behind, and one that runs
+        # later runs *inside another test*, against a directory that no longer
+        # exists. Cleanups are LIFO, so this one is registered first and runs
+        # after the destroy.
+        self.addCleanup(self.pump)
         self.win = OpenEmuxWindow(self.app)
-        self.addCleanup(self.win.destroy)
+        self.addCleanup(self._close_window)
 
         self.toasts = []
         toast_patch = mock.patch.object(
@@ -126,6 +152,50 @@ class WindowCase(unittest.TestCase):
         )
         toast_patch.start()
         self.addCleanup(toast_patch.stop)
+
+
+    def _close_window(self):
+        """Close it the way a user does, then destroy what is left.
+
+        `destroy()` alone does not emit ``close-request``, and neither does
+        `close()` on a window nothing ever mapped -- but that signal is where
+        the window lets go of `Adw.StyleManager`, which lives as long as the
+        process. A handler left on it holds the closure, the closure holds the
+        window, and the window holds its whole widget tree (issue #237). One
+        window is nothing; a thousand is a gigabyte.
+        """
+        self.win.emit("close-request")
+        self.win.destroy()
+
+    def _release_style_providers(self):
+        """Take the window's stylesheet off the display again afterwards.
+
+        `load_css` adds a provider to the *display*, which outlives the window
+        that added it: in the app that happens once, here it happens per test.
+        A thousand providers is a thousand stylesheets matched against every
+        widget of every later window -- hundreds of megabytes and a suite that
+        slows down as it goes.
+        """
+        display = Gdk.Display.get_default()
+        added = []
+        real_add = Gtk.StyleContext.add_provider_for_display
+
+        def _add(target, provider, priority):
+            added.append((target, provider))
+            return real_add(target, provider, priority)
+
+        patcher = mock.patch.object(
+            Gtk.StyleContext, "add_provider_for_display", _add
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        def _release():
+            for target, provider in added:
+                Gtk.StyleContext.remove_provider_for_display(target, provider)
+
+        self.addCleanup(_release)
+        return display
 
     # -- helpers ----------------------------------------------------------
     @contextmanager
@@ -155,6 +225,23 @@ class WindowCase(unittest.TestCase):
         while context.pending():
             context.iteration(False)
 
+    def pump_until(self, predicate, timeout=5.0):
+        """Run the idle loop until ``predicate`` holds, or give up.
+
+        A fixed number of iterations is not enough: how many turns GTK needs
+        to lay a page out and realize its cards depends on what else the
+        machine is doing, and a whole-suite run is exactly when it needs more.
+        """
+        deadline = time.monotonic() + timeout
+        context = GLib.MainContext.default()
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            while context.pending():
+                context.iteration(False)
+            time.sleep(0.005)
+        return predicate()
+
     def show(self):
         """Map the window, for the tests that need real focus and geometry.
 
@@ -163,3 +250,21 @@ class WindowCase(unittest.TestCase):
         """
         self.win.present()
         self.pump()
+
+    def show_with_cards(self, console):
+        """Map the window and wait for that console's page to realize a card.
+
+        Returns the grid. A card exists only once GTK has laid the page out,
+        and that is what every test about a card, a selection or the focus
+        needs to be true before it starts.
+        """
+        self.win.sidebar.select(console)
+        self.show()
+        grid = self.win.pages.grid_for(console)
+        entries = grid.entries()
+        self.pump_until(
+            lambda: grid.count() == len(entries)
+            and bool(entries)
+            and grid.card_for(entries[0]) is not None
+        )
+        return grid

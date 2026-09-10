@@ -123,5 +123,19 @@ class PlatformDefaultsTests(unittest.TestCase):
         )
 
 
+class TheConfigDirectoryTests(unittest.TestCase):
+    def test_it_is_a_dot_directory_in_the_user_home_on_every_platform(self):
+        # Windows included: %APPDATA% is the native convention, but moving
+        # there is a migration with real risk to an existing library.
+        from pathlib import Path
+
+        with mock.patch.object(
+            platform.Path, "home", classmethod(lambda _cls: Path("/home/x"))
+        ):
+            self.assertEqual(
+                platform.default_config_dir(), Path("/home/x") / ".openemux"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

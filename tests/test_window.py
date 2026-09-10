@@ -28,7 +28,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, GLib, Gtk
+    from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
     Adw.init()
 
@@ -42,6 +42,15 @@ if HAVE_DISPLAY:
         collection_scope,
     )
     from openemux.ui.window import OpenEmuxWindow
+
+
+def _walk(widget):
+    """Every descendant of a widget, depth first."""
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _walk(child)
+        child = child.get_next_sibling()
 
 
 @needs_display
@@ -811,6 +820,25 @@ class TheCollectionPromptsTests(WindowCase):
 
 @needs_display
 class RenamingAndDeletingRomsTests(WindowCase):
+    def deletes_without_the_desktop_trash(self):
+        """Run the real delete, minus the one step a temp dir cannot do.
+
+        `Gio.File.trash` refuses to move a file across a filesystem boundary,
+        and a throwaway library under `/tmp` sits on the other side of one
+        whenever `/tmp` is a tmpfs -- every container run, in other words.
+        Everything else `delete_rom` does is what these tests are about.
+        """
+        real = window_module.delete_rom
+
+        def _delete(roms_dir, rom):
+            def _unlink(path):
+                Path(path).unlink()
+                return True
+
+            return real(roms_dir, rom, trash=_unlink)
+
+        return mock.patch.object(window_module, "delete_rom", _delete)
+
     def test_renaming_moves_the_file_and_repaths_everything_that_knew_it(self):
         rom = self.rom()
         old_path = rom["path"]
@@ -833,7 +861,8 @@ class RenamingAndDeletingRomsTests(WindowCase):
 
     def test_deleting_removes_the_file_and_counts_what_went(self):
         roms = [self.rom(), self.rom(index=1)]
-        self.win._delete_roms(roms)
+        with self.deletes_without_the_desktop_trash():
+            self.win._delete_roms(roms)
         for rom in roms:
             self.assertFalse(Path(rom["path"]).exists())
         self.assertIn(self.said("toast.rom.deleted", count=2), self.toasts)
@@ -865,7 +894,8 @@ class RenamingAndDeletingRomsTests(WindowCase):
         rom = self.rom()
         with self.caught_dialog() as caught:
             self.win._confirm_delete_roms([rom])
-        caught[-1].emit("response", "delete")
+        with self.deletes_without_the_desktop_trash():
+            caught[-1].emit("response", "delete")
         self.assertFalse(Path(rom["path"]).exists())
 
     def test_a_prompt_for_no_roms_at_all_is_not_shown(self):
@@ -1271,6 +1301,42 @@ class OpeningFoldersTests(WindowCase):
             side_effect=GLib.Error("no handler"),
         ), mock.patch.object(
             window_module.subprocess, "Popen", side_effect=OSError("no xdg-open")
+        ):
+            self.win._open_path_in_file_manager(self.tmp / "somewhere")
+        self.assertEqual(len(self.toasts), 1)
+
+    def test_on_windows_explorer_is_asked_to_select_the_file(self):
+        # The comma is part of the switch and must be its own argv element,
+        # or Explorer opens the parent instead of selecting.
+        rom = self.rom()
+        with mock.patch.object(window_module, "IS_WINDOWS", True), mock.patch.object(
+            window_module.subprocess, "Popen"
+        ) as popen:
+            self.win._reveal_rom_in_files(rom)
+        self.assertEqual(popen.call_args[0][0][:2], ["explorer", "/select,"])
+
+    def test_an_explorer_that_will_not_start_opens_the_parent_folder(self):
+        rom = self.rom()
+        with mock.patch.object(window_module, "IS_WINDOWS", True), mock.patch.object(
+            window_module.subprocess, "Popen", side_effect=OSError("no explorer")
+        ), mock.patch.object(self.win, "_open_path_in_file_manager") as open_path:
+            self.win._reveal_rom_in_files(rom)
+        open_path.assert_called_once_with(Path(rom["path"]).parent)
+
+    def test_on_windows_a_folder_is_opened_through_the_shell(self):
+        # GIO's Windows backend refuses a file:// directory URI, and there is
+        # no xdg-open.
+        target = self.tmp / "somewhere"
+        with mock.patch.object(window_module, "IS_WINDOWS", True), mock.patch.object(
+            window_module.os, "startfile", create=True
+        ) as startfile:
+            self.win._open_path_in_file_manager(target)
+        startfile.assert_called_once_with(target)
+        self.assertEqual(self.toasts, [])
+
+    def test_on_windows_a_folder_that_will_not_open_is_reported(self):
+        with mock.patch.object(window_module, "IS_WINDOWS", True), mock.patch.object(
+            window_module.os, "startfile", side_effect=OSError("gone"), create=True
         ):
             self.win._open_path_in_file_manager(self.tmp / "somewhere")
         self.assertEqual(len(self.toasts), 1)
@@ -2046,6 +2112,450 @@ class ClickLoggingTests(WindowCase):
             describe(Gtk.Image.new_from_icon_name("view-refresh-symbolic")),
         )
         self.assertEqual(describe(Gtk.Box()), "Box")
+
+
+@needs_display
+class TheRescanWorkersTests(WindowCase):
+    """The threads themselves, run in place so the summary can be asserted."""
+
+    def setUp(self):
+        super().setUp()
+        self.win.sidebar.select("SFC")
+        thread_patch = mock.patch.object(window_module, "Thread", self._thread)
+        thread_patch.start()
+        self.addCleanup(thread_patch.stop)
+        self.delivered = []
+        idle_patch = mock.patch.object(
+            window_module.GLib,
+            "idle_add",
+            lambda fn, *args: self.delivered.append((fn, args)),
+        )
+        idle_patch.start()
+        self.addCleanup(idle_patch.stop)
+
+    def _thread(self, target=None, daemon=None):
+        self.worker = target
+        return mock.Mock()
+
+    def summary_for(self, handler):
+        """The summary the worker handed to ``handler`` on the main loop."""
+        for fn, args in self.delivered:
+            if fn == handler:
+                return args[1]
+        raise AssertionError("the worker never reported back")
+
+    def test_a_console_rescan_rebuilds_that_playlist_and_counts_it(self):
+        self.assertEqual(
+            self.win._rescan_single_console("SFC"), {"started": True}
+        )
+        self.worker()
+        summary = self.summary_for(self.win._on_rescan_single_done_ui)
+        self.assertEqual(summary["console"], "SFC")
+        self.assertEqual(summary["roms"], 2)
+        self.assertNotIn("error", summary)
+
+    def test_a_console_rescan_that_crashes_comes_back_as_a_failure(self):
+        # Issue #214: a worker that dies without reaching the UI handler
+        # leaves _scan_running set for the rest of the session.
+        self.win._rescan_single_console("SFC")
+        with mock.patch.object(
+            self.win.playlist_manager,
+            "scan_and_rebuild_playlist",
+            side_effect=OSError("drive gone"),
+        ):
+            self.worker()
+        summary = self.summary_for(self.win._on_rescan_single_done_ui)
+        self.assertEqual(summary["error"], "drive gone")
+
+    def test_a_whole_library_rescan_reports_every_console_it_found(self):
+        self.assertEqual(self.win._rescan_all_consoles(), {"started": True})
+        self.worker()
+        summary = self.summary_for(self.win._on_rescan_all_done_ui)
+        self.assertEqual(summary["total_roms"], 3)
+
+    def test_a_whole_library_rescan_that_crashes_comes_back_empty(self):
+        self.win._rescan_all_consoles()
+        with mock.patch.object(
+            self.win.playlist_manager,
+            "scan_and_rebuild_all_playlists",
+            side_effect=OSError("drive gone"),
+        ):
+            self.worker()
+        summary = self.summary_for(self.win._on_rescan_all_done_ui)
+        self.assertEqual(summary["error"], "drive gone")
+        self.assertEqual(summary["consoles"], {})
+
+    def test_the_progress_of_a_whole_library_rescan_reaches_the_banner(self):
+        self.win._rescan_all_consoles()
+        progress = []
+        with mock.patch.object(
+            self.win.playlist_manager,
+            "scan_and_rebuild_all_playlists",
+            lambda on_progress=None: progress.append(
+                on_progress({"current": 1, "total": 2})
+            )
+            or {"consoles": {}, "total_consoles": 0, "total_roms": 0, "failed": {}},
+        ):
+            self.worker()
+        self.assertTrue(
+            any(fn == self.win.tasks.update for fn, _args in self.delivered)
+        )
+
+    def test_a_console_rescan_asked_for_while_one_runs_says_nothing_silently(self):
+        self.win._scan_running = True
+        self.assertIsNone(self.win._rescan_single_console("SFC", show_toast=False))
+        self.assertEqual(self.toasts, [])
+
+    def test_a_whole_library_rescan_asked_for_while_one_runs_is_queued(self):
+        self.win._scan_running = True
+        self.assertIsNone(self.win._rescan_all_consoles(show_toast=True))
+        self.assertIsNone(self.win._rescan_pending["console"])
+        self.assertIn(self.said("toast.scan_running"), self.toasts)
+
+
+@needs_display
+class TheArtworkSyncWorkerTests(WindowCase):
+    """The callbacks `_start_artwork_sync` hands to the sync (issue #187)."""
+
+    def setUp(self):
+        super().setUp()
+        self.win.sidebar.select("SFC")
+        patcher = mock.patch.object(window_module, "sync_artwork_async")
+        self.sync_async = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.win._sync_covers_for_current_scope()
+        self.kwargs = self.sync_async.call_args.kwargs
+
+    def test_a_running_sync_can_be_cancelled_through_the_banner(self):
+        self.assertFalse(self.kwargs["should_cancel"]())
+        self.win._cover_sync_cancel.set()
+        self.assertTrue(self.kwargs["should_cancel"]())
+
+    def test_progress_reaches_the_banner_labelled_for_the_kind_in_flight(self):
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_progress"]({"processed": 1, "total": 4})
+        self.assertEqual(idle_add.call_args[0][0], self.win.tasks.update)
+
+    def test_a_label_pass_is_labelled_as_labels_rather_than_covers(self):
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_progress"](
+                {
+                    "processed": 1,
+                    "total": 4,
+                    "art_kind": window_module.COVER_ART_TYPE_CARTRIDGE_LABEL,
+                }
+            )
+        self.assertEqual(
+            idle_add.call_args[0][4], self.said("status.labels.progress")
+        )
+
+    def test_a_downloaded_cover_is_queued_for_the_batched_reveal(self):
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_progress"](
+                {
+                    "processed": 1,
+                    "total": 4,
+                    "result": "downloaded",
+                    "rom_path": "/roms/SFC/a.sfc",
+                    "rom_name": "a",
+                    "console": "SFC",
+                }
+            )
+        queued = [
+            call for call in idle_add.call_args_list
+            if call[0][0] == self.win._queue_cover_reveal
+        ]
+        self.assertEqual(len(queued), 1)
+
+    def test_a_downloaded_label_waits_for_the_final_reload_instead(self):
+        # A label alone re-composites the cartridge when the grid reloads.
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_progress"](
+                {
+                    "processed": 1,
+                    "total": 4,
+                    "result": "downloaded",
+                    "rom_path": "/roms/SFC/a.sfc",
+                    "art_kind": window_module.COVER_ART_TYPE_CARTRIDGE_LABEL,
+                }
+            )
+        self.assertFalse(
+            any(
+                call[0][0] == self.win._queue_cover_reveal
+                for call in idle_add.call_args_list
+            )
+        )
+
+    def test_a_skipped_cover_is_not_queued_for_a_reveal(self):
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_progress"](
+                {"processed": 1, "total": 4, "result": "skipped", "rom_path": "/a"}
+            )
+        self.assertFalse(
+            any(
+                call[0][0] == self.win._queue_cover_reveal
+                for call in idle_add.call_args_list
+            )
+        )
+
+    def test_the_finished_sync_reports_back_on_the_main_loop(self):
+        summary = {"downloaded": 1, "skipped": 0, "errors": 0}
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.kwargs["on_done"](summary)
+        self.assertEqual(idle_add.call_args[0][0], self.win._on_cover_sync_done_ui)
+
+    def test_a_scope_with_no_artwork_pass_at_all_says_so(self):
+        self.win._cover_sync_running = False
+        self.sync_async.reset_mock()
+        with mock.patch.object(
+            window_module, "build_artwork_passes", return_value=[]
+        ):
+            self.win._start_cover_sync(scope="all", selected_console=None)
+        self.assertIn(self.said("toast.sync_no_consoles"), self.toasts)
+        self.sync_async.assert_not_called()
+
+    def test_a_post_import_sync_with_no_pass_starts_nothing(self):
+        self.sync_async.reset_mock()
+        self.win._cover_sync_running = False
+        with mock.patch.object(
+            window_module, "build_artwork_passes", return_value=[]
+        ):
+            self.win._start_post_import_artwork_sync([self.rom()["path"]])
+        self.sync_async.assert_not_called()
+
+
+@needs_display
+class ReloadingAfterASyncTests(WindowCase):
+    def _finish(self):
+        self.win._on_cover_sync_done_ui(
+            "task", {"downloaded": 1, "skipped": 0, "errors": 0}
+        )
+
+    def test_the_all_page_is_rebuilt_whole(self):
+        self.win.current_console = ALL_CONSOLES_ID
+        with mock.patch.object(self.win.pages, "ensure_all_loaded") as reload:
+            self._finish()
+        reload.assert_called_once()
+
+    def test_the_favorites_page_is_rebuilt_whole(self):
+        self.win.current_console = FAVORITES_ID
+        with mock.patch.object(self.win.pages, "ensure_favorites_loaded") as reload:
+            self._finish()
+        reload.assert_called_once()
+
+    def test_a_console_page_is_rebuilt_only_when_it_has_a_grid(self):
+        self.win.sidebar.select("SFC")
+        with mock.patch.object(self.win.pages, "ensure_loaded") as reload:
+            self._finish()
+        reload.assert_called_once_with("SFC")
+
+    def test_a_page_with_no_grid_is_left_alone(self):
+        self.win.current_console = "not-a-page"
+        with mock.patch.object(self.win.pages, "ensure_loaded") as reload:
+            self._finish()
+        reload.assert_not_called()
+
+    def test_the_favorites_page_is_reloaded_by_name_not_by_grid(self):
+        self.win.current_console = FAVORITES_ID
+        with mock.patch.object(self.win.pages, "ensure_favorites_loaded") as reload:
+            self.win._reload_current_page()
+        reload.assert_called_once()
+
+    def test_a_collection_page_is_reloaded_by_its_slug(self):
+        slug = self.win.collection_manager.create("RPGs")
+        self.win.refresh_library(force=True)
+        self.win.current_console = collection_scope(slug)
+        with mock.patch.object(
+            self.win.pages, "ensure_collection_loaded"
+        ) as reload:
+            self.win._reload_current_page()
+        reload.assert_called_once_with(slug)
+
+    def test_one_rom_artwork_refresh_reaches_every_loaded_grid(self):
+        self.win.sidebar.select("SFC")
+        grid = self.win.pages.grid_for("SFC")
+        with mock.patch.object(grid, "refresh_rom_artwork") as refresh:
+            self.win.refresh_rom_artwork(self.rom(), fade=True)
+        refresh.assert_called_once_with(self.rom(), fade=True)
+
+
+@needs_display
+class TheSyncScopeDefaultTests(WindowCase):
+    def _default_scope(self):
+        with self.caught_dialog() as caught:
+            self.win._show_sync_covers_dialog()
+        combo = caught[-1].get_extra_child()
+        return self.win._get_console_dropdown_active_id(combo)
+
+    def test_a_console_page_offers_that_console(self):
+        self.win.sidebar.select("FC")
+        self.assertEqual(self._default_scope(), "FC")
+
+    def test_the_all_page_offers_the_whole_library(self):
+        self.win.current_console = ALL_CONSOLES_ID
+        self.assertEqual(self._default_scope(), ALL_CONSOLES_ID)
+
+    def test_a_page_that_is_neither_falls_back_to_the_first_console(self):
+        self.win.current_console = FAVORITES_ID
+        self.assertEqual(self._default_scope(), self.win.visible_consoles[0])
+
+
+@needs_display
+class TheConsoleDropdownRowsTests(WindowCase):
+    """The factory only runs when GTK binds a real `Gtk.ListItem`."""
+
+    def _bound_rows(self, dropdown, strings, height=320, scroll_to=None):
+        view = Gtk.ListView(
+            model=Gtk.SingleSelection(model=Gtk.StringList.new(strings)),
+            factory=dropdown.get_factory(),
+        )
+        window = Gtk.Window()
+        self.addCleanup(window.destroy)
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_child(view)
+        window.set_child(scroller)
+        window.set_default_size(320, height)
+        window.present()
+        self.pump()
+        if scroll_to is not None:
+            view.scroll_to(scroll_to, Gtk.ListScrollFlags.NONE, None)
+            self.pump()
+        rows = []
+        row = view.get_first_child()
+        while row is not None:
+            rows.append(row.get_first_child())
+            row = row.get_next_sibling()
+        return rows
+
+    def _label_of(self, box):
+        return box.get_last_child().get_label()
+
+    def test_a_console_row_shows_its_icon_and_full_name(self):
+        dropdown = self.win._build_console_dropdown(["SFC"])
+        row = self._bound_rows(dropdown, ["SFC"])[0]
+        self.assertTrue(self._label_of(row).startswith("SFC - "))
+
+    def test_the_all_row_is_labelled_after_the_sidebar_by_default(self):
+        dropdown = self.win._build_console_dropdown(["SFC"], include_all=True)
+        row = self._bound_rows(dropdown, [ALL_CONSOLES_ID])[0]
+        self.assertEqual(self._label_of(row), self.said("sidebar.all"))
+
+    def test_a_caller_can_relabel_the_all_row(self):
+        # The import picker renders it as "detect automatically".
+        dropdown = self.win._build_console_dropdown(
+            ["SFC"], include_all=True, all_label_key="import.console.auto"
+        )
+        row = self._bound_rows(dropdown, [ALL_CONSOLES_ID])[0]
+        self.assertEqual(self._label_of(row), self.said("import.console.auto"))
+
+    def _children_of(self, box):
+        count = 0
+        child = box.get_first_child()
+        while child is not None:
+            count += 1
+            child = child.get_next_sibling()
+        return count
+
+    def test_a_row_holds_exactly_one_icon_and_one_label(self):
+        dropdown = self.win._build_console_dropdown(["SFC", "FC"])
+        for row in self._bound_rows(dropdown, ["SFC", "FC"]):
+            self.assertEqual(self._children_of(row), 2)
+
+    def test_the_closed_state_row_is_emptied_before_it_is_filled_again(self):
+        # The dropdown's own row is one widget re-bound to whichever console
+        # is selected; without the clear the icons stack up inside it.
+        dropdown = self.win._build_console_dropdown(["SFC", "FC"])
+        window = Gtk.Window()
+        self.addCleanup(window.destroy)
+        window.set_child(dropdown)
+        window.present()
+        self.pump()
+        dropdown.set_selected(1)
+        self.pump()
+        boxes = [
+            widget
+            for widget in _walk(dropdown)
+            if isinstance(widget, Gtk.Box) and self._children_of(widget) == 2
+        ]
+        self.assertTrue(boxes)
+        for box in boxes:
+            self.assertEqual(self._children_of(box), 2)
+
+
+@needs_display
+class TheRemainingCornersTests(WindowCase):
+    def test_the_update_check_reports_back_on_the_main_loop(self):
+        settings = self.config.get_update_settings()
+        settings["check_on_startup"] = True
+        with mock.patch.object(
+            self.config, "get_update_settings", return_value=settings
+        ), mock.patch.object(window_module, "check_for_update_async") as check:
+            self.win._start_update_check()
+        on_done = check.call_args[0][1]
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            on_done({"version": "9.9.9"})
+        idle_add.assert_called_once_with(
+            self.win._on_update_check_done, {"version": "9.9.9"}
+        )
+
+    def test_the_layout_controls_are_re_synced_to_the_scope_on_screen(self):
+        self.win.sidebar.select("SFC")
+        other_mode = next(
+            mode for mode in window_module.VIEW_MODES if mode != self.win._view_mode
+        )
+        other_order = next(
+            order
+            for order in window_module.SORT_ORDERS
+            if order != self.win._sort_order
+        )
+        self.config.set_scope_display("SFC", "view_mode", other_mode)
+        self.config.set_scope_display("SFC", "sort_order", other_order)
+        self.win._refresh_scope_settings()
+        self.assertEqual(
+            self.win.lookup_action("view-mode").get_state().get_string(), other_mode
+        )
+        self.assertEqual(
+            self.win.lookup_action("sort-order").get_state().get_string(), other_order
+        )
+        self.assertFalse(
+            self.win.lookup_action("layout-follow-global").get_state().get_boolean()
+        )
+
+    def test_a_display_with_no_monitor_opens_at_the_fallback_size(self):
+        monitors = Gio.ListStore.new(Gtk.Widget)
+        display = mock.Mock()
+        display.get_monitors.return_value = monitors
+        with mock.patch.object(Gdk.Display, "get_default", return_value=display):
+            self.assertEqual(
+                self.win._default_window_size(), self.win.FALLBACK_WINDOW_SIZE
+            )
+
+    def test_no_display_at_all_opens_at_the_fallback_size(self):
+        with mock.patch.object(Gdk.Display, "get_default", return_value=None):
+            self.assertEqual(
+                self.win._default_window_size(), self.win.FALLBACK_WINDOW_SIZE
+            )
+
+    def test_a_real_monitor_gives_a_share_of_itself(self):
+        self.assertGreater(self.win._default_window_size()[0], 0)
+
+    def test_a_landing_view_no_sidebar_row_matches_falls_back_to_the_first(self):
+        with mock.patch.object(self.win.sidebar, "select", return_value=False):
+            self.win.refresh_library(force=True)
+        self.assertIsNotNone(self.win.console_list.get_selected_row())
+
+    def test_a_console_with_no_playlist_at_all_is_simply_not_visible(self):
+        with mock.patch.object(
+            self.win.playlist_manager, "playlist_exists", return_value=False
+        ):
+            self.assertEqual(self.win._discover_visible_consoles(), [])
+
+    def test_a_narrow_window_reveals_the_content_pane_on_selection(self):
+        with mock.patch.object(
+            self.win.split_view, "get_collapsed", return_value=True
+        ), mock.patch.object(self.win.split_view, "set_show_content") as show:
+            self.win.sidebar.select("SFC")
+        show.assert_called_with(True)
 
 
 if __name__ == "__main__":
