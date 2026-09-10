@@ -100,9 +100,21 @@ class WindowCase(unittest.TestCase):
                 self.home.add_rom(console, name)
         # The window reads playlists, not the directory tree: build them once
         # here so construction has a library to open on without a scan thread.
-        PlaylistManager(
+        playlists = PlaylistManager(
             self.config, RomScanner(self.config.get_roms_path())
-        ).scan_and_rebuild_all_playlists()
+        )
+        summary = playlists.scan_and_rebuild_all_playlists()
+        for console, roms in self.library.items():
+            built = len(playlists.load_playlist(console))
+            if built != len(roms):
+                raise AssertionError(
+                    "the throwaway library came out wrong: "
+                    f"{console} has {built} of {len(roms)} games. "
+                    f"roms={self.config.get_roms_path()} "
+                    f"playlists={self.config.get_playlists_dir()} "
+                    f"on disk={sorted(p.name for p in self.home.console_dir(console).iterdir())} "
+                    f"failed={summary['failed']}"
+                )
 
         self.app = shared_application()
         self.app.config_manager = self.config

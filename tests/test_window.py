@@ -820,6 +820,25 @@ class TheCollectionPromptsTests(WindowCase):
 
 @needs_display
 class RenamingAndDeletingRomsTests(WindowCase):
+    def deletes_without_the_desktop_trash(self):
+        """Run the real delete, minus the one step a temp dir cannot do.
+
+        `Gio.File.trash` refuses to move a file across a filesystem boundary,
+        and a throwaway library under `/tmp` sits on the other side of one
+        whenever `/tmp` is a tmpfs -- every container run, in other words.
+        Everything else `delete_rom` does is what these tests are about.
+        """
+        real = window_module.delete_rom
+
+        def _delete(roms_dir, rom):
+            def _unlink(path):
+                Path(path).unlink()
+                return True
+
+            return real(roms_dir, rom, trash=_unlink)
+
+        return mock.patch.object(window_module, "delete_rom", _delete)
+
     def test_renaming_moves_the_file_and_repaths_everything_that_knew_it(self):
         rom = self.rom()
         old_path = rom["path"]
@@ -842,7 +861,8 @@ class RenamingAndDeletingRomsTests(WindowCase):
 
     def test_deleting_removes_the_file_and_counts_what_went(self):
         roms = [self.rom(), self.rom(index=1)]
-        self.win._delete_roms(roms)
+        with self.deletes_without_the_desktop_trash():
+            self.win._delete_roms(roms)
         for rom in roms:
             self.assertFalse(Path(rom["path"]).exists())
         self.assertIn(self.said("toast.rom.deleted", count=2), self.toasts)
@@ -874,7 +894,8 @@ class RenamingAndDeletingRomsTests(WindowCase):
         rom = self.rom()
         with self.caught_dialog() as caught:
             self.win._confirm_delete_roms([rom])
-        caught[-1].emit("response", "delete")
+        with self.deletes_without_the_desktop_trash():
+            caught[-1].emit("response", "delete")
         self.assertFalse(Path(rom["path"]).exists())
 
     def test_a_prompt_for_no_roms_at_all_is_not_shown(self):
