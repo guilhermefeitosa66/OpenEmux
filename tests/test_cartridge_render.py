@@ -70,6 +70,43 @@ class CartridgeFrameTests(unittest.TestCase):
             # Rotated, so the bbox is wider than the rect's own 40x20.
             self.assertGreater(w1, 40)
 
+    def test_the_marker_is_found_by_id_before_the_inkscape_label(self):
+        # Authoring tools set one or the other; the id is the stable one.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">'
+                '<rect id="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            self.assertEqual(CartridgeFrame(svg).clip_id, "label-clip")
+
+    def test_a_marker_with_no_id_at_all_is_rejected(self):
+        # The id is what the second render pass hides the marker by.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg"'
+                ' xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+                ' width="100" height="50">'
+                '<rect inkscape:label="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            with self.assertRaises(CartridgeFrameError):
+                CartridgeFrame(svg)
+
+    def test_a_frame_with_no_size_of_its_own_is_rejected(self):
+        # Everything downstream scales from it, so there is nothing to do.
+        with TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "X.svg"
+            svg.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<rect id="label-clip" x="10" y="10" width="40" height="20"/>'
+                "</svg>"
+            )
+            with self.assertRaises(CartridgeFrameError):
+                CartridgeFrame(svg)
+
     def test_missing_marker_is_rejected(self):
         with TemporaryDirectory() as tmp:
             svg = Path(tmp) / "X.svg"
@@ -179,6 +216,47 @@ class RsvgUnavailableTests(unittest.TestCase):
         finally:
             cartridge_render.Rsvg = original
             cartridge_render._FRAMES.clear()
+
+
+class TheBytesReaderTests(unittest.TestCase):
+    """cairo's PNG loader wants a file object; this is the whole of one."""
+
+    def test_a_read_with_no_size_returns_the_rest(self):
+        reader = cartridge_render._BytesReader(b"abcdef")
+        self.assertEqual(reader.read(2), b"ab")
+        self.assertEqual(reader.read(-1), b"cdef")
+        self.assertEqual(reader.read(None), b"")
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class ACoverThatWillNotConvertTests(unittest.TestCase):
+    def test_a_pixbuf_that_cannot_be_encoded_is_reported(self):
+        pixbuf = unittest.mock.Mock()
+        pixbuf.save_to_bufferv.return_value = (False, None)
+        with self.assertRaises(CartridgeFrameError):
+            cartridge_render._pixbuf_to_surface(pixbuf)
+
+
+class WithoutLibrsvgTests(unittest.TestCase):
+    """The typelib is optional; SVG frames simply stop being available."""
+
+    def test_the_module_still_imports_and_says_so(self):
+        import importlib
+
+        import gi
+
+        real_require = gi.require_version
+
+        def _refuse(namespace, version):
+            if namespace == "Rsvg":
+                raise ValueError("no typelib")
+            return real_require(namespace, version)
+
+        self.addCleanup(importlib.reload, cartridge_render)
+        with unittest.mock.patch.object(gi, "require_version", _refuse):
+            importlib.reload(cartridge_render)
+            self.assertIsNone(cartridge_render.Rsvg)
+            self.assertFalse(cartridge_render.rsvg_available())
 
 
 if __name__ == "__main__":

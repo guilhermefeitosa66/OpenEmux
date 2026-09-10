@@ -895,5 +895,93 @@ class ClearedMidReadTests(unittest.TestCase):
         self.assertTrue(stopped, error)
 
 
+class WhichRuntimeAGameGoesToTests(unittest.TestCase):
+    """One backend today; the config already names others (issue #240)."""
+
+    def _manager_for(self, tmp_dir, mode):
+        manager, config = _manager(tmp_dir)
+        config.get_runtime_mode_for_console = lambda _console: mode
+        return manager
+
+    def test_the_integrated_core_is_named_as_not_written_yet(self):
+        with TemporaryDirectory() as tmp_dir:
+            started, error = self._manager_for(tmp_dir, "integrated_core").launch(
+                "/roms/SFC/Game.sfc", "SFC"
+            )
+        self.assertFalse(started)
+        self.assertIn("not implemented", error)
+
+    def test_a_mode_nothing_knows_says_which_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            started, error = self._manager_for(tmp_dir, "dolphin").launch(
+                "/roms/GC/Game.iso", "GC"
+            )
+        self.assertFalse(started)
+        self.assertIn("dolphin", error)
+
+    def test_a_launcher_that_never_started_a_process_carries_its_reason(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.retroarch_launcher.launch_process = (
+                lambda *a, **k: (None, "RetroArch was not found.")
+            )
+
+            started, error = manager.launch("/roms/SFC/Game.sfc", "SFC")
+
+        self.assertFalse(started)
+        self.assertEqual(error, "RetroArch was not found.")
+
+
+class WritingTheVolumeFromTheMainLoopTests(unittest.TestCase):
+    """The config is mutated from one thread only (issue #125)."""
+
+    def test_the_debounced_write_is_handed_to_the_main_loop(self):
+        with TemporaryDirectory() as tmp_dir:
+            posted = []
+            config = _DummyConfig(tmp_dir)
+            manager = RuntimeManager(
+                tmp_dir, config, sleep=_RecordingSleep(), dispatch=posted.append
+            )
+            manager._pending_volume_db = -6.0
+
+            manager._flush_volume_db_on_main_loop()
+
+            self.assertEqual(len(posted), 1)
+            self.assertEqual(config.volume_writes, [])
+            # False is GLib.SOURCE_REMOVE: returning what flush_volume_db
+            # returns would keep the idle alive and re-run it forever.
+            self.assertFalse(posted[0]())
+            self.assertEqual(config.volume_writes, [-6.0])
+
+
+class ThePacerIsBuiltOnceTests(unittest.TestCase):
+    def test_the_first_volume_change_builds_it_around_the_current_client(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager._command_client_cache = _FakeClient()
+            pacer = manager._volume_pacer()
+            self.assertIs(manager._volume_pacer(), pacer)
+            self.assertEqual(pacer.level, manager.volume_db)
+
+
+class WhatTheHotApplySnapshotAnswersTests(unittest.TestCase):
+    def test_without_a_marker_there_is_nothing_to_wait_for_or_discard(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            self.assertFalse(manager.snapshot_ready(None))
+            self.assertFalse(manager.discard_snapshot(None))
+
+    def test_loading_a_slot_leaves_the_hotkeys_where_they_were(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager.load_state_slot(9)
+
+        self.assertIn("LOAD_STATE_SLOT 9", client.sent)
+
+
 if __name__ == "__main__":
     unittest.main()
