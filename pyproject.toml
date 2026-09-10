@@ -66,17 +66,17 @@ relative_files = true
 # and the badge quietly moved (issue #242). Raise it as coverage rises; never
 # lower it to make a red run pass.
 #
-# One point below the total the suite actually reaches, not level with it: the
-# matrix runs four interpreters, and a `try`/`except` a newer stdlib no longer
-# takes moves the number by a fraction. A floor that has to be re-pinned on
-# every patch release is a floor nobody raises.
+# The suite covers every line it can reach, and the handful it cannot carry a
+# `# pragma: no cover` naming why -- an import guard for a typelib this process
+# already has, the console-script entry point. So the floor is the whole thing,
+# and a run that drops a line says so instead of spending it.
 #
 # The UI is measured too, and most of it needs a display: the tests that build
 # real widgets skip themselves without one (see tests/gtk_display.py), so a
 # headless run lands far below this floor. CI runs the suite under
 # `xvfb-run -a`, which is what makes the number honest -- and `make coverage`
 # on a desktop matches it.
-fail_under = 92
+fail_under = 100
 
 [tool.setuptools.package-data]
 # Every non-Python file the app reads at runtime. Only the pip-installed

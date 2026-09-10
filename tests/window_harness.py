@@ -107,13 +107,19 @@ class WindowCase(unittest.TestCase):
         for console, roms in self.library.items():
             built = len(playlists.load_playlist(console))
             if built != len(roms):
+                # The last line is not idle: a playlist reads back empty when
+                # the scan found nothing *and* when the entries were dropped
+                # for pointing at files that do not exist, and the two are
+                # different bugs.
+                rom_path = self.home.console_dir(console) / roms[0]
                 raise AssertionError(
                     "the throwaway library came out wrong: "
                     f"{console} has {built} of {len(roms)} games. "
                     f"roms={self.config.get_roms_path()} "
                     f"playlists={self.config.get_playlists_dir()} "
                     f"on disk={sorted(p.name for p in self.home.console_dir(console).iterdir())} "
-                    f"failed={summary['failed']}"
+                    f"failed={summary['failed']} "
+                    f"exists={rom_path.exists()}"
                 )
 
         self.app = shared_application()

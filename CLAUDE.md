@@ -56,9 +56,10 @@ Two traps inside the container:
 * **`python3` is the developer's pyenv**, which has no PyGObject -- `$HOME` is
   shared, shims and all. Use `/usr/bin/python3`, which is what `DEVBOX_PYTHON`
   in `devbox/lib.sh` is for.
-* `coverage` is not in `devbox/provision.sh`; `sudo apt-get install -y
-  python3-coverage` inside the container once, and `make devbox-tests` can then
-  be swapped for a `coverage run`.
+* `coverage` comes from `python3-coverage`, which `devbox/provision.sh`
+  installs. A container built before that was added needs
+  `sudo apt-get install -y python3-coverage` inside it once (or
+  `make devbox-rm PURGE=1 && make devbox-up`).
 
 Running the suite on the host is still right for a core-only change: those
 tests need no display and take seconds. Anything under `src/openemux/ui/` goes
