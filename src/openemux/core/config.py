@@ -168,6 +168,14 @@ def migrate_retroarch_binary(stored):
 #: RetroArch Flatpak's own updater and OpenEmux must not download cores. A
 #: config that already exists keeps whatever it says, and an older one that
 #: predates the key is read as on -- which is what it was.
+#:
+#: ``parallel_downloads`` ships at the ceiling the updater allows itself,
+#: ``MAX_PARALLEL_DOWNLOADS``. It sat at 4 while the cap was already 8, so
+#: every first boot spent twice as long as the code was willing to go: the
+#: full 238-artifact sweep measured 110.0 s at four workers and 44.4 s at
+#: eight, for the same bytes and the same requests (issue #442). Four is not a
+#: politeness the buildbot asked for -- the cap is where that judgement lives,
+#: and it has not moved.
 UPDATER_DEFAULTS = {
     "mode": "buildbot_all_cores",
     "enabled": True,
@@ -178,7 +186,7 @@ UPDATER_DEFAULTS = {
     "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
     "request_timeout_sec": 30,
     "retries": 3,
-    "parallel_downloads": 4,
+    "parallel_downloads": 8,
 }
 
 # Bumped when a UI default changes in a way that should reach configs written

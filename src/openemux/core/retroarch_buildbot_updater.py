@@ -242,11 +242,18 @@ class RetroArchBuildbotUpdater:
         took as long as the sum of every download in a manifest of a hundred
         and more (issue #240). Capped, because the buildbot is somebody else's
         server.
+
+        The fallback is the cap rather than a number of its own. It used to be
+        a literal 4, which was the shipped default at the time and stopped
+        being it when ``UPDATER_DEFAULTS`` moved to 8 (issue #442) -- exactly
+        the second copy of a settings value that issue #239 went and removed
+        everywhere else. A settings dict with no ``parallel_downloads`` in it
+        now behaves like a shipped config, whatever the shipped config says.
         """
         try:
-            configured = int(self.settings.get("parallel_downloads", 4))
+            configured = int(self.settings.get("parallel_downloads", MAX_PARALLEL_DOWNLOADS))
         except (TypeError, ValueError):
-            configured = 4
+            configured = MAX_PARALLEL_DOWNLOADS
         return max(1, min(configured, MAX_PARALLEL_DOWNLOADS))
 
     def _core_download_failure(self, artifact, error):

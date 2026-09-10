@@ -17,6 +17,7 @@ from tempfile import TemporaryDirectory
 import yaml
 
 from openemux.core.config import UPDATER_DEFAULTS, ConfigManager
+from openemux.core.retroarch_buildbot_updater import MAX_PARALLEL_DOWNLOADS
 
 
 def _manager(root, raw=None):
@@ -82,6 +83,25 @@ class EveryVintageOfConfigResolvesTheSameTests(unittest.TestCase):
             }
         )
         self.assertEqual(settings["cores_base_url"], "https://mirror.example/cores/")
+
+
+class TheShippedConcurrencyTests(unittest.TestCase):
+    """A first boot goes as fast as the updater lets itself go (issue #442).
+
+    ``parallel_downloads`` shipped at 4 while ``MAX_PARALLEL_DOWNLOADS`` was
+    already 8, so every first boot took twice the wall clock the code was
+    willing to spend: 110.0 s against 44.4 s over the same 238 artifacts. The
+    cap is where the politeness towards somebody else's server is decided; the
+    default has no business being a second, quieter opinion about it.
+    """
+
+    def test_the_default_is_the_ceiling(self):
+        self.assertEqual(UPDATER_DEFAULTS["parallel_downloads"], MAX_PARALLEL_DOWNLOADS)
+
+    def test_a_fresh_config_gets_it(self):
+        with TemporaryDirectory() as tmp:
+            settings = _manager(tmp).get_retroarch_updater_settings()
+        self.assertEqual(settings["parallel_downloads"], MAX_PARALLEL_DOWNLOADS)
 
 
 class TheTypesTheCallerReliesOnTests(unittest.TestCase):
