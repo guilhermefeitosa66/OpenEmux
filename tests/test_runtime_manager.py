@@ -5,6 +5,7 @@ import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
 from openemux.core.runtime_manager import (
@@ -952,6 +953,85 @@ class WritingTheVolumeFromTheMainLoopTests(unittest.TestCase):
             # returns would keep the idle alive and re-run it forever.
             self.assertFalse(posted[0]())
             self.assertEqual(config.volume_writes, [-6.0])
+
+
+class TearingDownAFinishedGameTests(unittest.TestCase):
+    """Nothing the process left behind may outlive it (issue #244)."""
+
+    def test_a_log_handle_that_will_not_close_is_dropped_anyway(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            proc = _FakeProcess()
+            handle = mock.Mock()
+            handle.close.side_effect = OSError("already gone")
+            proc._openemux_log_handle = handle
+            manager.active_process = proc
+
+            manager._clear_active()
+
+            handle.close.assert_called_once()
+            self.assertIsNone(manager.active_process)
+
+    def test_a_command_client_that_will_not_close_is_dropped_anyway(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = mock.Mock()
+            client.close.side_effect = OSError("already gone")
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager._clear_active()
+
+            self.assertIsNone(manager._command_client_cache)
+
+
+class ARelaunchThatCannotStartTests(unittest.TestCase):
+    def test_a_game_that_could_not_be_stopped_is_not_relaunched(self):
+        # The process went away between the check and the stop: there is
+        # nothing to wait for an exit from, so there is nothing to relaunch.
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _FakeProcess()
+            manager.active_rom = {"path": "/roms/SFC/Game.sfc", "console": "SFC"}
+
+            with mock.patch.object(
+                manager, "stop_active", return_value=(False, "No active game process.")
+            ):
+                rom, error = manager.relaunch_active()
+
+        self.assertIsNone(rom)
+        self.assertEqual(error, "No active game process.")
+
+    def test_the_unpacked_retry_says_so_when_it_does_not_start_either(self):
+        # The AppImage could not mount itself, and the retry found no
+        # RetroArch at all: two warnings and no game.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "dlopen(): error loading libfuse.so.2\n", encoding="utf-8"
+            )
+            manager, _config = _manager(tmp_dir)
+            manager._launch_request = {"path": "/roms/SFC/Game.sfc", "console": "SFC"}
+            manager.retroarch_launcher.launches_an_appimage = lambda: True
+            manager.retroarch_launcher.launch_process = (
+                lambda *a, **k: (None, "RetroArch was not found.")
+            )
+
+            with self.assertLogs("openemux.core.runtime_manager", level="WARNING"):
+                self.assertFalse(manager._retry_unpacked(log_path))
+
+
+class TheSaveStateHotkeysTests(unittest.TestCase):
+    def test_loading_the_active_slot_goes_over_the_command_channel(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            client = _FakeClient()
+            manager._command_client_cache = client
+            manager.active_process = _FakeProcess()
+
+            manager.load_state()
+
+        self.assertEqual(client.sent, ["LOAD_STATE"])
 
 
 class ThePacerIsBuiltOnceTests(unittest.TestCase):
