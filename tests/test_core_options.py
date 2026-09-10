@@ -6,6 +6,7 @@ catalog is the contract, and anything outside it never reaches a file.
 """
 
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -159,6 +160,61 @@ class StoreTests(unittest.TestCase):
             store = self._store(tmp_dir)
             store.set_for_console("PS", BEETLE, "beetle_psx_hw_filter", "xBR")
             self.assertEqual(store.get_for_console("PS", "swanstation_libretro.so"), {})
+
+
+class HowValuesAndCoresAreNamedTests(unittest.TestCase):
+    def test_a_value_with_no_friendly_name_is_shown_as_it_is(self):
+        # The tables cover the shared vocabulary; a core's own value passes
+        # through rather than being hidden behind a guess.
+        self.assertEqual(core_options.value_label("2x"), "2x")
+
+    def test_a_core_filename_with_no_known_suffix_keeps_its_name(self):
+        self.assertEqual(core_options.core_stem("mednafen_psx_hw"), "mednafen_psx_hw")
+
+
+class ReadingAnOptionsFileTests(unittest.TestCase):
+    def test_a_line_that_is_not_an_assignment_is_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "Beetle.opt"
+            path.write_text(
+                "# written by RetroArch\n\nbeetle_psx_hw_filter = \"xBR\"\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                core_options.read_options_file(path), {"beetle_psx_hw_filter": "xBR"}
+            )
+
+    def test_a_file_that_cannot_be_read_yields_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "Beetle.opt"
+            path.write_text("a = b\n", encoding="utf-8")
+            with mock.patch.object(
+                Path, "read_text", side_effect=OSError("permission denied")
+            ):
+                with self.assertLogs("openemux.core.core_options", level="WARNING"):
+                    self.assertEqual(core_options.read_options_file(path), {})
+
+
+class WhatTheStoreRefusesTests(unittest.TestCase):
+    def _store(self, tmp_dir):
+        return CoreOptionsStore(Path(tmp_dir) / "core_options.json")
+
+    def test_a_file_that_is_not_an_object_is_set_aside(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text("[1, 2]", encoding="utf-8")
+            self.assertEqual(store.load(), {})
+            self.assertEqual(
+                len(list(Path(tmp_dir).glob("core_options.json.broken-*"))), 1
+            )
+
+    def test_an_option_the_core_does_not_have_is_not_stored(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            self.assertEqual(
+                store.set_for_console("PS", BEETLE, "not_an_option", "x"), {}
+            )
+            self.assertFalse(store.config_file.exists())
 
 
 if __name__ == "__main__":

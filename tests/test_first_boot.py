@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from openemux.core import first_boot
 from openemux.core.first_boot import FirstBootBootstrapper
 
 
@@ -126,6 +127,81 @@ class FirstBootBootstrapperTests(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(cfg.state["status"], "completed")
+
+
+class ResumingAnInterruptedBootstrapTests(unittest.TestCase):
+    """The steps are resumable: a crash mid-run must not redo the downloads."""
+
+    def test_a_step_already_done_is_reported_as_skipped_and_not_rerun(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.state["completed_steps"] = ["openemux_config_files"]
+            bootstrapper = FirstBootBootstrapper(cfg)
+            ran = []
+            bootstrapper._step_config_files = lambda on_event=None: ran.append(1)
+            events = []
+
+            bootstrapper.run(on_event=events.append)
+
+        self.assertEqual(ran, [])
+        skipped = [evt for evt in events if evt["type"] == "step_skipped"]
+        self.assertEqual([evt["step_id"] for evt in skipped], ["openemux_config_files"])
+
+    def test_a_step_that_raises_ends_the_run_and_names_the_step(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            bootstrapper = FirstBootBootstrapper(cfg)
+
+            def _boom(on_event=None):
+                raise RuntimeError("disk full")
+
+            bootstrapper._step_directories = _boom
+            events = []
+
+            result = bootstrapper.run(on_event=events.append)
+
+        self.assertFalse(result["success"])
+        failed = [evt for evt in events if evt["type"] == "bootstrap_failed"]
+        self.assertEqual(failed[0]["step_id"], "openemux_directories")
+
+
+class TheCoreDownloadStepTests(unittest.TestCase):
+    def test_inside_a_flatpak_the_cores_are_left_to_retroarchs_own_updater(self):
+        # Downloading binaries into the sandbox is exactly what the Flatpak
+        # rules forbid, and RetroArch's own Flatpak already manages them.
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
+            with patch(
+                "openemux.core.first_boot.is_running_in_flatpak", return_value=True
+            ):
+                self.assertEqual(
+                    bootstrapper._step_retroarch_cores()["skipped"], "flatpak"
+                )
+
+    def test_the_download_progress_is_passed_on_to_the_caller(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
+            bootstrapper.updater.download_all = (
+                lambda on_progress=None: on_progress({"type": "core"}) or {"failures": []}
+            )
+            bootstrapper.updater.download_shader_packs_if_missing = (
+                lambda on_progress=None: {"failures": []}
+            )
+            seen = []
+            with patch(
+                "openemux.core.first_boot.is_running_in_flatpak", return_value=False
+            ):
+                bootstrapper._step_retroarch_cores(on_event=seen.append)
+        self.assertEqual(seen, [{"type": "core"}])
+
+
+class WhatTheFailureMessageSaysTests(unittest.TestCase):
+    def test_a_failure_with_no_details_at_all_still_says_something(self):
+        # "Something failed" is not actionable, but neither is an empty string.
+        self.assertEqual(
+            first_boot._first_failure_reason({"failures": []}, {}),
+            "no details reported",
+        )
 
 
 class OfflineFirstBootTests(unittest.TestCase):
