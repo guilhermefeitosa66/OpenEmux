@@ -138,6 +138,54 @@ class ColorStoreCachingTests(unittest.TestCase):
             self.assertEqual(store.get_console_color("SFC"), "red")
 
 
+class WhatTheStoreRefusesToKeepTests(unittest.TestCase):
+    """The file is the user's; anything unusable in it is dropped, not obeyed."""
+
+    def _store(self, tmp_dir):
+        return CartridgeColorStore(Path(tmp_dir) / "cartridge_colors.yaml")
+
+    def test_a_file_that_is_not_a_mapping_is_set_aside(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text("- red\n", encoding="utf-8")
+            self.assertEqual(store.get_console_color("SFC"), DEFAULT_COLOR_ID)
+            self.assertEqual(
+                len(list(Path(tmp_dir).glob("cartridge_colors.yaml.broken-*"))), 1
+            )
+
+    def test_a_default_for_a_console_that_does_not_exist_is_dropped(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text(
+                "console_defaults:\n  DREAMCAST: red\n  SFC: red\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                store.load()["console_defaults"], {"SFC": "red"}
+            )
+
+    def test_an_override_with_no_rom_path_is_dropped(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.config_file.write_text(
+                "rom_overrides:\n  \"\": red\n", encoding="utf-8"
+            )
+            self.assertEqual(store.load()["rom_overrides"], {})
+
+    def test_a_colour_for_a_console_that_does_not_exist_is_not_stored(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("DREAMCAST", "red")
+            self.assertEqual(store.load()["console_defaults"], {})
+
+    def test_setting_a_console_back_to_the_default_forgets_it(self):
+        # Stating the default would pin it against a later change of default.
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            store.set_console_color("SFC", DEFAULT_COLOR_ID)
+            self.assertEqual(store.load()["console_defaults"], {})
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -174,5 +174,36 @@ class BorrowingTheBannerTests(unittest.TestCase):
         TaskBanner(_t).show_notice("Drop ROMs here")
 
 
+class WhatTheRegistryReportsAboutItselfTests(unittest.TestCase):
+    def test_it_hands_back_the_banner_it_was_attached_to(self):
+        registry, banner = _attached()
+        self.assertIs(registry.banner, banner)
+
+    def test_it_counts_the_tasks_in_flight(self):
+        registry, _banner = _attached()
+        self.assertEqual(len(registry), 0)
+        registry.begin("scan", "Scanning")
+        registry.begin("sync", "Syncing")
+        self.assertEqual(len(registry), 2)
+
+
+class ARunningTaskThatLearnsMoreTests(unittest.TestCase):
+    """A worker often discovers the total, and the label, after it started."""
+
+    def test_a_total_that_arrives_late_reaches_the_banner(self):
+        registry, banner = _attached()
+        task_id = registry.begin("sync", "Syncing")
+        registry.update(task_id, current=1, total=4)
+        self.assertIn("1", banner.title)
+        self.assertIn("4", banner.title)
+
+    def test_a_task_that_renames_itself_mid_run_says_so(self):
+        # The cover sync moves from covers to labels without stopping.
+        registry, banner = _attached()
+        task_id = registry.begin("sync", "Syncing covers")
+        registry.update(task_id, label="Syncing labels")
+        self.assertIn("Syncing labels", banner.title)
+
+
 if __name__ == "__main__":
     unittest.main()
