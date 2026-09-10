@@ -14,6 +14,7 @@ from openemux.core.gamepad_reader import (
 
 ABS_HAT0Y = ABS_HAT0X + 1
 from openemux.core.ui_gamepad import (
+    IDLE_POLL,
     STATEFUL_ACTIONS,
     NAV_TOKEN_ACTIONS,
     GamepadNavigator,
@@ -618,6 +619,137 @@ class TheReaderLoopTests(unittest.TestCase):
         close.assert_called_once_with(7)
 
 
+@linux_only("it maps evdev tokens to UI actions")
+class WhatOneButtonTransitionDoesTests(unittest.TestCase):
+    """The same decisions the device tests make with a real pad.
+
+    `tests/test_ui_gamepad_device.py` drives these through uinput, which needs
+    a writable /dev/uinput -- a CI runner has none, and the branches would go
+    unexercised exactly where nobody is watching. Here they are reached by
+    handing the dispatcher one transition at a time.
+    """
+
+    def setUp(self):
+        self.actions = []
+        self.nav = GamepadNavigator(on_action=self.actions.append)
+        self.repeat = RepeatClock()
+        self.hold = HoldClock()
+
+    def _dispatch(self, token, pressed, suspended=False):
+        self.nav._dispatch(token, pressed, self.repeat, self.hold, suspended)
+
+    def test_a_direction_held_starts_repeating_and_fires_at_once(self):
+        self._dispatch("h0down", True)
+        self.assertEqual(self.actions, ["down"])
+        self.assertIsNotNone(self.repeat.next_deadline())
+
+    def test_letting_the_direction_go_stops_the_repeat(self):
+        self._dispatch("h0down", True)
+        self._dispatch("h0down", False)
+        self.assertIsNone(self.repeat.next_deadline())
+
+    def test_a_holdable_button_waits_for_the_release_before_it_fires(self):
+        # Ⓐ can mean "launch" or, held, "enter selection mode" -- so the tap
+        # cannot fire until the button comes back up (issue #78).
+        self._dispatch("0", True)
+        self.assertEqual(self.actions, [])
+        self.assertIsNotNone(self.hold.next_deadline())
+
+        self._dispatch("0", False)
+        self.assertEqual(self.actions, ["confirm"])
+
+    def test_a_button_released_while_suspended_fires_nothing(self):
+        self._dispatch("0", True)
+        self._dispatch("0", False, suspended=True)
+        self.assertEqual(self.actions, [])
+
+    def test_a_button_pressed_while_suspended_is_dropped(self):
+        self._dispatch("1", True, suspended=True)
+        self.assertEqual(self.actions, [])
+
+    def test_a_plain_button_fires_on_the_press_and_does_not_repeat(self):
+        self._dispatch("1", True)
+        self._dispatch("1", False)
+        self.assertEqual(self.actions, ["back"])
+        self.assertIsNone(self.repeat.next_deadline())
+
+
+@linux_only("it reads /dev/input event bytes")
+class WhatTheReaderMakesOfATurnTests(unittest.TestCase):
+    """The turn a real pad produces: kernel bytes in, actions and timing out."""
+
+    def setUp(self):
+        self.actions = []
+        self.suspended = [False]
+        self.nav = GamepadNavigator(
+            on_action=self.actions.append,
+            should_suspend=lambda: self.suspended[0],
+        )
+        self.pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+
+    def _event(self, ev_type, code, value):
+        """One evdev event, packed the way the kernel writes it."""
+        return struct.pack(INPUT_EVENT_FORMAT, 0, 0, ev_type, code, value)
+
+    def _read(self, data, repeat, hold, suspended=False):
+        with patch("openemux.core.ui_gamepad.os.read", return_value=data):
+            return self.nav._read_fd(7, self.pads, repeat, hold, suspended)
+
+    def test_the_kernels_own_autorepeat_is_ignored(self):
+        # value 2 is the kernel repeating a held key. The repeat clock here
+        # paces its own, and honouring both would double every step.
+        repeat, hold = RepeatClock(), HoldClock()
+        self._read(self._event(EV_KEY, KEY_CODES[1], 1), repeat, hold)
+        self._read(self._event(EV_KEY, KEY_CODES[1], 2), repeat, hold)
+        self.assertEqual(self.actions, ["back"])
+
+    def test_a_held_direction_gives_the_loop_a_deadline_to_wait_for(self):
+        # The loop waits in select() until the repeat is due; without a
+        # deadline it would sleep out the whole idle poll and the direction
+        # would step at whatever rate that happens to be.
+        repeat = RepeatClock()
+        self._read(self._event(EV_ABS, ABS_HAT0Y, 1), repeat, HoldClock())
+        self.assertEqual(self.actions, ["down"])
+        self.assertIsNotNone(repeat.next_deadline())
+        self.assertLess(repeat.next_deadline(), IDLE_POLL * 4)
+
+    def test_letting_it_go_stops_the_repeat(self):
+        repeat = RepeatClock()
+        self._read(self._event(EV_ABS, ABS_HAT0Y, 1), repeat, HoldClock())
+        self._read(self._event(EV_ABS, ABS_HAT0Y, 0), repeat, HoldClock())
+        self.assertIsNone(repeat.next_deadline())
+
+    def test_an_event_type_nothing_maps_is_dropped(self):
+        # EV_SYN separates event packets; it carries no input of its own.
+        self.assertTrue(
+            self._read(self._event(0, 0, 0), RepeatClock(), HoldClock())
+        )
+        self.assertEqual(self.actions, [])
+
+    def test_a_game_starting_mid_wait_releases_everything_held(self):
+        # The suspend flag is read again after select() returns: a press that
+        # arrived *during* the wait would otherwise reach both the game and
+        # the library (issue #223).
+        repeat, hold = RepeatClock(), HoldClock()
+        self._read(self._event(EV_ABS, ABS_HAT0Y, 1), repeat, hold)
+        self.suspended[0] = True
+        found = [dict(self.pads)]
+
+        def _open(_navigator, _already_open):
+            return found.pop(0) if found else {}
+
+        def _select(_r, _w, _x, _timeout):
+            self.nav._cancel.set()
+            return ([7], [], [])
+
+        with patch.object(GamepadNavigator, "_open_pads", _open), patch(
+            "openemux.core.ui_gamepad.select.select", _select
+        ), patch.object(GamepadNavigator, "_read_fd", return_value=True):
+            self.nav._run()
+
+        self.assertEqual(self.actions, ["down"])
+
+
 @linux_only("it drives the evdev reader loop")
 class WhenTheLastPadIsUnpluggedTests(unittest.TestCase):
     """The disconnect is announced once, and the repeats stop with it."""
@@ -715,6 +847,32 @@ class WhatTheReaderMakesOfTheBytesTests(unittest.TestCase):
         ) as close, patch.object(self.nav._cancel, "wait", _wait):
             self.nav._run()
         close.assert_any_call(7)
+
+    def test_a_repeat_that_comes_due_fires_and_paces_the_next_wait(self):
+        # A direction held down: the loop wakes when the repeat is due rather
+        # than on the idle poll, and fires it on the way round.
+        pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
+        fired = [["down"]]
+        waits = []
+        answer = self._turns([], [])
+
+        def _select(readable, writable, exceptional, timeout):
+            waits.append(timeout)
+            return answer(readable, writable, exceptional, timeout)
+
+        with patch.object(
+            GamepadNavigator, "_open_pads", self._found_once(pads)
+        ), patch(
+            "openemux.core.ui_gamepad.select.select", _select
+        ), patch.object(
+            RepeatClock, "next_deadline", lambda _self: 0.01
+        ), patch.object(
+            RepeatClock, "due_actions", lambda _self: fired.pop(0) if fired else []
+        ):
+            self.nav._run()
+
+        self.assertEqual(self.actions, ["down"])
+        self.assertTrue(all(wait < IDLE_POLL for wait in waits))
 
     def test_a_long_press_becomes_a_hold_action(self):
         pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
