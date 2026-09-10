@@ -240,6 +240,133 @@ class SymlinkedConsoleDirTests(unittest.TestCase):
             self.assertIsNone(manager._console_from_rom_path(loose))
 
 
+class WhatAPlaylistFileMayContainTests(unittest.TestCase):
+    """It is a plain list of paths, written and read across sessions."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_console_with_no_playlist_yet_loads_as_empty(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertEqual(manager.load_playlist("SFC"), [])
+
+    def test_a_console_that_already_has_one_is_not_rescanned(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            self.assertTrue(manager.ensure_playlist("SFC"))
+            self.assertFalse(manager.ensure_playlist("SFC"))
+
+    def test_blank_lines_and_games_that_left_the_disk_are_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            present = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            present.write_bytes(b"rom")
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(
+                f"\n{present}\n\n{base / 'roms' / 'SFC' / 'Gone.sfc'}\n",
+                encoding="utf-8",
+            )
+
+            entries = manager.load_playlist("SFC")
+
+        self.assertEqual([entry["name"] for entry in entries], ["Chrono Trigger"])
+
+    def test_an_archive_the_core_cannot_open_is_not_a_game(self):
+        # PlayStation cores need a real file; the importer extracts these, so
+        # a leftover .zip in the index is not playable.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            console_dir = base / "roms" / "PS"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            archive = console_dir / "Final Fantasy VII.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("Final Fantasy VII.cue", b"cue")
+            playlist = manager.get_playlist_path("PS")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(f"{archive}\n", encoding="utf-8")
+
+            self.assertEqual(manager.load_playlist("PS"), [])
+
+    def test_a_file_the_console_does_not_recognise_is_not_a_game(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            stray = base / "roms" / "SFC" / "readme.txt"
+            stray.write_text("not a game", encoding="utf-8")
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(f"{stray}\n", encoding="utf-8")
+
+            self.assertEqual(manager.load_playlist("SFC"), [])
+
+
+class TurningPathsIntoEntriesTests(unittest.TestCase):
+    """What a drag-and-drop or a collection hands back to the grid."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_the_same_path_twice_yields_one_entry(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            rom.write_bytes(b"rom")
+
+            entries = manager.entries_for_paths([str(rom), f" {rom} ", ""])
+
+        self.assertEqual(len(entries), 1)
+
+    def test_a_path_outside_the_library_belongs_to_no_console(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            outside = base / "elsewhere.sfc"
+            outside.write_bytes(b"rom")
+
+            self.assertEqual(manager.entries_for_paths([str(outside)]), [])
+
+
+class RewritingAnIndexThatDoesNotHaveItTests(unittest.TestCase):
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_rename_of_a_game_no_index_lists_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text("/roms/SFC/Another.sfc\n", encoding="utf-8")
+
+            self.assertEqual(
+                manager.repath_rom("SFC", "/roms/SFC/Missing.sfc", "/roms/SFC/New.sfc"),
+                0,
+            )
+
+    def test_pruning_with_no_favorites_file_at_all_removes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertEqual(manager.remove_missing_favorites(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -430,6 +557,133 @@ class FavoriteLookupTests(unittest.TestCase):
             self.assertEqual(
                 manager.list_favorite_paths(), {str(away), str(here)}
             )
+
+
+class WhatAPlaylistFileMayContainTests(unittest.TestCase):
+    """It is a plain list of paths, written and read across sessions."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_console_with_no_playlist_yet_loads_as_empty(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertEqual(manager.load_playlist("SFC"), [])
+
+    def test_a_console_that_already_has_one_is_not_rescanned(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            self.assertTrue(manager.ensure_playlist("SFC"))
+            self.assertFalse(manager.ensure_playlist("SFC"))
+
+    def test_blank_lines_and_games_that_left_the_disk_are_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            present = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            present.write_bytes(b"rom")
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(
+                f"\n{present}\n\n{base / 'roms' / 'SFC' / 'Gone.sfc'}\n",
+                encoding="utf-8",
+            )
+
+            entries = manager.load_playlist("SFC")
+
+        self.assertEqual([entry["name"] for entry in entries], ["Chrono Trigger"])
+
+    def test_an_archive_the_core_cannot_open_is_not_a_game(self):
+        # PlayStation cores need a real file; the importer extracts these, so
+        # a leftover .zip in the index is not playable.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            console_dir = base / "roms" / "PS"
+            console_dir.mkdir(parents=True, exist_ok=True)
+            archive = console_dir / "Final Fantasy VII.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("Final Fantasy VII.cue", b"cue")
+            playlist = manager.get_playlist_path("PS")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(f"{archive}\n", encoding="utf-8")
+
+            self.assertEqual(manager.load_playlist("PS"), [])
+
+    def test_a_file_the_console_does_not_recognise_is_not_a_game(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            stray = base / "roms" / "SFC" / "readme.txt"
+            stray.write_text("not a game", encoding="utf-8")
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text(f"{stray}\n", encoding="utf-8")
+
+            self.assertEqual(manager.load_playlist("SFC"), [])
+
+
+class TurningPathsIntoEntriesTests(unittest.TestCase):
+    """What a drag-and-drop or a collection hands back to the grid."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_the_same_path_twice_yields_one_entry(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            rom.write_bytes(b"rom")
+
+            entries = manager.entries_for_paths([str(rom), f" {rom} ", ""])
+
+        self.assertEqual(len(entries), 1)
+
+    def test_a_path_outside_the_library_belongs_to_no_console(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            outside = base / "elsewhere.sfc"
+            outside.write_bytes(b"rom")
+
+            self.assertEqual(manager.entries_for_paths([str(outside)]), [])
+
+
+class RewritingAnIndexThatDoesNotHaveItTests(unittest.TestCase):
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_rename_of_a_game_no_index_lists_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            playlist = manager.get_playlist_path("SFC")
+            playlist.parent.mkdir(parents=True, exist_ok=True)
+            playlist.write_text("/roms/SFC/Another.sfc\n", encoding="utf-8")
+
+            self.assertEqual(
+                manager.repath_rom("SFC", "/roms/SFC/Missing.sfc", "/roms/SFC/New.sfc"),
+                0,
+            )
+
+    def test_pruning_with_no_favorites_file_at_all_removes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertEqual(manager.remove_missing_favorites(), 0)
 
 
 if __name__ == "__main__":
