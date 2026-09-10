@@ -71,6 +71,64 @@ class FindingACardTests(_GridCase):
 
 
 @needs_display
+class TheFactoryCallbacksTests(_GridCase):
+    """GTK recycles a cell's widget; the bookkeeping has to follow it.
+
+    `Gtk.ListItem` cannot be constructed, so the callbacks are driven with a
+    stand-in that answers the three questions they ask of one.
+    """
+
+    class _Cell:
+        def __init__(self, child=None, item=None):
+            self._child = child
+            self._item = item
+
+        def get_child(self):
+            return self._child
+
+        def get_item(self):
+            return self._item
+
+        def set_child(self, child):
+            self._child = child
+
+    def test_an_entry_no_longer_on_the_page_has_no_position(self):
+        # The filter changed under a lookup started before it.
+        entry = self.entries[-1]
+        self.grid.set_filter(self.entries[0].rom["name"])
+        self.assertIsNone(self.grid._position_of(entry))
+
+    def test_a_cell_with_nothing_in_it_yet_binds_nothing(self):
+        self.grid._on_factory_bind(None, self._Cell())
+        self.grid._on_factory_bind(None, self._Cell(child=self.card()))
+
+    def test_a_rebind_carries_the_focus_to_the_game_that_landed_there(self):
+        # The card kept the focus through the recycle, so the focused *entry*
+        # is now whatever was just bound into it.
+        card = self.card()
+        self.grid._focused_card = card
+        self.grid._on_factory_bind(None, self._Cell(card, self.entries[-1]))
+        self.assertIs(self.grid._focused_entry, self.entries[-1])
+
+    def test_an_empty_cell_unbinds_nothing(self):
+        self.grid._on_factory_unbind(None, self._Cell())
+
+    def test_a_cell_torn_down_releases_the_game_it_was_showing(self):
+        card = self.card()
+        entry = card.entry
+        cell = self._Cell(card, entry)
+        self.grid._on_factory_teardown(None, cell)
+        self.assertIsNone(card.entry)
+        self.assertIsNone(self.grid.card_for(entry))
+        self.assertIsNone(cell.get_child())
+
+    def test_an_empty_cell_is_torn_down_all_the_same(self):
+        cell = self._Cell()
+        self.grid._on_factory_teardown(None, cell)
+        self.assertIsNone(cell.get_child())
+
+
+@needs_display
 class FollowingFocusTests(_GridCase):
     def test_the_focused_card_is_the_one_painted_as_focused(self):
         card = self.card()
@@ -306,6 +364,12 @@ class RefreshingOneCardTests(_GridCase):
 
 @needs_display
 class TheColumnLatticeTests(_GridCase):
+    def test_the_width_it_lays_out_in_is_its_own_when_none_is_given(self):
+        # The retune is also called from the size-allocate, which has one.
+        self.assertEqual(
+            self.grid._available_width(), self.grid._available_width(self.grid.get_width())
+        )
+
     """GtkGridView spreads its width between its columns; this takes it back."""
 
     def test_a_degenerate_allocation_is_not_passed_on(self):
