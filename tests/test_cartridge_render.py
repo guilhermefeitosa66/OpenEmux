@@ -227,6 +227,38 @@ class DroppingAGamesCompositesTests(unittest.TestCase):
                 cartridge_render.drop_cached("GB", "Kirby", cache_dir=Path(tmp_dir)), 0
             )
 
+    def test_the_games_own_composites_go_and_the_rest_stay(self):
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir) / "GB"
+            directory.mkdir(parents=True)
+            mine = directory / "Kirby.0123456789ab.png"
+            another = directory / "Zelda.0123456789ab.png"
+            not_a_composite = directory / "Kirby.txt"
+            for path in (mine, another, not_a_composite):
+                path.write_bytes(b"png")
+
+            dropped = cartridge_render.drop_cached(
+                "GB", "Kirby", cache_dir=Path(tmp_dir)
+            )
+
+            self.assertEqual(dropped, 1)
+            self.assertFalse(mine.exists())
+            self.assertTrue(another.exists())
+            self.assertTrue(not_a_composite.exists())
+
+    def test_a_cover_that_left_the_disk_renders_nothing(self):
+        # The key is content-addressed, so a cover that is gone has no key.
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(
+                render_cartridge(
+                    Path(tmp_dir) / "gone.png",
+                    FRAME,
+                    "GB",
+                    "Game",
+                    cache_dir=Path(tmp_dir),
+                )
+            )
+
     def test_a_composite_that_will_not_delete_is_not_counted(self):
         with TemporaryDirectory() as tmp_dir:
             directory = Path(tmp_dir) / "GB"
@@ -503,6 +535,21 @@ class DropStaleTests(unittest.TestCase):
             self.assertTrue(unrelated.exists())
             # In-flight temporaries from parallel renders are not .png.
             self.assertTrue(other_suffix.exists())
+
+    def test_a_stale_composite_that_will_not_delete_is_left_behind(self):
+        # Sweeping the cache is housekeeping; a file that will not go must not
+        # take the render that just succeeded down with it.
+        with TemporaryDirectory() as tmp_dir:
+            directory = Path(tmp_dir)
+            keep, stale, _, _ = self._populate(directory)
+
+            with unittest.mock.patch.object(
+                Path, "unlink", side_effect=OSError("read-only")
+            ):
+                cartridge_render._drop_stale(directory, "_blank", keep)
+
+            self.assertTrue(stale.exists())
+            self.assertTrue(keep.exists())
 
     def test_keeps_the_target_when_it_is_spelled_with_a_different_separator(self):
         # The exact Windows shape of the bug, reproduced explicitly so it is
