@@ -3,7 +3,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.bios_catalog import get_required_for_core
-from openemux.core.bios_manager import find_missing_required_for_core, scan_console_bios_status
+from openemux.core.bios_manager import (
+    _entry_label,
+    find_missing_required_for_core,
+    scan_console_bios_status,
+)
 
 
 class _DummyConfig:
@@ -44,6 +48,23 @@ class BiosManagerTests(unittest.TestCase):
     def test_required_mapping_exists_for_known_core(self):
         required = get_required_for_core("SATURN", "kronos_libretro.so")
         self.assertTrue(required)
+
+
+class HowARequirementIsLabelledTests(unittest.TestCase):
+    """The label is what the BIOS page shows for one requirement."""
+
+    def test_a_single_file_is_named_by_its_filename(self):
+        self.assertEqual(_entry_label({"file": "scph5501.bin"}), "scph5501.bin")
+
+    def test_a_choice_of_files_is_spelled_as_alternatives(self):
+        self.assertEqual(
+            _entry_label({"any_of": ["bios7.bin", "biosnds7.rom"]}),
+            "bios7.bin | biosnds7.rom",
+        )
+
+    def test_an_entry_that_names_nothing_has_no_label(self):
+        self.assertEqual(_entry_label({}), "")
+        self.assertEqual(_entry_label({"any_of": []}), "")
 
 
 if __name__ == "__main__":

@@ -140,6 +140,20 @@ class FlatpakHostDetectionTests(unittest.TestCase):
             ):
                 self.assertIsNone(detect_audio_driver())
 
+    def test_a_sandbox_with_no_relay_at_all_asks_nothing(self):
+        # flatpak-spawn is the only way out of the sandbox; without it there
+        # is no question to ask and no driver to guess.
+        with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
+            with mock.patch(
+                "openemux.core.audio_driver.is_running_in_flatpak", return_value=True
+            ), mock.patch(
+                "openemux.core.audio_driver.shutil.which", return_value=None
+            ), mock.patch(
+                "openemux.core.audio_driver.subprocess.run"
+            ) as run_mock:
+                self.assertIsNone(detect_audio_driver())
+            run_mock.assert_not_called()
+
     def test_outside_a_flatpak_the_host_is_never_asked(self):
         with TemporaryDirectory() as tmp, _Env(XDG_RUNTIME_DIR=tmp):
             with mock.patch(
@@ -152,6 +166,15 @@ class FlatpakHostDetectionTests(unittest.TestCase):
 
 
 class SettingResolutionTests(unittest.TestCase):
+    def test_auto_with_no_pulse_anywhere_leaves_the_key_alone(self):
+        # RetroArch's own config decides; writing "alsa" over it would be a
+        # guess, and the wrong one on a PipeWire host.
+        with mock.patch(
+            "openemux.core.audio_driver.detect_audio_driver", return_value=None
+        ):
+            with self.assertLogs("openemux.core.audio_driver", level="INFO"):
+                self.assertIsNone(resolve_audio_driver(AUTO))
+
     def test_auto_detects_from_the_host(self):
         with TemporaryDirectory() as tmp:
             socket_dir = os.path.join(tmp, "pulse")
