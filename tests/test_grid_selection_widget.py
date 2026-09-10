@@ -310,6 +310,19 @@ class WhatCountsAsBackgroundTests(_SelectionCase):
         self.selection._host = host
         self.assertFalse(self.selection.is_background(1, 1))
 
+    def test_a_widget_inside_a_card_is_the_card(self):
+        # The pick lands on the cover picture, never on the card itself, so
+        # the answer has to come from walking up to its parent.
+        card = self.card(0)
+        if card is None:
+            self.skipTest("the grid realized no card for the first game")
+        inside = card.get_first_child()
+        self.assertIsNotNone(inside)
+        host = mock.Mock()
+        host.pick.return_value = inside
+        self.selection._host = host
+        self.assertFalse(self.selection.is_background(1, 1))
+
     def test_empty_page_space_is_background(self):
         host = mock.Mock()
         host.pick.return_value = None

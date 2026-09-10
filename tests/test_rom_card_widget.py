@@ -71,6 +71,14 @@ class WhatACardShowsTests(_CardCase):
         self.assertEqual(RomItem._truncate_name("short", 10), "short")
         self.assertEqual(RomItem._truncate_name("0123456789abc", 10), "0123456789...")
 
+    def test_a_card_with_its_menu_up_closes_it_before_letting_go(self):
+        # The card's anchor is about to show another game, and a popover
+        # parented to it would still be pointing at the old one.
+        self.card._show_context_menu()
+        self.assertIsNotNone(self.card._context_popover)
+        self.card.unbind()
+        self.assertIsNone(self.card._context_popover)
+
     def test_rebinding_to_another_game_replaces_every_piece_of_state(self):
         other = RomEntry(self.win.playlist_manager.load_playlist("FC")[0])
         self.card.bind(other)

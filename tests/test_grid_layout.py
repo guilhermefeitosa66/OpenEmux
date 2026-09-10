@@ -1,5 +1,6 @@
 import unittest
 
+from openemux.ui.card_layout import default_item_size
 from openemux.ui.grid import (
     GRID_SPACING,
     card_size_for,
@@ -113,6 +114,17 @@ class CardSizeTests(unittest.TestCase):
     def test_unknown_console_falls_back_to_a_square_cover(self):
         width, height = cover_size_for_console("NOT-A-CONSOLE")
         self.assertEqual(width, height)
+
+    def test_a_page_that_mixes_consoles_lays_them_in_one_square_box(self):
+        # No single box-art shape to follow, so every cover is centred in the
+        # same square instead.
+        width, height = default_item_size()
+        self.assertEqual(width, height)
+
+    def test_that_box_follows_the_zoom_like_everything_else(self):
+        base = default_item_size(1.0)
+        doubled = default_item_size(2.0)
+        self.assertEqual(doubled, (base[0] * 2, base[1] * 2))
 
 
 if __name__ == "__main__":

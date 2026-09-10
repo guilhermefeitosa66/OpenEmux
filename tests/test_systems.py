@@ -84,6 +84,12 @@ class AccessorTests(unittest.TestCase):
         self.assertIsNone(get_thumbnail_system("DREAMCAST"))
         self.assertEqual(get_icon_name("DREAMCAST"), DEFAULT_ICON)
 
+    def test_a_console_on_the_list_answers_from_its_own_entry(self):
+        # Every console currently names the same generic icon, so this asserts
+        # where the answer came from rather than what it was.
+        for system in SYSTEMS:
+            self.assertEqual(get_icon_name(system["id"]), system["icon_name"])
+
     def test_extensions_come_back_lower_cased(self):
         # The scanner compares against a lower-cased suffix, so an entry typed
         # ".BIN" would silently match nothing.

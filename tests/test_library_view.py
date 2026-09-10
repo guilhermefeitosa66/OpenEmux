@@ -1,6 +1,7 @@
 import unittest
 
 from openemux.core.library_view import (
+    normalize_display_value,
     DEFAULT_VIEW_MODE,
     DEFAULT_ZOOM,
     MIN_SCALED_SPACING,
@@ -273,6 +274,23 @@ class ScalingTests(unittest.TestCase):
     def test_the_width_cap_scales_too_so_the_row_stays_proportional(self):
         width, _h = list_thumb_size((200, 100), 2.0)
         self.assertEqual(width, LIST_ROW_MAX_THUMB_WIDTH * 2)
+
+
+class NormalisingOneSettingByNameTests(unittest.TestCase):
+    """The page store normalises whatever it is handed, by key."""
+
+    def test_each_known_key_goes_through_its_own_rule(self):
+        self.assertEqual(
+            normalize_display_value("view_mode", "not-a-mode"), DEFAULT_VIEW_MODE
+        )
+        self.assertEqual(
+            normalize_display_value("sort_order", "not-an-order"), DEFAULT_SORT_ORDER
+        )
+        self.assertEqual(normalize_display_value("zoom", "not-a-zoom"), DEFAULT_ZOOM)
+
+    def test_a_key_with_no_rule_is_stored_as_it_came(self):
+        # Group-by is a plain console id; there is nothing to normalise.
+        self.assertEqual(normalize_display_value("group_by", "SFC"), "SFC")
 
 
 if __name__ == "__main__":

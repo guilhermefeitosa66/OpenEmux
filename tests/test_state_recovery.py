@@ -1,3 +1,4 @@
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -56,6 +57,24 @@ class QuarantineTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             self.assertEqual(first.read_text(encoding="utf-8"), "first\n")
             self.assertEqual(second.read_text(encoding="utf-8"), "second\n")
+
+    def test_a_thousand_failures_in_one_second_still_keep_the_last(self):
+        # The counter runs out at 999; the millisecond clock takes over so no
+        # copy is ever written over another.
+        with TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "config.yaml"
+            frozen = lambda: 1_700_000_000.5
+            stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(frozen()))
+            base = Path(tmp_dir) / f"config.yaml.broken-{stamp}"
+            base.touch()
+            for index in range(1, 1000):
+                Path(f"{base}.{index}").touch()
+            target.write_text("the last one\n", encoding="utf-8")
+
+            kept = quarantine_state_file(target, "boom", clock=frozen)
+
+            self.assertEqual(kept.read_text(encoding="utf-8"), "the last one\n")
+            self.assertEqual(kept.name, f"{base.name}.{int(frozen() * 1000)}")
 
     def test_a_missing_file_is_not_reported(self):
         with TemporaryDirectory() as tmp_dir:

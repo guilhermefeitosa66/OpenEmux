@@ -212,5 +212,16 @@ class RuntimeOverrideTests(unittest.TestCase):
         self.assertEqual(overrides["cheevos_hardcore_mode_enable"], '"true"')
 
 
+class ACredentialsFileThatIsNotAnObjectTests(unittest.TestCase):
+    def test_a_json_list_is_refused_rather_than_indexed(self):
+        # Anything but an object would fail later, on the first .get().
+        with TemporaryDirectory() as tmp_dir:
+            store = AchievementsStore(Path(tmp_dir) / "retroachievements.json")
+            store.config_file.write_text('["nope"]', encoding="utf-8")
+            self.assertEqual(store.load(), {})
+            kept = list(Path(tmp_dir).glob("retroachievements.json.broken-*"))
+            self.assertEqual(len(kept), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
