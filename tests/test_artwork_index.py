@@ -4,6 +4,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 from unittest.mock import patch
 
 from openemux.core.artwork_index import (
@@ -410,3 +411,196 @@ class SuggestionTests(unittest.TestCase):
                                   shipped_zip="/nonexistent.zip")
         self.assertEqual(broken.suggest(SNES, "chrono"), [])
         self.assertEqual(broken.suggest(SNES, "chrono", approximate=True), [])
+
+
+class WhenSqliteItselfFailsTests(unittest.TestCase):
+    """A degraded index costs the stage, never the sync."""
+
+    def _index(self, tmp, crc_rows=None):
+        db_path = Path(tmp) / "games.db"
+        _build_db(db_path, _LADDER_ROWS, crc_rows=crc_rows)
+        return ArtworkNameIndex(db_path=db_path)
+
+    def test_a_crc_lookup_that_errors_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp, crc_rows=[("AABBCCDD", SNES, "Chrono Trigger (USA)")])
+            with patch.object(
+                ArtworkNameIndex, "_crc_table_present", side_effect=sqlite3.Error("gone")
+            ):
+                with self.assertLogs("openemux.core.artwork_index", level="WARNING"):
+                    self.assertIsNone(index.resolve_by_crc(SNES, "AABBCCDD"))
+
+    def test_a_name_resolution_that_errors_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            with patch.object(
+                ArtworkNameIndex, "_and_round", side_effect=sqlite3.Error("gone")
+            ):
+                with self.assertLogs("openemux.core.artwork_index", level="WARNING"):
+                    self.assertIsNone(index.resolve_name(SNES, "Chrono Trigger"))
+
+    def test_a_suggestion_query_that_errors_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            with patch.object(
+                ArtworkNameIndex, "_fts_available", side_effect=sqlite3.Error("gone")
+            ):
+                with self.assertLogs("openemux.core.artwork_index", level="WARNING"):
+                    self.assertEqual(index.suggest(SNES, "Chrono"), [])
+
+    def test_a_crc_table_check_that_errors_reads_as_absent(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            conn = mock.Mock()
+            conn.execute.side_effect = sqlite3.Error("gone")
+            self.assertFalse(index._crc_table_present(conn))
+
+
+class WhatIsAskedForAndWhatIsNotTests(unittest.TestCase):
+    def _index(self, tmp):
+        db_path = Path(tmp) / "games.db"
+        _build_db(db_path, _LADDER_ROWS, crc_rows=[("AABBCCDD", SNES, "Chrono Trigger (USA)")])
+        return ArtworkNameIndex(db_path=db_path)
+
+    def test_a_crc_lookup_with_nothing_to_look_up_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(index.resolve_by_crc("", "AABBCCDD"))
+            self.assertIsNone(index.resolve_by_crc(SNES, ""))
+
+    def test_a_name_resolution_with_nothing_to_resolve_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(index.resolve_name("", "Chrono Trigger"))
+            self.assertIsNone(index.resolve_name(SNES, "   "))
+
+    def test_a_suggestion_with_nothing_to_suggest_from_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertEqual(index.suggest("", "Chrono"), [])
+            self.assertEqual(index.suggest(SNES, "  "), [])
+
+    def test_a_query_that_tokenises_to_nothing_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertEqual(index.suggest(SNES, "()[]"), [])
+
+    def test_an_and_round_with_no_tokens_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(index._and_round(None, SNES, [], None))
+
+    def test_an_or_round_with_no_tokens_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(index._or_round(None, SNES, ["chrono"], [], None))
+
+    def test_a_query_matching_nothing_at_all_answers_nothing(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(
+                index.resolve_name(SNES, "Something Entirely Different Indeed")
+            )
+
+    def test_a_broad_query_that_matches_too_little_is_ambiguity(self):
+        # Half the queried tokens is the floor; below it the answer is no
+        # answer, the same rule the AND rounds use. Only "chrono" is in the
+        # index here, against six words asked for.
+        with TemporaryDirectory() as tmp:
+            index = self._index(tmp)
+            self.assertIsNone(
+                index.resolve_name(SNES, "Chrono Alpha Beta Gamma Delta Epsilon")
+            )
+
+
+class WhenTheDatabaseHasNoFullTextIndexTests(unittest.TestCase):
+    """An older or partly-built database still answers what it can."""
+
+    def _index_without_fts(self, tmp):
+        db_path = Path(tmp) / "games.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE games (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " name TEXT NOT NULL, system TEXT NOT NULL)"
+        )
+        conn.executemany(
+            "INSERT INTO games (name, system) VALUES (?, ?)",
+            [("Chrono Trigger (USA)", SNES)],
+        )
+        conn.commit()
+        conn.close()
+        return ArtworkNameIndex(db_path=db_path)
+
+    def test_an_exact_suggestion_answers_nothing_without_it(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index_without_fts(tmp)
+            self.assertEqual(index.suggest(SNES, "Chrono"), [])
+
+    def test_an_approximate_suggestion_falls_back_to_a_scan(self):
+        with TemporaryDirectory() as tmp:
+            index = self._index_without_fts(tmp)
+            self.assertTrue(index.suggest(SNES, "Chrono", approximate=True))
+
+
+class TheDefaultsAndTheLastResortsTests(unittest.TestCase):
+    def test_an_index_with_no_path_given_uses_the_app_directory(self):
+        index = ArtworkNameIndex()
+        self.assertTrue(str(index._db_path).endswith(".db"))
+
+    def test_a_leftover_temporary_file_that_cannot_be_removed_is_ignored(self):
+        # A copyfileobj that raised half way used to leave one behind per
+        # attempt (issue #239).
+        with TemporaryDirectory() as tmp:
+            index = ArtworkNameIndex(
+                db_path=Path(tmp) / "games.db",
+                shipped_zip=Path(tmp) / "games.db.zip",
+            )
+            with zipfile.ZipFile(index._shipped_zip, "w") as archive:
+                archive.writestr("games.db", b"not sqlite")
+            with patch("shutil.copyfileobj", side_effect=OSError("disk full")), patch.object(
+                Path, "unlink", side_effect=OSError("gone")
+            ):
+                with self.assertLogs("openemux.core.artwork_index", level="WARNING"):
+                    self.assertFalse(index._ensure_db_file())
+
+    def test_a_bad_handle_that_will_not_close_does_not_hide_the_failure(self):
+        with TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            db_path.write_bytes(b"this is not sqlite at all")
+            index = ArtworkNameIndex(db_path=db_path, shipped_zip=Path(tmp) / "none.zip")
+            broken = mock.Mock()
+            broken.execute.side_effect = sqlite3.DatabaseError("not a database")
+            broken.close.side_effect = RuntimeError("already gone")
+            with patch.object(sqlite3, "connect", return_value=broken):
+                with self.assertLogs("openemux.core.artwork_index", level="WARNING"):
+                    self.assertIsNone(index._connect())
+            self.assertTrue(index._corrupt)
+
+    def test_the_crc_table_answer_is_remembered_for_the_life_of_the_file(self):
+        # What was paid per ROM is the connection opened to ask it again.
+        with TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            _build_db(db_path, _LADDER_ROWS, crc_rows=[])
+            index = ArtworkNameIndex(db_path=db_path)
+            self.assertTrue(index.has_crc_index())
+            with patch.object(ArtworkNameIndex, "_connect") as connect:
+                self.assertTrue(index.has_crc_index())
+            connect.assert_not_called()
+
+    def test_a_similarity_floor_skips_what_cannot_reach_it(self):
+        from openemux.core.artwork_index import _rank_by_similarity
+
+        # real_quick_ratio compares lengths alone, so a stem far longer than
+        # the query is dropped before the real comparison is paid for.
+        ranked = _rank_by_similarity(
+            ["Chrono Trigger (USA)", "Z" * 400], "Chrono", floor=0.4
+        )
+        self.assertEqual(ranked, ["Chrono Trigger (USA)"])
+
+    def test_with_no_region_matching_the_shortest_stem_wins(self):
+        from openemux.core.artwork_index import _pick_region
+
+        self.assertEqual(
+            _pick_region(["Game (Japan) (Rev 1)", "Game (Japan)"], ["USA"]),
+            "Game (Japan)",
+        )
