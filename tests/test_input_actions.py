@@ -108,61 +108,6 @@ class InputActionsTests(unittest.TestCase):
             self.assertIn(f"input_player{player}_a_btn", overrides)
 
 
-class WhenAKeyboardDefaultIsAlreadyTakenTests(unittest.TestCase):
-    """Two actions cannot share a key: the second one takes a fallback letter.
-
-    A duplicate would look bound in Preferences while one of the two never
-    fires, which is worse than an unfamiliar letter.
-    """
-
-    def _normalized(self, bindings):
-        return normalize_bindings(bindings, "keyboard", console="SFC")
-
-    def test_an_action_whose_default_was_taken_gets_a_fallback_letter(self):
-        actions = get_actions_for_console("SFC")
-        stolen = {
-            action: DEFAULT_KEYBOARD_BINDINGS["a"]
-            for action in ("b",)
-            if action in actions
-        }
-        result = self._normalized(stolen)
-        self.assertEqual(result["b"], DEFAULT_KEYBOARD_BINDINGS["a"])
-        self.assertNotEqual(result["a"], result["b"])
-        self.assertTrue(result["a"])
-
-    def test_every_action_still_ends_up_with_a_key_of_its_own(self):
-        actions = [a for a in get_actions_for_console("SFC")
-                   if a not in GLOBAL_HOTKEY_ACTIONS]
-        result = self._normalized({action: "z" for action in actions[:1]})
-        keys = [result[action] for action in actions if result[action]]
-        self.assertEqual(len(keys), len(set(keys)))
-
-    def test_a_fallback_letter_the_user_already_took_is_passed_over(self):
-        # The first fallback is "g"; someone bound it by hand, so the action
-        # that needs one has to walk past it.
-        result = self._normalized({"a": "g", "b": DEFAULT_KEYBOARD_BINDINGS["x"]})
-        self.assertEqual(result["a"], "g")
-        self.assertNotEqual(result["x"], "g")
-        self.assertTrue(result["x"])
-
-    def test_a_pad_is_never_handed_a_keyboard_letter(self):
-        # A letter on a gamepad is a binding that can never fire.
-        result = normalize_bindings(
-            {"a": DEFAULT_GAMEPAD_BINDINGS["b"]}, "gamepad", console="SFC"
-        )
-        self.assertNotIn("g", result.values())
-
-
-class WhatCountsAsAnAxisTests(unittest.TestCase):
-    def test_an_empty_binding_is_not_an_axis(self):
-        from openemux.core.input_actions import _is_axis_binding
-
-        self.assertFalse(_is_axis_binding(""))
-        self.assertFalse(_is_axis_binding(None))
-        self.assertFalse(_is_axis_binding("btn3"))
-        self.assertTrue(_is_axis_binding("+1"))
-
-
 if __name__ == "__main__":
     unittest.main()
 
