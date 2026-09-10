@@ -86,11 +86,27 @@ jobs:
           make setup-dev
 
       - name: Run unit tests under coverage
+        # Two processes, and not for speed: one cannot hold every window the
+        # suite builds. GTK keeps caches for the life of a process, so a run
+        # that constructs a thousand application windows peaks at ~6 GB -- more
+        # than the runner has. What the kernel reaps first is the X server, and
+        # that arrives here as a bare "Terminated" with no failing test to
+        # point at. The split is by the harness that builds those windows, so a
+        # new UI test file joins the right half by importing it.
+        #
         # `coverage report` enforces fail_under from pyproject.toml, so a PR
         # that drops the total below the floor fails here rather than moving
         # the badge quietly.
         run: |
-          xvfb-run -a env PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
+          windowed=$(grep -l window_harness tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||')
+          rest=$(ls tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||' | grep -vxF "$windowed")
+          run_suite() {
+            xvfb-run -a env PYTHONPATH=src .venv/bin/python \
+              -m coverage run --parallel-mode -m unittest -v $1
+          }
+          run_suite "$rest"
+          run_suite "$windowed"
+          .venv/bin/python -m coverage combine
           .venv/bin/python -m coverage report
 
       # The README's coverage badge is a shields.io endpoint badge fed by

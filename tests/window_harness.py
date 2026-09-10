@@ -28,7 +28,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gio, GLib
+    from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
     Adw.init()
 
@@ -125,6 +125,7 @@ class WindowCase(unittest.TestCase):
         self.app = shared_application()
         self.app.config_manager = self.config
 
+        self._release_style_providers()
         navigator_patch = mock.patch.object(
             window_module, "make_navigator", lambda **kwargs: mock.Mock()
         )
@@ -141,7 +142,7 @@ class WindowCase(unittest.TestCase):
         # after the destroy.
         self.addCleanup(self.pump)
         self.win = OpenEmuxWindow(self.app)
-        self.addCleanup(self.win.destroy)
+        self.addCleanup(self._close_window)
 
         self.toasts = []
         toast_patch = mock.patch.object(
@@ -151,6 +152,50 @@ class WindowCase(unittest.TestCase):
         )
         toast_patch.start()
         self.addCleanup(toast_patch.stop)
+
+
+    def _close_window(self):
+        """Close it the way a user does, then destroy what is left.
+
+        `destroy()` alone does not emit ``close-request``, and neither does
+        `close()` on a window nothing ever mapped -- but that signal is where
+        the window lets go of `Adw.StyleManager`, which lives as long as the
+        process. A handler left on it holds the closure, the closure holds the
+        window, and the window holds its whole widget tree (issue #237). One
+        window is nothing; a thousand is a gigabyte.
+        """
+        self.win.emit("close-request")
+        self.win.destroy()
+
+    def _release_style_providers(self):
+        """Take the window's stylesheet off the display again afterwards.
+
+        `load_css` adds a provider to the *display*, which outlives the window
+        that added it: in the app that happens once, here it happens per test.
+        A thousand providers is a thousand stylesheets matched against every
+        widget of every later window -- hundreds of megabytes and a suite that
+        slows down as it goes.
+        """
+        display = Gdk.Display.get_default()
+        added = []
+        real_add = Gtk.StyleContext.add_provider_for_display
+
+        def _add(target, provider, priority):
+            added.append((target, provider))
+            return real_add(target, provider, priority)
+
+        patcher = mock.patch.object(
+            Gtk.StyleContext, "add_provider_for_display", _add
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        def _release():
+            for target, provider in added:
+                Gtk.StyleContext.remove_provider_for_display(target, provider)
+
+        self.addCleanup(_release)
+        return display
 
     # -- helpers ----------------------------------------------------------
     @contextmanager
