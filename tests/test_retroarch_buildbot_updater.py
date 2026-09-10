@@ -568,6 +568,25 @@ class ParallelDownloadTests(unittest.TestCase):
                 )
                 self.assertGreaterEqual(updater._download_workers(), 1, value)
 
+    def test_a_settings_dict_without_the_key_still_fills_the_pool(self):
+        """The missing-key fallback is the cap, not a second copy of the default.
+
+        It was a literal 4, written when 4 was what ``UPDATER_DEFAULTS`` said.
+        The default moved to 8 (issue #442) and a fallback with a number of its
+        own would have quietly kept halving the sweep for any caller whose
+        settings dict predates the key.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            config = _FakeConfigManager(tmp_dir)
+            settings = config.get_retroarch_updater_settings()
+            del settings["parallel_downloads"]
+            config.get_retroarch_updater_settings = lambda: dict(settings)
+            updater = RetroArchBuildbotUpdater(config)
+            self.assertEqual(
+                updater._download_workers(),
+                retroarch_buildbot_updater.MAX_PARALLEL_DOWNLOADS,
+            )
+
     def test_progress_only_ever_grows(self):
         """Out-of-order completions must not walk the counter backwards."""
         events = []

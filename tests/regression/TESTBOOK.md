@@ -336,14 +336,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
 - **Steps:**
   1. Launch first boot and watch "Downloading core (n/total)" advance.
-- **Expected:** Several artifacts are in flight at once, up to `parallel_downloads` (default 4,
-  capped at 8 — the buildbot is somebody else's server). That setting has been in the config, and
-  in the settings the user can edit, since the updater was written, and nothing ever read it: the
-  sweep ran one artifact at a time on one thread, so a first boot took as long as the sum of every
-  download in a 224-artifact manifest (issue #240). The progress counter still only ever grows,
-  even though downloads finish out of order.
+- **Expected:** Several artifacts are in flight at once, up to `parallel_downloads`, which ships at
+  8 — the ceiling the updater allows itself, because the buildbot is somebody else's server. That
+  setting has been in the config, and in the settings the user can edit, since the updater was
+  written, and nothing ever read it: the sweep ran one artifact at a time on one thread, so a first
+  boot took as long as the sum of every download in a 224-artifact manifest (issue #240). It then
+  shipped at 4 against a cap of 8, which cost a measured 110.0 s instead of 44.4 s for the same 238
+  artifacts and the same bytes (issue #442). The progress counter still only ever grows, even though
+  downloads finish out of order.
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`ParallelDownloadTests`) — real
-  concurrency at 4, one at a time at 1, the cap, a nonsense value, and monotonic progress.
+  concurrency at 4, one at a time at 1, the cap, a nonsense value, monotonic progress, and that a
+  settings dict with no `parallel_downloads` at all still fills the pool.
+  `tests/test_updater_defaults.py` (`TheShippedConcurrencyTests`) — the shipped default is the cap,
+  and a fresh config resolves to it.
 
 ### RT-008 — Installing a core costs a buffer, not the core
 - **Area:** Startup
