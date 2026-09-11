@@ -65,6 +65,21 @@ Running the suite on the host is still right for a core-only change: those
 tests need no display and take seconds. Anything under `src/openemux/ui/` goes
 through the devbox.
 
+**Stop what you started.** The container stays up after the command that needed
+it returns, and the Xvnc inside it goes on running too -- idle, and holding a
+share of the developer's memory for the rest of the day. Ending the activity
+includes ending the processes it raised:
+
+```bash
+distrobox stop -Y openemux-devbox    # keeps the provisioning, frees the memory
+make devbox-rm PURGE=1               # only when the container itself is wrong
+docker ps                            # anything left from `make packages`
+```
+
+The packaging builds are the same story from the other side: `make packages`
+runs a Docker container per format, and a build interrupted halfway leaves them
+behind. Check with `docker ps` when a run of them ends badly.
+
 ## Running the app: use the devbox, not the developer's screen
 
 `make run` opens OpenEmux on the developer's desktop and takes the mouse and
