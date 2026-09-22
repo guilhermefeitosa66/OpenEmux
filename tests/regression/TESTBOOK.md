@@ -91,7 +91,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   A separate job starts the real app under `xvfb-run` and waits for its window, so a crash in
   application or window construction fails CI instead of surfacing by hand on release day.
   `coverage report` enforces `fail_under`, and the badge ladder has a red band, so coverage can no
-  longer decay in silence (issue #242).
+  longer decay in silence (issue #242). The Windows job installs the cairo named by
+  `packaging/windows/packages.lock` rather than whatever MSYS2 is rolling today: cairo 1.18.6
+  aborts GTK 4 at the first window it presents, which killed the suite on every branch at once.
 - **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
 ### RT-231 — Unsafe or simply broken code cannot reach develop unremarked

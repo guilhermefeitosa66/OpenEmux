@@ -226,6 +226,19 @@ class TestsWorkflowTests(unittest.TestCase):
                 self.assertIn(package, installed)
                 self.assertIn(package, bundle)
 
+    def test_the_windows_job_installs_the_cairo_the_bundle_ships(self):
+        # This job takes MSYS2's updates, and mingw-w64-x86_64-cairo 1.18.6-1
+        # aborts GTK 4 at the first window it presents -- exit code 3, no
+        # failing test, a third of the way into the suite, on every branch at
+        # once. It installs the cairo named by the bundle's lock instead: one
+        # version rather than two that can drift, and it moves the day the
+        # lock moves to a fixed release.
+        job = self.data["jobs"]["windows"]
+        run = " ".join(str(step.get("run", "")) for step in job["steps"])
+        self.assertIn("packaging/windows/packages.lock", run)
+        self.assertIn("mingw-w64-x86_64-cairo", run)
+        self.assertIn("pacman -U", run)
+
     def test_the_matrix_covers_every_supported_python(self):
         # pyproject promises >= 3.10 and the .rpm requires python3 >= 3.10;
         # CI ran 3.12 alone, so the floor the project advertises was never

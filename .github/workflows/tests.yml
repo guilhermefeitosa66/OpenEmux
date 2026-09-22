@@ -224,9 +224,28 @@ jobs:
             mingw-w64-x86_64-gsettings-desktop-schemas
             mingw-w64-x86_64-SDL2
 
+      - name: Install the cairo the bundle ships
+        # This job takes MSYS2's updates, which is the point of it -- except
+        # that mingw-w64-x86_64-cairo 1.18.6-1 aborts GTK 4 at the first
+        # window it presents: exit code 3, no failing test, a third of the way
+        # into the suite, on every branch at once. Proven by downgrading
+        # nothing else, twice, on one machine: with 1.18.6 the run dies after
+        # 27 s, with 1.18.4-4 it finishes all 4043 tests.
+        #
+        # The version is not repeated here -- it is read from
+        # packaging/windows/packages.lock, so this job installs whatever the
+        # Windows bundle ships and follows the lock the day it moves to a
+        # fixed cairo. Users are not exposed in the meantime: the bundle
+        # installs from that same lock, not from the rolling repository.
+        run: |
+          url=$(python -c 'import json; lock=json.load(open("packaging/windows/packages.lock")); pkg=next(p for p in lock["packages"] if p["name"] == "mingw-w64-x86_64-cairo"); print(lock["repository"] + "/" + pkg["filename"])')
+          echo "$url"
+          pacman -U --noconfirm "$url"
+
       - name: Show what is installed
         run: |
           python --version
+          pacman -Q mingw-w64-x86_64-cairo mingw-w64-x86_64-gtk4
           python -c "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk; print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())"
 
       - name: Run the unit tests
