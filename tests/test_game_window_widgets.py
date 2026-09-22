@@ -3,7 +3,7 @@
 `tests/test_game_window.py` covers the wrapper's decisions against stand-ins,
 which is what a headless run could reach. It leaves 344 of 429 statements
 unexecuted -- everything from the constructor down: the headerbar buttons that
-talk to RetroArch over UDP, the volume popover that walks the level in 0.5 dB
+talk to RetroArch, the volume popover that walks the level in 0.5 dB
 steps (issue #284), the tick that adopts the game, and the teardown that has
 to detach the X window before GTK destroys the frame around it.
 
@@ -60,7 +60,7 @@ class _ConfigManager:
 
 
 class _Runtime:
-    """Records every command instead of putting it on the UDP socket."""
+    """Records every command instead of sending it to RetroArch."""
 
     def __init__(self, process=None, fullscreen_binding="f"):
         self.active_process = process

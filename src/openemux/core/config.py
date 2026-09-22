@@ -318,11 +318,12 @@ DEFAULT_CONFIG = {
     "consoles": list(SYSTEM_IDS),
     "runtime": {
         "mode": "retroarch_wrapper",
-        # RetroArch's UDP command channel (issue #69): written into every
-        # runtime override so the running game can be controlled live. 0 picks
-        # a free port per launch, which is the only way to be sure the commands
-        # reach *our* RetroArch and not a standalone one the user is also
-        # running (issue #227). A non-zero value pins the port.
+        # RetroArch's UDP command channel (issue #69), on Windows only -- a
+        # Linux launch talks to the game through its stdin and opens no port
+        # (see retroarch_command). 0 picks a free port per launch, which is
+        # the only way to be sure the commands reach *our* RetroArch and not a
+        # standalone one the user is also running (issue #227). A non-zero
+        # value pins the port.
         "network_cmd_port": 0,
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
@@ -981,7 +982,7 @@ class ConfigManager:
         return DEFAULT_STATES_DIR / resolve_system_id(console)
 
     def get_network_cmd_port(self):
-        """The pinned command port, or 0 to pick a free one per launch."""
+        """The pinned UDP command port (Windows), or 0 for a free one per launch."""
         try:
             return int(self.config.get("runtime", {}).get("network_cmd_port", 0))
         except (TypeError, ValueError):

@@ -1,9 +1,10 @@
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from openemux.core import game_window_support
+from openemux.core import game_window_support, retroarch_command
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
@@ -601,19 +602,32 @@ class RetroArchLauncherTests(unittest.TestCase):
         # ...but the timing keys still restate the defaults.
         self.assertIn('input_turbo_period = "6"', lines)
 
-    def test_override_enables_the_command_channel_and_seeds_the_volume(self):
-        # Issue #69: every launch opens the loopback UDP channel and starts
-        # the game at the persisted master volume, so live stepping has a
-        # known starting point.
-        lines = self._override_lines(None)
+    def test_override_opens_the_stdin_channel_and_seeds_the_volume(self):
+        # Issue #69: every launch opens a command channel and starts the game
+        # at the persisted master volume, so live stepping has a known
+        # starting point. Outside Windows the channel is stdin, and the UDP
+        # one -- which RetroArch binds on every interface -- is switched off.
+        with patch.object(retroarch_command, "IS_WINDOWS", False):
+            lines = self._override_lines(None)
+        self.assertIn('stdin_cmd_enable = "true"', lines)
+        self.assertIn('network_cmd_enable = "false"', lines)
+        self.assertFalse(any(line.startswith("network_cmd_port") for line in lines))
+        self.assertIn('audio_volume = "-6.0"', lines)
+
+    def test_override_opens_the_udp_channel_on_windows(self):
+        # Its RetroArch build has no stdin interface.
+        with patch.object(retroarch_command, "IS_WINDOWS", True):
+            lines = self._override_lines(None)
         self.assertIn('network_cmd_enable = "true"', lines)
         self.assertIn('network_cmd_port = "55355"', lines)
-        self.assertIn('audio_volume = "-6.0"', lines)
+        self.assertFalse(any(line.startswith("stdin_cmd_enable") for line in lines))
 
     def test_the_launch_decides_the_command_port(self):
         # The port is picked per launch (issue #227) and RetroArch has to be
         # told the same number the client will send to.
-        with TemporaryDirectory() as tmp_dir:
+        with TemporaryDirectory() as tmp_dir, patch.object(
+            retroarch_command, "IS_WINDOWS", True
+        ):
             base = Path(tmp_dir)
             cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             launcher = RetroArchLauncher(base, cfg)
@@ -1505,6 +1519,32 @@ class WhenNothingCanLaunchTests(_ResolutionCase):
                 proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
         self.assertIsNone(proc)
         self.assertIn("Failed to launch RetroArch", error)
+
+
+class TheCommandPipeTests(_ResolutionCase):
+    """RetroArch gets a stdin pipe exactly when that is the command channel.
+
+    The pipe is the whole of the channel outside Windows: no pipe, and the
+    override's ``stdin_cmd_enable`` has nothing to read from.
+    """
+
+    def _popen_kwargs(self):
+        core = self.base / f"mgba_libretro{CORE_SUFFIX}"
+        core.write_bytes(b"core")
+        (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
+        with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen:
+            popen.return_value = Mock(pid=1)
+            self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
+        _close_log(popen.return_value)
+        return popen.call_args.kwargs
+
+    def test_outside_windows_retroarch_reads_its_commands_from_a_pipe(self):
+        with patch.object(retroarch_command, "IS_WINDOWS", False):
+            self.assertIs(self._popen_kwargs()["stdin"], subprocess.PIPE)
+
+    def test_on_windows_stdin_is_left_as_it_was(self):
+        with patch.object(retroarch_command, "IS_WINDOWS", True):
+            self.assertIsNone(self._popen_kwargs()["stdin"])
 
 
 class TheRuntimeOverrideCornersTests(_ResolutionCase):

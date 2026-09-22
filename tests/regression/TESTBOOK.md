@@ -2048,12 +2048,79 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Open the volume popover and drag the slider; press pause and the save-state button.
   3. Watch the *other* RetroArch.
 - **Expected:** Only the OpenEmux game reacts. The other instance's volume, pause state and save
-  states are untouched (issue #227).
-- **Check:** `grep network_cmd_port ~/.openemux/runtime/runtime_*.cfg` shows a port that is
-  neither 55355 nor the same across two launches;
-  `ss -ulnp | grep <that port>` lists exactly one process. Suite files
-  `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
+  states are untouched (issue #227). On Linux there is nothing the two could share: our game takes
+  its commands through its own stdin pipe and has no UDP port at all (RT-315).
+- **Check:** On Linux, `grep -hE '^(stdin|network)_cmd' "$(ls -t ~/.openemux/runtime/runtime_*.cfg
+  | head -1)"` prints exactly `network_cmd_enable = "false"` and `stdin_cmd_enable = "true"`, and
+  `ss -ulnp | grep retroarch` lists only the standalone instance's port 55355. On Windows,
+  `network_cmd_port` in the newest `runtime_*.cfg` is neither 55355 nor the same across two
+  launches. Suite files `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
   `tests/test_config_command_port.py`.
+
+### RT-315 — A running game is not reachable from the network
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** Linux, with the vendored RetroArch fetched (`make vendor-retroarch`). No
+  display is needed: the probe runs RetroArch with null drivers.
+- **Steps:**
+  1. Launch a game and, while it runs, list the UDP sockets: `ss -ulnp | grep retroarch`.
+  2. From another machine on the same network, try to reach it — or, as the probe does, look at
+     what RetroArch bound.
+- **Expected:** Our RetroArch has no UDP socket. Its commands (volume, pause, save, load, reset,
+  quit) come through a pipe on its stdin that only OpenEmux holds, and the launch switches
+  RetroArch's network command interface *off* even when the user's own `retroarch.cfg` turns it
+  on. That interface binds `0.0.0.0`, not loopback: before this, anyone on the local network
+  could quit, reset or overwrite a save state in a running game, with no authentication. Windows
+  is the exception — its RetroArch build has no stdin interface, so it keeps the UDP channel.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'PY'
+  import os, subprocess, time
+  from pathlib import Path
+  from openemux.core.config import ConfigManager
+  from openemux.core.retroarch_command import StdinCommandClient
+  from openemux.core.retroarch_launcher import RetroArchLauncher
+  scratch = Path(os.environ.get("SCRATCH", "/tmp")) / "RT-315"
+  scratch.mkdir(parents=True, exist_ok=True)
+  launcher = RetroArchLauncher(Path.cwd(), ConfigManager(config_file=scratch / "config.yaml"))
+  channel = launcher._command_channel_overrides(None)
+  assert channel == {"stdin_cmd_enable": '"true"', "network_cmd_enable": '"false"'}, channel
+  retroarch = launcher._resolve_retroarch_binary()
+  assert retroarch, "no RetroArch to run"
+  # A user config that has the UDP interface on; the launch override must win.
+  user_cfg = scratch / "retroarch.cfg"
+  user_cfg.write_text("".join(f'{k} = "{v}"\n' for k, v in {
+      "network_cmd_enable": "true", "network_cmd_port": "55355",
+      "video_driver": "null", "audio_driver": "null", "input_driver": "null",
+      "joypad_driver": "null", "menu_driver": "rgui", "quit_press_twice": "false",
+      "config_save_on_exit": "false"}.items()))
+  override = scratch / "override.cfg"
+  override.write_text("".join(f"{k} = {v}\n" for k, v in channel.items()))
+  env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+  proc = subprocess.Popen(
+      [retroarch, "--config", str(user_cfg), "--appendconfig", str(override), "--menu"],
+      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
+  try:
+      time.sleep(4)
+      assert proc.poll() is None, f"RetroArch exited early: {proc.returncode}"
+      ss = subprocess.run(["ss", "-ulpn"], capture_output=True, text=True).stdout
+      bound = [line.split()[3] for line in ss.splitlines() if f"pid={proc.pid}," in line]
+      assert not bound, f"RetroArch is listening on UDP: {bound}"
+      client = StdinCommandClient(proc.stdin)
+      assert client.send("VERSION"), "the stdin channel refused VERSION"
+      time.sleep(1)
+      assert client.send("QUIT"), "the stdin channel refused QUIT"
+      assert proc.wait(timeout=10) == 0, "RetroArch did not quit on the stdin QUIT"
+      assert proc.stdout.read().strip(), "no VERSION reply on stdout"
+  finally:
+      if proc.poll() is None:
+          proc.kill()
+  print("RT-315 OK")
+  PY
+  ```
+  Suite files `tests/test_retroarch_command.py` (`WhichChannelTests`, `StdinCommandClientTests`),
+  `tests/test_runtime_manager.py` (`StdinChannelTests`), `tests/test_retroarch_launcher.py`
+  (`TheCommandPipeTests`), `tests/test_runtime_override_pieces.py` (`TheSessionPieceTests`).
 
 ### RT-158 — The volume control says where the game actually is
 - **Area:** Launch
