@@ -3,9 +3,10 @@
 The launcher only ever asked "does this specific core exist?". Choosing a core
 per console or per ROM needs the other direction: *which* cores are installed,
 and which of them can run a given system. This module answers that by scanning
-the same directories the launcher searches and reading the ``.info`` sidecar
-files RetroArch ships, so the picker can show a core's real name ("Snes9x")
-rather than its filename.
+the directories in :func:`core_search_dirs` -- the same list the launcher
+resolves Automatic through -- and reading the ``.info`` sidecar files RetroArch
+ships, so the picker can show a core's real name ("Snes9x") rather than its
+filename.
 
 A core is matched to a console two ways, unioned:
 
@@ -23,14 +24,19 @@ import yaml
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.paths import get_real_home, store_path
-from openemux.core.platform import CORE_SUFFIX, bundled_core_dir, core_stem, user_retroarch_dirs
+from openemux.core.platform import (
+    CORE_SUFFIX,
+    bundled_core_dir,
+    core_stem,
+    system_core_dirs,
+    user_retroarch_dirs,
+)
 from openemux.core.systems import (
     get_runtime_core_candidates,
     get_thumbnail_system,
 )
 
-# Mirrors RetroArchLauncher's search order: user config first, then Flatpak,
-# the vendored bundle, and the common system locations.
+# A RetroArch installed as a Flatpak keeps its cores under its own app dir.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORES_CONFIG_FILE = store_path("cores")
@@ -42,15 +48,16 @@ DEFAULT_CORES_CONFIG = {
     "rom_overrides": {},
 }
 
-SYSTEM_CORE_DIRS = [
-    "/usr/lib/libretro",
-    "/usr/lib64/libretro",
-    "/usr/lib/x86_64-linux-gnu/libretro",
-    "/usr/local/lib/libretro",
-]
-
 
 def core_search_dirs(project_root=None):
+    """Every directory a core is looked for in, first match wins.
+
+    User config first, then the Flatpak, the vendored bundle, a RetroArch the
+    user installed themselves and the distribution's own locations. This is
+    the one list: the launcher resolves Automatic through it and the pickers
+    list what is installed from it, so a core the launcher would run is a core
+    the pickers can offer.
+    """
     real_home = get_real_home()
     dirs = [
         real_home / ".config" / "retroarch" / "cores",
@@ -66,7 +73,7 @@ def core_search_dirs(project_root=None):
             dirs.append(bundled)
     # Searched, never written to: a RetroArch the user installed themselves.
     dirs.extend(user_retroarch_dirs())
-    dirs.extend(Path(p) for p in SYSTEM_CORE_DIRS)
+    dirs.extend(Path(p) for p in system_core_dirs())
     return dirs
 
 
