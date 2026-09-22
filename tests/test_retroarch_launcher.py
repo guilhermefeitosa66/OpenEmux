@@ -1639,8 +1639,10 @@ class ThePathsThatAreTriedInOrderTests(_ResolutionCase):
             self.assertEqual(self.launcher._find_core_path("SFC"), "/cores/snes9x.so")
 
     def test_a_bundled_core_directory_joins_the_search(self):
+        # Patched where the list is built: the launcher searches the pickers'
+        # list rather than keeping one of its own.
         with patch(
-            "openemux.core.retroarch_launcher.bundled_core_dir",
+            "openemux.core.cores.bundled_core_dir",
             return_value=Path("/bundle/cores"),
         ):
             self.assertIn("/bundle/cores", self.launcher._core_search_dirs())

@@ -11,7 +11,7 @@ from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
-from openemux.core.cores import CoreCatalog
+from openemux.core.cores import CoreCatalog, core_search_dirs
 from openemux.core import input_tuning
 from openemux.core.input_actions import (
     conflicting_stock_hotkeys,
@@ -27,15 +27,13 @@ from openemux.core.input_profiles import (
     normalize_turbo_settings,
     player_for_device,
 )
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import is_running_in_flatpak
 from openemux.core.platform import (
     IS_WINDOWS,
     MACHINE,
     VENDORED_RETROARCH,
-    bundled_core_dir,
     cfg_path,
     popen_kwargs,
-    user_retroarch_dirs,
 )
 from openemux.core.retroarch_command import uses_stdin_channel
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
@@ -101,22 +99,6 @@ def appimage_flags(binary_path, libfuse_available=None, force=False):
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
-
-# Distro-packaged core locations. Empty on Windows, which has no equivalent
-# convention -- cores there come from the bundled portable RetroArch.
-# The Debian multiarch directory is named after the host triplet, so it is the
-# one entry here that changes with the architecture -- and it is the one Ubuntu
-# and Debian actually use for the libretro packages (issue #119).
-DEFAULT_CORE_DIRS = (
-    []
-    if IS_WINDOWS
-    else [
-        "/usr/lib/libretro",
-        "/usr/lib64/libretro",
-        f"/usr/lib/{MACHINE}-linux-gnu/libretro",
-        "/usr/local/lib/libretro",
-    ]
-)
 
 # Runtime OSD policy:
 # - Hide startup/runtime noise (content/core/autoconfig/override/remap/etc).
@@ -341,20 +323,9 @@ class RetroArchLauncher:
         return ["flatpak", "run", "--die-with-parent", RETROARCH_FLATPAK_ID]
 
     def _core_search_dirs(self):
-        real_home = get_real_home()
-        home_dirs = [
-            real_home / ".config" / "retroarch" / "cores",
-            real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
-            self.project_root / "vendors" / "retroarch-assets" / "cores",
-        ]
-        # Where the bundled portable RetroArch keeps its cores, and where the
-        # updater downloads them, on Windows.
-        bundled = bundled_core_dir(self.project_root)
-        if bundled:
-            home_dirs.append(bundled)
-        # A RetroArch the user installed themselves: searched, never written to.
-        home_dirs.extend(user_retroarch_dirs())
-        return [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
+        # The pickers' list too (cores.core_search_dirs): a second copy here is
+        # how they once disagreed about the machine's multiarch directory.
+        return [str(p) for p in core_search_dirs(self.project_root)]
 
     def _resolve_core_name(self, core_filename):
         """Find an installed core by its bare filename, or ``None``."""

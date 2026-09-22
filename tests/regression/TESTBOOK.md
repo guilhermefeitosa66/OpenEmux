@@ -91,7 +91,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   A separate job starts the real app under `xvfb-run` and waits for its window, so a crash in
   application or window construction fails CI instead of surfacing by hand on release day.
   `coverage report` enforces `fail_under`, and the badge ladder has a red band, so coverage can no
-  longer decay in silence (issue #242).
+  longer decay in silence (issue #242). The Windows job installs the cairo named by
+  `packaging/windows/packages.lock` rather than whatever MSYS2 is rolling today: cairo 1.18.6
+  aborts GTK 4 at the first window it presents, which killed the suite on every branch at once.
 - **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
 ### RT-231 — Unsafe or simply broken code cannot reach develop unremarked
@@ -4571,6 +4573,22 @@ desk. Anything needing a real ARM machine is `MANUAL`.
   153 of 217 do exist, and telling somebody to configure a core that was never built for their
   machine sends them looking for a file they cannot get.
 - **Check:** suite file `tests/test_architecture.py` (`MissingCoreMessageTests`).
+
+### RT-315 — The core pickers list the cores the distribution installed on ARM
+- **Area:** ARM
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None. The probe fakes the machine, so it runs on x86_64.
+- **Steps:**
+  1. On an arm64 Debian or Ubuntu with a packaged core installed (`sudo apt install
+     libretro-snes9x`), open "Settings" → "Cores" and look at "Super Nintendo"; then the console's
+     row in the sidebar ("Core") and a ROM's context menu ("Core").
+- **Expected:** All three list the installed core by name ("Snes9x"), the same core Automatic
+  launches. The cores the distribution packages live in `/usr/lib/<triplet>/libretro`, and the
+  triplet is `aarch64-linux-gnu` there -- a picker looking under `x86_64-linux-gnu` finds nothing
+  and offers "Automatic" alone, for a console that plays games perfectly well.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core import platform as pf; pf.MACHINE='aarch64'; from openemux.core.cores import CoreCatalog; d=[str(x) for x in CoreCatalog(project_root='/checkout').core_dirs]; assert '/usr/lib/aarch64-linux-gnu/libretro' in d, d; assert '/usr/lib/x86_64-linux-gnu/libretro' not in d, d; print('RT-315 OK')"`
+  Plus suite file `tests/test_architecture.py` (`CoreSearchDirTests`), which also holds the
+  launcher and the pickers to one list.
 
 ### RT-274 — The .deb and .rpm are stamped with the architecture they were built for
 - **Area:** ARM
