@@ -91,7 +91,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   A separate job starts the real app under `xvfb-run` and waits for its window, so a crash in
   application or window construction fails CI instead of surfacing by hand on release day.
   `coverage report` enforces `fail_under`, and the badge ladder has a red band, so coverage can no
-  longer decay in silence (issue #242).
+  longer decay in silence (issue #242). The Linux and Windows runs both split the suite in two
+  processes, window tests apart from the rest: one process holding every window the suite builds
+  peaks past what a runner has on Linux, and on Windows it died at the first window it presented
+  (exit code 3, no failing test, every branch at once).
 - **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
 ### RT-231 — Unsafe or simply broken code cannot reach develop unremarked

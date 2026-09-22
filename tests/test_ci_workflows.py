@@ -199,10 +199,20 @@ class TestsWorkflowTests(unittest.TestCase):
         job = self.data["jobs"].get("windows")
         self.assertIsNotNone(job, "nothing runs the suite on Windows")
         self.assertEqual(job["runs-on"], "windows-latest")
-        self.assertTrue(
-            any("unittest discover" in str(step.get("run", "")) for step in job["steps"]),
-            "the Windows job does not run the suite",
-        )
+        run = " ".join(str(step.get("run", "")) for step in job["steps"])
+        self.assertIn("unittest", run, "the Windows job does not run the suite")
+
+    def test_the_windows_suite_runs_the_window_tests_in_their_own_process(self):
+        # Windows always has a station to draw on, so nothing skips here and
+        # one process was left holding every window the suite builds. It died
+        # at the first window it presented -- exit code 3, no failing test,
+        # a third of the way in, on every branch at once. Same split as the
+        # Linux job, which makes it for the same reason.
+        job = self.data["jobs"]["windows"]
+        run = " ".join(str(step.get("run", "")) for step in job["steps"])
+        self.assertIn("window_harness", run, "the Windows job does not split the suite")
+        self.assertIn("$rest", run)
+        self.assertIn("$windowed", run)
 
     def test_the_windows_job_uses_the_stack_the_bundle_ships(self):
         # Running against some other Python would test a stack no user has:

@@ -231,11 +231,25 @@ jobs:
 
       - name: Run the unit tests
         # No coverage here: the floor is enforced by the Linux matrix, and a
-        # second reporter would only race it for the badge. Tests that need to
-        # build real widgets skip themselves when no display opened
-        # (tests/gtk_display.py), so this job never segfaults on a runner
-        # without an interactive desktop.
-        run: PYTHONPATH=src python -m unittest discover -s tests -v
+        # second reporter would only race it for the badge.
+        #
+        # Two processes, and not for speed -- the same split the Linux job
+        # makes, for a sharper version of the same reason. GTK *does* open
+        # windows here: unlike a headless Linux runner, Windows always has a
+        # station to draw on, so `tests/gtk_display.py` never skips and this
+        # one process ends up holding every window the suite builds. It then
+        # died at the first window it presented: exit code 3, no failing test,
+        # a third of the way in, on every branch at once (PRs #449 and #450
+        # and develop itself, while the very same commit passed when the suite
+        # ran on its own). Presenting that window from a process that has not
+        # already built two thousand tests' worth of state is what stops it.
+        # The split is by the harness that builds those windows, so a new UI
+        # test file joins the right half by importing it.
+        run: |
+          windowed=$(grep -l window_harness tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||')
+          rest=$(ls tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||' | grep -vxF "$windowed")
+          PYTHONPATH=src python -m unittest -v $rest
+          PYTHONPATH=src python -m unittest -v $windowed
 
   smoke:
     name: Headless start-up
