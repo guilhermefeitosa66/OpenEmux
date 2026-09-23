@@ -2,7 +2,7 @@
 
 `_write_runtime_override` assembled all of them inline: bindings for five
 device slots, stock-hotkey conflicts, analog modes, controller types, tuning,
-turbo, notifications, the BIOS directory, shaders, the UDP channel, the audio
+turbo, notifications, the BIOS directory, shaders, the command channel, the audio
 driver, save states and the embed overrides -- 170 lines, each block carrying
 its own comment saying which concern it was, which is structure standing in
 for a name (issue #238).
@@ -16,7 +16,9 @@ own rather than being read out of an assembled file.
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from openemux.core import retroarch_command
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from tests.test_retroarch_launcher import _DummyConfig
 from tests.platform_marks import linux_only
@@ -118,15 +120,29 @@ class TheEmbedPieceTests(unittest.TestCase):
 
 
 class TheSessionPieceTests(unittest.TestCase):
-    def test_the_command_channel_is_on_and_on_the_given_port(self):
+    def test_outside_windows_the_channel_is_stdin_and_udp_is_off(self):
+        # Off rather than unset: a user's retroarch.cfg may have it on, and
+        # RetroArch binds that socket on every interface.
         launcher, _config = _launcher()
-        overrides = launcher._session_overrides(54321)
+        with patch.object(retroarch_command, "IS_WINDOWS", False):
+            overrides = launcher._session_overrides(54321)
+        self.assertEqual(overrides["stdin_cmd_enable"], '"true"')
+        self.assertEqual(overrides["network_cmd_enable"], '"false"')
+        self.assertNotIn("network_cmd_port", overrides)
+
+    def test_on_windows_the_command_channel_is_on_and_on_the_given_port(self):
+        launcher, _config = _launcher()
+        with patch.object(retroarch_command, "IS_WINDOWS", True):
+            overrides = launcher._session_overrides(54321)
         self.assertEqual(overrides["network_cmd_enable"], '"true"')
         self.assertEqual(overrides["network_cmd_port"], '"54321"')
+        self.assertNotIn("stdin_cmd_enable", overrides)
 
     def test_no_port_falls_back_to_the_configured_one(self):
         launcher, _config = _launcher()
-        self.assertEqual(launcher._session_overrides(None)["network_cmd_port"], '"55355"')
+        with patch.object(retroarch_command, "IS_WINDOWS", True):
+            overrides = launcher._session_overrides(None)
+        self.assertEqual(overrides["network_cmd_port"], '"55355"')
 
     def test_nothing_this_launch_imposes_is_written_back(self):
         # The whole reason the embed overrides used to escape into the user's

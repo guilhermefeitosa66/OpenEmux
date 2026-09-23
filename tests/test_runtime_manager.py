@@ -1,5 +1,6 @@
 """RuntimeManager's live control of a running game (issues #69, #125)."""
 
+import os
 import threading
 import time
 import unittest
@@ -7,12 +8,18 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from openemux.core.retroarch_command import VOLUME_PACING_INTERVAL, VolumePacer
+from openemux.core import retroarch_command
+from openemux.core.retroarch_command import (
+    VOLUME_PACING_INTERVAL,
+    StdinCommandClient,
+    VolumePacer,
+)
 from openemux.core.runtime_manager import (
     HOT_APPLY_STATE_SLOT,
     STARTUP_FAILURE_SECONDS,
     RuntimeManager,
 )
+from tests.platform_marks import posix_only
 
 
 class _DummyConfig:
@@ -307,25 +314,39 @@ class CommandDispatchTests(unittest.TestCase):
             self.assertIsNone(rom)
             self.assertTrue(error)
 
+    def _relaunch_recording_the_port(self, tmp_dir):
+        manager, _config = _manager(tmp_dir)
+        launched = {}
+
+        def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None,
+                         force_extract=False):
+            launched["args"] = (rom_path, console)
+            launched["port"] = network_cmd_port
+            return _FakeProcess(), None
+
+        manager.retroarch_launcher.launch_process = _fake_launch
+        success, error = manager.relaunch_rom({"path": "/roms/x.sfc", "console": "SFC"})
+        self.assertTrue(success, error)
+        self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
+        return manager, launched
+
     def test_relaunch_rom_launches_the_same_rom_again(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            launched = {}
-
-            def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None,
-                             force_extract=False):
-                launched["args"] = (rom_path, console)
-                launched["port"] = network_cmd_port
-                return _FakeProcess(), None
-
-            manager.retroarch_launcher.launch_process = _fake_launch
-            success, error = manager.relaunch_rom(
-                {"path": "/roms/x.sfc", "console": "SFC"}
-            )
-            self.assertTrue(success, error)
-            self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
+        with TemporaryDirectory() as tmp_dir, mock.patch.object(
+            retroarch_command, "IS_WINDOWS", True
+        ):
+            _, launched = self._relaunch_recording_the_port(tmp_dir)
             # The launch owns the port; RetroArch and the client must agree.
             self.assertTrue(launched["port"] > 0)
+
+    def test_a_stdin_launch_asks_for_no_port_at_all(self):
+        # The game is spoken to through its stdin, so a port would be one more
+        # thing for RetroArch and the client to disagree on, for nothing.
+        with TemporaryDirectory() as tmp_dir, mock.patch.object(
+            retroarch_command, "IS_WINDOWS", False
+        ):
+            manager, launched = self._relaunch_recording_the_port(tmp_dir)
+            self.assertIsNone(launched["port"])
+            self.assertIsNone(manager._network_cmd_port)
 
     def test_relaunch_rom_refuses_without_a_rom(self):
         with TemporaryDirectory() as tmp_dir:
@@ -357,6 +378,79 @@ class CommandDispatchTests(unittest.TestCase):
             second = manager._command_client()
             self.assertIsNot(first, second)
             self.assertIsNone(manager._pacer)
+
+
+class _PipedProcess(_FakeProcess):
+    """A live game launched with a real stdin pipe, as every Linux launch is."""
+
+    def __init__(self, case):
+        super().__init__()
+        read_fd, write_fd = os.pipe()
+        self.reader = os.fdopen(read_fd, "rb", buffering=0)
+        self.stdin = os.fdopen(write_fd, "wb")
+        case.addCleanup(self.reader.close)
+        case.addCleanup(self.stdin.close)
+
+    def received(self):
+        os.set_blocking(self.reader.fileno(), False)
+        try:
+            return self.reader.read(65536) or b""
+        except BlockingIOError:
+            return b""
+
+
+@posix_only("the stdin channel is a POSIX pipe; the Windows build has no stdin interface")
+class StdinChannelTests(unittest.TestCase):
+    """A game with a stdin pipe is spoken to through it, never over UDP."""
+
+    def test_commands_go_down_the_games_own_pipe(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            game = _PipedProcess(self)
+            manager.active_process = game
+            with mock.patch.object(manager, "_resolve_network_cmd_port") as resolve:
+                self.assertTrue(manager.send_command("PAUSE_TOGGLE"))
+                self.assertTrue(manager.load_state_slot(3))
+            resolve.assert_not_called()
+            self.assertIsInstance(manager._command_client_cache, StdinCommandClient)
+            self.assertEqual(game.received(), b"PAUSE_TOGGLE\nLOAD_STATE_SLOT 3\n")
+
+    def test_the_same_game_keeps_its_client(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            manager.active_process = _PipedProcess(self)
+            self.assertIs(manager._command_client(), manager._command_client())
+
+    def test_a_new_game_gets_a_new_client_and_the_old_pipe_is_closed(self):
+        # launch() only refuses while a game is alive, so a game that ended
+        # without a poll clearing it is replaced under a cached client. That
+        # client must not keep writing into a dead game's pipe.
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            first_game = _PipedProcess(self)
+            manager.active_process = first_game
+            first = manager._command_client()
+            manager._pacer = VolumePacer(first, sleep=_RecordingSleep())
+
+            second_game = _PipedProcess(self)
+            manager.active_process = second_game
+            second = manager._command_client()
+
+            self.assertIsNot(first, second)
+            self.assertIs(second.stream, second_game.stdin)
+            self.assertTrue(first_game.stdin.closed)
+            self.assertIsNone(manager._pacer)
+
+    def test_a_game_that_ends_gets_eof_on_its_stdin(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+            game = _PipedProcess(self)
+            manager.active_process = game
+            manager.send_command("QUIT")
+            manager._clear_active()
+            self.assertTrue(game.stdin.closed)
+            self.assertIsNone(manager._command_client_cache)
+            self.assertEqual(game.reader.read(), b"QUIT\n")
 
 
 class StopActiveTests(unittest.TestCase):

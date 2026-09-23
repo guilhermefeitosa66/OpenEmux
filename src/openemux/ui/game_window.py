@@ -6,8 +6,9 @@ the frame flag on, the CRT TV artwork (``assets/images/tv-frame.png``) is
 drawn and the game sits inside the TV's screen cutout; without it the game
 fills the content area and the headerbar carries the action buttons.
 
-The headerbar buttons talk to RetroArch over the UDP network-command
-channel the launcher already enables (``RuntimeManager.send_command``).
+The headerbar buttons talk to RetroArch over the command channel the
+launcher already opens -- the game's stdin, or UDP on Windows
+(``RuntimeManager.send_command``).
 
 Whether a wrapper opens at all is ``runtime.game_window`` plus what the
 session can actually do -- see ``openemux.core.game_window_support``.
@@ -274,7 +275,7 @@ class GameWindow(Adw.Window):
     def _build_volume_button(self):
         """A headerbar volume control mirroring the library's (issue #69):
         a MenuButton whose popover holds the mute toggle and the dB slider,
-        walked over UDP by the runtime manager's pacer."""
+        walked by the runtime manager's pacer."""
         self._volume_btn = Gtk.MenuButton()
         self._volume_btn.set_icon_name("audio-volume-high-symbolic")
         self._volume_btn.set_tooltip_text(self._t("game_window.volume"))
