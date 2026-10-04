@@ -1661,6 +1661,29 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only (network-dependent and slow; logic covered by `tests/test_cover_sync.py`,
   `tests/test_artwork_search.py`, `tests/test_artwork_suggestions.py` via RT-002).
 
+### RT-320 — A fresh install has ScreenScraper on, after libretro
+- **Area:** Covers
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a fresh install, open "Preferences" and find "Artwork Providers".
+- **Expected:** The list reads "libretro thumbnails", "ScreenScraper", "OpenEmux mirror", all
+  three switched on. ScreenScraper used to come up off: a new config has no provider list, so it
+  took the migration meant for pre-1.9 configs, whose old `cover_source` default meant
+  libretro only (issue #455). An existing config keeps its switches: upgrading turns nothing on.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile, yaml; from pathlib import Path
+  from openemux.core.config import ConfigManager
+  d = Path(tempfile.mkdtemp(dir='$SCRATCH'))
+  on = lambda m: [p['id'] for p in m.get_artwork_providers() if p['enabled']]
+  assert on(ConfigManager(config_file=d / 'new.yaml')) == ['libretro', 'screenscraper', 'openemux']
+  (d / 'old.yaml').write_text(yaml.safe_dump({'covers': {'sync': {'cover_source': 'libretro'}}}))
+  assert 'screenscraper' not in on(ConfigManager(config_file=d / 'old.yaml'))
+  print('RT-320 OK')"
+  ```
+  Unit-level: `tests/test_artwork_providers.py` (`WhatANewConfigStartsWithTests`).
+
 ### RT-055 — An error page is never saved as a cover
 - **Area:** Covers
 - **Mode:** AUTO-SUITE

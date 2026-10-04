@@ -194,10 +194,10 @@ UPDATER_DEFAULTS = {
 # user picks in Preferences afterwards sticks.
 UI_SETTINGS_VERSION = 1
 
-# Cover art source selection. "libretro" is the historical (and default)
-# behavior: libretro thumbnails only, no credentials required. The
-# ScreenScraper-backed options are opt-in and require the user to configure
-# their own ScreenScraper account (see core/screenscraper.py).
+# Cover art source selection, the enum the provider list below replaced (issue
+# #76). Still read to migrate a config that predates the list: "libretro", its
+# default, meant libretro thumbnails only, with ScreenScraper off. A new config
+# never goes through it (issue #455).
 COVER_SOURCE_LIBRETRO = "libretro"
 COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
 COVER_SOURCE_SCREENSCRAPER = "screenscraper"
@@ -223,18 +223,20 @@ ARTWORK_PROVIDER_KINDS_AVAILABLE = {
     "screenscraper": (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL),
     "openemux": (COVER_ART_TYPE_BOXART,),
 }
-# Fresh-install precedence: the project's own mirror first (fully under our
-# control, no quotas), libretro second, ScreenScraper last (quota'd, and the
-# only one needing credentials). Migrated configs keep the order their old
-# cover_source enum meant instead.
+# Fresh-install precedence: libretro first (no account, no quota),
+# ScreenScraper second (matches by ROM hash and is the only source of
+# cartridge labels, but quota'd), the project's own mirror closing the chain.
+# All three on (issue #455). This is the list a *new* config starts from --
+# see ConfigManager.create_default_config; a config that predates the
+# provider list keeps the order its old cover_source enum meant.
 DEFAULT_ARTWORK_PROVIDERS = [
-    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {
         "id": "screenscraper",
         "enabled": True,
         "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
     },
+    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
 ]
 
 
@@ -535,6 +537,12 @@ class ConfigManager:
 
     def create_default_config(self):
         config = _merge_defaults(DEFAULT_CONFIG, {})
+        # Only here, not in DEFAULT_CONFIG: _merge_defaults would hand the
+        # list to every existing config that lacks it, and a pre-1.9 config
+        # must keep the order its cover_source enum meant. Without it, a new
+        # config took that same migration path and came out with ScreenScraper
+        # off, the enum's old default (issue #455).
+        config["covers"]["sync"]["providers"] = copy.deepcopy(DEFAULT_ARTWORK_PROVIDERS)
         config = self._migrate_runtime_config(config)
         self.save_config(config)
         return config

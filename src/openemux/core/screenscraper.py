@@ -1,4 +1,4 @@
-"""ScreenScraper.fr API v2 client (optional, opt-in cover art source).
+"""ScreenScraper.fr API v2 client (the cover art and cartridge label source).
 
 Why this exists
 ---------------
@@ -21,10 +21,12 @@ What the API actually requires (per https://www.screenscraper.fr/webapi2.php)
   430 means "your scrape quota is exceeded for today".
 * The API may only be integrated into freely distributed applications.
 
-Because OpenEmux ships no developer credentials, this source is **opt-in and off
-by default**: the user configures their own credentials in Preferences, and when
-anything is missing or fails we return no candidates so the caller falls back to
-libretro. Nothing in here ever raises into the sync loop.
+Release builds embed the project's developer credentials at build time
+(``core/embedded_credentials.py``), and a fresh install has this source on
+(issue #455); the user may add their own account in Preferences for their own
+quota. When anything is missing -- a source checkout with no ``.env`` -- or
+fails, we return no candidates so the caller falls back to the next provider.
+Nothing in here ever raises into the sync loop.
 """
 import json
 import logging
