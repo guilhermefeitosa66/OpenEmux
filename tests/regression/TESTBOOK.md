@@ -1344,6 +1344,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_cartridge_on_mixed_pages.py`.
 - **Restore:** none.
 
+### RT-322 — A cartridge with no label shows a blank sticker, not its box art
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The cartridge shelf on a console with cartridge art (SNES), and two games:
+  one with a file in `<roms>/SFC/labels/`, one with box art in `<roms>/SFC/covers/` and **no**
+  label.
+- **Steps:**
+  1. Open the console's page in the cartridge view.
+  2. Look at both cartridges.
+- **Expected:** The game with a label shows that label on the sticker. The game with only box art
+  shows a plain, blank sticker; its box art is never cropped into the label area, which is what
+  used to happen (issue #457). Neither card carries the "missing artwork" badge: box art still
+  counts as artwork. In the cover grid (or on "All"), the second game shows its box art as before.
+- **Check:** screenshot of the shelf (`make devbox-shot OUT=$SCRATCH/rt322.png WIN=1`). The rules
+  are in `tests/test_rom_card_widget.py` (`WhatACartridgeLabelShowsTests`) and
+  `tests/test_scraper.py` (`WhichArtIsALabelTests`).
+
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
 - **Mode:** AUTO-UI

@@ -173,7 +173,9 @@ class TheCoverArrivingTests(_CardCase):
     def test_a_cover_on_disk_is_decoded_off_the_main_thread(self):
         # Issue #128: the decode used to be handed to the main thread, which
         # serialised every rescale in the library onto the one that cannot
-        # afford it.
+        # afford it. A card with no cartridge frame, where the cover itself
+        # is what gets decoded (inside a frame it is the composite, #457).
+        self.card.cartridge_frame_path = None
         pixbuf = self.pixbuf()
         with mock.patch.object(
             rom_card_module.cover_cache, "load_cover", return_value=pixbuf
@@ -212,6 +214,36 @@ class TheCoverArrivingTests(_CardCase):
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), False)
         self.assertFalse(self.card._fade_next_apply)
         self.assertIsNotNone(self.card._reveal_animation)
+
+
+@needs_display
+class WhatACartridgeLabelShowsTests(_CardCase):
+    """Only a real label goes on the sticker (issue #457)."""
+
+    def _composite_with(self, path):
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        with mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render, mock.patch.object(
+            rom_card_module.cover_cache, "load_cover", return_value=None
+        ), mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, path
+            )
+        return render.call_args[0][0]
+
+    def test_a_label_is_drawn_on_the_cartridge(self):
+        label = "/roms/SFC/labels/Game.png"
+        self.assertEqual(self._composite_with(label), label)
+
+    def test_box_art_alone_leaves_a_blank_cartridge(self):
+        self.assertIsNone(self._composite_with("/roms/SFC/covers/Game.png"))
+
+    def test_box_art_alone_is_still_artwork(self):
+        # The badge and the "without artwork" filter must not start flagging
+        # every game whose only art is its box.
+        self._composite_with("/roms/SFC/covers/Game.png")
+        self.assertTrue(self.entry.has_artwork)
 
 
 @needs_display
