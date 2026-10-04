@@ -718,6 +718,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-321 — ROMs dropped onto the sidebar go to their own consoles
+- **Area:** Library & scanning
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A library with at least one console, and ROM files of a console it does not
+  have yet (say, a `.gba` while only SNES games exist).
+- **Steps:** As a QA person:
+  1. Open the SNES page.
+  2. Drag the `.gba` files from the file manager over the sidebar, then drop them there.
+  3. Open "All", then drag a `.gba` file onto the sidebar again.
+- **Expected:** While dragging over it, the sidebar takes the dashed drop outline and the banner
+  shows the drop hint, as the library area does. The drop imports the games into "Game Boy
+  Advance", which appears in the sidebar, and not into the SNES page that was open. Each file goes
+  to the console its extension names. Step 3 imports straight away, without the "which console?"
+  question that a drop onto the "All" page asks. Dropping onto the library area works exactly as
+  before, and dragging a console row to reorder the sidebar still works (issue #456).
+- **Check:** suite files `tests/test_import_flow.py` (`DroppingOntoTheSidebarTests`,
+  `DroppingFilesTests`), `tests/test_console_sidebar.py` (row reordering).
+
 ### RT-015 — Importing as a link leaves the original where it is
 - **Area:** Library
 - **Mode:** MANUAL
