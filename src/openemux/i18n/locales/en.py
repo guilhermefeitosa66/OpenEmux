@@ -231,6 +231,7 @@ TRANSLATIONS = {
     "status.scan.progress": "Scanning ROMs ({current}/{total})",
     "status.covers.starting": "Starting cover sync...",
     "status.covers.progress": "Syncing covers",
+    "status.cores.downloading": "Downloading the remaining cores",
     "status.labels.progress": "Syncing cartridge labels",
     "toast.running": "Running {name} ({console})",
     "toast.relaunching": "Relaunching the game…",

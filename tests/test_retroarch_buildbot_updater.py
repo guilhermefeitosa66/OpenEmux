@@ -821,3 +821,215 @@ class ParallelDownloadTests(unittest.TestCase):
         self.assertEqual(summary["downloaded"], 8)
         self.assertEqual([e["current"] for e in events], list(range(1, 9)))
         self.assertTrue(all(e["total"] == 8 for e in events))
+
+
+def _zip_bytes(members):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+    return buffer.getvalue()
+
+
+def _core(stem):
+    return f"{stem}_libretro{CORE_SUFFIX}"
+
+
+class ASweepOverPartOfTheListingTests(unittest.TestCase):
+    """The first boot waits for some cores and leaves the rest (issue #442)."""
+
+    LISTED = ("mgba", "snes9x", "stella")
+
+    def _sweep(self, tmp_dir, **kwargs):
+        updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+        listing = "".join(
+            f'<a href="{_core(stem)}.zip">{stem}</a>' for stem in self.LISTED
+        ).encode("utf-8")
+        fetched = []
+
+        def _fake_urlopen(url, timeout=5):
+            if str(url).endswith("/buildbot/"):
+                return _FakeResponse(listing)
+            name = str(url).rsplit("/", 1)[-1][: -len(".zip")]
+            fetched.append(name)
+            return _FakeResponse(_zip_bytes({name: b"core"}))
+
+        with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            summary = updater.download_all(**kwargs)
+        return updater, summary, sorted(fetched)
+
+    def test_only_fetches_just_the_named_cores(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, fetched = self._sweep(tmp_dir, only=[_core("snes9x"), _core("stella")])
+        self.assertEqual(fetched, [_core("snes9x"), _core("stella")])
+        self.assertEqual((summary["total"], summary["downloaded"]), (2, 2))
+
+    def test_a_named_core_the_buildbot_does_not_list_is_not_a_failure(self):
+        # Some cores are not built for every architecture; the console says so.
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, fetched = self._sweep(tmp_dir, only=[_core("snes9x"), _core("dolphin")])
+        self.assertEqual(fetched, [_core("snes9x")])
+        self.assertEqual(summary["failed"], 0)
+
+    def test_skip_fetches_everything_else(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, fetched = self._sweep(tmp_dir, skip=[_core("snes9x")])
+        self.assertEqual(fetched, [_core("mgba"), _core("stella")])
+        self.assertEqual(summary["downloaded"], 2)
+
+    def test_a_filter_that_keeps_nothing_is_done_not_failed(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, fetched = self._sweep(tmp_dir, only=[])
+        self.assertEqual(fetched, [])
+        self.assertEqual((summary["total"], summary["failed"]), (0, 0))
+
+    def test_an_empty_listing_still_fails_whatever_the_filter(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            with patch("urllib.request.urlopen", return_value=_FakeResponse(b"<html></html>")):
+                summary = updater.download_all(only=[_core("snes9x")])
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["failures"][0]["artifact"], "listing")
+
+    def test_a_cancelled_sweep_starts_nothing_and_fails_nothing(self):
+        cancel = threading.Event()
+        cancel.set()
+        with TemporaryDirectory() as tmp_dir:
+            updater, summary, fetched = self._sweep(tmp_dir, cancel_event=cancel)
+            self.assertEqual(list(updater.core_dir.glob("*" + CORE_SUFFIX)), [])
+        self.assertEqual(fetched, [])
+        self.assertEqual(summary["cancelled"], 3)
+        self.assertEqual((summary["downloaded"], summary["failed"]), (0, 0))
+
+    def test_an_unset_cancel_event_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, _ = self._sweep(tmp_dir, cancel_event=threading.Event())
+        self.assertEqual((summary["downloaded"], summary["cancelled"]), (3, 0))
+
+
+class OneShaderPackOfTwoTests(unittest.TestCase):
+    def test_packs_limits_the_run_to_the_named_pack(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            urls = []
+
+            def _fake_urlopen(url, timeout=5):
+                urls.append(str(url))
+                return _FakeResponse(_zip_bytes({"shaders_glsl/handheld/dot.glslp": b"dot"}))
+
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+                summary = updater.download_shader_packs_if_missing(packs=["shaders_glsl"])
+
+            self.assertEqual(urls, ["https://example.invalid/shaders_glsl.zip"])
+            self.assertEqual((summary["total"], summary["downloaded"]), (1, 1))
+            self.assertEqual(summary["targets"], [str(updater.shader_glsl_dir)])
+
+    def test_no_packs_means_nothing_to_do(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            with patch("urllib.request.urlopen", side_effect=AssertionError("no fetch")):
+                summary = updater.download_shader_packs_if_missing(packs=[])
+        self.assertEqual((summary["total"], summary["failed"]), (0, 0))
+
+
+class WhichShaderPackTheDriverReadsTests(unittest.TestCase):
+    def test_gl_reads_glsl(self):
+        self.assertEqual(retroarch_buildbot_updater.shader_pack_for("gl"), "shaders_glsl")
+
+    def test_the_vulkan_era_drivers_read_slang(self):
+        for driver in ("vulkan", "glcore", "d3d11"):
+            with self.subTest(driver=driver):
+                self.assertEqual(
+                    retroarch_buildbot_updater.shader_pack_for(driver), "shaders_slang"
+                )
+
+    def test_auto_follows_the_platform_default(self):
+        with patch("openemux.core.video_driver.IS_WINDOWS", False):
+            self.assertEqual(retroarch_buildbot_updater.shader_pack_for("auto"), "shaders_glsl")
+        with patch("openemux.core.video_driver.IS_WINDOWS", True):
+            self.assertEqual(retroarch_buildbot_updater.shader_pack_for("auto"), "shaders_slang")
+
+    def test_a_driver_with_no_shader_pipeline_reads_neither(self):
+        self.assertIsNone(retroarch_buildbot_updater.shader_pack_for("sdl2"))
+
+
+class TheCoreInfoFilesTests(unittest.TestCase):
+    """``core_info_base_url`` was configured and never read (issue #442)."""
+
+    def _install(self, tmp_dir, payload=None, error=None):
+        updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+        urls = []
+
+        def _fake_urlopen(url, timeout=5):
+            urls.append(str(url))
+            if error:
+                raise error
+            return _FakeResponse(payload)
+
+        events = []
+        with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            summary = updater.install_core_info(on_progress=events.append)
+        return updater, summary, urls, events
+
+    def test_the_info_files_land_beside_the_cores(self):
+        payload = _zip_bytes(
+            {
+                "snes9x_libretro.info": 'corename = "Snes9x"',
+                "mgba_libretro.info": 'corename = "mGBA"',
+                "core_info.refresh": "",
+            }
+        )
+        with TemporaryDirectory() as tmp_dir:
+            updater, summary, urls, events = self._install(tmp_dir, payload)
+            installed = sorted(path.name for path in updater.core_dir.iterdir())
+            cache = list(updater.cache_dir.iterdir())
+
+        self.assertEqual(urls, ["https://example.invalid/info.zip"])
+        self.assertEqual(installed, ["mgba_libretro.info", "snes9x_libretro.info"])
+        self.assertEqual((summary["installed"], summary["failed"]), (2, 0))
+        self.assertEqual(events[0]["core_name"], "core_info")
+        self.assertEqual(cache, [])
+
+    def test_a_member_name_cannot_steer_the_write_outside_the_core_dir(self):
+        payload = _zip_bytes({"../../escape_libretro.info": "x", "nested/a_libretro.info": "y"})
+        with TemporaryDirectory() as tmp_dir:
+            updater, summary, _, _ = self._install(tmp_dir, payload)
+            installed = sorted(path.name for path in updater.core_dir.iterdir())
+            escaped = (Path(tmp_dir) / "escape_libretro.info").exists()
+
+        self.assertEqual(installed, ["a_libretro.info", "escape_libretro.info"])
+        self.assertFalse(escaped)
+        self.assertEqual(summary["installed"], 2)
+
+    def test_an_archive_with_no_info_files_is_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, _, _ = self._install(tmp_dir, _zip_bytes({"README": "x"}))
+        self.assertEqual(summary["failed"], 1)
+        self.assertIn("no .info", summary["failures"][0]["error"])
+
+    def test_a_download_failure_is_reported_not_raised(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater, summary, _, _ = self._install(
+                tmp_dir, error=urllib.error.HTTPError("u", 404, "gone", None, None)
+            )
+            cache = list(updater.cache_dir.iterdir())
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["failures"][0]["artifact"], "core_info")
+        self.assertEqual(cache, [])
+
+    def test_no_url_is_a_failure_without_a_request(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.settings["core_info_base_url"] = ""
+            with patch("urllib.request.urlopen", side_effect=AssertionError("no fetch")):
+                summary = updater.install_core_info()
+        self.assertEqual(summary["failures"], [{"artifact": "core_info", "error": "missing url"}])
+
+    def test_a_disabled_updater_installs_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.settings["enabled"] = False
+            with patch("urllib.request.urlopen", side_effect=AssertionError("no fetch")):
+                summary = updater.install_core_info()
+        self.assertTrue(summary["disabled"])
+        self.assertEqual((summary["total"], summary["failed"]), (0, 0))

@@ -13,6 +13,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 from openemux.core.appimage_env import host_env
 from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
 from openemux.core.cores import CoreCatalog
+from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
@@ -39,7 +40,7 @@ from openemux.core.cover_sync import (
 )
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
-from openemux.core.paths import display_text, get_project_root
+from openemux.core.paths import display_text, get_project_root, is_running_in_flatpak
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
 from openemux.core.theme import toggled_theme
@@ -132,6 +133,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # is one write and not one per row (issue #383).
         self._remember_view_source = None
         self._cover_sync_running = False
+        self._deferred_assets_running = False
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
         self._rescan_pending = None
@@ -257,8 +259,66 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
+        self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
+
+    def _start_deferred_asset_download(self):
+        """Fetch the cores and shaders the first boot left for later.
+
+        The first boot waits only for what makes every console playable (issue
+        #442); the remaining ~200 cores and the second shader pack come down
+        here, under the task banner, while the library is already usable.
+        Owed until a sweep finishes clean, so a sweep cut short by closing the
+        app resumes at the next launch.
+        """
+        if self._deferred_assets_running:
+            return False
+        if is_running_in_flatpak() or not self.config_manager.deferred_assets_pending():
+            return False
+        self._deferred_assets_running = True
+        cancel_event = Event()
+        task_id = self.tasks.begin(
+            "cores", self.t("status.cores.downloading"), on_cancel=cancel_event.set
+        )
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self.tasks.update, task_id, evt.get("current", 0), evt.get("total", 0)
+            )
+
+        def _worker():
+            try:
+                summary = FirstBootBootstrapper(self.config_manager).download_deferred_assets(
+                    on_progress=_on_progress, cancel_event=cancel_event
+                )
+            except Exception as exc:
+                # The done handler is what clears the running flag; a worker
+                # that dies before reaching it must still reach it (#214).
+                logger.exception("deferred asset download crashed")
+                summary = {"error": str(exc)}
+            GLib.idle_add(self._on_deferred_assets_done_ui, task_id, summary)
+
+        Thread(target=_worker, daemon=True).start()
+        return True
+
+    def _on_deferred_assets_done_ui(self, task_id, summary):
+        self._deferred_assets_running = False
+        self.tasks.finish(task_id)
+        # Both catalogs cached what was on disk when the window opened; the
+        # cores and presets that just arrived are invisible until they rescan.
+        self.core_catalog.refresh()
+        self.shader_catalog.refresh()
+        launcher = self.runtime_manager.retroarch_launcher
+        launcher.core_catalog.refresh()
+        launcher.shader_catalog.refresh()
+        logger.info(
+            "deferred asset download finished: failed=%s cancelled=%s error=%s",
+            summary.get("failed"),
+            summary.get("cancelled"),
+            summary.get("error"),
+        )
+        return GLib.SOURCE_REMOVE
 
     def _start_update_check(self):
         settings = self.config_manager.get_update_settings()
@@ -2924,6 +2984,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=self.t("toast.bootstrap.completed"))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
+            # A retry from Preferences finishes with this window already up,
+            # so the start in __init__ ran before the step owed anything.
+            self._start_deferred_asset_download()
             return
         failed_step = result.get("failed_step")
         if failed_step:

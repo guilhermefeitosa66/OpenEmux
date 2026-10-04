@@ -229,6 +229,7 @@ TRANSLATIONS = {
     "status.scan.progress": "ROMs werden eingelesen ({current}/{total})",
     "status.covers.starting": "Cover-Synchronisierung wird gestartet...",
     "status.covers.progress": "Cover werden synchronisiert",
+    "status.cores.downloading": "Restliche Kerne werden heruntergeladen",
     "status.labels.progress": "Modul-Aufkleber werden synchronisiert",
     "toast.running": "{name} läuft ({console})",
     "toast.relaunching": "Spiel wird neu gestartet…",

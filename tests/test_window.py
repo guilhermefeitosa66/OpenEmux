@@ -2558,5 +2558,109 @@ class TheRemainingCornersTests(WindowCase):
         show.assert_called_with(True)
 
 
+@needs_display
+class TheDeferredAssetDownloadTests(WindowCase):
+    """What the first boot left for the background arrives here (issue #442)."""
+
+    def _start(self, summary=None, crash=None):
+        """Start the download with the bootstrapper faked; return the fake."""
+        fake = mock.Mock()
+
+        def _download(on_progress=None, cancel_event=None):
+            fake.cancel_event = cancel_event
+            on_progress({"current": 3, "total": 7})
+            if crash:
+                raise crash
+            return summary or {"failed": 0, "cancelled": False}
+
+        fake.download_deferred_assets.side_effect = _download
+        self.config.mark_deferred_assets_pending()
+        refreshed = []
+        launcher = self.win.runtime_manager.retroarch_launcher
+        for name, catalog in (
+            ("core", self.win.core_catalog),
+            ("shader", self.win.shader_catalog),
+            ("launcher core", launcher.core_catalog),
+            ("launcher shader", launcher.shader_catalog),
+        ):
+            patcher = mock.patch.object(
+                catalog, "refresh", lambda name=name: refreshed.append(name)
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        updates = []
+        real_update = self.win.tasks.update
+        update_patch = mock.patch.object(
+            self.win.tasks,
+            "update",
+            lambda *args: updates.append(args) or real_update(*args),
+        )
+        update_patch.start()
+        self.addCleanup(update_patch.stop)
+        with mock.patch.object(window_module, "FirstBootBootstrapper", return_value=fake):
+            started = self.win._start_deferred_asset_download()
+            self.assertTrue(started)
+            self.assertEqual(len(self.win.tasks), 1)
+            self.assertTrue(
+                self.pump_until(lambda: not self.win._deferred_assets_running)
+            )
+        return fake, refreshed, updates
+
+    def test_owed_assets_download_under_the_banner_and_refresh_the_catalogs(self):
+        fake, refreshed, updates = self._start()
+        self.assertEqual(len(self.win.tasks), 0)
+        self.assertEqual(
+            sorted(refreshed), ["core", "launcher core", "launcher shader", "shader"]
+        )
+        self.assertEqual([args[1:] for args in updates], [(3, 7)])
+        self.assertIsNotNone(fake.cancel_event)
+
+    def test_the_banner_label_names_the_work(self):
+        self.config.mark_deferred_assets_pending()
+        with mock.patch.object(window_module, "Thread"):
+            self.win._start_deferred_asset_download()
+        self.assertEqual(self.win.banner.get_title(), self.said("status.cores.downloading"))
+
+    def test_cancel_on_the_banner_reaches_the_download(self):
+        self.config.mark_deferred_assets_pending()
+        with mock.patch.object(window_module, "Thread") as thread:
+            self.win._start_deferred_asset_download()
+        self.win.banner.emit("button-clicked")
+        worker = thread.call_args.kwargs["target"]
+        fake = mock.Mock()
+        fake.download_deferred_assets.return_value = {}
+        with mock.patch.object(window_module, "FirstBootBootstrapper", return_value=fake):
+            worker()
+        self.assertTrue(
+            fake.download_deferred_assets.call_args.kwargs["cancel_event"].is_set()
+        )
+
+    def test_a_crashed_worker_still_ends_the_task(self):
+        with self.assertLogs("openemux.ui.window", "ERROR"):
+            self._start(crash=RuntimeError("boom"))
+        self.assertFalse(self.win._deferred_assets_running)
+        self.assertEqual(len(self.win.tasks), 0)
+
+    def test_nothing_owed_starts_nothing(self):
+        self.assertFalse(self.win._start_deferred_asset_download())
+        self.assertEqual(len(self.win.tasks), 0)
+
+    def test_inside_a_flatpak_nothing_starts(self):
+        self.config.mark_deferred_assets_pending()
+        with mock.patch.object(window_module, "is_running_in_flatpak", return_value=True):
+            self.assertFalse(self.win._start_deferred_asset_download())
+
+    def test_a_second_start_while_one_runs_is_refused(self):
+        self.config.mark_deferred_assets_pending()
+        self.win._deferred_assets_running = True
+        self.addCleanup(setattr, self.win, "_deferred_assets_running", False)
+        self.assertFalse(self.win._start_deferred_asset_download())
+
+    def test_a_successful_retry_from_preferences_starts_it(self):
+        with mock.patch.object(self.win, "_start_deferred_asset_download") as start:
+            self.win.on_bootstrap_finished({"success": True})
+        start.assert_called_once_with()
+
+
 if __name__ == "__main__":
     unittest.main()

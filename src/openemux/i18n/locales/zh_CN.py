@@ -229,6 +229,7 @@ TRANSLATIONS = {
     "status.scan.progress": "正在扫描 ROM（{current}/{total}）",
     "status.covers.starting": "正在开始同步封面...",
     "status.covers.progress": "正在同步封面",
+    "status.cores.downloading": "正在下载其余内核",
     "status.labels.progress": "正在同步卡带贴纸",
     "toast.running": "正在运行 {name}（{console}）",
     "toast.relaunching": "正在重新打开游戏…",
