@@ -93,6 +93,17 @@ def find_local_art(
     return None
 
 
+def is_label_art(path) -> bool:
+    """Whether ``path`` is a cartridge label rather than any other artwork.
+
+    ``fetch_cover`` hands back one path from whichever kind it found first,
+    and the cartridge renderer must not take a box cover for a label (issue
+    #457). The kind is the directory the art lives in, per
+    :func:`get_art_path_candidates`.
+    """
+    return bool(path) and Path(path).parent.name == LABEL_ART
+
+
 def remove_local_art(
     roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART, keep=None
 ) -> int:

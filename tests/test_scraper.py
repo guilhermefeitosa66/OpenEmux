@@ -12,6 +12,7 @@ from openemux.core.scraper import (
     rename_local_art,
     LABEL_ART,
     find_local_art,
+    is_label_art,
     find_local_cover,
     image_format,
     is_image,
@@ -76,6 +77,21 @@ class ScraperTests(unittest.TestCase):
             self.assertEqual(remove_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART), 1)
             self.assertIsNone(find_local_art(roms_dir, "GBA", "Golden Sun", LABEL_ART))
             self.assertIsNotNone(find_local_art(roms_dir, "GBA", "Golden Sun", COVER_ART))
+
+
+class WhichArtIsALabelTests(unittest.TestCase):
+    """The cartridge must not take a box cover for a label (issue #457)."""
+
+    def test_art_in_the_labels_directory_is_a_label(self):
+        self.assertTrue(is_label_art(Path("/roms/SFC") / LABEL_ART / "Game.png"))
+        self.assertTrue(is_label_art(str(Path("/roms/SFC") / LABEL_ART / "Game.png")))
+
+    def test_box_art_is_not(self):
+        self.assertFalse(is_label_art(Path("/roms/SFC") / COVER_ART / "Game.png"))
+
+    def test_no_path_is_not(self):
+        self.assertFalse(is_label_art(None))
+        self.assertFalse(is_label_art(""))
 
 
 class ImageSniffingTests(unittest.TestCase):
