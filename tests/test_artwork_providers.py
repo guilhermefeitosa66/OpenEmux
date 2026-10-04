@@ -1,10 +1,15 @@
 """Configurable artwork providers (issue #76): normalization, migration, chain."""
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
+
+import yaml
 
 from openemux.core import cover_sync
 from openemux.core.config import (
+    ConfigManager,
     COVER_ART_TYPE_BOXART,
     COVER_ART_TYPE_CARTRIDGE_LABEL,
     DEFAULT_ARTWORK_PROVIDERS,
@@ -44,9 +49,9 @@ class NormalizationTests(unittest.TestCase):
         libretro = next(p for p in normalized if p["id"] == "libretro")
         self.assertEqual(libretro["kinds"], [COVER_ART_TYPE_BOXART])
 
-    def test_fresh_default_order_is_mirror_first_all_enabled(self):
+    def test_fresh_default_order_is_libretro_first_all_enabled(self):
         providers = normalize_artwork_providers(None)
-        self.assertEqual(provider_ids(providers), ["openemux", "libretro", "screenscraper"])
+        self.assertEqual(provider_ids(providers), ["libretro", "screenscraper", "openemux"])
         self.assertTrue(all(p["enabled"] for p in providers))
 
     def test_partial_kind_selections_are_restored_to_full_capabilities(self):
@@ -176,6 +181,62 @@ class PassPlanningTests(unittest.TestCase):
             COVER_ART_TYPE_BOXART,
         )
         self.assertEqual([p["art_kind"] for p in summary["passes"]], [COVER_ART_TYPE_BOXART])
+
+
+class WhatANewConfigStartsWithTests(unittest.TestCase):
+    """ScreenScraper is on for a new install, and only for one (issue #455)."""
+
+    def _manager(self, tmp_dir, existing=None):
+        config_file = Path(tmp_dir) / "config.yaml"
+        if existing is not None:
+            config_file.write_text(yaml.safe_dump(existing), encoding="utf-8")
+        return ConfigManager(config_file=config_file)
+
+    def test_a_new_config_has_screenscraper_on_in_the_order_the_ui_shows(self):
+        with TemporaryDirectory() as tmp_dir:
+            providers = self._manager(tmp_dir).get_artwork_providers()
+        self.assertEqual(provider_ids(providers), ["libretro", "screenscraper", "openemux"])
+        self.assertEqual(
+            provider_ids(providers, enabled_only=True),
+            ["libretro", "screenscraper", "openemux"],
+        )
+
+    def test_the_new_list_is_written_to_disk(self):
+        with TemporaryDirectory() as tmp_dir:
+            self._manager(tmp_dir)
+            reopened = self._manager(tmp_dir)
+            self.assertIn("screenscraper", provider_ids(
+                reopened.get_artwork_providers(), enabled_only=True
+            ))
+
+    def test_a_config_that_predates_the_list_keeps_what_its_enum_meant(self):
+        existing = {"covers": {"sync": {"cover_source": "libretro"}}}
+        with TemporaryDirectory() as tmp_dir:
+            providers = self._manager(tmp_dir, existing).get_artwork_providers()
+        self.assertNotIn("screenscraper", provider_ids(providers, enabled_only=True))
+
+    def test_an_existing_switch_is_left_alone(self):
+        existing = {
+            "covers": {
+                "sync": {
+                    "providers": [
+                        {"id": "libretro", "enabled": True},
+                        {"id": "screenscraper", "enabled": False},
+                        {"id": "openemux", "enabled": True},
+                    ]
+                }
+            }
+        }
+        with TemporaryDirectory() as tmp_dir:
+            providers = self._manager(tmp_dir, existing).get_artwork_providers()
+        self.assertNotIn("screenscraper", provider_ids(providers, enabled_only=True))
+
+    def test_a_new_config_does_not_share_the_module_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            manager.get_cover_sync_settings()
+            manager.config["covers"]["sync"]["providers"][0]["enabled"] = False
+        self.assertTrue(DEFAULT_ARTWORK_PROVIDERS[0]["enabled"])
 
 
 if __name__ == "__main__":

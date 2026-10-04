@@ -929,9 +929,11 @@ cp .env.example .env
   real secrecy, just so it is not a plaintext, grep-able string.
 
 `_EMBEDDED_BLOB` is **empty in git** and a unit test guards that it stays empty,
-so a build without a `.env` simply ships no credential and ScreenScraper stays
-opt-in (off by default). End users still add their own ScreenScraper account
-(`ssid`/`sspassword`) in Preferences — separate from this developer credential.
+so a build without a `.env` simply ships no credential. ScreenScraper is still
+on in a fresh config (issue #455), but with no credential it returns nothing and
+the sync falls through to the next provider. End users may add their own
+ScreenScraper account (`ssid`/`sspassword`) in Preferences — separate from this
+developer credential — for a quota of their own.
 
 **Rotation.** A credential shipped in a client is extractable, so if the project
 account is ever abused, request a new `devid`/`devpassword` from ScreenScraper
