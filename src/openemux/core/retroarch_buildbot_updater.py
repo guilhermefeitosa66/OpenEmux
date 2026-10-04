@@ -439,6 +439,63 @@ class RetroArchBuildbotUpdater:
                 self._discard(archive_path)
         return summary
 
+    def install_core_info(self, on_progress=None):
+        """Install the libretro ``.info`` files beside the cores, and report it.
+
+        ``core_info_base_url`` sat in the defaults from the start and nothing
+        read it, so no ``.info`` was ever installed and the core pickers named
+        every core after its filename and could not match one to a console by
+        its ``database`` field (issue #442). One archive of a few hundred
+        kilobytes, extracted flat into ``core_dir``, where ``CoreCatalog``
+        already looks for it. Never raises: missing names are cosmetic, and
+        the first boot must not fail over them.
+        """
+        summary = {"total": 1, "downloaded": 0, "installed": 0, "failed": 0, "failures": []}
+        if not self.settings.get("enabled", True):
+            summary.update(total=0, disabled=True)
+            return summary
+        url = self.settings.get("core_info_base_url", "")
+        if not url:
+            summary.update(failed=1, failures=[{"artifact": "core_info", "error": "missing url"}])
+            return summary
+
+        self.ensure_environment()
+        if on_progress:
+            on_progress({"type": "download_progress", "current": 1, "total": 1, "core_name": "core_info"})
+        archive_path = self.cache_dir / "core_info.zip"
+        try:
+            self._download_file_with_retries(url, archive_path)
+            summary["installed"] = self._extract_core_info(archive_path)
+            summary["downloaded"] = 1
+        except Exception as exc:  # noqa: BLE001 - reported, not raised
+            summary["failed"] = 1
+            summary["failures"].append({"artifact": "core_info", "error": str(exc)})
+            logger.warning("buildbot core info download failed: error=%s", exc)
+        finally:
+            self._discard(archive_path)
+        return summary
+
+    def _extract_core_info(self, archive_path):
+        installed = 0
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            for member in archive.namelist():
+                # Flat: the archive keeps every file at its root, and the
+                # catalog only looks beside the cores. Anything else in there
+                # (the core_info.refresh marker) is not ours to install. Only
+                # the basename is ever used, so no member name can steer the
+                # write outside core_dir (issue #222).
+                name = os.path.basename(member)
+                if not name.endswith(".info"):
+                    continue
+                destination = self.core_dir / name
+                with archive.open(member, "r") as source:
+                    self._stream_to_file(source, destination)
+                installed += 1
+        if not installed:
+            raise RuntimeError(f"core info archive has no .info files: {archive_path}")
+        logger.info("buildbot core info installed: total=%d dir=%s", installed, self.core_dir)
+        return installed
+
     def _directory_has_files_with_extension(self, directory, extension):
         if not directory.exists():
             return False

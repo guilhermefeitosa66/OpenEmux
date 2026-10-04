@@ -377,6 +377,33 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
 
+### RT-319 — The core info files are installed, so cores show their real names
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** Network.
+- **Steps:** As a QA person: after a first boot, open a console's core list in "Preferences".
+- **Expected:** Cores show the names their authors gave them ("Snes9x", "mGBA"), not their
+  filenames turned into words ("Snes9X", "Mgba"), and a core the console table does not name still
+  appears under every console its `.info` declares. `core_info_base_url` sat in the defaults from
+  the start and nothing read it, so no `.info` file was ever installed (issue #442). The files go
+  beside the cores; a failed fetch is only a warning and never fails the first boot.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile; from pathlib import Path
+  from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
+  from openemux.core.config import UPDATER_DEFAULTS
+  d = Path(tempfile.mkdtemp(dir='$SCRATCH'))
+  class C:
+      def get_retroarch_updater_settings(self): return dict(UPDATER_DEFAULTS, core_dir=str(d / 'cores'))
+      def get_runtime_dir(self): return d / 'runtime'
+  s = RetroArchBuildbotUpdater(C()).install_core_info()
+  assert s['failed'] == 0 and s['installed'] > 100, s
+  assert 'Snes9x' in (d / 'cores' / 'snes9x_libretro.info').read_text(), 'no snes9x info'
+  print('RT-319 OK')"
+  ```
+  Unit-level: `tests/test_retroarch_buildbot_updater.py` (`TheCoreInfoFilesTests`).
+
 ### RT-240 — Bootstrap timestamps are written as UTC and stay readable
 - **Area:** Startup
 - **Mode:** AUTO-PROBE

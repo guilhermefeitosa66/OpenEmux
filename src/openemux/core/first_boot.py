@@ -166,6 +166,7 @@ class FirstBootBootstrapper:
                 on_event(evt)
 
         cores_summary = self.updater.download_all(on_progress=_progress)
+        info_summary = self.updater.install_core_info(on_progress=_progress)
         shaders_summary = self.updater.download_shader_packs_if_missing(on_progress=_progress)
         total_failures = int(cores_summary.get("failed", 0)) + int(shaders_summary.get("failed", 0))
         if total_failures > 0 and not self.updater.has_local_runtime_assets():
@@ -184,8 +185,16 @@ class FirstBootBootstrapper:
                 "first boot fell back to the bundled assets: %s",
                 _first_failure_reason(cores_summary, shaders_summary),
             )
+        if info_summary.get("failed"):
+            # Not counted above: without the .info files the pickers name
+            # cores after their filenames, which is how it always was.
+            logger.warning(
+                "first boot continues without core info: %s",
+                _first_failure_reason(info_summary),
+            )
         return {
             "cores": cores_summary,
+            "core_info": info_summary,
             "shaders": shaders_summary,
             "warning": warning,
         }

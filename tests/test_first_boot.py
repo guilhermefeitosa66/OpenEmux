@@ -194,6 +194,26 @@ class TheCoreDownloadStepTests(unittest.TestCase):
                 bootstrapper._step_retroarch_cores(on_event=seen.append)
         self.assertEqual(seen, [{"type": "core"}])
 
+    def test_missing_core_info_does_not_fail_the_step(self):
+        # Without the .info files the pickers fall back to filenames, which is
+        # how it always was: a warning, never a failed first boot (#442).
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
+            bootstrapper.updater.download_all = lambda on_progress=None: {"failures": []}
+            bootstrapper.updater.download_shader_packs_if_missing = (
+                lambda on_progress=None: {"failures": []}
+            )
+            bootstrapper.updater.install_core_info = lambda on_progress=None: {
+                "failed": 1,
+                "failures": [{"artifact": "core_info", "error": "404"}],
+            }
+            with patch(
+                "openemux.core.first_boot.is_running_in_flatpak", return_value=False
+            ), self.assertLogs("openemux.core.first_boot", "WARNING") as logs:
+                detail = bootstrapper._step_retroarch_cores()
+        self.assertIsNone(detail["warning"])
+        self.assertIn("core_info: 404", "\n".join(logs.output))
+
 
 class WhatTheFailureMessageSaysTests(unittest.TestCase):
     def test_a_failure_with_no_details_at_all_still_says_something(self):
