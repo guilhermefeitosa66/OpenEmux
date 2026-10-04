@@ -112,5 +112,24 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertFalse(reopened.get_ui_settings()["render_cartridge_overlay"])
 
 
+class TheDeferredAssetDebtTests(unittest.TestCase):
+    """What the first boot leaves for the background (issue #442)."""
+
+    def test_a_fresh_config_owes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertFalse(manager.deferred_assets_pending())
+
+    def test_the_debt_survives_a_restart_until_it_is_paid(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            ConfigManager(config_file=cfg_path).mark_deferred_assets_pending()
+            reopened = ConfigManager(config_file=cfg_path)
+            self.assertTrue(reopened.deferred_assets_pending())
+
+            reopened.mark_deferred_assets_done()
+            self.assertFalse(ConfigManager(config_file=cfg_path).deferred_assets_pending())
+
+
 if __name__ == "__main__":
     unittest.main()

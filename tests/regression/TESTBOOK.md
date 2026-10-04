@@ -280,6 +280,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
   fails — but the message names the real reason (`URLError: Network is unreachable`, not
   "something failed") and the step is **not** recorded as completed, so a retry retries it.
+  Offline, the background download of the remaining cores (RT-316) fails quietly and stays owed
+  for the next launch; it never turns the completed first boot into a failure.
 - **Check:** suite files `tests/test_first_boot.py`
   (`test_offline_falls_back_to_the_bundled_cores`,
   `test_offline_without_bundled_cores_fails_with_the_real_reason`),
@@ -337,7 +339,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
 - **Steps:**
-  1. Launch first boot and watch "Downloading core (n/total)" advance.
+  1. Launch first boot and watch "Downloading cores: <core> (n/total)" advance.
 - **Expected:** Several artifacts are in flight at once, up to `parallel_downloads`, which ships at
   8 — the ceiling the updater allows itself, because the buildbot is somebody else's server. That
   setting has been in the config, and in the settings the user can edit, since the updater was
@@ -345,7 +347,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   boot took as long as the sum of every download in a 224-artifact manifest (issue #240). It then
   shipped at 4 against a cap of 8, which cost a measured 110.0 s instead of 44.4 s for the same 238
   artifacts and the same bytes (issue #442). The progress counter still only ever grows, even though
-  downloads finish out of order.
+  downloads finish out of order. The same pool serves both halves of the sweep since #442: the
+  cores the first boot waits for (RT-316) and the rest, fetched in the background (RT-317).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`ParallelDownloadTests`) — real
   concurrency at 4, one at a time at 1, the cap, a nonsense value, monotonic progress, and that a
   settings dict with no `parallel_downloads` at all still fills the pool.
@@ -376,6 +379,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   404 for is not retried at all — waiting seven seconds to hear the same thing three more times
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
+
+### RT-316 — First boot waits only for the cores the consoles use
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
+- **Steps:** As a QA person: launch first boot and watch the "Downloading cores" counter.
+- **Expected:** The counter stops at the number of distinct cores the console table names (35 on
+  x86_64 Linux), not at the ~240 the buildbot lists, and the shader pack the video driver reads
+  comes down with them (`shaders_glsl` for Linux's `gl`, `shaders_slang` for Windows' `d3d11`).
+  Every console is playable when the main window opens. The first boot used to block on every core
+  and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
+  (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
+  pending`); inside Flatpak, or with the updater off, nothing is owed.
+- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
+  `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
+  (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
+  `OneShaderPackOfTwoTests`).
 
 ### RT-319 — The core info files are installed, so cores show their real names
 - **Area:** Startup

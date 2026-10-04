@@ -1216,6 +1216,28 @@ class ConfigManager:
             completed_steps.append(step_id)
         self.save_config()
 
+    def deferred_assets_pending(self):
+        """Whether the cores and shaders the first boot left for later are owed.
+
+        The first boot waits only for what makes every console playable and
+        hands the rest to a background download once the window is up (issue
+        #442). Persisted, so closing the app halfway resumes the sweep at the
+        next launch. A config that predates the key reads as not pending: the
+        first boot that wrote it already downloaded everything.
+        """
+        return self.get_bootstrap_state().get("deferred_assets") == "pending"
+
+    def mark_deferred_assets_pending(self):
+        self._set_deferred_assets("pending")
+
+    def mark_deferred_assets_done(self):
+        self._set_deferred_assets("done")
+
+    def _set_deferred_assets(self, value):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["deferred_assets"] = value
+        self.save_config()
+
     def finish_bootstrap_success(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "completed"

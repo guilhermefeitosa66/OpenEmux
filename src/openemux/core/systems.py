@@ -339,6 +339,19 @@ def get_runtime_core_candidates(value):
     return [normalize_core_filename(name) for name in system.get("runtime_core_candidates", [])]
 
 
+def curated_core_filenames():
+    """Every core some console names, once each, with this platform's extension.
+
+    This is the set that makes every console playable, and so the set the first
+    boot waits for: 35 cores out of the ~240 the buildbot lists. The rest only
+    populate the core pickers, and they arrive after the window opens (issue
+    #442).
+    """
+    return sorted(
+        {name for system_id in SYSTEM_IDS for name in get_runtime_core_candidates(system_id)}
+    )
+
+
 def get_thumbnail_system(value):
     system = get_system(value)
     if not system:

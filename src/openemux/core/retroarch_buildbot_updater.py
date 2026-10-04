@@ -13,6 +13,7 @@ from openemux.core.platform import CORE_SUFFIX
 # Aliased: this class already has a ``bundled_core_dir`` attribute meaning the
 # retroarch-assets directory, and the two must not be confused.
 from openemux.core.platform import bundled_core_dir as platform_bundled_core_dir
+from openemux.core.video_driver import effective_video_driver, preset_backends
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,26 @@ MAX_PARALLEL_DOWNLOADS = 8
 #: Copy buffer. Artifacts are streamed rather than buffered whole, so this is
 #: the memory a download costs regardless of the core's size.
 DOWNLOAD_CHUNK_BYTES = 256 * 1024
+
+#: The two shader packs, by the preset backend each one serves.
+SHADER_PACKS = {"glsl": "shaders_glsl", "slang": "shaders_slang"}
+
+#: What ``_install_artifact`` returns for an artifact it never started because
+#: the sweep was cancelled -- neither a success nor a failure.
+_CANCELLED = object()
+
+
+def shader_pack_for(video_driver_setting):
+    """The shader pack the given ``video_driver`` setting can load, or ``None``.
+
+    A shader preset is not portable across drivers (``core/video_driver.py``):
+    Linux's default ``gl`` reads ``.glslp`` and Windows' ``d3d11`` reads
+    ``.slangp``. The first boot waits for this pack only; the other one is of
+    no use until the user changes driver, so it arrives in the background
+    (issue #442). ``None`` for a driver that loads no preset at all.
+    """
+    backends = preset_backends(effective_video_driver(video_driver_setting))
+    return SHADER_PACKS[backends[0]] if backends else None
 
 
 class RetroArchBuildbotUpdater:
@@ -129,8 +150,17 @@ class RetroArchBuildbotUpdater:
         logger.info("buildbot manifest loaded: total=%d", len(artifacts))
         return artifacts
 
-    def download_all(self, on_progress=None):
-        """Download every core the buildbot lists, and report what happened.
+    def download_all(self, on_progress=None, only=None, skip=None, cancel_event=None):
+        """Download the cores the buildbot lists, and report what happened.
+
+        Every core by default. ``only`` restricts the sweep to those core
+        filenames and ``skip`` leaves those out, which is how the first boot
+        waits for the cores a console names and fetches the rest after the
+        window opens (issue #442). A name in ``only`` the buildbot does not
+        list is not a failure: some cores are not built for every architecture,
+        and the console says so on its own. ``cancel_event``, once set, stops
+        the sweep before any artifact it has not started yet; those are
+        counted as ``cancelled``, not as failures.
 
         Never raises for a network problem. The bootstrap step above this one
         decides what a failure means -- on a package that bundles cores it
@@ -165,8 +195,19 @@ class RetroArchBuildbotUpdater:
             logger.warning("buildbot core listing yielded nothing: reason=%s", reason)
             return self._core_download_failure("listing", reason)
 
+        # Filtered only now: an empty listing is a broken listing whatever the
+        # caller asked for, while a filter that keeps nothing is just done.
+        if only is not None:
+            wanted = set(only)
+            artifacts = [artifact for artifact in artifacts if artifact["core_name"] in wanted]
+        if skip:
+            unwanted = set(skip)
+            artifacts = [artifact for artifact in artifacts if artifact["core_name"] not in unwanted]
+        total = len(artifacts)
+
         downloaded = 0
         failed = 0
+        cancelled = 0
         failures = []
         workers = self._download_workers()
         completed = 0
@@ -176,7 +217,7 @@ class RetroArchBuildbotUpdater:
             max_workers=workers, thread_name_prefix="openemux-core-dl"
         ) as pool:
             pending = {
-                pool.submit(self._install_artifact, artifact): artifact
+                pool.submit(self._install_artifact, artifact, cancel_event): artifact
                 for artifact in artifacts
             }
             # Progress is reported from here, on completion, so the counter
@@ -187,6 +228,8 @@ class RetroArchBuildbotUpdater:
                 error = future.result()
                 if error is None:
                     downloaded += 1
+                elif error is _CANCELLED:
+                    cancelled += 1
                 else:
                     failed += 1
                     failures.append({"artifact": artifact["filename"], "error": error})
@@ -207,23 +250,28 @@ class RetroArchBuildbotUpdater:
             "total": total,
             "downloaded": downloaded,
             "failed": failed,
+            "cancelled": cancelled,
             "failures": failures,
             "core_dir": str(self.core_dir),
         }
         logger.info(
-            "buildbot core download finished: total=%d downloaded=%d failed=%d",
+            "buildbot core download finished: total=%d downloaded=%d failed=%d cancelled=%d",
             total,
             downloaded,
             failed,
+            cancelled,
         )
         return summary
 
-    def _install_artifact(self, artifact):
+    def _install_artifact(self, artifact, cancel_event=None):
         """Fetch and install one artifact. Returns an error string, or None.
 
         Never raises: it runs on a pool, and one core the buildbot is missing
-        must not take the sweep down with it.
+        must not take the sweep down with it. Returns ``_CANCELLED`` without
+        touching the network once ``cancel_event`` is set.
         """
+        if cancel_event is not None and cancel_event.is_set():
+            return _CANCELLED
         try:
             self._download_and_install(artifact)
             return None
@@ -378,7 +426,14 @@ class RetroArchBuildbotUpdater:
             with archive.open(selected, "r") as member:
                 self._stream_to_file(member, target_path)
 
-    def download_shader_packs_if_missing(self, on_progress=None):
+    def download_shader_packs_if_missing(self, on_progress=None, packs=None):
+        """Fetch the shader packs that are not on disk yet.
+
+        Both by default; ``packs`` names the ones to consider
+        (``"shaders_glsl"``, ``"shaders_slang"``), so the first boot can wait
+        for the one the video driver reads and leave the other for later
+        (issue #442).
+        """
         if not self.settings.get("enabled", True):
             return {
                 "total": 0,
@@ -391,17 +446,21 @@ class RetroArchBuildbotUpdater:
             }
 
         self.ensure_environment()
-        packs = [
+        all_packs = [
             ("shaders_glsl", self.settings.get("shader_glsl_url", ""), self.shader_glsl_dir, ".glslp"),
             ("shaders_slang", self.settings.get("shader_slang_url", ""), self.shader_slang_dir, ".slangp"),
         ]
+        if packs is not None:
+            packs = [pack for pack in all_packs if pack[0] in packs]
+        else:
+            packs = all_packs
         summary = {
             "total": len(packs),
             "downloaded": 0,
             "skipped": 0,
             "failed": 0,
             "failures": [],
-            "targets": [str(self.shader_glsl_dir), str(self.shader_slang_dir)],
+            "targets": [str(target_dir) for _, _, target_dir, _ in packs],
         }
 
         for index, (pack_name, url, target_dir, extension) in enumerate(packs, start=1):
