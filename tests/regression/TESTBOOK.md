@@ -397,6 +397,40 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
   `OneShaderPackOfTwoTests`).
 
+### RT-317 — The remaining cores arrive in the background, and the pickers see them
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` that has just finished a first boot with network
+  (`devbox-app start --first-boot`).
+- **Steps:**
+  1. When the main window opens, read the banner at the top.
+  2. Wait for the banner to go away (under a minute on a fast link).
+  3. Open "Preferences", go to the core setting of "Super Nintendo", and open its list.
+- **Expected:** Step 1 shows "Downloading the remaining cores (n/total)" with a "Cancel" button,
+  while the library is already usable. When it ends, `setup.bootstrap.deferred_assets` in
+  `config.yaml` reads `done`, and step 3 lists more cores than the console's curated ones
+  without restarting the app — the core catalog is rescanned when the download finishes (issue
+  #442).
+- **Check:** screenshots of steps 1 and 3; `grep deferred_assets
+  ~/.local/share/openemux-devbox/home/.openemux/config.yaml` prints `done`. The rules in
+  `tests/test_window.py` (`TheDeferredAssetDownloadTests`) and `tests/test_cores.py`
+  (`ACatalogThatOutlivesItsScanTests`).
+
+### RT-318 — A background core download cut short resumes at the next launch
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A **throwaway** `HOME` right after a first boot, with the background download
+  running.
+- **Steps:** As a QA person: click "Cancel" on the "Downloading the remaining cores" banner (or
+  quit the app), then launch it again.
+- **Expected:** After cancelling, `setup.bootstrap.deferred_assets` stays `pending`, and the next
+  launch shows the banner again and finishes the job. A download that fails (offline, the buildbot
+  down) behaves the same way, quietly: no toast, no failed bootstrap, just another try at the
+  next launch. Only a sweep with no failure and nothing cancelled records `done` (issue #442).
+- **Check:** suite files `tests/test_first_boot.py` (`TheDeferredDownloadTests`),
+  `tests/test_config_bootstrap_defaults.py` (`TheDeferredAssetDebtTests`), `tests/test_window.py`
+  (`test_cancel_on_the_banner_reaches_the_download`, `test_a_crashed_worker_still_ends_the_task`).
+
 ### RT-319 — The core info files are installed, so cores show their real names
 - **Area:** Startup
 - **Mode:** AUTO-PROBE

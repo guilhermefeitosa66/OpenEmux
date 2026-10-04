@@ -229,6 +229,7 @@ TRANSLATIONS = {
     "status.scan.progress": "Analyse des ROMs ({current}/{total})",
     "status.covers.starting": "Démarrage de la synchronisation des jaquettes...",
     "status.covers.progress": "Synchronisation des jaquettes",
+    "status.cores.downloading": "Téléchargement des cœurs restants",
     "status.labels.progress": "Synchronisation des étiquettes de cartouche",
     "toast.running": "{name} en cours ({console})",
     "toast.relaunching": "Relancement du jeu…",

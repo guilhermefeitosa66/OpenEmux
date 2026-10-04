@@ -229,6 +229,7 @@ TRANSLATIONS = {
     "status.scan.progress": "Analizando ROMs ({current}/{total})",
     "status.covers.starting": "Iniciando sincronización de carátulas...",
     "status.covers.progress": "Sincronizando carátulas",
+    "status.cores.downloading": "Descargando los núcleos restantes",
     "status.labels.progress": "Sincronizando etiquetas de cartucho",
     "toast.running": "Ejecutando {name} ({console})",
     "toast.relaunching": "Reabriendo el juego…",

@@ -153,6 +153,15 @@ class CoreCatalog:
             self._cores = self._scan()
         return self._cores
 
+    def refresh(self):
+        """Forget the last scan, so the next question rescans the directories.
+
+        The scan is cached for the window's lifetime, which used to be fine
+        because every core arrived before the window opened. Since issue #442
+        most of them arrive afterwards, in the background.
+        """
+        self._cores = None
+
     def is_installed(self, core_filename):
         return bool(core_filename) and core_filename in self.installed()
 

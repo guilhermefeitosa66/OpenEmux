@@ -256,5 +256,26 @@ class TheFullShaderListTests(unittest.TestCase):
         self.assertEqual(ids.count(DISABLED_SHADER_ID), 1)
 
 
+class AnIndexThatOutlivesItsPacksTests(unittest.TestCase):
+    """A shader pack can land after the window opened (issue #442)."""
+
+    def test_a_preset_installed_after_the_index_is_found_once_refreshed(self):
+        with TemporaryDirectory() as tmp_dir:
+            runtime_dir = Path(tmp_dir) / "runtime"
+            catalog = ShaderCatalog(runtime_dir=runtime_dir)
+            shader_id = "openemux-late-test"
+            self.assertIsNone(catalog.resolve_shader_path(shader_id, video_driver="vulkan"))
+
+            preset = runtime_dir / "shaders_slang" / "handheld" / f"{shader_id}.slangp"
+            preset.parent.mkdir(parents=True, exist_ok=True)
+            preset.write_text("slang", encoding="utf-8")
+            self.assertIsNone(catalog.resolve_shader_path(shader_id, video_driver="vulkan"))
+
+            catalog.refresh()
+            self.assertEqual(
+                catalog.resolve_shader_path(shader_id, video_driver="vulkan"), str(preset)
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

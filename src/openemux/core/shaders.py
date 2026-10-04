@@ -242,6 +242,14 @@ class ShaderCatalog:
         self.project_root = Path(project_root).expanduser() if project_root else get_project_root()
         self._index = None
 
+    def refresh(self):
+        """Forget the preset index, so the next lookup rebuilds it.
+
+        A shader pack can now arrive after the window opened, in the
+        background (issue #442), and the index would go on not knowing it.
+        """
+        self._index = None
+
     def label_for_shader(self, shader_id):
         shader_id = normalize_shader_id(shader_id)
         if shader_id == DISABLED_SHADER_ID:

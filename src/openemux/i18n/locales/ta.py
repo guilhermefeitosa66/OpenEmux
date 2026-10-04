@@ -231,6 +231,7 @@ TRANSLATIONS = {
     "status.scan.progress": "ROM-கள் வருடப்படுகின்றன ({current}/{total})",
     "status.covers.starting": "அட்டை ஒத்திசைவு தொடங்குகிறது...",
     "status.covers.progress": "அட்டைகள் ஒத்திசைக்கப்படுகின்றன",
+    "status.cores.downloading": "மீதமுள்ள கோர்களைப் பதிவிறக்குகிறது",
     "status.labels.progress": "கார்ட்ரிட்ஜ் லேபிள்கள் ஒத்திசைக்கப்படுகின்றன",
     "toast.running": "{name} ({console}) இயங்குகிறது",
     "toast.relaunching": "விளையாட்டு மீண்டும் தொடங்குகிறது…",

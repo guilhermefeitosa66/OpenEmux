@@ -186,5 +186,23 @@ class WhereACoreIsOnDiskTests(unittest.TestCase):
             self.assertIsNone(catalog.path_for(_core_name("snes9x")))
 
 
+class ACatalogThatOutlivesItsScanTests(unittest.TestCase):
+    """Cores arrive after the window opens now (issue #442)."""
+
+    def test_a_core_installed_after_the_scan_appears_once_refreshed(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            catalog = CoreCatalog(core_dirs=[base])
+            self.assertFalse(catalog.is_installed(_core_name("snes9x")))
+
+            _write_core(base, _core_name("snes9x"), {"corename": "Snes9x"})
+            # Cached: the scan is not repeated on every question.
+            self.assertFalse(catalog.is_installed(_core_name("snes9x")))
+
+            catalog.refresh()
+            self.assertTrue(catalog.is_installed(_core_name("snes9x")))
+            self.assertEqual(catalog.display_name_for(_core_name("snes9x")), "Snes9x")
+
+
 if __name__ == "__main__":
     unittest.main()

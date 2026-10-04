@@ -229,6 +229,7 @@ TRANSLATIONS = {
     "status.scan.progress": "ROM をスキャン中 ({current}/{total})",
     "status.covers.starting": "カバーの同期を開始しています...",
     "status.covers.progress": "カバーを同期中",
+    "status.cores.downloading": "残りのコアをダウンロード中",
     "status.labels.progress": "カートリッジラベルを同期中",
     "toast.running": "{name} を実行中 ({console})",
     "toast.relaunching": "ゲームを開き直しています…",
