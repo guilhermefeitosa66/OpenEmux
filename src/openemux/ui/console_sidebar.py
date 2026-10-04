@@ -91,6 +91,13 @@ class ConsoleSidebar:
         scroll.set_vexpand(True)
         scroll.set_child(self.list_box)
         toolbar.set_content(scroll)
+        # The sidebar is where a new console's games naturally get dragged:
+        # the content area shows some other console, and dropping a GBA game
+        # onto the SNES page reads as filing it there (issue #456). Files
+        # only -- a row dragged to reorder carries a string, which the rows'
+        # own targets take.
+        self.drop_area = toolbar
+        self.win.imports.install_drop_target(toolbar, detect=True)
 
         # Two entry points side by side, so neither has to be guessed at.
         #

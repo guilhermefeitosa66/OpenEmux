@@ -195,27 +195,82 @@ class DroppingFilesTests(_ImportCase):
         self.assertGreater(widget.observe_controllers().get_n_items(), before)
 
     def test_dragging_over_the_library_says_what_a_drop_would_do(self):
-        self.assertEqual(
-            self.flow._on_drop_enter(None, 0, 0), Gdk.DragAction.COPY
-        )
-        self.assertTrue(self.win.content_stack.has_css_class("rom-drop-active"))
+        stack = self.win.content_stack
+        self.assertEqual(self.flow._on_drop_enter(stack), Gdk.DragAction.COPY)
+        self.assertTrue(stack.has_css_class("rom-drop-active"))
 
     def test_dragging_away_again_takes_the_hint_back_down(self):
-        self.flow._on_drop_enter(None, 0, 0)
-        self.flow._on_drop_leave(None)
-        self.assertFalse(self.win.content_stack.has_css_class("rom-drop-active"))
+        stack = self.win.content_stack
+        self.flow._on_drop_enter(stack)
+        self.flow._on_drop_leave(stack)
+        self.assertFalse(stack.has_css_class("rom-drop-active"))
 
     def test_dropped_files_start_an_import(self):
-        self.assertTrue(
-            self.flow._on_drop(None, self._file_list("/tmp/a.sfc"), 0, 0)
-        )
+        stack = self.win.content_stack
+        self.assertTrue(self.flow._on_drop(stack, self._file_list("/tmp/a.sfc")))
         self.assertEqual(self.run_args()["paths"], [_local_path("/tmp/a.sfc")])
-        self.assertFalse(self.win.content_stack.has_css_class("rom-drop-active"))
+        self.assertFalse(stack.has_css_class("rom-drop-active"))
 
     def test_a_drop_carrying_no_local_path_imports_nothing(self):
         # A drop from a remote location: the files have URIs and no path.
-        self.assertFalse(self.flow._on_drop(None, self._remote_file_list(), 0, 0))
+        self.assertFalse(
+            self.flow._on_drop(self.win.content_stack, self._remote_file_list())
+        )
         self.import_async.assert_not_called()
+
+
+@needs_display
+class DroppingOntoTheSidebarTests(_ImportCase):
+    """A new console's games get dragged to the sidebar (issue #456)."""
+
+    def _file_list(self, *paths):
+        return Gdk.FileList.new_from_array(
+            [Gio.File.new_for_path(path) for path in paths]
+        )
+
+    def test_the_sidebar_accepts_files(self):
+        area = self.win.sidebar.drop_area
+        targets = [
+            controller
+            for controller in area.observe_controllers()
+            if isinstance(controller, Gtk.DropTarget)
+        ]
+        self.assertTrue(
+            any(Gdk.FileList.__gtype__ in t.get_gtypes() for t in targets)
+        )
+
+    def test_the_hint_lights_up_the_sidebar_not_the_library(self):
+        area = self.win.sidebar.drop_area
+        self.flow._on_drop_enter(area)
+        self.assertTrue(area.has_css_class("rom-drop-active"))
+        self.assertFalse(self.win.content_stack.has_css_class("rom-drop-active"))
+        self.flow._on_drop_leave(area)
+        self.assertFalse(area.has_css_class("rom-drop-active"))
+
+    def test_a_drop_on_an_all_page_detects_instead_of_asking(self):
+        self.win.current_console = ALL_CONSOLES_ID
+        with mock.patch.object(self.flow, "_ask_target_console") as ask:
+            self.assertTrue(
+                self.flow._on_drop(
+                    self.win.sidebar.drop_area, self._file_list("/tmp/a.gba"), detect=True
+                )
+            )
+        ask.assert_not_called()
+        self.assertEqual(self.run_args()["paths"], [_local_path("/tmp/a.gba")])
+        self.assertIsNone(self.run_args()["forced_console"])
+
+    def test_the_library_drop_on_an_all_page_still_asks(self):
+        self.win.current_console = ALL_CONSOLES_ID
+        with mock.patch.object(self.flow, "_ask_target_console") as ask:
+            self.flow._on_drop(self.win.content_stack, self._file_list("/tmp/a.gba"))
+        ask.assert_called_once()
+
+    def test_a_drop_on_a_console_page_is_not_filed_under_that_console(self):
+        # The SNES page is open; a GBA game dropped on the sidebar goes to GBA.
+        self.flow._on_drop(
+            self.win.sidebar.drop_area, self._file_list("/tmp/a.gba"), detect=True
+        )
+        self.assertIsNone(self.run_args()["forced_console"])
 
 
 @needs_display
