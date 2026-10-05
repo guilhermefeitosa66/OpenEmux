@@ -50,6 +50,14 @@ class TheLinesItKeepsTests(unittest.TestCase):
         self.assertEqual(buffer.lines(), [])
 
 
+class TheUsersNameTests(unittest.TestCase):
+    def test_the_home_directory_is_written_as_a_tilde(self):
+        buffer = LogBuffer()
+        with mock.patch("openemux.core.log_buffer.redact_home", side_effect=lambda t: t.replace("/home/me", "~")):
+            buffer.emit(_record(logging.INFO, "path=/home/me/.openemux/x"))
+        self.assertTrue(buffer.lines()[0].text.endswith("path=~/.openemux/x"))
+
+
 class TheErrorCountTests(unittest.TestCase):
     def test_errors_are_counted_until_seen(self):
         buffer = LogBuffer()

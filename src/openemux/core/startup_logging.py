@@ -154,11 +154,16 @@ def configure_startup_logging(runtime_dir=None):
         )
     except OSError:
         pass
+    # Set here rather than left to basicConfig: the home directory comes out
+    # as "~" in the file and on the console too, not only in the panel, since
+    # the file is what a bug report used to ask for (issue #461).
+    for handler in handlers:
+        handler.setFormatter(log_buffer.RedactingFormatter(log_buffer.LOG_FORMAT))
     # The in-memory view the log panel and bug reports read (log_buffer).
     handlers.append(log_buffer.BUFFER)
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        format=log_buffer.LOG_FORMAT,
         handlers=handlers,
         force=True,
     )

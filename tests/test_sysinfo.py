@@ -132,6 +132,12 @@ class TheRestTests(unittest.TestCase):
                 mock.patch.dict(sysinfo.os.environ, {}, clear=True):
             self.assertEqual(sysinfo.language(), sysinfo.UNKNOWN)
 
+    def test_collect_writes_the_home_as_a_tilde(self):
+        with mock.patch.object(sysinfo, "retroarch", return_value="1.0 · /home/me/ra"), \
+                mock.patch.object(sysinfo, "redact_home", side_effect=lambda v: v.replace("/home/me", "~")):
+            facts = dict(sysinfo.collect())
+        self.assertEqual(facts["RetroArch"], "1.0 · ~/ra")
+
     def test_collect_and_render(self):
         with mock.patch.object(sysinfo, "retroarch", return_value="1.0 · /ra"):
             facts = sysinfo.collect(gtk="4", adwaita="1")

@@ -139,6 +139,16 @@ class RotatingStartupLogTests(unittest.TestCase):
             configure_startup_logging(runtime_dir=tmp_dir)
             self.assertIn(log_buffer.BUFFER, logging.getLogger().handlers)
 
+    def test_every_handler_writes_the_home_as_a_tilde(self):
+        # The file is what a bug report used to ask for; the user's name
+        # must not be in it either (issue #461).
+        from openemux.core import log_buffer
+
+        with TemporaryDirectory() as tmp_dir:
+            configure_startup_logging(runtime_dir=tmp_dir)
+            for handler in logging.getLogger().handlers:
+                self.assertIsInstance(handler.formatter, log_buffer.RedactingFormatter)
+
     def test_the_file_handler_rotates(self):
         with TemporaryDirectory() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)
