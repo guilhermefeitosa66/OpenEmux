@@ -378,5 +378,17 @@ class RemovingAnEmptiedTreeTests(_ConfigCase):
         self.assertTrue((deep / "keep.rom").is_file())
 
 
+
+class TheLogPanelSettingTests(_ConfigCase):
+    """Off until asked for; the bar button and Settings share it (issue #461)."""
+
+    def test_it_starts_off(self):
+        self.assertFalse(self.config.get_ui_settings()["show_log_panel"])
+
+    def test_it_is_stored(self):
+        self.config.set_show_log_panel(True)
+        self.assertTrue(self.config.get_ui_settings()["show_log_panel"])
+
+
 if __name__ == "__main__":
     unittest.main()

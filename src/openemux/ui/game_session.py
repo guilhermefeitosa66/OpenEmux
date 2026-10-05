@@ -107,6 +107,14 @@ class GameSession:
             self.win.play_history.record_launch(rom["path"])
             self.open_wrapper(rom)
         if not success and error_msg:
+            # Logged as well as toasted: the toast is gone in five seconds,
+            # and a bug report built from the log must show what the user saw.
+            # The untranslated message, so the report reads the same whatever
+            # language the reporter runs in.
+            logger.error(
+                "launch failed: console=%s rom=%s error=%s",
+                rom["console"], rom["name"], error_msg,
+            )
             self._toast_now(self._error_text(error_msg), 5)
         elif success:
             self._toast_now(

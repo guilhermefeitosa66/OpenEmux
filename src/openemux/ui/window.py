@@ -70,6 +70,7 @@ from openemux.core.gamepad_backend import make_navigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
+from openemux.ui.log_panel import BugReportDialog, LogPanel
 from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
@@ -554,6 +555,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.imports.install_drop_target(self.content_stack)
 
         toolbar.add_bottom_bar(self._build_selection_bar())
+        # Above the tip bar, whose "Log" button opens it: the panel slides up
+        # out of the bar that controls it.
+        self.log_panel = LogPanel(self)
+        toolbar.add_bottom_bar(self.log_panel.widget)
         toolbar.add_bottom_bar(self._build_tip_bar())
 
         page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
@@ -1093,10 +1098,33 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # A CenterBox, not a plain Box: the end widget is guaranteed its natural
         # width and the tip ellipsizes into what is left. In a Box the tip's
         # hexpand won the negotiation and pushed the hints off the right edge.
+        # The log's own switch, at the far right after the input hints: one
+        # click from the library rather than a trip through Settings.
+        self.log_toggle = Gtk.ToggleButton()
+        self.log_toggle.add_css_class("flat")
+        self.log_toggle.add_css_class("log-toggle")
+        log_content = Gtk.Box(spacing=6)
+        log_content.append(Gtk.Image.new_from_icon_name("utilities-terminal-symbolic"))
+        log_label = Gtk.Label()
+        self._translatable(lambda: log_label.set_label(self.t("log.toggle")))
+        log_content.append(log_label)
+        self.log_badge = Gtk.Label()
+        self.log_badge.add_css_class("log-badge")
+        self.log_badge.set_visible(False)
+        log_content.append(self.log_badge)
+        self.log_toggle.set_child(log_content)
+        self._translatable(lambda: self.log_toggle.set_tooltip_text(self.t("log.toggle.tooltip")))
+        self.log_toggle.connect("toggled", lambda b: self.set_log_panel_visible(b.get_active()))
+
+        end_side = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        end_side.append(self.hint_box)
+        end_side.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        end_side.append(self.log_toggle)
+
         bar = Gtk.CenterBox()
         bar.add_css_class("tip-bar")
         bar.set_start_widget(tip_side)
-        bar.set_end_widget(self.hint_box)
+        bar.set_end_widget(end_side)
 
         self.tip_bar = bar
         self._has_hints = False
@@ -1105,7 +1133,27 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._rotate_tip()
         self.connect("close-request", self._on_close_stop_tips)
         self._apply_tips_visibility(self.config_manager.get_ui_settings()["show_tips"])
+        self.set_log_panel_visible(
+            self.config_manager.get_ui_settings()["show_log_panel"], persist=False
+        )
         return bar
+
+    def set_log_panel_visible(self, visible, persist=True):
+        """Open or close the log panel; the bar button and Settings follow."""
+        visible = bool(visible)
+        self.log_panel.set_open(visible)
+        if self.log_toggle.get_active() != visible:
+            self.log_toggle.set_active(visible)
+        if persist and self.config_manager.get_ui_settings()["show_log_panel"] != visible:
+            self.config_manager.set_show_log_panel(visible)
+
+    def update_log_badge(self, count):
+        """The red count on the "Log" button: errors since the panel was open."""
+        self.log_badge.set_label(str(count) if count < 100 else "99+")
+        self.log_badge.set_visible(count > 0)
+
+    def show_bug_report(self):
+        BugReportDialog(self).present()
 
     def _apply_tips_visibility(self, enabled):
         """Show or hide the tip bar, keeping the timer in step.
@@ -1129,7 +1177,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._stop_tip_rotation()
 
     def _update_tip_bar_visibility(self):
-        self.tip_bar.set_visible(getattr(self, "_tips_enabled", True) or self._has_hints)
+        # Always shown now: with tips off and no hints it still carries the
+        # "Log" button, and the log must never depend on the tips.
+        self.tip_bar.set_visible(True)
 
     def set_hints(self, pairs):
         """Fill the right side of the bottom bar with (glyph, label) hints."""
@@ -1175,6 +1225,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         menu.append(self.t("menu.preferences"), "win.preferences")
         menu.append(self.t("menu.shortcuts"), "win.shortcuts")
         menu.append(self.t("menu.welcome"), "win.welcome")
+        menu.append(self.t("menu.report_bug"), "win.report-bug")
         menu.append(self.t("menu.about"), "win.about")
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
@@ -1194,6 +1245,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
+            ("report-bug", lambda *_: self.show_bug_report(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
             ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
             ("import", lambda *_: self.imports.open_picker(), ["<Ctrl>o"]),

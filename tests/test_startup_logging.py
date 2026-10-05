@@ -131,6 +131,14 @@ class RotatingStartupLogTests(unittest.TestCase):
                 )
             )
 
+    def test_the_log_panel_buffer_is_on_the_root_logger(self):
+        # What the log panel and bug reports read (issue #461).
+        from openemux.core import log_buffer
+
+        with TemporaryDirectory() as tmp_dir:
+            configure_startup_logging(runtime_dir=tmp_dir)
+            self.assertIn(log_buffer.BUFFER, logging.getLogger().handlers)
+
     def test_the_file_handler_rotates(self):
         with TemporaryDirectory() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)

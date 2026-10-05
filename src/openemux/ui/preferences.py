@@ -1782,6 +1782,34 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         welcome_group.add(open_welcome_row)
         page.add(welcome_group)
 
+        # Troubleshooting: the log, and the way to hand it to the developer.
+        # Worded for someone who has never filed a bug report.
+        trouble_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.troubleshooting"),
+            description=self.t("settings.system.troubleshooting.description"),
+        )
+        self._log_panel_row = Adw.SwitchRow(
+            title=self.t("settings.system.log_panel.title"),
+            subtitle=self.t("settings.system.log_panel.subtitle"),
+        )
+        self._log_panel_row.add_prefix(Gtk.Image.new_from_icon_name("utilities-terminal-symbolic"))
+        self._log_panel_row.set_active(self.config.get_ui_settings()["show_log_panel"])
+        self._log_panel_row.connect(
+            "notify::active", lambda row, *_a: self.win.set_log_panel_visible(row.get_active())
+        )
+        trouble_group.add(self._log_panel_row)
+
+        self._report_row = Adw.ActionRow(
+            title=self.t("settings.system.report.title"),
+            subtitle=self.t("settings.system.report.subtitle"),
+        )
+        self._report_row.set_activatable(True)
+        self._report_row.add_prefix(Gtk.Image.new_from_icon_name("dialog-warning-symbolic"))
+        self._report_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        self._report_row.connect("activated", lambda _r: self.win.show_bug_report())
+        trouble_group.add(self._report_row)
+        page.add(trouble_group)
+
         saves_group = Adw.PreferencesGroup(title=self.t("prefs.group.saves"))
         export_row = Adw.ActionRow(
             title=self.t("settings.system.saves.export.title"),

@@ -3766,6 +3766,66 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** Screenshot of the overlay.
 - **Restore:** Press `Escape`.
 
+### RT-323 — The log is one click away, at the end of the tips bar
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** A library open, the log panel closed (the default).
+- **Steps:**
+  1. Look at the right end of the bottom bar.
+  2. Click "Log".
+  3. Click "Log" again.
+- **Expected:** Step 1 shows a "Log" button after the key hints. Step 2 slides the log panel open
+  above the bar and leaves "Log" pressed. The panel shows the log since the app started, live,
+  with the level coloured (ERROR in red), plus "Clear", "Copy Log + System Info", "Report a
+  Bug…" and a notice that sending the log is how a bug gets fixed. Step 3 closes it. The choice
+  is remembered: with the panel left open, the next launch opens with it open, and Settings ›
+  System › "Show the log panel" says the same (issue #461). With "Show tips" off, the bar
+  stays, holding only this button.
+- **Check:** screenshots of steps 1 and 2. The rules are in `tests/test_log_panel.py`
+  (`TheWindowKeepsThemInStepTests`, `WhatThePanelShowsTests`) and `tests/test_window.py`
+  (`test_the_bar_stays_for_the_log_button_with_no_tips_and_no_hints`).
+
+### RT-324 — An error logged with the panel closed shows a count on "Log"
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** The log panel closed, and a game that cannot start (in the devbox, any game:
+  there is no RetroArch).
+- **Steps:**
+  1. Double-click a game and wait for the toast to go.
+  2. Look at the "Log" button, then open the panel.
+- **Expected:** After step 1 the button carries a red count of the errors logged since the panel
+  was last open. Opening the panel shows them as ERROR lines naming the console, the game and
+  the reason, and the count goes away. Launch failures used to be only toasted, never logged,
+  so a report about a game that would not start carried no trace of it (issue #461).
+- **Check:** screenshots of the count and of the open panel. `tests/test_log_panel.py`
+  (`TheErrorCountTests`), `tests/test_game_session.py`
+  (`test_a_refused_launch_is_logged_as_well_as_toasted`).
+
+### RT-325 — "Report a Bug" copies the details and opens the bug form
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** none. Network only for the last step.
+- **Steps:**
+  1. Open "Report a Bug…" from the primary menu (or from the log panel, or from Settings ›
+     System › "Report a bug").
+  2. Click "Copy System Info + Log" and paste somewhere.
+  3. Click "Open GitHub".
+- **Expected:** Step 1 shows exactly what will be copied:
+  - the OpenEmux version and install format;
+  - the distribution, read from `/etc/os-release`;
+  - kernel, desktop and session;
+  - GTK, libadwaita and Python;
+  - RetroArch and the language;
+  - "+ the last N lines of the log".
+
+  Step 2 turns the button to "Copied" and pastes a "### System" block followed by the log.
+  Step 3 opens the browser on the `bug_report.yml` form with the "bug" label, the version and
+  the distribution already filled in; the log is pasted by the user, never sent by the app
+  (issue #461).
+- **Check:** screenshot of the dialog after step 2, and the browser's address after step 3
+  (`template=bug_report.yml&labels=bug&version=…&os=…`). `tests/test_log_panel.py` (`TheReportDialogTests`, `TheReportTextTests`),
+  `tests/test_sysinfo.py`.
+
 ## Destructive file operations
 
 ### RT-140 — Deleting a ROM asks for confirmation

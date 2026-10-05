@@ -441,10 +441,14 @@ class TheTipBarTests(WindowCase):
         self.win.set_hints([("A", "Open")])
         self.assertTrue(self.win.tip_bar.get_visible())
 
-    def test_the_bar_goes_away_with_no_tips_and_no_hints(self):
+    def test_the_bar_stays_for_the_log_button_with_no_tips_and_no_hints(self):
+        # It used to go away; it now carries the "Log" button, and the log
+        # must never depend on the tips (issue #461). Only the tip goes.
         self.win._apply_tips_visibility(False)
         self.win.set_hints([])
-        self.assertFalse(self.win.tip_bar.get_visible())
+        self.assertTrue(self.win.tip_bar.get_visible())
+        self.assertFalse(self.win._tip_side.get_visible())
+        self.assertTrue(self.win.log_toggle.get_visible())
 
     def test_the_hint_slots_are_filled_left_to_right_and_the_rest_hidden(self):
         self.win.set_hints([("A", "Open"), ("B", "Back")])
@@ -1854,9 +1858,19 @@ class TheDialogsAndMenusTests(WindowCase):
         with mock.patch.object(Gtk.ShortcutsWindow, "present"):
             self.win._show_shortcuts()
 
-    def test_the_primary_menu_offers_the_four_entries(self):
+    def test_the_primary_menu_offers_the_five_entries(self):
         model = self.win.primary_menu_button.get_menu_model()
-        self.assertEqual(model.get_n_items(), 4)
+        self.assertEqual(model.get_n_items(), 5)
+
+    def test_report_a_bug_sits_before_about(self):
+        # Where GNOME apps keep it, and reachable without opening Settings
+        # (issue #461).
+        model = self.win.primary_menu_button.get_menu_model()
+        actions = [
+            model.get_item_attribute_value(i, "action", None).get_string()
+            for i in range(model.get_n_items())
+        ]
+        self.assertEqual(actions[-2:], ["win.report-bug", "win.about"])
 
 
 @needs_display
