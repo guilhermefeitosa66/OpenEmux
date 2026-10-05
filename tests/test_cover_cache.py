@@ -86,6 +86,18 @@ class CacheTests(unittest.TestCase):
             second = cover_cache.load_cover(cover, 32, 32)
             self.assertIs(first, second)
 
+    def test_storing_a_key_again_counts_its_bytes_once(self):
+        # Two cards decoding the same cover at once both store it. The second
+        # store replaces the first, and the budget must not count it twice --
+        # which a full suite only exercised when two window tests happened to
+        # race, so the line's coverage came and went with the timing.
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 4, 4)
+        cover_cache._cache_put(("same",), pixbuf)
+        once = cover_cache._cache_bytes
+        cover_cache._cache_put(("same",), pixbuf)
+        self.assertEqual(cover_cache._cache_bytes, once)
+        self.assertEqual(cover_cache.cache_size(), 1)
+
     def test_a_different_target_size_is_a_different_entry(self):
         with TemporaryDirectory() as tmp_dir:
             cover = _write_png(Path(tmp_dir) / "cover.png")

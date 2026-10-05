@@ -22,6 +22,7 @@ from pathlib import Path
 
 from openemux import __version__
 from openemux.core.paths import get_project_root, is_running_in_flatpak
+from openemux.core.privacy import redact_home
 
 OS_RELEASE_PATHS = (Path("/etc/os-release"), Path("/usr/lib/os-release"))
 
@@ -126,8 +127,12 @@ def language():
 
 
 def collect(gtk=None, adwaita=None, retroarch_binary=None):
-    """Every fact as ordered (label, value) pairs, for the dialog and the copy."""
-    return [
+    """Every fact as ordered (label, value) pairs, for the dialog and the copy.
+
+    Each value has the home directory written as ``~`` -- a RetroArch the user
+    keeps under their home would otherwise put their name in the report.
+    """
+    facts = [
         ("OpenEmux", f"{__version__} · {install_format()}"),
         ("System", distribution()),
         ("Kernel", f"{platform.system()} {platform.release()} · {platform.machine()}"),
@@ -136,6 +141,7 @@ def collect(gtk=None, adwaita=None, retroarch_binary=None):
         ("RetroArch", retroarch(retroarch_binary)),
         ("Language", language()),
     ]
+    return [(label, redact_home(value)) for label, value in facts]
 
 
 def as_text(facts):

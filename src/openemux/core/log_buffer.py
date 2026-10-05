@@ -13,6 +13,8 @@ import collections
 import logging
 import threading
 
+from openemux.core.privacy import redact_home
+
 #: How many lines the panel can scroll back through. Enough for a session's
 #: worth of launches and syncs; the file on disk keeps the rest.
 MAX_LINES = 2000
@@ -22,6 +24,18 @@ MAX_LINES = 2000
 REPORT_LINES = 300
 
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+
+class RedactingFormatter(logging.Formatter):
+    """The app's log format, with the home directory written as ``~``.
+
+    Used by every handler the app installs -- the file, the console and the
+    panel -- so the user's name is in none of them, and a log pasted into a
+    public bug report does not carry it.
+    """
+
+    def format(self, record):
+        return redact_home(super().format(record))
 
 
 class LogLine:
@@ -43,7 +57,7 @@ class LogBuffer(logging.Handler):
 
     def __init__(self, max_lines=MAX_LINES):
         super().__init__(level=logging.INFO)
-        self.setFormatter(logging.Formatter(LOG_FORMAT))
+        self.setFormatter(RedactingFormatter(LOG_FORMAT))
         self._lines = collections.deque(maxlen=max_lines)
         self._listeners = []
         self._lock_lines = threading.Lock()

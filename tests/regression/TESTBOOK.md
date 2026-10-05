@@ -3826,6 +3826,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   (`template=bug_report.yml&labels=bug&version=…&os=…`). `tests/test_log_panel.py` (`TheReportDialogTests`, `TheReportTextTests`),
   `tests/test_sysinfo.py`.
 
+### RT-326 — The log never carries the user's name
+- **Area:** Help
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the log panel and look at any line with a path (a playlist
+  load, the ROM folder), then click "Copy Log + System Info" and paste it.
+- **Expected:** Every path under the home directory starts with `~`
+  (`path=~/.openemux/playlists/VB.list`), in the panel, in the pasted report (the RetroArch line
+  included) and in `~/.openemux/runtime/openemux_startup.log` itself. The home directory is named
+  after the user, and many people will not post their name in a public bug report (issue #461).
+  A path in somebody else's home (`/home/<user>2/…`) is left as it is.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from pathlib import Path
+  from openemux.core.privacy import redact_home
+  h = str(Path.home())
+  assert redact_home(f'path={h}/.openemux/playlists/VB.list') == 'path=~/.openemux/playlists/VB.list'
+  assert redact_home(f'{h}2/x') == f'{h}2/x'
+  print('RT-326 OK')"
+  ```
+  Unit-level: `tests/test_privacy.py`, `tests/test_startup_logging.py`
+  (`test_every_handler_writes_the_home_as_a_tilde`), `tests/test_sysinfo.py`.
+
 ## Destructive file operations
 
 ### RT-140 — Deleting a ROM asks for confirmation
