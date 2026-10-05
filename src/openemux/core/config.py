@@ -819,6 +819,7 @@ class ConfigManager:
             # Derived, not stored twice: the view mode is the source of truth.
             "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
+            "show_log_panel": bool(ui.get("show_log_panel", False)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
             "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
@@ -924,6 +925,11 @@ class ConfigManager:
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_tips"] = bool(enabled)
+        self.save_config()
+
+    def set_show_log_panel(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["show_log_panel"] = bool(enabled)
         self.save_config()
 
     def set_gamepad_navigation(self, enabled):

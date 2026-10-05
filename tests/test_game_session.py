@@ -137,6 +137,16 @@ class LaunchingTests(_SessionCase):
         self.open_wrapper.assert_not_called()
         self.assertEqual(self.toasts, [self.said("toast.launch_busy")])
 
+    def test_a_refused_launch_is_logged_as_well_as_toasted(self):
+        # The toast is gone in five seconds; a bug report is built from the
+        # log, and it must show what the user saw (issue #461).
+        self.runtime.launch_result = (False, "toast.launch_busy")
+        rom = self.rom()
+        with self.assertLogs("openemux.ui.game_session", "ERROR") as logs:
+            self.session.launch(rom)
+        self.assertIn("toast.launch_busy", logs.output[-1])
+        self.assertIn(rom["name"], logs.output[-1])
+
     def test_a_launch_that_raises_is_reported_rather_than_swallowed(self):
         # Issue #226: a click handler is where an exception goes to die
         # quietly -- PyGObject prints the traceback and the button does

@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from openemux.core import log_buffer
 from openemux.core.paths import store_path
 
 
@@ -153,6 +154,8 @@ def configure_startup_logging(runtime_dir=None):
         )
     except OSError:
         pass
+    # The in-memory view the log panel and bug reports read (log_buffer).
+    handlers.append(log_buffer.BUFFER)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",

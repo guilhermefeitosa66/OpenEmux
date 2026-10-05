@@ -239,6 +239,42 @@ flowboxchild:focus-visible {
     font-weight: bold;
 }
 
+/* ===== Log panel ===== */
+.log-panel {
+    padding: 10px 14px 12px;
+    border-top: 1px solid @headerbar_shade_color;
+    background-color: @headerbar_bg_color;
+}
+.log-live { color: @success_color; }
+.log-notice {
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: alpha(@accent_bg_color, 0.12);
+    font-size: 0.9em;
+}
+.log-scroll {
+    border-radius: 8px;
+    border: 1px solid alpha(@window_fg_color, 0.12);
+}
+.log-view { padding: 6px 10px; font-size: 0.85em; }
+.log-badge {
+    min-width: 16px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background-color: @error_bg_color;
+    color: @error_fg_color;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+.report-step {
+    min-width: 26px;
+    min-height: 26px;
+    border-radius: 13px;
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    font-weight: bold;
+}
+
 /* ===== ROM Drag & Drop ===== */
 .rom-drop-active {
     background-color: alpha(@accent_bg_color, 0.12);
