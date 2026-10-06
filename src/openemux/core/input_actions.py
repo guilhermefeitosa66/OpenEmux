@@ -643,8 +643,7 @@ def _unbind(overrides, base_key, device_type):
     Leaving it out is not the same thing: RetroArch falls back to the pad's
     autoconfig profile for any bind id the config does not set, so an omitted
     key keeps the stock mapping alive. ``"nul"`` is how RetroArch spells "this
-    is bound to nothing", the same idiom the launcher already uses to take the
-    fullscreen toggle away from the embedded window.
+    is bound to nothing".
     """
     if device_type == "keyboard":
         overrides[base_key] = _quote("nul")

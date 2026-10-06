@@ -19,8 +19,7 @@ class I18nTests(unittest.TestCase):
         # other 33 keys the Preferences refactor left unreachable (issue
         # #232), so this asserts against a key the app still shows.
         self.assertEqual(normalize_locale("unknown"), "en")
-        self.assertEqual(tr("unknown", "prefs.game_window.title"),
-                         "Play in an OpenEmux window")
+        self.assertEqual(tr("unknown", "prefs.page.video"), "Video")
 
     def test_missing_key_in_locale_uses_english(self):
         # This used to lean on German being incomplete. Every locale is

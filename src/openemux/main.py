@@ -80,41 +80,6 @@ def _configure_gtk_renderer():
         os.environ["GSK_RENDERER"] = "cairo"
 
 
-def _configure_game_window_backend():
-    """Run as an X11 client when the game window is on (issue #199).
-
-    The wrapper adopts RetroArch's window by re-parenting it, which only
-    works between two X clients -- on a Wayland session that means putting
-    both on XWayland. Has to happen before the first ``gi`` import, hence a
-    module-level call rather than something the app decides later.
-
-    Three ways out, all of them leaving GTK to pick its own backend: a
-    GDK_BACKEND is already set, which is an explicit choice we do not
-    override; the session cannot host an embed at all (no python-xlib, no X
-    display -- forcing x11 there would leave GTK with no display and the app
-    would not start); or the user turned the game window off.
-    """
-    # Windows has no X server and no reparenting equivalent, so the game
-    # window is off there and RetroArch opens its own. game_window_support
-    # already reaches the same conclusion via the absent DISPLAY; returning
-    # here says so outright and skips importing the X11 machinery to find out.
-    if IS_WINDOWS:
-        return
-    if os.environ.get("GDK_BACKEND"):
-        return
-    # Imported here rather than at module scope: this runs before the GTK
-    # stack is even importable, so the pre-GTK section stays as small as it
-    # can be.
-    from openemux.core import game_window_support
-    from openemux.core.config import read_game_window_setting
-
-    if not game_window_support.embedding_possible():
-        return
-    if not read_game_window_setting():
-        return
-    os.environ["GDK_BACKEND"] = "x11"
-
-
 def _ensure_pixbuf_loaders():
     """Windows: build gdk-pixbuf's loader cache before anything decodes an image.
 
@@ -218,10 +183,9 @@ def prepare_process():
     # on every launch.
     _redirect_bytecode_cache()
     _configure_gtk_renderer()
-    # Before the backend pick: the setting is read straight off the config
-    # file, which a legacy config dir may still be on its way to.
+    # Before logging: the start-up log lives in the config dir, which a legacy
+    # one may still be on its way to.
     migrate_legacy_config_dir()
-    _configure_game_window_backend()
     configure_startup_logging()
     _ensure_gtk_typelibs()
     _ensure_pixbuf_loaders()
@@ -232,9 +196,8 @@ def build_application():
 
     The GTK import and the application class live in ``openemux.app``, reached
     only from here: importing ``gi.repository.Gtk`` runs ``Gtk.init()``, which
-    *opens the display*, so ``GDK_BACKEND`` -- which
-    ``_configure_game_window_backend`` sets -- has to be in the environment
-    before that import rather than after it.
+    *opens the display*, so what the preparation puts in the environment
+    (``GSK_RENDERER``) has to be there before that import rather than after.
     """
     prepare_process()
     from openemux.app import OpenEmuxApplication

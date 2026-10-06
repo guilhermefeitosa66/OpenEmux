@@ -1,4 +1,4 @@
-"""The command channels -- stdin and UDP -- and volume stepping (issue #69)."""
+"""The command channels -- stdin and UDP (issue #69)."""
 
 import os
 import socket
@@ -9,47 +9,12 @@ from unittest.mock import patch
 from openemux.core import retroarch_command
 from openemux.core.retroarch_command import (
     DEFAULT_NETWORK_CMD_PORT,
-    DEFAULT_VOLUME_DB,
-    MAX_VOLUME_DB,
-    MIN_VOLUME_DB,
-    SATURATION_MARGIN_DB,
     RetroArchCommandClient,
     StdinCommandClient,
-    VolumePacer,
-    clamp_volume_db,
     pick_free_udp_port,
     uses_stdin_channel,
-    volume_steps,
 )
 from tests.platform_marks import posix_only
-
-
-class ClampTests(unittest.TestCase):
-    def test_range_and_garbage(self):
-        self.assertEqual(clamp_volume_db(0.0), 0.0)
-        # +5 dB is inside RetroArch's real range (it amplifies to +12).
-        self.assertEqual(clamp_volume_db(5), 5.0)
-        self.assertEqual(clamp_volume_db(20), MAX_VOLUME_DB)
-        self.assertEqual(clamp_volume_db(-100), MIN_VOLUME_DB)
-        # Garbage falls back to unity gain, never to the +12 dB ceiling.
-        self.assertEqual(clamp_volume_db("nonsense"), DEFAULT_VOLUME_DB)
-        self.assertEqual(clamp_volume_db(None), DEFAULT_VOLUME_DB)
-
-
-class VolumeStepTests(unittest.TestCase):
-    def test_down_and_up_in_half_db_steps(self):
-        self.assertEqual(volume_steps(0.0, -6.0), ("VOLUME_DOWN", 12))
-        self.assertEqual(volume_steps(-10.0, -5.0), ("VOLUME_UP", 10))
-
-    def test_no_steps_when_already_there(self):
-        self.assertEqual(volume_steps(-3.0, -3.0), (None, 0))
-        # Sub-step differences round away rather than emitting a wrong step.
-        self.assertEqual(volume_steps(-3.0, -3.1), (None, 0))
-
-    def test_targets_are_clamped_before_stepping(self):
-        command, count = volume_steps(0.0, -999)
-        self.assertEqual(command, "VOLUME_DOWN")
-        self.assertEqual(count, int(abs(MIN_VOLUME_DB) / 0.5))
 
 
 class CommandClientTests(unittest.TestCase):
@@ -64,14 +29,10 @@ class CommandClientTests(unittest.TestCase):
             # ResourceWarning after the summary (issue #244).
             self.addCleanup(client.close)
 
-            self.assertTrue(client.send("MUTE"))
-            data, _addr = server.recvfrom(64)
-            self.assertEqual(data, b"MUTE")
-
-            self.assertEqual(client.send_repeated("VOLUME_DOWN", 3), 3)
-            for _ in range(3):
+            for command in ("QUIT", "SAVE_STATE_SLOT 3"):
+                self.assertTrue(client.send(command))
                 data, _addr = server.recvfrom(64)
-                self.assertEqual(data, b"VOLUME_DOWN")
+                self.assertEqual(data, command.encode())
 
     def test_empty_command_is_refused(self):
         client = RetroArchCommandClient(1)
@@ -80,8 +41,8 @@ class CommandClientTests(unittest.TestCase):
         self.assertFalse(client.send(None))
 
     def test_the_socket_is_reused_across_commands(self):
-        # A volume walk is dozens of datagrams; one socket per packet is a
-        # syscall pair each time for no gain (issue #125).
+        # One socket per packet is a syscall pair each time for no gain
+        # (issue #125).
         client = RetroArchCommandClient(55355)
         client.send("MUTE")
         first = client._sock
@@ -142,12 +103,10 @@ class StdinCommandClientTests(unittest.TestCase):
         # in its buffer until the next arrives and the two run together.
         pipe = _Pipe(self)
         client = StdinCommandClient(pipe.stream)
-        self.assertTrue(client.send("VOLUME_UP"))
+        self.assertTrue(client.send("LOAD_STATE"))
         self.assertTrue(client.send("  SAVE_STATE_SLOT 3 \n"))
-        self.assertEqual(client.send_repeated("VOLUME_DOWN", 2), 2)
-        self.assertEqual(
-            pipe.drain(), b"VOLUME_UP\nSAVE_STATE_SLOT 3\nVOLUME_DOWN\nVOLUME_DOWN\n"
-        )
+        self.assertTrue(client.send("QUIT"))
+        self.assertEqual(pipe.drain(), b"LOAD_STATE\nSAVE_STATE_SLOT 3\nQUIT\n")
 
     def test_the_pipe_is_made_non_blocking(self):
         pipe = _Pipe(self)
@@ -218,110 +177,6 @@ class StdinCommandClientCornerTests(unittest.TestCase):
         self.assertFalse(client.send("QUIT"))
 
 
-class PacedDeliveryTests(unittest.TestCase):
-    """Issue #125: paced steps actually arrive; unpaced bursts did not."""
-
-    def test_a_paced_walk_delivers_every_step(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server:
-            server.bind(("127.0.0.1", 0))
-            server.settimeout(2)
-            port = server.getsockname()[1]
-            client = RetroArchCommandClient(port)
-
-            # Driven with a no-op sleep: the real 75 ms cadence over a full
-            # walk would take seconds, and what is under test here is
-            # delivery, not timing.
-            pacer = VolumePacer(client, level=0.0, sleep=lambda _s: None)
-            pacer.set_target(-10.0)
-            pacer.join(5)
-
-            for _ in range(20):
-                data, _addr = server.recvfrom(64)
-                self.assertEqual(data, b"VOLUME_DOWN")
-            self.assertEqual(pacer.level, -10.0)
-            client.close()
-
-    def test_a_walk_to_the_top_saturates_past_the_clamp(self):
-        # Aiming at RetroArch's own +12 dB clamp sends extra steps: the
-        # emulator pins there, so the overshoot is free and it re-syncs the
-        # tracker after hotkey changes the tracker never saw (the reported
-        # "slider at max is not RetroArch's max").
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server:
-            server.bind(("127.0.0.1", 0))
-            server.settimeout(2)
-            port = server.getsockname()[1]
-            client = RetroArchCommandClient(port)
-
-            pacer = VolumePacer(client, level=MAX_VOLUME_DB - 1.0, sleep=lambda _s: None)
-            pacer.set_target(MAX_VOLUME_DB)
-            pacer.join(5)
-
-            expected = int(SATURATION_MARGIN_DB / 0.5)
-            for _ in range(expected):
-                data, _addr = server.recvfrom(64)
-                self.assertEqual(data, b"VOLUME_UP")
-            self.assertEqual(pacer.level, MAX_VOLUME_DB)
-            client.close()
-
-    def test_send_repeated_can_pace_itself(self):
-        client = RetroArchCommandClient(55355)
-        with patch("openemux.core.retroarch_command.time.sleep") as sleep:
-            self.assertEqual(client.send_repeated("VOLUME_UP", 4, delay=0.016), 4)
-        # Between packets only -- no trailing wait after the last one.
-        self.assertEqual(sleep.call_count, 3)
-        client.close()
-
-    def test_send_repeated_stays_unpaced_by_default(self):
-        client = RetroArchCommandClient(55355)
-        with patch("openemux.core.retroarch_command.time.sleep") as sleep:
-            client.send_repeated("VOLUME_UP", 4)
-        self.assertEqual(sleep.call_count, 0)
-        client.close()
-
-
-class SettlingWalkTests(unittest.TestCase):
-    """A step that never left must not abandon the walk (issue #284)."""
-
-    class _Client:
-        def __init__(self, failures=()):
-            self.sent = []
-            self._failures = list(failures)
-
-        def send(self, command):
-            self.sent.append(command)
-            if self._failures and self._failures.pop(0):
-                return False
-            return True
-
-    def _pacer(self, client, level=0.0):
-        return VolumePacer(client, level=level, sleep=lambda _s: None, interval=0)
-
-    def test_a_lost_step_is_retried_and_the_walk_continues(self):
-        client = self._Client(failures=[False, True, False, False])
-        pacer = self._pacer(client)
-        pacer.set_target(-2.0)
-        pacer.join(2)
-        # 4 steps of 0.5 dB, plus the one retry of the step that failed.
-        self.assertEqual(len(client.sent), 5)
-        self.assertAlmostEqual(pacer.level, -2.0)
-
-    def test_a_step_that_fails_twice_stops_the_walk_where_it_landed(self):
-        client = self._Client(failures=[False, True, True])
-        pacer = self._pacer(client)
-        pacer.set_target(-5.0)
-        pacer.join(2)
-        self.assertAlmostEqual(pacer.level, -0.5)
-        # The tracker holds what actually landed, so the UI can reconcile.
-        self.assertTrue(pacer.settling)
-
-    def test_settling_is_false_once_the_level_reaches_the_target(self):
-        pacer = self._pacer(self._Client())
-        self.assertFalse(pacer.settling)
-        pacer.set_target(-3.0)
-        pacer.join(2)
-        self.assertFalse(pacer.settling)
-
-
 class FreePortTests(unittest.TestCase):
     """Each launch gets a port of its own (issue #227)."""
 
@@ -364,19 +219,6 @@ class WhenTheSocketGoesBadTests(unittest.TestCase):
         client = self._client(sock)
         client._drop_socket()
         self.assertIsNone(client._sock)
-
-
-class WhatThePacerIsAimingAtTests(unittest.TestCase):
-    def test_the_target_is_where_the_volume_is_heading(self):
-        # Read by the OSD while the walk is still on its way there.
-        client = RetroArchCommandClient(port=55555)
-        self.addCleanup(client._drop_socket)
-        pacer = VolumePacer(client, sleep=lambda _s: None)
-        pacer.reset(0.0)
-        self.assertEqual(pacer.target, 0.0)
-        pacer.set_target(-12.0)
-        pacer.join(2)
-        self.assertEqual(pacer.target, -12.0)
 
 
 if __name__ == "__main__":

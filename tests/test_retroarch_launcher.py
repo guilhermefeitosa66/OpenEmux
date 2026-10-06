@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from openemux.core import game_window_support, retroarch_command
+from openemux.core import retroarch_command, retroarch_launcher
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
@@ -12,6 +12,7 @@ from openemux.core.retroarch_launcher import (
     APPIMAGE_EXTRACT_AND_RUN,
     RetroArchLauncher,
     appimage_flags,
+    x11_display_available,
     x11_only_env,
 )
 
@@ -47,7 +48,6 @@ class _DummyConfig:
         self.audio_driver = "inherit"
         # "auto" is the shipped default; the #366 tests set it explicitly.
         self.video_driver = "auto"
-        self.game_window = False
         # Per-console core options (issue #296); None means "no store", which
         # is what every test that predates them expects.
         self.core_options = None
@@ -100,27 +100,12 @@ class _DummyConfig:
         # defaults, which write nothing (issues #154, #155).
         return dict(self.input_tuning)
 
-    def get_master_volume_db(self):
-        return -6.0
-
     def get_console_states_dir(self, console):
         return self.base_dir / "states" / console
 
-    def get_game_window_enabled(self):
-        # Off unless a test says otherwise: the embed overrides rewrite how
-        # RetroArch's own window behaves, and every other assertion here is
-        # about the standalone launch.
-        return self.game_window
 
 
 class RetroArchLauncherTests(unittest.TestCase):
-    def setUp(self):
-        # The embed verdict and the failure latch are module-global; a test
-        # elsewhere that latched them would silently push every override
-        # here into the "no wrapper" branch.
-        game_window_support.reset_embed_state()
-        self.addCleanup(game_window_support.reset_embed_state)
-
     def test_resolve_retroarch_binary_from_project_relative_path(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -322,7 +307,11 @@ class RetroArchLauncherTests(unittest.TestCase):
         cmd, launcher, log_text, _presets = self._launch_with_presets(
             ("glsl",), video_driver_windows=True
         )
-        self.assertNotIn("--set-shader", cmd)
+        # What is still loaded is the in-game bar's own pair (issue #469),
+        # never a console preset the driver cannot read.
+        loaded = cmd[cmd.index("--set-shader") + 1]
+        self.assertTrue(loaded.endswith("in_game_bar/Controls shown.slangp"), loaded)
+        self.assertNotIn(".glslp", " ".join(cmd))
         self.assertIsNotNone(launcher.last_shader_notice)
         key, kwargs = launcher.last_shader_notice
         self.assertEqual(key, "toast.shader.preset_missing")
@@ -490,86 +479,60 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('savestate_thumbnail_enable = "true"', lines)
         self.assertIn('state_slot = "0"', lines)
 
-    def _game_window_override_lines(self, enabled, embeddable=True):
+    def _window_override_lines(self, display=":0"):
+        env = {"DISPLAY": display} if display else {}
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
-            cfg.game_window = enabled
             launcher = RetroArchLauncher(base, cfg)
-            with patch(
-                "openemux.core.game_window_support.embedding_possible",
-                return_value=embeddable,
+            with patch.dict(retroarch_launcher.os.environ, env, clear=True), patch.object(
+                retroarch_launcher, "IS_WINDOWS", False
             ):
                 path = launcher._write_runtime_override("GBA")
             return Path(path).read_text(encoding="utf-8").splitlines()
 
-    def test_override_hands_retroarch_a_window_the_game_window_can_adopt(self):
-        # Issue #199: re-parenting needs a plain windowed window, and the
-        # fullscreen hotkey has to go -- toggling it recreates the window and
-        # breaks the embed.
-        lines = self._game_window_override_lines(True)
-        self.assertIn('video_fullscreen = "false"', lines)
-        self.assertIn('video_window_show_decorations = "false"', lines)
-        self.assertIn('video_window_save_positions = "false"', lines)
-        self.assertIn('pause_nonactive = "false"', lines)
-        self.assertIn('input_toggle_fullscreen = "nul"', lines)
-
-    def test_override_unbinds_the_pads_fullscreen_button_too(self):
-        # Only the keyboard binding used to go. The gamepad one was still
-        # written from the input profile, so one press of that button made
-        # RetroArch recreate its window and the embed died with it (#267).
-        lines = self._game_window_override_lines(True)
-        self.assertIn('input_toggle_fullscreen_btn = "nul"', lines)
-        self.assertIn('input_toggle_fullscreen_axis = "nul"', lines)
-
-    def test_override_stops_a_saved_config_from_forcing_a_wayland_context(self):
-        # An X client can only reparent another X client. Dropping the
-        # Wayland socket from RetroArch's environment is what lands it on
-        # X11, but a retroarch.cfg naming the wayland context would override
-        # that -- empty is RetroArch's own "probe" value (#267).
-        lines = self._game_window_override_lines(True)
-        self.assertIn('video_context_driver = ""', lines)
+    def test_override_heals_a_window_older_versions_left_borderless(self):
+        # Stated, not merely omitted: the game window OpenEmux used to wrap
+        # RetroArch in leaked its overrides into users' own retroarch.cfg, so
+        # a game came up borderless and never paused. The defaults are written
+        # back so a polluted config heals itself (issue #469).
+        lines = self._window_override_lines()
+        self.assertIn('video_window_show_decorations = "true"', lines)
+        self.assertIn('pause_nonactive = "true"', lines)
+        self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
 
     def test_override_keeps_retroarchs_output_in_our_log(self):
-        # The game window reads that log to find out whether RetroArch is an
-        # X client at all; log_to_file sends it somewhere else and leaves
-        # ours empty (#267).
-        lines = self._game_window_override_lines(True)
-        self.assertIn('log_to_file = "false"', lines)
+        # The failure reasons are read back from that log; log_to_file sends
+        # RetroArch's output somewhere else and leaves ours empty.
+        for display in (":0", None):
+            with self.subTest(display=display):
+                self.assertIn('log_to_file = "false"', self._window_override_lines(display))
 
-    def test_the_embed_only_overrides_stay_out_of_a_standalone_launch(self):
-        lines = self._game_window_override_lines(False)
-        self.assertNotIn('video_context_driver = ""', lines)
-        self.assertNotIn('input_toggle_fullscreen_btn = "nul"', lines)
+    def test_on_x11_retroarch_is_kept_an_x_client_the_bar_can_be_clicked_in(self):
+        # Where an X display exists RetroArch runs on it (issue #469): a
+        # retroarch.cfg naming the wayland context cannot pull it off, and
+        # the X input driver delivers the bar's clicks -- udev reads the
+        # mouse from /dev/input, which most users cannot open.
+        lines = self._window_override_lines(":0")
+        self.assertIn('video_context_driver = ""', lines)
+        self.assertIn('input_driver = "x"', lines)
 
-    def test_a_latched_embed_failure_heals_the_window_for_later_launches(self):
-        # After one failure the session runs standalone, and the very next
-        # launch has to give RetroArch its decorations back -- otherwise the
-        # user is handed a second borderless window (#267).
-        game_window_support.mark_embed_unavailable("RetroArch is not an X11 client")
-        lines = self._game_window_override_lines(True)
-        self.assertIn('video_window_show_decorations = "true"', lines)
-        self.assertIn('pause_nonactive = "true"', lines)
-        self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
+    def test_without_an_x_display_retroarch_picks_its_own_backend(self):
+        lines = self._window_override_lines(None)
+        self.assertFalse(any(line.startswith("video_context_driver") for line in lines))
+        self.assertFalse(any(line.startswith("input_driver") for line in lines))
 
-    def test_override_gives_the_window_its_decorations_when_the_setting_is_off(self):
-        # Stated, not merely omitted: earlier versions leaked the embed
-        # overrides into the user's own retroarch.cfg, so a game launched
-        # without a wrapper still came up borderless and never paused. The
-        # defaults are written back so a polluted config heals itself.
-        lines = self._game_window_override_lines(False)
-        self.assertNotIn('video_window_show_decorations = "false"', lines)
-        self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
-        self.assertIn('video_window_show_decorations = "true"', lines)
-        self.assertIn('pause_nonactive = "true"', lines)
-
-    def test_override_leaves_the_window_alone_when_the_session_cannot_embed(self):
-        # The setting says yes but nothing can host the embed: writing these
-        # anyway would leave RetroArch borderless with no wrapper around it.
-        lines = self._game_window_override_lines(True, embeddable=False)
-        self.assertNotIn('video_window_show_decorations = "false"', lines)
-        self.assertNotIn('input_toggle_fullscreen = "nul"', lines)
-        self.assertIn('video_window_show_decorations = "true"', lines)
+    def test_the_bar_is_on_every_launch_and_its_shader_folder_is_named(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA", shader_dir=base / "pair")
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+            plain = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8")
+        self.assertIn('input_overlay_enable = "true"', lines)
+        self.assertIn(f'video_shader_dir = "{base / "pair"}"', lines)
+        self.assertNotIn("video_shader_dir", plain)
 
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
@@ -593,7 +556,11 @@ class RetroArchLauncherTests(unittest.TestCase):
         lines = self._override_lines(profile)
         self.assertIn('input_turbo_period = "10"', lines)
         self.assertIn('input_turbo_duty_cycle = "5"', lines)
-        self.assertIn('input_turbo_mode = "1"', lines)
+        # The mode is the in-game bar's, not the profile's: its turbo button
+        # is one click, which only "Single Button (Toggle)" can act on
+        # (issue #469). Written once, so the bar's value is the one read.
+        self.assertIn('input_turbo_mode = "2"', lines)
+        self.assertEqual(sum(line.startswith("input_turbo_mode") for line in lines), 1)
         self.assertIn('input_player1_turbo_btn = "9"', lines)
 
     def test_override_has_no_turbo_binding_when_none_is_bound(self):
@@ -602,17 +569,17 @@ class RetroArchLauncherTests(unittest.TestCase):
         # ...but the timing keys still restate the defaults.
         self.assertIn('input_turbo_period = "6"', lines)
 
-    def test_override_opens_the_stdin_channel_and_seeds_the_volume(self):
-        # Issue #69: every launch opens a command channel and starts the game
-        # at the persisted master volume, so live stepping has a known
-        # starting point. Outside Windows the channel is stdin, and the UDP
-        # one -- which RetroArch binds on every interface -- is switched off.
+    def test_override_opens_the_stdin_channel(self):
+        # Issue #69: every launch opens a command channel. Outside Windows the
+        # channel is stdin, and the UDP one -- which RetroArch binds on every
+        # interface -- is switched off. The volume is RetroArch's own: nothing
+        # seeds audio_volume since the game window went (issue #469).
         with patch.object(retroarch_command, "IS_WINDOWS", False):
             lines = self._override_lines(None)
         self.assertIn('stdin_cmd_enable = "true"', lines)
         self.assertIn('network_cmd_enable = "false"', lines)
         self.assertFalse(any(line.startswith("network_cmd_port") for line in lines))
-        self.assertIn('audio_volume = "-6.0"', lines)
+        self.assertFalse(any(line.startswith("audio_volume") for line in lines))
 
     def test_override_opens_the_udp_channel_on_windows(self):
         # Its RetroArch build has no stdin interface.
@@ -1019,12 +986,35 @@ class ForcedExtractRetryTests(unittest.TestCase):
             self.assertFalse(launcher.launches_an_appimage())
 
 
+class X11DisplayTests(unittest.TestCase):
+    """Wherever there is an X display, RetroArch is put on it (issue #469)."""
+
+    def test_an_x_display_counts_xwayland_included(self):
+        with patch.object(retroarch_launcher, "IS_WINDOWS", False):
+            self.assertTrue(x11_display_available({"DISPLAY": ":0", "WAYLAND_DISPLAY": "w-0"}))
+
+    def test_a_wayland_session_without_xwayland_has_none(self):
+        with patch.object(retroarch_launcher, "IS_WINDOWS", False):
+            self.assertFalse(x11_display_available({"WAYLAND_DISPLAY": "w-0"}))
+            self.assertFalse(x11_display_available({"DISPLAY": "  "}))
+
+    def test_windows_never_has_one(self):
+        with patch.object(retroarch_launcher, "IS_WINDOWS", True):
+            self.assertFalse(x11_display_available({"DISPLAY": ":0"}))
+
+    def test_the_process_environment_is_read_by_default(self):
+        with patch.object(retroarch_launcher, "IS_WINDOWS", False), patch.dict(
+            retroarch_launcher.os.environ, {"DISPLAY": ":1"}, clear=True
+        ):
+            self.assertTrue(x11_display_available())
+
+
 class X11OnlyEnvTests(unittest.TestCase):
-    """What RetroArch's environment must not say while the wrapper embeds."""
+    """What RetroArch's environment must not say for it to land on X11."""
 
     def test_the_wayland_socket_pointer_always_goes(self):
         # Its mere presence is what makes RetroArch's wayland context
-        # succeed, and a wayland window can never be reparented into ours.
+        # succeed.
         cleaned = x11_only_env({"DISPLAY": ":0", "WAYLAND_DISPLAY": "wayland-0"})
         self.assertNotIn("WAYLAND_DISPLAY", cleaned)
         self.assertEqual(cleaned["DISPLAY"], ":0")
@@ -1066,6 +1056,9 @@ class StoppingAGameTests(unittest.TestCase):
             ), patch(
                 "openemux.core.retroarch_launcher.shutil.which",
                 return_value="/usr/bin/flatpak-spawn",
+            ), patch(
+                "openemux.core.retroarch_launcher.x11_display_available",
+                return_value=False,
             ):
                 prefix, error = launcher._launch_prefix()
         self.assertIsNone(error)
@@ -1081,15 +1074,10 @@ class StoppingAGameTests(unittest.TestCase):
             ],
         )
 
-    def test_the_flatpak_prefix_denies_the_wayland_socket_while_embedding(self):
-        # Popping WAYLAND_DISPLAY from *our* environment never reaches the
-        # sandbox -- `flatpak run` builds its own. Denying the socket does,
-        # and it is what makes --socket=fallback-x11 hand out X11, so the
-        # window the wrapper is about to adopt is an X window (issue #267).
+    def _flatpak_prefix(self, x11):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
-            cfg.game_window = True
             launcher = RetroArchLauncher(base, cfg)
             with patch(
                 "openemux.core.retroarch_launcher.is_running_in_flatpak",
@@ -1098,10 +1086,17 @@ class StoppingAGameTests(unittest.TestCase):
                 "openemux.core.retroarch_launcher.shutil.which",
                 return_value="/usr/bin/flatpak-spawn",
             ), patch(
-                "openemux.core.game_window_support.embedding_possible",
-                return_value=True,
+                "openemux.core.retroarch_launcher.x11_display_available",
+                return_value=x11,
             ):
-                prefix, error = launcher._launch_prefix()
+                return launcher._launch_prefix()
+
+    def test_the_flatpak_prefix_denies_the_wayland_socket_where_x_exists(self):
+        # Popping WAYLAND_DISPLAY from *our* environment never reaches the
+        # sandbox -- `flatpak run` builds its own. Denying the socket does,
+        # and it is what makes --socket=fallback-x11 hand out X11, so the
+        # game runs as the X client the bar expects (issues #267, #469).
+        prefix, error = self._flatpak_prefix(x11=True)
         self.assertIsNone(error)
         self.assertIn("--nosocket=wayland", prefix)
         # Never after the app id, or flatpak hands it to RetroArch as an
@@ -1109,6 +1104,12 @@ class StoppingAGameTests(unittest.TestCase):
         self.assertLess(
             prefix.index("--nosocket=wayland"), prefix.index("org.libretro.RetroArch")
         )
+
+    def test_without_an_x_display_the_flatpak_keeps_its_wayland_socket(self):
+        # Denying it there would leave RetroArch with no display at all.
+        prefix, error = self._flatpak_prefix(x11=False)
+        self.assertIsNone(error)
+        self.assertNotIn("--nosocket=wayland", prefix)
 
     def test_terminate_signals_the_process(self):
         with TemporaryDirectory() as tmp_dir:
@@ -1694,16 +1695,12 @@ class TheLastResortLookupsTests(_ResolutionCase):
             _proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
         self.assertIn("aarch64", error)
 
-    def test_a_game_window_launch_strips_the_wayland_pointers(self):
-        # RetroArch would otherwise pick its native Wayland driver, whose
-        # window no X client can reparent.
+    def _strip_calls(self, x11):
         core = self.base / f"mgba_libretro{CORE_SUFFIX}"
         core.write_bytes(b"core")
         (self.base / "retroarch").write_text("#!/bin/sh\n", encoding="utf-8")
-        self.config.game_window = True
         with patch(
-            "openemux.core.retroarch_launcher.game_window_support.game_window_active",
-            return_value=True,
+            "openemux.core.retroarch_launcher.x11_display_available", return_value=x11
         ), patch("openemux.core.retroarch_launcher.x11_only_env") as strip, patch(
             "openemux.core.retroarch_launcher.subprocess.Popen"
         ) as popen:
@@ -1711,7 +1708,15 @@ class TheLastResortLookupsTests(_ResolutionCase):
             popen.return_value = Mock(pid=1)
             self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
         _close_log(popen.return_value)
-        strip.assert_called_once()
+        return strip.call_count
+
+    def test_a_launch_where_x_exists_strips_the_wayland_pointers(self):
+        # RetroArch would otherwise pick its native Wayland driver, where the
+        # bar's clicks and the window title were never validated (#469).
+        self.assertEqual(self._strip_calls(x11=True), 1)
+
+    def test_a_launch_with_no_x_display_leaves_the_environment_alone(self):
+        self.assertEqual(self._strip_calls(x11=False), 0)
 
     def test_a_launch_that_fails_closes_the_log_it_opened(self):
         # One leaked descriptor per failed launch, otherwise.

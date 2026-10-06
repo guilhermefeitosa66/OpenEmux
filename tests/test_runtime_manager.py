@@ -9,11 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from openemux.core import retroarch_command
-from openemux.core.retroarch_command import (
-    VOLUME_PACING_INTERVAL,
-    StdinCommandClient,
-    VolumePacer,
-)
+from openemux.core.retroarch_command import StdinCommandClient
 from openemux.core.runtime_manager import (
     HOT_APPLY_STATE_SLOT,
     STARTUP_FAILURE_SECONDS,
@@ -25,18 +21,9 @@ from tests.platform_marks import posix_only
 class _DummyConfig:
     """The smallest config surface RuntimeManager touches."""
 
-    def __init__(self, base_dir, volume_db=0.0, port=55355):
+    def __init__(self, base_dir, port=55355):
         self.base_dir = Path(base_dir)
-        self.master_volume_db = volume_db
         self.port = port
-        self.volume_writes = []
-
-    def get_master_volume_db(self):
-        return self.master_volume_db
-
-    def set_master_volume_db(self, value):
-        self.master_volume_db = value
-        self.volume_writes.append(value)
 
     def get_network_cmd_port(self):
         return self.port
@@ -120,151 +107,6 @@ class _RecordingSleep:
 def _manager(tmp_dir, sleep=None, **config_kwargs):
     config = _DummyConfig(tmp_dir, **config_kwargs)
     return RuntimeManager(tmp_dir, config, sleep=sleep or _RecordingSleep()), config
-
-
-class VolumePacerTests(unittest.TestCase):
-    """Issue #125: the steps have to be paced or RetroArch drops them.
-
-    RetroArch drains its command socket once per frame. A 20 dB drag is 40
-    relative steps; fired back to back they land in a single frame window,
-    overrun the receive buffer and are discarded. MUTE is one packet in one
-    frame, which is exactly why mute worked and the slider did not.
-    """
-
-    def _walk(self, client, start, target, sleep=None):
-        sleep = sleep or _RecordingSleep()
-        pacer = VolumePacer(client, level=start, sleep=sleep)
-        pacer.set_target(target)
-        pacer.join(5)
-        return pacer, sleep
-
-    def test_a_twenty_db_drag_emits_one_packet_per_step(self):
-        client = _FakeClient()
-        pacer, sleep = self._walk(client, 0.0, -20.0)
-        self.assertEqual(len(client.sent), 40)
-        self.assertEqual(set(client.sent), {"VOLUME_DOWN"})
-        self.assertEqual(pacer.level, -20.0)
-
-    def test_every_packet_is_spaced_by_the_frame_interval(self):
-        client = _FakeClient()
-        _pacer, sleep = self._walk(client, 0.0, -5.0)
-        self.assertEqual(len(client.sent), 10)
-        # One sleep between packets; the last one needs no trailing wait.
-        self.assertEqual(len(sleep.calls), 10)
-        self.assertEqual(set(sleep.calls), {VOLUME_PACING_INTERVAL})
-
-    def test_walking_up_emits_volume_up(self):
-        client = _FakeClient()
-        pacer, _sleep = self._walk(client, -10.0, -8.0)
-        self.assertEqual(client.sent, ["VOLUME_UP"] * 4)
-        self.assertEqual(pacer.level, -8.0)
-
-    def test_dropped_packets_do_not_drift_the_tracker(self):
-        # The tracker may only advance by what actually left the socket;
-        # assuming otherwise put it permanently out of sync with RetroArch.
-        client = _FakeClient(fail_after=6)
-        pacer, _sleep = self._walk(client, 0.0, -20.0)
-        self.assertEqual(len(client.sent), 6)
-        self.assertEqual(pacer.level, -3.0)
-
-    def test_repeated_targets_coalesce_into_one_walk(self):
-        # A drag emits a value every 0.5 dB. Each must move the goal, not
-        # start its own burst, or the bursts overlap and fight each other.
-        client = _FakeClient()
-        sleep = _RecordingSleep()
-        pacer = VolumePacer(client, level=0.0, sleep=sleep)
-        for target in (-1.0, -2.0, -3.0, -10.0):
-            pacer.set_target(target)
-        pacer.join(5)
-        self.assertEqual(pacer.level, -10.0)
-        # Never more than the direct walk: no step is sent twice.
-        self.assertLessEqual(len(client.sent), 20)
-        self.assertEqual(set(client.sent), {"VOLUME_DOWN"})
-
-    def test_no_packets_when_already_at_the_target(self):
-        client = _FakeClient()
-        pacer, _sleep = self._walk(client, -6.0, -6.0)
-        self.assertEqual(client.sent, [])
-
-    def test_reset_reseeds_without_sending(self):
-        client = _FakeClient()
-        pacer = VolumePacer(client, level=0.0, sleep=_RecordingSleep())
-        pacer.reset(-12.0)
-        self.assertEqual(pacer.level, -12.0)
-        self.assertEqual(client.sent, [])
-
-    def test_targets_are_clamped(self):
-        client = _FakeClient()
-        pacer, _sleep = self._walk(client, 0.0, -999.0)
-        self.assertEqual(pacer.level, -40.0)
-
-
-class MasterVolumeTests(unittest.TestCase):
-    def _running_manager(self, tmp_dir, client, **kwargs):
-        manager, config = _manager(tmp_dir, **kwargs)
-        manager.active_process = _FakeProcess()
-        manager.active_rom = {"path": "/roms/x.sfc", "console": "SFC"}
-        manager._command_client_cache = client
-        manager._pacer = VolumePacer(
-            client, level=manager.volume_db, sleep=_RecordingSleep()
-        )
-        return manager, config
-
-    def test_a_drag_reaches_the_target_through_the_pacer(self):
-        with TemporaryDirectory() as tmp_dir:
-            client = _FakeClient()
-            manager, _config = self._running_manager(tmp_dir, client)
-            manager.set_master_volume_db(-12.0)
-            manager._pacer.join(5)
-            self.assertEqual(len(client.sent), 24)
-            self.assertEqual(manager.volume_db, -12.0)
-
-    def test_the_tracker_reflects_what_landed_not_what_was_asked(self):
-        with TemporaryDirectory() as tmp_dir:
-            client = _FakeClient(fail_after=4)
-            manager, _config = self._running_manager(tmp_dir, client)
-            manager.set_master_volume_db(-20.0)
-            manager._pacer.join(5)
-            self.assertEqual(manager.volume_db, -2.0)
-
-    def test_with_no_game_running_nothing_is_sent(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, config = _manager(tmp_dir)
-            client = _FakeClient()
-            manager._command_client_cache = client
-            self.assertEqual(manager.set_master_volume_db(-8.0), -8.0)
-            self.assertEqual(client.sent, [])
-            # It still persists: the slider doubles as "the level the next
-            # launch starts at".
-            manager.flush_volume_db()
-            self.assertEqual(config.master_volume_db, -8.0)
-
-    def test_the_level_is_persisted_once_the_slider_settles(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, config = _manager(tmp_dir)
-            for level in (-1.0, -2.0, -3.0, -4.0):
-                manager.set_master_volume_db(level)
-            # Debounced: a drag is dozens of values and each write is a
-            # synchronous YAML dump.
-            self.assertEqual(config.volume_writes, [])
-            manager.flush_volume_db()
-            self.assertEqual(config.volume_writes, [-4.0])
-
-    def test_flushing_twice_writes_once(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, config = _manager(tmp_dir)
-            manager.set_master_volume_db(-5.0)
-            self.assertTrue(manager.flush_volume_db())
-            self.assertFalse(manager.flush_volume_db())
-            self.assertEqual(config.volume_writes, [-5.0])
-
-    def test_setting_volume_db_reseeds_the_pacer(self):
-        with TemporaryDirectory() as tmp_dir:
-            client = _FakeClient()
-            manager, _config = self._running_manager(tmp_dir, client)
-            manager.volume_db = -15.0
-            self.assertEqual(manager.volume_db, -15.0)
-            self.assertEqual(client.sent, [])
 
 
 class CommandDispatchTests(unittest.TestCase):
@@ -369,15 +211,13 @@ class CommandDispatchTests(unittest.TestCase):
             manager, _config = _manager(tmp_dir)
             self.assertIs(manager._command_client(), manager._command_client())
 
-    def test_a_port_change_replaces_the_client_and_the_pacer(self):
+    def test_a_port_change_replaces_the_client(self):
         with TemporaryDirectory() as tmp_dir:
             manager, config = _manager(tmp_dir)
             first = manager._command_client()
-            manager._pacer = VolumePacer(first, sleep=_RecordingSleep())
             config.port = 55400
             second = manager._command_client()
             self.assertIsNot(first, second)
-            self.assertIsNone(manager._pacer)
 
 
 class _PipedProcess(_FakeProcess):
@@ -430,7 +270,6 @@ class StdinChannelTests(unittest.TestCase):
             first_game = _PipedProcess(self)
             manager.active_process = first_game
             first = manager._command_client()
-            manager._pacer = VolumePacer(first, sleep=_RecordingSleep())
 
             second_game = _PipedProcess(self)
             manager.active_process = second_game
@@ -439,7 +278,6 @@ class StdinChannelTests(unittest.TestCase):
             self.assertIsNot(first, second)
             self.assertIs(second.stream, second_game.stdin)
             self.assertTrue(first_game.stdin.closed)
-            self.assertIsNone(manager._pacer)
 
     def test_a_game_that_ends_gets_eof_on_its_stdin(self):
         with TemporaryDirectory() as tmp_dir:
@@ -629,38 +467,6 @@ class HotApplyTests(unittest.TestCase):
             manager, _config, client = self._running_manager(tmp_dir)
             client.fail_after = 0
             self.assertIsNone(manager.snapshot_active())
-
-
-class MuteAndSettlingTests(unittest.TestCase):
-    """The write-only half of the audio controls (issue #284)."""
-
-    def test_a_mute_that_never_left_does_not_flip_the_state(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            manager.active_process = _FakeProcess()
-
-            dead = _FakeClient(fail_after=0)
-            manager._command_client_cache = dead
-            attempts = []
-            dead.send = lambda command: (attempts.append(command), False)[1]
-
-            self.assertFalse(manager.toggle_mute())
-            # Tried twice before believing it: a send only reports failure
-            # when the datagram never left, so a retry cannot toggle twice.
-            self.assertEqual(attempts, ["MUTE", "MUTE"])
-
-    def test_a_mute_that_landed_flips_the_state(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            manager.active_process = _FakeProcess()
-            manager._command_client_cache = _FakeClient()
-            self.assertTrue(manager.toggle_mute())
-            self.assertFalse(manager.toggle_mute())
-
-    def test_settling_is_false_without_a_pacer(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            self.assertFalse(manager.volume_settling)
 
 
 class CommandPortTests(unittest.TestCase):
@@ -1027,28 +833,6 @@ class WhichRuntimeAGameGoesToTests(unittest.TestCase):
         self.assertEqual(error, "RetroArch was not found.")
 
 
-class WritingTheVolumeFromTheMainLoopTests(unittest.TestCase):
-    """The config is mutated from one thread only (issue #125)."""
-
-    def test_the_debounced_write_is_handed_to_the_main_loop(self):
-        with TemporaryDirectory() as tmp_dir:
-            posted = []
-            config = _DummyConfig(tmp_dir)
-            manager = RuntimeManager(
-                tmp_dir, config, sleep=_RecordingSleep(), dispatch=posted.append
-            )
-            manager._pending_volume_db = -6.0
-
-            manager._flush_volume_db_on_main_loop()
-
-            self.assertEqual(len(posted), 1)
-            self.assertEqual(config.volume_writes, [])
-            # False is GLib.SOURCE_REMOVE: returning what flush_volume_db
-            # returns would keep the idle alive and re-run it forever.
-            self.assertFalse(posted[0]())
-            self.assertEqual(config.volume_writes, [-6.0])
-
-
 class TearingDownAFinishedGameTests(unittest.TestCase):
     """Nothing the process left behind may outlive it (issue #244)."""
 
@@ -1126,16 +910,6 @@ class TheSaveStateHotkeysTests(unittest.TestCase):
             manager.load_state()
 
         self.assertEqual(client.sent, ["LOAD_STATE"])
-
-
-class ThePacerIsBuiltOnceTests(unittest.TestCase):
-    def test_the_first_volume_change_builds_it_around_the_current_client(self):
-        with TemporaryDirectory() as tmp_dir:
-            manager, _config = _manager(tmp_dir)
-            manager._command_client_cache = _FakeClient()
-            pacer = manager._volume_pacer()
-            self.assertIs(manager._volume_pacer(), pacer)
-            self.assertEqual(pacer.level, manager.volume_db)
 
 
 class WhatTheHotApplySnapshotAnswersTests(unittest.TestCase):

@@ -32,7 +32,6 @@ from openemux.core.library_view import (
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
-from openemux.core import game_window_support
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -151,22 +150,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks = TaskBanner(self.t)
 
         project_root = str(get_project_root())
-        self.runtime_manager = RuntimeManager(
-            project_root, self.config_manager, dispatch=GLib.idle_add
-        )
-        # GTK is up by now, so the one authority on whether this process can
-        # host an embed -- the display it actually opened -- can finally be
-        # asked, and published where the launcher will see it before it
-        # writes a single override. Guessing from the environment is what let
-        # a Wayland session get RetroArch's decorations stripped with no
-        # wrapper to hold the window (issues #212, #267).
-        from openemux.ui.game_window import display_supports_embedding
-
-        game_window_support.set_display_embeddable(display_supports_embedding())
-
-        # Launch, the wrapper window, the relaunch dance and the runtime
-        # poll: one collaborator, because they only make sense together
-        # (issue #237).
+        self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        # Launch, the relaunch dance and the runtime poll: one collaborator,
+        # because they only make sense together (issue #237).
         self.game = GameSession(self)
         # Covers downloaded by a running sync, waiting for a batched reveal
         # (issue #187): flushed by size, by time, or when the sync moves on
@@ -1354,19 +1340,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_close_stop_game(self, *_args):
         """Closing the library takes the running game with it.
 
-        A game OpenEmux started must never outlive the app: the wrapper
-        window is a window of this app and would keep it alive with no
-        library behind it, and a standalone RetroArch left running is a
-        process only a process manager can reach. The wait is bounded by the
-        stop escalation and normally over in milliseconds -- RetroArch
-        answers the QUIT command -- but it is deliberately synchronous, since
-        after this the app is on its way out and no worker would survive it.
+        A game OpenEmux started must never outlive the app: a RetroArch left
+        running is a process only a process manager can reach. The wait is
+        bounded by the stop escalation and normally over in milliseconds --
+        RetroArch answers the QUIT command -- but it is deliberately
+        synchronous, since after this the app is on its way out and no worker
+        would survive it.
         """
-        self.game.close_now()
-        # Asked again on purpose rather than as an else: a wrapper the user
-        # closed a moment ago has already done its (non-blocking) cleanup, so
-        # a game still shrugging off that stop would ride out on a worker
-        # thread this exit is about to take down with it.
         if self.runtime_manager.is_running():
             self.runtime_manager.stop_active(block=True)
         return False

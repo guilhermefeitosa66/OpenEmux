@@ -1,9 +1,10 @@
 """Everything about a game between the click and the exit toast.
 
-`ui/game_session.py` sat at 24%: it is five responsibilities that only make
-sense together -- launch, the wrapper window, the relaunch dance, the input
-hot-apply and the runtime poll -- and all five run on timers against a live
-RetroArch, so nothing here ever ran in the suite.
+`ui/game_session.py` sat at 24%: it is several responsibilities that only make
+sense together -- launch, the relaunch dance, the input hot-apply and the
+runtime poll -- and they run on timers against a live RetroArch, so nothing
+here ever ran in the suite. (The wrapper window that used to be one of them
+went with issue #469.)
 
 The runtime manager is a recorder, so no process is started. The timers are
 driven by hand: `GLib.timeout_add` is replaced with a queue the test steps
@@ -42,6 +43,7 @@ class _Runtime:
         self.discarded = []
         self.poll_result = None
         self.load_state_calls = 0
+        self.relaunched = []
 
     def launch(self, path, console, state_slot=None):
         self.launched.append((path, console, state_slot))
@@ -53,7 +55,8 @@ class _Runtime:
     def relaunch_active(self):
         return self.relaunch_result
 
-    def relaunch_rom(self, _rom):
+    def relaunch_rom(self, rom):
+        self.relaunched.append(rom)
         return self.relaunch_rom_result
 
     def snapshot_active(self):
@@ -113,28 +116,25 @@ class _SessionCase(WindowCase):
             )
             patcher.start()
             self.addCleanup(patcher.stop)
-        wrapper_patch = mock.patch.object(self.session, "open_wrapper")
-        self.open_wrapper = wrapper_patch.start()
-        self.addCleanup(wrapper_patch.stop)
 
 
 @needs_display
 class LaunchingTests(_SessionCase):
-    def test_a_launch_records_the_play_and_wraps_the_game(self):
+    def test_a_launch_records_the_play_and_says_it_is_running(self):
         rom = self.rom()
         self.session.launch(rom)
         self.assertEqual(self.runtime.launched[0][:2], (rom["path"], rom["console"]))
         self.assertEqual(self.win.play_history.play_count(rom["path"]), 1)
-        self.open_wrapper.assert_called_once_with(rom)
         self.assertIn(
             self.said("toast.running", name=rom["name"], console=rom["console"]),
             self.toasts,
         )
 
-    def test_a_refused_launch_says_why_and_wraps_nothing(self):
+    def test_a_refused_launch_says_why_and_records_nothing(self):
         self.runtime.launch_result = (False, "toast.launch_busy")
-        self.session.launch(self.rom())
-        self.open_wrapper.assert_not_called()
+        rom = self.rom()
+        self.session.launch(rom)
+        self.assertEqual(self.win.play_history.play_count(rom["path"]), 0)
         self.assertEqual(self.toasts, [self.said("toast.launch_busy")])
 
     def test_a_refused_launch_is_logged_as_well_as_toasted(self):
@@ -192,7 +192,6 @@ class LaunchingAtASaveStateTests(_SessionCase):
     def test_a_refused_launch_says_why_and_loads_nothing(self):
         self.runtime.launch_result = (False, "toast.launch_busy")
         self.session.launch_at_state(self.rom(), 3)
-        self.open_wrapper.assert_not_called()
         self.assertEqual(self.toasts, [self.said("toast.launch_busy")])
 
     def test_a_refused_launch_with_no_reason_says_nothing(self):
@@ -215,7 +214,7 @@ class TheRelaunchDanceTests(_SessionCase):
         self.runtime.running = False
         self.timers.step()
         self.assertFalse(self.session._relaunch_in_flight)
-        self.open_wrapper.assert_called_once()
+        self.assertEqual(self.runtime.relaunched, [self.runtime.active_rom])
 
     def test_a_relaunch_the_runtime_refuses_is_reported(self):
         self.runtime.relaunch_result = (None, "nothing is running")
@@ -226,10 +225,6 @@ class TheRelaunchDanceTests(_SessionCase):
         self.runtime.relaunch_result = (None, None)
         self.assertFalse(self.session.relaunch())
         self.assertEqual(self.toasts, [])
-
-    def test_a_caller_that_already_explained_itself_is_not_announced(self):
-        self.session.relaunch(announce=False)
-        self.assertNotIn(self.said("toast.relaunching"), self.toasts)
 
     def test_a_game_that_will_not_stop_gives_up_and_says_so(self):
         # The budget has to outlast the stop escalation -- QUIT, SIGTERM,
@@ -246,7 +241,6 @@ class TheRelaunchDanceTests(_SessionCase):
         self.session.relaunch()
         self.timers.step()
         self.assertIn("core is gone", self.toasts)
-        self.open_wrapper.assert_not_called()
 
     def test_a_carried_snapshot_is_loaded_back_and_then_thrown_away(self):
         marker = {"slot": 99}
@@ -351,176 +345,6 @@ class NoticingTheGameEndedTests(_SessionCase):
         self.runtime.poll_result = {"exit_code": 0}
         self.session.poll()
         self.assertIn(self.said("toast.finished", name="Game", code=0), self.toasts)
-
-
-@needs_display
-class TheWrapperWindowTests(WindowCase):
-    """Opening, closing and giving up on the window around the game."""
-
-    def setUp(self):
-        super().setUp()
-        self.session = self.win.game
-        self.runtime = _Runtime()
-        self.win.runtime_manager = self.runtime
-        self.built = []
-        patcher = mock.patch(
-            "openemux.ui.game_window.GameWindow", self._build_window
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        embed_patch = mock.patch(
-            "openemux.ui.game_window.display_supports_embedding", return_value=True
-        )
-        embed_patch.start()
-        self.addCleanup(embed_patch.stop)
-        active_patch = mock.patch.object(
-            session_module.game_window_support, "game_window_active", return_value=True
-        )
-        active_patch.start()
-        self.addCleanup(active_patch.stop)
-
-    def _build_window(self, **kwargs):
-        window = mock.Mock()
-        window.kwargs = kwargs
-        self.built.append(window)
-        return window
-
-    def test_a_launch_opens_a_wrapper_around_the_game(self):
-        rom = self.rom()
-        self.session.open_wrapper(rom)
-        self.assertEqual(len(self.built), 1)
-        self.assertIs(self.session.window, self.built[0])
-        self.built[0].present.assert_called_once()
-
-    def test_a_second_launch_replaces_the_wrapper_rather_than_stacking_one(self):
-        self.session.open_wrapper(self.rom())
-        first = self.built[0]
-        self.session.open_wrapper(self.rom())
-        first.close.assert_called_once()
-        self.assertIs(self.session.window, self.built[1])
-
-    def test_a_session_that_cannot_embed_says_so_once_and_opens_nothing(self):
-        # Issue #212: a user on such a session would otherwise be told off
-        # every time they start a game.
-        with mock.patch.object(
-            session_module.game_window_support, "game_window_active", return_value=False
-        ):
-            self.session.open_wrapper(self.rom())
-            self.session.open_wrapper(self.rom())
-        self.assertEqual(self.built, [])
-        self.assertEqual(
-            self.toasts.count(self.said("toast.game_window.unavailable")), 1
-        )
-
-    def test_a_user_who_turned_the_wrapper_off_is_not_told_anything(self):
-        self.config.set_game_window_enabled(False)
-        with mock.patch.object(
-            session_module.game_window_support, "game_window_active", return_value=False
-        ):
-            self.session.open_wrapper(self.rom())
-        self.assertEqual(self.toasts, [])
-
-    def test_a_display_that_turns_out_not_to_be_x11_publishes_that_verdict(self):
-        # Publishing it is what stops the launcher writing the embed
-        # overrides for the next launch (issue #212).
-        with mock.patch(
-            "openemux.ui.game_window.display_supports_embedding", return_value=False
-        ), mock.patch.object(
-            session_module.game_window_support, "set_display_embeddable"
-        ) as publish:
-            self.session.open_wrapper(self.rom())
-        publish.assert_called_once_with(False)
-        self.assertEqual(self.built, [])
-
-    def test_the_wrapper_reporting_itself_closed_clears_the_handle(self):
-        self.session.open_wrapper(self.rom())
-        self.session._on_closed(self.built[0])
-        self.assertIsNone(self.session.window)
-
-    def test_another_wrappers_close_does_not_clear_the_current_one(self):
-        self.session.open_wrapper(self.rom())
-        self.session._on_closed(mock.Mock())
-        self.assertIsNotNone(self.session.window)
-
-    def test_closing_the_app_takes_the_wrapper_down_synchronously(self):
-        self.session.open_wrapper(self.rom())
-        window = self.built[0]
-        self.session.close_now()
-        window.close_now.assert_called_once_with(block=True)
-        self.assertIsNone(self.session.window)
-
-    def test_closing_with_no_wrapper_up_is_harmless(self):
-        self.session.close_now()
-
-    def test_a_closed_wrapper_is_destroyed_rather_than_left_hidden(self):
-        window = mock.Mock()
-        with mock.patch.object(session_module.GLib, "idle_add") as idle_add:
-            self.assertFalse(self.session._on_close_request(window))
-        idle_add.assert_called_once_with(window.destroy)
-
-    def test_the_controller_button_brings_the_library_forward_first(self):
-        # The game window keeps handing X focus to the emulator, which would
-        # fight a dialog shown on top of it.
-        with mock.patch.object(self.win, "present") as present, mock.patch.object(
-            self.win, "_open_preferences"
-        ) as prefs:
-            self.session._open_input_settings(None)
-        present.assert_called_once()
-        prefs.assert_called_once_with(page="input")
-
-
-@needs_display
-class WhenTheEmbedFailsTests(WindowCase):
-    """Issue #267: the game is running with its decorations already stripped."""
-
-    def setUp(self):
-        super().setUp()
-        self.session = self.win.game
-        self.runtime = _Runtime()
-        self.win.runtime_manager = self.runtime
-        reason_patch = mock.patch.object(
-            session_module.game_window_support,
-            "embed_unavailable_reason",
-            return_value=None,
-        )
-        reason_patch.start()
-        self.addCleanup(reason_patch.stop)
-        mark_patch = mock.patch.object(
-            session_module.game_window_support, "mark_embed_unavailable"
-        )
-        self.mark = mark_patch.start()
-        self.addCleanup(mark_patch.stop)
-
-    def test_the_failure_is_latched_and_the_game_put_back_in_a_window(self):
-        self.runtime.running = True
-        with mock.patch.object(self.session, "relaunch") as relaunch:
-            self.session._on_embed_failed("reparenting failed")
-        self.mark.assert_called_once_with("reparenting failed")
-        relaunch.assert_called_once_with(announce=False)
-        self.assertIn(self.said("toast.game_window.standalone"), self.toasts)
-
-    def test_a_failure_already_latched_cannot_loop(self):
-        with mock.patch.object(
-            session_module.game_window_support,
-            "embed_unavailable_reason",
-            return_value="already",
-        ), mock.patch.object(self.session, "relaunch") as relaunch:
-            self.session._on_embed_failed("again")
-        relaunch.assert_not_called()
-        self.mark.assert_not_called()
-
-    def test_a_game_that_died_with_the_wrapper_is_not_relaunched(self):
-        self.runtime.running = False
-        with mock.patch.object(self.session, "relaunch") as relaunch:
-            self.session._on_embed_failed("reparenting failed")
-        relaunch.assert_not_called()
-        self.assertEqual(self.toasts, [])
-
-    def test_the_unavailable_notice_is_not_said_twice_over_this_one(self):
-        self.runtime.running = True
-        with mock.patch.object(self.session, "relaunch"):
-            self.session._on_embed_failed("reparenting failed")
-        self.assertTrue(self.session._notice_shown)
 
 
 if __name__ == "__main__":
