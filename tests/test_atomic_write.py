@@ -10,6 +10,7 @@ import yaml
 
 from openemux.core.atomic_write import (
     DEFAULT_FILE_MODE,
+    _fsync_directory,
     atomic_write_lines,
     atomic_write_text,
 )
@@ -244,6 +245,18 @@ class PlaylistAtomicWriteTests(unittest.TestCase):
                 thread.join()
 
             self.assertEqual(len(manager.list_favorite_paths()), len(roms))
+
+
+@posix_only("it opens a directory for fsync")
+class ADirectoryThatCannotBeSyncedTests(unittest.TestCase):
+    def test_a_write_that_worked_is_not_failed_over_the_sync(self):
+        # Some filesystems refuse to open a directory at all. The file is
+        # already renamed into place by then; only the durability is lost.
+        with TemporaryDirectory() as tmp_dir:
+            with patch(
+                "openemux.core.atomic_write.os.open", side_effect=OSError("no")
+            ):
+                self.assertIsNone(_fsync_directory(Path(tmp_dir)))
 
 
 if __name__ == "__main__":

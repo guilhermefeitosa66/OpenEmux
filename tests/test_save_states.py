@@ -1,8 +1,10 @@
 """Save-state browsing over the managed states directory (issue #73)."""
 
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from openemux.core import save_states
 
@@ -109,6 +111,115 @@ class DeleteStateTests(unittest.TestCase):
     def test_delete_of_a_gone_file_reports_failure(self):
         state = save_states.SaveState("/nope/x.state", 0, 0)
         self.assertFalse(save_states.delete_state(state))
+
+
+class WhatIsNotAStateTests(unittest.TestCase):
+    """The states directory holds companions and unrelated files too."""
+
+    def _states(self, tmp_dir, *names):
+        console = Path(tmp_dir) / "SFC"
+        console.mkdir(parents=True)
+        for name in names:
+            (console / name).write_bytes(b"state")
+        return console
+
+    def test_the_automatic_state_and_the_thumbnails_are_not_slots(self):
+        self.assertIsNone(save_states._slot_for(Path("Game.state.auto")))
+        self.assertIsNone(save_states._slot_for(Path("Game.png")))
+        self.assertEqual(save_states._slot_for(Path("Game.state")), 0)
+        self.assertEqual(save_states._slot_for(Path("Game.state3")), 3)
+
+    def test_a_companion_file_is_not_listed_as_a_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            self._states(
+                tmp_dir, "Chrono Trigger (USA).state1", "Chrono Trigger (USA).srm"
+            )
+            states = save_states.list_states(tmp_dir, ROM)
+        self.assertEqual([state.slot for state in states], [1])
+
+    def test_a_file_that_vanishes_mid_scan_is_skipped(self):
+        # RetroArch writes into this directory while OpenEmux reads it, so an
+        # entry that was listed a moment ago may be gone by the stat.
+        class _Vanishing:
+            stem = "Chrono Trigger (USA)"
+            suffix = ".state2"
+
+            def is_file(self):
+                return True
+
+            def is_dir(self):
+                return False
+
+            def stat(self):
+                raise OSError("gone")
+
+        with TemporaryDirectory() as tmp_dir:
+            self._states(tmp_dir, "Chrono Trigger (USA).state1")
+            real_entries = save_states._entries
+
+            def _entries(directory):
+                return list(real_entries(directory)) + [_Vanishing()]
+
+            with mock.patch.object(save_states, "_entries", _entries):
+                states = save_states.list_states(tmp_dir, ROM)
+
+        self.assertEqual([state.slot for state in states], [1])
+
+    def test_the_newest_copy_of_a_slot_is_the_one_that_counts(self):
+        # Two cores saved slot 1 and only one of them is what the user just
+        # made; the console directory is scanned before its per-core ones, so
+        # this is the case where the second copy found is the older.
+        with TemporaryDirectory() as tmp_dir:
+            console = self._states(tmp_dir, "Chrono Trigger (USA).state1")
+            nested = console / "snes9x"
+            nested.mkdir()
+            older = nested / "Chrono Trigger (USA).state1"
+            older.write_bytes(b"older")
+            os.utime(older, (1_000_000, 1_000_000))
+
+            states = save_states.list_states(console, ROM)
+
+        self.assertEqual(len(states), 1)
+        self.assertEqual(states[0].path.parent.name, "SFC")
+
+
+class WhenAStateWillNotBudgeTests(unittest.TestCase):
+    def test_a_state_that_cannot_be_renamed_does_not_stop_the_rest(self):
+        with TemporaryDirectory() as tmp_dir:
+            console = Path(tmp_dir) / "SFC"
+            console.mkdir(parents=True)
+            stuck = console / "Chrono Trigger (USA).state1"
+            stuck.write_bytes(b"state")
+            (console / "Chrono Trigger (USA).state2").write_bytes(b"state")
+            real_rename = Path.rename
+
+            def _refuse(self, target):
+                if self == stuck:
+                    raise OSError("read-only")
+                return real_rename(self, target)
+
+            with mock.patch.object(Path, "rename", _refuse):
+                with self.assertLogs("openemux.core.save_states", level="WARNING"):
+                    moved = save_states.rename_states(
+                        tmp_dir, "Chrono Trigger (USA)", "Chrono Trigger"
+                    )
+
+        self.assertEqual(moved, 1)
+
+    def test_a_screenshot_that_will_not_delete_is_not_an_error(self):
+        # The state itself is gone, which is what the user asked for.
+        with TemporaryDirectory() as tmp_dir:
+            console = Path(tmp_dir) / "SFC"
+            console.mkdir(parents=True)
+            state = console / "Chrono Trigger (USA).state1"
+            state.write_bytes(b"state")
+            thumbnail = console / "Chrono Trigger (USA).state1.png"
+            thumbnail.write_bytes(b"png")
+
+            entry = save_states.list_states(tmp_dir, ROM)[0]
+            thumbnail.unlink()
+            self.assertTrue(save_states.delete_state(entry))
+            self.assertFalse(state.exists())
 
 
 if __name__ == "__main__":

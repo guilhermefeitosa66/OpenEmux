@@ -13,6 +13,7 @@ from openemux.core.platform import CORE_SUFFIX
 # Aliased: this class already has a ``bundled_core_dir`` attribute meaning the
 # retroarch-assets directory, and the two must not be confused.
 from openemux.core.platform import bundled_core_dir as platform_bundled_core_dir
+from openemux.core.video_driver import effective_video_driver, preset_backends
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,26 @@ MAX_PARALLEL_DOWNLOADS = 8
 #: Copy buffer. Artifacts are streamed rather than buffered whole, so this is
 #: the memory a download costs regardless of the core's size.
 DOWNLOAD_CHUNK_BYTES = 256 * 1024
+
+#: The two shader packs, by the preset backend each one serves.
+SHADER_PACKS = {"glsl": "shaders_glsl", "slang": "shaders_slang"}
+
+#: What ``_install_artifact`` returns for an artifact it never started because
+#: the sweep was cancelled -- neither a success nor a failure.
+_CANCELLED = object()
+
+
+def shader_pack_for(video_driver_setting):
+    """The shader pack the given ``video_driver`` setting can load, or ``None``.
+
+    A shader preset is not portable across drivers (``core/video_driver.py``):
+    Linux's default ``gl`` reads ``.glslp`` and Windows' ``d3d11`` reads
+    ``.slangp``. The first boot waits for this pack only; the other one is of
+    no use until the user changes driver, so it arrives in the background
+    (issue #442). ``None`` for a driver that loads no preset at all.
+    """
+    backends = preset_backends(effective_video_driver(video_driver_setting))
+    return SHADER_PACKS[backends[0]] if backends else None
 
 
 class RetroArchBuildbotUpdater:
@@ -99,7 +120,7 @@ class RetroArchBuildbotUpdater:
         seen = set()
         for href in HREF_PATTERN.findall(html):
             href = href.strip()
-            if not href:
+            if not href:  # pragma: no cover - HREF_PATTERN never matches empty
                 continue
             parsed_href = urllib.parse.unquote(href)
             filename = os.path.basename(parsed_href)
@@ -129,8 +150,17 @@ class RetroArchBuildbotUpdater:
         logger.info("buildbot manifest loaded: total=%d", len(artifacts))
         return artifacts
 
-    def download_all(self, on_progress=None):
-        """Download every core the buildbot lists, and report what happened.
+    def download_all(self, on_progress=None, only=None, skip=None, cancel_event=None):
+        """Download the cores the buildbot lists, and report what happened.
+
+        Every core by default. ``only`` restricts the sweep to those core
+        filenames and ``skip`` leaves those out, which is how the first boot
+        waits for the cores a console names and fetches the rest after the
+        window opens (issue #442). A name in ``only`` the buildbot does not
+        list is not a failure: some cores are not built for every architecture,
+        and the console says so on its own. ``cancel_event``, once set, stops
+        the sweep before any artifact it has not started yet; those are
+        counted as ``cancelled``, not as failures.
 
         Never raises for a network problem. The bootstrap step above this one
         decides what a failure means -- on a package that bundles cores it
@@ -165,8 +195,19 @@ class RetroArchBuildbotUpdater:
             logger.warning("buildbot core listing yielded nothing: reason=%s", reason)
             return self._core_download_failure("listing", reason)
 
+        # Filtered only now: an empty listing is a broken listing whatever the
+        # caller asked for, while a filter that keeps nothing is just done.
+        if only is not None:
+            wanted = set(only)
+            artifacts = [artifact for artifact in artifacts if artifact["core_name"] in wanted]
+        if skip:
+            unwanted = set(skip)
+            artifacts = [artifact for artifact in artifacts if artifact["core_name"] not in unwanted]
+        total = len(artifacts)
+
         downloaded = 0
         failed = 0
+        cancelled = 0
         failures = []
         workers = self._download_workers()
         completed = 0
@@ -176,7 +217,7 @@ class RetroArchBuildbotUpdater:
             max_workers=workers, thread_name_prefix="openemux-core-dl"
         ) as pool:
             pending = {
-                pool.submit(self._install_artifact, artifact): artifact
+                pool.submit(self._install_artifact, artifact, cancel_event): artifact
                 for artifact in artifacts
             }
             # Progress is reported from here, on completion, so the counter
@@ -187,6 +228,8 @@ class RetroArchBuildbotUpdater:
                 error = future.result()
                 if error is None:
                     downloaded += 1
+                elif error is _CANCELLED:
+                    cancelled += 1
                 else:
                     failed += 1
                     failures.append({"artifact": artifact["filename"], "error": error})
@@ -207,23 +250,28 @@ class RetroArchBuildbotUpdater:
             "total": total,
             "downloaded": downloaded,
             "failed": failed,
+            "cancelled": cancelled,
             "failures": failures,
             "core_dir": str(self.core_dir),
         }
         logger.info(
-            "buildbot core download finished: total=%d downloaded=%d failed=%d",
+            "buildbot core download finished: total=%d downloaded=%d failed=%d cancelled=%d",
             total,
             downloaded,
             failed,
+            cancelled,
         )
         return summary
 
-    def _install_artifact(self, artifact):
+    def _install_artifact(self, artifact, cancel_event=None):
         """Fetch and install one artifact. Returns an error string, or None.
 
         Never raises: it runs on a pool, and one core the buildbot is missing
-        must not take the sweep down with it.
+        must not take the sweep down with it. Returns ``_CANCELLED`` without
+        touching the network once ``cancel_event`` is set.
         """
+        if cancel_event is not None and cancel_event.is_set():
+            return _CANCELLED
         try:
             self._download_and_install(artifact)
             return None
@@ -242,11 +290,18 @@ class RetroArchBuildbotUpdater:
         took as long as the sum of every download in a manifest of a hundred
         and more (issue #240). Capped, because the buildbot is somebody else's
         server.
+
+        The fallback is the cap rather than a number of its own. It used to be
+        a literal 4, which was the shipped default at the time and stopped
+        being it when ``UPDATER_DEFAULTS`` moved to 8 (issue #442) -- exactly
+        the second copy of a settings value that issue #239 went and removed
+        everywhere else. A settings dict with no ``parallel_downloads`` in it
+        now behaves like a shipped config, whatever the shipped config says.
         """
         try:
-            configured = int(self.settings.get("parallel_downloads", 4))
+            configured = int(self.settings.get("parallel_downloads", MAX_PARALLEL_DOWNLOADS))
         except (TypeError, ValueError):
-            configured = 4
+            configured = MAX_PARALLEL_DOWNLOADS
         return max(1, min(configured, MAX_PARALLEL_DOWNLOADS))
 
     def _core_download_failure(self, artifact, error):
@@ -371,7 +426,14 @@ class RetroArchBuildbotUpdater:
             with archive.open(selected, "r") as member:
                 self._stream_to_file(member, target_path)
 
-    def download_shader_packs_if_missing(self, on_progress=None):
+    def download_shader_packs_if_missing(self, on_progress=None, packs=None):
+        """Fetch the shader packs that are not on disk yet.
+
+        Both by default; ``packs`` names the ones to consider
+        (``"shaders_glsl"``, ``"shaders_slang"``), so the first boot can wait
+        for the one the video driver reads and leave the other for later
+        (issue #442).
+        """
         if not self.settings.get("enabled", True):
             return {
                 "total": 0,
@@ -384,17 +446,21 @@ class RetroArchBuildbotUpdater:
             }
 
         self.ensure_environment()
-        packs = [
+        all_packs = [
             ("shaders_glsl", self.settings.get("shader_glsl_url", ""), self.shader_glsl_dir, ".glslp"),
             ("shaders_slang", self.settings.get("shader_slang_url", ""), self.shader_slang_dir, ".slangp"),
         ]
+        if packs is not None:
+            packs = [pack for pack in all_packs if pack[0] in packs]
+        else:
+            packs = all_packs
         summary = {
             "total": len(packs),
             "downloaded": 0,
             "skipped": 0,
             "failed": 0,
             "failures": [],
-            "targets": [str(self.shader_glsl_dir), str(self.shader_slang_dir)],
+            "targets": [str(target_dir) for _, _, target_dir, _ in packs],
         }
 
         for index, (pack_name, url, target_dir, extension) in enumerate(packs, start=1):
@@ -431,6 +497,63 @@ class RetroArchBuildbotUpdater:
                 # packs are tens of megabytes each (issue #221).
                 self._discard(archive_path)
         return summary
+
+    def install_core_info(self, on_progress=None):
+        """Install the libretro ``.info`` files beside the cores, and report it.
+
+        ``core_info_base_url`` sat in the defaults from the start and nothing
+        read it, so no ``.info`` was ever installed and the core pickers named
+        every core after its filename and could not match one to a console by
+        its ``database`` field (issue #442). One archive of a few hundred
+        kilobytes, extracted flat into ``core_dir``, where ``CoreCatalog``
+        already looks for it. Never raises: missing names are cosmetic, and
+        the first boot must not fail over them.
+        """
+        summary = {"total": 1, "downloaded": 0, "installed": 0, "failed": 0, "failures": []}
+        if not self.settings.get("enabled", True):
+            summary.update(total=0, disabled=True)
+            return summary
+        url = self.settings.get("core_info_base_url", "")
+        if not url:
+            summary.update(failed=1, failures=[{"artifact": "core_info", "error": "missing url"}])
+            return summary
+
+        self.ensure_environment()
+        if on_progress:
+            on_progress({"type": "download_progress", "current": 1, "total": 1, "core_name": "core_info"})
+        archive_path = self.cache_dir / "core_info.zip"
+        try:
+            self._download_file_with_retries(url, archive_path)
+            summary["installed"] = self._extract_core_info(archive_path)
+            summary["downloaded"] = 1
+        except Exception as exc:  # noqa: BLE001 - reported, not raised
+            summary["failed"] = 1
+            summary["failures"].append({"artifact": "core_info", "error": str(exc)})
+            logger.warning("buildbot core info download failed: error=%s", exc)
+        finally:
+            self._discard(archive_path)
+        return summary
+
+    def _extract_core_info(self, archive_path):
+        installed = 0
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            for member in archive.namelist():
+                # Flat: the archive keeps every file at its root, and the
+                # catalog only looks beside the cores. Anything else in there
+                # (the core_info.refresh marker) is not ours to install. Only
+                # the basename is ever used, so no member name can steer the
+                # write outside core_dir (issue #222).
+                name = os.path.basename(member)
+                if not name.endswith(".info"):
+                    continue
+                destination = self.core_dir / name
+                with archive.open(member, "r") as source:
+                    self._stream_to_file(source, destination)
+                installed += 1
+        if not installed:
+            raise RuntimeError(f"core info archive has no .info files: {archive_path}")
+        logger.info("buildbot core info installed: total=%d dir=%s", installed, self.core_dir)
+        return installed
 
     def _directory_has_files_with_extension(self, directory, extension):
         if not directory.exists():

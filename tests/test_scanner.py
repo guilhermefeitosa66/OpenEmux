@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.scanner import RomScanner
+from tests.platform_marks import posix_only
 
 
 def _make_zip(path, entries):
@@ -241,6 +242,69 @@ class SymlinkedDirectoryTests(unittest.TestCase):
                 locked.chmod(0o755)
 
         self.assertEqual([rom["name"] for rom in roms], ["Contra"])
+
+
+@posix_only("dangling symlinks and file permissions")
+class WhatTheWalkSkipsTests(unittest.TestCase):
+    """A library is a user's directory tree; every oddity in it is normal."""
+
+    def test_a_link_pointing_nowhere_is_not_a_game(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            console = base / "FC"
+            console.mkdir()
+            (console / "Contra.nes").write_bytes(b"rom")
+            (console / "Gone.nes").symlink_to(base / "not-there.nes")
+
+            roms = RomScanner(base).scan_console("FC")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Contra"])
+
+    def test_a_cue_that_cannot_be_read_claims_no_bin(self):
+        # Unreadable, so nothing is known about what it references -- and the
+        # .bin beside it stays a game rather than disappearing.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            console = base / "PS"
+            console.mkdir()
+            cue = console / "Game.cue"
+            cue.write_text('FILE "Game.bin" BINARY\n', encoding="utf-8")
+            (console / "Game.bin").write_bytes(b"track")
+            cue.chmod(0o000)
+            try:
+                names = [rom["name"] for rom in RomScanner(base).scan_console("PS")]
+            finally:
+                cue.chmod(0o644)
+
+        self.assertIn("Game", names)
+
+    def test_a_cue_inside_the_covers_folder_claims_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            console = base / "PS"
+            (console / "covers").mkdir(parents=True)
+            (console / "covers" / "Game.cue").write_text(
+                'FILE "Game.bin" BINARY\n', encoding="utf-8"
+            )
+            (console / "Game.bin").write_bytes(b"track")
+
+            names = [rom["name"] for rom in RomScanner(base).scan_console("PS")]
+
+        self.assertEqual(names, ["Game"])
+
+    def test_a_cue_line_whose_filename_is_blank_is_skipped(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            console = base / "PS"
+            console.mkdir(parents=True)
+            (console / "Game.cue").write_text(
+                'FILE "   " BINARY\nFILE "Game.bin" BINARY\n', encoding="utf-8"
+            )
+            (console / "Game.bin").write_bytes(b"track")
+
+            paths = [rom["path"] for rom in RomScanner(base).scan_console("PS")]
+
+        self.assertEqual(paths, [str(console / "Game.cue")])
 
 
 if __name__ == "__main__":

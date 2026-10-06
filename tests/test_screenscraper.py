@@ -3,6 +3,8 @@ import json
 import unittest
 import urllib.error
 import urllib.parse
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import patch
 
@@ -461,6 +463,104 @@ class ThrottleTests(unittest.TestCase):
             screenscraper.throttle()
         # The second call had to wait out the remainder of the interval.
         self.assertTrue(any(value > 0 for value in sleeps))
+
+
+class ARomThatCannotBeHashedTests(unittest.TestCase):
+    """The hashes are what match a ROM exactly; without them the name is it."""
+
+    def test_a_file_that_is_not_there_has_no_digests(self):
+        self.assertIsNone(screenscraper.compute_md5("/nowhere/at/all.sfc"))
+        self.assertIsNone(screenscraper.compute_crc("/nowhere/at/all.sfc"))
+
+    def test_a_rom_on_disk_is_looked_up_by_its_hashes_and_its_size(self):
+        asked = {}
+
+        def fake_open(url, timeout=None):
+            asked["url"] = url
+            return _FakeResponse(SAMPLE_PAYLOAD)
+
+        with TemporaryDirectory() as tmp_dir:
+            rom = Path(tmp_dir) / "Chrono Trigger (USA).sfc"
+            rom.write_bytes(b"rom-data")
+            lookup_media_urls(
+                credentials=_creds(),
+                console="SFC",
+                rom_name=rom.name,
+                rom_path=str(rom),
+                opener=fake_open,
+            )
+
+        self.assertIn("crc=", asked["url"])
+        self.assertIn("md5=", asked["url"])
+        self.assertIn("romtaille=8", asked["url"])
+
+    def test_a_rom_whose_size_cannot_be_read_is_looked_up_without_one(self):
+        asked = {}
+
+        def fake_open(url, timeout=None):
+            asked["url"] = url
+            return _FakeResponse(SAMPLE_PAYLOAD)
+
+        with TemporaryDirectory() as tmp_dir:
+            rom = Path(tmp_dir) / "Chrono Trigger (USA).sfc"
+            rom.write_bytes(b"rom-data")
+            with patch("os.path.getsize", side_effect=OSError("gone")):
+                lookup_media_urls(
+                    credentials=_creds(),
+                    console="SFC",
+                    rom_name=rom.name,
+                    rom_path=str(rom),
+                    opener=fake_open,
+                )
+
+        self.assertNotIn("romtaille", asked["url"])
+
+
+class AQueryThatCouldNotBeBuiltTests(unittest.TestCase):
+    def test_nothing_is_requested_without_a_url(self):
+        called = []
+
+        def fake_open(url, timeout=None):  # pragma: no cover - must not run
+            called.append(url)
+            return _FakeResponse(SAMPLE_PAYLOAD)
+
+        with patch.object(screenscraper, "build_jeu_infos_url", return_value=None):
+            urls = lookup_media_urls(
+                credentials=_creds(),
+                console="SFC",
+                rom_name="Chrono Trigger.sfc",
+                opener=fake_open,
+            )
+
+        self.assertEqual(urls, [])
+        self.assertEqual(called, [])
+
+
+class WhatTheFetcherAcceptsTests(unittest.TestCase):
+    def test_a_body_that_is_already_text_is_read_as_it_is(self):
+        class _TextResponse(_FakeResponse):
+            def read(self):
+                return SAMPLE_PAYLOAD
+
+        urls = lookup_media_urls(
+            credentials=_creds(),
+            console="SFC",
+            rom_name="Chrono Trigger.sfc",
+            opener=lambda url, timeout=None: _TextResponse(b""),
+        )
+        self.assertTrue(urls)
+
+    def test_a_successful_answer_forgets_the_earlier_throttles(self):
+        latch = screenscraper.QuotaLatch()
+        latch.note_status(429)
+        lookup_media_urls(
+            credentials=_creds(),
+            console="SFC",
+            rom_name="Chrono Trigger.sfc",
+            opener=lambda url, timeout=None: _FakeResponse(SAMPLE_PAYLOAD),
+            quota=latch,
+        )
+        self.assertFalse(latch.closed)
 
 
 if __name__ == "__main__":

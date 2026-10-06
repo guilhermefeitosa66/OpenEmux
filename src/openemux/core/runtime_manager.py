@@ -6,9 +6,11 @@ import time
 from openemux.core import retroarch_log, save_states
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
+    StdinCommandClient,
     VolumePacer,
     clamp_volume_db,
     pick_free_udp_port,
+    uses_stdin_channel,
 )
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from openemux.core.systems import resolve_system_id
@@ -68,15 +70,17 @@ class RuntimeManager:
         # only "this console's shader has no preset your video driver can
         # load" (issue #366). A (key, kwargs) pair for tr(), or None.
         self.launch_notice = None
-        # The live volume tracker (issue #69): RetroArch only steps relative
-        # over UDP, so the absolute slider walks from this locally known level.
+        # The live volume tracker (issue #69): RetroArch's command channel only
+        # steps relative, so the absolute slider walks from this locally known
+        # level.
         # Seeded at launch from the same config value the launcher writes as
         # audio_volume, which is what keeps the tracker honest.
         self._volume_db = clamp_volume_db(self.config_manager.get_master_volume_db())
         self._command_client_cache = None
-        # The port this launch's channel runs on. Resolved at launch so the
-        # config's "0" (pick a free one) and the override RetroArch reads can
-        # never disagree.
+        # The port this launch's channel runs on, on Windows -- elsewhere the
+        # channel is the game's stdin and there is no port (None). Resolved at
+        # launch so the config's "0" (pick a free one) and the override
+        # RetroArch reads can never disagree.
         self._network_cmd_port = None
         # The last launch as it would have to be repeated, and whether the
         # unpacked retry has already been spent on it (issue #248).
@@ -91,10 +95,10 @@ class RuntimeManager:
         atexit.register(self.flush_volume_db)
         self.muted = False
 
-    # The level RetroArch is actually at, as far as delivered packets can
-    # say. Stepping is paced over UDP now, so a walk takes a moment to
-    # arrive and the tracker has to come from the pacer rather than being
-    # optimistically set to the target (issue #125).
+    # The level RetroArch is actually at, as far as delivered commands can
+    # say. Stepping is paced now, so a walk takes a moment to arrive and the
+    # tracker has to come from the pacer rather than being optimistically set
+    # to the target (issue #125).
     @property
     def volume_settling(self):
         """Is the emulator's real level still walking toward the last target?
@@ -138,7 +142,8 @@ class RuntimeManager:
         mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
         if mode == "retroarch_wrapper":
-            port = self._resolve_network_cmd_port()
+            # A port only where the channel is UDP; a stdin launch has none.
+            port = None if uses_stdin_channel() else self._resolve_network_cmd_port()
             proc, error_msg = self.retroarch_launcher.launch_process(
                 rom_path, system_id, state_slot=state_slot, network_cmd_port=port,
                 force_extract=force_extract,
@@ -214,7 +219,7 @@ class RuntimeManager:
             self._clear_active()
             return False, "No active game process."
 
-        # Sent from here rather than the worker: it is a single datagram, and
+        # Sent from here rather than the worker: it is a single command, and
         # a game that honours it is gone before the first grace period is up.
         self.send_command("QUIT")
         if block:
@@ -269,18 +274,31 @@ class RuntimeManager:
         return pick_free_udp_port()
 
     def _command_client(self):
-        """The command client, reused so the pacer keeps one socket."""
-        port = self._network_cmd_port
-        if port is None:
-            port = self._resolve_network_cmd_port()
+        """The running game's command client, reused so the pacer keeps one.
+
+        The process decides the channel: a game launched with a stdin pipe --
+        every launch outside Windows -- is spoken to through that pipe, and
+        only one without falls back to a UDP port. A cached client for some
+        other game's pipe, or another port, is replaced along with its pacer.
+        """
         client = self._command_client_cache
-        if client is None or client.port != port:
-            if client is not None:
-                client.close()
-            client = RetroArchCommandClient(port)
-            self._command_client_cache = client
-            self._pacer = None
-        return client
+        stream = getattr(self.active_process, "stdin", None)
+        if stream is not None:
+            if client is not None and getattr(client, "stream", None) is stream:
+                return client
+            replacement = StdinCommandClient(stream)
+        else:
+            port = self._network_cmd_port
+            if port is None:
+                port = self._resolve_network_cmd_port()
+            if client is not None and getattr(client, "port", None) == port:
+                return client
+            replacement = RetroArchCommandClient(port)
+        if client is not None:
+            client.close()
+        self._command_client_cache = replacement
+        self._pacer = None
+        return replacement
 
     def _volume_pacer(self):
         # Resolved first: a port change invalidates the pacer along with the
@@ -291,7 +309,7 @@ class RuntimeManager:
         return self._pacer
 
     def send_command(self, command):
-        """One network command to the running game; False when none runs."""
+        """One command to the running game; False when none runs."""
         if not self.is_running():
             return False
         return self._command_client().send(command)
@@ -365,10 +383,11 @@ class RuntimeManager:
 
         Write-only: the vendored RetroArch answers ``GET_CONFIG_PARAM
         audio_mute_enable`` with "unsupported", so nothing can correct this
-        tracker afterwards and a single dropped packet would leave the button
+        tracker afterwards and a single dropped command would leave the button
         inverted for the rest of the session. One retry -- a send only reports
-        failure when the datagram never left, so re-sending cannot toggle
-        twice (issue #284).
+        failure when the command never left (a datagram not sent, or a line
+        the pipe refused whole), so re-sending cannot toggle twice
+        (issue #284).
         """
         if not self.send_command("MUTE") and not self.send_command("MUTE"):
             return self.muted
@@ -376,7 +395,7 @@ class RuntimeManager:
         return self.muted
 
     # -- live input apply (issue #129) -------------------------------------
-    # The UDP interface has no config-write or remap-reload verb (checked
+    # The command interface has no config-write or remap-reload verb (checked
     # against the vendored RetroArch 1.22: SAVE/LOAD_STATE_SLOT exist,
     # SET_CONFIG_PARAM does not), so "apply while running" is a relaunch that
     # carries the gameplay across: snapshot to a scratch slot, restart with
@@ -385,7 +404,7 @@ class RuntimeManager:
     def snapshot_active(self, slot=HOT_APPLY_STATE_SLOT):
         """Ask the running game to save a scratch state; a marker or ``None``.
 
-        The command is fire-and-forget UDP, so the caller must poll
+        The command is fire-and-forget, so the caller must poll
         ``snapshot_ready(marker)`` to learn whether RetroArch actually wrote
         the file -- a core without save-state support never will, and that
         must not turn into a relaunch that silently loses the game.
@@ -437,7 +456,7 @@ class RuntimeManager:
         return save_states.delete_state(state)
 
     def load_state_slot(self, slot):
-        """Load a specific slot's state into the running game, over UDP.
+        """Load a specific slot's state into the running game.
 
         Unlike seeding ``state_slot`` at launch, this leaves the save/load
         hotkeys on the configured slot -- a quick-save right after an apply
@@ -462,8 +481,8 @@ class RuntimeManager:
         Deliberately distinct from the ``reset_game`` hotkey, which is a soft
         reset that keeps the same process: bindings reach RetroArch only
         through the --appendconfig file written at spawn, the
-        process never re-reads it, and the UDP interface has no config-write
-        or remap-reload verb. Terminating and launching again regenerates
+        process never re-reads it, and the command interface has no
+        config-write or remap-reload verb. Terminating and launching again regenerates
         that override, which is the only thing that applies a remap (#129).
 
         Returns ``(rom, error)``: the ROM to relaunch once the process is
@@ -576,11 +595,12 @@ class RuntimeManager:
             except Exception:
                 pass
         # The command channel talked to the game that just ended, and the next
-        # launch picks a port of its own (issue #227), so the cached client is
-        # already destined for replacement. Closing it here means the UDP
-        # socket does not outlive the game it was for -- which is also what
-        # made the suite report an unclosed socket after its summary, from the
-        # QUIT that stop_active sends (issue #244).
+        # launch brings a pipe or a port of its own (issue #227), so the cached
+        # client is already destined for replacement. Closing it here means
+        # neither our end of the pipe nor the UDP socket outlives the game it
+        # was for -- the socket is what made the suite report an unclosed
+        # socket after its summary, from the QUIT that stop_active sends
+        # (issue #244).
         client = self._command_client_cache
         if client is not None:
             try:

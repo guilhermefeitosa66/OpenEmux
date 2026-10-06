@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 
 from openemux.core.input_profiles import (
     ANALOG_DPAD_LEFT_STICK,
+    apply_v4_keyboard_defaults,
+    apply_v5_keyboard_defaults,
     ANALOG_DPAD_OFF,
     ANALOG_DPAD_RIGHT_STICK,
     DEVICE_IDS,
@@ -598,6 +600,77 @@ class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
         self.assertNotIn("b", cleared)
         self.assertEqual(cleared["l2"], "+2")
         self.assertEqual(cleared["up"], "h0up")
+
+
+class AProfileFileThatIsNotAProfileTests(unittest.TestCase):
+    """The file is hand-editable, so every shape of nonsense has to survive."""
+
+    def test_a_file_that_is_not_an_object_is_replaced_by_the_defaults(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.ensure_dir()
+            manager.profile_path("SFC").write_text("[1, 2]", encoding="utf-8")
+
+            profile = manager.load_profile("SFC")
+
+        self.assertEqual(profile["version"], PROFILE_VERSION)
+        self.assertIn("keyboard", profile["devices"])
+
+    def test_a_version_that_is_not_a_number_is_read_as_the_oldest(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.ensure_dir()
+            manager.profile_path("SFC").write_text(
+                json.dumps({"version": "not a number", "devices": {}}), encoding="utf-8"
+            )
+
+            self.assertEqual(manager.load_profile("SFC")["version"], PROFILE_VERSION)
+
+    def test_a_device_entry_that_is_not_an_object_falls_back_to_defaults(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            manager.ensure_dir()
+            manager.profile_path("SFC").write_text(
+                json.dumps({"version": PROFILE_VERSION, "devices": {"keyboard": "nope"}}),
+                encoding="utf-8",
+            )
+
+            keyboard = manager.load_profile("SFC")["devices"]["keyboard"]
+
+        self.assertTrue(keyboard["bindings"])
+
+    def test_bindings_that_are_not_a_mapping_clear_to_nothing(self):
+        self.assertEqual(clear_unreachable_gamepad_buttons("not a mapping"), {})
+
+    def test_keyboard_defaults_fill_in_over_a_missing_binding_set(self):
+        defaults = {"a": "x", "b": "z"}
+        self.assertEqual(
+            apply_v5_keyboard_defaults(None, defaults),
+            apply_v5_keyboard_defaults({}, defaults),
+        )
+        self.assertEqual(
+            apply_v4_keyboard_defaults(None, defaults),
+            apply_v4_keyboard_defaults({}, defaults),
+        )
+
+    def test_an_action_with_no_new_default_is_left_where_it_was(self):
+        updated = apply_v4_keyboard_defaults({"a": "q"}, {})
+        self.assertEqual(updated["a"], "q")
+
+
+class ReadingOneDevicesProfileTests(unittest.TestCase):
+    def test_the_active_device_is_the_one_returned_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile, selected, device = manager.get_device_profile("SFC")
+            self.assertEqual(selected, profile["active_device"])
+            self.assertIs(device, profile["devices"][selected])
+
+    def test_a_device_that_does_not_exist_falls_back_to_the_keyboard(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            _profile, selected, _device = manager.get_device_profile("SFC", "not-a-device")
+            self.assertEqual(selected, "keyboard")
 
 
 if __name__ == "__main__":

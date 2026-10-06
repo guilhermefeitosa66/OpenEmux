@@ -12,7 +12,9 @@ the ARM side from the machine this project is developed on.
 
 import subprocess
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from openemux.core import platform as pf
@@ -185,15 +187,102 @@ class RetroArchBinaryMigrationTests(unittest.TestCase):
             )
 
 
+MULTIARCH = "/usr/lib/{}-linux-gnu/libretro"
+
+
+@contextmanager
+def _as_linux(machine):
+    """Run the block as if this were a Linux ``machine``.
+
+    The architecture is read at call time precisely so this is possible: the
+    ARM side of every scenario below has to be exercised from the x86_64
+    machine the project is developed on.
+    """
+    with patch.object(pf, "IS_WINDOWS", False), patch.object(pf, "MACHINE", machine):
+        yield
+
+
+def _over(root, dirs):
+    """``dirs`` laid over ``root``: the same layout, on a tree the test owns.
+
+    ``/usr/lib/aarch64-linux-gnu/libretro`` is not a directory a test may
+    create, so the list the code computed is re-rooted instead of faked --
+    what is under test is which directories that list names.
+    """
+    return [Path(root, *Path(d).parts[1:]) for d in dirs]
+
+
 class CoreSearchDirTests(unittest.TestCase):
-    @linux_only("/usr/lib/<triplet>/libretro is a Debian layout; Windows has no equivalent")
+    """One list, and it follows the machine (issue #119).
+
+    The launcher and the core pickers each carried this list, and only the
+    launcher's was architecture-aware: the pickers' said ``x86_64`` outright.
+    On an ARM Debian or Ubuntu that left the three pickers -- Preferences >
+    Cores, the sidebar's console menu and a ROM's context menu, all of them
+    ``CoreCatalog.cores_for_console`` -- showing no core at all for a console
+    whose Automatic launch started a game from the very same directory.
+    """
+
+    def _launcher(self, tmp):
+        from tests.test_retroarch_launcher import _DummyConfig
+        from openemux.core.retroarch_launcher import RetroArchLauncher
+
+        base = Path(tmp)
+        return RetroArchLauncher(base, _DummyConfig(base, base / "retroarch", base / "core.so"))
+
     def test_the_multiarch_directory_follows_the_architecture(self):
         # /usr/lib/<triplet>/libretro is where Debian and Ubuntu put the
         # packaged cores, and the triplet is the one thing in that list that
         # changes with the machine.
-        from openemux.core.retroarch_launcher import DEFAULT_CORE_DIRS
+        for machine, other in (("x86_64", "aarch64"), ("aarch64", "x86_64")):
+            with self.subTest(machine=machine), _as_linux(machine):
+                dirs = pf.system_core_dirs()
+                self.assertIn(MULTIARCH.format(machine), dirs)
+                self.assertNotIn(MULTIARCH.format(other), dirs)
 
-        self.assertIn(f"/usr/lib/{pf.MACHINE}-linux-gnu/libretro", DEFAULT_CORE_DIRS)
+    def test_the_pickers_search_the_arm_directory_on_an_arm_machine(self):
+        from openemux.core.cores import CoreCatalog
+
+        with _as_linux("aarch64"):
+            # Built the way the window builds the one the three pickers read.
+            core_dirs = CoreCatalog(project_root="/checkout").core_dirs
+        self.assertIn(Path(MULTIARCH.format("aarch64")), core_dirs)
+        self.assertNotIn(Path(MULTIARCH.format("x86_64")), core_dirs)
+
+    def test_the_pickers_search_exactly_where_the_launcher_does(self):
+        from openemux.core.cores import CoreCatalog
+
+        with TemporaryDirectory() as tmp:
+            for machine in ("x86_64", "aarch64"):
+                with self.subTest(machine=machine), _as_linux(machine):
+                    launcher = self._launcher(tmp)
+                    self.assertEqual(
+                        [Path(d) for d in launcher._core_search_dirs()],
+                        CoreCatalog(project_root=launcher.project_root).core_dirs,
+                    )
+
+    def test_a_core_packaged_for_arm_is_offered_for_its_console(self):
+        # The defect as the user met it: libretro-snes9x installed from the
+        # distribution, Automatic launching it, and every picker empty.
+        from openemux.core.cores import CoreCatalog
+
+        core = f"snes9x_libretro{pf.CORE_SUFFIX}"
+        with TemporaryDirectory() as tmp:
+            packaged = Path(tmp, *Path(MULTIARCH.format("aarch64")).parts[1:])
+            packaged.mkdir(parents=True)
+            (packaged / core).write_bytes(b"core")
+
+            with _as_linux("aarch64"):
+                catalog = CoreCatalog(project_root=tmp)
+            catalog.core_dirs = _over(tmp, catalog.core_dirs)
+            self.assertIn(core, [c.filename for c in catalog.cores_for_console("SFC")])
+
+            # And the same core is invisible to a list that says x86_64 -- which
+            # is what the pickers used to be.
+            with _as_linux("x86_64"):
+                x86 = CoreCatalog(project_root=tmp)
+            x86.core_dirs = _over(tmp, x86.core_dirs)
+            self.assertEqual(x86.cores_for_console("SFC"), [])
 
 
 class AppImageRecipeTests(unittest.TestCase):

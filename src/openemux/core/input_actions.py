@@ -595,10 +595,11 @@ def with_dpad_as_analog(bindings):
     """Point the D-pad at the left stick as well as at the D-pad.
 
     Handheld frontends offer this as a live toggle that swaps one for the
-    other. RetroArch has no command for that -- the full UDP list has nothing
-    for remaps or analog mode -- so this does the thing that *is* possible and
-    is arguably better: the same press reaches both, because RetroArch accepts
-    a hat token for an analog direction just as it does for a D-pad one.
+    other. RetroArch has no command for that -- its full command list has
+    nothing for remaps or analog mode -- so this does the thing that *is*
+    possible and is arguably better: the same press reaches both, because
+    RetroArch accepts a hat token for an analog direction just as it does for
+    a D-pad one.
 
     A direction the user bound by hand is left alone; only unbound ones are
     filled, so this never overwrites a deliberate mapping.

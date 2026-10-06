@@ -13,6 +13,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 from openemux.core.appimage_env import host_env
 from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
 from openemux.core.cores import CoreCatalog
+from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
@@ -39,7 +40,7 @@ from openemux.core.cover_sync import (
 )
 from openemux.core.collections import CollectionManager
 from openemux.core.playlist_manager import PlaylistManager
-from openemux.core.paths import display_text, get_project_root
+from openemux.core.paths import display_text, get_project_root, is_running_in_flatpak
 from openemux.core.rom_actions import RomActionError, delete_rom, rename_rom
 from openemux.core.runtime_manager import RuntimeManager
 from openemux.core.theme import toggled_theme
@@ -69,6 +70,7 @@ from openemux.core.gamepad_backend import make_navigator
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
+from openemux.ui.log_panel import BugReportDialog, LogPanel
 from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
@@ -132,6 +134,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # is one write and not one per row (issue #383).
         self._remember_view_source = None
         self._cover_sync_running = False
+        self._deferred_assets_running = False
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
         self._rescan_pending = None
@@ -257,8 +260,66 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
+        self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
+
+    def _start_deferred_asset_download(self):
+        """Fetch the cores and shaders the first boot left for later.
+
+        The first boot waits only for what makes every console playable (issue
+        #442); the remaining ~200 cores and the second shader pack come down
+        here, under the task banner, while the library is already usable.
+        Owed until a sweep finishes clean, so a sweep cut short by closing the
+        app resumes at the next launch.
+        """
+        if self._deferred_assets_running:
+            return False
+        if is_running_in_flatpak() or not self.config_manager.deferred_assets_pending():
+            return False
+        self._deferred_assets_running = True
+        cancel_event = Event()
+        task_id = self.tasks.begin(
+            "cores", self.t("status.cores.downloading"), on_cancel=cancel_event.set
+        )
+
+        def _on_progress(evt):
+            GLib.idle_add(
+                self.tasks.update, task_id, evt.get("current", 0), evt.get("total", 0)
+            )
+
+        def _worker():
+            try:
+                summary = FirstBootBootstrapper(self.config_manager).download_deferred_assets(
+                    on_progress=_on_progress, cancel_event=cancel_event
+                )
+            except Exception as exc:
+                # The done handler is what clears the running flag; a worker
+                # that dies before reaching it must still reach it (#214).
+                logger.exception("deferred asset download crashed")
+                summary = {"error": str(exc)}
+            GLib.idle_add(self._on_deferred_assets_done_ui, task_id, summary)
+
+        Thread(target=_worker, daemon=True).start()
+        return True
+
+    def _on_deferred_assets_done_ui(self, task_id, summary):
+        self._deferred_assets_running = False
+        self.tasks.finish(task_id)
+        # Both catalogs cached what was on disk when the window opened; the
+        # cores and presets that just arrived are invisible until they rescan.
+        self.core_catalog.refresh()
+        self.shader_catalog.refresh()
+        launcher = self.runtime_manager.retroarch_launcher
+        launcher.core_catalog.refresh()
+        launcher.shader_catalog.refresh()
+        logger.info(
+            "deferred asset download finished: failed=%s cancelled=%s error=%s",
+            summary.get("failed"),
+            summary.get("cancelled"),
+            summary.get("error"),
+        )
+        return GLib.SOURCE_REMOVE
 
     def _start_update_check(self):
         settings = self.config_manager.get_update_settings()
@@ -494,6 +555,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.imports.install_drop_target(self.content_stack)
 
         toolbar.add_bottom_bar(self._build_selection_bar())
+        # Above the tip bar, whose "Log" button opens it: the panel slides up
+        # out of the bar that controls it.
+        self.log_panel = LogPanel(self)
+        toolbar.add_bottom_bar(self.log_panel.widget)
         toolbar.add_bottom_bar(self._build_tip_bar())
 
         page = Adw.NavigationPage.new(toolbar, self.t("app.title"))
@@ -1033,10 +1098,33 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # A CenterBox, not a plain Box: the end widget is guaranteed its natural
         # width and the tip ellipsizes into what is left. In a Box the tip's
         # hexpand won the negotiation and pushed the hints off the right edge.
+        # The log's own switch, at the far right after the input hints: one
+        # click from the library rather than a trip through Settings.
+        self.log_toggle = Gtk.ToggleButton()
+        self.log_toggle.add_css_class("flat")
+        self.log_toggle.add_css_class("log-toggle")
+        log_content = Gtk.Box(spacing=6)
+        log_content.append(Gtk.Image.new_from_icon_name("utilities-terminal-symbolic"))
+        log_label = Gtk.Label()
+        self._translatable(lambda: log_label.set_label(self.t("log.toggle")))
+        log_content.append(log_label)
+        self.log_badge = Gtk.Label()
+        self.log_badge.add_css_class("log-badge")
+        self.log_badge.set_visible(False)
+        log_content.append(self.log_badge)
+        self.log_toggle.set_child(log_content)
+        self._translatable(lambda: self.log_toggle.set_tooltip_text(self.t("log.toggle.tooltip")))
+        self.log_toggle.connect("toggled", lambda b: self.set_log_panel_visible(b.get_active()))
+
+        end_side = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        end_side.append(self.hint_box)
+        end_side.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        end_side.append(self.log_toggle)
+
         bar = Gtk.CenterBox()
         bar.add_css_class("tip-bar")
         bar.set_start_widget(tip_side)
-        bar.set_end_widget(self.hint_box)
+        bar.set_end_widget(end_side)
 
         self.tip_bar = bar
         self._has_hints = False
@@ -1045,7 +1133,27 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._rotate_tip()
         self.connect("close-request", self._on_close_stop_tips)
         self._apply_tips_visibility(self.config_manager.get_ui_settings()["show_tips"])
+        self.set_log_panel_visible(
+            self.config_manager.get_ui_settings()["show_log_panel"], persist=False
+        )
         return bar
+
+    def set_log_panel_visible(self, visible, persist=True):
+        """Open or close the log panel; the bar button and Settings follow."""
+        visible = bool(visible)
+        self.log_panel.set_open(visible)
+        if self.log_toggle.get_active() != visible:
+            self.log_toggle.set_active(visible)
+        if persist and self.config_manager.get_ui_settings()["show_log_panel"] != visible:
+            self.config_manager.set_show_log_panel(visible)
+
+    def update_log_badge(self, count):
+        """The red count on the "Log" button: errors since the panel was open."""
+        self.log_badge.set_label(str(count) if count < 100 else "99+")
+        self.log_badge.set_visible(count > 0)
+
+    def show_bug_report(self):
+        BugReportDialog(self).present()
 
     def _apply_tips_visibility(self, enabled):
         """Show or hide the tip bar, keeping the timer in step.
@@ -1069,7 +1177,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._stop_tip_rotation()
 
     def _update_tip_bar_visibility(self):
-        self.tip_bar.set_visible(getattr(self, "_tips_enabled", True) or self._has_hints)
+        # Always shown now: with tips off and no hints it still carries the
+        # "Log" button, and the log must never depend on the tips.
+        self.tip_bar.set_visible(True)
 
     def set_hints(self, pairs):
         """Fill the right side of the bottom bar with (glyph, label) hints."""
@@ -1115,6 +1225,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         menu.append(self.t("menu.preferences"), "win.preferences")
         menu.append(self.t("menu.shortcuts"), "win.shortcuts")
         menu.append(self.t("menu.welcome"), "win.welcome")
+        menu.append(self.t("menu.report_bug"), "win.report-bug")
         menu.append(self.t("menu.about"), "win.about")
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
@@ -1134,6 +1245,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("preferences", lambda *_: self._open_preferences(), ["<Ctrl>comma"]),
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
+            ("report-bug", lambda *_: self.show_bug_report(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
             ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
             ("import", lambda *_: self.imports.open_picker(), ["<Ctrl>o"]),
@@ -2564,7 +2676,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         elif self.visible_consoles:
             default_scope = self.visible_consoles[0]
         if default_scope == "all":
-            default_scope = ALL_CONSOLES_ID
+            # Unreachable: the guard at the top of this method returns when
+            # there are no visible consoles, so the branch above always fires.
+            # Kept as the belt to that braces, and marked so it does not read
+            # as a gap in the coverage report.
+            default_scope = ALL_CONSOLES_ID  # pragma: no cover
         self._set_console_dropdown_active_id(combo, default_scope)
 
         # Adw.AlertDialog with an extra child, the same shape the import flow's
@@ -2920,6 +3036,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast = Adw.Toast(title=self.t("toast.bootstrap.completed"))
             toast.set_timeout(4)
             self.toast_overlay.add_toast(toast)
+            # A retry from Preferences finishes with this window already up,
+            # so the start in __init__ ran before the step owed anything.
+            self._start_deferred_asset_download()
             return
         failed_step = result.get("failed_step")
         if failed_step:

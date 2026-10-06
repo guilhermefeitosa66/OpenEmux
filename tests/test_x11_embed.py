@@ -1,14 +1,20 @@
 """The X11 layer the game window adopts RetroArch through.
 
-Only the parts that can be answered without a real X server: the tri-state
-"is the game still inside our window?" check, whose whole point is that
-"unknown" and "no" mean opposite things (issue #267), the pointer the wrapper
-defines on the adopted window (issue #276), the two decisions behind the
-wrapper's hotkey and its focus reclaim (issue #236), and which window a launch
-decides is *its* RetroArch (issue #245).
+No real X server is needed for any of it: every method goes through one
+display object, so a fake one covers the whole file -- the tri-state "is the
+game still inside our window?" check, whose point is that "unknown" and "no"
+mean opposite things (issue #267), the pointer the wrapper defines on the
+adopted window (issue #276), the hotkey grab and the focus reclaim (issue
+#236), which window a launch decides is *its* RetroArch (issue #245), and the
+detach that has to happen before our own window dies (X destroys children with
+their parent, and RetroArch aborts on losing its window).
+
+Every method here is best-effort by design and must never raise to the UI, so
+each one is also driven with a display that fails.
 """
 
 import unittest
+from unittest import mock
 
 from openemux.core import x11_embed
 from openemux.core.input_actions import RETROARCH_KEY_NAMES
@@ -495,6 +501,391 @@ class EnsureFocusWithoutActiveWindowTests(unittest.TestCase):
 
         self.assertFalse(embedder.ensure_focus(0x200, 0x100))
         self.assertEqual(server.focus_calls, [])
+
+
+class _BrokenDisplay:
+    """A display that fails whatever it is asked. Every method must survive one."""
+
+    def __init__(self, error=None):
+        self.error = error or RuntimeError("BadWindow")
+        self.closed = 0
+
+    def _fail(self, *_args, **_kwargs):
+        raise self.error
+
+    create_resource_object = _fail
+    screen = _fail
+    intern_atom = _fail
+    get_input_focus = _fail
+    set_input_focus = _fail
+    open_font = _fail
+    pending_events = _fail
+    sync = _fail
+
+    def close(self):
+        self.closed += 1
+        raise self.error
+
+
+def _embedder_with_no_display():
+    embedder = RetroArchWindowEmbedder()
+    embedder._dpy = lambda: None
+    return embedder
+
+
+class OpeningAndClosingTheDisplayTests(unittest.TestCase):
+    """The one place `Xlib.display` is reached for (issue #364)."""
+
+    def test_a_machine_without_python_xlib_offers_no_display(self):
+        embedder = RetroArchWindowEmbedder()
+        with mock.patch.object(x11_embed, "XLIB_AVAILABLE", False):
+            self.assertFalse(embedder.available)
+            self.assertIsNone(embedder._dpy())
+
+    def test_the_first_call_opens_one_and_the_rest_reuse_it(self):
+        opened = []
+
+        class _Module:
+            @staticmethod
+            def Display():
+                opened.append(1)
+                return "the display"
+
+        embedder = RetroArchWindowEmbedder()
+        with mock.patch.object(x11_embed, "XLIB_AVAILABLE", True):
+            with _xlib_display(_Module):
+                self.assertEqual(embedder._dpy(), "the display")
+                self.assertEqual(embedder._dpy(), "the display")
+        self.assertEqual(len(opened), 1)
+
+    def test_a_display_that_will_not_open_is_reported_not_raised(self):
+        class _Module:
+            @staticmethod
+            def Display():
+                raise RuntimeError("no DISPLAY")
+
+        embedder = RetroArchWindowEmbedder()
+        with mock.patch.object(x11_embed, "XLIB_AVAILABLE", True):
+            with _xlib_display(_Module):
+                with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+                    self.assertIsNone(embedder._dpy())
+
+    def test_closing_drops_the_display_and_the_cursor_with_it(self):
+        # The cursor belongs to the display, so it dies with it.
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        embedder._display.close = lambda: None
+        embedder._cursor = _FakeCursor()
+        embedder.close()
+        self.assertIsNone(embedder._display)
+        self.assertIsNone(embedder._cursor)
+
+    def test_a_display_that_will_not_close_is_dropped_anyway(self):
+        embedder = RetroArchWindowEmbedder()
+        embedder._display = _BrokenDisplay()
+        embedder.close()
+        self.assertIsNone(embedder._display)
+
+    def test_closing_with_no_display_open_is_harmless(self):
+        RetroArchWindowEmbedder().close()
+
+
+def _xlib_display(module):
+    """Put ``module`` where ``from Xlib import display`` will find it."""
+    import Xlib
+
+    return mock.patch.object(Xlib, "display", module, create=True)
+
+
+class ListingTheToplevelsTests(unittest.TestCase):
+    def test_no_display_lists_nothing(self):
+        self.assertEqual(_embedder_with_no_display()._client_xids(), [])
+
+    def test_a_root_window_that_cannot_be_read_lists_nothing(self):
+        embedder = RetroArchWindowEmbedder()
+        embedder._display = _BrokenDisplay()
+        embedder._dpy = lambda: embedder._display
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertEqual(embedder._client_xids(), [])
+
+    def test_a_desktop_with_no_client_list_lists_nothing(self):
+        embedder = _embedder_over([])
+        self.assertEqual(embedder._client_xids(), [])
+
+    def test_a_window_with_no_pid_property_reports_none(self):
+        embedder = _embedder_over([_FakeClient(1)])
+        window = embedder._dpy().create_resource_object("window", 1)
+        self.assertIsNone(embedder._window_pid(window))
+
+    def test_no_display_snapshots_nothing(self):
+        embedder = _embedder_with_no_display()
+        embedder.snapshot_existing()
+        self.assertEqual(embedder._preexisting_xids, set())
+
+    def test_a_window_that_vanishes_mid_snapshot_is_skipped(self):
+        # The window can go between the listing and the inspection.
+        embedder = _embedder_over([_FakeClient(1, wm_class=("retroarch", "RetroArch"))])
+        embedder._display._clients.clear()
+        embedder.snapshot_existing()
+        self.assertEqual(embedder._preexisting_xids, set())
+
+
+class ThePointerCursorFallbackTests(unittest.TestCase):
+    def test_a_display_with_no_cursor_font_defines_no_pointer(self):
+        server = _FakeServer()
+        server.open_font = lambda _name: None
+        embedder = _embedder_on(server)
+        self.assertIsNone(embedder._pointer_cursor(server))
+
+    def test_no_display_defines_no_pointer(self):
+        self.assertFalse(_embedder_with_no_display().set_child_cursor(0x200))
+
+    def test_a_window_that_refuses_the_cursor_is_reported_not_raised(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        child = server.create_resource_object("window", 0x200)
+        child.change_attributes = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.set_child_cursor(0x200))
+
+
+def _raise(*_args, **_kwargs):
+    raise RuntimeError("BadWindow")
+
+
+class ReparentingTests(unittest.TestCase):
+    def test_a_window_is_reparented_mapped_and_given_a_pointer(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        self.assertTrue(embedder.embed(0x200, 0x100, 10, 20, 300, 200))
+        child = server.windows[0x200]
+        self.assertTrue(child.mapped)
+        self.assertTrue(child.attributes)
+
+    def test_no_display_reparents_nothing(self):
+        self.assertFalse(_embedder_with_no_display().embed(0x200, 0x100, 0, 0, 1, 1))
+
+    def test_a_reparent_that_fails_is_reported_not_raised(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        server.create_resource_object("window", 0x200).reparent = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.embed(0x200, 0x100, 0, 0, 1, 1))
+
+    def test_moving_the_game_asks_x_to_configure_it(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        configured = []
+        server.create_resource_object("window", 0x200).configure = (
+            lambda **kwargs: configured.append(kwargs)
+        )
+        self.assertTrue(embedder.move_resize(0x200, 10, 20, 300, 200))
+        self.assertEqual(
+            configured[-1], {"x": 10, "y": 20, "width": 300, "height": 200}
+        )
+
+    def test_a_degenerate_rect_is_clamped_to_one_pixel(self):
+        # X refuses a zero-sized window outright.
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        configured = []
+        server.create_resource_object("window", 0x200).configure = (
+            lambda **kwargs: configured.append(kwargs)
+        )
+        embedder.move_resize(0x200, 0, 0, 0, -5)
+        self.assertEqual(configured[-1]["width"], 1)
+        self.assertEqual(configured[-1]["height"], 1)
+
+    def test_no_display_moves_nothing(self):
+        self.assertFalse(
+            _embedder_with_no_display().move_resize(0x200, 0, 0, 1, 1)
+        )
+
+    def test_a_move_that_fails_is_reported_not_raised(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        server.create_resource_object("window", 0x200).configure = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.move_resize(0x200, 0, 0, 1, 1))
+
+
+class HandingOverKeyboardFocusTests(unittest.TestCase):
+    def test_focus_goes_to_the_game_so_retroarch_sees_key_input(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        self.assertTrue(embedder.focus(0x200))
+        self.assertEqual(server.focus_calls, [0x200])
+
+    def test_no_display_focuses_nothing(self):
+        self.assertFalse(_embedder_with_no_display().focus(0x200))
+
+    def test_a_focus_that_fails_is_reported_not_raised(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        server.set_input_focus = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.focus(0x200))
+
+    def test_no_display_reclaims_nothing(self):
+        self.assertFalse(_embedder_with_no_display().ensure_focus(0x200, 0x100))
+
+    def test_a_tick_that_finds_focus_already_on_the_game_costs_nothing(self):
+        server = _FakeServer(active_xid=0x100, focused_xid=0x200)
+        embedder = _embedder_on(server)
+        self.assertTrue(embedder.ensure_focus(0x200, 0x100))
+        self.assertEqual(server.focus_calls, [])
+
+    def test_a_reclaim_that_fails_is_reported_not_raised(self):
+        server = _FakeServer(active_xid=0x100, focused_xid=0x100)
+        embedder = _embedder_on(server)
+        server.set_input_focus = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.ensure_focus(0x200, 0x100))
+
+    def test_a_focus_answered_as_a_bare_xid_is_read_the_same_way(self):
+        # python-xlib answers PointerRoot/None as an int rather than a window.
+        server = _FakeServer(active_xid=0x100, focused_xid=0x200)
+        server.get_input_focus = lambda: _FakeFocus(0x200)
+        embedder = _embedder_on(server)
+        self.assertTrue(embedder.ensure_focus(0x200, 0x100))
+
+
+@linux_only("the X keysym tables and X.LockMask, from python-xlib")
+class GrabbingTheWrapperHotkeyTests(unittest.TestCase):
+    """The wrapper's only way to see a key: focus sits on the game (#236)."""
+
+    def _server(self):
+        server = _FakeServer()
+        server.keysym_to_keycode = lambda keysym: 42 if keysym else 0
+        return server
+
+    def test_the_key_is_grabbed_under_every_lock_combination(self):
+        # Caps or Num lock must not disable the hotkey.
+        server = self._server()
+        embedder = _embedder_on(server)
+        grabs = []
+        toplevel = server.create_resource_object("window", 0x100)
+        toplevel.grab_key = lambda *args: grabs.append(args)
+        self.assertEqual(embedder.grab_key(0x100, "f"), 42)
+        self.assertEqual(len(grabs), 4)
+
+    def test_a_binding_x_cannot_name_falls_back_rather_than_giving_up(self):
+        server = self._server()
+        server.keysym_to_keycode = lambda keysym: 43 if keysym else 0
+        embedder = _embedder_on(server)
+        server.create_resource_object("window", 0x100).grab_key = lambda *_a: None
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertEqual(embedder.grab_key(0x100, "nonsense-key", "f"), 43)
+
+    def test_a_binding_with_no_fallback_grabs_nothing(self):
+        server = self._server()
+        embedder = _embedder_on(server)
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertIsNone(embedder.grab_key(0x100, "nonsense-key"))
+
+    def test_no_display_grabs_nothing(self):
+        self.assertIsNone(_embedder_with_no_display().grab_key(0x100, "f"))
+
+    def test_a_grab_that_fails_is_reported_not_raised(self):
+        server = self._server()
+        embedder = _embedder_on(server)
+        server.create_resource_object("window", 0x100).grab_key = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertIsNone(embedder.grab_key(0x100, "f"))
+
+    def test_a_keycode_is_resolved_through_the_retroarch_spelling(self):
+        asked = []
+
+        class _Dpy:
+            @staticmethod
+            def keysym_to_keycode(keysym):
+                asked.append(keysym)
+                return 7
+
+        self.assertEqual(RetroArchWindowEmbedder._keycode_for(_Dpy, "enter"), 7)
+        self.assertTrue(asked)
+
+    def test_a_keysym_x_maps_to_no_keycode_is_skipped(self):
+        class _Dpy:
+            @staticmethod
+            def keysym_to_keycode(_keysym):
+                return 0
+
+        self.assertEqual(RetroArchWindowEmbedder._keycode_for(_Dpy, "f"), 0)
+
+    def test_a_name_x_does_not_know_at_all_resolves_to_nothing(self):
+        class _Dpy:
+            @staticmethod
+            def keysym_to_keycode(_keysym):  # pragma: no cover - never reached
+                raise AssertionError("should not be asked")
+
+        self.assertEqual(
+            RetroArchWindowEmbedder._keycode_for(_Dpy, "not-a-key-name"), 0
+        )
+
+
+@linux_only("X.KeyPress, from python-xlib")
+class ReadingTheGrabbedKeysTests(unittest.TestCase):
+    class _Event:
+        def __init__(self, event_type, detail):
+            self.type = event_type
+            self.detail = detail
+
+    def _server(self, events):
+        server = _FakeServer()
+        queue = list(events)
+        server.pending_events = lambda: len(queue)
+        server.next_event = lambda: queue.pop(0)
+        return server
+
+    def test_a_pressed_grabbed_key_is_reported_once(self):
+        from Xlib import X
+
+        server = self._server([self._Event(X.KeyPress, 42)])
+        self.assertEqual(_embedder_on(server).pressed_grabbed_keycodes(), [42])
+
+    def test_events_that_are_not_key_presses_are_ignored(self):
+        from Xlib import X
+
+        server = self._server([self._Event(X.KeyRelease, 42)])
+        self.assertEqual(_embedder_on(server).pressed_grabbed_keycodes(), [])
+
+    def test_no_display_reports_no_keys(self):
+        self.assertEqual(
+            _embedder_with_no_display().pressed_grabbed_keycodes(), []
+        )
+
+    def test_an_event_queue_that_fails_is_reported_not_raised(self):
+        server = _FakeServer()
+        server.pending_events = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertEqual(_embedder_on(server).pressed_grabbed_keycodes(), [])
+
+
+class DetachingBeforeOurWindowDiesTests(unittest.TestCase):
+    """X destroys children with their parent; RetroArch aborts on that."""
+
+    def test_the_game_is_unmapped_and_handed_back_to_the_root(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        child = server.create_resource_object("window", 0x200)
+        moves = []
+        child.unmap = lambda: moves.append("unmap")
+        child.reparent = lambda *_a: moves.append("reparent")
+        self.assertTrue(embedder.release(0x200))
+        # Unmapped first, so the freed toplevel does not flash WM-decorated
+        # while QUIT is still in flight.
+        self.assertEqual(moves, ["unmap", "reparent"])
+
+    def test_no_display_detaches_nothing(self):
+        self.assertFalse(_embedder_with_no_display().release(0x200))
+
+    def test_a_detach_that_fails_is_reported_not_raised(self):
+        server = _FakeServer()
+        embedder = _embedder_on(server)
+        server.create_resource_object("window", 0x200).unmap = _raise
+        with self.assertLogs("openemux.core.x11_embed", level="WARNING"):
+            self.assertFalse(embedder.release(0x200))
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ from openemux.core import cartridge_render, cover_cache
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.library_view import list_thumb_column_width, normalize_zoom, scale_length
 from openemux.core.paths import display_text
-from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover
+from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover, is_label_art
 from openemux.core.systems import get_system_display_name
 from openemux.ui.card_layout import (
     CARTRIDGE_RENDER_SCALE,
@@ -221,8 +221,9 @@ class RomItem(Gtk.Box):
         # the cover is centred at its own proportions over a uniform backdrop.
         self.mixed_consoles = ctx.mixed_consoles
         self._backdrop = None
-        # Inside a cartridge frame the label sticker is what belongs there, so
-        # prefer it and fall back to the box art when none was configured.
+        # Inside a cartridge frame the label sticker is what belongs there.
+        # The box art is still looked for after it, but only to know whether
+        # the ROM has artwork at all: it is never drawn as a label (#457).
         self._art_kinds = (LABEL_ART, COVER_ART) if ctx.cartridge else (COVER_ART,)
         self.add_css_class("rom-card")
         if compact:
@@ -598,12 +599,15 @@ class RomItem(Gtk.Box):
             # be thrown away, so it is not started at all.
             return
         if self.cartridge_frame_path:
-            # Compose the cover into the cartridge (cached on disk, so this
-            # only costs anything the first time). A ROM with no cover renders
+            # Compose the label into the cartridge (cached on disk, so this
+            # only costs anything the first time). A ROM with no label renders
             # as a blank cartridge instead of the generic icon, keeping the
-            # shelf consistent.
+            # shelf consistent -- and that includes a ROM that has box art:
+            # cropped into the sticker, a box cover is not a label, it is a
+            # broken-looking cartridge (issue #457).
+            label_path = cover_path if is_label_art(cover_path) else None
             composite = cartridge_render.render_cartridge(
-                cover_path,
+                label_path,
                 self.cartridge_frame_path,
                 rom["console"],
                 rom["name"],

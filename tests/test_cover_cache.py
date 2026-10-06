@@ -86,6 +86,18 @@ class CacheTests(unittest.TestCase):
             second = cover_cache.load_cover(cover, 32, 32)
             self.assertIs(first, second)
 
+    def test_storing_a_key_again_counts_its_bytes_once(self):
+        # Two cards decoding the same cover at once both store it. The second
+        # store replaces the first, and the budget must not count it twice --
+        # which a full suite only exercised when two window tests happened to
+        # race, so the line's coverage came and went with the timing.
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 4, 4)
+        cover_cache._cache_put(("same",), pixbuf)
+        once = cover_cache._cache_bytes
+        cover_cache._cache_put(("same",), pixbuf)
+        self.assertEqual(cover_cache._cache_bytes, once)
+        self.assertEqual(cover_cache.cache_size(), 1)
+
     def test_a_different_target_size_is_a_different_entry(self):
         with TemporaryDirectory() as tmp_dir:
             cover = _write_png(Path(tmp_dir) / "cover.png")
@@ -211,6 +223,22 @@ class PoolTests(unittest.TestCase):
 
     def test_the_pool_is_shared(self):
         self.assertIs(cover_cache.pool(), cover_cache.pool())
+
+
+class ACoverThatCannotBeKeyedTests(unittest.TestCase):
+    """A file that vanished has no mtime, so it has no cache key either."""
+
+    def test_a_missing_file_has_no_key(self):
+        self.assertIsNone(cover_cache._cache_key("/nowhere/at/all.png", 10, 10))
+
+    def test_nothing_is_read_from_the_cache_without_one(self):
+        self.assertIsNone(cover_cache._cache_get(None))
+
+    def test_nothing_is_written_to_it_either(self):
+        before = cover_cache._cache_bytes
+        cover_cache._cache_put(None, object())
+        cover_cache._cache_put(("key",), None)
+        self.assertEqual(cover_cache._cache_bytes, before)
 
 
 if __name__ == "__main__":

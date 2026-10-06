@@ -101,6 +101,14 @@ class PlatformDefaultsTests(unittest.TestCase):
                 dirs = platform.user_retroarch_dirs()
         self.assertEqual([d.as_posix() for d in dirs], ["C:/Users/me/AppData/Roaming/RetroArch/cores"])
 
+    def test_the_distribution_core_dirs_are_a_linux_convention(self):
+        # Windows has no /usr/lib: its cores come from the bundled portable
+        # RetroArch, and searching a POSIX layout there only costs stat calls.
+        with mock.patch.object(platform, "IS_WINDOWS", True):
+            self.assertEqual(platform.system_core_dirs(), [])
+        with mock.patch.object(platform, "IS_WINDOWS", False):
+            self.assertIn("/usr/lib/libretro", platform.system_core_dirs())
+
     def test_a_missing_appdata_is_not_an_error(self):
         # A service account or a stripped environment has no APPDATA; that
         # means "no user install to find", not a crash on startup.
@@ -121,6 +129,20 @@ class PlatformDefaultsTests(unittest.TestCase):
             (platform.BUILDBOT_OS, platform.CORE_SUFFIX) in {("windows", ".dll"), ("linux", ".so")},
             True,
         )
+
+
+class TheConfigDirectoryTests(unittest.TestCase):
+    def test_it_is_a_dot_directory_in_the_user_home_on_every_platform(self):
+        # Windows included: %APPDATA% is the native convention, but moving
+        # there is a migration with real risk to an existing library.
+        from pathlib import Path
+
+        with mock.patch.object(
+            platform.Path, "home", classmethod(lambda _cls: Path("/home/x"))
+        ):
+            self.assertEqual(
+                platform.default_config_dir(), Path("/home/x") / ".openemux"
+            )
 
 
 if __name__ == "__main__":

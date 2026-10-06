@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from openemux.core.dir_walk import relative_to_base, walk_files
+from openemux.core.dir_walk import _identity, relative_to_base, walk_files
 from tests.platform_marks import posix_only
 
 
@@ -143,6 +143,14 @@ class RelativeToBaseTests(unittest.TestCase):
 
     def test_the_base_itself_is_the_empty_path(self):
         self.assertEqual(relative_to_base(Path("/roms"), Path("/roms")), Path("."))
+
+
+class ADirectoryThatCannotBeStattedTests(unittest.TestCase):
+    def test_it_has_no_identity_and_so_never_prunes_the_walk(self):
+        # A link into a directory that disappeared between the listing and the
+        # stat: unreadable, but not a reason to stop walking the rest.
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(_identity(Path(tmp_dir) / "gone"))
 
 
 if __name__ == "__main__":

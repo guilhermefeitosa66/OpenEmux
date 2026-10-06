@@ -11,7 +11,7 @@ from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
-from openemux.core.cores import CoreCatalog
+from openemux.core.cores import CoreCatalog, core_search_dirs
 from openemux.core import input_tuning
 from openemux.core.input_actions import (
     conflicting_stock_hotkeys,
@@ -27,16 +27,15 @@ from openemux.core.input_profiles import (
     normalize_turbo_settings,
     player_for_device,
 )
-from openemux.core.paths import get_real_home, is_running_in_flatpak
+from openemux.core.paths import is_running_in_flatpak
 from openemux.core.platform import (
     IS_WINDOWS,
     MACHINE,
     VENDORED_RETROARCH,
-    bundled_core_dir,
     cfg_path,
     popen_kwargs,
-    user_retroarch_dirs,
 )
+from openemux.core.retroarch_command import uses_stdin_channel
 from openemux.core.shaders import ShaderCatalog, normalize_shader_id
 from openemux.core.systems import SYSTEM_IDS, get_runtime_core_candidates, resolve_system_id
 from openemux.core.video_driver import (
@@ -100,22 +99,6 @@ def appimage_flags(binary_path, libfuse_available=None, force=False):
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
 
 DEFAULT_CORE_CANDIDATES = {system_id: get_runtime_core_candidates(system_id) for system_id in SYSTEM_IDS}
-
-# Distro-packaged core locations. Empty on Windows, which has no equivalent
-# convention -- cores there come from the bundled portable RetroArch.
-# The Debian multiarch directory is named after the host triplet, so it is the
-# one entry here that changes with the architecture -- and it is the one Ubuntu
-# and Debian actually use for the libretro packages (issue #119).
-DEFAULT_CORE_DIRS = (
-    []
-    if IS_WINDOWS
-    else [
-        "/usr/lib/libretro",
-        "/usr/lib64/libretro",
-        f"/usr/lib/{MACHINE}-linux-gnu/libretro",
-        "/usr/local/lib/libretro",
-    ]
-)
 
 # Runtime OSD policy:
 # - Hide startup/runtime noise (content/core/autoconfig/override/remap/etc).
@@ -340,20 +323,9 @@ class RetroArchLauncher:
         return ["flatpak", "run", "--die-with-parent", RETROARCH_FLATPAK_ID]
 
     def _core_search_dirs(self):
-        real_home = get_real_home()
-        home_dirs = [
-            real_home / ".config" / "retroarch" / "cores",
-            real_home / ".var" / "app" / RETROARCH_FLATPAK_ID / "config" / "retroarch" / "cores",
-            self.project_root / "vendors" / "retroarch-assets" / "cores",
-        ]
-        # Where the bundled portable RetroArch keeps its cores, and where the
-        # updater downloads them, on Windows.
-        bundled = bundled_core_dir(self.project_root)
-        if bundled:
-            home_dirs.append(bundled)
-        # A RetroArch the user installed themselves: searched, never written to.
-        home_dirs.extend(user_retroarch_dirs())
-        return [str(p) for p in home_dirs] + DEFAULT_CORE_DIRS
+        # The pickers' list too (cores.core_search_dirs): a second copy here is
+        # how they once disagreed about the machine's multiarch directory.
+        return [str(p) for p in core_search_dirs(self.project_root)]
 
     def _resolve_core_name(self, core_filename):
         """Find an installed core by its bare filename, or ``None``."""
@@ -582,14 +554,19 @@ class RetroArchLauncher:
             }
         return {"video_shader_enable": '"false"'}
 
-    def _session_overrides(self, network_cmd_port):
-        """The command channel, the volume, and keeping this launch's own.
+    def _command_channel_overrides(self, network_cmd_port):
+        """Open this launch's command channel, and only that one.
 
-        The UDP command channel (issue #69) is loopback-only, and what lets
-        the in-app volume control reach the running game. The persisted
-        master volume seeds audio_volume so the level survives launches and
-        the live stepping starts from a known point.
+        stdin wherever RetroArch has it; UDP only on Windows, whose build does
+        not. See ``retroarch_command`` for why: RetroArch binds the UDP socket
+        on every interface, not on loopback.
         """
+        if uses_stdin_channel():
+            # Off, not merely unset: a user's own retroarch.cfg can have it on
+            # -- OpenEmux itself wrote it there on every launch until 1.11.2
+            # stopped RetroArch saving the launch's settings on exit -- and
+            # then this game would be on the network all the same.
+            return {"stdin_cmd_enable": '"true"', "network_cmd_enable": '"false"'}
         # The port is the caller's: it is picked per launch so a standalone
         # RetroArch cannot share it with us (issue #227), and both sides of
         # the channel have to agree on the same number.
@@ -598,6 +575,18 @@ class RetroArchLauncher:
         return {
             "network_cmd_enable": '"true"',
             "network_cmd_port": f'"{int(network_cmd_port)}"',
+        }
+
+    def _session_overrides(self, network_cmd_port):
+        """The command channel, the volume, and keeping this launch's own.
+
+        The command channel (issue #69) is what lets the in-app volume, pause
+        and save controls reach the running game. The persisted master volume
+        seeds audio_volume so the level survives launches and the live
+        stepping starts from a known point.
+        """
+        return {
+            **self._command_channel_overrides(network_cmd_port),
             "audio_volume": f'"{self.config_manager.get_master_volume_db():.1f}"',
             # Nothing this file injects may outlive the launch that asked for
             # it. RetroArch saves its configuration on exit by default, and by
@@ -1024,6 +1013,12 @@ class RetroArchLauncher:
                 cmd,
                 cwd=os.getcwd(),
                 env=env,
+                # The command channel, where RetroArch has one on stdin: a
+                # pipe only this process holds the other end of, instead of a
+                # UDP port the whole network can reach (see retroarch_command).
+                # AppImage runtimes, `flatpak run` and flatpak-spawn all pass
+                # it through to RetroArch.
+                stdin=subprocess.PIPE if uses_stdin_channel() else None,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
                 # CREATE_NO_WINDOW on Windows, nothing on Linux: without it a
@@ -1063,10 +1058,10 @@ class RetroArchLauncher:
         On Windows ``terminate()`` is ``TerminateProcess``, which is immediate
         and gives RetroArch no chance to flush a battery save -- there is no
         SIGTERM to deliver. That is survivable because this is not the first
-        thing tried: ``RuntimeManager.stop_active`` sends the UDP ``QUIT``
-        command first (``network_cmd_enable`` is set in the runtime override),
-        which exits RetroArch cleanly with saves written. This stays the
-        escalation for a game that ignored it.
+        thing tried: ``RuntimeManager.stop_active`` sends the ``QUIT``
+        command first (the runtime override opens the command channel, UDP on
+        Windows), which exits RetroArch cleanly with saves written. This stays
+        the escalation for a game that ignored it.
         """
         try:
             proc.terminate()

@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 from openemux.core.rom_importer import (
     collect_ambiguous_extensions,
+    import_roms_async,
     detect_console,
     import_roms,
 )
@@ -267,6 +268,146 @@ class ForcedConsoleTests(unittest.TestCase):
 
             self.assertTrue((base / "roms" / "SATURN" / "Disc.cue").exists())
             self.assertFalse((base / "roms" / "SATURN" / "Disc.zip").exists())
+
+
+class WhatTheImporterMakesOfOddInputTests(unittest.TestCase):
+    """A drop is whatever the file manager handed over: anything at all."""
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.roms = base / "roms"
+        self.source_dir = base / "elsewhere"
+        self.source_dir.mkdir(parents=True)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_a_file_that_only_looks_like_an_archive_belongs_to_no_console(self):
+        broken = self.source_dir / "Game.zip"
+        broken.write_bytes(b"not a zip at all")
+
+        with self.assertLogs("openemux.core.rom_importer", level="WARNING"):
+            self.assertEqual(detect_console(broken), [])
+
+    def test_an_archive_with_nothing_extractable_is_reported_as_unknown(self):
+        # A macOS-zipped folder whose only entries are the resource forks.
+        empty = self.source_dir / "Game.zip"
+        with zipfile.ZipFile(empty, "w") as archive:
+            archive.writestr("__MACOSX/._Game.cue", b"resource fork")
+            archive.writestr(".DS_Store", b"finder junk")
+
+        seen = []
+        result = import_roms(
+            [empty],
+            self.roms,
+            forced_console="PS",
+            on_progress=lambda event: seen.append(event["status"]),
+        )
+
+        self.assertEqual(result["unknown"], [str(empty)])
+        self.assertEqual(seen, ["unknown"])
+
+    def test_a_move_of_an_archive_takes_the_archive_with_it(self):
+        source = self.source_dir / "Game.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("Game.cue", b"FILE \"Game.bin\" BINARY\n")
+            archive.writestr("Game.bin", b"track")
+
+        result = import_roms([source], self.roms, forced_console="PS", mode="move")
+
+        self.assertEqual(result["extracted"], [str(source)])
+        self.assertFalse(source.exists())
+
+    def test_a_rom_already_in_the_library_is_skipped_rather_than_reimported(self):
+        target = self.roms / "SFC"
+        target.mkdir(parents=True)
+        rom = target / "Game.sfc"
+        rom.write_bytes(b"rom-data")
+
+        result = import_roms([rom], self.roms)
+
+        self.assertEqual(result["skipped"], [str(rom)])
+        self.assertEqual(result["imported"], [])
+
+    def test_a_name_taken_twice_over_gets_a_third_target(self):
+        target = self.roms / "SFC"
+        target.mkdir(parents=True)
+        (target / "Game.sfc").write_bytes(b"someone else's")
+        (target / "Game (2).sfc").write_bytes(b"and another")
+        source = self.source_dir / "Game.sfc"
+        source.write_bytes(b"mine")
+
+        result = import_roms([source], self.roms)
+
+        self.assertEqual(
+            [Path(path).name for path in result["imported"]], ["Game (3).sfc"]
+        )
+
+    def test_a_second_file_with_the_same_extension_is_only_asked_about_once(self):
+        for name in ("A.bin", "B.bin"):
+            (self.source_dir / name).write_bytes(b"rom")
+
+        ambiguous = collect_ambiguous_extensions(
+            [self.source_dir / "A.bin", self.source_dir / "B.bin"]
+        )
+
+        self.assertEqual(list(ambiguous), [".bin"])
+
+
+class AnImportThatCannotFinishTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.roms = base / "roms"
+        self.source_dir = base / "elsewhere"
+        self.source_dir.mkdir(parents=True)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_a_file_that_cannot_be_copied_is_named_in_the_summary(self):
+        # A full disk, a read-only library: the batch carries on and the
+        # dialog says which file did not make it.
+        source = self.source_dir / "Game.sfc"
+        source.write_bytes(b"rom-data")
+        other = self.source_dir / "Other.sfc"
+        other.write_bytes(b"rom-data-2")
+        seen = []
+
+        with mock.patch(
+            "openemux.core.rom_importer.shutil.copy2", side_effect=OSError("disk full")
+        ):
+            result = import_roms(
+                [source, other],
+                self.roms,
+                on_progress=lambda event: seen.append(event["status"]),
+            )
+
+        self.assertEqual(
+            [entry["path"] for entry in result["errors"]], [str(source), str(other)]
+        )
+        self.assertEqual(seen, ["error", "error"])
+
+
+class TheBackgroundImportTests(unittest.TestCase):
+    """The dialog stays responsive while a large drop is copied."""
+
+    def test_the_summary_reaches_the_callback_from_the_worker(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            source = base / "Game.sfc"
+            source.write_bytes(b"rom-data")
+            told = []
+
+            class _Thread:
+                def __init__(self, target=None, daemon=None):
+                    self._target = target
+                    self.daemon = daemon
+
+                def start(self):
+                    self._target()
+
+            with mock.patch("openemux.core.rom_importer.Thread", _Thread):
+                import_roms_async([source], base / "roms", on_done=told.append)
+
+        self.assertEqual([Path(p).name for p in told[0]["imported"]], ["Game.sfc"])
 
 
 class LinkImportTests(unittest.TestCase):

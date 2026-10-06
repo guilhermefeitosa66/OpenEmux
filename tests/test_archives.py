@@ -6,8 +6,11 @@ import warnings
 import zipfile
 from pathlib import Path
 
+from openemux.core import archives as archives_module
 from openemux.core.archives import (
+    _safe_target,
     archive_rom_name,
+    rename_archive_rom_entry,
     extract_archive,
     is_archive,
     loads_archives_natively,
@@ -205,6 +208,147 @@ class ExtractIntegrityTests(unittest.TestCase):
         self.assertEqual(list(self.dest.iterdir()), [])
         self.assertFalse((self.dest / "Disc.bin").exists())
         self.assertIs(os.replace, real_replace)
+
+
+class RenamingTheGameInsideAnArchiveTests(unittest.TestCase):
+    """Issue #134: the entry carries the title, so a rename has to reach it."""
+
+    def _archive(self, tmp_dir, entries):
+        path = Path(tmp_dir) / "Game.zip"
+        _zip(path, entries)
+        return path
+
+    def test_an_entry_that_already_has_the_name_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive = self._archive(tmp_dir, {"Kirby.gb": b"rom"})
+            self.assertFalse(rename_archive_rom_entry(archive, "Kirby", [".gb"]))
+
+    def test_the_directory_entries_are_not_copied_across(self):
+        # A zip carries its folders as entries of their own; the rewrite
+        # writes files, and the renamed ROM lands at the archive root.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "Game.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("roms/", b"")
+                archive.writestr("roms/Kirby.gb", b"rom")
+
+            self.assertTrue(rename_archive_rom_entry(path, "Kirby DX", [".gb"]))
+
+            with zipfile.ZipFile(path) as archive:
+                self.assertEqual(archive.namelist(), ["Kirby DX.gb"])
+
+    def test_a_rewrite_that_fails_leaves_the_original_archive_alone(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive = self._archive(tmp_dir, {"Kirby.gb": b"rom"})
+            before = archive.read_bytes()
+            with unittest.mock.patch.object(
+                Path, "replace", side_effect=OSError("read-only")
+            ):
+                with self.assertRaises(OSError):
+                    rename_archive_rom_entry(archive, "Kirby DX", [".gb"])
+            self.assertEqual(archive.read_bytes(), before)
+            self.assertFalse((Path(tmp_dir) / "Game.zip.renaming").exists())
+
+
+class WhatTheExtractorRefusesTests(unittest.TestCase):
+    def test_an_entry_that_climbs_out_of_the_folder_is_refused(self):
+        # Zip-slip. The flattening upstream already drops the directory
+        # part, so this is the guard behind it rather than in front.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            dest = Path(tmp_dir) / "dest"
+            dest.mkdir()
+            with self.assertLogs("openemux.core.archives", level="WARNING"):
+                self.assertIsNone(_safe_target(dest, "../escaped.gb"))
+            self.assertEqual(
+                _safe_target(dest, "Kirby.gb"), (dest / "Kirby.gb").resolve()
+            )
+
+    def test_an_entry_that_cannot_be_placed_is_skipped_by_the_extractor(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            archive = base / "Game.zip"
+            _zip(archive, {"escaped.gb": b"rom", "Kirby.gb": b"rom"})
+            dest = base / "dest"
+            dest.mkdir()
+            real = archives_module._safe_target
+
+            def _refuse(dest_dir, member_name):
+                return None if member_name == "escaped.gb" else real(dest_dir, member_name)
+
+            with unittest.mock.patch.object(
+                archives_module, "_safe_target", _refuse
+            ):
+                extracted = extract_archive(archive, dest)
+
+            self.assertEqual([path.name for path in extracted], ["Kirby.gb"])
+
+    def test_a_third_copy_of_a_name_gets_a_third_target(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            archive = base / "Game.zip"
+            with warnings.catch_warnings():
+                # A zip really can carry the same path three times.
+                warnings.simplefilter("ignore", UserWarning)
+                with zipfile.ZipFile(archive, "w") as zipped:
+                    for _ in range(3):
+                        zipped.writestr("track01.bin", b"data")
+            dest = base / "dest"
+            dest.mkdir()
+
+            names = [path.name for path in extract_archive(archive, dest)]
+
+        self.assertEqual(names, ["track01.bin", "track01 (2).bin", "track01 (3).bin"])
+
+    def test_a_third_file_already_at_that_name_gets_a_third_target(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            archive = base / "Game.zip"
+            _zip(archive, {"track01.bin": b"data"})
+            dest = base / "dest"
+            dest.mkdir()
+            (dest / "track01.bin").write_bytes(b"somebody else's")
+            (dest / "track01 (2).bin").write_bytes(b"and another")
+
+            extracted = extract_archive(archive, dest)
+
+        self.assertEqual([path.name for path in extracted], ["track01 (3).bin"])
+
+
+class WhatIsAlreadyAtTheTargetTests(unittest.TestCase):
+    def _setup(self, tmp_dir, existing):
+        base = Path(tmp_dir)
+        archive = base / "Game.zip"
+        _zip(archive, {"Kirby.gb": b"the whole rom"})
+        dest = base / "dest"
+        dest.mkdir()
+        if existing is not None:
+            (dest / "Kirby.gb").write_bytes(existing)
+        return archive, dest
+
+    def test_a_half_written_file_from_a_cut_short_extraction_is_repaired(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive, dest = self._setup(tmp_dir, b"the whole")
+            extracted = extract_archive(archive, dest)
+            self.assertEqual([path.name for path in extracted], ["Kirby.gb"])
+            self.assertEqual((dest / "Kirby.gb").read_bytes(), b"the whole rom")
+
+    def test_a_file_that_starts_differently_is_somebody_elses(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive, dest = self._setup(tmp_dir, b"not the ro")
+            extracted = extract_archive(archive, dest)
+            self.assertEqual([path.name for path in extracted], ["Kirby (2).gb"])
+
+    def test_a_file_that_vanishes_between_the_check_and_the_stat_is_something_else(self):
+        # The archive is walked while the destination is a live directory, so
+        # "it existed a moment ago" is all the exists() check ever proves.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive, dest = self._setup(tmp_dir, None)
+            with zipfile.ZipFile(archive) as zipped:
+                info = zipped.infolist()[0]
+                verdict = archives_module._existing_verdict(
+                    dest / "gone.gb", zipped, info
+                )
+        self.assertEqual(verdict, "different")
 
 
 if __name__ == "__main__":

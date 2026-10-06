@@ -1,23 +1,62 @@
-"""RetroArch's UDP network command interface (issue #69).
+"""RetroArch's command interface: how the app talks to a running game (#69).
 
-RetroArch listens on localhost UDP when ``network_cmd_enable`` is on (the
-launcher writes it into every runtime override) and accepts plain-text
-commands: ``VOLUME_UP`` / ``VOLUME_DOWN`` move the master volume in fixed
-0.5 dB steps, ``MUTE`` toggles. There is no absolute set-volume command, so
-an absolute slider is driven by stepping from a locally tracked level -- the
-initial level is written as ``audio_volume`` at launch, which keeps the local
-tracker honest.
+RetroArch accepts plain-text commands -- ``VOLUME_UP`` / ``VOLUME_DOWN`` move
+the master volume in fixed 0.5 dB steps, ``MUTE`` toggles, and ``QUIT``,
+``PAUSE_TOGGLE``, ``SAVE_STATE_SLOT n`` and the rest drive the game window's
+buttons. It reads them from two places, and which one a launch uses is a
+security decision, not a detail:
 
-Fire-and-forget on purpose: a lost UDP packet costs half a decibel, and the
-UI must never block on the emulator.
+- **Its standard input** (``stdin_cmd_enable``), everywhere RetroArch has it
+  -- every Linux build. The launcher starts RetroArch with a pipe for stdin
+  and this process holds the only other end, so nothing else on the machine,
+  let alone the network, can send the game a command.
+- **UDP** (``network_cmd_enable`` + ``network_cmd_port``), on Windows only:
+  libretro's Windows build is compiled without the stdin interface -- the
+  vendored ``retroarch.exe`` carries none of its runtime messages; configure
+  gates it on ``fcntl`` -- and there is no third way in. The Unix-socket
+  interface upstream has is built for Lakka alone.
+
+The UDP socket is **not** loopback-only, whatever it looks like. RetroArch
+binds it with a NULL host, which ``socket_init`` turns into ``AI_PASSIVE`` --
+the wildcard address. Measured against the vendored 1.22.2 and the Flathub
+build: the socket is ``0.0.0.0:<port>``, and a ``VERSION`` sent to the
+machine's LAN address was answered. Unless a host firewall drops it, anyone
+on the local network can QUIT, RESET, pause, save over or load a state in a
+game while it runs, with no authentication at all. That is why Linux does not
+use it -- and why the launcher turns it *off* there rather than leaving it
+unset, since a user's own ``retroarch.cfg`` may have it on.
+
+There is no absolute set-volume command on either channel, so an absolute
+slider is driven by stepping from a locally tracked level -- the initial
+level is written as ``audio_volume`` at launch, which keeps the local tracker
+honest.
+
+Fire-and-forget on purpose: RetroArch's replies are never read, a command
+that cannot be delivered costs half a decibel, and the UI must never block on
+the emulator.
 """
 
 import logging
+import os
 import socket
 import threading
 import time
 
+from openemux.core.platform import IS_WINDOWS
+
 logger = logging.getLogger(__name__)
+
+
+def uses_stdin_channel():
+    """Does a launch talk to RetroArch through its stdin rather than UDP?
+
+    Everywhere but Windows, whose RetroArch build has no stdin interface. The
+    launcher asks this to decide what to enable and whether to give the
+    process a stdin pipe; see the module docstring for why UDP is the last
+    resort.
+    """
+    return not IS_WINDOWS
+
 
 DEFAULT_NETWORK_CMD_PORT = 55355
 
@@ -99,8 +138,85 @@ def volume_steps(current_db, target_db):
     return ("VOLUME_UP" if delta > 0 else "VOLUME_DOWN"), count
 
 
-class RetroArchCommandClient:
-    """Sends network commands to a running RetroArch. Never raises."""
+class _CommandClient:
+    """What both channels share on top of their own ``send``."""
+
+    def send_repeated(self, command, count, delay=0.0):
+        """Send the same command ``count`` times.
+
+        ``delay`` seconds between commands. It defaults to 0 so this stays the
+        honest primitive, but any caller stepping the volume wants
+        ``VOLUME_PACING_INTERVAL`` -- see ``VolumePacer``.
+        """
+        sent = 0
+        total = max(0, int(count))
+        for index in range(total):
+            if self.send(command):
+                sent += 1
+            if delay and index < total - 1:
+                time.sleep(delay)
+        return sent
+
+
+class StdinCommandClient(_CommandClient):
+    """Writes commands into a running RetroArch's stdin pipe. Never raises.
+
+    One command per line, which is how RetroArch's stdin interface splits
+    them. Never blocks either: the pipe is switched to non-blocking, so a
+    RetroArch that stops reading -- hung, or a build without the stdin
+    interface -- fills the pipe buffer and from then on a command is refused
+    instead of freezing the thread that sent it, which for most commands is
+    the UI's. Every command is far below ``PIPE_BUF``, so POSIX makes each
+    write all-or-nothing: a refused command never leaves half a line in the
+    pipe to corrupt the next one.
+    """
+
+    def __init__(self, stream):
+        #: The ``Popen.stdin`` this client writes into; the runtime manager
+        #: compares it to tell whether the cached client is for this game.
+        self.stream = stream
+        self._lock = threading.Lock()
+        self._fd = None
+        try:
+            fd = stream.fileno()
+            os.set_blocking(fd, False)
+            self._fd = fd
+        except (AttributeError, OSError, ValueError) as exc:
+            logger.warning("retroarch stdin channel unusable: %s", exc)
+
+    def close(self):
+        """Close our end of the pipe. RetroArch reads EOF and plays on."""
+        with self._lock:
+            self._fd = None
+            try:
+                self.stream.close()
+            except (OSError, ValueError):
+                pass
+
+    def send(self, command):
+        """Send one command; True when the whole line went into the pipe."""
+        payload = (command or "").strip()
+        if not payload:
+            return False
+        line = (payload + "\n").encode("utf-8")
+        with self._lock:
+            if self._fd is None:
+                return False
+            try:
+                return os.write(self._fd, line) == len(line)
+            except OSError as exc:
+                # BlockingIOError: the pipe is full, so RetroArch is not
+                # reading. BrokenPipeError: RetroArch is gone.
+                logger.warning("retroarch command failed: cmd=%s error=%s", payload, exc)
+                return False
+
+
+class RetroArchCommandClient(_CommandClient):
+    """Sends UDP network commands to a running RetroArch. Never raises.
+
+    The Windows channel only -- see the module docstring for why a Linux
+    launch never opens the socket this talks to.
+    """
 
     def __init__(self, port=DEFAULT_NETWORK_CMD_PORT, host="127.0.0.1"):
         self.port = int(port)
@@ -147,22 +263,6 @@ class RetroArchCommandClient:
             logger.warning("retroarch command failed: cmd=%s error=%s", payload, exc)
             return False
 
-    def send_repeated(self, command, count, delay=0.0):
-        """Send the same command ``count`` times.
-
-        ``delay`` seconds between packets. It defaults to 0 so this stays the
-        honest primitive, but any caller stepping the volume wants
-        ``VOLUME_PACING_INTERVAL`` -- see ``VolumePacer``.
-        """
-        sent = 0
-        total = max(0, int(count))
-        for index in range(total):
-            if self.send(command):
-                sent += 1
-            if delay and index < total - 1:
-                time.sleep(delay)
-        return sent
-
 
 class VolumePacer:
     """Walks a running game's volume toward a target, one packet per frame.
@@ -171,6 +271,11 @@ class VolumePacer:
     drag into N back-to-back datagrams overruns the receive buffer and nearly
     all of them are dropped. That is the whole of issue #125, and it explains
     the reported asymmetry: MUTE is one packet in one frame and always lands.
+
+    The stdin channel loses nothing in transit, but it needs the same pacing:
+    RetroArch turns each command into one press of the matching hotkey for a
+    single input poll, whichever channel it came in on, so several
+    ``VOLUME_UP`` read in the same poll are one press, not several.
 
     ``set_target`` only moves the goal, so a fast drag coalesces into a single
     walk instead of N overlapping bursts. The tracked level advances **only**

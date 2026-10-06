@@ -3,8 +3,10 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
+from openemux.core import update_checker
 from openemux.core.update_checker import (
     check_for_update,
+    check_for_update_async,
     fetch_latest_release,
     is_newer,
     parse_version,
@@ -100,6 +102,54 @@ class CheckForUpdateTests(unittest.TestCase):
             side_effect=urllib.error.URLError("offline"),
         ):
             self.assertIsNone(check_for_update("1.1.1"))
+
+
+class TheStartupCheckOnItsOwnThreadTests(unittest.TestCase):
+    """It runs at launch, so nothing it does may reach the user as a crash."""
+
+    def _ran_inline(self):
+        """Run the worker where the thread would have, and record the start."""
+        started = []
+
+        class _Thread:
+            def __init__(self, target=None, daemon=None):
+                self._target = target
+                started.append(daemon)
+
+            def start(self):
+                self._target()
+
+        return patch.object(update_checker, "Thread", _Thread), started
+
+    def test_the_release_it_found_reaches_the_callback(self):
+        told = []
+        thread_patch, started = self._ran_inline()
+        with thread_patch, patch.object(
+            update_checker, "check_for_update", return_value={"version": "9.9.9"}
+        ):
+            check_for_update_async("1.0.0", told.append)
+        self.assertEqual(told, [{"version": "9.9.9"}])
+        self.assertEqual(started, [True])
+
+    def test_a_check_that_crashes_is_reported_as_no_update(self):
+        # No network, a mangled payload, a proxy returning HTML: none of it
+        # may take the launch down.
+        told = []
+        thread_patch, _started = self._ran_inline()
+        with thread_patch, patch.object(
+            update_checker, "check_for_update", side_effect=RuntimeError("boom")
+        ):
+            with self.assertLogs("openemux.core.update_checker", level="INFO"):
+                check_for_update_async("1.0.0", told.append)
+        self.assertEqual(told, [None])
+
+    def test_a_check_nobody_is_listening_for_still_runs(self):
+        thread_patch, _started = self._ran_inline()
+        with thread_patch, patch.object(
+            update_checker, "check_for_update", return_value=None
+        ) as check:
+            check_for_update_async("1.0.0", None)
+        check.assert_called_once()
 
 
 if __name__ == "__main__":

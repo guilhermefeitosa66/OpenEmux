@@ -1,6 +1,9 @@
+import os
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from openemux import main as main_module
 from openemux.main import _is_packaged_install
 from tests.platform_marks import linux_only
 
@@ -34,6 +37,22 @@ class PackagedInstallDetectionTests(unittest.TestCase):
     def test_accepts_path_and_str(self):
         self.assertTrue(_is_packaged_install(Path("/opt/openemux")))
         self.assertTrue(_is_packaged_install("/opt/openemux"))
+
+
+class OnWindowsThePackageSaysSoItselfTests(unittest.TestCase):
+    """The /opt and /usr prefixes are POSIX; the bundle launcher sets a flag."""
+
+    def test_the_bundle_launcher_marks_a_packaged_install(self):
+        with mock.patch.object(main_module, "IS_WINDOWS", True), mock.patch.dict(
+            os.environ, {"OPENEMUX_PACKAGED": "1"}, clear=False
+        ):
+            self.assertTrue(_is_packaged_install("C:/Program Files/OpenEmux"))
+
+    def test_without_the_flag_a_windows_checkout_is_a_source_run(self):
+        with mock.patch.object(main_module, "IS_WINDOWS", True), mock.patch.dict(
+            os.environ, {}, clear=True
+        ):
+            self.assertFalse(_is_packaged_install("C:/Users/someone/OpenEmux"))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -81,6 +82,35 @@ class PlayHistoryTests(unittest.TestCase):
             history.repath("/roms/old.sfc", "/roms/new.sfc")
             self.assertEqual(history.play_count("/roms/new.sfc"), 1)
             self.assertEqual(history.play_count("/roms/old.sfc"), 0)
+
+
+class WhenTheHistoryFileCannotBeUsedTests(unittest.TestCase):
+    def test_a_file_that_is_not_an_object_is_set_aside(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "play_history.json"
+            path.write_text("[1, 2, 3]", encoding="utf-8")
+            history = PlayHistory(path)
+            self.assertFalse(history.has_history())
+            self.assertEqual(
+                len(list(Path(tmp_dir).glob("play_history.json.broken-*"))), 1
+            )
+
+    def test_a_history_that_cannot_be_written_is_not_a_failed_launch(self):
+        # Recording a launch must never be what stops a game from starting.
+        with TemporaryDirectory() as tmp_dir:
+            history = PlayHistory(Path(tmp_dir) / "play_history.json")
+            with mock.patch(
+                "openemux.core.play_history.atomic_write_text",
+                side_effect=OSError("read-only"),
+            ):
+                with self.assertLogs("openemux.core.play_history", level="INFO"):
+                    history.record_launch("/roms/SFC/Game.sfc")
+
+    def test_repathing_a_game_with_no_history_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            history = PlayHistory(Path(tmp_dir) / "play_history.json")
+            history.repath("/roms/SFC/Never Played.sfc", "/roms/SFC/Renamed.sfc")
+            self.assertFalse(history.has_history())
 
 
 if __name__ == "__main__":

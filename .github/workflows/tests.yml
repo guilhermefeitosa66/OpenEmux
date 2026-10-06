@@ -11,6 +11,12 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only by default, stated here rather than inherited from a repository
+# setting that somebody could flip without touching this file. The `badge` job
+# is the only one that raises it, and only for a push to develop.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
@@ -36,18 +42,14 @@ jobs:
 
       - name: Ruff (correctness rules only)
         # Undefined names, unused imports, f-string mistakes, shadowing: the
-        # class of defect a test only finds if it happens to execute the line,
-        # and the UI modules sit around 10-13% coverage (issue #243). No
+        # class of defect a test only finds if it happens to execute the line
+        # (issue #243), which is cheaper to catch here than to cover. No
         # formatting rules -- see [tool.ruff] in pyproject.toml.
         run: ruff check --output-format=github .
 
   unittest:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    permissions:
-      # contents: write is only exercised by the badge step below, which
-      # force-pushes coverage.json to the unprotected `badges` branch.
-      contents: write
     strategy:
       # One version failing is information about that version; cancelling the
       # rest hides which ones are actually affected.
@@ -84,26 +86,43 @@ jobs:
           make setup-dev
 
       - name: Run unit tests under coverage
+        # Two processes, and not for speed: one cannot hold every window the
+        # suite builds. GTK keeps caches for the life of a process, so a run
+        # that constructs a thousand application windows peaks at ~6 GB -- more
+        # than the runner has. What the kernel reaps first is the X server, and
+        # that arrives here as a bare "Terminated" with no failing test to
+        # point at. The split is by the harness that builds those windows, so a
+        # new UI test file joins the right half by importing it.
+        #
         # `coverage report` enforces fail_under from pyproject.toml, so a PR
         # that drops the total below the floor fails here rather than moving
         # the badge quietly.
         run: |
-          xvfb-run -a env PYTHONPATH=src .venv/bin/python -m coverage run -m unittest discover -s tests -v
+          windowed=$(grep -l window_harness tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||')
+          rest=$(ls tests/test_*.py | sed 's|tests/|tests.|;s|\.py$||' | grep -vxF "$windowed")
+          run_suite() {
+            xvfb-run -a env PYTHONPATH=src .venv/bin/python \
+              -m coverage run --parallel-mode -m unittest -v $1
+          }
+          run_suite "$rest"
+          run_suite "$windowed"
+          .venv/bin/python -m coverage combine
           .venv/bin/python -m coverage report
 
       # The README's coverage badge is a shields.io endpoint badge fed by
-      # badges/coverage.json on the `badges` branch. The branch is CI-owned
-      # infrastructure: force-pushed to a single commit on every push to
-      # develop, never merged anywhere.
-      - name: Publish the coverage badge data
-        # One version owns the badge; four jobs force-pushing the same branch
-        # would race for no gain.
+      # badges/coverage.json on the `badges` branch. This job only *computes*
+      # the payload and hands it over as an artifact; the `badge` job below is
+      # what pushes it. That split is the point: pushing needs `contents:
+      # write`, and this job runs the pull request's own code -- its
+      # dependency install and its test suite -- so it must not be holding a
+      # token that can write to the repository while it does.
+      - name: Build the coverage badge data
+        # One version owns the badge; four jobs computing it would race for no
+        # gain.
         if: |
           matrix.python-version == '3.12'
           && github.event_name == 'push'
           && github.ref == 'refs/heads/develop'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           total=$(.venv/bin/python -m coverage report --format=total)
           if   [ "$total" -ge 90 ]; then color=brightgreen
@@ -115,15 +134,54 @@ jobs:
           # to say "this is a problem" however far coverage fell (issue #242).
           else                          color=red
           fi
-          dir=$(mktemp -d)
+          mkdir -p badge
           printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
-            "$total" "$color" > "$dir/coverage.json"
-          git -C "$dir" init -q -b badges
-          git -C "$dir" config user.name "github-actions[bot]"
-          git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$dir" add coverage.json
-          git -C "$dir" commit -q -m "coverage: ${total}%"
-          git -C "$dir" push -q --force \
+            "$total" "$color" > badge/coverage.json
+          cat badge/coverage.json
+
+      - name: Upload the coverage badge data
+        if: |
+          matrix.python-version == '3.12'
+          && github.event_name == 'push'
+          && github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-badge
+          path: badge/
+          # Consumed by the next job and never needed again.
+          retention-days: 1
+
+  badge:
+    name: Publish the coverage badge
+    needs: unittest
+    # Push to develop only. A pull request never reaches this job, which is
+    # what keeps `contents: write` away from code that came in from outside.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      # The one job in this workflow that writes anything. It force-pushes a
+      # single JSON file to the unprotected, CI-owned `badges` branch, which is
+      # never merged anywhere, and it runs no repository code at all -- there
+      # is no checkout here on purpose.
+      contents: write
+    steps:
+      - name: Download the coverage badge data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage-badge
+          path: badge
+
+      - name: Force-push it to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          total=$(python3 -c 'import json;print(json.load(open("badge/coverage.json"))["message"])')
+          git -C badge init -q -b badges
+          git -C badge config user.name "github-actions[bot]"
+          git -C badge config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C badge add coverage.json
+          git -C badge commit -q -m "coverage: ${total}"
+          git -C badge push -q --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   windows:
@@ -166,9 +224,28 @@ jobs:
             mingw-w64-x86_64-gsettings-desktop-schemas
             mingw-w64-x86_64-SDL2
 
+      - name: Install the cairo the bundle ships
+        # This job takes MSYS2's updates, which is the point of it -- except
+        # that mingw-w64-x86_64-cairo 1.18.6-1 aborts GTK 4 at the first
+        # window it presents: exit code 3, no failing test, a third of the way
+        # into the suite, on every branch at once. Proven by downgrading
+        # nothing else, twice, on one machine: with 1.18.6 the run dies after
+        # 27 s, with 1.18.4-4 it finishes all 4043 tests.
+        #
+        # The version is not repeated here -- it is read from
+        # packaging/windows/packages.lock, so this job installs whatever the
+        # Windows bundle ships and follows the lock the day it moves to a
+        # fixed cairo. Users are not exposed in the meantime: the bundle
+        # installs from that same lock, not from the rolling repository.
+        run: |
+          url=$(python -c 'import json; lock=json.load(open("packaging/windows/packages.lock")); pkg=next(p for p in lock["packages"] if p["name"] == "mingw-w64-x86_64-cairo"); print(lock["repository"] + "/" + pkg["filename"])')
+          echo "$url"
+          pacman -U --noconfirm "$url"
+
       - name: Show what is installed
         run: |
           python --version
+          pacman -Q mingw-w64-x86_64-cairo mingw-w64-x86_64-gtk4
           python -c "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk; print('GTK', Gtk.get_major_version(), Gtk.get_minor_version())"
 
       - name: Run the unit tests

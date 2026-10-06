@@ -205,6 +205,14 @@ Join the OpenEmux community on Reddit at [r/OpenEmux](https://www.reddit.com/r/O
 Bug reports and feature suggestions shape this project, and the people behind them
 are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
+Want to help? [CONTRIBUTING.md](CONTRIBUTING.md) covers everything from filing a
+good bug report to opening your first pull request, and you do not need to write
+Python to be useful — testing a release and translating the interface both count.
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Found a security problem? Do not open a public issue — [SECURITY.md](SECURITY.md)
+describes the private channel.
+
 ---
 
 ## Support the Project

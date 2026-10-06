@@ -1,5 +1,8 @@
+import os
 import unittest
+from unittest import mock
 
+from openemux import i18n
 from openemux.i18n import (
     SUPPORTED_LOCALES,
     detect_system_locale,
@@ -7,6 +10,7 @@ from openemux.i18n import (
     normalize_locale,
     tr,
 )
+from tests.platform_marks import posix_only
 
 
 class I18nTests(unittest.TestCase):
@@ -141,6 +145,71 @@ class TranslationTableCacheTests(unittest.TestCase):
         first = _merged_table("es")
         reset_translation_cache()
         self.assertIsNot(_merged_table("es"), first)
+
+
+class ALocaleWithNoRegionTests(unittest.TestCase):
+    def test_a_bare_language_is_matched_on_its_own(self):
+        self.assertEqual(match_locale("fr"), "fr")
+        self.assertEqual(match_locale("fr.UTF-8"), "fr")
+
+
+class TheWindowsDisplayLanguageTests(unittest.TestCase):
+    """Windows sets none of the POSIX locale variables (issue #118).
+
+    Without asking the OS, every Windows user silently got English -- and the
+    bug hides in development, because the MSYS2 login shell does export LANG.
+    """
+
+    def test_a_desktop_that_names_nothing_falls_back_to_the_os(self):
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
+            i18n, "_windows_ui_locale", return_value="pt-BR"
+        ):
+            self.assertEqual(detect_system_locale(), "pt_BR")
+
+    def test_an_os_answer_we_do_not_ship_still_ends_in_english(self):
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
+            i18n, "_windows_ui_locale", return_value="ru-RU"
+        ):
+            self.assertEqual(detect_system_locale(), "en")
+
+    @posix_only("there is a real GetUserDefaultUILanguage to answer on Windows")
+    def test_nothing_is_asked_of_the_os_on_linux(self):
+        self.assertEqual(i18n._windows_ui_locale(), "")
+
+    def test_the_display_language_is_read_as_a_posix_tag(self):
+        # GetUserDefaultUILanguage is the *display* language; getlocale()
+        # reports the formatting one, which users set independently.
+        import ctypes
+
+        kernel32 = mock.Mock()
+        kernel32.GetUserDefaultUILanguage.return_value = 1046
+
+        def _get_locale_info(_lang_id, _kind, buffer, _size):
+            buffer.value = "pt-BR"
+            return 5
+
+        kernel32.GetLocaleInfoW.side_effect = _get_locale_info
+        with mock.patch.object(i18n.sys, "platform", "win32"), mock.patch.object(
+            ctypes, "windll", mock.Mock(kernel32=kernel32), create=True
+        ):
+            self.assertEqual(i18n._windows_ui_locale(), "pt_BR")
+
+    def test_an_os_that_will_not_answer_is_not_a_failed_start_up(self):
+        import ctypes
+
+        kernel32 = mock.Mock()
+        kernel32.GetLocaleInfoW.return_value = 0
+        with mock.patch.object(i18n.sys, "platform", "win32"), mock.patch.object(
+            ctypes, "windll", mock.Mock(kernel32=kernel32), create=True
+        ):
+            self.assertEqual(i18n._windows_ui_locale(), "")
+
+    @posix_only("ctypes.windll exists on Windows, so the call succeeds there")
+    def test_an_os_call_that_raises_is_swallowed(self):
+        with mock.patch.object(i18n.sys, "platform", "win32"):
+            # No ctypes.windll at all on this platform: the import itself is
+            # what fails, which is the case the guard exists for.
+            self.assertEqual(i18n._windows_ui_locale(), "")
 
 
 if __name__ == "__main__":

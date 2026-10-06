@@ -169,9 +169,33 @@ def user_retroarch_dirs():
         if not appdata:
             return []
         return [Path(appdata) / "RetroArch" / "cores"]
-    # Linux keeps its equivalents in retroarch_launcher/cores, which know about
+    # Linux keeps its equivalents in cores.core_search_dirs, which knows about
     # the Flatpak layout as well; nothing to add here.
     return []
+
+
+def system_core_dirs():
+    """Where the distribution's own libretro packages put their cores.
+
+    Empty on Windows, which has no equivalent convention -- cores there come
+    from the bundled portable RetroArch. The Debian multiarch directory is
+    named after the host triplet, so it is the one entry here that changes with
+    the architecture -- and it is the one Ubuntu and Debian actually use for
+    the libretro packages (issue #119).
+
+    One function because there used to be two copies of this list: the
+    launcher's followed the machine and the core pickers' said ``x86_64``, so
+    on ARM the pickers showed nothing for a console whose Automatic launch
+    worked. Read at call time, so a test can fake the machine.
+    """
+    if IS_WINDOWS:
+        return []
+    return [
+        "/usr/lib/libretro",
+        "/usr/lib64/libretro",
+        f"/usr/lib/{MACHINE}-linux-gnu/libretro",
+        "/usr/local/lib/libretro",
+    ]
 
 
 def bundled_core_dir(project_root):

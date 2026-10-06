@@ -91,7 +91,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   A separate job starts the real app under `xvfb-run` and waits for its window, so a crash in
   application or window construction fails CI instead of surfacing by hand on release day.
   `coverage report` enforces `fail_under`, and the badge ladder has a red band, so coverage can no
-  longer decay in silence (issue #242).
+  longer decay in silence (issue #242). The Windows job installs the cairo named by
+  `packaging/windows/packages.lock` rather than whatever MSYS2 is rolling today: cairo 1.18.6
+  aborts GTK 4 at the first window it presents, which killed the suite on every branch at once.
 - **Check:** suite file `tests/test_ci_workflows.py` (`TestsWorkflowTests`, `SmokeScriptTests`).
 
 ### RT-231 — Unsafe or simply broken code cannot reach develop unremarked
@@ -278,6 +280,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
   fails — but the message names the real reason (`URLError: Network is unreachable`, not
   "something failed") and the step is **not** recorded as completed, so a retry retries it.
+  Offline, the background download of the remaining cores (RT-316) fails quietly and stays owed
+  for the next launch; it never turns the completed first boot into a failure.
 - **Check:** suite files `tests/test_first_boot.py`
   (`test_offline_falls_back_to_the_bundled_cores`,
   `test_offline_without_bundled_cores_fails_with_the_real_reason`),
@@ -335,15 +339,21 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
 - **Steps:**
-  1. Launch first boot and watch "Downloading core (n/total)" advance.
-- **Expected:** Several artifacts are in flight at once, up to `parallel_downloads` (default 4,
-  capped at 8 — the buildbot is somebody else's server). That setting has been in the config, and
-  in the settings the user can edit, since the updater was written, and nothing ever read it: the
-  sweep ran one artifact at a time on one thread, so a first boot took as long as the sum of every
-  download in a 224-artifact manifest (issue #240). The progress counter still only ever grows,
-  even though downloads finish out of order.
+  1. Launch first boot and watch "Downloading cores: <core> (n/total)" advance.
+- **Expected:** Several artifacts are in flight at once, up to `parallel_downloads`, which ships at
+  8 — the ceiling the updater allows itself, because the buildbot is somebody else's server. That
+  setting has been in the config, and in the settings the user can edit, since the updater was
+  written, and nothing ever read it: the sweep ran one artifact at a time on one thread, so a first
+  boot took as long as the sum of every download in a 224-artifact manifest (issue #240). It then
+  shipped at 4 against a cap of 8, which cost a measured 110.0 s instead of 44.4 s for the same 238
+  artifacts and the same bytes (issue #442). The progress counter still only ever grows, even though
+  downloads finish out of order. The same pool serves both halves of the sweep since #442: the
+  cores the first boot waits for (RT-316) and the rest, fetched in the background (RT-317).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`ParallelDownloadTests`) — real
-  concurrency at 4, one at a time at 1, the cap, a nonsense value, and monotonic progress.
+  concurrency at 4, one at a time at 1, the cap, a nonsense value, monotonic progress, and that a
+  settings dict with no `parallel_downloads` at all still fills the pool.
+  `tests/test_updater_defaults.py` (`TheShippedConcurrencyTests`) — the shipped default is the cap,
+  and a fresh config resolves to it.
 
 ### RT-008 — Installing a core costs a buffer, not the core
 - **Area:** Startup
@@ -369,6 +379,84 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   404 for is not retried at all — waiting seven seconds to hear the same thing three more times
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
+
+### RT-316 — First boot waits only for the cores the consoles use
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
+- **Steps:** As a QA person: launch first boot and watch the "Downloading cores" counter.
+- **Expected:** The counter stops at the number of distinct cores the console table names (35 on
+  x86_64 Linux), not at the ~240 the buildbot lists, and the shader pack the video driver reads
+  comes down with them (`shaders_glsl` for Linux's `gl`, `shaders_slang` for Windows' `d3d11`).
+  Every console is playable when the main window opens. The first boot used to block on every core
+  and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
+  (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
+  pending`); inside Flatpak, or with the updater off, nothing is owed.
+- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
+  `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
+  (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
+  `OneShaderPackOfTwoTests`).
+
+### RT-317 — The remaining cores arrive in the background, and the pickers see them
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` that has just finished a first boot with network
+  (`devbox-app start --first-boot`).
+- **Steps:**
+  1. When the main window opens, read the banner at the top.
+  2. Wait for the banner to go away (under a minute on a fast link).
+  3. Open "Preferences", go to the core setting of "Super Nintendo", and open its list.
+- **Expected:** Step 1 shows "Downloading the remaining cores (n/total)" with a "Cancel" button,
+  while the library is already usable. When it ends, `setup.bootstrap.deferred_assets` in
+  `config.yaml` reads `done`, and step 3 lists more cores than the console's curated ones
+  without restarting the app — the core catalog is rescanned when the download finishes (issue
+  #442).
+- **Check:** screenshots of steps 1 and 3; `grep deferred_assets
+  ~/.local/share/openemux-devbox/home/.openemux/config.yaml` prints `done`. The rules in
+  `tests/test_window.py` (`TheDeferredAssetDownloadTests`) and `tests/test_cores.py`
+  (`ACatalogThatOutlivesItsScanTests`).
+
+### RT-318 — A background core download cut short resumes at the next launch
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A **throwaway** `HOME` right after a first boot, with the background download
+  running.
+- **Steps:** As a QA person: click "Cancel" on the "Downloading the remaining cores" banner (or
+  quit the app), then launch it again.
+- **Expected:** After cancelling, `setup.bootstrap.deferred_assets` stays `pending`, and the next
+  launch shows the banner again and finishes the job. A download that fails (offline, the buildbot
+  down) behaves the same way, quietly: no toast, no failed bootstrap, just another try at the
+  next launch. Only a sweep with no failure and nothing cancelled records `done` (issue #442).
+- **Check:** suite files `tests/test_first_boot.py` (`TheDeferredDownloadTests`),
+  `tests/test_config_bootstrap_defaults.py` (`TheDeferredAssetDebtTests`), `tests/test_window.py`
+  (`test_cancel_on_the_banner_reaches_the_download`, `test_a_crashed_worker_still_ends_the_task`).
+
+### RT-319 — The core info files are installed, so cores show their real names
+- **Area:** Startup
+- **Mode:** AUTO-PROBE
+- **Preconditions:** Network.
+- **Steps:** As a QA person: after a first boot, open a console's core list in "Preferences".
+- **Expected:** Cores show the names their authors gave them ("Snes9x", "mGBA"), not their
+  filenames turned into words ("Snes9X", "Mgba"), and a core the console table does not name still
+  appears under every console its `.info` declares. `core_info_base_url` sat in the defaults from
+  the start and nothing read it, so no `.info` file was ever installed (issue #442). The files go
+  beside the cores; a failed fetch is only a warning and never fails the first boot.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile; from pathlib import Path
+  from openemux.core.retroarch_buildbot_updater import RetroArchBuildbotUpdater
+  from openemux.core.config import UPDATER_DEFAULTS
+  d = Path(tempfile.mkdtemp(dir='$SCRATCH'))
+  class C:
+      def get_retroarch_updater_settings(self): return dict(UPDATER_DEFAULTS, core_dir=str(d / 'cores'))
+      def get_runtime_dir(self): return d / 'runtime'
+  s = RetroArchBuildbotUpdater(C()).install_core_info()
+  assert s['failed'] == 0 and s['installed'] > 100, s
+  assert 'Snes9x' in (d / 'cores' / 'snes9x_libretro.info').read_text(), 'no snes9x info'
+  print('RT-319 OK')"
+  ```
+  Unit-level: `tests/test_retroarch_buildbot_updater.py` (`TheCoreInfoFilesTests`).
 
 ### RT-240 — Bootstrap timestamps are written as UTC and stay readable
 - **Area:** Startup
@@ -710,6 +798,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print(f"RT-012 OK — {len(files)} playlists well-formed")
   EOF
   ```
+
+### RT-321 — ROMs dropped onto the sidebar go to their own consoles
+- **Area:** Library & scanning
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A library with at least one console, and ROM files of a console it does not
+  have yet (say, a `.gba` while only SNES games exist).
+- **Steps:** As a QA person:
+  1. Open the SNES page.
+  2. Drag the `.gba` files from the file manager over the sidebar, then drop them there.
+  3. Open "All", then drag a `.gba` file onto the sidebar again.
+- **Expected:** While dragging over it, the sidebar takes the dashed drop outline and the banner
+  shows the drop hint, as the library area does. The drop imports the games into "Game Boy
+  Advance", which appears in the sidebar, and not into the SNES page that was open. Each file goes
+  to the console its extension names. Step 3 imports straight away, without the "which console?"
+  question that a drop onto the "All" page asks. Dropping onto the library area works exactly as
+  before, and dragging a console row to reorder the sidebar still works (issue #456).
+- **Check:** suite files `tests/test_import_flow.py` (`DroppingOntoTheSidebarTests`,
+  `DroppingFilesTests`), `tests/test_console_sidebar.py` (row reordering).
 
 ### RT-015 — Importing as a link leaves the original where it is
 - **Area:** Library
@@ -1337,6 +1443,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_cartridge_on_mixed_pages.py`.
 - **Restore:** none.
 
+### RT-322 — A cartridge with no label shows a blank sticker, not its box art
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The cartridge shelf on a console with cartridge art (SNES), and two games:
+  one with a file in `<roms>/SFC/labels/`, one with box art in `<roms>/SFC/covers/` and **no**
+  label.
+- **Steps:**
+  1. Open the console's page in the cartridge view.
+  2. Look at both cartridges.
+- **Expected:** The game with a label shows that label on the sticker. The game with only box art
+  shows a plain, blank sticker; its box art is never cropped into the label area, which is what
+  used to happen (issue #457). Neither card carries the "missing artwork" badge: box art still
+  counts as artwork. In the cover grid (or on "All"), the second game shows its box art as before.
+- **Check:** screenshot of the shelf (`make devbox-shot OUT=$SCRATCH/rt322.png WIN=1`). The rules
+  are in `tests/test_rom_card_widget.py` (`WhatACartridgeLabelShowsTests`) and
+  `tests/test_scraper.py` (`WhichArtIsALabelTests`).
+
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
 - **Mode:** AUTO-UI
@@ -1653,6 +1776,29 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ends without errors.
 - **Check:** human only (network-dependent and slow; logic covered by `tests/test_cover_sync.py`,
   `tests/test_artwork_search.py`, `tests/test_artwork_suggestions.py` via RT-002).
+
+### RT-320 — A fresh install has ScreenScraper on, after libretro
+- **Area:** Covers
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a fresh install, open "Preferences" and find "Artwork Providers".
+- **Expected:** The list reads "libretro thumbnails", "ScreenScraper", "OpenEmux mirror", all
+  three switched on. ScreenScraper used to come up off: a new config has no provider list, so it
+  took the migration meant for pre-1.9 configs, whose old `cover_source` default meant
+  libretro only (issue #455). An existing config keeps its switches: upgrading turns nothing on.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile, yaml; from pathlib import Path
+  from openemux.core.config import ConfigManager
+  d = Path(tempfile.mkdtemp(dir='$SCRATCH'))
+  on = lambda m: [p['id'] for p in m.get_artwork_providers() if p['enabled']]
+  assert on(ConfigManager(config_file=d / 'new.yaml')) == ['libretro', 'screenscraper', 'openemux']
+  (d / 'old.yaml').write_text(yaml.safe_dump({'covers': {'sync': {'cover_source': 'libretro'}}}))
+  assert 'screenscraper' not in on(ConfigManager(config_file=d / 'old.yaml'))
+  print('RT-320 OK')"
+  ```
+  Unit-level: `tests/test_artwork_providers.py` (`WhatANewConfigStartsWithTests`).
 
 ### RT-055 — An error page is never saved as a cover
 - **Area:** Covers
@@ -2043,12 +2189,79 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Open the volume popover and drag the slider; press pause and the save-state button.
   3. Watch the *other* RetroArch.
 - **Expected:** Only the OpenEmux game reacts. The other instance's volume, pause state and save
-  states are untouched (issue #227).
-- **Check:** `grep network_cmd_port ~/.openemux/runtime/runtime_*.cfg` shows a port that is
-  neither 55355 nor the same across two launches;
-  `ss -ulnp | grep <that port>` lists exactly one process. Suite files
-  `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
+  states are untouched (issue #227). On Linux there is nothing the two could share: our game takes
+  its commands through its own stdin pipe and has no UDP port at all (RT-315).
+- **Check:** On Linux, `grep -hE '^(stdin|network)_cmd' "$(ls -t ~/.openemux/runtime/runtime_*.cfg
+  | head -1)"` prints exactly `network_cmd_enable = "false"` and `stdin_cmd_enable = "true"`, and
+  `ss -ulnp | grep retroarch` lists only the standalone instance's port 55355. On Windows,
+  `network_cmd_port` in the newest `runtime_*.cfg` is neither 55355 nor the same across two
+  launches. Suite files `tests/test_retroarch_command.py`, `tests/test_runtime_manager.py`,
   `tests/test_config_command_port.py`.
+
+### RT-315 — A running game is not reachable from the network
+- **Area:** Launch
+- **Mode:** AUTO-PROBE
+- **Preconditions:** Linux, with the vendored RetroArch fetched (`make vendor-retroarch`). No
+  display is needed: the probe runs RetroArch with null drivers.
+- **Steps:**
+  1. Launch a game and, while it runs, list the UDP sockets: `ss -ulnp | grep retroarch`.
+  2. From another machine on the same network, try to reach it — or, as the probe does, look at
+     what RetroArch bound.
+- **Expected:** Our RetroArch has no UDP socket. Its commands (volume, pause, save, load, reset,
+  quit) come through a pipe on its stdin that only OpenEmux holds, and the launch switches
+  RetroArch's network command interface *off* even when the user's own `retroarch.cfg` turns it
+  on. That interface binds `0.0.0.0`, not loopback: before this, anyone on the local network
+  could quit, reset or overwrite a save state in a running game, with no authentication. Windows
+  is the exception — its RetroArch build has no stdin interface, so it keeps the UDP channel.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'PY'
+  import os, subprocess, time
+  from pathlib import Path
+  from openemux.core.config import ConfigManager
+  from openemux.core.retroarch_command import StdinCommandClient
+  from openemux.core.retroarch_launcher import RetroArchLauncher
+  scratch = Path(os.environ.get("SCRATCH", "/tmp")) / "RT-315"
+  scratch.mkdir(parents=True, exist_ok=True)
+  launcher = RetroArchLauncher(Path.cwd(), ConfigManager(config_file=scratch / "config.yaml"))
+  channel = launcher._command_channel_overrides(None)
+  assert channel == {"stdin_cmd_enable": '"true"', "network_cmd_enable": '"false"'}, channel
+  retroarch = launcher._resolve_retroarch_binary()
+  assert retroarch, "no RetroArch to run"
+  # A user config that has the UDP interface on; the launch override must win.
+  user_cfg = scratch / "retroarch.cfg"
+  user_cfg.write_text("".join(f'{k} = "{v}"\n' for k, v in {
+      "network_cmd_enable": "true", "network_cmd_port": "55355",
+      "video_driver": "null", "audio_driver": "null", "input_driver": "null",
+      "joypad_driver": "null", "menu_driver": "rgui", "quit_press_twice": "false",
+      "config_save_on_exit": "false"}.items()))
+  override = scratch / "override.cfg"
+  override.write_text("".join(f"{k} = {v}\n" for k, v in channel.items()))
+  env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+  proc = subprocess.Popen(
+      [retroarch, "--config", str(user_cfg), "--appendconfig", str(override), "--menu"],
+      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
+  try:
+      time.sleep(4)
+      assert proc.poll() is None, f"RetroArch exited early: {proc.returncode}"
+      ss = subprocess.run(["ss", "-ulpn"], capture_output=True, text=True).stdout
+      bound = [line.split()[3] for line in ss.splitlines() if f"pid={proc.pid}," in line]
+      assert not bound, f"RetroArch is listening on UDP: {bound}"
+      client = StdinCommandClient(proc.stdin)
+      assert client.send("VERSION"), "the stdin channel refused VERSION"
+      time.sleep(1)
+      assert client.send("QUIT"), "the stdin channel refused QUIT"
+      assert proc.wait(timeout=10) == 0, "RetroArch did not quit on the stdin QUIT"
+      assert proc.stdout.read().strip(), "no VERSION reply on stdout"
+  finally:
+      if proc.poll() is None:
+          proc.kill()
+  print("RT-315 OK")
+  PY
+  ```
+  Suite files `tests/test_retroarch_command.py` (`WhichChannelTests`, `StdinCommandClientTests`),
+  `tests/test_runtime_manager.py` (`StdinChannelTests`), `tests/test_retroarch_launcher.py`
+  (`TheCommandPipeTests`), `tests/test_runtime_override_pieces.py` (`TheSessionPieceTests`).
 
 ### RT-158 — The volume control says where the game actually is
 - **Area:** Launch
@@ -3553,6 +3766,90 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** Screenshot of the overlay.
 - **Restore:** Press `Escape`.
 
+### RT-323 — The log is one click away, at the end of the tips bar
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** A library open, the log panel closed (the default).
+- **Steps:**
+  1. Look at the right end of the bottom bar.
+  2. Click "Log".
+  3. Click "Log" again.
+- **Expected:** Step 1 shows a "Log" button after the key hints. Step 2 slides the log panel open
+  above the bar and leaves "Log" pressed. The panel shows the log since the app started, live,
+  with the level coloured (ERROR in red), plus "Clear", "Copy Log + System Info", "Report a
+  Bug…" and a notice that sending the log is how a bug gets fixed. Step 3 closes it. The choice
+  is remembered: with the panel left open, the next launch opens with it open, and Settings ›
+  System › "Show the log panel" says the same (issue #461). With "Show tips" off, the bar
+  stays, holding only this button.
+- **Check:** screenshots of steps 1 and 2. The rules are in `tests/test_log_panel.py`
+  (`TheWindowKeepsThemInStepTests`, `WhatThePanelShowsTests`) and `tests/test_window.py`
+  (`test_the_bar_stays_for_the_log_button_with_no_tips_and_no_hints`).
+
+### RT-324 — An error logged with the panel closed shows a count on "Log"
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** The log panel closed, and a game that cannot start (in the devbox, any game:
+  there is no RetroArch).
+- **Steps:**
+  1. Double-click a game and wait for the toast to go.
+  2. Look at the "Log" button, then open the panel.
+- **Expected:** After step 1 the button carries a red count of the errors logged since the panel
+  was last open. Opening the panel shows them as ERROR lines naming the console, the game and
+  the reason, and the count goes away. Launch failures used to be only toasted, never logged,
+  so a report about a game that would not start carried no trace of it (issue #461).
+- **Check:** screenshots of the count and of the open panel. `tests/test_log_panel.py`
+  (`TheErrorCountTests`), `tests/test_game_session.py`
+  (`test_a_refused_launch_is_logged_as_well_as_toasted`).
+
+### RT-325 — "Report a Bug" copies the details and opens the bug form
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** none. Network only for the last step.
+- **Steps:**
+  1. Open "Report a Bug…" from the primary menu (or from the log panel, or from Settings ›
+     System › "Report a bug").
+  2. Click "Copy System Info + Log" and paste somewhere.
+  3. Click "Open GitHub".
+- **Expected:** Step 1 shows exactly what will be copied:
+  - the OpenEmux version and install format;
+  - the distribution, read from `/etc/os-release`;
+  - kernel, desktop and session;
+  - GTK, libadwaita and Python;
+  - RetroArch and the language;
+  - "+ the last N lines of the log".
+
+  Step 2 turns the button to "Copied" and pastes a "### System" block followed by the log.
+  Step 3 opens the browser on the `bug_report.yml` form with the "bug" label, the version and
+  the distribution already filled in; the log is pasted by the user, never sent by the app
+  (issue #461).
+- **Check:** screenshot of the dialog after step 2, and the browser's address after step 3
+  (`template=bug_report.yml&labels=bug&version=…&os=…`). `tests/test_log_panel.py` (`TheReportDialogTests`, `TheReportTextTests`),
+  `tests/test_sysinfo.py`.
+
+### RT-326 — The log never carries the user's name
+- **Area:** Help
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the log panel and look at any line with a path (a playlist
+  load, the ROM folder), then click "Copy Log + System Info" and paste it.
+- **Expected:** Every path under the home directory starts with `~`
+  (`path=~/.openemux/playlists/VB.list`), in the panel, in the pasted report (the RetroArch line
+  included) and in `~/.openemux/runtime/openemux_startup.log` itself. The home directory is named
+  after the user, and many people will not post their name in a public bug report (issue #461).
+  A path in somebody else's home (`/home/<user>2/…`) is left as it is.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from pathlib import Path
+  from openemux.core.privacy import redact_home
+  h = str(Path.home())
+  assert redact_home(f'path={h}/.openemux/playlists/VB.list') == 'path=~/.openemux/playlists/VB.list'
+  assert redact_home(f'{h}2/x') == f'{h}2/x'
+  print('RT-326 OK')"
+  ```
+  Unit-level: `tests/test_privacy.py`, `tests/test_startup_logging.py`
+  (`test_every_handler_writes_the_home_as_a_tilde`), `tests/test_sysinfo.py`.
+
 ## Destructive file operations
 
 ### RT-140 — Deleting a ROM asks for confirmation
@@ -4499,6 +4796,22 @@ desk. Anything needing a real ARM machine is `MANUAL`.
   153 of 217 do exist, and telling somebody to configure a core that was never built for their
   machine sends them looking for a file they cannot get.
 - **Check:** suite file `tests/test_architecture.py` (`MissingCoreMessageTests`).
+
+### RT-315 — The core pickers list the cores the distribution installed on ARM
+- **Area:** ARM
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None. The probe fakes the machine, so it runs on x86_64.
+- **Steps:**
+  1. On an arm64 Debian or Ubuntu with a packaged core installed (`sudo apt install
+     libretro-snes9x`), open "Settings" → "Cores" and look at "Super Nintendo"; then the console's
+     row in the sidebar ("Core") and a ROM's context menu ("Core").
+- **Expected:** All three list the installed core by name ("Snes9x"), the same core Automatic
+  launches. The cores the distribution packages live in `/usr/lib/<triplet>/libretro`, and the
+  triplet is `aarch64-linux-gnu` there -- a picker looking under `x86_64-linux-gnu` finds nothing
+  and offers "Automatic" alone, for a console that plays games perfectly well.
+- **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core import platform as pf; pf.MACHINE='aarch64'; from openemux.core.cores import CoreCatalog; d=[str(x) for x in CoreCatalog(project_root='/checkout').core_dirs]; assert '/usr/lib/aarch64-linux-gnu/libretro' in d, d; assert '/usr/lib/x86_64-linux-gnu/libretro' not in d, d; print('RT-315 OK')"`
+  Plus suite file `tests/test_architecture.py` (`CoreSearchDirTests`), which also holds the
+  launcher and the pickers to one list.
 
 ### RT-274 — The .deb and .rpm are stamped with the architecture they were built for
 - **Area:** ARM

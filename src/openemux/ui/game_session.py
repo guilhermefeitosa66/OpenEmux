@@ -48,8 +48,8 @@ RESUME_LOAD_DELAY_S = 4
 RESUME_DISCARD_DELAY_S = 10
 
 #: How long a launch-and-load-state waits before sending LOAD_STATE. RetroArch
-#: has no launch-and-load flag to pass, so the state goes out over UDP once the
-#: game has had a moment to boot.
+#: has no launch-and-load flag to pass, so the state goes out as a command once
+#: the game has had a moment to boot.
 STATE_LOAD_DELAY_S = 4
 
 
@@ -107,6 +107,14 @@ class GameSession:
             self.win.play_history.record_launch(rom["path"])
             self.open_wrapper(rom)
         if not success and error_msg:
+            # Logged as well as toasted: the toast is gone in five seconds,
+            # and a bug report built from the log must show what the user saw.
+            # The untranslated message, so the report reads the same whatever
+            # language the reporter runs in.
+            logger.error(
+                "launch failed: console=%s rom=%s error=%s",
+                rom["console"], rom["name"], error_msg,
+            )
             self._toast_now(self._error_text(error_msg), 5)
         elif success:
             self._toast_now(
@@ -133,7 +141,7 @@ class GameSession:
 
         RetroArch has no launch-and-load flag OpenEmux could pass, so this is
         best effort: the slot is seeded via the runtime override, and the
-        LOAD_STATE command goes out over UDP after the game had a moment to
+        LOAD_STATE command goes out after the game had a moment to
         boot. If the game is slower than that, the state is one hotkey away
         on the already-selected slot.
         """
@@ -225,7 +233,7 @@ class GameSession:
         """Make a saved remap reach the running game, keeping its progress.
 
         The whole of issue #129: the process only reads bindings at spawn and
-        the UDP interface has no config or remap verb, so the change is
+        the command interface has no config or remap verb, so the change is
         carried across a relaunch -- snapshot to a scratch slot, wait for the
         file to actually land, relaunch with the regenerated override, load
         the snapshot back. If the core cannot save states the timeout fires

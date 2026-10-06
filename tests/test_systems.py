@@ -20,6 +20,7 @@ from openemux.core.systems import (
     SYSTEM_IDS,
     SYSTEMS,
     SYSTEMS_BY_ID,
+    curated_core_filenames,
     get_icon_name,
     get_runtime_core_candidates,
     get_supported_extensions,
@@ -83,6 +84,12 @@ class AccessorTests(unittest.TestCase):
         self.assertEqual(get_runtime_core_candidates("DREAMCAST"), [])
         self.assertIsNone(get_thumbnail_system("DREAMCAST"))
         self.assertEqual(get_icon_name("DREAMCAST"), DEFAULT_ICON)
+
+    def test_a_console_on_the_list_answers_from_its_own_entry(self):
+        # Every console currently names the same generic icon, so this asserts
+        # where the answer came from rather than what it was.
+        for system in SYSTEMS:
+            self.assertEqual(get_icon_name(system["id"]), system["icon_name"])
 
     def test_extensions_come_back_lower_cased(self):
         # The scanner compares against a lower-cased suffix, so an entry typed
@@ -233,6 +240,28 @@ class TheTableItselfTests(unittest.TestCase):
         for system in SYSTEMS:
             with self.subTest(system=system["id"]):
                 self.assertTrue(system["icon_name"].endswith("-symbolic"))
+
+
+class TheCuratedCoreSetTests(unittest.TestCase):
+    """What the first boot waits for (issue #442)."""
+
+    def test_it_is_every_candidate_of_every_console_once(self):
+        expected = {
+            name for system_id in SYSTEM_IDS for name in get_runtime_core_candidates(system_id)
+        }
+        curated = curated_core_filenames()
+        self.assertEqual(set(curated), expected)
+        self.assertEqual(len(curated), len(set(curated)))
+        self.assertEqual(curated, sorted(curated))
+
+    def test_it_is_spelled_with_this_platforms_extension(self):
+        for name in curated_core_filenames():
+            with self.subTest(core=name):
+                self.assertTrue(name.endswith(CORE_SUFFIX))
+
+    def test_it_is_a_small_fraction_of_the_buildbot(self):
+        # The point of the split: a few dozen, not a few hundred.
+        self.assertLess(len(curated_core_filenames()), 60)
 
 
 if __name__ == "__main__":

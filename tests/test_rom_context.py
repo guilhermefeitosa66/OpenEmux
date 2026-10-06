@@ -12,8 +12,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.ui.context_menu import SEPARATOR, Submenu
-from openemux.ui.rom_context import RomContextMenuServices
+from openemux.ui.rom_context import RomContextMenuServices, card_menu_entries
 
 CHECK = "emblem-ok-symbolic"
 
@@ -394,6 +395,101 @@ class LoadStateSubmenuTests(unittest.TestCase):
             self.assertIsNotNone(slot3[1])
             slot3[1]()
             self.assertEqual(window.calls, [("launch_rom_at_state", (ROM, 3), {})])
+
+
+class _Card:
+    """The surface `card_menu_entries` reads. The card is never driven."""
+
+    def __init__(self, **kwargs):
+        self.rom = kwargs.get("rom", ROM)
+        self.cartridge_frame_path = kwargs.get("frame")
+        self.context_services = kwargs.get("services")
+        self.on_rename_rom = kwargs.get("on_rename")
+        self.on_delete_rom = kwargs.get("on_delete")
+        self._favorite = kwargs.get("favorite", False)
+        self._label = kwargs.get("label", True)
+        self._local_art = set(kwargs.get("local_art", ()))
+        self.asked = []
+
+    def t(self, key, **params):
+        return key
+
+    def is_favorite(self, _rom):
+        return self._favorite
+
+    def supports_label(self):
+        return self._label
+
+    def has_local_cover(self, _rom, art_dir):
+        self.asked.append(art_dir)
+        return art_dir in self._local_art
+
+
+def _rows(entries):
+    return [entry[0] for entry in entries if entry is not SEPARATOR
+            and not isinstance(entry, Submenu)]
+
+
+class TheRowsACardOffersTests(unittest.TestCase):
+    """The half of the menu the card used to build inside itself (issue #238)."""
+
+    def test_the_bare_card_offers_the_favourite_toggle_and_reveal(self):
+        entries = card_menu_entries(_Card())
+        self.assertEqual(_rows(entries), ["context.favorite.add", "context.reveal"])
+
+    def test_a_favourite_offers_to_stop_being_one(self):
+        entries = card_menu_entries(_Card(favorite=True))
+        self.assertIn("context.favorite.remove", _rows(entries))
+
+    def test_rename_and_delete_appear_only_where_the_grid_wired_them(self):
+        entries = card_menu_entries(
+            _Card(on_rename=lambda *_a: None, on_delete=lambda *_a: None)
+        )
+        self.assertEqual(
+            _rows(entries)[-2:], ["context.rename", "context.delete"]
+        )
+
+    def test_artwork_with_nothing_stored_locally_offers_no_removal(self):
+        card = _Card()
+        artwork = _by_title(card_menu_entries(card), "context.cover.artwork")
+        self.assertEqual(_labels(artwork), ["context.cover.choose"])
+
+    def test_artwork_already_on_disk_can_be_taken_off_again(self):
+        card = _Card(local_art=(COVER_ART,))
+        artwork = _by_title(card_menu_entries(card), "context.cover.artwork")
+        self.assertEqual(
+            _labels(artwork), ["context.cover.choose", "context.cover.remove"]
+        )
+
+    def test_a_cartridge_card_asks_about_the_label_rather_than_the_cover(self):
+        # Issue #77: one artwork kind at a time, and it follows what the card
+        # is showing rather than the console's default.
+        card = _Card(frame="/frames/fc.png", label=True, local_art=(LABEL_ART,))
+        artwork = _by_title(card_menu_entries(card), "context.label.artwork")
+        self.assertEqual(card.asked, [LABEL_ART])
+        self.assertIn("context.label.remove", _labels(artwork))
+
+    def test_a_console_whose_cartridge_carries_no_label_keeps_the_cover(self):
+        card = _Card(frame="/frames/ps.png", label=False)
+        self.assertIsNotNone(
+            _by_title(card_menu_entries(card), "context.cover.artwork")
+        )
+
+    def test_the_services_add_the_sync_row_and_the_manage_entry(self):
+        card = _Card(services=RomContextMenuServices(_Window()))
+        entries = card_menu_entries(card)
+        self.assertIn("context.cover.sync", _rows(entries))
+        artwork = _by_title(entries, "context.cover.artwork")
+        self.assertEqual(_labels(artwork)[0], "context.cover.manage")
+
+    def test_the_data_driven_submenus_are_spliced_in_after_the_artwork(self):
+        card = _Card(services=RomContextMenuServices(_Window()))
+        titles = [
+            entry.label for entry in card_menu_entries(card)
+            if isinstance(entry, Submenu)
+        ]
+        self.assertEqual(titles[0], "context.cover.artwork")
+        self.assertIn("context.load_state", titles)
 
 
 if __name__ == "__main__":

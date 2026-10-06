@@ -43,16 +43,21 @@ class ImportFlow:
         self.running = False
 
     # ----- ways in --------------------------------------------------------
-    def install_drop_target(self, widget):
+    def install_drop_target(self, widget, detect=False):
         """Accept dropped files on ``widget``.
 
-        Installed on the content stack rather than on each grid, so that every
-        page -- including the empty-library status page -- accepts ROMs.
+        The window installs one on the content stack rather than on each grid,
+        so that every page -- including the empty-library status page --
+        accepts ROMs. The sidebar installs one too, with ``detect``: a drop
+        there names no console, so every file goes where its extension says,
+        without the "which console?" question an "All" page asks (issue #456).
         """
         drop_target = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
-        drop_target.connect("enter", self._on_drop_enter)
-        drop_target.connect("leave", self._on_drop_leave)
-        drop_target.connect("drop", self._on_drop)
+        drop_target.connect("enter", lambda _t, _x, _y: self._on_drop_enter(widget))
+        drop_target.connect("leave", lambda _t: self._on_drop_leave(widget))
+        drop_target.connect(
+            "drop", lambda _t, value, _x, _y: self._on_drop(widget, value, detect)
+        )
         widget.add_controller(drop_target)
 
     def open_picker(self, *_args):
@@ -74,38 +79,42 @@ class ImportFlow:
 
         dialog.open_multiple(self.win, None, self._on_files_chosen)
 
-    def begin(self, paths):
-        """Resolve ambiguous extensions, then run the import in the background."""
+    def begin(self, paths, detect=False):
+        """Resolve ambiguous extensions, then run the import in the background.
+
+        ``detect`` sends every file to the console its extension names, the
+        way a drop on a console's page does, wherever the user happens to be.
+        """
         if self.running:
             self.win._toast(self.win.t("import.running"))
             return
 
         # In "All" or "Favorites" there is no console context to import into, so
         # ask outright instead of silently guessing from the file extension.
-        if self.win.current_console in (None, ALL_CONSOLES_ID, FAVORITES_ID):
+        if not detect and self.win.current_console in (None, ALL_CONSOLES_ID, FAVORITES_ID):
             self._ask_target_console(paths)
             return
 
         self._continue(paths, forced_console=None)
 
     # ----- drag and drop --------------------------------------------------
-    def _on_drop_enter(self, _target, _x, _y):
-        self.win.content_stack.add_css_class("rom-drop-active")
+    def _on_drop_enter(self, widget):
+        widget.add_css_class("rom-drop-active")
         self.win.tasks.show_notice(self.win.t("import.drop_hint"))
         return Gdk.DragAction.COPY
 
-    def _on_drop_leave(self, _target):
-        self.win.content_stack.remove_css_class("rom-drop-active")
+    def _on_drop_leave(self, widget):
+        widget.remove_css_class("rom-drop-active")
         self.win.tasks.refresh()
 
-    def _on_drop(self, _target, value, _x, _y):
-        self.win.content_stack.remove_css_class("rom-drop-active")
+    def _on_drop(self, widget, value, detect=False):
+        widget.remove_css_class("rom-drop-active")
         self.win.tasks.refresh()
         paths = [f.get_path() for f in value.get_files() if f.get_path()]
         if not paths:
             return False
-        logger.info("rom import: dropped %d path(s)", len(paths))
-        self.begin(paths)
+        logger.info("rom import: dropped %d path(s) detect=%s", len(paths), detect)
+        self.begin(paths, detect=detect)
         return True
 
     def _on_files_chosen(self, dialog, result):

@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,6 +7,7 @@ from tempfile import TemporaryDirectory
 from openemux.core.archives import archive_rom_name, rename_archive_rom_entry
 from openemux.core.rom_actions import (
     RomActionError,
+    _gio_trash,
     delete_rom,
     rename_rom,
     sanitize_rom_name,
@@ -221,6 +223,76 @@ class RenameRomTests(unittest.TestCase):
             self.assertFalse(rename_archive_rom_entry(archive, "Whatever", (".gb",)))
             with zipfile.ZipFile(archive) as zf:
                 self.assertEqual(sorted(zf.namelist()), ["One.gb", "Two.gb"])
+
+
+class WhenTheTrashRefusesTests(unittest.TestCase):
+    def test_a_path_the_trash_will_not_take_is_reported_not_raised(self):
+        # A volume with no trash directory, or a file already gone: the
+        # caller turns this into "could not be moved to the trash".
+        with self.assertLogs("openemux.core.rom_actions", level="WARNING"):
+            self.assertFalse(_gio_trash("/nowhere/at/all/Game.sfc"))
+
+    def test_a_delete_of_a_file_that_is_not_there_says_so(self):
+        with TemporaryDirectory() as tmp_dir:
+            rom = _rom(tmp_dir)
+            Path(rom["path"]).unlink()
+            with self.assertRaises(RomActionError):
+                delete_rom(Path(tmp_dir), rom)
+
+    def test_a_delete_the_trash_refuses_is_an_error_not_a_silent_no_op(self):
+        with TemporaryDirectory() as tmp_dir:
+            rom = _rom(tmp_dir)
+            with self.assertRaises(RomActionError):
+                delete_rom(Path(tmp_dir), rom, trash=lambda _path: False)
+            self.assertTrue(Path(rom["path"]).exists())
+
+
+class RenamingWhatIsNoLongerThereTests(unittest.TestCase):
+    def test_a_rom_that_left_the_disk_cannot_be_renamed(self):
+        # The library entry outlives the file: a rename from a stale grid.
+        with TemporaryDirectory() as tmp_dir:
+            rom = _rom(tmp_dir)
+            Path(rom["path"]).unlink()
+            with self.assertRaises(RomActionError):
+                rename_rom(Path(tmp_dir), rom, "Kirby 2")
+
+
+class TheSaveFilesThatTravelWithARenameTests(unittest.TestCase):
+    """Issue #134: the battery save has to follow the ROM, and never clobber."""
+
+    def _rom_with_save(self, tmp_dir, save_suffix=".srm"):
+        rom = _rom(tmp_dir)
+        save = Path(rom["path"]).with_suffix(save_suffix)
+        save.write_bytes(b"save")
+        return rom, save
+
+    def test_a_save_whose_target_is_taken_is_left_where_it_is(self):
+        with TemporaryDirectory() as tmp_dir:
+            rom, save = self._rom_with_save(tmp_dir)
+            taken = save.with_name("Kirby 2.srm")
+            taken.write_bytes(b"someone else's save")
+
+            with self.assertLogs("openemux.core.rom_actions", level="WARNING"):
+                rename_rom(Path(tmp_dir), rom, "Kirby 2")
+
+            self.assertTrue(save.exists())
+            self.assertEqual(taken.read_bytes(), b"someone else's save")
+
+    def test_a_save_that_cannot_be_moved_does_not_fail_the_rename(self):
+        with TemporaryDirectory() as tmp_dir:
+            rom, save = self._rom_with_save(tmp_dir)
+            real_rename = Path.rename
+
+            def _refuse(self, target):
+                if self == save:
+                    raise OSError("read-only")
+                return real_rename(self, target)
+
+            with mock.patch.object(Path, "rename", _refuse):
+                with self.assertLogs("openemux.core.rom_actions", level="WARNING"):
+                    renamed = rename_rom(Path(tmp_dir), rom, "Kirby 2")
+
+            self.assertTrue(Path(renamed["path"]).exists())
 
 
 if __name__ == "__main__":

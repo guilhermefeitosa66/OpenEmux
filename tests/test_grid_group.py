@@ -300,5 +300,69 @@ class SortOrdersOnAGroupedPageTests(unittest.TestCase):
         self.assertEqual(_ScopeStub("SFC")._sort_orders_for_scope(), list(SORT_ORDERS))
 
 
+class TalkingToTheGridAnItemBelongsToTests(unittest.TestCase):
+    """Every per-item verb has to find the right group first."""
+
+    def test_a_selection_verb_reaches_the_grid_holding_the_game(self):
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        zelda = grids[1].entries()[0]
+
+        group.note_cursor(zelda, keep_anchor=True)
+        group.toggle_item(zelda)
+        group.select_item(zelda)
+
+        self.assertEqual(grids[0].calls, [])
+        self.assertEqual(
+            grids[1].calls,
+            [("note", zelda, True), ("toggle", zelda), ("select", zelda)],
+        )
+
+    def test_an_item_on_no_group_of_this_page_is_not_acted_on(self):
+        group, grids = _group(("FC", ["Contra"]))
+        stranger = _Entry("Somewhere else")
+
+        self.assertIsNone(group.grid_for_item(stranger))
+        self.assertIsNone(group.grid_for_item(None))
+        group.note_cursor(stranger)
+        group.toggle_item(stranger)
+        group.select_item(stranger)
+
+        self.assertEqual(grids[0].calls, [])
+
+    def test_the_visible_selection_is_synced_on_every_group(self):
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        group.sync_visible_selection()
+        self.assertEqual([grid.calls for grid in grids], [["sync"], ["sync"]])
+
+
+class WalkingFromOneGroupToTheNextTests(unittest.TestCase):
+    def test_a_grid_that_is_not_on_the_page_has_no_neighbours(self):
+        group, _grids = _group(("FC", ["Contra"]))
+        stranger = _Grid("MD", ["Sonic"])
+        self.assertIsNone(group.grid_after(stranger))
+        self.assertIsNone(group.grid_before(stranger))
+
+
+class WhereTheFocusLandsTests(unittest.TestCase):
+    def test_a_page_with_nothing_on_it_takes_no_focus(self):
+        group, _grids = _group(("FC", []))
+        self.assertFalse(group.focus_first_card())
+
+    def test_with_no_group_remembering_anything_it_starts_at_the_top(self):
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        self.assertTrue(group.focus_restore())
+        self.assertEqual(grids[0].calls, ["focus-first"])
+        self.assertEqual(grids[1].calls, [])
+
+    def test_the_group_the_user_was_last_in_gets_the_focus_back(self):
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        grids[1].has_focus_memory = lambda: True
+        grids[1].focus_restore = lambda: grids[1].calls.append("restore") or True
+
+        self.assertTrue(group.focus_restore())
+        self.assertEqual(grids[1].calls, ["restore"])
+        self.assertEqual(grids[0].calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

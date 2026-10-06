@@ -168,6 +168,14 @@ def migrate_retroarch_binary(stored):
 #: RetroArch Flatpak's own updater and OpenEmux must not download cores. A
 #: config that already exists keeps whatever it says, and an older one that
 #: predates the key is read as on -- which is what it was.
+#:
+#: ``parallel_downloads`` ships at the ceiling the updater allows itself,
+#: ``MAX_PARALLEL_DOWNLOADS``. It sat at 4 while the cap was already 8, so
+#: every first boot spent twice as long as the code was willing to go: the
+#: full 238-artifact sweep measured 110.0 s at four workers and 44.4 s at
+#: eight, for the same bytes and the same requests (issue #442). Four is not a
+#: politeness the buildbot asked for -- the cap is where that judgement lives,
+#: and it has not moved.
 UPDATER_DEFAULTS = {
     "mode": "buildbot_all_cores",
     "enabled": True,
@@ -178,7 +186,7 @@ UPDATER_DEFAULTS = {
     "shader_slang_url": "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip",
     "request_timeout_sec": 30,
     "retries": 3,
-    "parallel_downloads": 4,
+    "parallel_downloads": 8,
 }
 
 # Bumped when a UI default changes in a way that should reach configs written
@@ -186,10 +194,10 @@ UPDATER_DEFAULTS = {
 # user picks in Preferences afterwards sticks.
 UI_SETTINGS_VERSION = 1
 
-# Cover art source selection. "libretro" is the historical (and default)
-# behavior: libretro thumbnails only, no credentials required. The
-# ScreenScraper-backed options are opt-in and require the user to configure
-# their own ScreenScraper account (see core/screenscraper.py).
+# Cover art source selection, the enum the provider list below replaced (issue
+# #76). Still read to migrate a config that predates the list: "libretro", its
+# default, meant libretro thumbnails only, with ScreenScraper off. A new config
+# never goes through it (issue #455).
 COVER_SOURCE_LIBRETRO = "libretro"
 COVER_SOURCE_LIBRETRO_THEN_SCREENSCRAPER = "libretro_then_screenscraper"
 COVER_SOURCE_SCREENSCRAPER = "screenscraper"
@@ -215,18 +223,20 @@ ARTWORK_PROVIDER_KINDS_AVAILABLE = {
     "screenscraper": (COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL),
     "openemux": (COVER_ART_TYPE_BOXART,),
 }
-# Fresh-install precedence: the project's own mirror first (fully under our
-# control, no quotas), libretro second, ScreenScraper last (quota'd, and the
-# only one needing credentials). Migrated configs keep the order their old
-# cover_source enum meant instead.
+# Fresh-install precedence: libretro first (no account, no quota),
+# ScreenScraper second (matches by ROM hash and is the only source of
+# cartridge labels, but quota'd), the project's own mirror closing the chain.
+# All three on (issue #455). This is the list a *new* config starts from --
+# see ConfigManager.create_default_config; a config that predates the
+# provider list keeps the order its old cover_source enum meant.
 DEFAULT_ARTWORK_PROVIDERS = [
-    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {"id": "libretro", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
     {
         "id": "screenscraper",
         "enabled": True,
         "kinds": [COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL],
     },
+    {"id": "openemux", "enabled": True, "kinds": [COVER_ART_TYPE_BOXART]},
 ]
 
 
@@ -310,11 +320,12 @@ DEFAULT_CONFIG = {
     "consoles": list(SYSTEM_IDS),
     "runtime": {
         "mode": "retroarch_wrapper",
-        # RetroArch's UDP command channel (issue #69): written into every
-        # runtime override so the running game can be controlled live. 0 picks
-        # a free port per launch, which is the only way to be sure the commands
-        # reach *our* RetroArch and not a standalone one the user is also
-        # running (issue #227). A non-zero value pins the port.
+        # RetroArch's UDP command channel (issue #69), on Windows only -- a
+        # Linux launch talks to the game through its stdin and opens no port
+        # (see retroarch_command). 0 picks a free port per launch, which is
+        # the only way to be sure the commands reach *our* RetroArch and not a
+        # standalone one the user is also running (issue #227). A non-zero
+        # value pins the port.
         "network_cmd_port": 0,
         # Master volume in dB (0 = unity), persisted so the level chosen for
         # one loud game carries into the next launch.
@@ -526,6 +537,12 @@ class ConfigManager:
 
     def create_default_config(self):
         config = _merge_defaults(DEFAULT_CONFIG, {})
+        # Only here, not in DEFAULT_CONFIG: _merge_defaults would hand the
+        # list to every existing config that lacks it, and a pre-1.9 config
+        # must keep the order its cover_source enum meant. Without it, a new
+        # config took that same migration path and came out with ScreenScraper
+        # off, the enum's old default (issue #455).
+        config["covers"]["sync"]["providers"] = copy.deepcopy(DEFAULT_ARTWORK_PROVIDERS)
         config = self._migrate_runtime_config(config)
         self.save_config(config)
         return config
@@ -802,6 +819,7 @@ class ConfigManager:
             # Derived, not stored twice: the view mode is the source of truth.
             "render_cartridge_overlay": renders_cartridge(view_mode),
             "show_tips": bool(ui.get("show_tips", True)),
+            "show_log_panel": bool(ui.get("show_log_panel", False)),
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
             "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
@@ -909,6 +927,11 @@ class ConfigManager:
         ui["show_tips"] = bool(enabled)
         self.save_config()
 
+    def set_show_log_panel(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["show_log_panel"] = bool(enabled)
+        self.save_config()
+
     def set_gamepad_navigation(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["gamepad_navigation"] = bool(enabled)
@@ -973,7 +996,7 @@ class ConfigManager:
         return DEFAULT_STATES_DIR / resolve_system_id(console)
 
     def get_network_cmd_port(self):
-        """The pinned command port, or 0 to pick a free one per launch."""
+        """The pinned UDP command port (Windows), or 0 for a free one per launch."""
         try:
             return int(self.config.get("runtime", {}).get("network_cmd_port", 0))
         except (TypeError, ValueError):
@@ -1205,6 +1228,28 @@ class ConfigManager:
         completed_steps = bootstrap.setdefault("completed_steps", [])
         if step_id not in completed_steps:
             completed_steps.append(step_id)
+        self.save_config()
+
+    def deferred_assets_pending(self):
+        """Whether the cores and shaders the first boot left for later are owed.
+
+        The first boot waits only for what makes every console playable and
+        hands the rest to a background download once the window is up (issue
+        #442). Persisted, so closing the app halfway resumes the sweep at the
+        next launch. A config that predates the key reads as not pending: the
+        first boot that wrote it already downloaded everything.
+        """
+        return self.get_bootstrap_state().get("deferred_assets") == "pending"
+
+    def mark_deferred_assets_pending(self):
+        self._set_deferred_assets("pending")
+
+    def mark_deferred_assets_done(self):
+        self._set_deferred_assets("done")
+
+    def _set_deferred_assets(self, value):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["deferred_assets"] = value
         self.save_config()
 
     def finish_bootstrap_success(self):

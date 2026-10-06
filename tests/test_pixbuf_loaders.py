@@ -168,12 +168,27 @@ class DegradationTests(unittest.TestCase):
             self.assertFalse((loaders_dir.parent / "loaders.cache").exists())
 
     def test_nowhere_to_write_is_reported_not_raised(self):
+        # Neither the install directory nor the per-user fallback takes it.
         with TemporaryDirectory() as tmp:
             root, _ = _bundle(tmp)
             with patch.object(Path, "write_text",
                               side_effect=PermissionError("read-only")):
                 with self.assertLogs("openemux.core.pixbuf_loaders", level="WARNING"):
-                    self.assertIsNone(pl.ensure_loaders_cache(root, environ={}))
+                    self.assertIsNone(pl.ensure_loaders_cache(
+                        root,
+                        environ={},
+                        runner=lambda *a, **k: _Result(stdout=CACHE_TEXT),
+                    ))
+
+
+class AFreshnessCheckThatCannotReadTests(unittest.TestCase):
+    def test_a_loaders_directory_that_cannot_be_listed_forces_a_rebuild(self):
+        # Rebuilding costs a subprocess; trusting a cache that may name
+        # modules that are no longer there costs the image formats.
+        with TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "loaders.cache"
+            cache_path.write_text("cache", encoding="utf-8")
+            self.assertFalse(pl._is_current(cache_path, Path(tmp) / "gone"))
 
 
 class QueryTests(unittest.TestCase):
