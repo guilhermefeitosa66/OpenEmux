@@ -1,28 +1,20 @@
 <!DOCTYPE html>
-<html lang="en" data-lang-auto>
+<html lang="{{html_lang}}"{{auto_attr}}>
 
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — Retro gaming, built Linux first</title>
+  <title>{{meta.title}}
   <meta name="description"
-    content="OpenEmux is a beautiful emulation frontend that makes RetroArch simple and enjoyable. Built Linux first, with a Windows build in beta. Browse your library with cover art, and play the games you own." />
-  <link rel="icon" href="assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — Retro gaming, built Linux first" />
+    {{meta.description}}
+  <link rel="icon" href="{{root}}assets/logo.png" />
+  <meta property="og:title" {{meta.og_title}}
   <meta property="og:description"
-    content="A beautiful emulation frontend that makes RetroArch simple and enjoyable for everyone. Linux first, and now on Windows, in beta." />
+    {{meta.og_description}}
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
-  <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/" />
-  <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
-  <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
-  <link rel="alternate" hreflang="pt-BR" href="https://guilhermefeitosa66.github.io/OpenEmux/pt-br/" />
-  <link rel="alternate" hreflang="es" href="https://guilhermefeitosa66.github.io/OpenEmux/es/" />
-  <link rel="alternate" hreflang="fr" href="https://guilhermefeitosa66.github.io/OpenEmux/fr/" />
-  <link rel="alternate" hreflang="de" href="https://guilhermefeitosa66.github.io/OpenEmux/de/" />
-  <link rel="alternate" hreflang="ja" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/" />
-  <link rel="alternate" hreflang="zh-CN" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/" />
-  <link rel="alternate" hreflang="ta" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/" />
-  <link rel="alternate" hreflang="x-default" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
+  <meta property="og:url" content="{{canonical}}" />
+  <link rel="canonical" href="{{canonical}}" />
+{{hreflang_links}}
   <meta name="twitter:card" content="summary_large_image" />
   <style>
     :root {
@@ -951,37 +943,24 @@
       }
     }
   </style>
-  <script src="lang.js"></script>
+  <script src="{{root}}lang.js"></script>
 </head>
 
 <body>
 
   <header>
     <div class="wrap nav">
-      <a class="brand" href="#top"><img src="assets/logo.png" alt="" /> OpenEmux</a>
+      <a class="brand" href="#top"><img src="{{root}}assets/logo.png" alt="" /> OpenEmux</a>
       <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#systems">Systems</a>
-        <a href="#screenshots">Screenshots</a>
-        <a href="#install">Install</a>
+        {{nav.features}}
+        {{nav.systems}}
+        {{nav.screenshots}}
+        {{nav.install}}
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
-        <a href="https://www.reddit.com/r/OpenEmux/">Community</a>
+        {{nav.community}}
         <a class="btn btn-primary btn-sm"
-          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download</a>
-      </nav>
-      <details class="lang-switch">
-        <summary aria-label="Language: English"><span class="flag" aria-hidden="true">🇺🇸</span><span class="lang-name">English</span></summary>
-        <ul>
-          <li><a href="./" hreflang="en" lang="en" aria-current="page"><span class="flag" aria-hidden="true">🇺🇸</span>English</a></li>
-          <li><a href="pt-br/" hreflang="pt-BR" lang="pt-BR"><span class="flag" aria-hidden="true">🇧🇷</span>Português (Brasil)</a></li>
-          <li><a href="es/" hreflang="es" lang="es"><span class="flag" aria-hidden="true">🇪🇸</span>Español</a></li>
-          <li><a href="fr/" hreflang="fr" lang="fr"><span class="flag" aria-hidden="true">🇫🇷</span>Français</a></li>
-          <li><a href="de/" hreflang="de" lang="de"><span class="flag" aria-hidden="true">🇩🇪</span>Deutsch</a></li>
-          <li><a href="ja/" hreflang="ja" lang="ja"><span class="flag" aria-hidden="true">🇯🇵</span>日本語</a></li>
-          <li><a href="zh-cn/" hreflang="zh-CN" lang="zh-CN"><span class="flag" aria-hidden="true">🇨🇳</span>简体中文</a></li>
-          <li><a href="ta/" hreflang="ta" lang="ta"><span class="flag" aria-hidden="true">🇮🇳</span>தமிழ்</a></li>
-        </ul>
-      </details>
+          {{nav.download}}
+      {{lang_switcher}}
     </div>
   </header>
 
@@ -989,23 +968,18 @@
   <section class="hero" id="top">
     <div class="stars"></div>
     <div class="wrap hero-inner">
-      <img class="hero-logo" src="assets/logo.png" alt="OpenEmux logo" />
-      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux now runs on Windows →</a>
-      <h1>Retro gaming,<br /><span class="grad">built Linux first.</span></h1>
-      <p class="lede">OpenEmux wraps the power of RetroArch in a clean GNOME-native frontend — so you can browse your
-        collection with cover art, pick up a gamepad, and just play. No config files. No setup rabbit holes.
-        Linux is where it is designed, built and tested first; Windows runs the same app, in beta.</p>
+      <img class="hero-logo" src="{{root}}assets/logo.png" {{hero.logo_alt}}
+      <a class="hero-pill" href="#install">{{hero.pill}}
+      {{hero.title}}
+      {{hero.lede}}
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
-          Linux</a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
-          Windows <span class="beta">Beta</span></a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ View on GitHub</a>
+        <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_linux}}
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_windows}}
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">{{hero.github}}
       </div>
-      <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak on Linux ·
-        installer &amp; portable ZIP on Windows</p>
+      {{hero.note}}
       <div class="shot">
-        <img src="assets/openemux-roms-snes.png" alt="OpenEmux library view showing SNES games with cover art" />
+        <img src="{{root}}assets/openemux-roms-snes.png" {{hero.shot_alt}}
       </div>
     </div>
     <div class="hero-pad"></div>
@@ -1014,46 +988,33 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap center">
-      <span class="eyebrow">Why OpenEmux</span>
-      <h2>Emulation without the homework</h2>
-      <p class="lede">RetroArch is one of the most powerful emulation platforms ever built. OpenEmux gives it an
-        interface that gets out of your way.</p>
+      {{features.eyebrow}}
+      {{features.title}}
+      {{features.lede}}
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>A real game shelf</h3>
-          <p>Your library, organized by console with full cover art synced automatically from the libretro thumbnail
-            archive.</p>
+          {{features.shelf}}
         </div>
         <div class="card">
           <div class="ico">✨</div>
-          <h3>Zero-config first boot</h3>
-          <p>On first launch OpenEmux sets up its config and downloads the cores your consoles need, in about ten
-            seconds. The rest arrive in the background while you browse.</p>
+          {{features.first_boot}}
         </div>
         <div class="card">
           <div class="ico">🎮</div>
-          <h3>Per-console controls</h3>
-          <p>Map keyboard and gamepad inputs per system in a friendly panel. Bindings are injected into RetroArch at
-            launch time.</p>
+          {{features.controls}}
         </div>
         <div class="card">
           <div class="ico">📺</div>
-          <h3>Shaders that look right</h3>
-          <p>Pick a CRT or scanline shader per console from a curated catalog and it just applies — no shader menu
-            spelunking.</p>
+          {{features.shaders}}
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Linux first</h3>
-          <p>Built in GTK4 and Adwaita, following the GNOME HIG, and tested on Linux before anything else. Linux is a
-            first-class citizen here; Windows comes along, in beta.</p>
+          {{features.native}}
         </div>
         <div class="card">
           <div class="ico">🔍</div>
-          <h3>BIOS at a glance</h3>
-          <p>A clear checklist of which BIOS files each console needs and which ones you already have. No more silent
-            launch failures.</p>
+          {{features.bios}}
         </div>
       </div>
     </div>
@@ -1063,34 +1024,24 @@
   <section id="philosophy">
     <div class="wrap split">
       <div>
-        <span class="eyebrow">The philosophy</span>
-        <h2>Play the games you own</h2>
-        <p class="lede">OpenEmux is a front-end for RetroArch, built to make emulation approachable. It is
-          <strong>not</strong> a source of games — it ships no games, no ROMs, no BIOS files, and never will.
-        </p>
+        {{philosophy.eyebrow}}
+        {{philosophy.title}}
+        {{philosophy.lede}}
         <ul class="checks">
-          <li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of
-            games you purchased.</li>
-          <li><strong>Piracy isn't what this is for.</strong> Downloading copyrighted games you don't own is illegal in
-            most countries.</li>
-          <li><strong>Emulation preserves history.</strong> So much of gaming's art, music and design lives on fragile
-            aging hardware. Keeping it playable is legitimate — and it works best when it respects the people who made
-            these games.</li>
+          {{philosophy.own}}
+          {{philosophy.piracy}}
+          {{philosophy.history}}
         </ul>
       </div>
       <div>
-        <img src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
-      </div>
-    </div>
-  </section>
+        {{philosophy.shot_alt}}
 
   <!-- SYSTEMS -->
   <section id="systems">
     <div class="wrap center">
-      <span class="eyebrow">31 systems</span>
-      <h2>Four decades of consoles, one library</h2>
-      <p class="lede">Nintendo, Sega, Sony, Atari and more — each with its own cores, cover art, input profiles and
-        shader settings.</p>
+      {{systems.eyebrow}}
+      {{systems.title}}
+      {{systems.lede}}
       <div class="systems">
         <span class="chip">Nintendo (NES) / Famicom</span>
         <span class="chip">Famicom Disk System</span>
@@ -1130,64 +1081,59 @@
   <!-- SCREENSHOTS -->
   <section id="screenshots">
     <div class="wrap center">
-      <span class="eyebrow">Screenshots</span>
-      <h2>Your collection, on a shelf</h2>
-      <p class="lede">Cover art, organized by console — the way a game library should look. Scroll through the
-        systems, and click any shot to view it full-size.</p>
+      {{shots.eyebrow}}
+      {{shots.title}}
+      {{shots.lede}}
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
-          <button class="carousel-btn carousel-prev" type="button" aria-label="Previous">‹</button>
+          <button class="carousel-btn carousel-prev" type="button" {{shots.prev}}
           <div class="carousel-viewport">
             <div class="carousel-track">
-              <figure><img src="assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
+              <figure><img src="{{root}}assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
                 <figcaption>Super Nintendo</figcaption>
               </figure>
-              <figure><img src="assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
+              <figure><img src="{{root}}assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
                 <figcaption>Game Boy Advance</figcaption>
               </figure>
-              <figure><img src="assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
+              <figure><img src="{{root}}assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
                 <figcaption>Nintendo 64</figcaption>
               </figure>
-              <figure><img src="assets/shelf/md.png" alt="OpenEmux — Sega Genesis / Mega Drive library" />
+              <figure><img src="{{root}}assets/shelf/md.png" alt="OpenEmux — Sega Genesis / Mega Drive library" />
                 <figcaption>Sega Genesis / Mega Drive</figcaption>
               </figure>
-              <figure><img src="assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
+              <figure><img src="{{root}}assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
                 <figcaption>Sega Master System</figcaption>
               </figure>
-              <figure><img src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+              <figure><img src="{{root}}assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="assets/shelf/nds.png" alt="OpenEmux — Nintendo DS library" />
+              <figure><img src="{{root}}assets/shelf/nds.png" alt="OpenEmux — Nintendo DS library" />
                 <figcaption>Nintendo DS</figcaption>
               </figure>
-              <figure><img src="assets/shelf/gb.png" alt="OpenEmux — Game Boy library" />
+              <figure><img src="{{root}}assets/shelf/gb.png" alt="OpenEmux — Game Boy library" />
                 <figcaption>Game Boy</figcaption>
               </figure>
-              <figure><img src="assets/shelf/gbc.png" alt="OpenEmux — Game Boy Color library" />
+              <figure><img src="{{root}}assets/shelf/gbc.png" alt="OpenEmux — Game Boy Color library" />
                 <figcaption>Game Boy Color</figcaption>
               </figure>
-              <figure><img src="assets/shelf/fc.png" alt="OpenEmux — NES / Famicom library" />
+              <figure><img src="{{root}}assets/shelf/fc.png" alt="OpenEmux — NES / Famicom library" />
                 <figcaption>NES / Famicom</figcaption>
               </figure>
             </div>
           </div>
-          <button class="carousel-btn carousel-next" type="button" aria-label="Next">›</button>
+          <button class="carousel-btn carousel-next" type="button" {{shots.next}}
         </div>
-        <div class="carousel-dots" role="tablist" aria-label="Carousel navigation"></div>
+        <div class="carousel-dots" role="tablist" {{shots.dots}}
       </div>
       <div style="margin-top:64px">
-        <h2>Settings that make sense</h2>
-        <p class="lede">ROM paths, BIOS checks, input mappings and shaders — all in one clean panel, no config files.
-        </p>
+        {{shots.settings_title}}
+        {{shots.settings_lede}}
         <div class="gallery thirds" style="margin-top:32px">
-          <figure><img src="assets/openemux-settings.png" alt="General settings" />
-            <figcaption>ROMs &amp; cover art</figcaption>
+          <figure>{{shots.settings_roms}}
           </figure>
-          <figure><img src="assets/openemux-settings-bios.png" alt="BIOS settings" />
-            <figcaption>BIOS checklist</figcaption>
+          <figure>{{shots.settings_bios}}
           </figure>
-          <figure><img src="assets/openemux-settings-input.png" alt="Input settings" />
-            <figcaption>Input mapping</figcaption>
+          <figure>{{shots.settings_input}}
           </figure>
         </div>
       </div>
@@ -1197,98 +1143,79 @@
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
-      <span class="eyebrow">Get started</span>
-      <h2>Running in under a minute</h2>
-      <p class="lede">Grab a package for your distro, the universal AppImage, the Flatpak — or, on Windows, the
-        installer. OpenEmux handles the rest on first launch.</p>
+      {{install.eyebrow}}
+      {{install.title}}
+      {{install.lede}}
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
           <div class="step-n">AppImage</div>
-          <h3>Any distro</h3>
+          {{install.any_distro}}
           <pre><code>chmod +x OpenEmux-x86_64.AppImage
 ./OpenEmux-x86_64.AppImage</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">No FUSE? Prefix with <code>APPIMAGE_EXTRACT_AND_RUN=1</code>.</p>
+          {{install.no_fuse}}
         </div>
         <div class="card">
           <div class="step-n">.deb</div>
           <h3>Debian / Ubuntu</h3>
           <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Ubuntu 24.04 LTS or newer.</p>
+          {{install.ubuntu_min}}
         </div>
         <div class="card">
           <div class="step-n">.rpm</div>
           <h3>Fedora</h3>
           <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Fedora 40 or newer.</p>
+          {{install.fedora_min}}
         </div>
         <div class="card">
           <div class="step-n">Flatpak</div>
-          <h3>Sandboxed, auto-updating</h3>
+          {{install.flatpak_title}}
           <pre><code>flatpak install -y flathub org.libretro.RetroArch
 flatpak remote-add --if-not-exists --no-gpg-verify \
   openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
 flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Updates arrive with <code>flatpak update</code>. A single-file
-            <code>.flatpak</code> bundle is on the Releases page too.
-          </p>
+          {{install.flatpak_note}}
         </div>
       </div>
 
       <h3 class="platform-head">Windows <span class="beta">Beta</span></h3>
-      <p class="lede">Both builds carry GTK 4, the Python runtime and RetroArch itself, so there is nothing to install
-        alongside them. Windows 10 or 11, 64-bit. It is new — if something misbehaves, <a
-          href="https://github.com/guilhermefeitosa66/OpenEmux/issues">open an issue</a>.</p>
+      {{install.windows_lede}}
       <div class="steps">
         <div class="card">
-          <div class="step-n">Installer</div>
-          <h3>The usual way</h3>
+          {{install.installer_step}}
+          {{install.installer_title}}
           <pre><code>OpenEmux-*-setup.exe</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Installs for your user only, so no administrator prompt.
-            The builds are not code-signed yet: SmartScreen will warn, and <em>More info → Run anyway</em> gets past
-            it.</p>
+          {{install.installer_note}}
         </div>
         <div class="card">
-          <div class="step-n">Portable</div>
-          <h3>Nothing installed</h3>
+          {{install.portable_step}}
+          {{install.portable_title}}
           <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Unzip it anywhere and run <code>OpenEmux.exe</code> from the
-            <code>OpenEmux\</code> folder inside. Good for a USB stick or a machine you cannot install software on.</p>
+          {{install.portable_note}}
         </div>
       </div>
 
       <div class="card" style="margin-top:22px;text-align:left">
-        <div class="step-n">Checksums</div>
-        <h3>Verify your download</h3>
-        <p style="font-size:.9rem">Every release ships a <code>SHA256SUMS</code> file. Put it next to the artifact you
-          downloaded and run:</p>
+        {{install.checksums_step}}
+        {{install.verify_title}}
+        {{install.verify_lede}}
         <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
-        <p style="margin-top:12px;font-size:.85rem"><code>OK</code> means the file is exactly what was published.
-          Anything else means it is corrupt or tampered with — don't run it.</p>
-        <p style="margin-top:16px;font-size:.9rem">On Windows, PowerShell prints the hash and you compare it by eye
-          with the matching line in <code>SHA256SUMS</code>:</p>
+        {{install.verify_ok}}
+        {{install.verify_windows}}
         <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
       </div>
       <p style="margin-top:22px"><a class="btn btn-primary btn-sm"
-          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download from Releases →</a></p>
-      <p class="lede" style="margin-top:40px">Prefer building it yourself?
-        <code>make bootstrap &amp;&amp; make run</code> — see the <a
-          href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">build instructions</a>.
-      </p>
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{install.releases}}
+      {{install.build}}
     </div>
   </section>
 
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
-      <span class="eyebrow">Standing on shoulders</span>
-      <h2>Thanks to RetroArch, libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux was directly inspired by <a href="https://openemu.org/">OpenEmu</a>, the beloved macOS
-        emulator that made retro gaming feel effortless and beautiful. Since OpenEmu is macOS-only, OpenEmux exists to
-        bring that same polish to Linux first, and now to Windows too. None of it would be possible without the
-        incredible work of the <a href="https://www.retroarch.com/">RetroArch</a> and <a
-          href="https://www.libretro.com/">libretro</a> teams. ❤️
-      </p>
+      {{thanks.eyebrow}}
+      {{thanks.title}}
+      {{thanks.lede}}
     </div>
   </section>
 
@@ -1296,18 +1223,14 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <section id="support">
     <div class="wrap">
       <div class="support">
-        <span class="eyebrow">Support the project</span>
-        <h2>OpenEmux is free — and stays free</h2>
-        <p class="lede center">If it made your retro shelf a little nicer, consider buying me a coffee. It helps me keep
-          improving features and stability. And come say hi on <a
-            href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> — share your setup, ask for help, or follow what's
-          coming next.</p>
+        {{support.eyebrow}}
+        {{support.title}}
+        {{support.lede}}
         <div class="cta" style="margin-top:26px">
           <a class="btn btn-primary"
-            href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">☕
-            Donate with PayPal</a>
-          <a class="btn btn-ghost" href="https://www.reddit.com/r/OpenEmux/">💬 Join r/OpenEmux</a>
-          <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">⭐ Star on GitHub</a>
+            href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">{{support.donate}}
+          <a class="btn btn-ghost" href="https://www.reddit.com/r/OpenEmux/">{{support.join}}
+          <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">{{support.star}}
         </div>
       </div>
     </div>
@@ -1316,25 +1239,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <footer>
     <div class="wrap">
       <div class="foot">
-        <div>Made with lots of love and care by <strong style="color:var(--text)">Guilherme Feitoza</strong> 🇧🇷</div>
+        {{footer.made}}
         <div class="foot-links">
           <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
           <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a>
           <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases</a>
-          <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/LICENSE">MIT License</a>
-          <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/THIRD_PARTY_NOTICES.md">Third-party
-            notices</a>
+          <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/LICENSE"{{footer.license}}
+          <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/THIRD_PARTY_NOTICES.md"{{footer.notices}}
         </div>
       </div>
-      <p class="disclaimer">OpenEmux is an independent open-source project and is not affiliated with, endorsed by, or
-        associated with OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari, or any other company. All trademarks
-        are the property of their respective owners. OpenEmux distributes no games, ROMs, or BIOS files.</p>
+      {{footer.disclaimer}}
     </div>
   </footer>
 
   <!-- Lightbox: click any screenshot to view it full-size (e-commerce style) -->
-  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer">
-    <button class="lightbox-close" id="lightboxClose" aria-label="Close">×</button>
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" {{lightbox.label}}
+    <button class="lightbox-close" id="lightboxClose" {{lightbox.close}}
     <img id="lightboxImg" src="" alt="" />
     <div class="lightbox-cap" id="lightboxCap"></div>
   </div>
@@ -1406,7 +1326,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         for (var i = 0; i < pages; i++) {
           var b = document.createElement('button');
           b.type = 'button';
-          b.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+          b.setAttribute('aria-label', {{js.slide}} + (i + 1));
           (function (idx) { b.addEventListener('click', function () { go(idx); }); })(i);
           dotsWrap.appendChild(b);
         }
