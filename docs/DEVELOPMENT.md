@@ -30,6 +30,7 @@ artifacts. For user-facing install instructions, see the main
   - [Package CI](#package-ci)
 - [Testing the packages on other distros](#testing-the-packages-on-other-distros)
 - [How the packages are laid out](#how-the-packages-are-laid-out)
+- [The website](#the-website)
 - [Cutting a release](#cutting-a-release)
 
 ## Requirements
@@ -938,6 +939,32 @@ developer credential — for a quota of their own.
 **Rotation.** A credential shipped in a client is extractable, so if the project
 account is ever abused, request a new `devid`/`devpassword` from ScreenScraper
 staff, update your `.env`, and cut a new release — no source change needed.
+
+## The website
+
+The GitHub Pages site is served from `docs/` on `main`, and it speaks the same
+languages as the app (`LANGUAGE_META` in `src/openemux/i18n/__init__.py`).
+English is `docs/index.html`; every other language is `docs/<slug>/index.html`
+(`pt-br`, `es`, `fr`, `de`, `ja`, `zh-cn`, `ta`).
+
+Those pages are **generated** — don't edit them. The source is:
+
+- `site/page.html` — the one template, with `{{key}}` placeholders;
+- `site/strings/<locale>.json` — one string table per language, same keys in
+  the same order, each value an HTML fragment.
+
+```bash
+python3 tools/build_site.py          # rewrite docs/ from the source
+python3 tools/build_site.py --check  # exit 1 if docs/ is out of date
+```
+
+Commit the regenerated pages with the source: Pages serves `docs/` as is.
+`tests/test_site.py` fails when they drift apart, when a language lacks a
+string, or when a translation changes the markup rather than the text.
+
+A change to the site alone reaches the live page only through `main`. Merge it
+to `develop` as usual, then open a second pull request with just `docs/` to
+`main` — or let it ride with the next release.
 
 ## Cutting a release
 
