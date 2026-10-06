@@ -1,8 +1,8 @@
 """The preferences dialog, driven the way the settings actually get changed.
 
 `ui/preferences.py` is the largest module in the app and sat at 11%: 1225
-statements, of which the suite executed the module-level `game_window_subtitle`
-and little else. Everything a user changes about OpenEmux passes through here,
+statements, of which the suite executed a single module-level helper and
+little else. Everything a user changes about OpenEmux passes through here,
 and every one of those changes is a signal handler that reads a widget and
 writes the config -- so a stub cannot stand in for it. The dialog is built
 against a real `ConfigManager` on a throwaway directory and a stand-in window
@@ -37,7 +37,7 @@ if HAVE_DISPLAY:
     from openemux.core.input_actions import GLOBAL_HOTKEY_ACTIONS
     from openemux.core.shaders import ShaderCatalog
     from openemux.ui import preferences as prefs_module
-    from openemux.ui.preferences import OpenEmuxPreferences, game_window_subtitle
+    from openemux.ui.preferences import OpenEmuxPreferences
 
 
 class _Core:
@@ -1172,73 +1172,6 @@ class TheVideoPageTests(_PreferencesCase):
         self.config.set_shader_for_console("SFC", "crt")
         self.prefs._restore_shader_defaults()
         self.assertEqual(self.toasts(), ["toast.shaders.defaults_restored"])
-
-
-@needs_display
-class TheGameWindowSwitchTests(_PreferencesCase):
-    def setUp(self):
-        super().setUp()
-        self.setUpToastCapture()
-
-    def test_the_subtitle_names_the_xwayland_cost_on_wayland(self):
-        with mock.patch.object(
-            prefs_module.game_window_support, "session_is_wayland", return_value=True
-        ):
-            subtitle = game_window_subtitle(lambda key, **kw: key)
-        self.assertIn("prefs.game_window.subtitle.xwayland", subtitle)
-
-    def test_the_subtitle_says_nothing_extra_on_x11(self):
-        with mock.patch.object(
-            prefs_module.game_window_support, "session_is_wayland", return_value=False
-        ):
-            subtitle = game_window_subtitle(lambda key, **kw: key)
-        self.assertEqual(subtitle, "prefs.game_window.subtitle")
-
-    def test_turning_the_game_window_on_is_stored(self):
-        with mock.patch(
-            "openemux.ui.game_window.display_supports_embedding", return_value=True
-        ), mock.patch.object(
-            prefs_module.game_window_support, "embed_unavailable_reason", return_value=None
-        ):
-            self.prefs._on_game_window_toggled(
-                mock.Mock(get_active=lambda: True), None
-            )
-        self.assertTrue(self.config.get_game_window_enabled())
-        self.assertEqual(self.toasts(), [])
-
-    def test_turning_it_on_in_a_session_that_cannot_embed_asks_for_a_restart(self):
-        # Issue #267: the X11 backend is chosen before GTK starts, so this run
-        # cannot honour the switch however it is set.
-        with mock.patch(
-            "openemux.ui.game_window.display_supports_embedding", return_value=False
-        ):
-            self.prefs._on_game_window_toggled(
-                mock.Mock(get_active=lambda: True), None
-            )
-        self.assertEqual(self.toasts(), ["toast.game_window.restart"])
-
-    def test_turning_it_off_never_asks_for_a_restart(self):
-        self.prefs._on_game_window_toggled(mock.Mock(get_active=lambda: False), None)
-        self.assertFalse(self.config.get_game_window_enabled())
-        self.assertEqual(self.toasts(), [])
-
-    def test_a_machine_that_cannot_embed_at_all_shows_a_disabled_row_that_says_why(self):
-        with mock.patch.object(
-            prefs_module.game_window_support, "embedding_possible", return_value=False
-        ):
-            prefs = OpenEmuxPreferences(self.win)
-        self.assertFalse(prefs._game_window_row.get_sensitive())
-        self.assertIn("prefs.game_window.unavailable", prefs._game_window_row.get_subtitle())
-
-    def test_on_windows_the_reason_says_there_is_no_equivalent(self):
-        with mock.patch.object(
-            prefs_module.game_window_support, "embedding_possible", return_value=False
-        ), mock.patch.object(prefs_module, "IS_WINDOWS", True):
-            prefs = OpenEmuxPreferences(self.win)
-        self.assertEqual(
-            prefs._game_window_row.get_subtitle(),
-            "prefs.game_window.unavailable_windows",
-        )
 
 
 @needs_display

@@ -10,7 +10,7 @@ artifacts. For user-facing install instructions, see the main
 - [Project layout](#project-layout)
 - [Running from source](#running-from-source)
 - [Running it without taking the screen](#running-it-without-taking-the-screen)
-- [The game window puts the whole app on X11](#the-game-window-puts-the-whole-app-on-x11)
+- [The in-game controls live inside RetroArch](#the-in-game-controls-live-inside-retroarch)
 - [Developing on Windows](#developing-on-windows)
   - [Gamepads: two backends, one token vocabulary](#gamepads-two-backends-one-token-vocabulary)
 - [Tests](#tests)
@@ -143,72 +143,39 @@ that were surprising enough to write down — distrobox shares the host's `/tmp`
 network *and* PID namespace, and each of those is a way for a container to
 reach out and touch the session it is meant to leave alone.
 
-## The game window puts the whole app on X11
+## The in-game controls live inside RetroArch
 
-OpenEmux has one hard X11 dependency, and it is a setting the user can turn
-off: **Play in an OpenEmux window** (`runtime.game_window`, on by default).
+A game always plays in **RetroArch's own window**. Its controls — close, menu,
+pause, reset, slow motion, fast-forward, turbo, save/load state, volume,
+fullscreen, hide — are a bar RetroArch draws itself, as an input overlay
+(issue #469). Until then they lived in a libadwaita "game window" that
+captured RetroArch's X11 window with `XReparentWindow`; that window, its
+preference and the XWayland forcing it needed are gone.
 
-The wrapper adopts RetroArch's own window with `XReparentWindow`
-([`core/x11_embed.py`](../src/openemux/core/x11_embed.py)), which only works
-between two X clients. So `_configure_game_window_backend()` in
-[`main.py`](../src/openemux/main.py) sets `GDK_BACKEND=x11` **before the first
-`gi` import** — it has to be before, because the backend is fixed the moment
-GTK opens the display, and nothing later can change it.
+The pieces:
 
-### What that costs on Wayland
+| Piece | Where | What it does |
+| --- | --- | --- |
+| The bar | [`data/overlay/openemux-bar.cfg`](../src/openemux/data/overlay/openemux-bar.cfg) + PNGs | One overlay page per combination of the toggles and shown/hidden; each button fires a RetroArch hotkey, and a toggle also swaps to the page with the other icon (`pause_toggle\|overlay_next`). |
+| Its generator | [`scripts/build_overlay.py`](../scripts/build_overlay.py) | Renders the PNGs from SVG paths and writes the `.cfg`. The output is committed; run it again after changing the bar: `/usr/bin/python3 scripts/build_overlay.py` (it needs GdkPixbuf's SVG loader). |
+| The margin | [`data/overlay/margin.glsl`](../src/openemux/data/overlay/margin.glsl) / `.slang` | A last shader pass that shrinks the game so the bar does not cover it. |
+| The launch | [`core/overlay_bar.py`](../src/openemux/core/overlay_bar.py) | The overlay overrides, and `prepare_shaders`: a folder holding exactly two presets — the console's own shader with and without the margin — that `video_shader_dir` points at, so the hide/show buttons' `shader_next` gives the space back to the game. |
+| The title | [`core/window_title.py`](../src/openemux/core/window_title.py) | Renames RetroArch's window to `<game> — <core> · RetroArch` over X11 and keeps it that way. |
 
-GTK4 picks one backend per *process*, not per window. There is no arrangement
-where the game wrapper speaks X11 and the library window speaks Wayland — so
-with the setting on, on a Wayland session, **the entire library UI renders
-through XWayland for the whole run**, whether or not a game is up. That is
-fractional-scaling sharpness and Wayland-native behaviour given up for the
-majority of the time, which the user spends browsing rather than playing.
+Three constraints that are easy to break:
 
-There is no way to have both, so the trade-off is stated rather than hidden:
-the switch's subtitle gains a sentence about it on a Wayland session
-(`prefs.game_window.subtitle.xwayland`, appended by
-`ui/preferences.game_window_subtitle`). A user who wants a Wayland-native
-library turns the setting off and lets RetroArch open its own window.
-
-The notice asks `game_window_support.session_is_wayland()`, which reads
-`WAYLAND_DISPLAY`/`XDG_SESSION_TYPE` rather than asking GTK what backend it
-opened. Asking GTK is the bug: on the session the notice is *for*,
-`GDK_BACKEND` is already `x11` because the setting is on, so GTK answers "X11"
-and the one person affected never sees it.
-
-### The guards, and the one that is not ours to override
-
-`_configure_game_window_backend()` leaves the backend alone in three cases:
-
-| Case | Why |
-| --- | --- |
-| `GDK_BACKEND` is already set | An explicit choice by the user or their launcher. **We never override it** — including a `wayland` that will then refuse to embed. |
-| `embedding_possible()` is false | No python-xlib, or no `DISPLAY` at all — a Wayland session without XWayland, or the Flatpak sandbox without `--socket=fallback-x11`. Forcing `x11` there leaves GTK with no display and the app does not start. |
-| The setting is off | Nothing to embed into. |
-
-The first row cuts both ways and is deliberate: `GDK_BACKEND=wayland` with the
-game window on is a session that will not embed, and the app says so at launch
-(`toast.game_window.unavailable`) rather than quietly ignoring the variable.
-`embedding_possible()` also reads only the *first* entry of a comma list, since
-that is what GTK does — `wayland,x11` used to pass the check and then put GTK
-on Wayland with the embed overrides already written (issue #212).
-
-At launch time the question is asked again, against the display GTK actually
-opened (`ui/game_window.display_supports_embedding`), with a standalone
-fallback: the pre-GTK guess is never the last word.
-
-### Testing both session types
-
-`make devbox-app` runs on an X server of its own, so it exercises the X11 half
-and nothing else. The Wayland half needs a real compositor —
-`make ubuntu-wayland` and its siblings in the packaging matrix.
-
-The two session types are explicit scenarios in
-[the regression test book](../tests/regression/TESTBOOK.md): `RT-253` (the
-notice appears on Wayland and not on X11) and `RT-256` (an explicit
-`GDK_BACKEND` is never overridden) are probes the suite runner executes;
-`RT-254` and `RT-255` need a real login session of each type and are the
-developer's to run.
+- **The bar's height is said in three places** — `STRIP` in the generator,
+  `overlay_bar.MARGIN`, and `MARGIN` in both shaders. `tests/test_overlay_bar.py`
+  fails if they disagree; a mismatch cuts the game or makes it resample.
+- **A console shader's last pass must render at the viewport.** Appending the
+  margin makes it an intermediate pass, and an intermediate pass with no scale
+  of its own renders at the *console's* resolution — dot grids and CRT masks
+  vanish. `prepare_shaders` rewrites its scale to the shrunk viewport.
+- **RetroArch runs as an X client wherever there is an X display** (XWayland
+  included): the launcher strips the Wayland pointers and pins
+  `input_driver = "x"`. That is the setup the bar was validated on — the X
+  input driver is what delivers its clicks — and the only one where the window
+  can be retitled. The library itself is left on whatever backend GTK picks.
 
 ## Tests
 
@@ -301,8 +268,7 @@ whole class, and it still holds for the lines coverage does not reach.
 
 An import that exists for its side effect rather than its name is kept with a
 `# noqa: F401` and a sentence saying why (`main.py` imports `Gtk` because
-importing it is what runs `Gtk.init()`; `x11_embed.py` imports the whole `Xlib`
-set because that block is the probe for whether python-xlib is installed).
+importing it is what runs `Gtk.init()`).
 
 ### Dependencies and the lock files
 

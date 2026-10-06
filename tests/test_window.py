@@ -2004,15 +2004,14 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.win.gamepad_navigator.stop.assert_called_once()
 
     def test_closing_takes_the_running_game_with_it(self):
-        with mock.patch.object(self.win.game, "close_now") as close_now, (
-            mock.patch.object(self.win.runtime_manager, "is_running", return_value=True)
+        with mock.patch.object(
+            self.win.runtime_manager, "is_running", return_value=True
         ), mock.patch.object(self.win.runtime_manager, "stop_active") as stop:
             self.assertFalse(self.win._on_close_stop_game())
-        close_now.assert_called_once()
         stop.assert_called_once_with(block=True)
 
     def test_closing_with_no_game_running_stops_nothing(self):
-        with mock.patch.object(self.win.game, "close_now"), mock.patch.object(
+        with mock.patch.object(
             self.win.runtime_manager, "is_running", return_value=False
         ), mock.patch.object(self.win.runtime_manager, "stop_active") as stop:
             self.win._on_close_stop_game()

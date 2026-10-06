@@ -161,8 +161,8 @@ class StartupImportsTests(unittest.TestCase):
 
     ``urllib.request`` brings ``http.client`` and ``ssl`` with it and is only
     ever needed by a sync, an update check or a sign-in; ``Xlib.display``
-    brings the X protocol machinery and is only needed by a launch that embeds
-    a game window. Between them they cost ~18 ms of a ~167 ms start-up, on
+    brings the X protocol machinery and is only needed once a game is up, to
+    retitle RetroArch's window. Between them they cost ~18 ms of a ~167 ms start-up, on
     every launch, for work the overwhelming majority of launches never do.
 
     ``asyncio`` and ``ssl`` are deliberately not on the list: PyGObject's own

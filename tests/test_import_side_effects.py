@@ -128,7 +128,6 @@ class PrepareProcessRunsOnceTests(unittest.TestCase):
             for name in (
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
-                "_configure_game_window_backend",
                 "configure_startup_logging",
                 "_ensure_gtk_typelibs",
             )

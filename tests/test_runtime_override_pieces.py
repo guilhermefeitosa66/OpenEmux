@@ -3,25 +3,25 @@
 `_write_runtime_override` assembled all of them inline: bindings for five
 device slots, stock-hotkey conflicts, analog modes, controller types, tuning,
 turbo, notifications, the BIOS directory, shaders, the command channel, the audio
-driver, save states and the embed overrides -- 170 lines, each block carrying
+driver, save states and the window overrides -- 170 lines, each block carrying
 its own comment saying which concern it was, which is structure standing in
 for a name (issue #238).
 
 They are helpers returning dicts now, and each can be asked its own question.
 The existing tests in `test_retroarch_launcher.py` go through the writer and
-read the file back; these go at the pieces directly, which is how the embed
-block -- the one that leaked into users' `retroarch.cfg` -- gets a test of its
-own rather than being read out of an assembled file.
+read the file back; these go at the pieces directly, which is how the window
+block -- the one that heals what the old game window leaked into users'
+`retroarch.cfg` -- gets a test of its own rather than being read out of an
+assembled file.
 """
 
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from openemux.core import retroarch_command
+from openemux.core import retroarch_command, retroarch_launcher
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from tests.test_retroarch_launcher import _DummyConfig
-from tests.platform_marks import linux_only
 
 
 def _launcher(tmp="/tmp/openemux-test", **config_attrs):
@@ -63,60 +63,40 @@ class TheSaveStatePieceTests(unittest.TestCase):
         self.assertEqual(overrides["state_slot"], '"3"')
 
 
-class TheEmbedPieceTests(unittest.TestCase):
-    """The block that leaked into users' own retroarch.cfg (issues #199, #267)."""
+class TheWindowPieceTests(unittest.TestCase):
+    """RetroArch's own window, healed of what the game window leaked (#469)."""
 
-    def test_without_a_wrapper_it_writes_retroarchs_defaults_back(self):
-        launcher, _config = _launcher(game_window=False)
-        overrides = launcher._embed_overrides()
+    def _overrides(self, display):
+        env = {"DISPLAY": display} if display else {}
+        with patch.dict(retroarch_launcher.os.environ, env, clear=True), patch.object(
+            retroarch_launcher, "IS_WINDOWS", False
+        ):
+            return RetroArchLauncher._window_overrides()
+
+    def test_it_writes_retroarchs_defaults_back(self):
         # Stated rather than left alone: it heals a config an earlier version
-        # already polluted.
+        # already polluted -- borderless, and never pausing on focus loss.
+        overrides = self._overrides(":0")
         self.assertEqual(overrides["video_window_show_decorations"], '"true"')
         self.assertEqual(overrides["pause_nonactive"], '"true"')
 
-    def test_without_a_wrapper_nothing_else_is_imposed(self):
-        launcher, _config = _launcher(game_window=False)
-        overrides = launcher._embed_overrides()
-        for key in ("video_fullscreen", "video_context_driver", "log_to_file"):
-            self.assertNotIn(key, overrides)
+    def test_the_fullscreen_hotkey_is_left_to_the_profile(self):
+        # The game window unbound it while it wrapped the game; the input
+        # profile's own binding is what wins now.
+        self.assertNotIn("input_toggle_fullscreen", self._overrides(":0"))
 
-    def test_without_a_wrapper_the_fullscreen_hotkey_is_left_alone(self):
-        # With no wrapper the input profile's own binding is what should win;
-        # unbinding it here is what left it permanently "nul".
-        launcher, _config = _launcher(game_window=False)
-        overrides = launcher._embed_overrides()
-        self.assertNotIn("input_toggle_fullscreen", overrides)
-
-    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
-    def test_with_a_wrapper_the_window_is_plain_and_undecorated(self):
-        launcher, _config = _launcher(game_window=True)
-        overrides = launcher._embed_overrides()
-        self.assertEqual(overrides["video_fullscreen"], '"false"')
-        self.assertEqual(overrides["video_windowed_fullscreen"], '"false"')
-        self.assertEqual(overrides["video_window_show_decorations"], '"false"')
-        self.assertEqual(overrides["video_window_save_positions"], '"false"')
-
-    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
-    def test_with_a_wrapper_focus_hops_do_not_pause_the_game(self):
-        launcher, _config = _launcher(game_window=True)
-        self.assertEqual(launcher._embed_overrides()["pause_nonactive"], '"false"')
-
-    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
-    def test_with_a_wrapper_the_fullscreen_hotkey_is_unbound_on_every_device(self):
-        # Only the keyboard one was unbound before, and the gamepad binding
-        # from the input profile survived: one press destroyed the embed
-        # (issue #267).
-        launcher, _config = _launcher(game_window=True)
-        overrides = launcher._embed_overrides()
-        for suffix in ("", "_btn", "_axis"):
-            self.assertEqual(overrides[f"input_toggle_fullscreen{suffix}"], '"nul"')
-
-    @linux_only("the game window is an X11 wrapper; it is never active elsewhere")
-    def test_with_a_wrapper_the_context_driver_is_emptied_not_pinned(self):
+    def test_on_x11_the_context_is_probed_and_the_mouse_comes_from_x(self):
+        overrides = self._overrides(":0")
         # Empty means "probe". Naming a context the build lacks would leave
         # the game with no video at all.
-        launcher, _config = _launcher(game_window=True)
-        self.assertEqual(launcher._embed_overrides()["video_context_driver"], '""')
+        self.assertEqual(overrides["video_context_driver"], '""')
+        self.assertEqual(overrides["input_driver"], '"x"')
+
+    def test_without_x_nothing_about_the_backend_is_imposed(self):
+        overrides = self._overrides(None)
+        self.assertNotIn("video_context_driver", overrides)
+        self.assertNotIn("input_driver", overrides)
+        self.assertEqual(overrides["log_to_file"], '"false"')
 
 
 class TheSessionPieceTests(unittest.TestCase):

@@ -147,9 +147,17 @@ class TheRuntimeSettingsTests(_ConfigCase):
         runtime["console_backend"] = {"SFC": "embedded"}
         self.assertEqual(self.config.get_runtime_mode_for_console("SNES"), "embedded")
 
-    def test_the_master_volume_is_clamped_to_the_range_retroarch_accepts(self):
-        self.config.set_master_volume_db(9999)
-        self.assertLess(self.config.get_master_volume_db(), 9999)
+    def test_the_game_windows_settings_are_dropped_on_load(self):
+        # The window that captured RetroArch's, and its volume slider, are
+        # gone (issue #469): a config that still carries them sheds them.
+        path = self.tmp / "old.yaml"
+        path.write_text(
+            "runtime:\n  game_window: true\n  master_volume_db: -6.0\n", encoding="utf-8"
+        )
+        runtime = ConfigManager(path).config["runtime"]
+        self.assertNotIn("game_window", runtime)
+        self.assertNotIn("master_volume_db", runtime)
+        self.assertEqual(runtime["mode"], "retroarch_wrapper")
 
     def test_the_extra_retroarch_flags_default_to_none_at_all(self):
         self.assertEqual(self.config.get_retroarch_extra_flags(), [])

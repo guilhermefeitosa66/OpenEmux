@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from openemux.core import core_options, game_window_support, retroachievements
+from openemux.core import core_options, overlay_bar, retroachievements
 from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
@@ -121,11 +121,18 @@ DEFAULT_NOTIFICATION_OVERRIDES = {
 }
 
 
-#: Environment variables that point a toolkit at a Wayland compositor. While
-#: embedding, RetroArch has to be an X client or the wrapper can never adopt
-#: its window, and removing these is what actually pins it -- the config
-#: override only stops a saved preference from fighting back (issue #267).
-WAYLAND_ENV_VARS = ("WAYLAND_DISPLAY", "SDL_VIDEODRIVER")
+def x11_display_available(env=None):
+    """Is there an X display RetroArch can be put on (XWayland included)?
+
+    Wherever there is, RetroArch runs as an X client (issue #469): that is
+    what the in-game bar was validated on -- the X input driver delivers its
+    clicks -- and the only place OpenEmux can retitle its window
+    (``window_title``). Without one (a Wayland session with no XWayland)
+    RetroArch is left to pick its own backend.
+    """
+    if IS_WINDOWS:
+        return False
+    return bool(((env if env is not None else os.environ).get("DISPLAY") or "").strip())
 
 
 def x11_only_env(env):
@@ -183,12 +190,12 @@ class RetroArchLauncher:
                 # dies with the process we signalled.
                 "--die-with-parent",
             ]
-            if game_window_support.game_window_active(self.config_manager):
+            if x11_display_available():
                 # Stripping WAYLAND_DISPLAY from *our* environment does not
                 # reach the sandbox -- `flatpak run` builds its own. Denying
                 # the socket does, and it is what makes the RetroArch
                 # Flatpak's --socket=fallback-x11 actually hand out X11, so
-                # the window we are about to adopt is an X window (#267).
+                # the game runs as the X client the bar expects (#267, #469).
                 prefix.append("--nosocket=wayland")
             prefix.append(RETROARCH_FLATPAK_ID)
             return prefix, None
@@ -375,7 +382,7 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
         Seven concerns, one file. They used to be one 170-line function whose
@@ -403,7 +410,12 @@ class RetroArchLauncher:
         overrides.update(self._session_overrides(network_cmd_port))
         overrides.update(self._av_overrides())
         overrides.update(self._savestate_overrides(states_dir, state_slot))
-        overrides.update(self._embed_overrides())
+        overrides.update(self._window_overrides())
+        # The game's controls are drawn by RetroArch itself (issue #469).
+        overrides.update(overlay_bar.runtime_overrides())
+        if shader_dir:
+            # Where the bar's hide/show buttons' "next shader" looks.
+            overrides["video_shader_dir"] = f'"{cfg_path(shader_dir)}"'
         # RetroAchievements does its own work inside RetroArch; what it needs
         # from us is the account (issue #300).
         overrides.update(
@@ -578,16 +590,14 @@ class RetroArchLauncher:
         }
 
     def _session_overrides(self, network_cmd_port):
-        """The command channel, the volume, and keeping this launch's own.
+        """The command channel, and keeping this launch's own.
 
-        The command channel (issue #69) is what lets the in-app volume, pause
-        and save controls reach the running game. The persisted master volume
-        seeds audio_volume so the level survives launches and the live
-        stepping starts from a known point.
+        The command channel (issue #69) is how the app reaches the running
+        game: QUIT when it is closed from the app, and the save-state slots
+        the state manager and the input hot-apply use.
         """
         return {
             **self._command_channel_overrides(network_cmd_port),
-            "audio_volume": f'"{self.config_manager.get_master_volume_db():.1f}"',
             # Nothing this file injects may outlive the launch that asked for
             # it. RetroArch saves its configuration on exit by default, and by
             # then the --appendconfig values *are* the configuration: every
@@ -605,8 +615,8 @@ class RetroArchLauncher:
             # quit. RetroArch defaults quit_press_twice to true, and the
             # network QUIT goes through the very same "quit key" path as the
             # hotkey: the first one only arms a two-second "press again to
-            # exit" window, so the command the game window sends when it
-            # closes was a no-op and the game kept playing. Measured against
+            # exit" window, so the command the app sends when it closes the
+            # game was a no-op and the game kept playing. Measured against
             # RetroArch 1.22.2: with the default, a single QUIT datagram
             # leaves the process alive; with this override it exits cleanly
             # (0), flushing battery saves on the way. The stock RetroArch
@@ -655,10 +665,9 @@ class RetroArchLauncher:
         vendored Linux build has no WIMP UI to start, so writing it there would
         be a line that reads as if it were load-bearing and is not.
 
-        This is not the game window. That wrapper -- pause, save state, volume
-        -- is X11 reparenting and has no Windows equivalent; Preferences says
-        so there (issue #118). This only stops RetroArch from putting its own
-        menu in front of the game.
+        This is not the in-game bar (``overlay_bar``), which RetroArch draws
+        on every platform. This only stops RetroArch from putting its own
+        desktop menu in front of the game.
 
         Launch-scoped like everything else in this file: ``--appendconfig``
         with ``config_save_on_exit = false``, so a user's own RetroArch keeps
@@ -760,62 +769,43 @@ class RetroArchLauncher:
             "state_slot": f'"{int(state_slot or 0)}"',
         }
 
-    def _embed_overrides(self):
-        """What the game window needs, or what heals a config it polluted.
+    @staticmethod
+    def _window_overrides():
+        """RetroArch's own window, decorated, and our log kept ours.
 
-        Keyed off the same answer the UI uses (issue #199): written without a
-        wrapper to own the window, they would leave the game floating
-        borderless.
+        The game always plays in RetroArch's own window (issue #469). The
+        first two are stated rather than left alone, because the game window
+        OpenEmux used to wrap RetroArch in leaked its overrides into users'
+        own retroarch.cfg: a game came up borderless and never paused when it
+        lost focus. Writing RetroArch's defaults back heals a config that was
+        already polluted.
         """
-        if not game_window_support.game_window_active(self.config_manager):
-            # Stated rather than left alone, because earlier versions leaked
-            # the block below into the user's own retroarch.cfg: a game
-            # launched without a wrapper came up borderless and never paused
-            # when it lost focus, and turning the setting off did not fix it.
-            # Writing RetroArch's defaults back heals a config that was
-            # already polluted. (The fullscreen hotkey heals itself: with no
-            # wrapper the input profile's own binding is written above.)
-            return {
-                "video_window_show_decorations": '"true"',
-                "pause_nonactive": '"true"',
-            }
-
-        # The game window needs RetroArch in a plain windowed window it can
-        # re-parent -- no fullscreen, no decorations, and no saving back the
-        # position we impose. pause_nonactive off because X keyboard focus
-        # moves between our window and the embedded one, and every such hop
-        # would otherwise pause the game.
         overrides = {
-            "video_fullscreen": '"false"',
-            "video_windowed_fullscreen": '"false"',
-            "video_window_show_decorations": '"false"',
-            "video_window_save_positions": '"false"',
-            "pause_nonactive": '"false"',
-            # Which backend RetroArch talks to is the whole embed: an X
-            # client can only reparent another X client. Dropping the
-            # Wayland socket from its environment (see launch_process) is
-            # what actually lands it on X11/XWayland, but a retroarch.cfg
-            # that *names* the wayland context would override that. Empty is
-            # RetroArch's own written default and means "probe" -- so this
-            # neutralizes a saved pin without imposing one. Not "x11": that
-            # is not a registered ident (the real one is "x"), and naming a
-            # context a build lacks would leave the game with no video at all.
-            "video_context_driver": '""',
+            "video_window_show_decorations": '"true"',
+            "pause_nonactive": '"true"',
             # Keep RetroArch's output in the log file the launcher opened for
             # it. With log_to_file on, RetroArch writes to its own file
-            # instead, our runtime log stays empty, and the game window loses
-            # the one early signal that tells it RetroArch is not an X client.
+            # instead, and the failure reasons read back from our log (a core
+            # that would not load, an AppImage that could not mount) are lost.
             "log_to_file": '"false"',
         }
-        # The wrapper owns the window: RetroArch toggling fullscreen on a
-        # reparented child recreates/unparents its window and breaks the
-        # embed, so the hotkey is unbound while embedded -- on the pad as
-        # well as the keyboard. Only the keyboard one was unbound before, and
-        # the gamepad binding written from the input profile
-        # (input_toggle_fullscreen_btn) survived: one press of that button
-        # destroyed a working embed (issue #267).
-        for suffix in ("", "_btn", "_axis"):
-            overrides[f"input_toggle_fullscreen{suffix}"] = '"nul"'
+        if x11_display_available():
+            # Dropping the Wayland socket from its environment (see
+            # launch_process) is what lands RetroArch on X11/XWayland, but a
+            # retroarch.cfg that *names* the wayland context would override
+            # that. Empty is RetroArch's own written default and means
+            # "probe" -- so this neutralizes a saved pin without imposing one.
+            # Not "x11": that is not a registered ident (the real one is "x"),
+            # and naming a context a build lacks would leave the game with no
+            # video at all.
+            overrides["video_context_driver"] = '""'
+            # The in-game bar is clicked with the mouse, and the X input
+            # driver is what delivers those clicks from the X server. "udev"
+            # -- which a retroarch.cfg may name -- reads the mouse from
+            # /dev/input instead, which most users cannot open, and the bar
+            # would sit there unclickable. Keyboard only: the pad has its own
+            # input_joypad_driver, untouched.
+            overrides["input_driver"] = '"x"'
         return overrides
 
     def _write_core_options(self, console, core_filename, runtime_dir, timestamp):
@@ -921,6 +911,7 @@ class RetroArchLauncher:
                 )
             return None, message
         core_filename = Path(core_path).name
+        self.last_core_path = core_path
         missing_bios = find_missing_required_for_core(self.config_manager, system_id, core_filename)
         if missing_bios:
             bios_dir = self.config_manager.get_console_bios_dir(system_id)
@@ -945,6 +936,18 @@ class RetroArchLauncher:
         self.last_shader_notice = self._shader_notice(
             shader_id, shader_path, video_driver
         )
+        # The bar needs the bottom of the screen kept clear while it is shown,
+        # and given back to the game when it is hidden: a pair of presets,
+        # with and without the margin pass, after the console's own shader if
+        # it has one (issue #469).
+        # The console's own preset is kept apart: it is what the launch log
+        # reports, since the pair below is always there.
+        console_preset = shader_path
+        shader_path, shader_dir = overlay_bar.prepare_shaders(
+            console_preset,
+            video_driver,
+            self.config_manager.get_runtime_dir(),
+        )
 
         cmd = [*launch_prefix, "-L", core_path]
         runtime_override = self._write_runtime_override(
@@ -954,6 +957,7 @@ class RetroArchLauncher:
             shader_enabled=bool(shader_path),
             state_slot=state_slot,
             network_cmd_port=network_cmd_port,
+            shader_dir=shader_dir,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
@@ -990,7 +994,7 @@ class RetroArchLauncher:
             # failure, nothing -- so "what did OpenEmux ask for" was the one
             # question the log could not answer. Now it can.
             log_handle.write(
-                self._log_header(system_id, video_driver, shader_id, shader_path)
+                self._log_header(system_id, video_driver, shader_id, console_preset)
             )
             log_handle.flush()
             # The session's environment, not this process's. Running from an
@@ -1004,10 +1008,10 @@ class RetroArchLauncher:
             # unwrapped RetroArch loading its own (issue #328).
             env = host_env(os.environ)
             # On a Wayland session RetroArch would pick its native wayland
-            # driver, whose window no X client can reparent. Stripped of the
-            # Wayland pointers it falls back to X11 and lands on XWayland,
-            # next to the app that main.py already put on the X11 backend.
-            if game_window_support.game_window_active(self.config_manager):
+            # driver. Stripped of the Wayland pointers it falls back to X11
+            # and lands on XWayland, where the bar's clicks and the window
+            # title work the way they were validated (issue #469).
+            if x11_display_available(env):
                 env = x11_only_env(env)
             proc = subprocess.Popen(
                 cmd,
