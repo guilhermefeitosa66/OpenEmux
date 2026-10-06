@@ -88,6 +88,21 @@
   </keywords>
 
   <releases>
+    <release version="1.14.0" date="2026-10-05">
+      <description>
+        <p>The first boot is ready in seconds, a bug can be reported from inside the app, and a running game is no longer reachable from the network.</p>
+        <ul>
+          <li>A live log panel, a "Log" button that counts errors, and a Report a Bug dialog that copies the details and opens the bug form</li>
+          <li>The log and the copied report write the home directory as ~, so they do not carry the user's name</li>
+          <li>The first boot waits only for the cores the consoles use; the rest download in the background</li>
+          <li>The core pickers show each core's real name and every core that can run the console</li>
+          <li>A running game is no longer reachable from the local network</li>
+          <li>ROMs can be dropped onto the sidebar, each going to its own console</li>
+          <li>ScreenScraper is on by default for new installs</li>
+          <li>A cartridge with no label shows a blank sticker instead of its box art</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.13.1" date="2026-09-09">
       <description>
         <p>OpenEmux runs on distributions that are not Debian-derived: the AppImage starts, and it can reach the network.</p>

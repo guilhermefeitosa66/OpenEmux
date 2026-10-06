@@ -179,6 +179,17 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Mon Oct 05 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.14.0-1
+- Report a bug from inside the app: a live log panel, a "Log" button with an error count, and a Report a Bug dialog
+- The log and the copied report write the home directory as ~, keeping the user's name out of it
+- The first boot waits only for the 35 cores the consoles use; the rest download in the background
+- The core info files are installed, so the core pickers show real names and every matching core
+- A running game is no longer reachable from the local network: RetroArch is driven over a private pipe
+- ROMs dropped onto the sidebar are imported, each into the console its extension names
+- ScreenScraper is on by default for new installs
+- A cartridge with no label shows a blank sticker instead of its box art cropped into it
+- On ARM the core pickers search the machine's own library directory
+
 * Wed Sep 09 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.13.1-1
 - The AppImage starts on Arch and every distribution whose /bin/sh is newer than the bundle
 - HTTPS works outside Debian: the bundle uses the machine's own CA store, so first boot completes
