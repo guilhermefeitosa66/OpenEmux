@@ -2033,6 +2033,36 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   of the bar names images that exist, and every toggle's target is a page (issue #469).
 - **Check:** suite file `tests/test_overlay_bar.py` (`ShippedAssetsTests`).
 
+
+### RT-334 — A PlayStation or PSP game shows the bar, not a touch gamepad
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A `retroarch.cfg` with `input_overlay_enable_autopreferred = "true"` (RetroArch's
+  default) and RetroArch's `overlays` folder installed; a PS and a PSP game.
+- **Steps:**
+  1. Launch the PS game, then the PSP one.
+- **Expected:** Each opens with OpenEmux's bar on the bottom edge. No touch gamepad (L1/L2/R1/R2,
+  a d-pad, the four shapes) is drawn over the game: RetroArch's "preferred overlay" for those
+  systems used to replace the bar the moment the content loaded (issue #471).
+- **Check:** human only; `grep autopreferred "$(ls -t ~/.openemux/runtime/runtime_*.cfg | head -1)"`
+  prints `input_overlay_enable_autopreferred = "false"`.
+
+### RT-335 — An N64 game has video, on either core, with the bar and its margin
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** An N64 ROM; both `parallel_n64` and `mupen64plus_next` installed.
+- **Steps:**
+  1. Launch the game with "ParaLLEl N64", play a moment, close it.
+  2. Choose "Mupen64Plus-Next" for the console and launch it again.
+  3. On each, hide the bar and show it again.
+- **Expected:** Both show the game, with the bar and the margin, from the very first launch — no
+  black screen. Hiding and showing the bar works on both. Those cores make RetroArch switch to
+  the `glcore` driver, which cannot read a `.glslp`; the launch now starts RetroArch on the driver
+  the core will ask for, with presets in that driver's format (issue #471).
+- **Check:** human only; the launch log's first line says `video_driver=glcore`, and
+  `~/.openemux/runtime/hw_drivers.json` names both cores with `"glcore"` after they ran. Suite
+  files `tests/test_hw_driver.py`, `tests/test_retroarch_launcher.py`
+  (`test_a_core_that_switches_to_glcore_starts_there_with_slang`).
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL

@@ -176,6 +176,16 @@ Three constraints that are easy to break:
   `input_driver = "x"`. That is the setup the bar was validated on — the X
   input driver is what delivers its clicks — and the only one where the window
   can be retitled. The library itself is left on whatever backend GTK picks.
+- **A preset only loads on the driver whose format it is written in** —
+  `.glslp` on `gl`, `.slangp` on `glcore`/`vulkan` — and a GPU core can make
+  RetroArch *switch* driver mid-launch (the N64 cores go from `gl` to
+  `glcore`; a `.glslp` there is a black screen). So the launch starts on the
+  driver the core will ask for: [`core/hw_driver.py`](../src/openemux/core/hw_driver.py)
+  predicts it from what the core asked for last time (read back from its log),
+  a short table, and the `.info`'s `required_hw_api`.
+- RetroArch's `input_overlay_enable_autopreferred` would swap the bar for a
+  system's touch gamepad (PlayStation and PSP ship one); the launch turns it
+  off.
 
 ## Tests
 
