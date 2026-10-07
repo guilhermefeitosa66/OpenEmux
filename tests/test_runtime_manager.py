@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from openemux.core import retroarch_command
+from openemux.core.hw_driver import HwDriverMemory
 from openemux.core.retroarch_command import StdinCommandClient
 from openemux.core.runtime_manager import (
     HOT_APPLY_STATE_SLOT,
@@ -544,6 +545,23 @@ class StartupFailureTests(unittest.TestCase):
 
         self.assertEqual(result["exit_code"], 1)
         self.assertIn("libfuse2", result["failure_reason"])
+
+    def test_the_driver_a_core_switched_to_is_remembered_for_its_next_launch(self):
+        # Issue #471: the next launch starts RetroArch on it, so presets in
+        # the matching format load and nothing switches mid-launch.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "[INFO] [Video] Using HW render, glcore driver forced.\n", encoding="utf-8"
+            )
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+            proc._openemux_core_path = "/cores/parallel_n64_libretro.so"
+            clock.advance(600.0)
+            proc.exit_code = 0
+            manager.poll_active()
+            memory = HwDriverMemory(manager.config_manager.get_runtime_dir())
+            self.assertEqual(memory.get("/cores/parallel_n64_libretro.so"), "glcore")
 
     def test_a_long_session_that_ends_badly_is_not_a_startup_failure(self):
         # A game the user played for an hour and that crashed on the way out

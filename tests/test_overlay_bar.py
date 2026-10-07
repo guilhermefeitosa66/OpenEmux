@@ -19,6 +19,13 @@ class RuntimeOverridesTests(unittest.TestCase):
         # Single Button (Toggle) in RetroArch 1.22's numbering.
         self.assertEqual(overrides["input_turbo_mode"], '"2"')
 
+    def test_no_system_overlay_replaces_the_bar(self):
+        # PlayStation and PSP have a "preferred" touch gamepad RetroArch would
+        # load in its place.
+        self.assertEqual(
+            overlay_bar.runtime_overrides()["input_overlay_enable_autopreferred"], '"false"'
+        )
+
     def test_keeps_the_overlay_clickable_in_fullscreen(self):
         overrides = overlay_bar.runtime_overrides()
         self.assertEqual(overrides["video_windowed_fullscreen"], '"true"')

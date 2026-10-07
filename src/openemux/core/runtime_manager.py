@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 
-from openemux.core import retroarch_log, save_states, window_title
+from openemux.core import hw_driver, retroarch_log, save_states, window_title
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     StdinCommandClient,
@@ -383,6 +383,11 @@ class RuntimeManager:
         log_path = getattr(proc, "_openemux_log_path", None)
         ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
+        # Whatever video driver this core made RetroArch switch to is where
+        # its next launch starts (issue #471).
+        hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir()).remember_from_log(
+            getattr(proc, "_openemux_core_path", None), log_path
+        )
 
         result = {
             "exit_code": exit_code,

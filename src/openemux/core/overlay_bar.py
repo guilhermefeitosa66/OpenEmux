@@ -58,6 +58,11 @@ def runtime_overrides():
     return {
         "input_overlay_enable": '"true"',
         "input_overlay": f'"{cfg_path(OVERLAY_CFG)}"',
+        # RetroArch's own default swaps the overlay for the system's
+        # "preferred" one when content loads -- a touch gamepad, on a desktop
+        # -- wherever it ships one: PlayStation and PSP do, so their games came
+        # up with that gamepad over them and no bar at all (issue #471).
+        "input_overlay_enable_autopreferred": '"false"',
         "input_overlay_opacity": '"1.000000"',
         # The dock is a 16:9 layout: keep its buttons square whatever the
         # window's shape, instead of stretching them with it.

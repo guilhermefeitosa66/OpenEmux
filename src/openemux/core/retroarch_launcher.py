@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from openemux.core import core_options, overlay_bar, retroachievements
+from openemux.core import core_options, hw_driver, overlay_bar, retroachievements
 from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
@@ -382,7 +382,7 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
         Seven concerns, one file. They used to be one 170-line function whose
@@ -409,6 +409,10 @@ class RetroArchLauncher:
         overrides.update(self._shader_overrides(shader_path, shader_enabled))
         overrides.update(self._session_overrides(network_cmd_port))
         overrides.update(self._av_overrides())
+        if video_driver:
+            # The driver this core will make RetroArch switch to, started on
+            # so nothing switches (see hw_driver).
+            overrides["video_driver"] = f'"{video_driver}"'
         overrides.update(self._savestate_overrides(states_dir, state_slot))
         overrides.update(self._window_overrides())
         # The game's controls are drawn by RetroArch itself (issue #469).
@@ -928,8 +932,18 @@ class RetroArchLauncher:
         elif hasattr(self.config_manager, "get_shader_for_console"):
             shader_id = normalize_shader_id(self.config_manager.get_shader_for_console(system_id))
         # The driver decides which preset format is loadable at all, so it is
-        # resolved before the preset and not after (issue #366).
-        video_driver = effective_video_driver(self._video_driver_setting())
+        # resolved before the preset and not after (issue #366) -- and it is
+        # the driver the *core* will end up on, which for a GPU core is not
+        # always the configured one (issue #471).
+        configured_driver = effective_video_driver(self._video_driver_setting())
+        hw_memory = hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir())
+        core_driver = hw_driver.predicted_driver(core_path, hw_memory)
+        video_driver = core_driver or configured_driver
+        if core_driver and core_driver != configured_driver:
+            logger.info(
+                "video driver: %s asks for %s; starting there instead of %s",
+                core_filename, core_driver, configured_driver,
+            )
         shader_path = self.shader_catalog.resolve_shader_path(
             shader_id, video_driver=video_driver
         )
@@ -958,6 +972,7 @@ class RetroArchLauncher:
             state_slot=state_slot,
             network_cmd_port=network_cmd_port,
             shader_dir=shader_dir,
+            video_driver=video_driver if video_driver != configured_driver else None,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:
@@ -1032,6 +1047,9 @@ class RetroArchLauncher:
             # Keep a reference attached to process object to avoid GC closing the file descriptor too early.
             proc._openemux_log_handle = log_handle
             proc._openemux_log_path = str(log_path)
+            # Which core ran, so the end of the game can record the video
+            # driver it made RetroArch switch to (hw_driver).
+            proc._openemux_core_path = core_path
             logger.info(
                 "retroarch launch started: console=%s core=%s rom=%s log=%s cmd_file=%s",
                 system_id,

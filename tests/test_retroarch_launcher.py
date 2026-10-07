@@ -273,11 +273,42 @@ class RetroArchLauncherTests(unittest.TestCase):
                     proc, _error = launcher.launch_process("/tmp/game.gba", "GBA")
                     _close_log(proc)
                     cmd = popen_mock.call_args[0][0]
+            override = Path(cmd[cmd.index("--appendconfig") + 1])
+            self._last_override = override.read_text(encoding="utf-8").splitlines()
             log_text = "".join(
                 path.read_text(encoding="utf-8")
                 for path in sorted((base / "runtime").glob("retroarch_gba_*.log"))
             )
             return cmd, launcher, log_text, presets
+
+    def test_a_core_that_switches_to_glcore_starts_there_with_slang(self):
+        # The N64 cores make RetroArch switch from gl to glcore, which cannot
+        # read a .glslp: handed one, it drew a black screen. The launch starts
+        # on the driver the core will ask for, with presets in its format
+        # (issue #471).
+        with patch(
+            "openemux.core.retroarch_launcher.hw_driver.predicted_driver",
+            return_value="glcore",
+        ):
+            cmd, _launcher, log_text, presets = self._launch_with_presets(
+                ("glsl", "slang"), video_driver_windows=False
+            )
+        # These stand-in presets cannot be extended, so the console's own
+        # slang one is what loads; what matters is that it is the slang one.
+        self.assertEqual(cmd[cmd.index("--set-shader") + 1], str(presets["slang"]))
+        self.assertIn('video_driver = "glcore"', self._last_override)
+        self.assertIn("video_driver=glcore", log_text)
+
+    def test_a_core_that_stays_on_the_configured_driver_writes_none(self):
+        with patch(
+            "openemux.core.retroarch_launcher.hw_driver.predicted_driver",
+            return_value="gl",
+        ):
+            cmd, _launcher, _log, _presets = self._launch_with_presets(
+                ("glsl", "slang"), video_driver_windows=False
+            )
+        self.assertTrue(cmd[cmd.index("--set-shader") + 1].endswith(".glslp"))
+        self.assertFalse(any(line.startswith("video_driver") for line in self._last_override))
 
     def test_a_d3d11_host_is_handed_the_slang_preset(self):
         # Issue #366: both packs are installed and the old order took the
