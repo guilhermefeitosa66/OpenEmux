@@ -3198,6 +3198,25 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   what the selection model indexes by.
 - **Check:** suite file `tests/test_grid_selection.py` (`WhatABandCatchesTests`).
 
+### RT-336 — The rubber band is drawn all the way to the pointer on a page with few games
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`) on its synthetic library, the
+  window about 1500×950 and the log panel closed.
+- **Steps:**
+  1. Open "GB - Game Boy" (three games, one row).
+  2. Press in the empty space at the bottom right of the page, well below and to the right of the
+     cards, and drag up and to the left until the pointer is over the first card; take a
+     screenshot *before* releasing (`make devbox-xdo CMD='mousedown 1'`, a few `mousemove`s, then
+     `make devbox-shot`).
+  3. Release.
+- **Expected:** While dragging, the blue rectangle runs from the point the drag started to the
+  pointer — across the empty space, not cut off at the bottom or right edge of the cards. On
+  release the three games are selected ("3 selected"). Clicking a card afterwards still works: the
+  layer the rectangle is drawn on takes no input (issue #473).
+- **Check:** the screenshot shows the rectangle's bottom-right corner at the press point, far
+  outside the cards; suite file `tests/test_grid_selection_widget.py` (`TheBandLayerTests`).
+
 ### RT-248 — Every launch heals a retroarch.cfg the old game window polluted
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
