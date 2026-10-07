@@ -245,19 +245,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `ui/icons.py` (0% covered) nor `ui/theming.py` had a test file (issue #245).
 - **Check:** suite files `tests/test_icons.py`, `tests/test_theming.py`.
 
-### RT-237 — A launch that cannot be adopted picks the right window, or hands the game back once
+### RT-237 — The title watcher finds this launch's window and no other RetroArch
 - **Area:** Launch & runtime
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
 - **Steps:** As a QA person: launch a game while your own RetroArch is already open, and launch one
   through a wrapper that forks (an AppImage, `flatpak-spawn`).
-- **Expected:** The wrapper adopts the window belonging to this launch — a `_NET_WM_PID` match wins,
-  a WM_CLASS match covers the forked case, and a RetroArch that was already on screen is never
-  taken. When no window can be adopted at all, the owner is told **exactly once** and the game is
-  handed back; a wrapper the user is closing reports nothing, or the owner would relaunch a game
-  they just quit (issues #245, #267).
-- **Check:** suite files `tests/test_x11_embed.py` (`FindGameWindowTests`), `tests/test_game_window.py`
-  (`StandaloneFallbackTests`).
+- **Expected:** The window retitled with the game's name (RT-331) is the one this launch opened —
+  a `_NET_WM_PID` match wins, a WM_CLASS match covers the forked case, and a RetroArch that was
+  already on screen is never taken (issues #245, #469).
+- **Check:** suite files `tests/test_x11_windows.py` (`FindGameWindowTests`),
+  `tests/test_window_title.py` (`KeepTitleTests`).
 
 ### RT-002 — The unit suite passes
 - **Area:** Startup
@@ -608,10 +606,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-PROBE
 - **Preconditions:** `develop` checked out, GTK importable.
 - **Steps:** As a QA person: start the app and confirm it still syncs covers, checks for updates,
-  signs in to RetroAchievements and embeds a game window — none of which happens at start-up.
+  signs in to RetroAchievements and retitles a running game's window — none of which happens at
+  start-up.
 - **Expected:** `urllib.request` (which brings `http.client` and `ssl` with it) and
   `Xlib.display` (the X protocol machinery) are not imported by starting the app. They are loaded
-  by the first sync, update check, sign-in or window embed instead. `asyncio` and `ssl` are
+  by the first sync, update check, sign-in or game launch instead. `asyncio` and `ssl` are
   deliberately not checked: PyGObject's own `gi/overrides/Gio.py` imports asyncio at module scope,
   so they arrive with `Gio` no matter what this app does.
 - **Check:**
@@ -1930,161 +1929,140 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   at an AppImage is a reasonable thing to do, and it has to keep working.
 - **Check:** suite file `tests/test_retroarch_launcher.py` (`AppImageFuseFallbackTests`).
 
-### RT-062 — A game launches and plays
+### RT-062 — A game launches and plays in RetroArch's own window
 - **Area:** Launch
 - **Mode:** MANUAL
-- **Preconditions:** A working core and ROM for at least one console; "Play in an OpenEmux window"
-  on (the default) and an X11/XWayland session.
+- **Preconditions:** A working core and ROM for at least one console.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Watch the window while the game boots.
-  3. Play for ~30 s; close the game window.
-- **Expected:** While the game is starting, the window shows a spinner and "Starting &lt;game&gt;…"
-  — never a plain black rectangle with no explanation. The game then appears *inside* an OpenEmux
-  window titled with the ROM name, with the header bar carrying pause, reset, save state, load
-  state, controller settings, volume and the RetroArch menu. Sound plays, input responds, and
-  closing the window ends the game and returns to the library cleanly.
+  2. Play for ~30 s, then close the game with the bar's power button.
+- **Expected:** The game opens in RetroArch's own window — **with its title bar and borders** —
+  and the in-game bar sits across the bottom edge (RT-327). Sound plays, input responds, and the
+  power button ends the game and returns to the library cleanly. No OpenEmux window wraps the game
+  and no "game window" notice is shown (issue #469).
 - **Check:** human only (grabbing the keyboard for the emulator makes automation unsafe).
 
-### RT-064 — Turning the game window off gives RetroArch its own window
+### RT-327 — The in-game bar sits on the bottom edge and does not cover the game
 - **Area:** Launch
 - **Mode:** MANUAL
 - **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. "Settings" → "Video" → turn "Play in an OpenEmux window" off.
-  2. Launch a game.
-- **Expected:** No OpenEmux wrapper appears; RetroArch opens its own decorated window — **with its
-  title bar and borders**, pausing when it loses focus — and behaves exactly as it did before the
-  feature existed, its fullscreen hotkey included. This holds even on a machine where an earlier
-  version already ran with the game window on.
-- **Check:** human only.
-- **Restore:** Turn the switch back on.
+  1. Look at the bottom of RetroArch's window; resize it wider (≈21:9) and narrower (≈4:3).
+  2. Toggle fullscreen with the bar's fullscreen button, then back.
+- **Expected:** A flat, full-width bar is glued to the bottom edge at every size and in fullscreen
+  (16:9 and 16:10 alike); its buttons keep their shape and stay together — none drift away from the
+  bar. The game image ends where the bar begins: nothing of the game is under it (issue #469).
+- **Check:** human only. The geometry rules themselves: `tests/test_overlay_bar.py`.
 
-### RT-065 — A session that cannot embed says so instead of failing
-- **Area:** Launch
-- **Mode:** AUTO-PROBE
-- **Preconditions:** none.
-- **Steps:** As a QA person: on a machine with no X display (a pure Wayland session, the Flatpak
-  sandbox), confirm the app still starts and the "Play in an OpenEmux window" switch is
-  unavailable rather than broken.
-- **Expected:** With no X display reachable, embedding reports itself impossible — so the startup
-  code never forces the X11 backend and the launcher never writes the embed overrides.
-- **Check:**
-  ```bash
-  PYTHONPATH=src .venv/bin/python - <<'EOF'
-  import os
-  from unittest import mock
-  from openemux.core import game_window_support as g
-  with mock.patch.dict(os.environ, {}, clear=True):
-      assert not g.embedding_possible(), "claimed embedding is possible with no DISPLAY"
-  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "wayland"}, clear=True):
-      assert not g.embedding_possible(), "ignored an explicit non-X11 backend"
-  print("RT-065 OK")
-  EOF
-  ```
-
-### RT-253 — On a Wayland session the switch says the whole app moves to XWayland
-- **Area:** Launch
-- **Mode:** AUTO-PROBE
-- **Preconditions:** none.
-- **Steps:** As a QA person: on a Wayland session, open "Settings" → "Video" and read the subtitle
-  under "Play in an OpenEmux window".
-- **Expected:** The subtitle carries an extra sentence naming XWayland — the setting decides how
-  the *library* is drawn too, not only the game. It does not appear on an X11 session, where there
-  is nothing to warn about. The question asked is what the compositor is, never what backend GTK
-  opened: with the setting on, `GDK_BACKEND` is already `x11`, so asking GTK would answer "X11"
-  on exactly the session the sentence is for (issue #258).
-- **Check:**
-  ```bash
-  PYTHONPATH=src .venv/bin/python - <<'EOF'
-  import os
-  from unittest import mock
-  from openemux.i18n import tr
-  from openemux.ui.preferences import game_window_subtitle
-  t = lambda key: tr("en", key)
-  note = t("prefs.game_window.subtitle.xwayland")
-  wayland = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0", "GDK_BACKEND": "x11"}
-  with mock.patch.dict(os.environ, wayland, clear=True):
-      assert note in game_window_subtitle(t), "Wayland session is not told about XWayland"
-  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "XDG_SESSION_TYPE": "x11"}, clear=True):
-      assert note not in game_window_subtitle(t), "X11 session shown an irrelevant warning"
-  print("RT-253 OK")
-  EOF
-  ```
-
-### RT-254 — On an X11 session the app is on X11 and the game embeds
+### RT-328 — Every button on the bar does what it says, and toggles show their state
 - **Area:** Launch
 - **Mode:** MANUAL
-- **Preconditions:** A login session of type `x11` (`echo $XDG_SESSION_TYPE`), a working core and
-  ROM, "Play in an OpenEmux window" on.
+- **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. Start the app and launch a game.
-  2. In another terminal, run `xprop -name OpenEmux WM_CLASS` while the app is up.
-- **Expected:** The game appears inside the OpenEmux window as in RT-062. `xprop` answers, because
-  the library window is a native X client — the same thing it would be with the setting off. On
-  this session type the setting costs nothing: it is the Wayland case (RT-255) where it also
-  changes how the library itself is drawn.
-- **Check:** human only (needs a real X11 login session).
+  1. Click, in turn: pause (and again), reset, slow motion (and again), fast-forward (and again),
+     save state, load state, mute (and again), volume −, volume +, the menu (and close it).
+- **Expected:** Each does what its icon says, with RetroArch's own notice ("Paused.",
+  "Slow-Motion.", "Fast-Forward.", "Audio muted.", the volume widget, the Quick Menu). Pause turns
+  into a blue play button while paused; slow motion and fast-forward turn blue while on; mute turns
+  red while muted. Save then load brings the game back to the saved moment. Only RetroArch's own
+  volume indicator appears (issue #469).
+- **Check:** human only. Known limit: a toggle flipped from the keyboard or RetroArch's menu does
+  not change the bar's icon.
 
-### RT-255 — On a Wayland session the game window puts the library on XWayland
+### RT-329 — Hiding the bar gives its space back to the game
 - **Area:** Launch
 - **Mode:** MANUAL
-- **Preconditions:** A login session of type `wayland` with XWayland available, a working core and
-  ROM.
+- **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. With "Play in an OpenEmux window" **on**, start the app. Run
-     `xlsclients | grep -i openemux` from another terminal.
-  2. Turn the setting off, restart the app, and run the same command.
-- **Expected:** With the setting on, `xlsclients` lists OpenEmux — the whole library UI is an
-  XWayland client for the entire run, not only while a game is up, and the game embeds normally.
-  With it off, `xlsclients` does not list it: the app is a native Wayland client and RetroArch
-  opens its own window. GTK4 fixes one backend per process, so there is no third state where the
-  wrapper is on X11 and the library is native (issue #258).
-- **Check:** human only (needs a real Wayland login session).
-- **Restore:** Turn the setting back on.
+  1. Pause the game and mute it, then click the bar's down-chevron.
+  2. Click the faded up-chevron that appears in the bottom-right corner.
+- **Expected:** Hidden, the bar is gone, the game grows to the full height of the window, and only
+  a small faded button remains in the bottom-right corner (RetroArch says `Shader: "Controls
+  hidden.glslp"`). Shown again, the bar returns with its state intact — still paused (blue play),
+  still muted (red) — and the game shrinks back above it.
+- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`).
 
-### RT-256 — An explicit GDK_BACKEND is never overridden
+### RT-330 — A console's shader keeps its quality with the bar
 - **Area:** Launch
-- **Mode:** AUTO-PROBE
-- **Preconditions:** none.
-- **Steps:** As a QA person: start the app with `GDK_BACKEND=wayland` set, with "Play in an
-  OpenEmux window" on.
-- **Expected:** The app respects the variable and stays on Wayland rather than forcing itself to
-  X11 — and, because nothing can be reparented there, reports the embed as impossible instead of
-  writing the overrides and stranding a borderless game. A comma list is judged by its **first**
-  entry, which is the one GTK takes: `wayland,x11` used to pass the check and then put GTK on
-  Wayland with the overrides already written (issue #212).
-- **Check:**
-  ```bash
-  PYTHONPATH=src .venv/bin/python - <<'EOF'
-  import os
-  from unittest import mock
-  from openemux.core import game_window_support as g
-  for backend in ("wayland", "wayland,x11"):
-      env = {"DISPLAY": ":0", "WAYLAND_DISPLAY": "wayland-0", "GDK_BACKEND": backend}
-      with mock.patch.dict(os.environ, env, clear=True):
-          assert not g.embedding_possible(), f"overrode an explicit GDK_BACKEND={backend}"
-  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "x11,wayland"}, clear=True):
-      assert g.embedding_possible(), "refused a list whose first entry is x11"
-  print("RT-256 OK")
-  EOF
-  ```
+- **Mode:** MANUAL
+- **Preconditions:** A console with a shader chosen in "Settings" → "Video" — `geom-crt` on SFC and
+  `dot` on GBA are the ones this was found with.
+- **Steps:**
+  1. Launch a game on each; look closely at the scanlines / dot grid with the bar shown.
+  2. Hide the bar and look again.
+- **Expected:** The shader is applied, and looks the same with the bar shown and hidden: scanlines
+  and dot grids are sharp, never blurred or missing. (A shader's last pass used to render at the
+  console's resolution once the margin pass was appended after it.)
+- **Check:** human only; the rewritten last pass in `tests/test_overlay_bar.py`
+  (`test_a_console_shader_is_kept_in_both_with_absolute_paths`).
 
-### RT-079 — The wrapper's fullscreen key works whatever it is bound to
+### RT-331 — RetroArch's window is titled with the game
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** An X11 session, or a Wayland one with XWayland.
+- **Steps:**
+  1. Launch a game and read the window's title bar; toggle fullscreen and back, and read it again.
+- **Expected:** The title reads `<game> — <core> · RetroArch` (e.g. "Chrono Trigger — Snes9x ·
+  RetroArch"), with No-Intro tags such as "(USA)" dropped — not RetroArch's "RetroArch Snes9x 1.63
+  fae2fea". It is still the game's title after the fullscreen round trip.
+- **Check:** human only; `xprop -id "$(xdotool search --class retroarch | tail -1)" _NET_WM_NAME`
+  prints the game's title. Suite files `tests/test_window_title.py`, `tests/test_x11_windows.py`.
+
+### RT-332 — The bar's turbo button fires the turbo button by itself
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session, on a game where the RetroPad's B does
+  something visible (a menu it confirms, a character it makes jump).
+- **Steps:**
+  1. Without touching the controller, click the bar's lightning bolt; wait a few seconds; click it
+     again.
+- **Expected:** While it is blue, B fires repeatedly on its own; the second click stops it. While
+  the bar is up the turbo mode is RetroArch's "Single Button (Toggle)", whatever the console's
+  profile says (issue #469).
+- **Check:** human only; the launch values in `tests/test_overlay_bar.py`
+  (`test_turbo_fires_on_its_own_after_one_press`) and `tests/test_retroarch_launcher.py`.
+
+### RT-333 — The bar's height, the margin and the shader agree
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
-- **Steps:** As a QA person: rebind "Toggle fullscreen" to Enter (or Page Up, Delete, keypad +,
-  right Shift), launch a game in the OpenEmux window and press it.
-- **Expected:** The window toggles fullscreen. Bindings are stored in RetroArch's vocabulary and X
-  does not know most of those words, so the grab resolved to nothing and the key did nothing —
-  and RetroArch's own toggle is deliberately unbound while embedded, so that left **no**
-  fullscreen key at all, with one log line to explain it (issue #236). A binding that still cannot
-  be resolved now falls back to "F" instead of to nothing.
-- **Check:** suite file `tests/test_x11_embed.py` (`KeysymResolutionTests` — including
-  `test_every_retroarch_key_name_can_be_resolved`, which walks the whole stored vocabulary against
-  the real Xlib tables), `tests/test_game_window.py` (`FullscreenBindingTests`).
+- **Steps:** As a QA person: change the bar's height in `scripts/build_overlay.py`, regenerate it,
+  and run the suite.
+- **Expected:** The suite fails until `overlay_bar.MARGIN` and the margin shaders' `MARGIN` say the
+  same height: any two disagreeing either cuts the game or leaves the image resampled. Every page
+  of the bar names images that exist, and every toggle's target is a page (issue #469).
+- **Check:** suite file `tests/test_overlay_bar.py` (`ShippedAssetsTests`).
 
+
+### RT-334 — A PlayStation or PSP game shows the bar, not a touch gamepad
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A `retroarch.cfg` with `input_overlay_enable_autopreferred = "true"` (RetroArch's
+  default) and RetroArch's `overlays` folder installed; a PS and a PSP game.
+- **Steps:**
+  1. Launch the PS game, then the PSP one.
+- **Expected:** Each opens with OpenEmux's bar on the bottom edge. No touch gamepad (L1/L2/R1/R2,
+  a d-pad, the four shapes) is drawn over the game: RetroArch's "preferred overlay" for those
+  systems used to replace the bar the moment the content loaded (issue #471).
+- **Check:** human only; `grep autopreferred "$(ls -t ~/.openemux/runtime/runtime_*.cfg | head -1)"`
+  prints `input_overlay_enable_autopreferred = "false"`.
+
+### RT-335 — An N64 game has video, on either core, with the bar and its margin
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** An N64 ROM; both `parallel_n64` and `mupen64plus_next` installed.
+- **Steps:**
+  1. Launch the game with "ParaLLEl N64", play a moment, close it.
+  2. Choose "Mupen64Plus-Next" for the console and launch it again.
+  3. On each, hide the bar and show it again.
+- **Expected:** Both show the game, with the bar and the margin, from the very first launch — no
+  black screen. Hiding and showing the bar works on both. Those cores make RetroArch switch to
+  the `glcore` driver, which cannot read a `.glslp`; the launch now starts RetroArch on the driver
+  the core will ask for, with presets in that driver's format (issue #471).
+- **Check:** human only; the launch log's first line says `video_driver=glcore`, and
+  `~/.openemux/runtime/hw_drivers.json` names both cores with `"glcore"` after they ran. Suite
+  files `tests/test_hw_driver.py`, `tests/test_retroarch_launcher.py`
+  (`test_a_core_that_switches_to_glcore_starts_there_with_slang`).
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL
@@ -2096,21 +2074,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   refused, but the refusal is an error toast, so anyone who habitually double-clicks got an error
   on every launch (issue #236).
 - **Check:** human only (launching grabs the keyboard for the emulator); the debounce itself in
-  `tests/test_game_window.py` (`DoubleClickTests`).
-
-### RT-084 — Input keeps working after clicking the game window's chrome
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** A game running in the OpenEmux window.
-- **Steps:**
-  1. Click the header bar (the pause or volume control), then go back to playing.
-- **Expected:** The pad and the keyboard still drive the game. RetroArch gates input on X focus,
-  and the reclaim tick used to skip entirely on sessions whose window manager does not keep
-  `_NET_ACTIVE_WINDOW` current — the game went input-dead after any click on the chrome, silently
-  (issue #236). The fallback now decides from X's own input focus, and the missing property is
-  logged once.
-- **Check:** human only; the decision itself in `tests/test_x11_embed.py`
-  (`FocusReclaimDecisionTests`, `EnsureFocusWithoutActiveWindowTests`).
+  `tests/test_grid_activation.py` (`DoubleClickTests`).
 
 ### RT-063 — In-game hotkeys work
 - **Area:** Launch
@@ -2119,23 +2083,19 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. In game, use the hint-bar hotkeys: hold and press `F` (fullscreen toggle), hold and press
      `F1` (RetroArch menu); save and load a state.
-- **Expected:** Each hotkey does what the hint bar promises. Note that while the game is embedded
-  the *keyboard* fullscreen binding is the one that works: the wrapper grabs it and fullscreens
-  itself, because RetroArch toggling fullscreen on a re-parented window would recreate that window
-  and break the embed. RetroArch's own fullscreen bindings, keyboard and pad alike, are unbound
-  for the duration (see RT-155).
+- **Expected:** Each hotkey does what the hint bar promises, alongside the bar's own buttons
+  (RT-328). The fullscreen binding is RetroArch's own, keyboard and pad alike.
 - **Check:** human only.
 
-### RT-066 — Closing the game window ends the emulator process
+### RT-066 — Closing the game's window ends the emulator process
 - **Area:** Launch
 - **Mode:** MANUAL
-- **Preconditions:** A working core and ROM; "Play in an OpenEmux window" on. Run this on the
-  install being released (Flatpak included) — what a stop signal reaches depends on how RetroArch
-  was launched.
+- **Preconditions:** A working core and ROM. Run this on the install being released (Flatpak
+  included) — what a stop signal reaches depends on how RetroArch was launched.
 - **Steps:**
   1. Launch a game and let it run until sound is playing.
-  2. Click the window's "×".
-  3. Wait 5 s, then run `pgrep -af retroarch` in a terminal.
+  2. Close it with the bar's power button; repeat with the window's "×".
+  3. Each time, wait 5 s, then run `pgrep -af retroarch` in a terminal.
 - **Expected:** The window closes, the sound stops with it, and no RetroArch process is left
   behind — `pgrep` prints nothing. The library window is still there, with the "finished" toast.
 - **Check:** human only; `pgrep -af retroarch` must print nothing.
@@ -2186,10 +2146,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   interface enabled on its default port 55355, playing something audible.
 - **Steps:**
   1. With that instance running, launch a game from OpenEmux.
-  2. Open the volume popover and drag the slider; press pause and the save-state button.
+  2. Use the bar's volume, pause and save-state buttons, and save a state from the app's state
+     manager.
   3. Watch the *other* RetroArch.
 - **Expected:** Only the OpenEmux game reacts. The other instance's volume, pause state and save
-  states are untouched (issue #227). On Linux there is nothing the two could share: our game takes
+  states are untouched (issue #227) — the bar is drawn inside our game, and the app's own commands
+  go through our game's stdin. On Linux there is nothing the two could share: our game takes
   its commands through its own stdin pipe and has no UDP port at all (RT-315).
 - **Check:** On Linux, `grep -hE '^(stdin|network)_cmd' "$(ls -t ~/.openemux/runtime/runtime_*.cfg
   | head -1)"` prints exactly `network_cmd_enable = "false"` and `stdin_cmd_enable = "true"`, and
@@ -2207,8 +2169,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Launch a game and, while it runs, list the UDP sockets: `ss -ulnp | grep retroarch`.
   2. From another machine on the same network, try to reach it — or, as the probe does, look at
      what RetroArch bound.
-- **Expected:** Our RetroArch has no UDP socket. Its commands (volume, pause, save, load, reset,
-  quit) come through a pipe on its stdin that only OpenEmux holds, and the launch switches
+- **Expected:** Our RetroArch has no UDP socket. The commands the app sends it (quit, and the save
+  and load of state slots) come through a pipe on its stdin that only OpenEmux holds, and the launch switches
   RetroArch's network command interface *off* even when the user's own `retroarch.cfg` turns it
   on. That interface binds `0.0.0.0`, not loopback: before this, anyone on the local network
   could quit, reset or overwrite a save state in a running game, with no authentication. Windows
@@ -2263,23 +2225,6 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_runtime_manager.py` (`StdinChannelTests`), `tests/test_retroarch_launcher.py`
   (`TheCommandPipeTests`), `tests/test_runtime_override_pieces.py` (`TheSessionPieceTests`).
 
-### RT-158 — The volume control says where the game actually is
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** RT-062 done in the same session, with audible sound.
-- **Steps:**
-  1. Open the volume popover and drag the slider from the top to the bottom in one move.
-  2. Watch the line under the slider while the audio ramps.
-  3. Wait for it to disappear, then open RetroArch's own menu → "Audio" → "Volume".
-  4. Close the popover and reopen it.
-- **Expected:** While the audio is still ramping, the popover reports the level the game is
-  actually at; the line disappears when the two agree. RetroArch's own reading then matches the
-  slider within one 0.5 dB step, and reopening the popover does not make the slider jump
-  (issue #284).
-- **Check:** human only for the reading; suite files `tests/test_retroarch_command.py`
-  (a lost step is retried, and a walk that ends short leaves the tracker on what landed) and
-  `tests/test_runtime_manager.py` (mute does not flip on a datagram that never left).
-
 ### RT-159 — Achievements unlock while you play
 - **Area:** Launch
 - **Mode:** MANUAL
@@ -2313,107 +2258,6 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   looks like.
 - **Check:** human only; the launch log in `~/.openemux/runtime/retroarch_*.log` must contain
   `[Audio] Started synchronous audio driver` and no `failed_to_start_audio_driver`.
-
-### RT-152 — A session that cannot embed never strips RetroArch's window
-<!-- Numbered outside the Launch block: 060-069 is full and ids are never reused. -->
-- **Area:** Launch
-- **Mode:** AUTO-PROBE
-- **Preconditions:** none.
-- **Steps:** As a QA person: on a session that cannot host the game window — GTK on Wayland, or
-  after an embed has already failed once — confirm the launcher writes RetroArch's own window
-  settings back instead of the embed ones.
-- **Expected:** The borderless overrides are only ever written when a wrapper will actually exist.
-  Anything else leaves the game undecorated, unmovable and without its fullscreen hotkey, with no
-  window to hold it (issue #267).
-- **Check:**
-  ```bash
-  PYTHONPATH=src .venv/bin/python - <<'EOF'
-  import os
-  from unittest import mock
-  from openemux.core import game_window_support as g
-
-  g.reset_embed_state()
-  # GTK reported a non-X11 display: capability is unchanged, this launch is not.
-  with mock.patch.dict(os.environ, {"DISPLAY": ":0"}, clear=True):
-      with mock.patch.object(g, "XLIB_AVAILABLE", True):
-          g.set_display_embeddable(False)
-          assert g.embedding_possible(), "the Preferences switch must stay usable"
-          assert not g.embedding_ready(), "launched an embed on a non-X11 display"
-  g.reset_embed_state()
-  # A failed embed latches the rest of the session standalone.
-  with mock.patch.object(g, "embedding_possible", lambda: True):
-      g.mark_embed_unavailable("RetroArch is not an X11 client")
-      assert not g.embedding_ready(), "tried to embed again after a failure"
-  g.reset_embed_state()
-  # GTK takes the first backend that opens, so wayland,x11 means wayland.
-  with mock.patch.dict(os.environ, {"DISPLAY": ":0", "GDK_BACKEND": "wayland,x11"}, clear=True):
-      with mock.patch.object(g, "XLIB_AVAILABLE", True):
-          assert not g.embedding_possible(), "accepted a backend list that lands on Wayland"
-  print("RT-152 OK")
-  EOF
-  ```
-
-### RT-153 — A failed embed hands the game back a normal window
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** "Play in an OpenEmux window" on, a working core and ROM. The embed has to
-  fail, which on a healthy X11 machine means forcing it: run the app with
-  `RetroArchWindowEmbedder.find_game_window` patched to return `None`.
-- **Steps:**
-  1. Launch a game and watch the OpenEmux game window.
-  2. Wait for it to give up.
-- **Expected:** While it waits, the window shows a spinner and "Starting &lt;game&gt;…" rather than
-  a black rectangle. When it gives up it says so — *"The game window could not take over
-  RetroArch. Reopening the game in its own window."* — and the game comes back in **RetroArch's
-  own decorated window: a title bar, movable, resizable, its fullscreen hotkey working and the
-  game pausing when it loses focus.** The user is never left with an undecorated square that
-  cannot be moved (issue #267). Launching a second game afterwards opens no wrapper at all and is
-  decorated from the start.
-- **Check:** human only. The newest `~/.openemux/runtime/runtime_*.cfg` written after the failure
-  must contain `video_window_show_decorations = "true"` and `pause_nonactive = "true"`, and must
-  **not** contain `video_context_driver = ""`.
-
-### RT-154 — Moving the game window mid-play keeps the game inside it
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** RT-062 done in the same session, with the game visibly inside the wrapper.
-- **Steps:**
-  1. Drag the game window around the screen by its header bar, several times, while the game runs.
-  2. If a second monitor is available, drag it onto that one too.
-  3. Keep playing for ~30 s afterwards.
-- **Expected:** The game stays inside the window and keeps running throughout. The wrapper never
-  disappears and no borderless RetroArch window is left behind — that is exactly the failure
-  issue #267 was reported as.
-- **Check:** human only; `~/.openemux/runtime/openemux_startup.log` must contain no
-  `embedding unavailable` line for that session.
-
-### RT-155 — The pad's fullscreen button cannot break the embed
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** RT-062 done in the same session, with a gamepad connected and a fullscreen
-  binding mapped to a pad button.
-- **Steps:**
-  1. With the game embedded, press the pad button bound to the fullscreen toggle several times.
-- **Expected:** Nothing happens to the embed: RetroArch does not recreate its window and the game
-  stays inside the OpenEmux window. The keyboard fullscreen binding is the fullscreen path while
-  embedded, and it still works.
-- **Check:** human only; the launch's `runtime_*.cfg` must contain
-  `input_toggle_fullscreen_btn = "nul"`.
-
-### RT-156 — The mouse cursor stays visible over the embedded game
-- **Area:** Launch
-- **Mode:** MANUAL
-- **Preconditions:** RT-062 done in the same session, on a desktop whose screen lock can be
-  triggered (`loginctl lock-session`, or the shortcut the desktop provides).
-- **Steps:**
-  1. With the game embedded, move the pointer over the game area and note the cursor.
-  2. Lock the session, wait a few seconds, unlock it.
-  3. Move the pointer over the game area again.
-  4. Alt+Tab to another window and back, then move the pointer over the game area once more.
-- **Expected:** The cursor is visible over the game in step 1 and stays visible in steps 3 and 4.
-  It never has to be recovered by opening the RetroArch menu.
-- **Check:** human only; `tests/test_x11_embed.py` covers the two moments the wrapper redefines
-  the pointer (every adoption, and the focus-reclaim edge that an unlock produces).
 
 ### RT-151 — The menu icon opens the install that owns it
 - **Area:** Packaging
@@ -2492,12 +2336,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   user in between. Exactly one retry: a second failure is reported normally. A native RetroArch is
   never retried — there is nothing to unpack — and a death the log does not blame on FUSE is
   reported at once.
-  The game window follows the retry rather than closing on the dead process, so the game is still
-  wrapped and embedding is not written off for the session.
 - **Check:** suite files `tests/test_runtime_manager.py` (`UnpackedRetryTests`),
   `tests/test_retroarch_launcher.py` (`ForcedExtractRetryTests`),
-  `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`),
-  `tests/test_game_window.py` (`FollowRelaunchTests`).
+  `tests/test_retroarch_log.py` (`FuseFailureTests`, `ReadIsFuseFailureTests`).
 
 ### RT-314 — Every packaged icon is the size its directory claims
 - **Area:** Packaging
@@ -3357,19 +3198,37 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   what the selection model indexes by.
 - **Check:** suite file `tests/test_grid_selection.py` (`WhatABandCatchesTests`).
 
-### RT-248 — A launch without the game window heals a polluted retroarch.cfg
+### RT-336 — The rubber band is drawn all the way to the pointer on a page with few games
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`) on its synthetic library, the
+  window about 1500×950 and the log panel closed.
+- **Steps:**
+  1. Open "GB - Game Boy" (three games, one row).
+  2. Press in the empty space at the bottom right of the page, well below and to the right of the
+     cards, and drag up and to the left until the pointer is over the first card; take a
+     screenshot *before* releasing (`make devbox-xdo CMD='mousedown 1'`, a few `mousemove`s, then
+     `make devbox-shot`).
+  3. Release.
+- **Expected:** While dragging, the blue rectangle runs from the point the drag started to the
+  pointer — across the empty space, not cut off at the bottom or right edge of the cards. On
+  release the three games are selected ("3 selected"). Clicking a card afterwards still works: the
+  layer the rectangle is drawn on takes no input (issue #473).
+- **Check:** the screenshot shows the rectangle's bottom-right corner at the press point, far
+  outside the cards; suite file `tests/test_grid_selection_widget.py` (`TheBandLayerTests`).
+
+### RT-248 — Every launch heals a retroarch.cfg the old game window polluted
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
-- **Steps:** As a QA person: turn the game window off in "Settings" → "Video", launch a game,
-  and read the `--appendconfig` file the launcher wrote under `~/.openemux/runtime/`.
+- **Steps:** As a QA person: launch a game and read the `--appendconfig` file the launcher wrote
+  under `~/.openemux/runtime/`.
 - **Expected:** It states `video_window_show_decorations = "true"` and `pause_nonactive = "true"`
-  rather than saying nothing. Earlier versions leaked the embed block into the user's own
-  `retroarch.cfg`, so a game launched without a wrapper came up borderless and never paused when
-  it lost focus -- and turning the setting off did not fix it. It also leaves the fullscreen
-  hotkey alone, so the input profile's own binding is what wins (issues #199, #267).
-- **Check:** suite file `tests/test_runtime_override_pieces.py` (`TheEmbedPieceTests`).
-
+  rather than saying nothing. The game window older versions wrapped RetroArch in leaked its block
+  into the user's own `retroarch.cfg`, so a game came up borderless and never paused when it lost
+  focus. It also leaves the fullscreen hotkey alone, so the input profile's own binding is what
+  wins (issues #199, #267, #469).
+- **Check:** suite file `tests/test_runtime_override_pieces.py` (`TheWindowPieceTests`).
 
 ### RT-075 — No button fires two commands at once
 - **Area:** Input
@@ -3687,20 +3546,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Area:** i18n
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
-- **Steps:** As a QA person: run the app in a non-English locale, pause a game in the OpenEmux
-  window and hover the button, open "Choose cover image", and try to launch a second game while
-  one is running.
-- **Expected:** All three read in the chosen language. Each used to be English whatever the
-  locale: the pause button was *built* with a translated label and *rewritten* with the literal
-  `"Resume"`, so it flipped to English on the first click and stayed there; the file picker's
-  filter said `Images` beside an Open/Cancel pair the portal had translated; and the "a game is
-  already running" toast was an English sentence returned from `core/runtime_manager.py`, which
-  has no locale (issue #232).
+- **Steps:** As a QA person: run the app in a non-English locale, open "Choose cover image", and
+  try to launch a second game while one is running.
+- **Expected:** Both read in the chosen language. Each used to be English whatever the locale: the
+  file picker's filter said `Images` beside an Open/Cancel pair the portal had translated, and the
+  "a game is already running" toast was an English sentence returned from
+  `core/runtime_manager.py`, which has no locale (issue #232).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python - <<'EOF'
   from openemux.i18n import LOCALE_TRANSLATIONS, SUPPORTED_LOCALES, tr
-  for key in ("game_window.resume", "dialog.filter.images", "toast.launch.already_running"):
+  for key in ("dialog.filter.images", "toast.launch.already_running"):
       for locale in SUPPORTED_LOCALES:
           assert key in LOCALE_TRANSLATIONS[locale], f"{locale} is missing {key}"
   for key in ("dialog.sync.title", "dialog.scan.title"):
@@ -4451,17 +4307,6 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Expected:** Explorer opens on that console's ROM directory, with no error toast. (GIO answers
   *No application is registered as handling this file* for a `file://` directory URI on Windows,
   and there is no `xdg-open`, so both Linux paths fail here.)
-- **Check:** human only.
-
-### RT-192 — The game window is reported unavailable on Windows, with the right reason
-- **Area:** Windows platform
-- **Mode:** MANUAL
-- **Preconditions:** OpenEmux running on Windows.
-- **Steps:**
-  1. Open "Preferences" and find the game-window switch.
-- **Expected:** The row is insensitive and reads *Not available on Windows: the game window relies
-  on X11 window embedding.* -- not the Linux wording about X11 or XWayland, which would read as
-  "install an X server and this will work". Launching a game opens RetroArch's own window.
 - **Check:** human only.
 
 ### RT-193 — A user's own RetroArch install is left untouched
@@ -5254,3 +5099,72 @@ the date.
   itself; what ships now is the portable tree that image always contained, so there is no FUSE
   dependency to declare weakly or strongly. RT-279 asserts the opposite in its place: no package
   declares one at all.
+
+### RT-064 — Turning the game window off gives RetroArch its own window
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. There is no switch any more: every game opens in RetroArch's own decorated window.
+  RT-062 covers that window, RT-248 the healing of a config an older version left borderless.
+### RT-065 — A session that cannot embed says so instead of failing
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. Nothing embeds, so no session can fail to. The notice and its toast are gone with
+  the window.
+### RT-253 — On a Wayland session the switch says the whole app moves to XWayland
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. The switch and its XWayland note are gone; the library is never moved to XWayland
+  any more.
+### RT-254 — On an X11 session the app is on X11 and the game embeds
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. Nothing embeds. RetroArch alone is put on X11/XWayland where an X display exists
+  (RT-331 covers the title that depends on it).
+### RT-255 — On a Wayland session the game window puts the library on XWayland
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. The library is no longer put on XWayland for a game window; only RetroArch runs as
+  an X client.
+### RT-256 — An explicit GDK_BACKEND is never overridden
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. OpenEmux no longer sets GDK_BACKEND at all, so there is nothing to override.
+### RT-079 — The wrapper's fullscreen key works whatever it is bound to
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. The wrapper's grabbed fullscreen key is gone. Fullscreen is RetroArch's own (its
+  hotkey, or the bar's button: RT-328).
+### RT-084 — Input keeps working after clicking the game window's chrome
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. There is no window chrome around the game any more to steal the keyboard.
+### RT-158 — The volume control says where the game actually is
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. The volume slider is gone; volume is RetroArch's own, with its own indicator
+  (RT-328).
+### RT-152 — A session that cannot embed never strips RetroArch's window
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. Nothing strips RetroArch's window any more; it is always decorated (RT-248).
+### RT-153 — A failed embed hands the game back a normal window
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. There is no embed to fail.
+### RT-154 — Moving the game window mid-play keeps the game inside it
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. There is no wrapper window to move.
+### RT-155 — The pad's fullscreen button cannot break the embed
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. RetroArch's fullscreen bindings are no longer unbound; nothing can break.
+### RT-156 — The mouse cursor stays visible over the embedded game
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. There is no embedded window to define a cursor on.
+### RT-192 — The game window is reported unavailable on Windows, with the right reason
+- **Retired:** 2026-10-06 (issue #469).
+- **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
+  draws itself. The game window, and its Windows-specific "unavailable" reason, are gone. The bar
+  is drawn by RetroArch on every platform.

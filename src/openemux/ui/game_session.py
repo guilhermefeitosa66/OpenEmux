@@ -1,16 +1,17 @@
-"""The running game: launching it, wrapping it, relaunching it, and noticing
-when it is over.
+"""The running game: launching it, relaunching it, and noticing when it is
+over.
 
-Everything about a game between the click and the exit toast. It was five
-responsibilities' worth of methods on `OpenEmuxWindow` -- launch, the wrapper
-window, the relaunch dance, the input hot-apply and the runtime poll -- held
-together by three attributes nothing else in the window touched (issue #237).
+Everything about a game between the click and the exit toast. It was several
+responsibilities' worth of methods on `OpenEmuxWindow` -- launch, the relaunch
+dance, the input hot-apply and the runtime poll -- held together by state
+nothing else in the window touched (issue #237). The game itself plays in
+RetroArch's own window, with the controls RetroArch draws (issue #469).
 
 The relaunch is the reason they belong together: applying a remap to a running
 game (issue #129) means snapshotting to a scratch slot, waiting for the file
-to land, relaunching with the regenerated override, opening a new wrapper and
-loading the snapshot back -- five steps across four timers, each of which has
-to know what the others are doing.
+to land, relaunching with the regenerated override and loading the snapshot
+back -- four steps across three timers, each of which has to know what the
+others are doing.
 """
 
 import logging
@@ -20,8 +21,6 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
-
-from openemux.core import feature_flags, game_window_support
 
 logger = logging.getLogger(__name__)
 
@@ -54,23 +53,16 @@ STATE_LOAD_DELAY_S = 4
 
 
 class GameSession:
-    """Owns the running game and the window wrapping it.
+    """Owns the running game.
 
     Holds the window for the things a session has to reach -- the runtime
-    manager, toasts, the play history, the application -- and owns the three
-    pieces of state that are nobody else's: the wrapper window, whether the
-    "no wrapper here" notice has been said, and whether a relaunch is walking
-    the stop/start dance right now.
+    manager, toasts, the play history -- and owns the one piece of state that
+    is nobody else's: whether a relaunch is walking the stop/start dance right
+    now.
     """
 
     def __init__(self, window):
         self.win = window
-        #: The window wrapping the embedded RetroArch, while one is running.
-        self.window = None
-        #: Said once per session, not once per launch: a user on a session
-        #: that cannot embed would otherwise be told off every time they
-        #: start a game (issue #212).
-        self._notice_shown = False
         #: True while a relaunch is walking the stop/start dance, so the
         #: runtime poll does not announce the game as finished mid-relaunch.
         self._relaunch_in_flight = False
@@ -105,7 +97,6 @@ class GameSession:
             # cleanly was still played, and this is the only point that knows
             # which ROM was asked for.
             self.win.play_history.record_launch(rom["path"])
-            self.open_wrapper(rom)
         if not success and error_msg:
             # Logged as well as toasted: the toast is gone in five seconds,
             # and a bug report built from the log must show what the user saw.
@@ -153,7 +144,6 @@ class GameSession:
                 self.win._toast(self._error_text(error_msg), timeout=5)
             return
         self.win.play_history.record_launch(rom["path"])
-        self.open_wrapper(rom)
         self.win._toast(self.win.t("states.toast.launching", name=rom["name"], slot=slot))
 
         def _load_when_up():
@@ -163,7 +153,7 @@ class GameSession:
 
         GLib.timeout_add_seconds(STATE_LOAD_DELAY_S, _load_when_up)
 
-    def relaunch(self, resume_marker=None, announce=True):
+    def relaunch(self, resume_marker=None):
         """Stop the running game and start the same ROM again.
 
         Not the same thing as Restart (#130): only a fresh process re-reads
@@ -175,10 +165,6 @@ class GameSession:
         ``RuntimeManager.snapshot_active``), the scratch state is loaded back
         once the new process has had time to boot, so the relaunch carries
         the gameplay across instead of starting the game over.
-
-        ``announce=False`` drops the "Relaunching" toast, for a caller that
-        has already explained itself and would only be queueing a second
-        message behind its own (issue #267).
         """
         runtime = self.win.runtime_manager
         rom, error_msg = runtime.relaunch_active()
@@ -191,8 +177,7 @@ class GameSession:
         # purpose, and the runtime poll must not report that as the game
         # finishing.
         self._relaunch_in_flight = True
-        if announce:
-            self.win._toast(self.win.t("toast.relaunching"))
+        self.win._toast(self.win.t("toast.relaunching"))
         remaining = [RELAUNCH_MAX_POLLS]
 
         def _discard_scratch():
@@ -217,11 +202,6 @@ class GameSession:
             success, launch_error = runtime.relaunch_rom(rom)
             if not success and launch_error:
                 self.win._toast(launch_error, timeout=5)
-            if success:
-                # The relaunched RetroArch starts with the embed overrides
-                # (undecorated window); without a wrapper adopting it, it
-                # would float borderless.
-                self.open_wrapper(rom)
             if success and resume_marker is not None:
                 GLib.timeout_add_seconds(RESUME_LOAD_DELAY_S, _resume_when_up)
             return False
@@ -266,117 +246,6 @@ class GameSession:
 
         GLib.timeout_add(SNAPSHOT_POLL_INTERVAL_MS, _relaunch_when_saved)
         return True
-
-    # ----- the wrapper window ---------------------------------------------
-    def open_wrapper(self, rom):
-        """Wrap the RetroArch window in an OpenEmux one (issue #199).
-
-        Every launch path opens it, including the input hot-apply relaunch
-        (issue #129): the old wrapper closes with its process, so the new
-        game needs a new wrapper adopting it.
-        """
-        if not game_window_support.game_window_active(self.win.config_manager):
-            self._notice_unavailable()
-            return
-        from openemux.ui import game_window
-
-        if not game_window.display_supports_embedding():
-            # Last guard, and the only one that asks GTK itself: the session
-            # looked embeddable but the app ended up on a non-X11 display.
-            # Publishing that verdict is what stops the launcher writing the
-            # embed overrides for the *next* launch, which is how a game
-            # ended up borderless with no wrapper to hold it (issue #212).
-            game_window_support.set_display_embeddable(False)
-            self._notice_unavailable("display is not X11")
-            return
-
-        if self.window is not None:
-            self.window.close()
-            self.window = None
-        window = game_window.GameWindow(
-            application=self.win.get_application(),
-            runtime_manager=self.win.runtime_manager,
-            rom=rom,
-            frame_enabled=feature_flags.retroarch_embed_frame_enabled(),
-            locale=self.win.locale,
-            on_closed=self._on_closed,
-            on_open_input_settings=self._open_input_settings,
-            on_embed_failed=self._on_embed_failed,
-        )
-        window.connect("close-request", self._on_close_request)
-        self.window = window
-        window.present()
-
-    def close_now(self):
-        """Take the wrapper down synchronously, on the way out of the app.
-
-        A game OpenEmux started must never outlive the app: the wrapper is a
-        window of this app and would keep it alive with no library behind it.
-        """
-        window, self.window = self.window, None
-        if window is not None:
-            window.close_now(block=True)
-
-    def _on_closed(self, window):
-        if self.window is window:
-            self.window = None
-
-    def _notice_unavailable(self, reason=None):
-        """Say once why the game opened in RetroArch's own window (#212).
-
-        Only when the user actually asked for the game window: turning the
-        setting off is a choice, not something to report back at them.
-        """
-        if not self.win.config_manager.get_game_window_enabled():
-            return
-        if reason:
-            game_window_support.mark_embed_unavailable(reason)
-        if self._notice_shown:
-            return
-        self._notice_shown = True
-        logger.warning(
-            "game window: unavailable (%s); the game runs in its own window",
-            game_window_support.embed_unavailable_reason() or "session cannot embed",
-        )
-        self.win._toast(self.win.t("toast.game_window.unavailable"), timeout=6)
-
-    def _on_embed_failed(self, reason):
-        """The wrapper could not adopt the game; give the game a real window.
-
-        This is issue #267. The game is running right now with RetroArch's
-        decorations stripped and its fullscreen hotkey unbound, because the
-        launcher wrote those for a wrapper that then failed -- an unmovable,
-        unresizable square in the middle of the screen. Latching the failure
-        makes the next override write RetroArch's own defaults back, and
-        relaunching is what actually puts the game in a normal window. The
-        latch is also what keeps this from looping: the relaunch opens no
-        wrapper, so it cannot fail the same way again.
-        """
-        if game_window_support.embed_unavailable_reason():
-            return
-        game_window_support.mark_embed_unavailable(reason)
-        # The notice belongs to launches that never opened a wrapper; this
-        # path explains itself below and must not say it twice.
-        self._notice_shown = True
-        if not self.win.runtime_manager.is_running():
-            # Nothing to hand back -- the game died with the wrapper, and
-            # the runtime poll is already reporting that.
-            return
-        self.win._toast(self.win.t("toast.game_window.standalone"), timeout=6)
-        self.relaunch(announce=False)
-
-    def _open_input_settings(self, _game_window):
-        # Presented on the library window on purpose: the game window keeps
-        # handing X focus to the emulator, which would fight a dialog shown
-        # on top of it.
-        self.win.present()
-        self.win._open_preferences(page="input")
-
-    def _on_close_request(self, window):
-        # close() only hides a GTK4 window; destroy it once the emission is
-        # over so a closed wrapper does not linger hidden until app exit.
-        GLib.idle_add(window.destroy)
-        return False
 
     # ----- noticing the end -----------------------------------------------
     def poll(self):

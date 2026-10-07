@@ -47,6 +47,14 @@ class CoreCatalogTests(unittest.TestCase):
             catalog = CoreCatalog(core_dirs=[base])
             self.assertEqual(catalog.display_name_for(_core_name("bsnes")), "Bsnes")
 
+    def test_a_core_that_is_not_installed_is_still_named(self):
+        # A console override or a ROM's chosen core can name a core this
+        # machine does not have; the label falls back to its filename.
+        with TemporaryDirectory() as tmp_dir:
+            catalog = CoreCatalog(core_dirs=[Path(tmp_dir)])
+            self.assertEqual(catalog.display_name_for(_core_name("mesen")), "Mesen")
+            self.assertEqual(catalog.display_name_for(""), "")
+
     def test_cores_for_console_lists_candidates_first(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

@@ -1,24 +1,16 @@
-import atexit
 import logging
 import threading
 import time
 
-from openemux.core import retroarch_log, save_states
+from openemux.core import hw_driver, retroarch_log, save_states, window_title
 from openemux.core.retroarch_command import (
     RetroArchCommandClient,
     StdinCommandClient,
-    VolumePacer,
-    clamp_volume_db,
     pick_free_udp_port,
     uses_stdin_channel,
 )
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from openemux.core.systems import resolve_system_id
-
-#: How long the volume must sit still before it is written to config.yaml.
-#: A drag emits a value every 0.5 dB and each write is a synchronous YAML
-#: dump, so persisting per tick meant dozens of disk writes per drag.
-VOLUME_PERSIST_DEBOUNCE = 0.75
 
 #: The scratch slot that carries gameplay across an input-change relaunch
 #: (issue #129). Far outside the 0-9 range the states UI manages, so the
@@ -48,7 +40,7 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager, sleep=time.sleep, dispatch=None, clock=time.monotonic):
+    def __init__(self, project_root, config_manager, sleep=time.sleep, clock=time.monotonic):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
         self._sleep = sleep
@@ -56,13 +48,6 @@ class RuntimeManager:
         # When the running game started, so a poll can tell "the user quit"
         # from "it never came up" (issue #226).
         self._launched_at = None
-        # How a background thread hands work back to the GTK main loop
-        # (``GLib.idle_add``). The debounced volume write used to run on the
-        # Timer thread and mutate the very config dict the main thread was
-        # editing; routed through here it happens where every other config
-        # write happens (issue #208). Without one -- tests, headless -- the
-        # write stays on the calling thread, which is what it always did.
-        self._dispatch = dispatch
         self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
         self.active_process = None
         self.active_rom = None
@@ -70,12 +55,6 @@ class RuntimeManager:
         # only "this console's shader has no preset your video driver can
         # load" (issue #366). A (key, kwargs) pair for tr(), or None.
         self.launch_notice = None
-        # The live volume tracker (issue #69): RetroArch's command channel only
-        # steps relative, so the absolute slider walks from this locally known
-        # level.
-        # Seeded at launch from the same config value the launcher writes as
-        # audio_volume, which is what keeps the tracker honest.
-        self._volume_db = clamp_volume_db(self.config_manager.get_master_volume_db())
         self._command_client_cache = None
         # The port this launch's channel runs on, on Windows -- elsewhere the
         # channel is the game's stdin and there is no port (None). Resolved at
@@ -86,42 +65,6 @@ class RuntimeManager:
         # unpacked retry has already been spent on it (issue #248).
         self._launch_request = None
         self._fuse_retry_done = False
-        self._pacer = None
-        self._persist_lock = threading.Lock()
-        self._persist_timer = None
-        self._pending_volume_db = None
-        # A debounced write can still be in flight when the app quits; the
-        # last level the user chose should not be the one that gets lost.
-        atexit.register(self.flush_volume_db)
-        self.muted = False
-
-    # The level RetroArch is actually at, as far as delivered commands can
-    # say. Stepping is paced now, so a walk takes a moment to arrive and the
-    # tracker has to come from the pacer rather than being optimistically set
-    # to the target (issue #125).
-    @property
-    def volume_settling(self):
-        """Is the emulator's real level still walking toward the last target?
-
-        RetroArch has no absolute set-volume command, so a drag becomes a
-        walk of 0.5 dB steps paced at one per command-poll -- seconds, for a
-        long drag. The UI asks this so it can say the level is still moving
-        instead of showing a number the game has not reached (issue #284).
-        """
-        pacer = self._pacer
-        return bool(pacer is not None and pacer.settling)
-
-    @property
-    def volume_db(self):
-        if self._pacer is not None:
-            return self._pacer.level
-        return self._volume_db
-
-    @volume_db.setter
-    def volume_db(self, value):
-        self._volume_db = clamp_volume_db(value)
-        if self._pacer is not None:
-            self._pacer.reset(self._volume_db)
 
     def launch(self, rom_path, console, state_slot=None, force_extract=False):
         """Start a game. ``force_extract`` is the FUSE retry, not a user option.
@@ -158,6 +101,11 @@ class RuntimeManager:
             )
             self.active_process = proc
             self.active_rom = {"path": rom_path, "console": system_id}
+            # RetroArch's own window is what the user sees: name the game in
+            # its title instead of the core's version hash (issue #469).
+            window_title.start(
+                proc, rom_path, getattr(self.retroarch_launcher, "last_core_path", None)
+            )
             # What a retry has to repeat, and whether one is still owed. A
             # fresh launch re-arms it; the retry itself does not, so a game
             # that cannot start gets exactly one second attempt.
@@ -169,8 +117,6 @@ class RuntimeManager:
             self._fuse_retry_done = force_extract
             self._launched_at = self._clock()
             self._network_cmd_port = port
-            self.volume_db = self.config_manager.get_master_volume_db()
-            self.muted = False
             return True, None
 
         if mode == "integrated_core":
@@ -274,12 +220,12 @@ class RuntimeManager:
         return pick_free_udp_port()
 
     def _command_client(self):
-        """The running game's command client, reused so the pacer keeps one.
+        """The running game's command client, reused while the game runs.
 
         The process decides the channel: a game launched with a stdin pipe --
         every launch outside Windows -- is spoken to through that pipe, and
         only one without falls back to a UDP port. A cached client for some
-        other game's pipe, or another port, is replaced along with its pacer.
+        other game's pipe, or another port, is replaced.
         """
         client = self._command_client_cache
         stream = getattr(self.active_process, "stdin", None)
@@ -297,102 +243,13 @@ class RuntimeManager:
         if client is not None:
             client.close()
         self._command_client_cache = replacement
-        self._pacer = None
         return replacement
-
-    def _volume_pacer(self):
-        # Resolved first: a port change invalidates the pacer along with the
-        # client it was holding.
-        client = self._command_client()
-        if self._pacer is None:
-            self._pacer = VolumePacer(client, level=self._volume_db)
-        return self._pacer
 
     def send_command(self, command):
         """One command to the running game; False when none runs."""
         if not self.is_running():
             return False
         return self._command_client().send(command)
-
-    def set_master_volume_db(self, target_db):
-        """Aim the running game's volume at ``target_db`` and persist it.
-
-        Non-blocking: the walk is handed to the pacer, which spreads the
-        relative steps one per frame so RetroArch actually receives them.
-        Repeated calls during a drag just move the goal.
-
-        The persisted value updates even with no game running, so the slider
-        also works as "the level the next launch starts at".
-        """
-        target = clamp_volume_db(target_db)
-        if self.is_running():
-            self._volume_pacer().set_target(target)
-        else:
-            self.volume_db = target
-        self._persist_volume_db(target)
-        return target
-
-    def _persist_volume_db(self, target):
-        """Write the level to config.yaml once the slider settles."""
-        with self._persist_lock:
-            self._pending_volume_db = target
-            if self._persist_timer is not None:
-                self._persist_timer.cancel()
-            self._persist_timer = threading.Timer(
-                VOLUME_PERSIST_DEBOUNCE, self._flush_volume_db_on_main_loop
-            )
-            self._persist_timer.daemon = True
-            self._persist_timer.start()
-
-    def _flush_volume_db_on_main_loop(self):
-        """The debounce timer firing, from its own thread.
-
-        Hands the write to the main loop when there is one so the config is
-        only ever mutated from a single thread. ``flush_volume_db`` itself
-        stays synchronous: atexit calls it after the loop has stopped, and a
-        write posted to a dead main loop would simply never happen.
-        """
-        if self._dispatch is None:
-            self.flush_volume_db()
-            return
-
-        def _write_once():
-            self.flush_volume_db()
-            # False is GLib.SOURCE_REMOVE: flush_volume_db returns True when
-            # it wrote something, and handing that straight to idle_add would
-            # keep the source alive and re-run it forever.
-            return False
-
-        self._dispatch(_write_once)
-
-    def flush_volume_db(self):
-        """Write any debounced volume level out now."""
-        with self._persist_lock:
-            pending = self._pending_volume_db
-            self._pending_volume_db = None
-            if self._persist_timer is not None:
-                self._persist_timer.cancel()
-                self._persist_timer = None
-        if pending is None:
-            return False
-        self.config_manager.set_master_volume_db(pending)
-        return True
-
-    def toggle_mute(self):
-        """Toggle RetroArch's mute; returns the new (locally tracked) state.
-
-        Write-only: the vendored RetroArch answers ``GET_CONFIG_PARAM
-        audio_mute_enable`` with "unsupported", so nothing can correct this
-        tracker afterwards and a single dropped command would leave the button
-        inverted for the rest of the session. One retry -- a send only reports
-        failure when the command never left (a datagram not sent, or a line
-        the pipe refused whole), so re-sending cannot toggle twice
-        (issue #284).
-        """
-        if not self.send_command("MUTE") and not self.send_command("MUTE"):
-            return self.muted
-        self.muted = not self.muted
-        return self.muted
 
     # -- live input apply (issue #129) -------------------------------------
     # The command interface has no config-write or remap-reload verb (checked
@@ -526,6 +383,11 @@ class RuntimeManager:
         log_path = getattr(proc, "_openemux_log_path", None)
         ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
+        # Whatever video driver this core made RetroArch switch to is where
+        # its next launch starts (issue #471).
+        hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir()).remember_from_log(
+            getattr(proc, "_openemux_core_path", None), log_path
+        )
 
         result = {
             "exit_code": exit_code,
@@ -608,6 +470,5 @@ class RuntimeManager:
             except Exception:
                 pass
             self._command_client_cache = None
-            self._pacer = None
         self.active_process = None
         self.active_rom = None

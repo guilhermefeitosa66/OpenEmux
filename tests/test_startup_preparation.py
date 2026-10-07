@@ -2,8 +2,7 @@
 
 `main.py` sat at 40%. What was covered is the parts other tests reach on their
 way past -- the bytecode redirect, the desktop-entry content. What was not is
-the preparation itself: the renderer pick, the X11 backend the embedded game
-window needs, the vendored typelibs a distro without the introspection
+the preparation itself: the renderer pick, the vendored typelibs a distro without the introspection
 packages falls back on, and the desktop integration that has to stand down for
 a packaged install.
 
@@ -60,41 +59,6 @@ class TheRendererPickTests(_EnvironmentCase):
         ):
             main_module._configure_gtk_renderer()
         self.assertEqual(os.environ["GSK_RENDERER"], "ngl")
-
-
-class TheGameWindowBackendTests(_EnvironmentCase):
-    """Issue #199: the embed is X11 reparenting between two X clients."""
-
-    def _configure(self, embeddable=True, setting=True, windows=False):
-        with mock.patch.object(main_module, "IS_WINDOWS", windows), mock.patch(
-            "openemux.core.game_window_support.embedding_possible",
-            return_value=embeddable,
-        ), mock.patch(
-            "openemux.core.config.read_game_window_setting", return_value=setting
-        ):
-            main_module._configure_game_window_backend()
-
-    def test_a_session_that_can_embed_is_put_on_x11(self):
-        self._configure()
-        self.assertEqual(os.environ["GDK_BACKEND"], "x11")
-
-    def test_a_backend_the_user_chose_is_never_overridden(self):
-        os.environ["GDK_BACKEND"] = "wayland"
-        self._configure()
-        self.assertEqual(os.environ["GDK_BACKEND"], "wayland")
-
-    def test_a_session_that_cannot_embed_is_left_to_gtk(self):
-        # Forcing x11 there would leave GTK with no display at all.
-        self._configure(embeddable=False)
-        self.assertNotIn("GDK_BACKEND", os.environ)
-
-    def test_a_user_who_turned_the_game_window_off_is_left_to_gtk(self):
-        self._configure(setting=False)
-        self.assertNotIn("GDK_BACKEND", os.environ)
-
-    def test_windows_has_no_x_server_to_be_put_on(self):
-        self._configure(windows=True)
-        self.assertNotIn("GDK_BACKEND", os.environ)
 
 
 class TheVendoredTypelibsTests(_EnvironmentCase):
@@ -229,7 +193,6 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
             "_redirect_bytecode_cache",
             "_configure_gtk_renderer",
             "migrate_legacy_config_dir",
-            "_configure_game_window_backend",
             "configure_startup_logging",
             "_ensure_gtk_typelibs",
             "_ensure_pixbuf_loaders",
@@ -251,7 +214,6 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
                 "_redirect_bytecode_cache",
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
-                "_configure_game_window_backend",
                 "configure_startup_logging",
                 "_ensure_gtk_typelibs",
                 "_ensure_pixbuf_loaders",
@@ -263,7 +225,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         # swap the root handlers out from under the running app.
         main_module.prepare_process()
         main_module.prepare_process()
-        self.assertEqual(len(self.calls), 7)
+        self.assertEqual(len(self.calls), 6)
 
     def test_the_application_is_built_only_after_the_preparation(self):
         # Importing gi.repository.Gtk runs Gtk.init(), which opens the

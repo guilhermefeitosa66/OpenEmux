@@ -88,6 +88,21 @@
   </keywords>
 
   <releases>
+    <release version="1.15.0" date="2026-10-07">
+      <description>
+        <p>The game's controls move inside RetroArch: a bar on the bottom edge of the game's own window, on every console.</p>
+        <ul>
+          <li>Close, menu, pause, reset, slow motion, fast-forward, turbo, save and load state, volume, fullscreen and hide, all in one bar</li>
+          <li>Toggles show their state, and hiding the bar gives its space back to the game</li>
+          <li>A console's shader keeps its quality with the bar shown or hidden</li>
+          <li>RetroArch's window is titled with the game being played</li>
+          <li>The game window that captured RetroArch's window is gone, and the library no longer has to run on XWayland</li>
+          <li>PlayStation and PSP games no longer get a touch gamepad drawn over them</li>
+          <li>N64 games have video again</li>
+          <li>The selection rectangle is drawn all the way to the pointer</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.14.0" date="2026-10-05">
       <description>
         <p>The first boot is ready in seconds, a bug can be reported from inside the app, and a running game is no longer reachable from the network.</p>

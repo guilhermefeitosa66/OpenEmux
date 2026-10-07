@@ -13,8 +13,8 @@ authors = [{ name = "Guilherme Feitoza" }]
 # PyGObject and pycairo are provided by the GNOME runtime / system packages and
 # are intentionally not listed here so `pip install .` stays buildable offline
 # (Flatpak) and against distro GObject-introspection.
-# python-xlib backs the game window: it reparents RetroArch's X11 window into
-# an OpenEmux one (issue #199). Missing it costs the game window, not the app.
+# python-xlib retitles RetroArch's X11 window with the game's name (issue
+# #469). Missing it costs the title, not the app.
 dependencies = ["PyYAML", "python-xlib"]
 
 [project.urls]
@@ -96,4 +96,10 @@ openemux = [
     # The game-name database (issue #184), consumed by the staged cover
     # lookup and the cover-picker suggestions.
     "data/games.db.zip",
+    # The in-game control bar: RetroArch overlay pages, their images and the
+    # margin shader that keeps the bottom of the screen clear for them.
+    "data/overlay/*.cfg",
+    "data/overlay/*.png",
+    "data/overlay/*.glsl",
+    "data/overlay/*.slang",
 ]

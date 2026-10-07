@@ -61,7 +61,7 @@ Requires:       python3-cairo
 Requires:       gtk4 >= 4.6
 Requires:       libadwaita >= 1.5
 Requires:       python3-pyyaml
-# The game window reparents RetroArch's X11 window into ours (issue #199).
+# Retitles RetroArch's X11 window with the game's name (issue #469).
 Requires:       python3-xlib
 Requires:       librsvg2
 # Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
@@ -179,6 +179,16 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Wed Oct 07 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.15.0-1
+- The game's controls are a bar RetroArch draws on the bottom edge of its own window, on every console
+- Pause, mute, slow motion, fast-forward and turbo show their state; hiding the bar gives its space back to the game
+- A console's shader keeps its quality with the bar shown or hidden
+- RetroArch's window is titled with the game being played
+- The game window that captured RetroArch's window, its preference and its CRT frame are gone
+- PlayStation and PSP games no longer get a touch gamepad drawn over them
+- N64 games have video again: RetroArch starts on the video driver the core asks for
+- The selection rectangle is drawn all the way to the pointer on a page with few games
+
 * Mon Oct 05 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.14.0-1
 - Report a bug from inside the app: a live log panel, a "Log" button with an error count, and a Report a Bug dialog
 - The log and the copied report write the home directory as ~, keeping the user's name out of it

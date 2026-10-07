@@ -19,7 +19,6 @@ from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
 from openemux.core import (
     core_options,
-    game_window_support,
     retroachievements,
     rom_importer,
     save_backup,
@@ -29,7 +28,6 @@ from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
 from openemux.core.gamepad_reader import describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
-from openemux.core.platform import IS_WINDOWS
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -57,27 +55,6 @@ from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
-
-
-def game_window_subtitle(t):
-    """The game-window switch's subtitle, with the Wayland cost spelled out.
-
-    The setting reads as "show the game inside OpenEmux", and on a Wayland
-    session it also decides how the *library* is drawn. The embed is
-    ``XReparentWindow`` between two X clients, so ``main.py`` forces
-    ``GDK_BACKEND=x11`` before GTK is imported, and GTK4 cannot pick a backend
-    per window: the whole UI renders through XWayland for the entire run, not
-    only while a game is up. That costs fractional-scaling sharpness and
-    Wayland-native behaviour for the time the user spends browsing rather than
-    playing, and nothing in the UI used to say so (issue #258).
-
-    A module-level function rather than a method so it can be tested without a
-    display -- constructing the row it feeds segfaults on a headless box.
-    """
-    subtitle = t("prefs.game_window.subtitle")
-    if game_window_support.session_is_wayland():
-        return f"{subtitle} {t('prefs.game_window.subtitle.xwayland')}"
-    return subtitle
 
 
 class OpenEmuxPreferences(Adw.PreferencesDialog):
@@ -1415,8 +1392,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.page.video"), icon_name="applications-graphics-symbolic"
         )
 
-        page.add(self._build_game_window_group())
-
         appearance = Adw.PreferencesGroup(title=self.t("prefs.group.appearance"))
         # The cartridge frame is one of the view modes now, so this row mirrors
         # the header's switcher rather than owning a switch of its own.
@@ -1469,56 +1444,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._shader_rows = []
         self._rebuild_shader_rows()
         return page
-
-    def _build_game_window_group(self):
-        """Play inside an OpenEmux window, or leave RetroArch its own (#199).
-
-        Sits at the top of the Video page: it decides what the user looks at
-        while playing, which outranks the cover-grid appearance below it.
-        """
-        group = Adw.PreferencesGroup(title=self.t("prefs.group.game_window"))
-        self._game_window_row = Adw.SwitchRow(
-            title=self.t("prefs.game_window.title"),
-            subtitle=game_window_subtitle(self.t),
-        )
-        self._game_window_row.set_active(self.config.get_game_window_enabled())
-        if game_window_support.embedding_possible():
-            self._game_window_row.connect("notify::active", self._on_game_window_toggled)
-        else:
-            # Nothing to offer here: no python-xlib, or a session with no X
-            # display at all (a Wayland session without XWayland, the Flatpak
-            # sandbox on Wayland). The row stays visible and says why, rather
-            # than silently disappearing on some machines.
-            self._game_window_row.set_sensitive(False)
-            # "needs X11 or XWayland" is actionable advice on Linux and
-            # misleading on Windows, where it reads as "install an X server and
-            # this will work". It will not: the embed is X11 reparenting, which
-            # has no Windows equivalent, so say that instead (issue #118).
-            reason = (
-                "prefs.game_window.unavailable_windows"
-                if IS_WINDOWS
-                else "prefs.game_window.unavailable"
-            )
-            self._game_window_row.set_subtitle(self.t(reason))
-        group.add(self._game_window_row)
-        return group
-
-    def _on_game_window_toggled(self, row, _param):
-        enabled = row.get_active()
-        self.config.set_game_window_enabled(enabled)
-        from openemux.ui.game_window import display_supports_embedding
-
-        if enabled and (
-            not display_supports_embedding()
-            or game_window_support.embed_unavailable_reason()
-        ):
-            # The X11 backend is chosen before GTK starts, so a session that
-            # booted with the setting off is on Wayland for good: the next
-            # game would still open in RetroArch's own window. The same is
-            # true after an embed has failed once -- the session is latched
-            # standalone, and switching this back on silently would promise
-            # something this run cannot deliver (issue #267).
-            self._toast(self.t("toast.game_window.restart"), timeout=6)
 
     def _shader_options_for_console(self, console_id):
         show_all = bool(self._show_all_switch.get_active())

@@ -42,7 +42,7 @@ DYNAMIC_PREFIXES = (
     "welcome.",
 )
 
-#: The keys retired in issue #232. Listed by name rather than merely deleted:
+#: Keys retired in issues #232 and #469. Listed by name rather than merely deleted:
 #: the unreachable-key test below would pass with them present *and* absent if
 #: the scan were ever weakened, and a name here is a claim that stays checked.
 RETIRED = frozenset(
@@ -57,6 +57,18 @@ RETIRED = frozenset(
     settings.title settings.ui.render_cartridge.subtitle
     settings.ui.render_cartridge.title settings.ui.subtitle settings.ui.title
     sidebar.library sidebar.settings status.idle status.running
+    """.split()
+) | frozenset(
+    # The game window and its preference, gone with the window (issue #469).
+    """
+    prefs.group.game_window prefs.game_window.title prefs.game_window.subtitle
+    prefs.game_window.subtitle.xwayland prefs.game_window.unavailable
+    prefs.game_window.unavailable_windows toast.game_window.restart
+    toast.game_window.standalone toast.game_window.unavailable game_window.pause
+    game_window.resume game_window.reset game_window.save_state
+    game_window.load_state game_window.menu game_window.volume
+    game_window.volume.settling game_window.mute game_window.controller_settings
+    game_window.starting
     """.split()
 )
 
@@ -118,14 +130,6 @@ class NoKeyIsCarriedWithNothingToShowItTests(unittest.TestCase):
 
 
 class TheFourStringsThatBypassedTheCatalogueTests(unittest.TestCase):
-    def test_the_pause_button_has_a_translated_resume(self):
-        # The button is *built* with the translated "game_window.pause" and
-        # was *rewritten* with an English literal, so the tooltip flipped to
-        # English on the first click and stayed there for the session.
-        for locale in SUPPORTED_LOCALES:
-            with self.subTest(locale=locale):
-                self.assertIn("game_window.resume", LOCALE_TRANSLATIONS[locale])
-
     def test_the_image_filter_name_is_translated(self):
         for locale in SUPPORTED_LOCALES:
             with self.subTest(locale=locale):

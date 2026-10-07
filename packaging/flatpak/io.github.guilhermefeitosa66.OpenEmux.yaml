@@ -57,8 +57,8 @@ command: openemux
 #
 # The rest are ordinary and narrow.
 finish-args:
-  # GTK UI. fallback-x11 and ipc are also what the game window needs: it
-  # reparents RetroArch's X11 window into an OpenEmux one via python-xlib.
+  # GTK UI. fallback-x11 and ipc are also what retitling RetroArch's X11
+  # window needs (python-xlib, issue #469).
   - --socket=wayland
   - --socket=fallback-x11
   - --share=ipc

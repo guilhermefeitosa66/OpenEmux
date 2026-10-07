@@ -1,5 +1,5 @@
-# python-xlib (and its only dependency, six) for the game window: reparenting
-# RetroArch's window into an OpenEmux one is XReparentWindow (issue #199).
+# python-xlib (and its only dependency, six): OpenEmux retitles RetroArch's
+# X11 window with the game's name (issue #469).
 #
 # The runtime carries neither, and the sandbox builds with --no-index, so both
 # sdists are vendored here. In a Flatpak on Wayland there is no X socket at all

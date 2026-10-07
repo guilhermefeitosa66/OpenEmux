@@ -25,6 +25,7 @@ from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
 from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
 from openemux.ui.grid_group import GridGroup, GridSection
+from openemux.ui.grid_selection import BandLayer
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
@@ -163,11 +164,19 @@ class LibraryPages:
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
-        page.append(header)
-        page.append(scroll)
         # Empty-space clicks and the rubber band are handled by the grid's
         # band gesture, which attaches itself to this scroller on map so it
-        # covers the whole page, not just the card rows.
+        # covers the whole page, not just the card rows. The band is drawn on
+        # a layer laid over the same area -- drawn in the grid, it was clipped
+        # to the cards, short of where the pointer was (issue #473).
+        band_layer = BandLayer()
+        scroll._openemux_band_layer = band_layer
+        stack = Gtk.Overlay()
+        stack.set_vexpand(True)
+        stack.set_child(scroll)
+        stack.add_overlay(band_layer)
+        page.append(header)
+        page.append(stack)
 
         # Stashed for render(); the guard breaks the feedback loop between
         # the master checkbox and the selection it reflects.
