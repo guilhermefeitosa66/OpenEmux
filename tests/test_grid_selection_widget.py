@@ -22,7 +22,7 @@ if HAVE_DISPLAY:
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gdk, Graphene, Gtk
 
-    from openemux.ui.grid_selection import CLICK_SLOP_PX
+    from openemux.ui.grid_selection import CLICK_SLOP_PX, BandLayer
 
 
 class _SelectionCase(WindowCase):
@@ -375,6 +375,12 @@ class TheBandGesturesTests(_SelectionCase):
 
 @needs_display
 class DrawingTheBandTests(_SelectionCase):
+    """Painting in the grid itself: a grid that hosts its own band."""
+
+    def setUp(self):
+        super().setUp()
+        self.selection._layer = None
+
     def test_no_band_paints_nothing(self):
         self.selection._band = None
         self.selection.draw(Gtk.Snapshot())
@@ -386,6 +392,78 @@ class DrawingTheBandTests(_SelectionCase):
     def test_a_real_band_paints_a_fill_and_four_edges(self):
         self.selection._band = (10, 10, 100, 80)
         self.selection.draw(Gtk.Snapshot())
+
+
+@needs_display
+class TheBandLayerTests(_SelectionCase):
+    """The band drawn over the whole page, not clipped to the cards (#473)."""
+
+    def _gesture(self):
+        gesture = mock.Mock()
+        gesture.get_current_event_state.return_value = 0
+        return gesture
+
+    def test_a_console_page_paints_the_band_on_a_layer_over_the_page(self):
+        # Drawn in the grid, the band was clipped to the cards -- a row or two
+        # down and short of the right edge on a page with few games -- while
+        # the gesture itself covered the page.
+        layer = self.selection._layer
+        self.assertIsInstance(layer, BandLayer)
+        self.assertIs(layer.get_parent(), self.selection._host.get_parent())
+        self.assertIsInstance(layer.get_parent(), Gtk.Overlay)
+
+    def test_the_layer_takes_no_input(self):
+        # Every press must still reach the cards and the scroller below it.
+        self.assertFalse(self.selection._layer.get_can_target())
+
+    def test_a_drag_lends_the_layer_its_band_and_takes_it_back(self):
+        layer = self.selection._layer
+        self.selection._on_begin(self._gesture(), 0, 0)
+        self.assertIs(layer.painter, self.selection)
+        self.selection._on_update(None, 40, 30)
+        self.selection._on_end(None, 40, 30)
+        self.assertIsNone(layer.painter)
+
+    def test_another_grids_band_is_not_taken_off_the_layer(self):
+        layer = self.selection._layer
+        other = object()
+        self.selection._on_begin(self._gesture(), 0, 0)
+        layer.painter = other
+        self.selection._on_end(None, 0, 0)
+        self.assertIs(layer.painter, other)
+
+    def test_the_grid_leaves_the_band_to_the_layer(self):
+        self.selection._band = (10, 10, 100, 80)
+        with mock.patch.object(self.selection, "_paint_band") as paint:
+            self.selection.draw(Gtk.Snapshot())
+        paint.assert_not_called()
+
+    def test_the_layer_paints_the_band_moved_into_its_own_space(self):
+        self.selection._band = (10.0, 20.0, 100.0, 80.0)
+        point = Graphene.Point().init(110.0, 220.0)
+        with mock.patch.object(self.grid, "compute_point", return_value=(True, point)), \
+                mock.patch.object(self.selection, "_paint_band") as paint:
+            self.selection.draw_on_layer(Gtk.Snapshot(), self.selection._layer)
+        self.assertEqual(paint.call_args.args[1:], (110.0, 220.0, 100.0, 80.0))
+
+    def test_a_band_that_cannot_be_moved_or_is_absent_is_not_painted(self):
+        layer = self.selection._layer
+        with mock.patch.object(self.selection, "_paint_band") as paint:
+            self.selection._band = None
+            self.selection.draw_on_layer(Gtk.Snapshot(), layer)
+            self.selection._band = (1, 1, 50, 50)
+            with mock.patch.object(self.grid, "compute_point", return_value=(False, None)):
+                self.selection.draw_on_layer(Gtk.Snapshot(), layer)
+        paint.assert_not_called()
+
+    def test_the_layer_paints_only_while_a_band_is_lent_to_it(self):
+        layer = BandLayer()
+        painter = mock.Mock()
+        layer.do_snapshot(Gtk.Snapshot())
+        layer.painter = painter
+        snapshot = Gtk.Snapshot()
+        layer.do_snapshot(snapshot)
+        painter.draw_on_layer.assert_called_once_with(snapshot, layer)
 
 
 if __name__ == "__main__":

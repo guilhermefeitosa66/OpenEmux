@@ -55,6 +55,9 @@ class GridSelection:
         self._band_bounds = []
         #: What the band gestures are attached to; see :meth:`attach`.
         self._host = None
+        #: Where the band is painted when the host provides a layer for it;
+        #: ``None`` paints it in the grid itself.
+        self._layer = None
         self._press_at = None
 
     # ----- the model over the visible entries ------------------------------
@@ -268,6 +271,12 @@ class GridSelection:
         click.connect("released", self._on_release)
         host.add_controller(click)
         host._openemux_clear_gesture = click
+        # The band is drawn over the whole host when the page gives it a layer
+        # for that. Drawn in the grid instead, it was clipped to the grid --
+        # which, on a page with only a few games, ends a row or two down and
+        # well short of the right edge, while the gesture covers the page
+        # (issue #473).
+        self._layer = getattr(host, "_openemux_band_layer", None)
 
     def _to_grid_coords(self, x, y):
         """Host space -> grid space (the band maths live in grid space)."""
@@ -327,6 +336,8 @@ class GridSelection:
         )
         self._band_origin = self._to_grid_coords(start_x, start_y)
         self._band = None
+        if self._layer is not None:
+            self._layer.painter = self
         self._freeze_bounds()
         if not self._band_base:
             # A plain press on empty space clears -- which also makes a plain
@@ -344,7 +355,7 @@ class GridSelection:
             abs(offset_y),
         )
         self._apply(list(self._band_base) + self.entries_in_band())
-        self.grid.queue_draw()
+        self._redraw_band()
 
     def _on_end(self, _gesture, _offset_x, _offset_y):
         self._band = None
@@ -354,7 +365,12 @@ class GridSelection:
         # The band bypassed the model; adopt its result so a Shift range or
         # Ctrl toggle right after behaves as if the band had used it.
         self._adopt_view()
-        self.grid.queue_draw()
+        self._redraw_band()
+        if self._layer is not None and self._layer.painter is self:
+            self._layer.painter = None
+
+    def _redraw_band(self):
+        (self._layer or self.grid).queue_draw()
 
     def _freeze_bounds(self):
         """Freeze every on-screen card's rectangle for the length of one drag.
@@ -388,10 +404,23 @@ class GridSelection:
         return entries_intersecting(self._band, self._band_bounds)
 
     def draw(self, snapshot):
-        """Paint the band, if one is being dragged."""
+        """Paint the band in the grid, when there is no layer to paint it on."""
+        if self._layer is not None or self._band is None:
+            return
+        self._paint_band(snapshot, *self._band)
+
+    def draw_on_layer(self, snapshot, layer):
+        """Paint the band on ``layer``, translated out of grid space."""
         if self._band is None:
             return
         x, y, width, height = self._band
+        ok, origin = self.grid.compute_point(layer, Graphene.Point().init(x, y))
+        if not ok:
+            return
+        self._paint_band(snapshot, origin.x, origin.y, width, height)
+
+    @staticmethod
+    def _paint_band(snapshot, x, y, width, height):
         if width < 1 or height < 1:
             return
         fill = Gdk.RGBA()
@@ -406,6 +435,28 @@ class GridSelection:
             (x + width - 1, y, 1, height),
         ):
             snapshot.append_color(edge, Graphene.Rect().init(*rect))
+
+
+class BandLayer(Gtk.Widget):
+    """A transparent layer over a page, for the rubber band to be drawn on.
+
+    It covers the same area as the band gestures (the page's scroller), takes
+    no input -- every press goes through to the cards and the scroller below
+    -- and paints nothing unless a band is being dragged.
+    """
+
+    __gtype_name__ = "OpenEmuxBandLayer"
+
+    def __init__(self):
+        super().__init__()
+        self.set_can_target(False)
+        self.set_can_focus(False)
+        #: The GridSelection whose band is being dragged, if any.
+        self.painter = None
+
+    def do_snapshot(self, snapshot):
+        if self.painter is not None:
+            self.painter.draw_on_layer(snapshot, self)
 
 
 def entries_intersecting(band, bounds):
