@@ -183,9 +183,12 @@ class PrepareShadersTests(unittest.TestCase):
         self.assertIn('scale_type1 = "source"', hidden)
 
     def test_leaves_absolute_paths_alone(self):
-        preset = self._preset("abs.glslp", "shaders = 1\nshader0 = /opt/s.glsl\n")
+        # Absolute on this platform: "/opt/s.glsl" is not, on Windows -- it
+        # has no drive -- so it is (rightly) resolved like a relative path.
+        absolute = (self.tmp / "elsewhere" / "s.glsl").as_posix()
+        preset = self._preset("abs.glslp", f"shaders = 1\nshader0 = {absolute}\n")
         _, shader_dir = overlay_bar.prepare_shaders(str(preset), "gl", self.runtime)
-        self.assertIn('shader0 = "/opt/s.glsl"', self._pair(shader_dir)[1])
+        self.assertIn(f'shader0 = "{absolute}"', self._pair(shader_dir)[1])
 
     def test_presets_it_cannot_extend_are_returned_as_is(self):
         cases = {
