@@ -1344,6 +1344,14 @@ class TheSystemPageTests(_PreferencesCase):
         self.assertFalse(self.config.get_ui_settings()["show_tips"])
         self.assertEqual(self.called("_apply_tips_visibility")[-1][1][0], False)
 
+    def test_the_semi_transparent_bar_switch_is_stored(self):
+        # Issue #477: off by default, read again at the next launch.
+        self.assertFalse(self.prefs._translucent_bar_row.get_active())
+        self.prefs._translucent_bar_row.set_active(True)
+        self.assertTrue(self.config.get_ui_settings()["translucent_game_bar"])
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertTrue(prefs._translucent_bar_row.get_active())
+
     def test_the_log_panel_switch_is_applied_by_the_window(self):
         # The window owns the setting, the panel and the bar button, and keeps
         # all three in step (issue #461).

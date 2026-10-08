@@ -41,6 +41,10 @@ backup and export to a visual controller map. The plan that came out of it is
 contributed the game-name database in
 [#188](https://github.com/guilhermefeitosa66/OpenEmux/pull/188).
 
+After trying the in-game control bar, suggested an option to make it
+semi-transparent for people who keep it on screen, which became
+[#477](https://github.com/guilhermefeitosa66/OpenEmux/issues/477).
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
