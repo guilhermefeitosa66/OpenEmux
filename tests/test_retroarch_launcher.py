@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from openemux.core import retroarch_command, retroarch_launcher
+from openemux.core import overlay_bar, retroarch_command, retroarch_launcher
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
@@ -343,6 +343,11 @@ class RetroArchLauncherTests(unittest.TestCase):
         loaded = cmd[cmd.index("--set-shader") + 1]
         self.assertTrue(loaded.endswith("in_game_bar/Controls shown.slangp"), loaded)
         self.assertNotIn(".glslp", " ".join(cmd))
+        # RetroArch is pointed at the bar's copy in the runtime folder, never
+        # at the package, which a RetroArch Flatpak cannot read (issue #482).
+        overlay = next(line for line in self._last_override
+                       if line.startswith("input_overlay = "))
+        self.assertIn("/runtime/overlay/openemux-bar.cfg", overlay.replace("\\", "/"))
         self.assertIsNotNone(launcher.last_shader_notice)
         key, kwargs = launcher.last_shader_notice
         self.assertEqual(key, "toast.shader.preset_missing")
@@ -1778,9 +1783,14 @@ class TheLastResortLookupsTests(_ResolutionCase):
             def flush(self):
                 return None
 
+        # The bar's files are staged before the log opens; with every open()
+        # faked, the copy has nothing real to read.
         with patch("builtins.open", return_value=_Handle()), patch(
             "openemux.core.retroarch_launcher.subprocess.Popen",
             side_effect=OSError("ENOEXEC"),
+        ), patch(
+            "openemux.core.retroarch_launcher.overlay_bar.stage_assets",
+            return_value=overlay_bar.OVERLAY_DIR,
         ):
             with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
                 proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
