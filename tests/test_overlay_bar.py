@@ -122,7 +122,10 @@ class StageAssetsTests(unittest.TestCase):
         stale.write_text("old", encoding="utf-8")
         with patch("openemux.core.overlay_bar.shutil.copyfile") as copy:
             overlay_bar.stage_assets(self.runtime)
-        copy.assert_called_once_with(overlay_bar.MARGIN_SHADER["glsl"], stale)
+        # By name: MSYS2 joins the package path with a backslash, and the
+        # same file then compares unequal as a Path.
+        self.assertEqual([(Path(src).name, Path(dst)) for (src, dst), _ in copy.call_args_list],
+                         [("margin.glsl", stale)])
         self.assertTrue(same.is_file())
 
     def test_only_files_are_copied(self):
