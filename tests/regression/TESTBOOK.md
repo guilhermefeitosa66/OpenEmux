@@ -2063,6 +2063,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `~/.openemux/runtime/hw_drivers.json` names both cores with `"glcore"` after they ran. Suite
   files `tests/test_hw_driver.py`, `tests/test_retroarch_launcher.py`
   (`test_a_core_that_switches_to_glcore_starts_there_with_slang`).
+
+### RT-337 — The Flatpak build shows the in-game bar
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed as a Flatpak (`make flatpak`, or the openemux-flatpak
+  repo) with RetroArch from Flathub (`org.libretro.RetroArch`); a game of any console.
+- **Steps:**
+  1. Launch the game from the Flatpak OpenEmux.
+  2. Hide the bar with its down-chevron, then show it again.
+- **Expected:** The game opens with OpenEmux's bar on the bottom edge and the game above it, as
+  in RT-327; hiding and showing behave as in RT-329. `~/.openemux/runtime/overlay/` holds
+  `openemux-bar.cfg`, its PNGs and the margin shaders, and that is where the launch points
+  RetroArch — not at OpenEmux's `/app`, which the RetroArch Flatpak cannot see (issue #482).
+- **Check:** human only; `grep input_overlay ~/.openemux/runtime/runtime_*.cfg | tail -1` names
+  `~/.openemux/runtime/overlay/openemux-bar.cfg`. Suite files `tests/test_overlay_bar.py`
+  (`StageAssetsTests`) and `tests/test_retroarch_launcher.py`.
+
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL
