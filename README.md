@@ -162,7 +162,7 @@ Browse your game collection with cover art, organized by console — just like a
 <p align="center">
   <img src="docs/assets/openemux-roms-nes.png" alt="NES Library" width="48%"/>
   &nbsp;
-  <img src="docs/assets/openemux-roms-snes.png" alt="SNES Library" width="48%"/>
+  <img src="docs/assets/openemux-library-snes.png" alt="SNES Library" width="48%"/>
 </p>
 <p align="center">
   <img src="docs/assets/openemux-roms-gba.png" alt="GBA Library" width="48%"/>
