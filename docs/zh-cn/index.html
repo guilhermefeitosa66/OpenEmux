@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — 面向 Linux 的复古游戏库</title>
+  <title>OpenEmux — 更轻松地使用 RetroArch</title>
   <meta name="description"
-    content="OpenEmux 是一款自由开源的 RetroArch 前端。它按主机整理你的游戏并显示封面，再通过 RetroArch 启动。优先在 Linux 上开发，Windows 版本处于测试阶段。" />
+    content="OpenEmux 是一款自由开源的模拟器前端，底层使用 RetroArch。它让只想玩游戏的人更容易上手 RetroArch：添加你自己的游戏，选一个，就能开始。Linux 是它的主要平台；同时也支持 Windows，目前为测试版。" />
   <link rel="icon" href="../assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — 面向 Linux 的复古游戏库" />
+  <meta property="og:title" content="OpenEmux — 更轻松地使用 RetroArch" />
   <meta property="og:description"
-    content="一款自由开源的 RetroArch 前端，优先在 Linux 上开发，Windows 版本处于测试阶段。" />
+    content="一款让 RetroArch 更易用的自由开源模拟器前端。Linux 是它的主要平台；同时也支持 Windows，目前为测试版。" />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/" />
@@ -1050,31 +1050,6 @@
       }
     }
 
-    .cart-tally {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      row-gap: 4px;
-      color: var(--muted);
-      font-size: .9rem;
-      font-variant-numeric: tabular-nums
-    }
-
-    .cart-tally b {
-      color: var(--text);
-      font-weight: 600
-    }
-
-    .cart-tally span:not(.sep) {
-      white-space: nowrap
-    }
-
-    .cart-tally .sep {
-      opacity: .4;
-      margin: 0 .5em
-    }
-
     /* still and scrollable for anyone who asked for less motion */
     @media (prefers-reduced-motion: reduce) {
       .belt-row {
@@ -1138,8 +1113,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux 标志" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux 现已支持 Windows →</a>
-      <h1>一个复古游戏库，<br /><span class="grad">在 Linux 上打造。</span></h1>
-      <p class="lede">OpenEmux 是一款免费的 RetroArch 前端。它按主机整理你的游戏并显示封面，选中游戏后会用 RetroArch 打开，按键和着色器都已按你的设置准备好。它优先在 Linux 上开发和测试；也提供 Windows 版本，目前仍是测试版。</p>
+      <h1>更轻松地<br /><span class="grad">使用 RetroArch。</span></h1>
+      <p class="lede">OpenEmux 是一款免费的模拟器前端，底层使用 RetroArch。RetroArch 功能强大，但对只想玩游戏的人来说，它的菜单和设置可能有些复杂。OpenEmux 按主机显示你已有的游戏和封面，并在启动时用 RetroArch 打开，核心、按键和着色器都已设置好。Linux 是它的主要平台；同时也支持 Windows，目前为测试版。</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ 下载
           Linux 版</a>
@@ -1161,12 +1136,12 @@
     <div class="wrap center">
       <span class="eyebrow">功能</span>
       <h2>OpenEmux 能做什么</h2>
-      <p class="lede">模拟由 RetroArch 负责。OpenEmux 处理它周围的事情：游戏库、核心、按键和着色器，让需要手动设置的东西少一些。</p>
+      <p class="lede">模拟由 RetroArch 负责。OpenEmux 处理它周围的事情：整理你的游戏、下载核心、设置按键和着色器，让需要手动配置的东西少一些。</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>按主机分类的游戏库</h3>
-          <p>游戏按主机分组，封面从 libretro 缩略图库下载。</p>
+          <h3>你的游戏，按主机分类</h3>
+          <p>你添加的游戏会按主机分组，封面从 libretro 缩略图库下载。</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
@@ -1185,8 +1160,8 @@
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>在 Linux 上打造</h3>
-          <p>使用 GTK4 和 Adwaita 编写，遵循 GNOME 设计规范，并且优先在 Linux 上测试。Windows 版本运行的是同一个应用，目前仍是测试版。</p>
+          <h3>Linux 优先</h3>
+          <p>Linux 是 OpenEmux 的主要平台。应用使用 GTK4 和 Adwaita 构建，遵循 GNOME 设计规范，每一处改动都先在 Linux 上测试。同时也支持 Windows，目前仍是测试版。</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
@@ -1203,9 +1178,7 @@
       <div>
         <span class="eyebrow">关于游戏</span>
         <h2>玩你拥有的游戏</h2>
-        <p class="lede">OpenEmux 是 RetroArch 的前端，旨在让模拟器变得平易近人。它
-          <strong>不是</strong>游戏来源——它不附带任何游戏、ROM 或 BIOS 文件，将来也不会。
-        </p>
+        <p class="lede">OpenEmux 是 RetroArch 的前端，让只想玩游戏的人不必先学会 RetroArch 的菜单。它<strong>不是</strong>游戏来源：不附带任何游戏、ROM 或 BIOS 文件，将来也不会。</p>
         <ul class="checks">
           <li><strong>只使用你合法拥有的内容。</strong>自行提取你的卡带和光盘，或使用
             你购买的游戏的备份。</li>
@@ -1225,8 +1198,7 @@
     <div class="wrap center">
       <span class="eyebrow">31 个系统</span>
       <h2>支持的系统</h2>
-      <p class="lede">Nintendo、Sega、Sony、Atari 等等——每个系统都有各自的核心、封面、输入配置和
-        着色器设置。</p>
+      <p class="lede">每个系统都使用 RetroArch 自己的核心运行，并在 OpenEmux 中拥有各自的封面、按键和着色器设置。</p>
       <div class="systems">
         <span class="chip">Nintendo (NES) / Famicom</span>
         <span class="chip">Famicom Disk System</span>
@@ -1267,21 +1239,18 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">卡带视图</span>
-      <h2 id="cartridges-title">游戏回到各自的卡带上</h2>
-      <p class="lede">在卡带视图中，每款游戏都会以标签图案显示在它所属主机的卡带上。</p>
+      <h2 id="cartridges-title">每款游戏都在它所属主机的卡带上</h2>
+      <p class="lede">在卡带视图中，你添加的游戏会以标签图案显示在所属主机的卡带上。下面的卡带就是这种视图的示例。</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="超级任天堂、Game Boy Advance、Nintendo 64 和 Mega Drive 卡带一排排滚动而过"></div>
-    <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
-        Game Boy Advance</span><span class="sep">·</span><span><b>11</b> Mega Drive</span><span
-        class="sep">·</span><span><b>9</b> Nintendo 64</span></p>
   </section>
 
   <!-- SCREENSHOTS -->
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">截图</span>
-      <h2>游戏库，按主机浏览</h2>
-      <p class="lede">每台主机在游戏库中都有自己的页面。用箭头切换，点击截图即可查看原尺寸。</p>
+      <h2>你的游戏，按主机浏览</h2>
+      <p class="lede">每台主机都有自己的页面，显示你为它添加的游戏。用箭头切换，点击截图即可查看原尺寸。</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="上一张">‹</button>

@@ -1042,31 +1042,6 @@
       }
     }
 
-    .cart-tally {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      row-gap: 4px;
-      color: var(--muted);
-      font-size: .9rem;
-      font-variant-numeric: tabular-nums
-    }
-
-    .cart-tally b {
-      color: var(--text);
-      font-weight: 600
-    }
-
-    .cart-tally span:not(.sep) {
-      white-space: nowrap
-    }
-
-    .cart-tally .sep {
-      opacity: .4;
-      margin: 0 .5em
-    }
-
     /* still and scrollable for anyone who asked for less motion */
     @media (prefers-reduced-motion: reduce) {
       .belt-row {
@@ -1233,7 +1208,6 @@
       {{cart.lede}}
     </div>
     <div class="cart-wall" id="cartWall" data-base="{{root}}assets/carts/" role="img" {{cart.wall_label}}</div>
-    {{cart.tally}}
   </section>
 
   <!-- SCREENSHOTS -->

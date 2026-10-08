@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — Linux のためのレトロゲームライブラリ</title>
+  <title>OpenEmux — RetroArch をもっと手軽に</title>
   <meta name="description"
-    content="OpenEmux は RetroArch 用の自由でオープンソースのフロントエンドです。ゲームをコンソールごとにカバーアート付きで整理し、RetroArch で起動します。Linux を優先して開発しており、Windows 版はベータです。" />
+    content="OpenEmux は、RetroArch を内部で使う、自由でオープンソースのエミュレーションフロントエンドです。ただ遊びたい人にとって RetroArch を使いやすくします。自分のゲームを追加して選べば、すぐに起動します。メインプラットフォームは Linux で、Windows にもベータ版で対応しています。" />
   <link rel="icon" href="../assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — Linux のためのレトロゲームライブラリ" />
+  <meta property="og:title" content="OpenEmux — RetroArch をもっと手軽に" />
   <meta property="og:description"
-    content="RetroArch 用の自由でオープンソースのフロントエンド。Linux を優先して開発しており、Windows 版はベータです。" />
+    content="RetroArch を使いやすくする、自由でオープンソースのエミュレーションフロントエンド。メインプラットフォームは Linux で、Windows にもベータ版で対応しています。" />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/ja/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/" />
@@ -1050,31 +1050,6 @@
       }
     }
 
-    .cart-tally {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      row-gap: 4px;
-      color: var(--muted);
-      font-size: .9rem;
-      font-variant-numeric: tabular-nums
-    }
-
-    .cart-tally b {
-      color: var(--text);
-      font-weight: 600
-    }
-
-    .cart-tally span:not(.sep) {
-      white-space: nowrap
-    }
-
-    .cart-tally .sep {
-      opacity: .4;
-      margin: 0 .5em
-    }
-
     /* still and scrollable for anyone who asked for less motion */
     @media (prefers-reduced-motion: reduce) {
       .belt-row {
@@ -1138,8 +1113,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux のロゴ" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux が Windows でも動くようになりました →</a>
-      <h1>レトロゲームのライブラリを、<br /><span class="grad">Linux で。</span></h1>
-      <p class="lede">OpenEmux は RetroArch 用の無料のフロントエンドです。ゲームをコンソールごとにカバーアート付きで整理し、選んだゲームを、操作設定やシェーダーを反映した状態で RetroArch で起動します。開発とテストはまず Linux で行っています。Windows 版もありますが、まだベータです。</p>
+      <h1>RetroArch を、<br /><span class="grad">もっと手軽に。</span></h1>
+      <p class="lede">OpenEmux は、RetroArch を内部で使う無料のエミュレーションフロントエンドです。RetroArch は高機能ですが、ただ遊びたいだけの人にはメニューや設定が多すぎることがあります。OpenEmux は、あなたが持っているゲームをコンソールごとにカバーアート付きで表示し、コア、操作設定、シェーダーを設定済みの状態で RetroArch で起動します。メインプラットフォームは Linux で、Windows にもベータ版で対応しています。</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Linux 版を
           ダウンロード</a>
@@ -1161,12 +1136,12 @@
     <div class="wrap center">
       <span class="eyebrow">機能</span>
       <h2>OpenEmux でできること</h2>
-      <p class="lede">エミュレーションは RetroArch が担います。OpenEmux はその周りのこと、つまりライブラリ、コア、操作設定、シェーダーを引き受け、手作業での設定を減らします。</p>
+      <p class="lede">エミュレーションは RetroArch が担います。OpenEmux はその周り、つまりゲームの整理、コアのダウンロード、操作設定とシェーダーの設定を引き受け、手作業での設定を減らします。</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>コンソール別のライブラリ</h3>
-          <p>ゲームはコンソールごとにまとめられ、カバーアートは libretro のサムネイルアーカイブから取得します。</p>
+          <h3>あなたのゲームをコンソール別に</h3>
+          <p>追加したゲームはコンソールごとにまとめられ、カバーアートは libretro のサムネイルアーカイブから取得します。</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
@@ -1185,8 +1160,8 @@
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Linux で作っています</h3>
-          <p>GTK4 と Adwaita で書かれ、GNOME のガイドラインに沿っており、ほかの何よりも先に Linux でテストしています。Windows 版は同じアプリを動かしていて、まだベータです。</p>
+          <h3>Linux ファースト</h3>
+          <p>Linux は OpenEmux のメインプラットフォームです。アプリは GTK4 と Adwaita で作られ、GNOME のガイドラインに沿っており、すべての変更はまず Linux でテストしています。Windows にも対応していますが、まだベータ版です。</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
@@ -1203,9 +1178,7 @@
       <div>
         <span class="eyebrow">ゲームについて</span>
         <h2>自分が持っているゲームを遊ぼう</h2>
-        <p class="lede">OpenEmux は、エミュレーションを身近にするために作られた RetroArch のフロントエンドです。ゲームの入手先では
-          <strong>ありません</strong>。ゲームも ROM も BIOS ファイルも同梱しておらず、今後も同梱することはありません。
-        </p>
+        <p class="lede">OpenEmux は RetroArch のフロントエンドで、ただ遊びたい人が先に RetroArch のメニューを覚えなくて済むように作られています。ゲームの入手先では<strong>ありません</strong>。ゲームも ROM も BIOS ファイルも同梱しておらず、今後も同梱しません。</p>
         <ul class="checks">
           <li><strong>合法的に所有しているコンテンツだけを使ってください。</strong> 自分のカートリッジやディスクから吸い出すか、
             購入したゲームのバックアップを使いましょう。</li>
@@ -1225,8 +1198,7 @@
     <div class="wrap center">
       <span class="eyebrow">31 システム</span>
       <h2>対応システム</h2>
-      <p class="lede">Nintendo、Sega、Sony、Atari など。それぞれにコア、カバーアート、入力プロファイル、
-        シェーダー設定があります。</p>
+      <p class="lede">どのシステムも RetroArch 自身のコアで動き、OpenEmux ではそれぞれにカバーアート、操作設定、シェーダー設定があります。</p>
       <div class="systems">
         <span class="chip">Nintendo (NES) / Famicom</span>
         <span class="chip">Famicom Disk System</span>
@@ -1267,21 +1239,18 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">カートリッジ表示</span>
-      <h2 id="cartridges-title">ゲームをそれぞれのカートリッジで</h2>
-      <p class="lede">カートリッジ表示では、各ゲームがそのコンソールのカートリッジに、ラベルのアートを載せて表示されます。</p>
+      <h2 id="cartridges-title">ゲームを、そのコンソールのカートリッジで</h2>
+      <p class="lede">カートリッジ表示では、追加したゲームがそのコンソールのカートリッジに、ラベルのアートを載せて表示されます。下のカートリッジはその表示の例です。</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="スーパーファミコン、ゲームボーイアドバンス、NINTENDO64、メガドライブのカートリッジが流れていく列"></div>
-    <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
-        Game Boy Advance</span><span class="sep">·</span><span><b>11</b> Mega Drive</span><span
-        class="sep">·</span><span><b>9</b> Nintendo 64</span></p>
   </section>
 
   <!-- SCREENSHOTS -->
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">スクリーンショット</span>
-      <h2>コンソールごとのライブラリ</h2>
-      <p class="lede">ライブラリにはコンソールごとのページがあります。矢印で切り替えられ、スクリーンショットをクリックすると原寸で表示できます。</p>
+      <h2>あなたのゲームを、コンソールごとに</h2>
+      <p class="lede">コンソールごとに、追加したゲームのページがあります。矢印で切り替えられ、スクリーンショットをクリックすると原寸で表示できます。</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="前へ">‹</button>

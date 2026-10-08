@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — A retro game library for Linux</title>
+  <title>OpenEmux — An easier way to use RetroArch</title>
   <meta name="description"
-    content="OpenEmux is a free and open-source frontend for RetroArch. It keeps your games organized by console, with cover art, and opens them in RetroArch. Developed on Linux first, with a Windows build in beta." />
+    content="OpenEmux is a free and open-source emulation frontend that uses RetroArch underneath. It makes RetroArch easier for anyone who just wants to play: add your own games, pick one, and it starts. Linux is its main platform; Windows is supported too, in beta." />
   <link rel="icon" href="assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — A retro game library for Linux" />
+  <meta property="og:title" content="OpenEmux — An easier way to use RetroArch" />
   <meta property="og:description"
-    content="A free and open-source frontend for RetroArch, developed on Linux first, with a Windows build in beta." />
+    content="A free and open-source emulation frontend that makes RetroArch easier to use. Linux is its main platform; Windows is supported too, in beta." />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
@@ -1050,31 +1050,6 @@
       }
     }
 
-    .cart-tally {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      row-gap: 4px;
-      color: var(--muted);
-      font-size: .9rem;
-      font-variant-numeric: tabular-nums
-    }
-
-    .cart-tally b {
-      color: var(--text);
-      font-weight: 600
-    }
-
-    .cart-tally span:not(.sep) {
-      white-space: nowrap
-    }
-
-    .cart-tally .sep {
-      opacity: .4;
-      margin: 0 .5em
-    }
-
     /* still and scrollable for anyone who asked for less motion */
     @media (prefers-reduced-motion: reduce) {
       .belt-row {
@@ -1138,8 +1113,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="assets/logo.png" alt="OpenEmux logo" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux now runs on Windows →</a>
-      <h1>A retro game library,<br /><span class="grad">made on Linux.</span></h1>
-      <p class="lede">OpenEmux is a free frontend for RetroArch. It keeps your games organized by console, with cover art, and opens them in RetroArch when you pick one, with your controls and shaders already set. It is developed and tested on Linux first; a Windows build is available too, still in beta.</p>
+      <h1>An easier way<br /><span class="grad">to use RetroArch.</span></h1>
+      <p class="lede">OpenEmux is a free emulation frontend that uses RetroArch underneath. RetroArch is powerful, but its menus and settings can be a lot for someone who just wants to play. OpenEmux shows the games you already have, organized by console with cover art, and starts them in RetroArch with the cores, controls and shaders already set. Linux is its main platform; Windows is supported too, in beta.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
           Linux</a>
@@ -1161,12 +1136,12 @@
     <div class="wrap center">
       <span class="eyebrow">Features</span>
       <h2>What OpenEmux does</h2>
-      <p class="lede">RetroArch does the emulation. OpenEmux takes care of what is around it: the library, the cores, the controls and the shaders, so there is less to set up by hand.</p>
+      <p class="lede">RetroArch does the emulation. OpenEmux takes care of what is around it: organizing your games, downloading the cores, and setting up controls and shaders, so there is less to configure by hand.</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>Library by console</h3>
-          <p>Games are grouped by console, with cover art downloaded from the libretro thumbnail archive.</p>
+          <h3>Your games, by console</h3>
+          <p>The games you add are grouped by console, with cover art downloaded from the libretro thumbnail archive.</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
@@ -1185,8 +1160,8 @@
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Made on Linux</h3>
-          <p>Written with GTK4 and Adwaita, following the GNOME guidelines, and tested on Linux before anything else. The Windows build runs the same app and is still in beta.</p>
+          <h3>Linux first</h3>
+          <p>Linux is OpenEmux's main platform. The app is built with GTK4 and Adwaita, follows the GNOME guidelines, and every change is tested on Linux first. Windows is supported too, with a build still in beta.</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
@@ -1203,9 +1178,7 @@
       <div>
         <span class="eyebrow">About the games</span>
         <h2>Play the games you own</h2>
-        <p class="lede">OpenEmux is a front-end for RetroArch, built to make emulation approachable. It is
-          <strong>not</strong> a source of games — it ships no games, no ROMs, no BIOS files, and never will.
-        </p>
+        <p class="lede">OpenEmux is a frontend for RetroArch, made so that someone who just wants to play does not have to learn RetroArch's menus first. It is <strong>not</strong> a source of games: it ships no games, no ROMs and no BIOS files, and never will.</p>
         <ul class="checks">
           <li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of
             games you purchased.</li>
@@ -1225,8 +1198,7 @@
     <div class="wrap center">
       <span class="eyebrow">31 systems</span>
       <h2>Supported systems</h2>
-      <p class="lede">Nintendo, Sega, Sony, Atari and more — each with its own cores, cover art, input profiles and
-        shader settings.</p>
+      <p class="lede">Each system runs on RetroArch's own cores, and has its own cover art, controls and shader settings in OpenEmux.</p>
       <div class="systems">
         <span class="chip">Nintendo (NES) / Famicom</span>
         <span class="chip">Famicom Disk System</span>
@@ -1267,21 +1239,18 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">Cartridge view</span>
-      <h2 id="cartridges-title">Games on their cartridges</h2>
-      <p class="lede">In the cartridge view, each game is shown with its label art on the cartridge of its own console.</p>
+      <h2 id="cartridges-title">Each game on its console's cartridge</h2>
+      <p class="lede">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="assets/carts/" role="img" aria-label="Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past"></div>
-    <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
-        Game Boy Advance</span><span class="sep">·</span><span><b>11</b> Mega Drive</span><span
-        class="sep">·</span><span><b>9</b> Nintendo 64</span></p>
   </section>
 
   <!-- SCREENSHOTS -->
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">Screenshots</span>
-      <h2>The library, console by console</h2>
-      <p class="lede">Each console has its own page in the library. Use the arrows to go through them, and click a screenshot to see it full size.</p>
+      <h2>Your games, console by console</h2>
+      <p class="lede">Each console gets its own page with the games you added to it. Use the arrows to go through them, and click a screenshot to see it full size.</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="Previous">‹</button>
