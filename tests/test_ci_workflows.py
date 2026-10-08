@@ -303,7 +303,10 @@ class TestsWorkflowTests(unittest.TestCase):
             if str(s.get("uses", "")).startswith("actions/download-artifact")
         )
         self.assertEqual(upload["with"]["name"], download["with"]["name"])
-        self.assertEqual(self.data["jobs"]["badge"]["needs"], "unittest")
+        # It may need more than the tests (the site-only gate, #487), but
+        # never less: the artifact only exists once they ran.
+        needs = self.data["jobs"]["badge"]["needs"]
+        self.assertIn("unittest", [needs] if isinstance(needs, str) else needs)
 
     def test_the_badge_has_a_band_that_reports_a_problem(self):
         # The ladder bottomed out at orange, so however far coverage fell the
