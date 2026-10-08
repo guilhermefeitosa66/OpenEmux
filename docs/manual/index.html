@@ -9,6 +9,15 @@
     content="The OpenEmux manual: installing, importing games, cover art, views, playlists, favorites, cores, shaders and every settings page, with screenshots." />
   <link rel="icon" href="../assets/logo.png" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <link rel="alternate" hreflang="pt-BR" href="https://guilhermefeitosa66.github.io/OpenEmux/pt-br/manual/" />
+  <link rel="alternate" hreflang="es" href="https://guilhermefeitosa66.github.io/OpenEmux/es/manual/" />
+  <link rel="alternate" hreflang="fr" href="https://guilhermefeitosa66.github.io/OpenEmux/fr/manual/" />
+  <link rel="alternate" hreflang="de" href="https://guilhermefeitosa66.github.io/OpenEmux/de/manual/" />
+  <link rel="alternate" hreflang="ja" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/manual/" />
+  <link rel="alternate" hreflang="zh-CN" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/manual/" />
+  <link rel="alternate" hreflang="ta" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/manual/" />
+  <link rel="alternate" hreflang="x-default" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
   <meta property="og:title" content="OpenEmux Manual" />
   <meta property="og:description" content="How to install and use OpenEmux, section by section, with screenshots." />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/manual/img/overview.webp" />
@@ -522,6 +531,101 @@
         grid-template-columns: 1fr
       }
     }
+    /* ---------- language picker ---------- */
+    /* A <details> menu of plain links: it opens and works without JavaScript,
+       and each entry is the same page in another language. */
+    .lang-switch {
+      position: relative;
+      flex: none
+    }
+
+    .lang-switch summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none
+    }
+
+    .lang-switch summary::-webkit-details-marker {
+      display: none
+    }
+
+    .lang-switch summary::after {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: translateY(-2px) rotate(45deg)
+    }
+
+    .lang-switch[open] summary::after {
+      transform: translateY(2px) rotate(-135deg)
+    }
+
+    .lang-switch summary:hover,
+    .lang-switch[open] summary {
+      background: var(--panel)
+    }
+
+    .lang-switch .flag {
+      font-size: 1.15rem;
+      line-height: 1
+    }
+
+    .lang-switch ul {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      min-width: 210px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+      z-index: 60
+    }
+
+    .lang-switch li a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 12px;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: .95rem
+    }
+
+    .lang-switch li a:hover {
+      background: rgba(255, 255, 255, .06);
+      text-decoration: none
+    }
+
+    .lang-switch li a[aria-current="page"] {
+      background: rgba(139, 92, 246, .22);
+      font-weight: 700
+    }
+
+    /* On a phone the header holds the brand, Download and the picker: the
+       flag alone says which language is on. */
+    @media(max-width:560px) {
+      .lang-switch .lang-name {
+        display: none
+      }
+    }
+
   </style>
 </head>
 
@@ -536,6 +640,19 @@
         <a href="https://www.reddit.com/r/OpenEmux/">Community</a>
       </nav>
       <button class="toc-toggle" id="tocToggle" type="button" aria-expanded="false" aria-controls="toc">Contents</button>
+      <details class="lang-switch">
+        <summary aria-label="Language: English"><span class="flag" aria-hidden="true">🇺🇸</span><span class="lang-name">English</span></summary>
+        <ul>
+          <li><a href="../manual/" hreflang="en" lang="en" aria-current="page"><span class="flag" aria-hidden="true">🇺🇸</span>English</a></li>
+          <li><a href="../pt-br/manual/" hreflang="pt-BR" lang="pt-BR"><span class="flag" aria-hidden="true">🇧🇷</span>Português (Brasil)</a></li>
+          <li><a href="../es/manual/" hreflang="es" lang="es"><span class="flag" aria-hidden="true">🇪🇸</span>Español</a></li>
+          <li><a href="../fr/manual/" hreflang="fr" lang="fr"><span class="flag" aria-hidden="true">🇫🇷</span>Français</a></li>
+          <li><a href="../de/manual/" hreflang="de" lang="de"><span class="flag" aria-hidden="true">🇩🇪</span>Deutsch</a></li>
+          <li><a href="../ja/manual/" hreflang="ja" lang="ja"><span class="flag" aria-hidden="true">🇯🇵</span>日本語</a></li>
+          <li><a href="../zh-cn/manual/" hreflang="zh-CN" lang="zh-CN"><span class="flag" aria-hidden="true">🇨🇳</span>简体中文</a></li>
+          <li><a href="../ta/manual/" hreflang="ta" lang="ta"><span class="flag" aria-hidden="true">🇮🇳</span>தமிழ்</a></li>
+        </ul>
+      </details>
     </div>
   </header>
 

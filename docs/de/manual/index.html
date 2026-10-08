@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenEmux-Handbuch</title>
+  <meta name="description"
+    content="Das OpenEmux-Handbuch: Installation, Spiele importieren, Cover, Ansichten, Playlists, Favoriten, Kerne, Shader und jede Seite der Einstellungen, mit Screenshots." />
+  <link rel="icon" href="../../assets/logo.png" />
+  <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/de/manual/" />
+  <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <link rel="alternate" hreflang="pt-BR" href="https://guilhermefeitosa66.github.io/OpenEmux/pt-br/manual/" />
+  <link rel="alternate" hreflang="es" href="https://guilhermefeitosa66.github.io/OpenEmux/es/manual/" />
+  <link rel="alternate" hreflang="fr" href="https://guilhermefeitosa66.github.io/OpenEmux/fr/manual/" />
+  <link rel="alternate" hreflang="de" href="https://guilhermefeitosa66.github.io/OpenEmux/de/manual/" />
+  <link rel="alternate" hreflang="ja" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/manual/" />
+  <link rel="alternate" hreflang="zh-CN" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/manual/" />
+  <link rel="alternate" hreflang="ta" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/manual/" />
+  <link rel="alternate" hreflang="x-default" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <meta property="og:title" content="OpenEmux-Handbuch" />
+  <meta property="og:description" content="So installierst und benutzt du OpenEmux, Abschnitt für Abschnitt, mit Screenshots." />
+  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/manual/img/overview.webp" />
+  <style>
+    :root {
+      --bg: #08060f;
+      --panel: #151029;
+      --line: rgba(255, 255, 255, .09);
+      --violet: #8b5cf6;
+      --violet-deep: #5b21b6;
+      --gold: #ffd21e;
+      --text: #f4f1ff;
+      --muted: #a9a2c4;
+      --side: 290px;
+      --head: 64px;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--head) + 18px);
+      overflow-x: clip
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Cantarell, "Noto Sans", sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration: none
+    }
+
+    a:hover {
+      text-decoration: underline
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block
+    }
+
+    /* ---------- header ---------- */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      height: var(--head);
+      background: rgba(8, 6, 15, .82);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line)
+    }
+
+    .nav {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: -.02em
+    }
+
+    .brand:hover {
+      text-decoration: none
+    }
+
+    .brand img {
+      width: 30px;
+      height: 30px
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: 500
+    }
+
+    .nav-links {
+      margin-left: auto;
+      display: flex;
+      gap: 22px;
+      font-size: .92rem
+    }
+
+    .nav-links a {
+      color: var(--muted)
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      text-decoration: none
+    }
+
+    .toc-toggle {
+      display: none;
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: .9rem;
+      cursor: pointer
+    }
+
+    /* ---------- layout ---------- */
+    .layout {
+      display: grid;
+      grid-template-columns: var(--side) minmax(0, 1fr);
+      max-width: 1320px;
+      margin: 0 auto
+    }
+
+    aside {
+      position: sticky;
+      top: var(--head);
+      height: calc(100vh - var(--head));
+      overflow-y: auto;
+      padding: 28px 18px 40px 24px;
+      border-right: 1px solid var(--line);
+      font-size: .9rem;
+      scrollbar-width: thin
+    }
+
+    .toc,
+    .toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0
+    }
+
+    .toc ul {
+      margin: 2px 0 8px 12px;
+      padding-left: 10px;
+      border-left: 1px solid var(--line)
+    }
+
+    .toc a {
+      display: block;
+      padding: 4px 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      line-height: 1.4
+    }
+
+    .toc a:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, .04);
+      text-decoration: none
+    }
+
+    .toc a.active {
+      color: var(--text);
+      background: rgba(139, 92, 246, .18)
+    }
+
+    .toc>li>details>summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .toc>li>details>summary::-webkit-details-marker {
+      display: none
+    }
+
+    .toc>li>details>summary::before {
+      content: "▸";
+      color: var(--gold);
+      font-size: .8rem;
+      transition: transform .15s ease
+    }
+
+    .toc>li>details[open]>summary::before {
+      transform: rotate(90deg)
+    }
+
+    .toc>li>details>summary a {
+      padding: 0;
+      color: inherit;
+      flex: 1
+    }
+
+    .toc>li>details>summary a:hover {
+      background: none
+    }
+
+    .toc>li>details>summary:has(a.active) {
+      background: rgba(139, 92, 246, .18)
+    }
+
+    main {
+      padding: 40px 56px 120px;
+      min-width: 0
+    }
+
+    .content {
+      max-width: 880px
+    }
+
+    /* ---------- type ---------- */
+    .eyebrow {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin: 0 0 14px
+    }
+
+    h2 {
+      font-size: 1.75rem;
+      letter-spacing: -.02em;
+      line-height: 1.2;
+      margin: 0 0 14px
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      letter-spacing: -.01em;
+      margin: 38px 0 10px
+    }
+
+    h4 {
+      font-size: 1rem;
+      margin: 26px 0 6px
+    }
+
+    p {
+      margin: 0 0 14px
+    }
+
+    .lede {
+      color: var(--muted);
+      font-size: 1.08rem
+    }
+
+    section.chapter {
+      padding: 56px 0 8px;
+      border-top: 1px solid var(--line);
+      margin-top: 40px
+    }
+
+    section.chapter:first-of-type {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 8px
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+      margin: 0 0 14px
+    }
+
+    li {
+      margin-bottom: 6px
+    }
+
+    strong {
+      color: #fff
+    }
+
+    .ui {
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap
+    }
+
+    kbd {
+      display: inline-block;
+      min-width: 1.6em;
+      padding: 1px 7px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .06);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82em;
+      text-align: center;
+      color: #fff;
+      white-space: nowrap
+    }
+
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .86em;
+      color: #c7f0d8;
+      overflow-wrap: anywhere
+    }
+
+    pre {
+      background: #05040b;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 0 0 16px
+    }
+
+    pre code {
+      overflow-wrap: normal
+    }
+
+    .note {
+      border: 1px solid rgba(139, 92, 246, .35);
+      background: rgba(139, 92, 246, .09);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin: 0 0 16px;
+      color: #ddd6f7
+    }
+
+    .note strong:first-child {
+      color: var(--gold)
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 18px;
+      font-size: .93rem
+    }
+
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line)
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .06em
+    }
+
+    .table-wrap {
+      overflow-x: auto
+    }
+
+    /* ---------- screenshots ---------- */
+    figure.shot {
+      margin: 18px 0 26px
+    }
+
+    figure.shot img {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .5);
+      cursor: zoom-in;
+      background: #222226
+    }
+
+    figure.shot.narrow img {
+      max-width: 520px
+    }
+
+    figure.shot.mid img {
+      max-width: 680px
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: .85rem;
+      margin-top: 10px
+    }
+
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: start
+    }
+
+    .pair figure.shot {
+      margin: 18px 0 18px
+    }
+
+    /* ---------- lightbox ---------- */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 4, 16, .92);
+      padding: 24px;
+      backdrop-filter: blur(4px)
+    }
+
+    .lightbox.open {
+      display: flex
+    }
+
+    .lightbox img {
+      max-width: 96vw;
+      max-height: 88vh;
+      border-radius: 10px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, .7)
+    }
+
+    .lightbox-close {
+      position: fixed;
+      top: 14px;
+      right: 22px;
+      width: 44px;
+      height: 44px;
+      font-size: 1.9rem;
+      line-height: 1;
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer
+    }
+
+    .lightbox-cap {
+      position: fixed;
+      bottom: 18px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #d8d3ea;
+      font-size: .9rem;
+      padding: 0 16px;
+      pointer-events: none
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      margin-top: 64px;
+      padding-top: 28px;
+      color: var(--muted);
+      font-size: .85rem
+    }
+
+    /* ---------- narrow screens ---------- */
+    @media (max-width: 960px) {
+      .layout {
+        display: block
+      }
+
+      .toc-toggle {
+        display: inline-block;
+        margin-left: auto
+      }
+
+      .nav-links {
+        display: none
+      }
+
+      aside {
+        display: none;
+        position: fixed;
+        inset: var(--head) 0 0 0;
+        height: auto;
+        z-index: 40;
+        background: var(--bg);
+        border-right: 0;
+        padding: 20px 16px 60px
+      }
+
+      body.toc-open aside {
+        display: block
+      }
+
+      main {
+        padding: 28px 16px 80px
+      }
+
+      .nav {
+        padding: 0 16px
+      }
+
+      .pair {
+        grid-template-columns: 1fr
+      }
+    }
+    /* ---------- language picker ---------- */
+    /* A <details> menu of plain links: it opens and works without JavaScript,
+       and each entry is the same page in another language. */
+    .lang-switch {
+      position: relative;
+      flex: none
+    }
+
+    .lang-switch summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none
+    }
+
+    .lang-switch summary::-webkit-details-marker {
+      display: none
+    }
+
+    .lang-switch summary::after {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: translateY(-2px) rotate(45deg)
+    }
+
+    .lang-switch[open] summary::after {
+      transform: translateY(2px) rotate(-135deg)
+    }
+
+    .lang-switch summary:hover,
+    .lang-switch[open] summary {
+      background: var(--panel)
+    }
+
+    .lang-switch .flag {
+      font-size: 1.15rem;
+      line-height: 1
+    }
+
+    .lang-switch ul {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      min-width: 210px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+      z-index: 60
+    }
+
+    .lang-switch li a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 12px;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: .95rem
+    }
+
+    .lang-switch li a:hover {
+      background: rgba(255, 255, 255, .06);
+      text-decoration: none
+    }
+
+    .lang-switch li a[aria-current="page"] {
+      background: rgba(139, 92, 246, .22);
+      font-weight: 700
+    }
+
+    /* On a phone the header holds the brand, Download and the picker: the
+       flag alone says which language is on. */
+    @media(max-width:560px) {
+      .lang-switch .lang-name {
+        display: none
+      }
+    }
+
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="nav">
+      <a class="brand" href="../"><img src="../../assets/logo.png" alt="" /> OpenEmux <small>Handbuch</small></a>
+      <nav class="nav-links">
+        <a href="../">Start</a>
+        <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Download</a>
+        <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
+        <a href="https://www.reddit.com/r/OpenEmux/">Community</a>
+      </nav>
+      <button class="toc-toggle" id="tocToggle" type="button" aria-expanded="false" aria-controls="toc">Inhalt</button>
+      <details class="lang-switch">
+        <summary aria-label="Sprache: Deutsch"><span class="flag" aria-hidden="true">🇩🇪</span><span class="lang-name">Deutsch</span></summary>
+        <ul>
+          <li><a href="../../manual/" hreflang="en" lang="en"><span class="flag" aria-hidden="true">🇺🇸</span>English</a></li>
+          <li><a href="../../pt-br/manual/" hreflang="pt-BR" lang="pt-BR"><span class="flag" aria-hidden="true">🇧🇷</span>Português (Brasil)</a></li>
+          <li><a href="../../es/manual/" hreflang="es" lang="es"><span class="flag" aria-hidden="true">🇪🇸</span>Español</a></li>
+          <li><a href="../../fr/manual/" hreflang="fr" lang="fr"><span class="flag" aria-hidden="true">🇫🇷</span>Français</a></li>
+          <li><a href="../../de/manual/" hreflang="de" lang="de" aria-current="page"><span class="flag" aria-hidden="true">🇩🇪</span>Deutsch</a></li>
+          <li><a href="../../ja/manual/" hreflang="ja" lang="ja"><span class="flag" aria-hidden="true">🇯🇵</span>日本語</a></li>
+          <li><a href="../../zh-cn/manual/" hreflang="zh-CN" lang="zh-CN"><span class="flag" aria-hidden="true">🇨🇳</span>简体中文</a></li>
+          <li><a href="../../ta/manual/" hreflang="ta" lang="ta"><span class="flag" aria-hidden="true">🇮🇳</span>தமிழ்</a></li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside id="toc" aria-label="Inhalt">
+      <ul class="toc">
+        <li><details open><summary><a href="#start">Erste Schritte</a></summary>
+            <ul>
+              <li><a href="#what">Was OpenEmux ist</a></li>
+              <li><a href="#window">Ein Rundgang durch das Fenster</a></li>
+              <li><a href="#welcome">Die Willkommenstour</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#install">Installation</a></summary>
+            <ul>
+              <li><a href="#install-appimage">AppImage</a></li>
+              <li><a href="#install-deb">Debian / Ubuntu</a></li>
+              <li><a href="#install-rpm">Fedora</a></li>
+              <li><a href="#install-flatpak">Flatpak</a></li>
+              <li><a href="#install-windows">Windows</a></li>
+              <li><a href="#install-verify">Einen Download prüfen</a></li>
+              <li><a href="#install-first">Der erste Start</a></li>
+              <li><a href="#install-source">Aus dem Quellcode bauen</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#import">Spiele importieren</a></summary>
+            <ul>
+              <li><a href="#import-picker">ROMs importieren</a></li>
+              <li><a href="#import-drop">Ziehen und Ablegen</a></li>
+              <li><a href="#import-console">Welche Konsole?</a></li>
+              <li><a href="#import-folder">Der ROM-Ordner</a></li>
+              <li><a href="#import-rescan">Neu einlesen</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#covers">Cover synchronisieren</a></summary>
+            <ul>
+              <li><a href="#covers-sync">Cover synchronisieren</a></li>
+              <li><a href="#covers-providers">Woher die Cover kommen</a></li>
+              <li><a href="#covers-screenscraper">ScreenScraper-Konto</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#artwork">Cover verwalten</a></summary>
+            <ul>
+              <li><a href="#artwork-missing">Spiele ohne Cover</a></li>
+              <li><a href="#artwork-menu">Die Cover-Einträge eines Spiels</a></li>
+              <li><a href="#artwork-manager">Die Cover-Verwaltung</a></li>
+              <li><a href="#artwork-color">Modulfarben</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#views">Ansichten</a></summary>
+            <ul>
+              <li><a href="#views-modes">Cover, Modul und Liste</a></li>
+              <li><a href="#views-layout">Das Layout-Menü</a></li>
+              <li><a href="#views-pages">„Alle“ und gruppierte Seiten</a></li>
+              <li><a href="#views-search">Suche</a></li>
+              <li><a href="#views-select">Mehrere Spiele auswählen</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#playlists">Playlists</a></summary>
+            <ul>
+              <li><a href="#playlists-create">Eine Playlist erstellen</a></li>
+              <li><a href="#playlists-add">Spiele hinzufügen und entfernen</a></li>
+              <li><a href="#playlists-manage">Umbenennen und löschen</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#favorites">Favoriten</a></summary></details></li>
+        <li><details open><summary><a href="#cores">Kerne und Shader</a></summary>
+            <ul>
+              <li><a href="#cores-game">Für ein Spiel</a></li>
+              <li><a href="#cores-console">Für eine ganze Konsole</a></li>
+              <li><a href="#cores-menus">Alle Kontextmenüs</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#settings">Einstellungen</a></summary>
+            <ul>
+              <li><a href="#settings-library">Bibliothek</a></li>
+              <li><a href="#settings-bios">BIOS</a></li>
+              <li><a href="#settings-input">Eingabe</a></li>
+              <li><a href="#settings-video">Video</a></li>
+              <li><a href="#settings-cores">Kerne</a></li>
+              <li><a href="#settings-system">System</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#keys">Tastenkürzel und Hotkeys</a></summary>
+            <ul>
+              <li><a href="#keys-library">In der Bibliothek</a></li>
+              <li><a href="#keys-game">Beim Spielen</a></li>
+              <li><a href="#keys-gamepad">Mit einem Controller</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#help">Wenn etwas schiefgeht</a></summary></details></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="content">
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="start">
+          <span class="eyebrow">Handbuch</span>
+          <h1>OpenEmux benutzen</h1>
+          <p class="lede">Dieses Handbuch geht OpenEmux Stück für Stück durch, von der Installation bis zum letzten Schalter in den Einstellungen. Jeder Screenshot rahmt den Teil ein, um den es im Text geht. Klicke auf einen Screenshot, um ihn in voller Größe zu sehen.</p>
+
+          <h3 id="what">Was OpenEmux ist</h3>
+          <p>OpenEmux ist eine freie, quelloffene Emulator-Oberfläche. Es ordnet die Spiele, die du schon hast, nach Konsole, mit Covern, und startet sie mit fertig eingerichteter Steuerung und fertigen Shadern. Die Emulation selbst übernimmt <a href="https://www.retroarch.com/">RetroArch</a> mit seinen libretro-Kernen; OpenEmux kümmert sich um alles drumherum, damit du vor dem Spielen nicht erst die Menüs von RetroArch lernen musst.</p>
+          <p>OpenEmux enthält keine Spiele, ROMs oder BIOS-Dateien. Die bringst du selbst mit.</p>
+          <p>Linux ist die Hauptplattform von OpenEmux. Windows wird auch unterstützt, mit einer Version, die noch in der Beta ist.</p>
+
+          <h3 id="window">Ein Rundgang durch das Fenster</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/overview.webp" alt="Das OpenEmux-Fenster mit einer Super-Nintendo-Bibliothek in der Modulansicht" />
+            <figcaption>Das Hauptfenster, auf der Super-Nintendo-Seite in der Modulansicht.</figcaption>
+          </figure>
+
+          <h4>Die Seitenleiste</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-sidebar.webp" alt="Die Seitenleiste, eingerahmt" /></figure>
+          <p>Die Seitenleiste listet die Seiten deiner Bibliothek, von oben nach unten:</p>
+          <ul>
+            <li><span class="ui">Alle</span>: jedes Spiel, nach Konsole gruppiert.</li>
+            <li><span class="ui">Favoriten</span>: die Spiele, die du mit einem Stern markiert hast. Die Zeile erscheint erst, wenn etwas markiert ist. Siehe <a href="#favorites">Favoriten</a>.</li>
+            <li>Deine Playlists, falls du welche angelegt hast. Hier <span class="ui">Megaman</span>. Siehe <a href="#playlists">Playlists</a>.</li>
+            <li>Eine Zeile pro Konsole mit Spielen, mit ihrer Kurz-ID und ihrem Namen, etwa <span class="ui">SFC - Super Nintendo (SNES)</span>.</li>
+          </ul>
+          <p>Konsolen- und Playlist-Zeilen haben ein Menü: Rechtsklick darauf, oder mit der Maus darüberfahren und auf die Schaltfläche <span class="ui">⋮</span> klicken. Konsolenzeilen lassen sich auch ziehen, um ihre Reihenfolge zu ändern.</p>
+
+          <h4>Die Schaltflächen in der Kopfleiste</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-header.webp" alt="Die Kopfleiste, mit den Schaltflächen auf beiden Seiten eingerahmt" /></figure>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Schaltfläche</th>
+                <th>Was sie macht</th>
+              </tr>
+              <tr>
+                <td>☰ <span class="ui">Hauptmenü</span> (neben „Bibliothek“)</td>
+                <td>Einstellungen, Tastenkürzel, Willkommen, Fehler melden … und Über OpenEmux.</td>
+              </tr>
+              <tr>
+                <td>⟳ <span class="ui">Angezeigte Seite neu laden</span></td>
+                <td>Liest die angezeigte Konsole neu ein, oder alle Konsolen auf <span class="ui">Alle</span>. Wie <kbd>F5</kbd>.</td>
+              </tr>
+              <tr>
+                <td>⤓ <span class="ui">ROMs importieren</span></td>
+                <td>Öffnet die Dateiauswahl, um Spiele hinzuzufügen. Siehe <a href="#import">Spiele importieren</a>.</td>
+              </tr>
+              <tr>
+                <td>🖼 <span class="ui">Cover synchronisieren</span></td>
+                <td>Lädt fehlende Cover herunter. Siehe <a href="#covers">Cover synchronisieren</a>.</td>
+              </tr>
+              <tr>
+                <td>🎮 <span class="ui">Controller-Einstellungen dieser Konsole</span></td>
+                <td>Öffnet die Einstellungen auf der Seite Eingabe. Nur auf der Seite einer Konsole sichtbar.</td>
+              </tr>
+              <tr>
+                <td>🛠 <span class="ui">Einstellungen</span></td>
+                <td>Öffnet die Einstellungen. Wie <kbd>Ctrl</kbd>+<kbd>,</kbd>.</td>
+              </tr>
+              <tr>
+                <td>Drei verbundene Schaltflächen</td>
+                <td><span class="ui">Cover-Raster</span>, <span class="ui">Modul-Raster</span> und <span class="ui">Kompakte Liste</span>. Siehe <a href="#views">Ansichten</a>.</td>
+              </tr>
+              <tr>
+                <td>▦ <span class="ui">Ansichtsmodus</span></td>
+                <td>Das Layout-Menü: Ansicht, Sortierung, Filter und Größe der Vorschaubilder für diese Seite.</td>
+              </tr>
+              <tr>
+                <td>☀ / ☾</td>
+                <td>Wechselt zwischen dunklem und hellem Design.</td>
+              </tr>
+              <tr>
+                <td>🔍 <span class="ui">Suchen</span></td>
+                <td>Filtert die angezeigte Seite. Siehe <a href="#views-search">Suche</a>.</td>
+              </tr>
+            </table>
+          </div>
+
+          <h4>Der untere Fensterrand</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="320" src="../../manual/img/ui-bottom.webp" alt="Der untere Fensterrand: die Schaltflächen der Seitenleiste, die Tippleiste und die Schaltfläche Protokoll" /></figure>
+          <ul>
+            <li><span class="ui">ROMs importieren</span> und <span class="ui">Neue Playlist</span> sitzen unten in der Seitenleiste.</li>
+            <li>Die Tippleiste zeigt einen kurzen Tipp, der alle paar Sekunden wechselt. Wenn du dich mit der Tastatur oder einem Controller bewegst, zeigt sie auch, welche Taste was macht.</li>
+            <li><span class="ui">Protokoll</span> öffnet den Protokollbereich. Eine rote Zahl darauf zählt die Fehler. Siehe <a href="#help">Wenn etwas schiefgeht</a>.</li>
+          </ul>
+
+          <h4>Eine Spielkarte</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="200" src="../../manual/img/ui-card-hover.webp" alt="Eine Modulkarte unter dem Mauszeiger, mit Stern, Menüschaltfläche und Play-Schaltfläche" /></figure>
+            <div>
+              <p>Zeigst du auf ein Spiel, erscheinen drei Bedienelemente:</p>
+              <ul>
+                <li>der <strong>Stern</strong> oben links markiert es als Favorit;</li>
+                <li>das <strong>⋮</strong> oben rechts öffnet das Menü des Spiels;</li>
+                <li>die <strong>Play</strong>-Schaltfläche in der Mitte startet es. Ein einfacher Klick irgendwo auf die Karte macht dasselbe.</li>
+              </ul>
+              <p>Ein Rechtsklick auf eine Karte öffnet ebenfalls ihr Menü.</p>
+            </div>
+          </div>
+
+          <h4>Das Hauptmenü und die Tastenkürzel</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="451" height="307" src="../../manual/img/ui-main-menu.webp" alt="Das geöffnete Hauptmenü" /></figure>
+            <figure class="shot"><img loading="lazy" width="890" height="670" src="../../manual/img/ui-shortcuts.webp" alt="Das Fenster mit den Tastenkürzeln" /></figure>
+          </div>
+          <p><span class="ui">Tastenkürzel</span> (<kbd>Ctrl</kbd>+<kbd>?</kbd>) listet die Tasten der Bibliothek. Du findest sie auch unter <a href="#keys">Tastenkürzel und Hotkeys</a>.</p>
+
+          <h3 id="welcome">Die Willkommenstour</h3>
+          <figure class="shot mid"><img loading="lazy" width="920" height="670" src="../../manual/img/ui-welcome.webp" alt="Die Tour „Willkommen bei OpenEmux“" /></figure>
+          <p>Beim ersten Öffnen von OpenEmux zeigt eine kurze Tour die wichtigsten Funktionen: Importieren, Layouts, Cover, Farben und Shader, Tastenkürzel sowie Tastatur und Controller. Auf ihrer ersten Seite kannst du die Sprache der Oberfläche wählen. Entferne den Haken bei <span class="ui">Beim Start anzeigen</span>, damit sie nicht mehr von selbst aufgeht; sie bleibt im Hauptmenü unter <span class="ui">Willkommen</span> erreichbar.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="install">
+          <span class="eyebrow">Installation</span>
+          <h2>OpenEmux installieren</h2>
+          <p>Jede Version liegt auf der <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases-Seite</a>. Nimm das Format, das zu deinem System passt; alle starten dieselbe App.</p>
+
+          <h3 id="install-appimage">AppImage (jede Linux-Distribution)</h3>
+          <p>Eine einzige Datei, die auf den meisten Distributionen läuft, ohne etwas zu installieren:</p>
+          <pre><code>chmod +x OpenEmux-x86_64.AppImage
+./OpenEmux-x86_64.AppImage</code></pre>
+          <p>Hat dein System kein FUSE, starte sie mit <code>APPIMAGE_EXTRACT_AND_RUN=1</code> vor dem Befehl.</p>
+
+          <h3 id="install-deb">Debian / Ubuntu (.deb)</h3>
+          <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
+          <p>Braucht Ubuntu 24.04 LTS oder neuer, oder ein gleich altes Debian.</p>
+
+          <h3 id="install-rpm">Fedora (.rpm)</h3>
+          <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
+          <p>Braucht Fedora 40 oder neuer.</p>
+
+          <h3 id="install-flatpak">Flatpak</h3>
+          <p>In einer Sandbox, und zusammen mit deinen anderen Flatpaks aktualisiert:</p>
+          <pre><code>flatpak install -y flathub org.libretro.RetroArch
+flatpak remote-add --if-not-exists --no-gpg-verify \
+  openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
+flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
+          <p>Updates kommen dann mit <code>flatpak update</code>. Ein <code>.flatpak</code>-Paket als einzelne Datei liegt ebenfalls auf der Releases-Seite.</p>
+
+          <h3 id="install-windows">Windows (Beta)</h3>
+          <p>Beide Windows-Versionen bringen GTK 4, die Python-Laufzeit und RetroArch selbst mit, du musst also nichts weiter installieren. Sie brauchen Windows 10 oder 11, 64 Bit.</p>
+          <ul>
+            <li><strong>Installer</strong>, <code>OpenEmux-*-setup.exe</code>: installiert nur für deinen Benutzer und fragt daher nicht nach Administratorrechten. Die Versionen sind noch nicht signiert, deshalb warnt SmartScreen davor; mit <span class="ui">Weitere Informationen → Trotzdem ausführen</span> kommst du daran vorbei.</li>
+            <li><strong>Portabel</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: irgendwo entpacken und <code>OpenEmux.exe</code> im darin enthaltenen Ordner <code>OpenEmux\</code> starten. Praktisch auf einem USB-Stick oder einem Rechner, auf dem du keine Software installieren kannst.</li>
+          </ul>
+          <p>Die Windows-Version ist neu. Wenn etwas nicht richtig läuft, <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">eröffne bitte ein Issue</a>.</p>
+
+          <h3 id="install-verify">Einen Download prüfen</h3>
+          <p>Jede Version hat eine Datei <code>SHA256SUMS</code>. Leg sie neben das, was du heruntergeladen hast, und führe aus:</p>
+          <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
+          <p><code>OK</code> heißt, die Datei ist genau die veröffentlichte. Alles andere heißt, sie ist beschädigt oder wurde verändert; starte sie dann nicht. Unter Windows gibt PowerShell die Prüfsumme aus, und du vergleichst sie mit der passenden Zeile in <code>SHA256SUMS</code>:</p>
+          <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
+
+          <h3 id="install-first">Der erste Start</h3>
+          <p>Beim ersten Start zeigt OpenEmux ein Fenster <span class="ui">Ersteinrichtung wird vorbereitet</span>, während es seine Konfiguration anlegt, die Ordner für ROMs, BIOS und Cover erstellt, Eingabeprofile und Playlists vorbereitet und die libretro-Kerne herunterlädt, die deine Konsolen brauchen. Das dauert meist etwa zehn Sekunden; die übrigen Kerne werden im Hintergrund weiter geladen, während du die App benutzt, und ein Banner unter der Kopfleiste zeigt den Fortschritt.</p>
+          <p>Deine Einstellungen liegen in <code>~/.openemux/</code> und deine Spiele in <code>~/games/roms/</code>, ein Ordner pro Konsole.</p>
+
+          <h3 id="install-source">Aus dem Quellcode bauen</h3>
+          <pre><code>make bootstrap &amp;&amp; make run</code></pre>
+          <p>Die Einzelheiten stehen in der <a href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">Bauanleitung</a>.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="import">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Spiele importieren</h2>
+          <p>OpenEmux spielt die ROM-Dateien, die du schon hast. Beim Importieren werden sie in den ROM-Ordner kopiert (oder verknüpft), ein Unterordner pro Konsole, und in die Bibliothek aufgenommen.</p>
+
+          <h3 id="import-picker">ROMs importieren</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/import-buttons.webp" alt="Die zwei Schaltflächen „ROMs importieren“, eingerahmt: eine unten in der Seitenleiste, eine in der Kopfleiste" /></figure>
+          <p>Klicke unten in der Seitenleiste auf <span class="ui">ROMs importieren</span> oder in der Kopfleiste auf die Schaltfläche ⤓, oder drücke <kbd>Ctrl</kbd>+<kbd>O</kbd>. Eine Dateiauswahl öffnet sich; du kannst mehrere Dateien auf einmal wählen.</p>
+          <figure class="shot mid"><img loading="lazy" width="830" height="420" src="../../manual/img/import-dialog.webp" alt="Die Dateiauswahl zum Importieren von ROMs, mit eingerahmtem Filter „ROMs und Archive“" /></figure>
+          <p>Der Filter <span class="ui">ROMs und Archive</span> zeigt nur die Dateien, die OpenEmux importieren kann, auch <code>.zip</code>-Archive. Nach dem Import sagt eine Meldung, wie viele Spiele hinzugekommen sind und wie viele Dateien übersprungen wurden, und OpenEmux sucht Cover für die neuen Spiele.</p>
+          <div class="note"><strong>Zip-Dateien.</strong> Eine Zip-Datei wird nach den Dateien darin einsortiert. Kann der Kern der Konsole keine Spiele aus einer Zip-Datei lesen, entpackt OpenEmux sie für dich und sagt dir Bescheid.</div>
+
+          <h3 id="import-drop">Ziehen und Ablegen</h3>
+          <p>Du kannst Dateien oder ganze Ordner auch irgendwo im Fenster ablegen. Während du ziehst, zeigt ein Banner <span class="ui">Dateien hier ablegen, um sie zu importieren</span>. Ordner werden bis ganz nach unten durchsucht.</p>
+
+          <h3 id="import-console">Welche Konsole?</h3>
+          <p>OpenEmux erkennt die Konsole an der Dateiendung (<code>.sfc</code> ist ein Super-Nintendo-Spiel, <code>.gba</code> ein Game-Boy-Advance-Spiel und so weiter). Dabei können zwei Dialoge auftauchen:</p>
+          <ul>
+            <li>Importierst du aus <span class="ui">Alle</span>, <span class="ui">Favoriten</span> oder einer leeren Bibliothek, fragt es zuerst <span class="ui">Welche Konsole?</span>, mit <span class="ui">Automatisch erkennen</span> ausgewählt. Lass das so, außer du willst alle Dateien einer bestimmten Konsole zuordnen.</li>
+            <li>Teilen sich mehrere Konsolen eine Endung, etwa <code>.bin</code> oder <code>.iso</code>, fragt es einmal pro Endung, mit einer Schaltfläche pro möglicher Konsole. Die wahrscheinlichste steht vorne.</li>
+          </ul>
+
+          <h3 id="import-folder">Der ROM-Ordner</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="181" src="../../manual/img/settings-library-roms-folder.webp" alt="Einstellungen, Seite Bibliothek, die Gruppe ROM-Ordner" /></figure>
+          <p>In <a href="#settings-library">Einstellungen → Bibliothek</a>:</p>
+          <ul>
+            <li><span class="ui">Pfad</span> ist der Ort der Bibliothek. <span class="ui">Wählen…</span> stellt einen anderen Ordner ein; das Ordnersymbol öffnet ihn in deinem Dateimanager.</li>
+            <li><span class="ui">Wie ROMs importiert werden</span> wählt zwischen <span class="ui">Datei kopieren</span> (Standard: das Original bleibt, wo es war, und die Bibliothek bekommt eine eigene Kopie) und <span class="ui">Auf das Original verweisen</span> (keine Kopie; die Bibliothek zeigt auf den Ort der Datei, wenn du das Original verschiebst oder löschst, funktioniert das Spiel also nicht mehr).</li>
+          </ul>
+          <p>Du kannst Dateien auch selbst in die Konsolenordner legen, zum Beispiel <code>~/games/roms/SFC/</code>, und neu einlesen.</p>
+
+          <h3 id="import-rescan">Neu einlesen</h3>
+          <figure class="shot"><img loading="lazy" width="900" height="160" src="../../manual/img/import-rescan.webp" alt="Die Schaltfläche „Angezeigte Seite neu laden“, eingerahmt" /></figure>
+          <p>Die Bibliothek wird bei jedem Start von OpenEmux eingelesen. Um Änderungen von außerhalb der App zu übernehmen, nimm <span class="ui">⟳</span> in der Kopfleiste (<kbd>F5</kbd>), <span class="ui">Diese Konsole neu einlesen</span> im Menü einer Konsole oder <span class="ui">ROMs einlesen</span> in <a href="#settings-library">Einstellungen → Bibliothek</a>, wo du eine Konsole oder alle wählen kannst.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="covers">
+          <span class="eyebrow">Cover</span>
+          <h2>Cover synchronisieren</h2>
+          <p>OpenEmux lädt zwei Arten von Bildern herunter: <strong>Cover</strong> (die Hülle) und <strong>Aufkleber</strong> (das Bild auf dem Modul, das die Modulansicht benutzt). Es holt nur, was fehlt; Bilder, die du schon hast, bleiben unangetastet.</p>
+
+          <h3 id="covers-sync">Cover synchronisieren</h3>
+          <figure class="shot"><img loading="lazy" width="900" height="160" src="../../manual/img/covers-sync-button.webp" alt="Die Schaltfläche „Cover synchronisieren“ in der Kopfleiste, eingerahmt" /></figure>
+          <p>Klicke in der Kopfleiste auf 🖼 <span class="ui">Cover synchronisieren</span> oder drücke <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>. Auf der Seite einer Konsole synchronisiert es diese Konsole, überall sonst die ganze Bibliothek. Ein Banner unter der Kopfleiste zeigt den Fortschritt, mit einer Schaltfläche <span class="ui">Abbrechen</span>, und die Cover erscheinen, sobald sie ankommen.</p>
+          <p>Dieselbe Aktion gibt es im Menü einer Konsole (<span class="ui">Cover synchronisieren</span>), in der Leiste, die bei mehreren ausgewählten Spielen erscheint, und in <a href="#settings-library">Einstellungen → Bibliothek → Wartung</a>, wo du zuerst die Konsole wählst.</p>
+
+          <h3 id="covers-providers">Woher die Cover kommen</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="251" src="../../manual/img/settings-library-artwork-providers.webp" alt="Einstellungen, Seite Bibliothek, die Gruppe Cover-Quellen" /></figure>
+          <p>Drei Quellen werden der Reihe nach versucht, die oberste zuerst; die darunter sind Ausweichoptionen. Jede Zeile hat Pfeile, um sie nach oben oder unten zu schieben, und einen Schalter, um sie abzuschalten.</p>
+          <ul>
+            <li><span class="ui">libretro-Vorschaubilder</span>: Cover aus der Community-Sammlung. Kein Konto nötig.</li>
+            <li><span class="ui">ScreenScraper</span>: Cover und Modul-Aufkleber, zugeordnet über die Prüfsumme der ROM, findet Spiele also auch bei ungewöhnlichen Dateinamen.</li>
+            <li><span class="ui">OpenEmux-Spiegel</span>: Cover aus der eigenen Sammlung des Projekts.</li>
+          </ul>
+
+          <h3 id="covers-screenscraper">ScreenScraper-Konto</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="373" src="../../manual/img/settings-library-screenscraper.webp" alt="Einstellungen, Seite Bibliothek, die Gruppe ScreenScraper-Konto" /></figure>
+          <p>ScreenScraper funktioniert ohne Konto: OpenEmux bringt Entwickler-Zugangsdaten und ein gemeinsames Kontingent mit. Ein eigenes, kostenloses ScreenScraper-Konto hat ein eigenes Tageskontingent, das ist bei großen Bibliotheken schneller und zuverlässiger. Fülle <span class="ui">ScreenScraper-Benutzername</span> und <span class="ui">ScreenScraper-Passwort</span> aus. Unter <span class="ui">Erweitert</span> stehen eine Entwickler-ID und ein Passwort, die brauchst du nur mit einem eigenen Entwicklerkonto.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="artwork">
+          <span class="eyebrow">Cover</span>
+          <h2>Cover verwalten</h2>
+
+          <h3 id="artwork-missing">Spiele ohne Cover</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="520" src="../../manual/img/covers-missing.webp" alt="Eine Mega-Drive-Seite, auf der drei Module leere Aufkleber haben, eingerahmt" /></figure>
+          <p>Wurde kein Aufkleber gefunden, zeigt das Modul einen leeren Aufkleber; wurde kein Cover gefunden, zeigt die Cover-Ansicht auf der leeren Karte eine Schaltfläche <span class="ui">Cover suchen…</span>. Um nur diese Spiele aufzulisten, schalte <span class="ui">Nur ohne Cover</span> im <a href="#views-layout">Layout-Menü</a> ein.</p>
+
+          <h3 id="artwork-menu">Die Cover-Einträge eines Spiels</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="470" src="../../manual/img/covers-card-menu.webp" alt="Das Menü eines Spiels mit eingerahmten Einträgen „Aufkleber synchronisieren“ und „Aufkleberbild“" /></figure>
+            <div>
+              <p>Klicke mit der rechten Maustaste auf ein Spiel oder auf sein <span class="ui">⋮</span>. Die Cover-Einträge wirken in der Modulansicht auf den <strong>Aufkleber</strong> und überall sonst auf das <strong>Cover</strong>, und ihre Namen passen sich an:</p>
+              <ul>
+                <li><span class="ui">Aufkleber synchronisieren…</span> / <span class="ui">Cover synchronisieren…</span> holt die Bilder dieses Spiels sofort. Anders als die Synchronisierung der Bibliothek <strong>ersetzt</strong> es die Bilder, die das Spiel schon hat.</li>
+                <li><span class="ui">Aufkleberbild ▸</span> / <span class="ui">Coverbild ▸</span> enthält die anderen drei.</li>
+              </ul>
+            </div>
+          </div>
+          <figure class="shot mid"><img loading="lazy" width="711" height="576" src="../../manual/img/covers-label-submenu.webp" alt="Das Untermenü Aufkleberbild, eingerahmt" /></figure>
+          <ul>
+            <li><span class="ui">Aufkleber verwalten…</span> öffnet die Cover-Verwaltung, siehe unten.</li>
+            <li><span class="ui">Bild des Modul-Aufklebers wählen</span> nimmt eine Bilddatei von deinem Computer, so wie sie ist.</li>
+            <li><span class="ui">Bild des Modul-Aufklebers entfernen</span> löscht das aktuelle Bild des Spiels. Erscheint nur, wenn es etwas zu entfernen gibt.</li>
+          </ul>
+
+          <h3 id="artwork-manager">Die Cover-Verwaltung</h3>
+          <p>Die Verwaltung öffnest du über <span class="ui">Cover verwalten…</span> / <span class="ui">Aufkleber verwalten…</span> oder über die Schaltfläche <span class="ui">Cover suchen…</span> auf einer leeren Karte. Sie hat drei Tabs.</p>
+          <h4>Cover und Aufkleber</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-cover.webp" alt="Die Cover-Verwaltung im Tab Cover, mit Cover-Ergebnissen" />
+              <figcaption>Tab Cover: die Hüllen.</figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-label.webp" alt="Die Cover-Verwaltung im Tab Aufkleber, mit Aufkleber-Ergebnissen" />
+              <figcaption>Tab Aufkleber: die Modul-Aufkleber.</figcaption>
+            </figure>
+          </div>
+          <ul>
+            <li><span class="ui">Name</span> ist der Titel, nach dem gesucht wird. Ändere ihn, wenn der Dateiname nicht der echte Name des Spiels ist.</li>
+            <li><span class="ui">Prüfsumme</span> ist der Fingerabdruck der Datei, schon für dich berechnet.</li>
+            <li><span class="ui">Nach Name suchen</span> und <span class="ui">Nach Prüfsumme suchen</span> fragen die Quellen ab. Die Suche nach Prüfsumme ist exakt; die Suche nach Name ist großzügiger.</li>
+            <li><span class="ui">Vorschläge</span> (Tab Cover) schlägt ähnliche Titel aus der Spielnamen-Datenbank vor, sortiert nach Ähnlichkeit, wenn der Name so wie geschrieben nichts findet.</li>
+          </ul>
+          <p>Klicke auf ein Ergebnis, um es zu wählen; es bekommt ein Häkchen. <span class="ui">Speichern</span> übernimmt es und lässt das Fenster offen; <span class="ui">Fertig</span> übernimmt es und schließt; <span class="ui">Abbrechen</span> schließt, ohne etwas zu ändern. Den Tab Aufkleber gibt es nur bei Konsolen mit Modulansicht.</p>
+          <h4>Importieren</h4>
+          <figure class="shot mid"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-import.webp" alt="Der Tab Importieren der Cover-Verwaltung, mit seinen Bearbeitungswerkzeugen" /></figure>
+          <p>Zieh ein Bild auf den Tab oder klicke auf <span class="ui">Hinzufügen…</span>, um eins zu wählen. Dann kannst du es <span class="ui">Zuschneiden</span>, spiegeln, drehen oder deine Änderungen mit <span class="ui">Zurücksetzen</span> verwerfen, und unter <span class="ui">Speichern als</span> wählen, ob es <span class="ui">Cover</span> oder <span class="ui">Aufkleber</span> wird.</p>
+
+          <h3 id="artwork-color">Modulfarben</h3>
+          <figure class="shot mid"><img loading="lazy" width="587" height="595" src="../../manual/img/covers-cartridge-color.webp" alt="Das Untermenü Modulfarbe, eingerahmt" /></figure>
+          <p>In der Modulansicht färbt <span class="ui">Modulfarbe ▸</span> das Gehäuse des Moduls eines Spiels: <span class="ui">Standard</span> oder Schwarz, Weiß, Rot, Orange, Gelb, Grün, Blaugrün, Blau, Violett, Rosa, Gold oder Transparent. Praktisch für Spiele, die auf einem farbigen Modul erschienen sind, wie das rote Pokémon Feuerrot.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="views">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Ansichten</h2>
+
+          <h3 id="views-modes">Cover, Modul und Liste</h3>
+          <p>Die drei verbundenen Schaltflächen in der Kopfleiste legen fest, wie die Seite ihre Spiele zeigt.</p>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-cover.webp" alt="Ansicht Cover-Raster, mit eingerahmter Schaltfläche" />
+            <figcaption><span class="ui">Cover-Raster</span>: das vollständige Cover jedes Spiels.</figcaption>
+          </figure>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-cartridge.webp" alt="Ansicht Modul-Raster, mit eingerahmter Schaltfläche" />
+            <figcaption><span class="ui">Modul-Raster</span> (Standard): jedes Spiel auf dem Modul seiner Konsole, mit seinem Bild auf dem Aufkleber. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS, Mega Drive und Master System haben Module; andere Konsolen zeigen ihre Cover.</figcaption>
+          </figure>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-list.webp" alt="Ansicht Kompakte Liste, mit eingerahmter Schaltfläche" />
+            <figcaption><span class="ui">Kompakte Liste</span>: eine Zeile pro Spiel, mit Kontrollkästchen zum Auswählen, kleinem Vorschaubild, Titel und Konsole.</figcaption>
+          </figure>
+
+          <h3 id="views-layout">Das Layout-Menü</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="508" height="440" src="../../manual/img/views-layout-menu.webp" alt="Das Layout-Menü, eingerahmt" /></figure>
+            <figure class="shot"><img loading="lazy" width="508" height="351" src="../../manual/img/views-sort.webp" alt="Das Untermenü Sortieren nach, eingerahmt" /></figure>
+          </div>
+          <p>Die Schaltfläche ▦ <span class="ui">Ansichtsmodus</span> öffnet das Layout der angezeigten Seite:</p>
+          <ul>
+            <li><span class="ui">Globales Layout verwenden</span>: mit Haken folgt diese Seite dem gemeinsamen Layout aller Seiten ohne eigenes Layout. Änderst du ohne Haken etwas darunter, behält die Seite ihr eigenes Layout.</li>
+            <li>Die drei Ansichten.</li>
+            <li><span class="ui">Sortieren nach</span>: <span class="ui">Name (A-Z)</span>, <span class="ui">Name (Z-A)</span>, <span class="ui">Zuletzt gespielt</span>, <span class="ui">Zuletzt hinzugefügt</span>, <span class="ui">Dateigröße</span> und, auf Seiten mit mehreren Konsolen, <span class="ui">Plattform</span>.</li>
+            <li><span class="ui">Nur ohne Cover</span>: zeigt nur die Spiele, denen noch Bilder fehlen. Gilt, bis du OpenEmux schließt.</li>
+            <li>Die Schaltflächen <span class="ui">−</span> / <span class="ui">+</span> stellen die Größe der Vorschaubilder ein, von 50 % bis 200 %. <kbd>Ctrl</kbd>+<kbd>+</kbd>, <kbd>Ctrl</kbd>+<kbd>−</kbd> und <kbd>Ctrl</kbd>+<kbd>0</kbd> machen dasselbe.</li>
+          </ul>
+          <figure class="shot narrow"><img loading="lazy" width="482" height="515" src="../../manual/img/views-console-layout.webp" alt="Das Menü einer Konsole mit dem Untermenü Layout, eingerahmt" /></figure>
+          <p>Das Menü einer Konsole in der Seitenleiste bietet dieselbe Wahl unter <span class="ui">Layout ▸</span>, so kann jede Konsole ihre eigene Ansicht behalten. Playlists haben das auch.</p>
+
+          <h3 id="views-pages">„Alle“ und gruppierte Seiten</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-all.webp" alt="Die Seite Alle, nach Konsole gruppiert, mit eingerahmter Zeile Alle" /></figure>
+          <p><span class="ui">Alle</span>, <span class="ui">Favoriten</span> und Playlists mischen Konsolen, deshalb sind sie gruppiert: Jede Gruppe hat eine Überschrift mit Symbol, Name und Anzahl der Spiele der Konsole. Die Gruppen folgen der Reihenfolge der Konsolen, die du in der Seitenleiste oder in <a href="#settings-library">Einstellungen → Bibliothek</a> festlegst.</p>
+
+          <h3 id="views-search">Suche</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-search.webp" alt="Die Suchleiste mit dem Text mario, die die Seite Alle filtert" /></figure>
+          <p>Klicke auf 🔍, drücke <kbd>Ctrl</kbd>+<kbd>F</kbd> oder fang einfach an zu tippen. Die Suche filtert die angezeigte Seite, such also von <span class="ui">Alle</span> aus, um die ganze Bibliothek zu durchsuchen. <kbd>Esc</kbd> schließt sie.</p>
+
+          <h3 id="views-select">Mehrere Spiele auswählen</h3>
+          <figure class="shot"><img loading="lazy" width="1520" height="180" src="../../manual/img/ui-selection.webp" alt="Die Auswahlleiste, eingerahmt, mit zwei ausgewählten Spielen" /></figure>
+          <p>Ein einfacher Klick startet ein Spiel, deshalb wählst du mit Zusatztasten aus: <kbd>Ctrl</kbd>-Klick fügt ein Spiel hinzu, <kbd>Shift</kbd>-Klick einen Bereich, Ziehen auf einer leeren Fläche zieht ein Auswahlrechteck auf, und <kbd>Ctrl</kbd>+<kbd>A</kbd> wählt die ganze Seite. In der Listenansicht nimmst du die Kontrollkästchen. Unten erscheint eine Leiste mit <span class="ui">Alle auswählen</span>, <span class="ui">Cover synchronisieren</span> und <span class="ui">Löschen</span>; <span class="ui">Zur Playlist hinzufügen</span> im Spielmenü wirkt dann auf die ganze Auswahl. Klicke auf eine leere Fläche oder auf <span class="ui">×</span>, um sie aufzuheben.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="playlists">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Playlists</h2>
+          <p>Eine Playlist ist eine Liste von Spielen, die du selbst zusammenstellst, von beliebigen Konsolen: eine Spielereihe, die Spiele, die du mit Freunden spielst, die, die du gerade durchspielst. Ein Spiel zu einer Playlist hinzuzufügen kopiert oder verschiebt es nicht.</p>
+
+          <h3 id="playlists-create">Eine Playlist erstellen</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="440" height="320" src="../../manual/img/playlists-new.webp" alt="Der Dialog Neue Playlist" /></figure>
+            <div>
+              <p>Klicke unten in der Seitenleiste auf <span class="ui">Neue Playlist</span> (oder mit der rechten Maustaste auf eine leere Stelle der Seitenleiste), gib einen Namen ein und klicke auf <span class="ui">Erstellen</span>. Die Playlist erscheint in der Seitenleiste, zwischen Favoriten und den Konsolen.</p>
+            </div>
+          </div>
+
+          <h3 id="playlists-add">Spiele hinzufügen und entfernen</h3>
+          <figure class="shot mid"><img loading="lazy" width="594" height="576" src="../../manual/img/playlists-add.webp" alt="Das Untermenü Zur Playlist hinzufügen, eingerahmt" /></figure>
+          <p>Im Menü eines Spiels listet <span class="ui">Zur Playlist hinzufügen ▸</span> deine Playlists. Ein Häkchen heißt, das Spiel ist schon drin, und ein Klick auf eine abgehakte Playlist nimmt es wieder heraus. <span class="ui">Neue Playlist</span> ganz unten erstellt eine, in der dieses Spiel schon drin ist. Sind mehrere Spiele ausgewählt, kommen alle auf einmal hinein.</p>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/playlists-view.webp" alt="Die Playlist Megaman, mit Spielen von Super Nintendo und PlayStation" /></figure>
+          <p>In einer Playlist sind die Spiele nach Konsole gruppiert, und das Spielmenü hat einen zusätzlichen Eintrag, <span class="ui">Aus dieser Playlist entfernen</span>.</p>
+
+          <h3 id="playlists-manage">Umbenennen und löschen</h3>
+          <figure class="shot narrow"><img loading="lazy" width="317" height="325" src="../../manual/img/playlists-menu.webp" alt="Das Menü einer Playlist in der Seitenleiste, eingerahmt" /></figure>
+          <p>Klicke mit der rechten Maustaste auf die Playlist in der Seitenleiste oder auf ihr <span class="ui">⋮</span>: <span class="ui">Playlist umbenennen…</span>, <span class="ui">Layout ▸</span> und <span class="ui">Playlist löschen</span>. Eine Playlist zu löschen löscht nie ihre Spiele.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="favorites">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Favoriten</h2>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="470" src="../../manual/img/favorites-menu.webp" alt="Das Menü eines Spiels mit eingerahmtem Eintrag Aus Favoriten entfernen" /></figure>
+            <div>
+              <p>Um ein Spiel mit einem Stern zu markieren, klicke auf den Stern auf seiner Karte, wähle <span class="ui">Zu Favoriten hinzufügen</span> in seinem Menü oder drücke <kbd>Ctrl</kbd>+<kbd>D</kbd> (Ⓨ am Controller). Dieselben Handgriffe nehmen den Stern wieder weg.</p>
+              <p>Ein markiertes Spiel behält sein Stern-Abzeichen auf jeder Seite.</p>
+            </div>
+          </div>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="Die Seite Favoriten nach Konsole gruppiert, mit eingerahmter Zeile" /></figure>
+          <p>Die Seite <span class="ui">Favoriten</span> sammelt sie, nach Konsole gruppiert. Ihre Zeile erscheint in der Seitenleiste, sobald du ein Spiel markiert hast, und OpenEmux öffnet auf ihr, wenn es sonst nichts gibt, wohin es zurückkehren kann.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="cores">
+          <span class="eyebrow">Emulation</span>
+          <h2>Kerne und Shader</h2>
+          <p>Ein <strong>Kern</strong> ist der Emulator, den RetroArch für eine Konsole ausführt: Für das Super Nintendo gibt es Snes9x, bsnes, Mesen-S und andere. Jede Konsole startet mit einer sinnvollen Voreinstellung, angezeigt als <span class="ui">Automatisch (…)</span>. Ein <strong>Shader</strong> ändert, wie das Bild gezeichnet wird: Ein CRT-Shader bringt die Scanlines und die Wölbung eines alten Fernsehers zurück, und <span class="ui">Disabled</span> zeigt die rohen Pixel.</p>
+          <p>Beides lässt sich für eine ganze Konsole einstellen und zusätzlich für ein einzelnes Spiel.</p>
+
+          <h3 id="cores-game">Für ein Spiel</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="695" height="795" src="../../manual/img/cores-game-core.webp" alt="Das Untermenü Kern eines Spiels, eingerahmt" />
+              <figcaption><span class="ui">Kern ▸</span> im Menü eines Spiels.</figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="721" height="536" src="../../manual/img/cores-game-shader.webp" alt="Das Untermenü Shader eines Spiels, eingerahmt" />
+              <figcaption><span class="ui">Shader ▸</span> im Menü eines Spiels.</figcaption>
+            </figure>
+          </div>
+          <ul>
+            <li><span class="ui">Kern ▸</span> listet jeden installierten Kern der Konsole. Der erste Eintrag, <span class="ui">Automatisch (…)</span>, folgt der Einstellung der Konsole. Braucht der gewählte Kern BIOS-Dateien, die du nicht hast, sagt OpenEmux dir, welche.</li>
+            <li><span class="ui">Shader ▸</span> beginnt mit <span class="ui">Konsolen-Einstellung verwenden (…)</span>, dann <span class="ui">Disabled</span>, <span class="ui">Dot</span>, <span class="ui">Geom CRT</span>, <span class="ui">NewPixie CRT</span>, <span class="ui">zfast CRT</span>, <span class="ui">CRT Royale</span> und <span class="ui">Sharp Bilinear Simple</span>. Schalte <span class="ui">Alle Shader anzeigen</span> in <a href="#settings-video">Einstellungen → Video</a> ein, um jeden Shader von RetroArch aufzulisten.</li>
+          </ul>
+
+          <h3 id="cores-console">Für eine ganze Konsole</h3>
+          <figure class="shot narrow"><img loading="lazy" width="332" height="515" src="../../manual/img/cores-console-menu.webp" alt="Das Menü einer Konsole in der Seitenleiste, eingerahmt" /></figure>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="571" height="795" src="../../manual/img/cores-console-core.webp" alt="Das Untermenü Standardkern, eingerahmt" />
+              <figcaption><span class="ui">Standardkern ▸</span></figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="530" height="515" src="../../manual/img/cores-console-shader.webp" alt="Das Untermenü Standard-Shader, eingerahmt" />
+              <figcaption><span class="ui">Standard-Shader ▸</span></figcaption>
+            </figure>
+          </div>
+          <p>Klicke mit der rechten Maustaste auf eine Konsole in der Seitenleiste. <span class="ui">Standardkern ▸</span> und <span class="ui">Standard-Shader ▸</span> legen fest, was jedes Spiel dieser Konsole benutzt, außer das Spiel hat eine eigene Wahl. Es sind dieselben Einstellungen wie in <a href="#settings-cores">Einstellungen → Kerne</a> und <a href="#settings-video">Einstellungen → Video → Shader pro Konsole</a>. Ab Werk nutzen Handhelds (Game Boy, Game Boy Color, Game Boy Advance, DS) <span class="ui">Dot</span> und alle anderen <span class="ui">Geom CRT</span>.</p>
+
+          <h3 id="cores-menus">Alle Kontextmenüs</h3>
+          <h4>Das Menü eines Spiels</h4>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Eintrag</th>
+                <th>Was er macht</th>
+              </tr>
+              <tr>
+                <td><span class="ui">Zu Favoriten hinzufügen</span> / <span class="ui">Aus Favoriten entfernen</span></td>
+                <td>Markiert das Spiel mit einem Stern oder nimmt ihn weg.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Cover synchronisieren…</span> / <span class="ui">Aufkleber synchronisieren…</span></td>
+                <td>Lädt die Bilder dieses Spiels neu herunter und ersetzt die aktuellen.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Coverbild ▸</span> / <span class="ui">Aufkleberbild ▸</span></td>
+                <td>Verwalten…, eine Bilddatei wählen oder das aktuelle Bild entfernen.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Spielstand laden ▸</span></td>
+                <td>Startet das Spiel aus einem seiner zehn Speicherplätze, jeder mit seinem Datum. Leere Plätze sind ausgegraut.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Kern ▸</span></td>
+                <td>Der Kern nur für dieses Spiel.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Shader ▸</span></td>
+                <td>Der Shader nur für dieses Spiel.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Modulfarbe ▸</span></td>
+                <td>Die Farbe des Gehäuses in der Modulansicht.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Zur Playlist hinzufügen ▸</span></td>
+                <td>Legt das Spiel in eine Playlist oder nimmt es heraus.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Aus dieser Playlist entfernen</span></td>
+                <td>Nur innerhalb einer Playlist.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Im Dateimanager anzeigen</span></td>
+                <td>Öffnet den Ordner mit ausgewählter ROM-Datei.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Umbenennen…</span></td>
+                <td>Benennt das Spiel und seine Datei um, die Endung bleibt. <kbd>F2</kbd>.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">ROM löschen…</span></td>
+                <td>Verschiebt die Datei nach einer Rückfrage in den Papierkorb. <kbd>Delete</kbd>.</td>
+              </tr>
+            </table>
+          </div>
+          <h4>Das Menü einer Konsole</h4>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Eintrag</th>
+                <th>Was er macht</th>
+              </tr>
+              <tr>
+                <td><span class="ui">Diese Konsole neu einlesen</span></td>
+                <td>Liest den Ordner der Konsole neu ein.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">ROMs importieren</span></td>
+                <td>Öffnet die Dateiauswahl zum Importieren. Die Endung entscheidet trotzdem über die Konsole.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Cover synchronisieren</span></td>
+                <td>Lädt fehlende Bilder für diese Konsole herunter.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Layout ▸</span></td>
+                <td><span class="ui">Global verwenden</span> oder eine eigene Ansicht.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Standardkern ▸</span></td>
+                <td>Der Kern für die ganze Konsole.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Standard-Shader ▸</span></td>
+                <td>Der Shader für die ganze Konsole.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Controller-Einstellungen</span></td>
+                <td>Öffnet Einstellungen → Eingabe mit dieser Konsole ausgewählt.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Ordner öffnen</span></td>
+                <td>Öffnet den Ordner der Konsole im Dateimanager.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">Nach oben</span> / <span class="ui">Nach unten</span></td>
+                <td>Ändert den Platz der Konsole in der Seitenleiste. <kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd>, oder die Zeile ziehen.</td>
+              </tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="settings">
+          <span class="eyebrow">Einstellungen</span>
+          <h2>Einstellungen</h2>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/settings-open.webp" alt="Das Fenster Einstellungen auf der Seite Bibliothek, mit eingerahmter Schaltfläche Einstellungen und Seiten-Tabs" /></figure>
+          <p>Öffne die Einstellungen mit der Schaltfläche 🛠 in der Kopfleiste, über das Hauptmenü oder mit <kbd>Ctrl</kbd>+<kbd>,</kbd>. Die Seiten liegen am unteren Rand: <span class="ui">Bibliothek</span>, <span class="ui">BIOS</span>, <span class="ui">Eingabe</span>, <span class="ui">Video</span>, <span class="ui">Kerne</span> und <span class="ui">System</span>. Die 🔍 oben links durchsucht alle Seiten. Änderungen gelten sofort; speichern musst du nichts, außer im Steuerungseditor.</p>
+
+          <!-- Library -->
+          <h3 id="settings-library">Bibliothek</h3>
+          <h4>ROM-Ordner</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="181" src="../../manual/img/settings-library-roms-folder.webp" alt="Die Gruppe ROM-Ordner" /></figure>
+          <p>Wo die Bibliothek liegt und ob beim Import Dateien kopiert oder verknüpft werden. Siehe <a href="#import-folder">Der ROM-Ordner</a>.</p>
+          <h4>Wartung</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-library-maintenance.webp" alt="Die Gruppe Wartung" /></figure>
+          <ul>
+            <li><span class="ui">ROMs einlesen</span> baut die Spielelisten aus den Ordnern neu auf. Ein Dialog fragt nach dem Umfang: alle Konsolen oder eine.</li>
+            <li><span class="ui">Cover synchronisieren</span> lädt fehlende Bilder im Hintergrund herunter, für alle Konsolen oder eine.</li>
+          </ul>
+          <h4>Reihenfolge der Konsolen</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="731" src="../../manual/img/settings-library-console-order.webp" alt="Die Gruppe Reihenfolge der Konsolen" /></figure>
+          <p>Die Reihenfolge der Konsolen in der Seitenleiste und in den Gruppen von Alle, Favoriten und Playlists. Nimm die Pfeile oder zieh Konsolen in der Seitenleiste. <span class="ui">Standardreihenfolge wiederherstellen</span> macht das rückgängig. Eine Konsole, die du einsortiert hast, behält ihren Platz, auch solange sie keine Spiele hat.</p>
+          <h4>Cover-Quellen und ScreenScraper-Konto</h4>
+          <p>Siehe <a href="#covers-providers">Woher die Cover kommen</a> und <a href="#covers-screenscraper">ScreenScraper-Konto</a>.</p>
+
+          <!-- BIOS -->
+          <h3 id="settings-bios">BIOS</h3>
+          <figure class="shot narrow"><img loading="lazy" width="642" height="1100" src="../../manual/img/settings-bios-expanded.webp" alt="Die Seite BIOS mit zwei aufgeklappten Konsolen, eingerahmt" /></figure>
+          <p>Manche Konsolen brauchen die Firmware des Originalgeräts, das BIOS, um Spiele zu starten. OpenEmux liefert keins mit; du kopierst dein eigenes nach <code>&lt;ROMs folder&gt;/&lt;CONSOLE&gt;/bios</code>, zum Beispiel <code>~/games/roms/PS/bios/</code>.</p>
+          <ul>
+            <li>Jede Konsole, die BIOS-Dateien nutzt, hat eine Zeile, die zeigt, wie viele davon vorhanden sind und wie viele sie kennt, etwa <span class="ui">0/1</span>. Die Ordnerschaltfläche öffnet den BIOS-Ordner dieser Konsole.</li>
+            <li>Klapp eine Zeile auf, um jede Datei zu sehen, markiert als <span class="ui">Erforderliches BIOS</span> oder <span class="ui">Optionales BIOS</span>, mit ⚠, solange sie fehlt, und ✓, sobald sie da ist. Eine Zeile mit <span class="ui">eines von:</span> ist mit jeder der aufgeführten Dateien erfüllt; die PlayStation zum Beispiel akzeptiert mehrere regionale BIOS-Dateien.</li>
+            <li>⟳ oben prüft erneut, nachdem du Dateien hineinkopiert hast.</li>
+          </ul>
+
+          <!-- Input -->
+          <h3 id="settings-input">Eingabe</h3>
+          <p>Diese Seite bearbeitet die Steuerung jeweils einer Konsole. Ein danach gestartetes Spiel benutzt sie; läuft beim Speichern ein Spiel dieser Konsole, startet es neu und dein Fortschritt bleibt erhalten.</p>
+          <h4>Controller</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="336" src="../../manual/img/settings-input-controller.webp" alt="Die Gruppe Controller" /></figure>
+          <ul>
+            <li><span class="ui">Konsole</span>: welche Konsole du bearbeitest. Am Anfang ist es die angezeigte Konsole.</li>
+            <li><span class="ui">Eingabegerät</span>: <span class="ui">Tastatur</span> oder <span class="ui">Gamepad Port 1</span> bis <span class="ui">4</span>. Tastatur und Controller von Spieler 1 funktionieren gleichzeitig. Für die Ports 2 bis 4 schickt ein Schalter <span class="ui">Diesen Port aktivieren</span> die Belegung dieses Spielers an RetroArch.</li>
+            <li><span class="ui">Controller-Typ</span>: was der emulierten Konsole als angeschlossen gemeldet wird. Eine PlayStation kann zum Beispiel einen DualShock bekommen (nötig für Spiele mit Analogsteuerung), ein Mega Drive ein 6-Tasten-Pad (für Street Fighter II), ein Super Nintendo eine Maus oder einen Multitap. Nur bei Konsolen mit Optionen sichtbar.</li>
+            <li><span class="ui">Stick als Steuerkreuz</span>: Der Stick bewegt das Steuerkreuz, ohne etwas neu zu belegen. Die Optionen <span class="ui">(erzwungen)</span> wenden das auch an, wenn der Kern es nicht täte.</li>
+            <li><span class="ui">Steuerkreuz bewegt auch den Stick</span>: andersherum, für 3D-Konsolen wie das N64 oder die PlayStation.</li>
+          </ul>
+          <h4>Stick und Vibration</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="508" src="../../manual/img/settings-input-stick.webp" alt="Die Gruppe Stick und Vibration" /></figure>
+          <p>Diese gelten für alle Konsolen.</p>
+          <ul>
+            <li><span class="ui">Totzone des Sticks</span>: wie weit sich der Stick bewegen muss, bevor es zählt. Erhöhe sie, wenn die Spielfigur wegdriftet, obwohl niemand den Stick berührt.</li>
+            <li><span class="ui">Empfindlichkeit des Sticks</span>: verstärkt die Stickbewegung. 1.0 ist normal.</li>
+            <li><span class="ui">Achsenschwelle</span>: wie weit ein Stick oder Trigger gehen muss, damit es als Tastendruck zählt.</li>
+            <li><span class="ui">Stärke der Vibration</span>: Rumble, von 0 (aus) bis 100.</li>
+            <li><span class="ui">Eingabelatenz</span>: wann die Eingabe innerhalb eines Frames gelesen wird. Früh reagiert am schnellsten und verzeiht auf einem langsamen Rechner am wenigsten; Spät ist der Standard.</li>
+            <li><span class="ui">Spielfokus</span>: übernimmt die Tastatur, während ein Spiel läuft, damit die Hotkeys von RetroArch keine Tasten wegnehmen, die ein Computerspiel braucht. Aus, beim Schließen des Menüs oder beim Start eines Spiels.</li>
+            <li><span class="ui">Tastennamen des Spiels verwenden</span>: zeigt im RetroArch-Menü für jede Taste ihre Aktion im Spiel, wenn der Kern sie liefert.</li>
+          </ul>
+          <h4>Turbo</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="273" src="../../manual/img/settings-input-turbo.webp" alt="Die Gruppe Turbo" /></figure>
+          <p>Dauerfeuer für Spiele, bei denen du eine Taste hämmern musst. Belege die Taste <span class="ui">Turbo (Modifikator)</span> unten in Spielsteuerung.</p>
+          <ul>
+            <li><span class="ui">Turbo-Periode</span>: Frames pro Feuerzyklus. Weniger ist schneller.</li>
+            <li><span class="ui">Turbo-Tastverhältnis</span>: wie viele Frames die Taste in jedem Zyklus gedrückt bleibt.</li>
+            <li><span class="ui">Turbo-Modus</span>: <span class="ui">Klassisch</span> feuert jede Taste, die zusammen mit dem Modifikator gehalten wird; <span class="ui">Eine Taste (umschalten)</span> und „Eine Taste (halten)“ feuern eine gewählte Taste, umgeschaltet oder gehalten.</li>
+          </ul>
+          <h4>Spielsteuerung</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="788" src="../../manual/img/settings-input-game-controls.webp" alt="Die Gruppe Spielsteuerung" /></figure>
+          <p>Eine Zeile pro Taste der gewählten Konsole. Klicke auf eine Belegung und drücke die gewünschte Taste; beim Warten steht dort <span class="ui">Taste drücken...</span>, und <kbd>Esc</kbd> leert sie. War die Taste schon anderswo belegt, gibt OpenEmux sie dort frei und sagt dir Bescheid.</p>
+          <ul>
+            <li><span class="ui">Alle belegen</span> geht der Reihe nach durch jede Taste.</li>
+            <li><span class="ui">Standard wiederherstellen</span> holt die Standardbelegung dieser Konsole zurück.</li>
+            <li><span class="ui">Speichern</span> übernimmt deine Änderungen. Denk daran; das ist die einzige Stelle in den Einstellungen, an der du speichern musst.</li>
+          </ul>
+          <h4>System-Tastenkürzel</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-input-hotkeys.webp" alt="Die Gruppe System-Tastenkürzel" /></figure>
+          <p>Tasten für RetroArch selbst statt für das Spiel: Menü, Spielstand speichern und laden, Speicherplätze, Lautstärke, Stumm, Vorspulen, Vollbild, Neustart, Zurückspulen, Pause, Zeitlupe, Screenshot, Spielfokus und Diskwechsel. <span class="ui">Tastenkürzel aktivieren</span> ist eine Taste, die du gedrückt hältst, damit die anderen funktionieren; auf der Tastatur ist sie standardmäßig leer, die Hotkeys funktionieren dort also allein. Die Standardbelegung steht unter <a href="#keys-game">Beim Spielen</a>.</p>
+
+          <!-- Video -->
+          <h3 id="settings-video">Video</h3>
+          <h4>Erscheinungsbild</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="291" src="../../manual/img/settings-video-appearance.webp" alt="Die Gruppe Erscheinungsbild" /></figure>
+          <ul>
+            <li><span class="ui">Ansichtsmodus</span> und <span class="ui">Spiele sortieren nach</span>: das globale Layout. Siehe <a href="#views-layout">Das Layout-Menü</a>.</li>
+            <li><span class="ui">Alle Shader anzeigen</span>: listet in den Shader-Menüs jeden Shader von RetroArch statt der kurzen Liste.</li>
+            <li><span class="ui">Standard wiederherstellen</span>: setzt jede Konsole auf ihren Standard-Shader zurück.</li>
+          </ul>
+          <h4>Shader pro Konsole</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-video-shaders.webp" alt="Die Gruppe Shader pro Konsole" /></figure>
+          <p>Eine Zeile pro Konsole mit ihrem Standard-Shader. Dieselbe Einstellung wie <span class="ui">Standard-Shader</span> im Menü der Konsole.</p>
+
+          <!-- Cores -->
+          <h3 id="settings-cores">Kerne</h3>
+          <h4>Kerne pro Konsole</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-cores-cores.webp" alt="Die Gruppe Kerne pro Konsole" /></figure>
+          <figure class="shot narrow"><img loading="lazy" width="700" height="600" src="../../manual/img/settings-cores-dropdown.webp" alt="Die geöffnete Kernliste des Super Nintendo, eingerahmt" /></figure>
+          <p>Eine Zeile pro Konsole. Der Untertitel sagt, welchen Kern <span class="ui">Automatisch</span> benutzt; öffne die Liste, um einen anderen installierten Kern zu wählen. Dieselbe Einstellung wie <span class="ui">Standardkern</span> im Menü der Konsole. Eine Konsole ohne Kern zeigt <span class="ui">Für dieses System ist kein Kern installiert</span>, bis der Download im Hintergrund bei ihr ankommt.</p>
+          <h4>Erweitert</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="196" src="../../manual/img/settings-cores-advanced.webp" alt="Die Gruppe Erweitert" /></figure>
+          <p>Zusätzliche Optionen, die manche Kerne verstehen, nur für Konsolen aufgelistet, deren aktueller Kern sie hat. Bei PSP und PlayStation sind das die interne Auflösung (3D-Spiele über ihrer nativen Auflösung rendern, für ein schärferes Bild, auf Kosten der Geschwindigkeit), die Grafik-API und die Texturfilterung.</p>
+
+          <!-- System -->
+          <h3 id="settings-system">System</h3>
+          <h4>Sprache</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="126" src="../../manual/img/settings-system-language.webp" alt="Die Gruppe Sprache" /></figure>
+          <p>Die Sprache der Oberfläche: English, Deutsch, 日本語, Français, 简体中文, Português (Brasil), Español oder தமிழ். Die Einstellungen öffnen sich in der neuen Sprache neu.</p>
+          <h4>Oberfläche</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="238" src="../../manual/img/settings-system-interface.webp" alt="Die Gruppe Oberfläche" /></figure>
+          <ul>
+            <li><span class="ui">Design</span>: <span class="ui">System</span> (folgt deinem Desktop), <span class="ui">Hell</span> oder <span class="ui">Dunkel</span>.</li>
+            <li><span class="ui">Tipps anzeigen</span>: der wechselnde Tipp unten im Fenster.</li>
+            <li><span class="ui">Oberfläche mit einem Controller steuern</span>: mit einem Controller durch die Bibliothek navigieren. Ⓐ bestätigt, Ⓑ geht zurück.</li>
+          </ul>
+          <h4>Erste Schritte</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-getting-started.webp" alt="Die Gruppe Erste Schritte" /></figure>
+          <p>Ob die Willkommenstour beim Start aufgeht, und eine Schaltfläche, um sie jetzt zu öffnen.</p>
+          <h4>Fehlerbehebung</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="251" src="../../manual/img/settings-system-troubleshooting.webp" alt="Die Gruppe Fehlerbehebung" /></figure>
+          <p><span class="ui">Protokollbereich anzeigen</span> hält das Protokoll unter der Bibliothek offen; <span class="ui">Fehler melden …</span> kopiert das Protokoll und deine Systemdaten und öffnet eine Meldung auf GitHub. Siehe <a href="#help">Wenn etwas schiefgeht</a>.</p>
+          <h4>Spielstände</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-saves.webp" alt="Die Gruppe Spielstände" /></figure>
+          <p><span class="ui">Spielstände exportieren</span> packt jeden Savestate und jeden Batteriespeicher (die Speicherstände im Spiel bei Modulen) in eine <code>.zip</code>. <span class="ui">Spielstände importieren</span> stellt so eine Datei wieder her, zum Beispiel auf einem neuen Computer; Spielstände, die du schon hast, bleiben unangetastet.</p>
+          <h4>RetroAchievements</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="273" src="../../manual/img/settings-system-retroachievements.webp" alt="Die Gruppe RetroAchievements" /></figure>
+          <p>Melde dich mit deinem <a href="https://retroachievements.org/">RetroAchievements</a>-Konto an, um beim Spielen Errungenschaften freizuschalten. Dein Passwort wird einmal gegen ein Token getauscht und nicht gespeichert. Nach der Anmeldung kannst du das Verfolgen einschalten und den <span class="ui">Hardcore-Modus</span> wählen, der Savestates, Zurückspulen und Vorspulen abschaltet.</p>
+          <h4>Ersteinrichtung</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-initial-setup.webp" alt="Die Gruppe Ersteinrichtung" /></figure>
+          <p>Zeigt, ob die Einrichtung beim ersten Start abgeschlossen ist. Ist ein Schritt fehlgeschlagen, zum Beispiel weil du offline warst, wiederholt <span class="ui">Ersteinrichtung abschließen</span> ihn im Hintergrund.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="keys">
+          <span class="eyebrow">Referenz</span>
+          <h2>Tastenkürzel und Hotkeys</h2>
+
+          <h3 id="keys-library">In der Bibliothek</h3>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Tasten</th>
+                <th>Aktion</th>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>F</kbd></td>
+                <td>Suchen</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>,</kbd></td>
+                <td>Einstellungen</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>?</kbd></td>
+                <td>Tastenkürzel</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td>
+                <td>Beenden</td>
+              </tr>
+              <tr>
+                <td><kbd>F5</kbd> oder <kbd>Ctrl</kbd>+<kbd>R</kbd></td>
+                <td>Aktuelle Seite neu einlesen</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>O</kbd></td>
+                <td>ROMs importieren</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td>
+                <td>Cover synchronisieren</td>
+              </tr>
+              <tr>
+                <td><kbd>Tab</kbd> oder <kbd>F6</kbd></td>
+                <td>Zwischen Seitenleiste und Spielen wechseln</td>
+              </tr>
+              <tr>
+                <td><kbd>→</kbd> / <kbd>Backspace</kbd></td>
+                <td>Von der Konsolenliste zu den Spielen und zurück</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd></td>
+                <td>Größere, kleinere, normale Vorschaubilder</td>
+              </tr>
+              <tr>
+                <td><kbd>Enter</kbd> oder <kbd>Space</kbd></td>
+                <td>Das markierte Spiel starten</td>
+              </tr>
+              <tr>
+                <td><kbd>Menu</kbd> oder <kbd>Shift</kbd>+<kbd>F10</kbd></td>
+                <td>Das Menü des markierten Spiels</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>D</kbd></td>
+                <td>Favorit an/aus</td>
+              </tr>
+              <tr>
+                <td><kbd>F2</kbd></td>
+                <td>Das Spiel umbenennen</td>
+              </tr>
+              <tr>
+                <td><kbd>Delete</kbd></td>
+                <td>Das Spiel löschen</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td>
+                <td>Alle auswählen / Auswahl aufheben</td>
+              </tr>
+              <tr>
+                <td><kbd>Shift</kbd>+Pfeiltasten, <kbd>Ctrl</kbd>+<kbd>Space</kbd></td>
+                <td>Auswahl erweitern, markiertes Spiel an-/abwählen</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> (Seitenleiste)</td>
+                <td>Die Konsole nach oben oder unten schieben</td>
+              </tr>
+              <tr>
+                <td><kbd>Esc</kbd></td>
+                <td>Auswahl aufheben, dann zurück zur Seitenleiste</td>
+              </tr>
+            </table>
+          </div>
+
+          <h3 id="keys-game">Beim Spielen</h3>
+          <p>Die Standardtasten der Tastatur. Ändern kannst du sie in <a href="#settings-input">Einstellungen → Eingabe → System-Tastenkürzel</a>.</p>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Taste</th>
+                <th>Aktion</th>
+                <th>Taste</th>
+                <th>Aktion</th>
+              </tr>
+              <tr>
+                <td><kbd>F1</kbd></td>
+                <td>RetroArch-Menü</td>
+                <td><kbd>P</kbd></td>
+                <td>Pause</td>
+              </tr>
+              <tr>
+                <td><kbd>F2</kbd></td>
+                <td>Spielstand speichern</td>
+                <td><kbd>W</kbd></td>
+                <td>Zurückspulen</td>
+              </tr>
+              <tr>
+                <td><kbd>F4</kbd></td>
+                <td>Spielstand laden</td>
+                <td><kbd>R</kbd></td>
+                <td>Neustart</td>
+              </tr>
+              <tr>
+                <td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td>
+                <td>Nächster / vorheriger Speicherplatz</td>
+                <td><kbd>O</kbd></td>
+                <td>Zeitlupe</td>
+              </tr>
+              <tr>
+                <td><kbd>F6</kbd></td>
+                <td>Vorspulen an/aus</td>
+                <td><kbd>H</kbd></td>
+                <td>Vorspulen, solange gedrückt</td>
+              </tr>
+              <tr>
+                <td><kbd>F</kbd></td>
+                <td>Vollbild</td>
+                <td><kbd>F8</kbd></td>
+                <td>Screenshot</td>
+              </tr>
+              <tr>
+                <td>Ziffernblock <kbd>+</kbd> / <kbd>−</kbd></td>
+                <td>Lautstärke</td>
+                <td><kbd>M</kbd></td>
+                <td>Stumm</td>
+              </tr>
+              <tr>
+                <td><kbd>G</kbd></td>
+                <td>Spielfokus</td>
+                <td><kbd>T</kbd></td>
+                <td>Turbo</td>
+              </tr>
+              <tr>
+                <td><kbd>F9</kbd></td>
+                <td>Disk auswerfen</td>
+                <td><kbd>N</kbd> / <kbd>B</kbd></td>
+                <td>Nächste / vorherige Disk</td>
+              </tr>
+            </table>
+          </div>
+          <p>Standard-Spieltasten: Pfeiltasten für das Steuerkreuz, <kbd>Z</kbd> A, <kbd>X</kbd> B, <kbd>S</kbd> X, <kbd>C</kbd> Y, <kbd>D</kbd> / <kbd>A</kbd> L1 / R1, <kbd>E</kbd> / <kbd>Q</kbd> L2 / R2, <kbd>Enter</kbd> Start, <kbd>Space</kbd> Select und <kbd>I</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> für den Analogstick.</p>
+          <p>Spiele öffnen sich in einem Fenster mit einer Steuerleiste unten: Schließen, Menü, Pause, Reset, Zeitlupe, Vorspulen, Turbo, Spielstand speichern und laden, Lautstärke, Vollbild und eine Schaltfläche, um die Leiste auszublenden.</p>
+
+          <h3 id="keys-gamepad">Mit einem Controller</h3>
+          <p>Im Spiel ist <strong>Select</strong> die Hotkey-Taste: Select+Start öffnet das RetroArch-Menü, Select+X speichert einen Spielstand, Select+Y lädt ihn, Select+L1 schaltet den Vollbildmodus um und Select+R1 spult vor.</p>
+          <p>In der Bibliothek, mit eingeschaltetem <span class="ui">Oberfläche mit einem Controller steuern</span>: Ⓐ startet, Ⓑ geht zurück, Ⓧ öffnet das Menü des Spiels, Ⓨ schaltet Favorit an oder aus, L1 / R1 wechseln die Konsole, und Ⓐ gedrückt halten beginnt die Auswahl von Spielen. Die Tippleiste zeigt dabei die Tasten an.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="help">
+          <span class="eyebrow">Hilfe</span>
+          <h2>Wenn etwas schiefgeht</h2>
+          <figure class="shot"><img loading="lazy" width="1520" height="330" src="../../manual/img/ui-log.webp" alt="Der geöffnete Protokollbereich unten im Fenster" /></figure>
+          <p>Klicke unten rechts auf <span class="ui">Protokoll</span>. Der Bereich zeigt live, was OpenEmux gerade macht: Einlesen, Downloads, den genauen Befehl, mit dem jedes Spiel gestartet wurde, und warum ein Spiel sofort wieder zugegangen ist. <span class="ui">Protokoll + Systeminfos kopieren</span> legt es in die Zwischenablage, und <span class="ui">Fehler melden …</span> führt dich durch das Erstellen einer Meldung auf GitHub, mit dem Protokoll schon eingefügt.</p>
+          <p>Ein paar häufige Fälle:</p>
+          <ul>
+            <li><strong>Ein Spiel schließt sich gleich nach dem Öffnen.</strong> Die Meldung sagt meist, warum. Prüfe <a href="#settings-bios">BIOS</a> bei Konsolen, die eins brauchen, und probier einen anderen Kern im Menü <span class="ui">Kern ▸</span> des Spiels.</li>
+            <li><strong>Ein Spiel hat kein Cover.</strong> Probier <span class="ui">Aufkleber synchronisieren…</span> / <span class="ui">Cover synchronisieren…</span>, oder such in der <a href="#artwork-manager">Cover-Verwaltung</a> nach einem anderen Namen.</li>
+            <li><strong>Der Controller macht nichts.</strong> Prüfe ihn in <a href="#settings-input">Einstellungen → Eingabe</a> mit <span class="ui">Eingabegerät</span> auf seinem Port. Unter Linux muss dein Benutzer eventuell in der Gruppe <code>input</code> sein.</li>
+          </ul>
+          <p>Fragen und Ideen sind auf <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> willkommen, Fehler auf <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">GitHub</a>.</p>
+
+          <footer>
+            <p>OpenEmux ist freie Software unter der MIT-Lizenz. Es ist ein unabhängiges Projekt, nicht verbunden mit OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari oder einer anderen Firma, und es verbreitet keine Spiele, ROMs oder BIOS-Dateien. <a href="../">Zurück zur OpenEmux-Website</a>.</p>
+          </footer>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot-Ansicht">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Schließen">×</button>
+    <img id="lightboxImg" src="" alt="" />
+    <div class="lightbox-cap" id="lightboxCap"></div>
+  </div>
+
+  <script>
+    // Lightbox: click a screenshot to see it full size.
+    (function () {
+      var box = document.getElementById("lightbox");
+      var img = document.getElementById("lightboxImg");
+      var cap = document.getElementById("lightboxCap");
+      function close() {
+        box.classList.remove("open");
+        document.body.style.overflow = "";
+        img.src = "";
+      }
+      document.querySelectorAll("figure.shot img").forEach(function (el) {
+        el.addEventListener("click", function () {
+          var fc = el.closest("figure").querySelector("figcaption");
+          img.src = el.currentSrc || el.src;
+          img.alt = el.alt;
+          cap.textContent = fc ? fc.textContent : el.alt;
+          box.classList.add("open");
+          document.body.style.overflow = "hidden";
+        });
+      });
+      document.getElementById("lightboxClose").addEventListener("click", close);
+      box.addEventListener("click", function (e) { if (e.target === box) close(); });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && box.classList.contains("open")) close();
+      });
+    })();
+
+    // Contents: highlight the section on screen, and the menu button on narrow screens.
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+      var byId = {};
+      links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+      var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); })
+        .filter(Boolean);
+      var current = null;
+      function update() {
+        var y = window.scrollY + 120, pick = targets[0];
+        for (var i = 0; i < targets.length; i++) {
+          if (targets[i].getBoundingClientRect().top + window.scrollY <= y) pick = targets[i];
+        }
+        if (pick === current) return;
+        if (current) byId[current.id].classList.remove("active");
+        current = pick;
+        var a = byId[pick.id];
+        a.classList.add("active");
+        var aside = document.getElementById("toc");
+        var r = a.getBoundingClientRect(), ar = aside.getBoundingClientRect();
+        if (r.top < ar.top + 40 || r.bottom > ar.bottom - 40) {
+          aside.scrollTop += r.top - ar.top - ar.height / 3;
+        }
+      }
+      var ticking = false;
+      window.addEventListener("scroll", function () {
+        if (!ticking) { ticking = true; requestAnimationFrame(function () { ticking = false; update(); }); }
+      }, { passive: true });
+      update();
+
+      var toggle = document.getElementById("tocToggle");
+      toggle.addEventListener("click", function () {
+        var open = document.body.classList.toggle("toc-open");
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      links.forEach(function (a) {
+        a.addEventListener("click", function () {
+          document.body.classList.remove("toc-open");
+          toggle.setAttribute("aria-expanded", "false");
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>
