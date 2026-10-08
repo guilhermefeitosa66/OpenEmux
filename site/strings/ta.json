@@ -43,11 +43,6 @@
   "shots.prev": "aria-label=\"முந்தையது\">‹</button>",
   "shots.next": "aria-label=\"அடுத்தது\">›</button>",
   "shots.dots": "aria-label=\"ஸ்லைடு வழிசெலுத்தல்\"></div>",
-  "shots.settings_title": "<h2>அமைப்புகள்</h2>",
-  "shots.settings_lede": "<p class=\"lede\">ROM கோப்புறைகள், BIOS கோப்புகள், கட்டுப்பாடுகள், ஷேடர்கள் அனைத்தும் விருப்பத்தேர்வுகள் சாளரத்தில் அமைக்கப்படுகின்றன; அமைப்புக் கோப்புகளைத் திருத்த வேண்டியதில்லை.</p>",
-  "shots.settings_roms": "<img src=\"assets/openemux-settings.png\" alt=\"பொது அமைப்புகள்\" />\n            <figcaption>ROM-கள் &amp; அட்டைப் படங்கள்</figcaption>",
-  "shots.settings_bios": "<img src=\"assets/openemux-settings-bios.png\" alt=\"BIOS அமைப்புகள்\" />\n            <figcaption>BIOS சரிபார்ப்புப் பட்டியல்</figcaption>",
-  "shots.settings_input": "<img src=\"assets/openemux-settings-input.png\" alt=\"உள்ளீட்டு அமைப்புகள்\" />\n            <figcaption>உள்ளீட்டு மேப்பிங்</figcaption>",
   "install.eyebrow": "<span class=\"eyebrow\">தொடங்குங்கள்</span>",
   "install.title": "<h2>நிறுவுதல்</h2>",
   "install.lede": "<p class=\"lede\">Debian, Ubuntu, Fedora ஆகியவற்றுக்கான தொகுப்புகள், ஒரு AppImage, ஒரு Flatpak, Windows-க்கான நிறுவி ஆகியவை உள்ளன. முதல் துவக்கத்தில் மீதியை OpenEmux அமைக்கிறது.</p>",
@@ -92,5 +87,7 @@
   "cart.lede": "<p class=\"lede\">கேட்ரிட்ஜ் காட்சியில், நீங்கள் சேர்த்த விளையாட்டுகள் அவற்றின் கன்சோலின் கேட்ரிட்ஜில் லேபிள் ஓவியத்துடன் தோன்றும். கீழே உள்ள கேட்ரிட்ஜ்கள் அந்தக் காட்சிக்கான ஓர் எடுத்துக்காட்டு.</p>",
   "cart.wall_label": "aria-label=\"Super Nintendo, Game Boy Advance, Nintendo 64, Mega Drive கேட்ரிட்ஜ்களின் வரிசைகள் நகர்ந்து செல்கின்றன\">",
   "shots.favorites": "alt=\"OpenEmux — பிடித்தவை\" />\n                <figcaption>பிடித்தவை</figcaption>\n              </figure>",
+  "nav.manual": "கையேடு",
+  "shots.manual": "கையேட்டைப் படிக்க (ஆங்கிலத்தில்) →",
   "lang.label": "மொழி"
 }

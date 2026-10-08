@@ -43,11 +43,6 @@
   "shots.prev": "aria-label=\"Zurück\">‹</button>",
   "shots.next": "aria-label=\"Weiter\">›</button>",
   "shots.dots": "aria-label=\"Karussell-Navigation\"></div>",
-  "shots.settings_title": "<h2>Einstellungen</h2>",
-  "shots.settings_lede": "<p class=\"lede\">ROM-Ordner, BIOS-Dateien, Steuerung und Shader werden alle im Einstellungsfenster festgelegt, ohne Konfigurationsdateien zu bearbeiten.</p>",
-  "shots.settings_roms": "<img src=\"assets/openemux-settings.png\" alt=\"Allgemeine Einstellungen\" />\n            <figcaption>ROMs &amp; Cover</figcaption>",
-  "shots.settings_bios": "<img src=\"assets/openemux-settings-bios.png\" alt=\"BIOS-Einstellungen\" />\n            <figcaption>BIOS-Checkliste</figcaption>",
-  "shots.settings_input": "<img src=\"assets/openemux-settings-input.png\" alt=\"Eingabe-Einstellungen\" />\n            <figcaption>Tastenbelegung</figcaption>",
   "install.eyebrow": "<span class=\"eyebrow\">Los geht’s</span>",
   "install.title": "<h2>Installation</h2>",
   "install.lede": "<p class=\"lede\">Es gibt Pakete für Debian, Ubuntu und Fedora, ein AppImage und ein Flatpak sowie einen Installer für Windows. Beim ersten Start richtet OpenEmux den Rest ein.</p>",
@@ -92,5 +87,7 @@
   "cart.lede": "<p class=\"lede\">In der Modulansicht erscheinen die Spiele, die du hinzugefügt hast, mit ihrem Etikett auf dem Modul ihrer Konsole. Die Module unten sind ein Beispiel für diese Ansicht.</p>",
   "cart.wall_label": "aria-label=\"Reihen von Super-Nintendo-, Game-Boy-Advance-, Nintendo-64- und Mega-Drive-Modulen, die vorbeiziehen\">",
   "shots.favorites": "alt=\"OpenEmux — Favoriten\" />\n                <figcaption>Favoriten</figcaption>\n              </figure>",
+  "nav.manual": "Handbuch",
+  "shots.manual": "Zum Handbuch (auf Englisch) →",
   "lang.label": "Sprache"
 }

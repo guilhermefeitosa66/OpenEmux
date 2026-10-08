@@ -43,11 +43,6 @@
   "shots.prev": "aria-label=\"前へ\">‹</button>",
   "shots.next": "aria-label=\"次へ\">›</button>",
   "shots.dots": "aria-label=\"カルーセルのナビゲーション\"></div>",
-  "shots.settings_title": "<h2>設定</h2>",
-  "shots.settings_lede": "<p class=\"lede\">ROM フォルダ、BIOS ファイル、操作設定、シェーダーはすべて設定ウィンドウで変更でき、設定ファイルを編集する必要はありません。</p>",
-  "shots.settings_roms": "<img src=\"assets/openemux-settings.png\" alt=\"一般設定\" />\n            <figcaption>ROM &amp; カバーアート</figcaption>",
-  "shots.settings_bios": "<img src=\"assets/openemux-settings-bios.png\" alt=\"BIOS の設定\" />\n            <figcaption>BIOS チェックリスト</figcaption>",
-  "shots.settings_input": "<img src=\"assets/openemux-settings-input.png\" alt=\"入力の設定\" />\n            <figcaption>入力の割り当て</figcaption>",
   "install.eyebrow": "<span class=\"eyebrow\">はじめよう</span>",
   "install.title": "<h2>インストール</h2>",
   "install.lede": "<p class=\"lede\">Debian、Ubuntu、Fedora 向けのパッケージ、AppImage、Flatpak、そして Windows 向けのインストーラーがあります。初回起動時に、残りは OpenEmux が設定します。</p>",
@@ -92,5 +87,7 @@
   "cart.lede": "<p class=\"lede\">カートリッジ表示では、追加したゲームがそのコンソールのカートリッジに、ラベルのアートを載せて表示されます。下のカートリッジはその表示の例です。</p>",
   "cart.wall_label": "aria-label=\"スーパーファミコン、ゲームボーイアドバンス、NINTENDO64、メガドライブのカートリッジが流れていく列\">",
   "shots.favorites": "alt=\"OpenEmux — お気に入り\" />\n                <figcaption>お気に入り</figcaption>\n              </figure>",
+  "nav.manual": "マニュアル",
+  "shots.manual": "マニュアルを読む（英語） →",
   "lang.label": "言語"
 }

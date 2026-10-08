@@ -43,11 +43,6 @@
   "shots.prev": "aria-label=\"Previous\">‹</button>",
   "shots.next": "aria-label=\"Next\">›</button>",
   "shots.dots": "aria-label=\"Carousel navigation\"></div>",
-  "shots.settings_title": "<h2>Settings</h2>",
-  "shots.settings_lede": "<p class=\"lede\">ROM folders, BIOS files, controls and shaders are all set in the preferences window, so there are no config files to edit.</p>",
-  "shots.settings_roms": "<img src=\"assets/openemux-settings.png\" alt=\"General settings\" />\n            <figcaption>ROMs &amp; cover art</figcaption>",
-  "shots.settings_bios": "<img src=\"assets/openemux-settings-bios.png\" alt=\"BIOS settings\" />\n            <figcaption>BIOS checklist</figcaption>",
-  "shots.settings_input": "<img src=\"assets/openemux-settings-input.png\" alt=\"Input settings\" />\n            <figcaption>Input mapping</figcaption>",
   "install.eyebrow": "<span class=\"eyebrow\">Get started</span>",
   "install.title": "<h2>Installing</h2>",
   "install.lede": "<p class=\"lede\">There are packages for Debian, Ubuntu and Fedora, an AppImage and a Flatpak, and an installer for Windows. On first launch OpenEmux sets up the rest.</p>",
@@ -92,5 +87,7 @@
   "cart.lede": "<p class=\"lede\">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>",
   "cart.wall_label": "aria-label=\"Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past\">",
   "shots.favorites": "alt=\"OpenEmux — Favorites\" />\n                <figcaption>Favorites</figcaption>\n              </figure>",
+  "nav.manual": "Manual",
+  "shots.manual": "Read the manual →",
   "lang.label": "Language"
 }

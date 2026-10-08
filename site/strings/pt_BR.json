@@ -43,11 +43,6 @@
   "shots.prev": "aria-label=\"Anterior\">‹</button>",
   "shots.next": "aria-label=\"Próxima\">›</button>",
   "shots.dots": "aria-label=\"Navegação do carrossel\"></div>",
-  "shots.settings_title": "<h2>Configurações</h2>",
-  "shots.settings_lede": "<p class=\"lede\">Pastas de ROMs, arquivos de BIOS, controles e shaders ficam todos na janela de preferências, sem arquivo de configuração para editar.</p>",
-  "shots.settings_roms": "<img src=\"assets/openemux-settings.png\" alt=\"Configurações gerais\" />\n            <figcaption>ROMs &amp; capas</figcaption>",
-  "shots.settings_bios": "<img src=\"assets/openemux-settings-bios.png\" alt=\"Configurações de BIOS\" />\n            <figcaption>Lista de BIOS</figcaption>",
-  "shots.settings_input": "<img src=\"assets/openemux-settings-input.png\" alt=\"Configurações de controle\" />\n            <figcaption>Mapeamento de controles</figcaption>",
   "install.eyebrow": "<span class=\"eyebrow\">Comece agora</span>",
   "install.title": "<h2>Instalação</h2>",
   "install.lede": "<p class=\"lede\">Há pacotes para Debian, Ubuntu e Fedora, um AppImage e um Flatpak, e um instalador para Windows. Na primeira abertura o OpenEmux configura o resto.</p>",
@@ -92,5 +87,7 @@
   "cart.lede": "<p class=\"lede\">Na visão de cartucho, os jogos que você adicionou aparecem com a arte do rótulo no cartucho do console deles. Os cartuchos abaixo são um exemplo dessa visão.</p>",
   "cart.wall_label": "aria-label=\"Fileiras de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 e Mega Drive passando pela tela\">",
   "shots.favorites": "alt=\"OpenEmux — Favoritos\" />\n                <figcaption>Favoritos</figcaption>\n              </figure>",
+  "nav.manual": "Manual",
+  "shots.manual": "Ler o manual (em inglês) →",
   "lang.label": "Idioma"
 }
