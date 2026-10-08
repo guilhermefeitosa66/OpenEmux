@@ -952,6 +952,151 @@
         display: none
       }
     }
+    /* ---------- cartridge wall ----------
+       Four endless belts of real cartridge renders. Each row has its own size,
+       speed and direction (smaller, dimmer and slower reads as farther away),
+       and page scroll pushes each row sideways by a different amount. The rows
+       are built by the script at the end of the page. */
+    #cartridges {
+      overflow: hidden;
+      padding-bottom: 72px
+    }
+
+    #cartridges .wrap {
+      margin-bottom: 44px
+    }
+
+    .cart-wall {
+      position: relative;
+      display: grid;
+      gap: var(--row-gap, 26px);
+      padding-block: 18px;
+      /* the belts dissolve into the page at both ends instead of being cut */
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+      mask-image: linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+    }
+
+    .cart-wall::before {
+      content: "";
+      position: absolute;
+      inset: 10% 0;
+      background: radial-gradient(60% 50% at 50% 55%, rgba(139, 92, 246, .16), transparent 70%);
+      pointer-events: none;
+    }
+
+    .belt-row {
+      position: relative;
+      height: var(--h);
+      opacity: var(--depth)
+    }
+
+    /* outer layer: scroll parallax (set from JS); inner layer: the endless loop (CSS) */
+    .belt-shift {
+      height: 100%;
+      will-change: transform
+    }
+
+    .belt {
+      display: flex;
+      width: max-content;
+      height: 100%;
+      animation: belt-left var(--dur) linear infinite;
+      will-change: transform
+    }
+
+    .belt-row[data-dir="right"] .belt {
+      animation-name: belt-right
+    }
+
+    .belt-row:hover .belt,
+    .cart-wall.is-offscreen .belt {
+      animation-play-state: paused
+    }
+
+    .belt-set {
+      display: flex;
+      gap: var(--gap);
+      padding-right: var(--gap);
+      height: 100%
+    }
+
+    .cart {
+      flex: none;
+      height: 100%;
+      width: auto;
+      max-width: none;
+      filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .55));
+      transition: transform .25s ease, filter .25s ease
+    }
+
+    .belt-row:hover .cart:hover {
+      transform: translateY(-6px) scale(1.04);
+      filter: drop-shadow(0 16px 22px rgba(0, 0, 0, .6)) drop-shadow(0 0 18px rgba(139, 92, 246, .35))
+    }
+
+    @keyframes belt-left {
+      to {
+        transform: translateX(-50%)
+      }
+    }
+
+    @keyframes belt-right {
+      from {
+        transform: translateX(-50%)
+      }
+
+      to {
+        transform: translateX(0)
+      }
+    }
+
+    .cart-tally {
+      margin-top: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      row-gap: 4px;
+      color: var(--muted);
+      font-size: .9rem;
+      font-variant-numeric: tabular-nums
+    }
+
+    .cart-tally b {
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .cart-tally span:not(.sep) {
+      white-space: nowrap
+    }
+
+    .cart-tally .sep {
+      opacity: .4;
+      margin: 0 .5em
+    }
+
+    /* still and scrollable for anyone who asked for less motion */
+    @media (prefers-reduced-motion: reduce) {
+      .belt-row {
+        overflow-x: auto;
+        scrollbar-width: none
+      }
+
+      .belt {
+        animation: none
+      }
+
+      .belt-set+.belt-set {
+        display: none
+      }
+    }
+
+    @media (max-width: 600px) {
+      .cart-wall {
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 90%, transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 90%, transparent 100%)
+      }
+    }
   </style>
   <script src="../lang.js"></script>
 </head>
@@ -1127,6 +1272,19 @@
         <span class="chip">Vectrex</span>
       </div>
     </div>
+  </section>
+
+  <!-- CARTRIDGES -->
+  <section id="cartridges" aria-labelledby="cartridges-title">
+    <div class="wrap center">
+      <span class="eyebrow">Vista de cartuchos</span>
+      <h2 id="cartridges-title">Cada juego en el cartucho en que salió</h2>
+      <p class="lede">OpenEmux coloca la etiqueta de cada juego sobre el cartucho de su consola, y tu biblioteca se ve como la estantería con la que creciste.</p>
+    </div>
+    <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="Filas de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 y Mega Drive desplazándose"></div>
+    <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
+        Game Boy Advance</span><span class="sep">·</span><span><b>11</b> Mega Drive</span><span
+        class="sep">·</span><span><b>9</b> Nintendo 64</span></p>
   </section>
 
   <!-- SCREENSHOTS -->
@@ -1423,6 +1581,123 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     })();
   </script>
 
+  <script>
+    // Cartridge wall: builds the four belts. One set of carts has to be wider
+    // than the viewport (plus the scroll drift) or the loop shows its seam, so
+    // the set is repeated to fit and rebuilt when the width changes enough.
+    (function () {
+      var wall = document.getElementById("cartWall");
+      if (!wall) return;
+      // Cartridge renders are 400 px wide; ratio = width / height.
+      var CONSOLES = {
+        gba: { ratio: 400 / 230, games: ["bust-a-move", "castlevania-aria-of-sorrow", "castlevania-circle-of-the-moon", "castlevania-harmony-of-dissonance", "donkey-kong-country-1", "donkey-kong-country-2", "donkey-kong-country-3", "dragonball-advanced-adventure", "kirby-nightmare-in-dreamland", "kirby-the-amazing-mirror", "mario-kart-super-circuit", "megaman-bass", "megaman-zero-1", "megaman-zero-2", "megaman-zero-3", "megaman-zero-4", "metal-slug-advance", "metroid-fusion", "metroid-zero-mission", "poke-mon-1-1-fire-red-version", "poke-mon-1-2-leaf-green-version", "poke-mon-3-1-ruby-version", "poke-mon-3-2-sapphire-version", "poke-mon-3-3-emerald-version", "sonic-advance", "super-mario-advance", "super-mario-advance-2-super-mario-world", "super-mario-advance-3-yoshi-s-island", "super-mario-advance-4-super-mario-bros", "the-legend-of-zelda-the-minish-cap", "wario-land-4"] },
+        sfc: { ratio: 400 / 255, games: ["asterix", "bust-a-move", "chrono-trigger", "dolucky-no-a-league-soccer", "donkey-kong-1", "donkey-kong-2", "donkey-kong-3", "goof-troop", "mega-man-x", "mega-man-x2", "mega-man-x3", "mighty-morphin-power-rangers", "mighty-morphin-power-rangers-the-movie", "mortal-kombat-1", "mortal-kombat-2", "mortal-kombat-3", "mortal-kombat-3-ultimate", "prince-of-persia", "street-fighter-ii-turbo", "super-bomberman-1", "super-bomberman-2", "super-bomberman-3", "super-bomberman-4", "super-bomberman-5", "super-mario-all-stars", "super-mario-kart", "super-mario-world", "super-mario-world-2-yoshi-s-island", "super-metroid", "the-legend-of-zelda-a-link-to-the-past", "top-gear-1", "top-gear-2", "top-gear-3000"] },
+        n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
+        md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
+      };
+      // Back to front. speed is px/s at full scale; drift is how far a full
+      // pass of page scroll pushes the row sideways.
+      var ROWS = [
+        { console: "gba", h: 92, speed: 22, dir: "left", depth: .5, drift: 50 },
+        { console: "sfc", h: 124, speed: 34, dir: "right", depth: .78, drift: -90 },
+        { console: "n64", h: 168, speed: 48, dir: "left", depth: 1, drift: 150 },
+        { console: "md", h: 132, speed: 36, dir: "right", depth: .82, drift: -100 }
+      ];
+      var base = wall.getAttribute("data-base");
+      var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      var built = [];
+      var lastScale = 0;
+
+      function title(slug) {
+        return slug.replace(/-/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+      }
+
+      function build() {
+        var vw = document.documentElement.clientWidth;
+        var scale = Math.max(.58, Math.min(1, vw / 1280));
+        if (Math.abs(scale - lastScale) < .04 && built.length) return;
+        lastScale = scale;
+        wall.textContent = "";
+        built = [];
+        wall.style.setProperty("--row-gap", Math.round(26 * scale) + "px");
+
+        ROWS.forEach(function (row, i) {
+          var spec = CONSOLES[row.console];
+          var h = Math.round(row.h * scale);
+          var gap = Math.round(h * .22);
+          var itemW = h * spec.ratio + gap;
+          var by = (i * 7) % spec.games.length;
+          var games = spec.games.slice(by).concat(spec.games.slice(0, by));
+          var minW = vw * 1.15 + Math.abs(row.drift) * 2;
+          var seq = [];
+          while (seq.length * itemW < minW) seq = seq.concat(games);
+
+          var el = document.createElement("div");
+          el.className = "belt-row";
+          el.setAttribute("data-dir", row.dir);
+          el.style.setProperty("--h", h + "px");
+          el.style.setProperty("--gap", gap + "px");
+          el.style.setProperty("--depth", row.depth);
+          el.style.setProperty("--dur", (seq.length * itemW / (row.speed * scale)).toFixed(1) + "s");
+          var shift = document.createElement("div");
+          shift.className = "belt-shift";
+          var belt = document.createElement("div");
+          belt.className = "belt";
+          for (var copy = 0; copy < 2; copy++) {
+            var set = document.createElement("div");
+            set.className = "belt-set";
+            if (copy) set.setAttribute("aria-hidden", "true");
+            seq.forEach(function (slug) {
+              var img = document.createElement("img");
+              img.className = "cart";
+              img.src = base + row.console + "-" + slug + ".webp";
+              img.alt = "";
+              img.title = title(slug);
+              img.width = Math.round(h * spec.ratio);
+              img.height = h;
+              img.decoding = "async";
+              img.draggable = false;
+              set.appendChild(img);
+            });
+            belt.appendChild(set);
+          }
+          shift.appendChild(belt);
+          el.appendChild(shift);
+          wall.appendChild(el);
+          built.push({ shift: shift, drift: row.drift * scale });
+        });
+        parallax();
+      }
+
+      // -1 when the wall enters at the bottom of the viewport, +1 as it leaves at the top.
+      var ticking = false;
+      function parallax() {
+        ticking = false;
+        if (reduceMotion.matches) return;
+        var r = wall.getBoundingClientRect();
+        var vh = window.innerHeight;
+        var p = Math.max(-1, Math.min(1, ((vh - r.top) / (vh + r.height)) * 2 - 1));
+        built.forEach(function (b) {
+          b.shift.style.transform = "translate3d(" + (p * b.drift).toFixed(1) + "px,0,0)";
+        });
+      }
+
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver(function (entries) {
+          wall.classList.toggle("is-offscreen", !entries[0].isIntersecting);
+        }).observe(wall);
+      }
+      var resizeTimer;
+      window.addEventListener("resize", function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(build, 150);
+      });
+      window.addEventListener("scroll", function () {
+        if (!ticking) { ticking = true; requestAnimationFrame(parallax); }
+      }, { passive: true });
+      build();
+    })();
+  </script>
 </body>
 
 </html>
