@@ -1439,6 +1439,20 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         appearance.add(restore_row)
         page.add(appearance)
 
+        # The in-game bar RetroArch draws (issue #469). Read at each launch, so
+        # a change reaches the next game, not the one already running.
+        game_bar = Adw.PreferencesGroup(title=self.t("prefs.group.game_bar"))
+        self._translucent_bar_row = Adw.SwitchRow(
+            title=self.t("settings.game_bar.translucent.title"),
+            subtitle=self.t("settings.game_bar.translucent.subtitle"),
+        )
+        self._translucent_bar_row.set_active(
+            self.config.get_ui_settings()["translucent_game_bar"]
+        )
+        self._translucent_bar_row.connect("notify::active", self._on_translucent_bar_changed)
+        game_bar.add(self._translucent_bar_row)
+        page.add(game_bar)
+
         self._shaders_group = Adw.PreferencesGroup(title=self.t("prefs.group.shaders"))
         page.add(self._shaders_group)
         self._shader_rows = []
@@ -1997,6 +2011,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         enabled = row.get_active()
         self.config.set_show_tips(enabled)
         self.win._apply_tips_visibility(enabled)
+
+    def _on_translucent_bar_changed(self, row, *_a):
+        self.config.set_translucent_game_bar(row.get_active())
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())

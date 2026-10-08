@@ -33,6 +33,65 @@ class RuntimeOverridesTests(unittest.TestCase):
         self.assertEqual(overrides["input_overlay_hide_when_gamepad_connected"], '"false"')
 
 
+class TranslucentBarTests(unittest.TestCase):
+    """The semi-transparent bar is drawn over the game (issue #477)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.runtime = Path(self._tmp.name) / "runtime"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_opaque_bar_is_the_default(self):
+        overrides = overlay_bar.runtime_overrides()
+        self.assertEqual(Path(overrides["input_overlay"].strip('"')).name, "openemux-bar.cfg")
+        self.assertEqual(overrides["input_overlay_opacity"], '"1.000000"')
+
+    def test_translucent_loads_its_own_pages_at_the_lower_opacity(self):
+        overrides = overlay_bar.runtime_overrides(translucent=True)
+        path = Path(overrides["input_overlay"].strip('"'))
+        self.assertEqual(path, overlay_bar.TRANSLUCENT_CFG)
+        self.assertTrue(path.is_file())
+        self.assertEqual(overrides["input_overlay_opacity"],
+                         f'"{overlay_bar.TRANSLUCENT_OPACITY:.6f}"')
+
+    def test_only_the_show_button_differs_between_the_two_bars(self):
+        # The show button compensates for the global opacity in its own
+        # image, so it stays as easy to spot as on the opaque bar.
+        opaque = overlay_bar.OVERLAY_CFG.read_text(encoding="utf-8").splitlines()
+        translucent = overlay_bar.TRANSLUCENT_CFG.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(opaque), len(translucent))
+        changed = [(a, b) for a, b in zip(opaque, translucent) if a != b]
+        self.assertEqual(len(changed), 32)  # one per hidden page
+        for a, b in changed:
+            self.assertTrue(a.endswith("= btn_show.png"), a)
+            self.assertTrue(b.endswith("= btn_show_translucent.png"), b)
+        self.assertTrue((overlay_bar.OVERLAY_DIR / "btn_show_translucent.png").is_file())
+
+    def test_the_opacity_agrees_with_the_generator(self):
+        script = (Path(__file__).resolve().parent.parent / "scripts" / "build_overlay.py").read_text()
+        value = re.search(r"^TRANSLUCENT_OPACITY = ([0-9.]+)$", script, re.M).group(1)
+        self.assertEqual(float(value), overlay_bar.TRANSLUCENT_OPACITY)
+
+    def test_no_strip_is_kept_with_or_without_a_console_shader(self):
+        _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, translucent=True)
+        folder = Path(shader_dir)
+        hidden = (folder / f"{overlay_bar.HIDDEN_PRESET}.glslp").read_text()
+        shown = (folder / f"{overlay_bar.SHOWN_PRESET}.glslp").read_text()
+        self.assertEqual(shown, hidden)
+        self.assertIn('MARGIN = "0.0"', shown)
+
+        preset = Path(self._tmp.name) / "crt" / "a.glslp"
+        preset.parent.mkdir(parents=True)
+        preset.write_text('shaders = 1\nshader0 = "a.glsl"\n', encoding="utf-8")
+        _, shader_dir = overlay_bar.prepare_shaders(str(preset), "gl", self.runtime,
+                                                    translucent=True)
+        shown = (Path(shader_dir) / f"{overlay_bar.SHOWN_PRESET}.glslp").read_text()
+        self.assertIn('shaders = "1"', shown)
+        self.assertNotIn("margin", shown)
+
+
 class ShippedAssetsTests(unittest.TestCase):
     def test_every_image_the_overlay_names_exists(self):
         text = overlay_bar.OVERLAY_CFG.read_text(encoding="utf-8")

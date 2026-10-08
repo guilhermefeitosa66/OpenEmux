@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 
 OVERLAY_DIR = Path(__file__).resolve().parent.parent / "data" / "overlay"
 OVERLAY_CFG = OVERLAY_DIR / "openemux-bar.cfg"
+#: The same pages for the semi-transparent bar, whose "show" button makes up
+#: for the lower opacity in its own image (issue #477).
+TRANSLUCENT_CFG = OVERLAY_DIR / "openemux-bar-translucent.cfg"
+
+#: RetroArch's overlay opacity for the semi-transparent bar. Must agree with
+#: TRANSLUCENT_OPACITY in scripts/build_overlay.py.
+TRANSLUCENT_OPACITY = 0.6
 
 #: The margin pass, per preset backend.
 MARGIN_SHADER = {"glsl": OVERLAY_DIR / "margin.glsl", "slang": OVERLAY_DIR / "margin.slang"}
@@ -87,21 +94,25 @@ def stage_assets(runtime_dir):
     return target
 
 
-def runtime_overrides(overlay_dir=OVERLAY_DIR):
+def runtime_overrides(overlay_dir=OVERLAY_DIR, translucent=False):
     """The ``--appendconfig`` lines that turn the bar on for one launch.
 
     ``overlay_dir`` is where the bar's files are, as ``stage_assets`` left them.
+    ``translucent`` draws it see-through, over the game (issue #477); the
+    shaders then keep no strip for it (``prepare_shaders``).
     """
     width, height = WINDOW_SIZE
+    overlay = TRANSLUCENT_CFG if translucent else OVERLAY_CFG
+    opacity = TRANSLUCENT_OPACITY if translucent else 1.0
     return {
         "input_overlay_enable": '"true"',
-        "input_overlay": f'"{cfg_path(Path(overlay_dir) / OVERLAY_CFG.name)}"',
+        "input_overlay": f'"{cfg_path(Path(overlay_dir) / overlay.name)}"',
         # RetroArch's own default swaps the overlay for the system's
         # "preferred" one when content loads -- a touch gamepad, on a desktop
         # -- wherever it ships one: PlayStation and PSP do, so their games came
         # up with that gamepad over them and no bar at all (issue #471).
         "input_overlay_enable_autopreferred": '"false"',
-        "input_overlay_opacity": '"1.000000"',
+        "input_overlay_opacity": f'"{opacity:.6f}"',
         # The dock is a 16:9 layout: keep its buttons square whatever the
         # window's shape, instead of stretching them with it.
         "input_overlay_auto_scale": '"true"',
@@ -192,7 +203,8 @@ def _absolute_passes(source):
     return out, passes
 
 
-def prepare_shaders(user_preset, video_driver, runtime_dir, overlay_dir=OVERLAY_DIR):
+def prepare_shaders(user_preset, video_driver, runtime_dir, overlay_dir=OVERLAY_DIR,
+                    translucent=False):
     """The preset to load and the shader directory to point RetroArch at.
 
     Returns ``(preset, shader_dir)``. ``shader_dir`` holds exactly the two
@@ -202,6 +214,10 @@ def prepare_shaders(user_preset, video_driver, runtime_dir, overlay_dir=OVERLAY_
     for the other backend, one this cannot safely extend -- and then the bar
     simply sits over the bottom of the game. The margin pass is read from
     ``overlay_dir``, as ``stage_assets`` left it.
+
+    A ``translucent`` bar is drawn over the game on purpose, so both presets
+    are the margin-free one: the hide and show buttons still step through
+    the folder, and land on the same full-size image either way.
     """
     backend = _backend_for(video_driver)
     if backend is None:
@@ -241,6 +257,8 @@ def prepare_shaders(user_preset, video_driver, runtime_dir, overlay_dir=OVERLAY_
         # RetroArch would draw with no shader at all.
         hidden = [*plain, 'parameters = "MARGIN"', 'MARGIN = "0.0"']
         shown = plain
+    if translucent:
+        shown = hidden
 
     folder = Path(runtime_dir) / "in_game_bar"
     folder.mkdir(parents=True, exist_ok=True)

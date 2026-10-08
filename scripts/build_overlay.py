@@ -24,6 +24,12 @@ margin the ``margin`` shader keeps clear (STRIP / H). The bar's background is
 a flat strip drawn far wider than the overlay, so it spans the whole window
 whatever is left and right of the 4:3 box.
 
+Semi-transparent, the bar is drawn over the game instead (issue #477): the
+launch drops the margin pass and sets RetroArch's global overlay opacity to
+``TRANSLUCENT_OPACITY``. ``openemux-bar-translucent.cfg`` is the same pages
+with the "show" button swapped for one that carries more alpha of its own,
+so it ends up exactly as visible as on the opaque bar.
+
 Hiding the bar frees that strip for the game: the hide and show buttons also
 send ``shader_next``, and the launcher points RetroArch's shader directory
 at a folder holding exactly two presets, with and without the margin pass.
@@ -49,6 +55,12 @@ W, H = 960.0, 720.0
 STRIP = 60.0
 CY = H - STRIP / 2
 SCALE = 2
+
+#: The overlay opacity of the semi-transparent bar. Must agree with
+#: ``TRANSLUCENT_OPACITY`` in ``core/overlay_bar.py``.
+TRANSLUCENT_OPACITY = 0.6
+#: How faded the "show" button is, as seen on screen, in either mode.
+SHOW_OPACITY = 0.45
 
 TILE_BG = "#383838"
 ICON = {
@@ -224,7 +236,12 @@ def main():
         # Overlay opacity is global, so the faded "show" button carries its
         # 45% in the image itself.
         "show": tile_png("show", "show", w=40, h=40, bg="#2a2a2a", icon_px=20,
-                         opacity=0.45, border="#ffffff30"),
+                         opacity=SHOW_OPACITY, border="#ffffff30"),
+        # The same button for the semi-transparent bar, which RetroArch draws
+        # at TRANSLUCENT_OPACITY: the image makes up the difference.
+        "show_translucent": tile_png("show_translucent", "show", w=40, h=40, bg="#2a2a2a",
+                                     icon_px=20, opacity=SHOW_OPACITY / TRANSLUCENT_OPACITY,
+                                     border="#ffffff30"),
     }
 
     states = list(itertools.product((False, True), repeat=len(TOGGLES)))
@@ -278,6 +295,10 @@ def main():
                 lines.append(f'{o}_desc{j}_next_target = "{target}"')
 
     (OUT / "openemux-bar.cfg").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    translucent = [line.replace(f"= {img['show']}", f"= {img['show_translucent']}")
+                   for line in lines]
+    (OUT / "openemux-bar-translucent.cfg").write_text("\n".join(translucent) + "\n",
+                                                      encoding="utf-8")
     print(f"{OUT}: {len(pages)} pages, margin {STRIP:.0f}px = {STRIP / H:.4f} of the height")
 
 

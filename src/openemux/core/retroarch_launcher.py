@@ -382,6 +382,11 @@ class RetroArchLauncher:
                 return resolved
         return None
 
+    def _translucent_bar(self):
+        """Whether the in-game bar is drawn see-through, over the game (#477)."""
+        get_ui = getattr(self.config_manager, "get_ui_settings", None)
+        return bool(get_ui and get_ui().get("translucent_game_bar", False))
+
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
@@ -416,7 +421,7 @@ class RetroArchLauncher:
         overrides.update(self._savestate_overrides(states_dir, state_slot))
         overrides.update(self._window_overrides())
         # The game's controls are drawn by RetroArch itself (issue #469).
-        overrides.update(overlay_bar.runtime_overrides(overlay_dir))
+        overrides.update(overlay_bar.runtime_overrides(overlay_dir, self._translucent_bar()))
         if shader_dir:
             # Where the bar's hide/show buttons' "next shader" looks.
             overrides["video_shader_dir"] = f'"{cfg_path(shader_dir)}"'
@@ -965,6 +970,7 @@ class RetroArchLauncher:
             video_driver,
             self.config_manager.get_runtime_dir(),
             overlay_dir,
+            translucent=self._translucent_bar(),
         )
 
         cmd = [*launch_prefix, "-L", core_path]
