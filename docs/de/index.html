@@ -1600,13 +1600,14 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
         md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
       };
-      // Back to front. speed is px/s at full scale; drift is how far a full
-      // pass of page scroll pushes the row sideways.
+      // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
+      // N64 and Mega Drive sit behind them at the edges. speed is px/s at full
+      // scale; drift is how far a full pass of page scroll pushes the row sideways.
       var ROWS = [
-        { console: "gba", h: 92, speed: 22, dir: "left", depth: .5, drift: 50 },
-        { console: "sfc", h: 124, speed: 34, dir: "right", depth: .78, drift: -90 },
-        { console: "n64", h: 168, speed: 48, dir: "left", depth: 1, drift: 150 },
-        { console: "md", h: 132, speed: 36, dir: "right", depth: .82, drift: -100 }
+        { console: "n64", h: 96, speed: 22, dir: "left", depth: .5, drift: 50 },
+        { console: "sfc", h: 168, speed: 48, dir: "right", depth: 1, drift: -150 },
+        { console: "gba", h: 150, speed: 44, dir: "left", depth: 1, drift: 130 },
+        { console: "md", h: 104, speed: 26, dir: "right", depth: .55, drift: -60 }
       ];
       var base = wall.getAttribute("data-base");
       var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
