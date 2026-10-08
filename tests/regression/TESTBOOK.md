@@ -2080,6 +2080,27 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `~/.openemux/runtime/overlay/openemux-bar.cfg`. Suite files `tests/test_overlay_bar.py`
   (`StageAssetsTests`) and `tests/test_retroarch_launcher.py`.
 
+### RT-338 — The semi-transparent bar is drawn over the full-size game
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** "Settings" → "Video" → "In-Game Bar" → "Semi-transparent control bar" turned
+  on; a console with no shader and one with a shader (e.g. `dot` on GBA).
+- **Steps:**
+  1. Launch a game on each console.
+  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+     bottom-right corner.
+  3. Turn the switch off again and launch one of the games.
+- **Expected:** With the switch on, the game fills the whole height of the window and the bar is
+  drawn over its bottom edge, see-through: the game shows through the strip and the buttons, which
+  still respond (issue #477). Hiding and showing the bar does not resize the game. The faded "show"
+  button is as visible as with the switch off. The console's shader is still applied. With the
+  switch off, the opaque bar in its own strip is back (RT-327).
+- **Check:** human only; `grep -E "input_overlay( |_opacity)" ~/.openemux/runtime/runtime_*.cfg |
+  tail -2` names `openemux-bar-translucent.cfg` and `0.600000` with the switch on. Suite files
+  `tests/test_overlay_bar.py` (`TranslucentBarTests`), `tests/test_retroarch_launcher.py`,
+  `tests/test_preferences.py`.
+- **Restore:** turn "Semi-transparent control bar" off.
+
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL

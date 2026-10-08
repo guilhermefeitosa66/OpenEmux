@@ -372,6 +372,9 @@ DEFAULT_CONFIG = {
         # The user's own order for the console rows (issue #386). Empty means
         # the SYSTEMS order, which is what everyone had before.
         "console_order": [],
+        # The in-game bar drawn over the game, see-through, instead of in a
+        # strip of its own below it (issue #477).
+        "translucent_game_bar": False,
     },
     "updates": {
         "check_on_startup": True,
@@ -800,6 +803,7 @@ class ConfigManager:
             "gamepad_navigation": bool(ui.get("gamepad_navigation", True)),
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
             "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
+            "translucent_game_bar": bool(ui.get("translucent_game_bar", False)),
         }
 
     def set_theme(self, theme):
@@ -902,6 +906,12 @@ class ConfigManager:
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_tips"] = bool(enabled)
+        self.save_config()
+
+    def set_translucent_game_bar(self, enabled):
+        """See-through in-game bar over the game; read at the next launch."""
+        ui = self.config.setdefault("ui", {})
+        ui["translucent_game_bar"] = bool(enabled)
         self.save_config()
 
     def set_show_log_panel(self, enabled):
