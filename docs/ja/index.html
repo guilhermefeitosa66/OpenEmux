@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — Linux ファーストで作られたレトロゲーム環境</title>
+  <title>OpenEmux — Linux のためのレトロゲームライブラリ</title>
   <meta name="description"
-    content="OpenEmux は、RetroArch をシンプルで楽しく使えるようにする美しいエミュレーションフロントエンドです。Linux ファーストで開発され、Windows 版はベータ提供中。カバーアート付きのライブラリを眺めて、手持ちのゲームを遊べます。" />
+    content="OpenEmux は RetroArch 用の自由でオープンソースのフロントエンドです。ゲームをコンソールごとにカバーアート付きで整理し、RetroArch で起動します。Linux を優先して開発しており、Windows 版はベータです。" />
   <link rel="icon" href="../assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — Linux ファーストで作られたレトロゲーム環境" />
+  <meta property="og:title" content="OpenEmux — Linux のためのレトロゲームライブラリ" />
   <meta property="og:description"
-    content="RetroArch を誰でもシンプルに楽しく使えるようにする、美しいエミュレーションフロントエンド。Linux ファーストで、Windows でもベータ版で使えるようになりました。" />
+    content="RetroArch 用の自由でオープンソースのフロントエンド。Linux を優先して開発しており、Windows 版はベータです。" />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/ja/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/" />
@@ -1138,10 +1138,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux のロゴ" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux が Windows でも動くようになりました →</a>
-      <h1>レトロゲームを、<br /><span class="grad">Linux ファーストで。</span></h1>
-      <p class="lede">OpenEmux は RetroArch のパワーを、すっきりとした GNOME ネイティブのフロントエンドで包み込みます。
-        カバーアート付きでコレクションを眺め、ゲームパッドを手に取れば、すぐに遊べます。設定ファイルも、終わりの見えないセットアップもありません。
-        設計・開発・テストはまず Linux で行っています。Windows でも同じアプリがベータ版として動きます。</p>
+      <h1>レトロゲームのライブラリを、<br /><span class="grad">Linux で。</span></h1>
+      <p class="lede">OpenEmux は RetroArch 用の無料のフロントエンドです。ゲームをコンソールごとにカバーアート付きで整理し、選んだゲームを、操作設定やシェーダーを反映した状態で RetroArch で起動します。開発とテストはまず Linux で行っています。Windows 版もありますが、まだベータです。</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Linux 版を
           ダウンロード</a>
@@ -1161,46 +1159,39 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap center">
-      <span class="eyebrow">OpenEmux を選ぶ理由</span>
-      <h2>下調べ不要のエミュレーション</h2>
-      <p class="lede">RetroArch は、これまでに作られた中でも屈指の強力なエミュレーション環境です。OpenEmux は、
-        その力を邪魔にならないインターフェイスで使えるようにします。</p>
+      <span class="eyebrow">機能</span>
+      <h2>OpenEmux でできること</h2>
+      <p class="lede">エミュレーションは RetroArch が担います。OpenEmux はその周りのこと、つまりライブラリ、コア、操作設定、シェーダーを引き受け、手作業での設定を減らします。</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>本物のゲーム棚</h3>
-          <p>ライブラリはコンソールごとに整理され、libretro のサムネイルアーカイブからカバーアートが
-            自動で同期されます。</p>
+          <h3>コンソール別のライブラリ</h3>
+          <p>ゲームはコンソールごとにまとめられ、カバーアートは libretro のサムネイルアーカイブから取得します。</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
-          <h3>設定いらずの初回起動</h3>
-          <p>初めて起動すると、OpenEmux が設定を用意し、お使いのコンソールに必要なコアを約 10 秒で
-            ダウンロードします。残りはライブラリを眺めている間にバックグラウンドで届きます。</p>
+          <h3>初回起動ですぐ使える</h3>
+          <p>初めて開いたとき、OpenEmux は設定を作成し、お使いのコンソールに必要なコアをダウンロードします。通常は 10 秒ほどです。残りはバックグラウンドでダウンロードが続きます。</p>
         </div>
         <div class="card">
           <div class="ico">🎮</div>
           <h3>コンソールごとの操作設定</h3>
-          <p>キーボードとゲームパッドの割り当てを、わかりやすいパネルでシステムごとに設定できます。割り当ては起動時に
-            RetroArch へ渡されます。</p>
+          <p>各コンソールのキーボードとゲームパッドの割り当てを 1 つのパネルで設定できます。ゲーム起動時に OpenEmux が RetroArch に渡します。</p>
         </div>
         <div class="card">
           <div class="ico">📺</div>
-          <h3>見た目にこだわるシェーダー</h3>
-          <p>厳選されたカタログから、CRT や走査線のシェーダーをコンソールごとに選ぶだけですぐに適用されます。シェーダーメニューを
-            探し回る必要はありません。</p>
+          <h3>コンソールごとのシェーダー</h3>
+          <p>CRT やスキャンラインのシェーダーを、短いリストからコンソールごとに選べます。RetroArch のシェーダーメニューを探す必要はありません。</p>
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Linux ファースト</h3>
-          <p>GTK4 と Adwaita で作られ、GNOME HIG に沿っており、何よりも先に Linux でテストしています。Linux は
-            ここでは主役です。Windows もベータ版で後に続きます。</p>
+          <h3>Linux で作っています</h3>
+          <p>GTK4 と Adwaita で書かれ、GNOME のガイドラインに沿っており、ほかの何よりも先に Linux でテストしています。Windows 版は同じアプリを動かしていて、まだベータです。</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
-          <h3>BIOS がひと目でわかる</h3>
-          <p>各コンソールに必要な BIOS ファイルと、すでに揃っているものがはっきりとしたチェックリストでわかります。原因不明の
-            起動失敗とはもうお別れです。</p>
+          <h3>BIOS チェックリスト</h3>
+          <p>各コンソールに必要な BIOS ファイルと、すでに手元にあるものを表示します。ファイルが足りないせいで、何も言わずにゲームが起動しない、ということを防ぎます。</p>
         </div>
       </div>
     </div>
@@ -1210,7 +1201,7 @@
   <section id="philosophy">
     <div class="wrap split">
       <div>
-        <span class="eyebrow">私たちの考え方</span>
+        <span class="eyebrow">ゲームについて</span>
         <h2>自分が持っているゲームを遊ぼう</h2>
         <p class="lede">OpenEmux は、エミュレーションを身近にするために作られた RetroArch のフロントエンドです。ゲームの入手先では
           <strong>ありません</strong>。ゲームも ROM も BIOS ファイルも同梱しておらず、今後も同梱することはありません。
@@ -1220,9 +1211,7 @@
             購入したゲームのバックアップを使いましょう。</li>
           <li><strong>海賊行為のためのものではありません。</strong> 所有していない著作権付きゲームのダウンロードは、
             ほとんどの国で違法です。</li>
-          <li><strong>エミュレーションは歴史を守ります。</strong> ゲームのアートや音楽、デザインの多くは、壊れやすく
-            老朽化していくハードウェアの上にしか残っていません。遊べる状態で残すことは正当な取り組みであり、ゲームを作った人々への
-            敬意があってこそ、最もうまくいきます。</li>
+          <li><strong>エミュレーションは歴史の保存に役立ちます。</strong> ゲームのアートや音楽、デザインの多くは、古くなっていくハードウェアの上にあります。それを遊べる状態に保つことには意味があり、ゲームを作った人たちへの敬意があってこそうまくいきます。</li>
         </ul>
       </div>
       <div>
@@ -1235,7 +1224,7 @@
   <section id="systems">
     <div class="wrap center">
       <span class="eyebrow">31 システム</span>
-      <h2>40 年分のコンソールを、ひとつのライブラリに</h2>
+      <h2>対応システム</h2>
       <p class="lede">Nintendo、Sega、Sony、Atari など。それぞれにコア、カバーアート、入力プロファイル、
         シェーダー設定があります。</p>
       <div class="systems">
@@ -1278,8 +1267,8 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">カートリッジ表示</span>
-      <h2 id="cartridges-title">どのゲームも、発売当時のカートリッジで</h2>
-      <p class="lede">OpenEmux は各ゲームのラベルアートを、そのコンソールのカートリッジに貼って表示します。ライブラリが、子どもの頃の棚のように並びます。</p>
+      <h2 id="cartridges-title">ゲームをそれぞれのカートリッジで</h2>
+      <p class="lede">カートリッジ表示では、各ゲームがそのコンソールのカートリッジに、ラベルのアートを載せて表示されます。</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="スーパーファミコン、ゲームボーイアドバンス、NINTENDO64、メガドライブのカートリッジが流れていく列"></div>
     <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
@@ -1291,9 +1280,8 @@
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">スクリーンショット</span>
-      <h2>あなたのコレクションを、棚に並べて</h2>
-      <p class="lede">コンソールごとに整理されたカバーアート。ゲームライブラリはこうあるべき、という見た目です。
-        システムをスクロールして、画像をクリックすると原寸で表示できます。</p>
+      <h2>コンソールごとのライブラリ</h2>
+      <p class="lede">ライブラリにはコンソールごとのページがあります。矢印で切り替えられ、スクリーンショットをクリックすると原寸で表示できます。</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="前へ">‹</button>
@@ -1336,9 +1324,8 @@
         <div class="carousel-dots" role="tablist" aria-label="カルーセルのナビゲーション"></div>
       </div>
       <div style="margin-top:64px">
-        <h2>わかりやすい設定</h2>
-        <p class="lede">ROM のパス、BIOS のチェック、入力の割り当て、シェーダー。すべてがひとつのすっきりしたパネルに。設定ファイルは不要です。
-        </p>
+        <h2>設定</h2>
+        <p class="lede">ROM フォルダ、BIOS ファイル、操作設定、シェーダーはすべて設定ウィンドウで変更でき、設定ファイルを編集する必要はありません。</p>
         <div class="gallery thirds" style="margin-top:32px">
           <figure><img src="../assets/openemux-settings.png" alt="一般設定" />
             <figcaption>ROM &amp; カバーアート</figcaption>
@@ -1358,9 +1345,8 @@
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">はじめよう</span>
-      <h2>1 分以内に起動</h2>
-      <p class="lede">お使いのディストリビューション向けのパッケージ、汎用の AppImage、Flatpak、または Windows なら
-        インストーラーを入手してください。あとは初回起動時に OpenEmux がすべて済ませます。</p>
+      <h2>インストール</h2>
+      <p class="lede">Debian、Ubuntu、Fedora 向けのパッケージ、AppImage、Flatpak、そして Windows 向けのインストーラーがあります。初回起動時に、残りは OpenEmux が設定します。</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1441,13 +1427,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
-      <span class="eyebrow">先人たちへの感謝</span>
+      <span class="eyebrow">クレジット</span>
       <h2>RetroArch、libretro &amp; OpenEmu に感謝を</h2>
-      <p class="lede">OpenEmux は、レトロゲームを手軽で美しい体験にした、多くの人に愛される macOS 向けエミュレーター <a href="https://openemu.org/">OpenEmu</a>
-        から直接インスピレーションを受けています。OpenEmu は macOS 専用なので、OpenEmux は同じ完成度をまず Linux に、
-        そして今では Windows にも届けるために生まれました。どれも <a href="https://www.retroarch.com/">RetroArch</a> と <a
-          href="https://www.libretro.com/">libretro</a> の各チームのすばらしい仕事なしには実現できませんでした。❤️
-      </p>
+      <p class="lede">OpenEmux は macOS 向けのエミュレーターフロントエンド <a href="https://openemu.org/">OpenEmu</a> から着想を得ています。OpenEmu は macOS でしか動かないため、OpenEmux は同じような体験を Linux で、そして今では Windows でも提供しようとしています。エミュレーションそのものは <a href="https://www.retroarch.com/">RetroArch</a> と <a href="https://www.libretro.com/">libretro</a> のプロジェクトによるもので、その仕事なしには何も実現しませんでした。❤️</p>
     </div>
   </section>
 
@@ -1456,11 +1438,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <div class="wrap">
       <div class="support">
         <span class="eyebrow">プロジェクトを支援する</span>
-        <h2>OpenEmux は無料、これからもずっと無料です</h2>
-        <p class="lede center">あなたのレトロゲーム棚が少しでも素敵になったなら、コーヒーを 1 杯おごっていただけるとうれしいです。機能や安定性の
-          改善を続ける力になります。そして <a
-            href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> にも気軽に遊びに来てください。環境を紹介したり、質問したり、
-          今後の予定をチェックしたりできます。</p>
+        <h2>OpenEmux はフリーソフトウェアです</h2>
+        <p class="lede center">無料で使え、コードは MIT ライセンスで公開しています。役に立っていて応援したいと思っていただけたら、寄付は修正や新機能に使う時間の一部になります。バグ報告、翻訳、コード、アイデアも同じくらい助けになります。<a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> では、質問したり、環境を紹介したり、作業中のことを追いかけたりできます。</p>
         <div class="cta" style="margin-top:26px">
           <a class="btn btn-primary"
             href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">☕

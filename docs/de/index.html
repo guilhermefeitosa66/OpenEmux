@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — Retro-Gaming, zuerst für Linux gebaut</title>
+  <title>OpenEmux — Eine Retro-Spielebibliothek für Linux</title>
   <meta name="description"
-    content="OpenEmux ist eine schöne Emulator-Oberfläche, die RetroArch einfach und angenehm macht. Zuerst für Linux gebaut, mit einer Windows-Version in der Beta. Durchstöbere deine Bibliothek mit Covern und spiele die Spiele, die dir gehören." />
+    content="OpenEmux ist ein freies Open-Source-Frontend für RetroArch. Es ordnet deine Spiele nach Konsole, mit Coverbildern, und startet sie in RetroArch. Zuerst unter Linux entwickelt, mit einer Windows-Version in der Beta." />
   <link rel="icon" href="../assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — Retro-Gaming, zuerst für Linux gebaut" />
+  <meta property="og:title" content="OpenEmux — Eine Retro-Spielebibliothek für Linux" />
   <meta property="og:description"
-    content="Eine schöne Emulator-Oberfläche, die RetroArch für alle einfach und angenehm macht. Linux zuerst, und jetzt auch unter Windows, als Beta." />
+    content="Ein freies Open-Source-Frontend für RetroArch, zuerst unter Linux entwickelt, mit einer Windows-Version in der Beta." />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/de/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/de/" />
@@ -1138,11 +1138,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux-Logo" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux läuft jetzt auch unter Windows →</a>
-      <h1>Retro-Gaming,<br /><span class="grad">zuerst für Linux gebaut.</span></h1>
-      <p class="lede">OpenEmux packt die Leistung von RetroArch in eine aufgeräumte, GNOME-native Oberfläche — so
-        stöberst du mit Covern durch deine Sammlung, schnappst dir einen Controller und spielst einfach los. Keine
-        Konfigurationsdateien. Kein endloses Einrichten. Entworfen, gebaut und getestet wird zuerst unter Linux;
-        unter Windows läuft dieselbe App, als Beta.</p>
+      <h1>Eine Retro-Spielebibliothek,<br /><span class="grad">gemacht unter Linux.</span></h1>
+      <p class="lede">OpenEmux ist ein kostenloses Frontend für RetroArch. Es ordnet deine Spiele nach Konsole, mit Coverbildern, und startet jedes davon in RetroArch, wenn du es auswählst, mit deiner Steuerung und deinen Shadern schon eingerichtet. Entwickelt und getestet wird zuerst unter Linux; eine Windows-Version gibt es auch, noch in der Beta.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Für
           Linux herunterladen</a>
@@ -1162,46 +1159,39 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap center">
-      <span class="eyebrow">Warum OpenEmux</span>
-      <h2>Emulation ohne Hausaufgaben</h2>
-      <p class="lede">RetroArch ist eine der leistungsfähigsten Emulationsplattformen, die je gebaut wurden. OpenEmux
-        gibt ihr eine Oberfläche, die dir nicht im Weg steht.</p>
+      <span class="eyebrow">Funktionen</span>
+      <h2>Was OpenEmux macht</h2>
+      <p class="lede">Die Emulation übernimmt RetroArch. OpenEmux kümmert sich um das Drumherum: die Bibliothek, die Cores, die Steuerung und die Shader, damit weniger von Hand einzurichten ist.</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>Ein echtes Spieleregal</h3>
-          <p>Deine Bibliothek, nach Konsolen sortiert, mit vollständigen Covern, die automatisch aus dem
-            libretro-Thumbnail-Archiv synchronisiert werden.</p>
+          <h3>Bibliothek nach Konsole</h3>
+          <p>Spiele werden nach Konsole gruppiert, mit Coverbildern aus dem Thumbnail-Archiv von libretro.</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
-          <h3>Erster Start ohne Einrichtung</h3>
-          <p>Beim ersten Start richtet OpenEmux seine Konfiguration ein und lädt die Kerne, die deine Konsolen brauchen,
-            in etwa zehn Sekunden herunter. Der Rest kommt im Hintergrund, während du stöberst.</p>
+          <h3>Bereit beim ersten Start</h3>
+          <p>Beim ersten Öffnen legt OpenEmux seine Konfiguration an und lädt die Cores für deine Konsolen herunter, meist in etwa zehn Sekunden. Der Rest lädt im Hintergrund weiter.</p>
         </div>
         <div class="card">
           <div class="ico">🎮</div>
           <h3>Steuerung pro Konsole</h3>
-          <p>Belege Tastatur und Controller für jedes System in einem übersichtlichen Bereich. Die Tastenbelegung wird
-            beim Start an RetroArch übergeben.</p>
+          <p>Tastatur und Gamepad für jede Konsole in einem Bereich belegen. OpenEmux gibt die Belegung beim Spielstart an RetroArch weiter.</p>
         </div>
         <div class="card">
           <div class="ico">📺</div>
-          <h3>Shader, die einfach gut aussehen</h3>
-          <p>Wähle pro Konsole einen CRT- oder Scanline-Shader aus einem kuratierten Katalog, und er wird einfach
-            angewendet — ohne Expedition durch Shader-Menüs.</p>
+          <h3>Shader pro Konsole</h3>
+          <p>Wähle für jede Konsole einen CRT- oder Scanline-Shader aus einer kurzen Liste, ohne das Shader-Menü von RetroArch zu durchsuchen.</p>
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Linux zuerst</h3>
-          <p>Gebaut mit GTK4 und Adwaita, nach der GNOME HIG, und unter Linux getestet, bevor irgendetwas anderes kommt.
-            Linux ist hier keine Nebensache; Windows kommt mit, als Beta.</p>
+          <h3>Gemacht unter Linux</h3>
+          <p>Geschrieben mit GTK4 und Adwaita, nach den GNOME-Richtlinien, und unter Linux getestet, bevor es irgendwo anders läuft. Die Windows-Version führt dieselbe App aus und ist noch in der Beta.</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
-          <h3>BIOS auf einen Blick</h3>
-          <p>Eine klare Checkliste, welche BIOS-Dateien jede Konsole braucht und welche du schon hast. Schluss mit
-            Starts, die stillschweigend scheitern.</p>
+          <h3>BIOS-Übersicht</h3>
+          <p>Zeigt, welche BIOS-Dateien jede Konsole braucht und welche du schon hast, damit eine fehlende Datei nicht zu einem Spiel wird, das kommentarlos nicht startet.</p>
         </div>
       </div>
     </div>
@@ -1211,7 +1201,7 @@
   <section id="philosophy">
     <div class="wrap split">
       <div>
-        <span class="eyebrow">Die Philosophie</span>
+        <span class="eyebrow">Über die Spiele</span>
         <h2>Spiel die Spiele, die dir gehören</h2>
         <p class="lede">OpenEmux ist eine Oberfläche für RetroArch, gebaut, um Emulation zugänglich zu machen. Es ist
           <strong>keine</strong> Quelle für Spiele — es liefert keine Spiele, keine ROMs, keine BIOS-Dateien und wird
@@ -1222,9 +1212,7 @@
             oder nutze Sicherungskopien von Spielen, die du gekauft hast.</li>
           <li><strong>Für Raubkopien ist das nicht gedacht.</strong> Urheberrechtlich geschützte Spiele herunterzuladen,
             die dir nicht gehören, ist in den meisten Ländern illegal.</li>
-          <li><strong>Emulation bewahrt Geschichte.</strong> So viel Kunst, Musik und Design aus der Welt der Spiele
-            steckt in empfindlicher, alternder Hardware. Sie spielbar zu halten ist legitim — und es funktioniert am
-            besten, wenn es die Menschen respektiert, die diese Spiele gemacht haben.</li>
+          <li><strong>Emulation hilft, Geschichte zu bewahren.</strong> Viel von der Kunst, der Musik und dem Design der Videospiele lebt auf alternder Hardware. Es spielbar zu halten, lohnt sich, und es gelingt am besten mit Respekt vor den Menschen, die diese Spiele gemacht haben.</li>
         </ul>
       </div>
       <div>
@@ -1237,7 +1225,7 @@
   <section id="systems">
     <div class="wrap center">
       <span class="eyebrow">31 Systeme</span>
-      <h2>Vier Jahrzehnte Konsolen, eine Bibliothek</h2>
+      <h2>Unterstützte Systeme</h2>
       <p class="lede">Nintendo, Sega, Sony, Atari und mehr — jede mit eigenen Kernen, Covern, Eingabeprofilen und
         Shader-Einstellungen.</p>
       <div class="systems">
@@ -1280,8 +1268,8 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">Modulansicht</span>
-      <h2 id="cartridges-title">Jedes Spiel auf seinem Original-Modul</h2>
-      <p class="lede">OpenEmux bringt das Label jedes Spiels auf das Modul seiner Konsole. So sieht deine Bibliothek aus wie das Regal, mit dem du aufgewachsen bist.</p>
+      <h2 id="cartridges-title">Die Spiele auf ihren Modulen</h2>
+      <p class="lede">In der Modulansicht erscheint jedes Spiel mit seinem Etikett auf dem Modul seiner eigenen Konsole.</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="Reihen von Super-Nintendo-, Game-Boy-Advance-, Nintendo-64- und Mega-Drive-Modulen, die vorbeiziehen"></div>
     <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
@@ -1293,9 +1281,8 @@
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">Screenshots</span>
-      <h2>Deine Sammlung, im Regal</h2>
-      <p class="lede">Cover, nach Konsolen sortiert — so, wie eine Spielebibliothek aussehen sollte. Blättere durch
-        die Systeme und klicke auf ein Bild, um es in voller Größe zu sehen.</p>
+      <h2>Die Bibliothek, Konsole für Konsole</h2>
+      <p class="lede">Jede Konsole hat ihre eigene Seite in der Bibliothek. Mit den Pfeilen blätterst du durch, und ein Klick auf einen Screenshot zeigt ihn in voller Größe.</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="Zurück">‹</button>
@@ -1338,10 +1325,8 @@
         <div class="carousel-dots" role="tablist" aria-label="Karussell-Navigation"></div>
       </div>
       <div style="margin-top:64px">
-        <h2>Einstellungen, die Sinn ergeben</h2>
-        <p class="lede">ROM-Pfade, BIOS-Prüfung, Tastenbelegung und Shader — alles in einem aufgeräumten Bereich, ohne
-        Konfigurationsdateien.
-        </p>
+        <h2>Einstellungen</h2>
+        <p class="lede">ROM-Ordner, BIOS-Dateien, Steuerung und Shader werden alle im Einstellungsfenster festgelegt, ohne Konfigurationsdateien zu bearbeiten.</p>
         <div class="gallery thirds" style="margin-top:32px">
           <figure><img src="../assets/openemux-settings.png" alt="Allgemeine Einstellungen" />
             <figcaption>ROMs &amp; Cover</figcaption>
@@ -1361,9 +1346,8 @@
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">Los geht’s</span>
-      <h2>In unter einer Minute startklar</h2>
-      <p class="lede">Hol dir ein Paket für deine Distribution, das universelle AppImage, das Flatpak — oder unter
-        Windows den Installer. Um den Rest kümmert sich OpenEmux beim ersten Start.</p>
+      <h2>Installation</h2>
+      <p class="lede">Es gibt Pakete für Debian, Ubuntu und Fedora, ein AppImage und ein Flatpak sowie einen Installer für Windows. Beim ersten Start richtet OpenEmux den Rest ein.</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1445,14 +1429,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
-      <span class="eyebrow">Auf den Schultern von Riesen</span>
+      <span class="eyebrow">Danksagung</span>
       <h2>Danke an RetroArch, libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux ist direkt von <a href="https://openemu.org/">OpenEmu</a> inspiriert, dem beliebten
-        macOS-Emulator, der Retro-Gaming mühelos und schön wirken ließ. Da OpenEmu nur für macOS existiert, gibt es
-        OpenEmux, um denselben Feinschliff zuerst zu Linux zu bringen, und jetzt auch zu Windows. Nichts davon wäre
-        möglich ohne die großartige Arbeit der Teams von <a href="https://www.retroarch.com/">RetroArch</a> und <a
-          href="https://www.libretro.com/">libretro</a>. ❤️
-      </p>
+      <p class="lede">OpenEmux ist von <a href="https://openemu.org/">OpenEmu</a> inspiriert, dem Emulator-Frontend für macOS. OpenEmu läuft nur unter macOS, deshalb versucht OpenEmux, etwas Ähnliches unter Linux anzubieten, und inzwischen auch unter Windows. Die Emulation selbst stammt aus den Projekten <a href="https://www.retroarch.com/">RetroArch</a> und <a href="https://www.libretro.com/">libretro</a>, und ohne deren Arbeit gäbe es nichts davon. ❤️</p>
     </div>
   </section>
 
@@ -1461,11 +1440,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <div class="wrap">
       <div class="support">
         <span class="eyebrow">Unterstütze das Projekt</span>
-        <h2>OpenEmux ist kostenlos — und bleibt es auch</h2>
-        <p class="lede center">Wenn es dein Retro-Regal ein bisschen schöner gemacht hat, spendier mir doch einen Kaffee.
-          Das hilft mir, Funktionen und Stabilität weiter zu verbessern. Und sag Hallo auf <a
-            href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> — zeig dein Setup, frag nach Hilfe oder verfolge,
-          was als Nächstes kommt.</p>
+        <h2>OpenEmux ist freie Software</h2>
+        <p class="lede center">Es ist kostenlos, und der Code ist unter der MIT-Lizenz offen. Wenn es dir nützt und du helfen möchtest, bezahlt eine Spende einen Teil der Zeit, die in Fehlerbehebungen und neue Funktionen fließt. Fehlerberichte, Übersetzungen, Code und Ideen helfen genauso. Auf <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> kannst du um Hilfe bitten, dein Setup zeigen oder verfolgen, woran gerade gearbeitet wird.</p>
         <div class="cta" style="margin-top:26px">
           <a class="btn btn-primary"
             href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">☕

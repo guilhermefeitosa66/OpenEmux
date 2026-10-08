@@ -6,13 +6,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — 复古游戏，Linux 优先</title>
+  <title>OpenEmux — 面向 Linux 的复古游戏库</title>
   <meta name="description"
-    content="OpenEmux 是一款精美的模拟器前端，让 RetroArch 变得简单好用。以 Linux 为先打造，Windows 版正在 Beta 测试中。用封面浏览你的游戏库，畅玩你拥有的游戏。" />
+    content="OpenEmux 是一款自由开源的 RetroArch 前端。它按主机整理你的游戏并显示封面，再通过 RetroArch 启动。优先在 Linux 上开发，Windows 版本处于测试阶段。" />
   <link rel="icon" href="../assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — 复古游戏，Linux 优先" />
+  <meta property="og:title" content="OpenEmux — 面向 Linux 的复古游戏库" />
   <meta property="og:description"
-    content="一款精美的模拟器前端，让每个人都能轻松愉快地使用 RetroArch。Linux 优先，现在也登陆了 Windows（Beta）。" />
+    content="一款自由开源的 RetroArch 前端，优先在 Linux 上开发，Windows 版本处于测试阶段。" />
   <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/" />
@@ -1138,10 +1138,8 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux 标志" />
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux 现已支持 Windows →</a>
-      <h1>复古游戏，<br /><span class="grad">Linux 优先打造。</span></h1>
-      <p class="lede">OpenEmux 将 RetroArch 的强大功能装进一个简洁的 GNOME 原生前端——用封面浏览你的收藏，
-        拿起手柄就能开玩。无需编辑配置文件，也不用在设置里钻牛角尖。
-        OpenEmux 首先在 Linux 上设计、构建和测试；Windows 运行的是同一个应用，目前为 Beta 版。</p>
+      <h1>一个复古游戏库，<br /><span class="grad">在 Linux 上打造。</span></h1>
+      <p class="lede">OpenEmux 是一款免费的 RetroArch 前端。它按主机整理你的游戏并显示封面，选中游戏后会用 RetroArch 打开，按键和着色器都已按你的设置准备好。它优先在 Linux 上开发和测试；也提供 Windows 版本，目前仍是测试版。</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ 下载
           Linux 版</a>
@@ -1161,46 +1159,39 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap center">
-      <span class="eyebrow">为什么选择 OpenEmux</span>
-      <h2>玩模拟器，不必先做功课</h2>
-      <p class="lede">RetroArch 是有史以来最强大的模拟平台之一。OpenEmux 为它配上了一个
-        不碍事的界面。</p>
+      <span class="eyebrow">功能</span>
+      <h2>OpenEmux 能做什么</h2>
+      <p class="lede">模拟由 RetroArch 负责。OpenEmux 处理它周围的事情：游戏库、核心、按键和着色器，让需要手动设置的东西少一些。</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>真正的游戏陈列架</h3>
-          <p>你的游戏库按主机分类整理，完整封面会自动从 libretro 缩略图库
-            同步。</p>
+          <h3>按主机分类的游戏库</h3>
+          <p>游戏按主机分组，封面从 libretro 缩略图库下载。</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
-          <h3>首次启动零配置</h3>
-          <p>首次启动时，OpenEmux 会完成配置并下载你的主机所需的核心，大约只需十
-            秒。其余核心会在你浏览时于后台下载。</p>
+          <h3>首次启动即可使用</h3>
+          <p>第一次打开时，OpenEmux 会创建配置并下载你的主机所需的核心，通常大约十秒。其余的会在后台继续下载。</p>
         </div>
         <div class="card">
           <div class="ico">🎮</div>
-          <h3>按主机设置操作</h3>
-          <p>在友好的面板中为每个系统映射键盘和手柄按键。启动游戏时，映射会自动注入
-            RetroArch。</p>
+          <h3>每台主机单独的按键设置</h3>
+          <p>在一个面板里为每台主机设置键盘和手柄按键。游戏启动时，OpenEmux 会把它们交给 RetroArch。</p>
         </div>
         <div class="card">
           <div class="ico">📺</div>
-          <h3>效果到位的着色器</h3>
-          <p>从精选目录中为每台主机挑选 CRT 或扫描线着色器，选好即生效——不用在着色器菜单里
-            摸索。</p>
+          <h3>每台主机单独的着色器</h3>
+          <p>从一份简短的列表里为每台主机选择 CRT 或扫描线着色器，不用去翻 RetroArch 的着色器菜单。</p>
         </div>
         <div class="card">
           <div class="ico">🐧</div>
-          <h3>Linux 优先</h3>
-          <p>基于 GTK4 和 Adwaita 构建，遵循 GNOME HIG，并且总是先在 Linux 上完成测试。在这里，Linux 是
-            一等公民；Windows 版随后跟进，目前为 Beta。</p>
+          <h3>在 Linux 上打造</h3>
+          <p>使用 GTK4 和 Adwaita 编写，遵循 GNOME 设计规范，并且优先在 Linux 上测试。Windows 版本运行的是同一个应用，目前仍是测试版。</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
-          <h3>BIOS 一目了然</h3>
-          <p>清晰的清单告诉你每台主机需要哪些 BIOS 文件、你已经有了哪些。再也不会
-            莫名其妙地启动失败。</p>
+          <h3>BIOS 清单</h3>
+          <p>显示每台主机需要哪些 BIOS 文件、你已经有哪些，避免因为缺少文件而让游戏悄无声息地无法启动。</p>
         </div>
       </div>
     </div>
@@ -1210,7 +1201,7 @@
   <section id="philosophy">
     <div class="wrap split">
       <div>
-        <span class="eyebrow">我们的理念</span>
+        <span class="eyebrow">关于游戏</span>
         <h2>玩你拥有的游戏</h2>
         <p class="lede">OpenEmux 是 RetroArch 的前端，旨在让模拟器变得平易近人。它
           <strong>不是</strong>游戏来源——它不附带任何游戏、ROM 或 BIOS 文件，将来也不会。
@@ -1220,9 +1211,7 @@
             你购买的游戏的备份。</li>
           <li><strong>本项目不是为盗版而生。</strong>在大多数国家，下载你并不拥有的受版权保护的游戏
             都是违法的。</li>
-          <li><strong>模拟器保存历史。</strong>大量游戏艺术、音乐和设计仍依赖于脆弱且
-            日渐老化的硬件。让它们可以继续游玩是正当的——而尊重这些游戏的创作者，
-            才能让这件事做得最好。</li>
+          <li><strong>模拟有助于保存历史。</strong> 游戏的许多美术、音乐和设计都依存于日渐老化的硬件。让它们保持可玩是值得的，而尊重制作这些游戏的人，才能把这件事做好。</li>
         </ul>
       </div>
       <div>
@@ -1235,7 +1224,7 @@
   <section id="systems">
     <div class="wrap center">
       <span class="eyebrow">31 个系统</span>
-      <h2>四十年的主机，一个游戏库</h2>
+      <h2>支持的系统</h2>
       <p class="lede">Nintendo、Sega、Sony、Atari 等等——每个系统都有各自的核心、封面、输入配置和
         着色器设置。</p>
       <div class="systems">
@@ -1278,8 +1267,8 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">卡带视图</span>
-      <h2 id="cartridges-title">每款游戏，都在它原本的卡带上</h2>
-      <p class="lede">OpenEmux 会把每款游戏的标签贴到对应主机的卡带外壳上，让游戏库看起来就像你小时候的那排架子。</p>
+      <h2 id="cartridges-title">游戏回到各自的卡带上</h2>
+      <p class="lede">在卡带视图中，每款游戏都会以标签图案显示在它所属主机的卡带上。</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="超级任天堂、Game Boy Advance、Nintendo 64 和 Mega Drive 卡带一排排滚动而过"></div>
     <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
@@ -1291,9 +1280,8 @@
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">截图</span>
-      <h2>把收藏摆上陈列架</h2>
-      <p class="lede">封面按主机整齐排列——游戏库本该如此。滑动浏览各个
-        系统，点击任意截图即可查看大图。</p>
+      <h2>游戏库，按主机浏览</h2>
+      <p class="lede">每台主机在游戏库中都有自己的页面。用箭头切换，点击截图即可查看原尺寸。</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="上一张">‹</button>
@@ -1336,9 +1324,8 @@
         <div class="carousel-dots" role="tablist" aria-label="轮播导航"></div>
       </div>
       <div style="margin-top:64px">
-        <h2>一看就懂的设置</h2>
-        <p class="lede">ROM 路径、BIOS 检查、按键映射和着色器——全都在一个简洁的面板里，无需配置文件。
-        </p>
+        <h2>设置</h2>
+        <p class="lede">ROM 文件夹、BIOS 文件、按键和着色器都在偏好设置窗口中设置，不需要编辑配置文件。</p>
         <div class="gallery thirds" style="margin-top:32px">
           <figure><img src="../assets/openemux-settings.png" alt="常规设置" />
             <figcaption>ROM &amp; 封面</figcaption>
@@ -1358,9 +1345,8 @@
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">开始使用</span>
-      <h2>一分钟内即可运行</h2>
-      <p class="lede">选择适合你发行版的软件包、通用的 AppImage、Flatpak——或者在 Windows 上使用
-        安装程序。其余的一切，OpenEmux 都会在首次启动时搞定。</p>
+      <h2>安装</h2>
+      <p class="lede">提供 Debian、Ubuntu 和 Fedora 的软件包，以及 AppImage、Flatpak 和 Windows 安装程序。首次启动时，其余的由 OpenEmux 完成设置。</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1441,14 +1427,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
-      <span class="eyebrow">站在巨人的肩膀上</span>
+      <span class="eyebrow">致谢</span>
       <h2>感谢 RetroArch、libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux 的灵感直接来自 <a href="https://openemu.org/">OpenEmu</a>——这款深受喜爱的 macOS
-        模拟器让复古游戏变得轻松又美观。由于 OpenEmu 仅支持 macOS，OpenEmux 应运而生，
-        把同样的精致体验首先带到 Linux，如今也带到了 Windows。这一切都离不开
-        <a href="https://www.retroarch.com/">RetroArch</a> 和 <a
-          href="https://www.libretro.com/">libretro</a> 团队的卓越工作。❤️
-      </p>
+      <p class="lede">OpenEmux 的灵感来自 macOS 上的模拟器前端 <a href="https://openemu.org/">OpenEmu</a>。OpenEmu 只能在 macOS 上运行，所以 OpenEmux 尝试在 Linux 上提供类似的体验，现在也支持 Windows。模拟本身来自 <a href="https://www.retroarch.com/">RetroArch</a> 和 <a href="https://www.libretro.com/">libretro</a> 项目，没有他们的工作，这一切都不会存在。❤️</p>
     </div>
   </section>
 
@@ -1457,11 +1438,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <div class="wrap">
       <div class="support">
         <span class="eyebrow">支持本项目</span>
-        <h2>OpenEmux 免费——并将永远免费</h2>
-        <p class="lede center">如果它让你的复古游戏架变得更好看了一点，不妨请我喝杯咖啡。这能帮助我持续
-          改进功能和稳定性。也欢迎来 <a
-            href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> 打个招呼——分享你的配置、寻求帮助，或关注
-          接下来的新动态。</p>
+        <h2>OpenEmux 是自由软件</h2>
+        <p class="lede center">它可以免费使用，代码以 MIT 许可证开放。如果它对你有用并且你想帮忙，捐赠可以支付一部分用于修复和新功能的时间。错误报告、翻译、代码和想法同样很有帮助。在 <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a>，你可以寻求帮助、分享你的设置，或者关注正在进行的工作。</p>
         <div class="cta" style="margin-top:26px">
           <a class="btn btn-primary"
             href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">☕
