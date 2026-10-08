@@ -87,5 +87,10 @@
   "lightbox.label": "aria-label=\"திரைப்பிடிப்புக் காட்சியகம்\">",
   "lightbox.close": "aria-label=\"மூடு\">×</button>",
   "js.slide": "'ஸ்லைடுக்குச் செல் '",
+  "cart.eyebrow": "<span class=\"eyebrow\">கேட்ரிட்ஜ் காட்சி</span>",
+  "cart.title": "<h2 id=\"cartridges-title\">ஒவ்வொரு விளையாட்டும், அது வெளியான கேட்ரிட்ஜிலேயே</h2>",
+  "cart.lede": "<p class=\"lede\">OpenEmux ஒவ்வொரு விளையாட்டின் லேபிள் படத்தையும் அதன் கன்சோலின் கேட்ரிட்ஜில் பதிக்கிறது, அதனால் உங்கள் நூலகம் நீங்கள் வளர்ந்த அலமாரியைப் போலவே தோன்றும்.</p>",
+  "cart.wall_label": "aria-label=\"Super Nintendo, Game Boy Advance, Nintendo 64, Mega Drive கேட்ரிட்ஜ்களின் வரிசைகள் நகர்ந்து செல்கின்றன\">",
+  "cart.tally": "<p class=\"cart-tally wrap\"><span><b>33</b> Super Nintendo</span><span class=\"sep\">·</span><span><b>31</b>\n        Game Boy Advance</span><span class=\"sep\">·</span><span><b>11</b> Mega Drive</span><span\n        class=\"sep\">·</span><span><b>9</b> Nintendo 64</span></p>",
   "lang.label": "மொழி"
 }

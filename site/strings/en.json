@@ -87,5 +87,10 @@
   "lightbox.label": "aria-label=\"Screenshot viewer\">",
   "lightbox.close": "aria-label=\"Close\">×</button>",
   "js.slide": "'Go to slide '",
+  "cart.eyebrow": "<span class=\"eyebrow\">Cartridge view</span>",
+  "cart.title": "<h2 id=\"cartridges-title\">Every game on the cartridge it came on</h2>",
+  "cart.lede": "<p class=\"lede\">OpenEmux prints each game’s label art onto the shell of its console, so the library reads like the shelf you grew up with.</p>",
+  "cart.wall_label": "aria-label=\"Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past\">",
+  "cart.tally": "<p class=\"cart-tally wrap\"><span><b>33</b> Super Nintendo</span><span class=\"sep\">·</span><span><b>31</b>\n        Game Boy Advance</span><span class=\"sep\">·</span><span><b>11</b> Mega Drive</span><span\n        class=\"sep\">·</span><span><b>9</b> Nintendo 64</span></p>",
   "lang.label": "Language"
 }

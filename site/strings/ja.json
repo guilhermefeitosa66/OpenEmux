@@ -87,5 +87,10 @@
   "lightbox.label": "aria-label=\"スクリーンショットビューアー\">",
   "lightbox.close": "aria-label=\"閉じる\">×</button>",
   "js.slide": "'スライドへ移動: '",
+  "cart.eyebrow": "<span class=\"eyebrow\">カートリッジ表示</span>",
+  "cart.title": "<h2 id=\"cartridges-title\">どのゲームも、発売当時のカートリッジで</h2>",
+  "cart.lede": "<p class=\"lede\">OpenEmux は各ゲームのラベルアートを、そのコンソールのカートリッジに貼って表示します。ライブラリが、子どもの頃の棚のように並びます。</p>",
+  "cart.wall_label": "aria-label=\"スーパーファミコン、ゲームボーイアドバンス、NINTENDO64、メガドライブのカートリッジが流れていく列\">",
+  "cart.tally": "<p class=\"cart-tally wrap\"><span><b>33</b> Super Nintendo</span><span class=\"sep\">·</span><span><b>31</b>\n        Game Boy Advance</span><span class=\"sep\">·</span><span><b>11</b> Mega Drive</span><span\n        class=\"sep\">·</span><span><b>9</b> Nintendo 64</span></p>",
   "lang.label": "言語"
 }

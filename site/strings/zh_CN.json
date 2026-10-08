@@ -87,5 +87,10 @@
   "lightbox.label": "aria-label=\"截图查看器\">",
   "lightbox.close": "aria-label=\"关闭\">×</button>",
   "js.slide": "'转到幻灯片 '",
+  "cart.eyebrow": "<span class=\"eyebrow\">卡带视图</span>",
+  "cart.title": "<h2 id=\"cartridges-title\">每款游戏，都在它原本的卡带上</h2>",
+  "cart.lede": "<p class=\"lede\">OpenEmux 会把每款游戏的标签贴到对应主机的卡带外壳上，让游戏库看起来就像你小时候的那排架子。</p>",
+  "cart.wall_label": "aria-label=\"超级任天堂、Game Boy Advance、Nintendo 64 和 Mega Drive 卡带一排排滚动而过\">",
+  "cart.tally": "<p class=\"cart-tally wrap\"><span><b>33</b> Super Nintendo</span><span class=\"sep\">·</span><span><b>31</b>\n        Game Boy Advance</span><span class=\"sep\">·</span><span><b>11</b> Mega Drive</span><span\n        class=\"sep\">·</span><span><b>9</b> Nintendo 64</span></p>",
   "lang.label": "语言"
 }

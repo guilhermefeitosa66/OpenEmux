@@ -87,5 +87,10 @@
   "lightbox.label": "aria-label=\"Visor de capturas\">",
   "lightbox.close": "aria-label=\"Cerrar\">×</button>",
   "js.slide": "'Ir a la diapositiva '",
+  "cart.eyebrow": "<span class=\"eyebrow\">Vista de cartuchos</span>",
+  "cart.title": "<h2 id=\"cartridges-title\">Cada juego en el cartucho en que salió</h2>",
+  "cart.lede": "<p class=\"lede\">OpenEmux coloca la etiqueta de cada juego sobre el cartucho de su consola, y tu biblioteca se ve como la estantería con la que creciste.</p>",
+  "cart.wall_label": "aria-label=\"Filas de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 y Mega Drive desplazándose\">",
+  "cart.tally": "<p class=\"cart-tally wrap\"><span><b>33</b> Super Nintendo</span><span class=\"sep\">·</span><span><b>31</b>\n        Game Boy Advance</span><span class=\"sep\">·</span><span><b>11</b> Mega Drive</span><span\n        class=\"sep\">·</span><span><b>9</b> Nintendo 64</span></p>",
   "lang.label": "Idioma"
 }
