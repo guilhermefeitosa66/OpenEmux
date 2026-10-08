@@ -88,6 +88,6 @@
   "cart.wall_label": "aria-label=\"Filas de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 y Mega Drive desplazándose\">",
   "shots.favorites": "alt=\"OpenEmux — Favoritos\" />\n                <figcaption>Favoritos</figcaption>\n              </figure>",
   "nav.manual": "Manual",
-  "shots.manual": "Leer el manual (en inglés) →",
+  "shots.manual": "Leer el manual →",
   "lang.label": "Idioma"
 }

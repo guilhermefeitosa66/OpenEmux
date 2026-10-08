@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="ta">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenEmux கையேடு</title>
+  <meta name="description"
+    content="OpenEmux கையேடு: நிறுவுதல், விளையாட்டுகளை இறக்குமதி செய்தல், அட்டைப் படங்கள், காட்சிகள், பிளேலிஸ்ட்கள், பிடித்தவை, கோர்கள், ஷேடர்கள் மற்றும் ஒவ்வொரு அமைப்புகள் பக்கமும், திரைப்படங்களுடன்." />
+  <link rel="icon" href="../../assets/logo.png" />
+  <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/manual/" />
+  <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <link rel="alternate" hreflang="pt-BR" href="https://guilhermefeitosa66.github.io/OpenEmux/pt-br/manual/" />
+  <link rel="alternate" hreflang="es" href="https://guilhermefeitosa66.github.io/OpenEmux/es/manual/" />
+  <link rel="alternate" hreflang="fr" href="https://guilhermefeitosa66.github.io/OpenEmux/fr/manual/" />
+  <link rel="alternate" hreflang="de" href="https://guilhermefeitosa66.github.io/OpenEmux/de/manual/" />
+  <link rel="alternate" hreflang="ja" href="https://guilhermefeitosa66.github.io/OpenEmux/ja/manual/" />
+  <link rel="alternate" hreflang="zh-CN" href="https://guilhermefeitosa66.github.io/OpenEmux/zh-cn/manual/" />
+  <link rel="alternate" hreflang="ta" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/manual/" />
+  <link rel="alternate" hreflang="x-default" href="https://guilhermefeitosa66.github.io/OpenEmux/manual/" />
+  <meta property="og:title" content="OpenEmux கையேடு" />
+  <meta property="og:description" content="OpenEmux-ஐ எப்படி நிறுவிப் பயன்படுத்துவது, பகுதி பகுதியாக, திரைப்படங்களுடன்." />
+  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/manual/img/overview.webp" />
+  <style>
+    :root {
+      --bg: #08060f;
+      --panel: #151029;
+      --line: rgba(255, 255, 255, .09);
+      --violet: #8b5cf6;
+      --violet-deep: #5b21b6;
+      --gold: #ffd21e;
+      --text: #f4f1ff;
+      --muted: #a9a2c4;
+      --side: 290px;
+      --head: 64px;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--head) + 18px);
+      overflow-x: clip
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Cantarell, "Noto Sans", sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration: none
+    }
+
+    a:hover {
+      text-decoration: underline
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block
+    }
+
+    /* ---------- header ---------- */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      height: var(--head);
+      background: rgba(8, 6, 15, .82);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line)
+    }
+
+    .nav {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: -.02em
+    }
+
+    .brand:hover {
+      text-decoration: none
+    }
+
+    .brand img {
+      width: 30px;
+      height: 30px
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: 500
+    }
+
+    .nav-links {
+      margin-left: auto;
+      display: flex;
+      gap: 22px;
+      font-size: .92rem
+    }
+
+    .nav-links a {
+      color: var(--muted)
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      text-decoration: none
+    }
+
+    .toc-toggle {
+      display: none;
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: .9rem;
+      cursor: pointer
+    }
+
+    /* ---------- layout ---------- */
+    .layout {
+      display: grid;
+      grid-template-columns: var(--side) minmax(0, 1fr);
+      max-width: 1320px;
+      margin: 0 auto
+    }
+
+    aside {
+      position: sticky;
+      top: var(--head);
+      height: calc(100vh - var(--head));
+      overflow-y: auto;
+      padding: 28px 18px 40px 24px;
+      border-right: 1px solid var(--line);
+      font-size: .9rem;
+      scrollbar-width: thin
+    }
+
+    .toc,
+    .toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0
+    }
+
+    .toc ul {
+      margin: 2px 0 8px 12px;
+      padding-left: 10px;
+      border-left: 1px solid var(--line)
+    }
+
+    .toc a {
+      display: block;
+      padding: 4px 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      line-height: 1.4
+    }
+
+    .toc a:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, .04);
+      text-decoration: none
+    }
+
+    .toc a.active {
+      color: var(--text);
+      background: rgba(139, 92, 246, .18)
+    }
+
+    .toc>li>details>summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .toc>li>details>summary::-webkit-details-marker {
+      display: none
+    }
+
+    .toc>li>details>summary::before {
+      content: "▸";
+      color: var(--gold);
+      font-size: .8rem;
+      transition: transform .15s ease
+    }
+
+    .toc>li>details[open]>summary::before {
+      transform: rotate(90deg)
+    }
+
+    .toc>li>details>summary a {
+      padding: 0;
+      color: inherit;
+      flex: 1
+    }
+
+    .toc>li>details>summary a:hover {
+      background: none
+    }
+
+    .toc>li>details>summary:has(a.active) {
+      background: rgba(139, 92, 246, .18)
+    }
+
+    main {
+      padding: 40px 56px 120px;
+      min-width: 0
+    }
+
+    .content {
+      max-width: 880px
+    }
+
+    /* ---------- type ---------- */
+    .eyebrow {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin: 0 0 14px
+    }
+
+    h2 {
+      font-size: 1.75rem;
+      letter-spacing: -.02em;
+      line-height: 1.2;
+      margin: 0 0 14px
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      letter-spacing: -.01em;
+      margin: 38px 0 10px
+    }
+
+    h4 {
+      font-size: 1rem;
+      margin: 26px 0 6px
+    }
+
+    p {
+      margin: 0 0 14px
+    }
+
+    .lede {
+      color: var(--muted);
+      font-size: 1.08rem
+    }
+
+    section.chapter {
+      padding: 56px 0 8px;
+      border-top: 1px solid var(--line);
+      margin-top: 40px
+    }
+
+    section.chapter:first-of-type {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 8px
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+      margin: 0 0 14px
+    }
+
+    li {
+      margin-bottom: 6px
+    }
+
+    strong {
+      color: #fff
+    }
+
+    .ui {
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap
+    }
+
+    kbd {
+      display: inline-block;
+      min-width: 1.6em;
+      padding: 1px 7px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .06);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82em;
+      text-align: center;
+      color: #fff;
+      white-space: nowrap
+    }
+
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .86em;
+      color: #c7f0d8;
+      overflow-wrap: anywhere
+    }
+
+    pre {
+      background: #05040b;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 0 0 16px
+    }
+
+    pre code {
+      overflow-wrap: normal
+    }
+
+    .note {
+      border: 1px solid rgba(139, 92, 246, .35);
+      background: rgba(139, 92, 246, .09);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin: 0 0 16px;
+      color: #ddd6f7
+    }
+
+    .note strong:first-child {
+      color: var(--gold)
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 18px;
+      font-size: .93rem
+    }
+
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line)
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .06em
+    }
+
+    .table-wrap {
+      overflow-x: auto
+    }
+
+    /* ---------- screenshots ---------- */
+    figure.shot {
+      margin: 18px 0 26px
+    }
+
+    figure.shot img {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .5);
+      cursor: zoom-in;
+      background: #222226
+    }
+
+    figure.shot.narrow img {
+      max-width: 520px
+    }
+
+    figure.shot.mid img {
+      max-width: 680px
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: .85rem;
+      margin-top: 10px
+    }
+
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: start
+    }
+
+    .pair figure.shot {
+      margin: 18px 0 18px
+    }
+
+    /* ---------- lightbox ---------- */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 4, 16, .92);
+      padding: 24px;
+      backdrop-filter: blur(4px)
+    }
+
+    .lightbox.open {
+      display: flex
+    }
+
+    .lightbox img {
+      max-width: 96vw;
+      max-height: 88vh;
+      border-radius: 10px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, .7)
+    }
+
+    .lightbox-close {
+      position: fixed;
+      top: 14px;
+      right: 22px;
+      width: 44px;
+      height: 44px;
+      font-size: 1.9rem;
+      line-height: 1;
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer
+    }
+
+    .lightbox-cap {
+      position: fixed;
+      bottom: 18px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #d8d3ea;
+      font-size: .9rem;
+      padding: 0 16px;
+      pointer-events: none
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      margin-top: 64px;
+      padding-top: 28px;
+      color: var(--muted);
+      font-size: .85rem
+    }
+
+    /* ---------- narrow screens ---------- */
+    @media (max-width: 960px) {
+      .layout {
+        display: block
+      }
+
+      .toc-toggle {
+        display: inline-block;
+        margin-left: auto
+      }
+
+      .nav-links {
+        display: none
+      }
+
+      aside {
+        display: none;
+        position: fixed;
+        inset: var(--head) 0 0 0;
+        height: auto;
+        z-index: 40;
+        background: var(--bg);
+        border-right: 0;
+        padding: 20px 16px 60px
+      }
+
+      body.toc-open aside {
+        display: block
+      }
+
+      main {
+        padding: 28px 16px 80px
+      }
+
+      .nav {
+        padding: 0 16px
+      }
+
+      .pair {
+        grid-template-columns: 1fr
+      }
+    }
+    /* ---------- language picker ---------- */
+    /* A <details> menu of plain links: it opens and works without JavaScript,
+       and each entry is the same page in another language. */
+    .lang-switch {
+      position: relative;
+      flex: none
+    }
+
+    .lang-switch summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none
+    }
+
+    .lang-switch summary::-webkit-details-marker {
+      display: none
+    }
+
+    .lang-switch summary::after {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: translateY(-2px) rotate(45deg)
+    }
+
+    .lang-switch[open] summary::after {
+      transform: translateY(2px) rotate(-135deg)
+    }
+
+    .lang-switch summary:hover,
+    .lang-switch[open] summary {
+      background: var(--panel)
+    }
+
+    .lang-switch .flag {
+      font-size: 1.15rem;
+      line-height: 1
+    }
+
+    .lang-switch ul {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      min-width: 210px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+      z-index: 60
+    }
+
+    .lang-switch li a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 12px;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: .95rem
+    }
+
+    .lang-switch li a:hover {
+      background: rgba(255, 255, 255, .06);
+      text-decoration: none
+    }
+
+    .lang-switch li a[aria-current="page"] {
+      background: rgba(139, 92, 246, .22);
+      font-weight: 700
+    }
+
+    /* On a phone the header holds the brand, Download and the picker: the
+       flag alone says which language is on. */
+    @media(max-width:560px) {
+      .lang-switch .lang-name {
+        display: none
+      }
+    }
+
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="nav">
+      <a class="brand" href="../"><img src="../../assets/logo.png" alt="" /> OpenEmux <small>கையேடு</small></a>
+      <nav class="nav-links">
+        <a href="../">முகப்பு</a>
+        <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">பதிவிறக்கம்</a>
+        <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
+        <a href="https://www.reddit.com/r/OpenEmux/">சமூகம்</a>
+      </nav>
+      <button class="toc-toggle" id="tocToggle" type="button" aria-expanded="false" aria-controls="toc">உள்ளடக்கம்</button>
+      <details class="lang-switch">
+        <summary aria-label="மொழி: தமிழ்"><span class="flag" aria-hidden="true">🇮🇳</span><span class="lang-name">தமிழ்</span></summary>
+        <ul>
+          <li><a href="../../manual/" hreflang="en" lang="en"><span class="flag" aria-hidden="true">🇺🇸</span>English</a></li>
+          <li><a href="../../pt-br/manual/" hreflang="pt-BR" lang="pt-BR"><span class="flag" aria-hidden="true">🇧🇷</span>Português (Brasil)</a></li>
+          <li><a href="../../es/manual/" hreflang="es" lang="es"><span class="flag" aria-hidden="true">🇪🇸</span>Español</a></li>
+          <li><a href="../../fr/manual/" hreflang="fr" lang="fr"><span class="flag" aria-hidden="true">🇫🇷</span>Français</a></li>
+          <li><a href="../../de/manual/" hreflang="de" lang="de"><span class="flag" aria-hidden="true">🇩🇪</span>Deutsch</a></li>
+          <li><a href="../../ja/manual/" hreflang="ja" lang="ja"><span class="flag" aria-hidden="true">🇯🇵</span>日本語</a></li>
+          <li><a href="../../zh-cn/manual/" hreflang="zh-CN" lang="zh-CN"><span class="flag" aria-hidden="true">🇨🇳</span>简体中文</a></li>
+          <li><a href="../../ta/manual/" hreflang="ta" lang="ta" aria-current="page"><span class="flag" aria-hidden="true">🇮🇳</span>தமிழ்</a></li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside id="toc" aria-label="உள்ளடக்கம்">
+      <ul class="toc">
+        <li><details open><summary><a href="#start">தொடங்குதல்</a></summary>
+            <ul>
+              <li><a href="#what">OpenEmux என்றால் என்ன</a></li>
+              <li><a href="#window">சாளரத்தைச் சுற்றிப் பார்த்தல்</a></li>
+              <li><a href="#welcome">வரவேற்புச் சுற்றுலா</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#install">நிறுவுதல்</a></summary>
+            <ul>
+              <li><a href="#install-appimage">AppImage</a></li>
+              <li><a href="#install-deb">Debian / Ubuntu</a></li>
+              <li><a href="#install-rpm">Fedora</a></li>
+              <li><a href="#install-flatpak">Flatpak</a></li>
+              <li><a href="#install-windows">Windows</a></li>
+              <li><a href="#install-verify">பதிவிறக்கத்தைச் சரிபார்த்தல்</a></li>
+              <li><a href="#install-first">முதல் தொடக்கம்</a></li>
+              <li><a href="#install-source">மூலநிரலிலிருந்து உருவாக்குதல்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#import">விளையாட்டுகளை இறக்குமதி செய்தல்</a></summary>
+            <ul>
+              <li><a href="#import-picker">ROM-களை இறக்குமதி செய்</a></li>
+              <li><a href="#import-drop">இழுத்துவிடுதல்</a></li>
+              <li><a href="#import-console">எந்தக் கன்சோல்?</a></li>
+              <li><a href="#import-folder">ROM கோப்புறை</a></li>
+              <li><a href="#import-rescan">மீண்டும் வருடுதல்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#covers">அட்டைப் படங்களை ஒத்திசைத்தல்</a></summary>
+            <ul>
+              <li><a href="#covers-sync">அட்டைகளை ஒத்திசை</a></li>
+              <li><a href="#covers-providers">படங்கள் எங்கிருந்து வருகின்றன</a></li>
+              <li><a href="#covers-screenscraper">ScreenScraper கணக்கு</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#artwork">அட்டைப் படங்களை நிர்வகித்தல்</a></summary>
+            <ul>
+              <li><a href="#artwork-missing">படம் இல்லாத விளையாட்டுகள்</a></li>
+              <li><a href="#artwork-menu">ஒரு விளையாட்டின் பட உருப்படிகள்</a></li>
+              <li><a href="#artwork-manager">பட மேலாளர்</a></li>
+              <li><a href="#artwork-color">கார்ட்ரிட்ஜ் நிறங்கள்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#views">காட்சிகள்</a></summary>
+            <ul>
+              <li><a href="#views-modes">அட்டை, கார்ட்ரிட்ஜ், பட்டியல்</a></li>
+              <li><a href="#views-layout">அமைப்பு மெனு</a></li>
+              <li><a href="#views-pages">அனைத்தும் மற்றும் குழுவாக்கப்பட்ட பக்கங்கள்</a></li>
+              <li><a href="#views-search">தேடல்</a></li>
+              <li><a href="#views-select">பல விளையாட்டுகளைத் தேர்ந்தெடுத்தல்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#playlists">பிளேலிஸ்ட்கள்</a></summary>
+            <ul>
+              <li><a href="#playlists-create">பிளேலிஸ்ட்டை உருவாக்குதல்</a></li>
+              <li><a href="#playlists-add">விளையாட்டுகளைச் சேர்த்தலும் நீக்குதலும்</a></li>
+              <li><a href="#playlists-manage">மறுபெயரிடுதலும் நீக்குதலும்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#favorites">பிடித்தவை</a></summary></details></li>
+        <li><details open><summary><a href="#cores">கோர்களும் ஷேடர்களும்</a></summary>
+            <ul>
+              <li><a href="#cores-game">ஒரு விளையாட்டுக்கு</a></li>
+              <li><a href="#cores-console">ஒரு முழு கன்சோலுக்கு</a></li>
+              <li><a href="#cores-menus">எல்லாச் சூழல் மெனுக்களும்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#settings">அமைப்புகள்</a></summary>
+            <ul>
+              <li><a href="#settings-library">நூலகம்</a></li>
+              <li><a href="#settings-bios">BIOS</a></li>
+              <li><a href="#settings-input">உள்ளீடு</a></li>
+              <li><a href="#settings-video">வீடியோ</a></li>
+              <li><a href="#settings-cores">கோர்கள்</a></li>
+              <li><a href="#settings-system">அமைப்பு</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#keys">குறுக்குவழிகளும் ஹாட்கீகளும்</a></summary>
+            <ul>
+              <li><a href="#keys-library">நூலகத்தில்</a></li>
+              <li><a href="#keys-game">விளையாடும்போது</a></li>
+              <li><a href="#keys-gamepad">கேம்பேடுடன்</a></li>
+            </ul>
+          </details></li>
+        <li><details open><summary><a href="#help">ஏதாவது தவறாகும்போது</a></summary></details></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="content">
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="start">
+          <span class="eyebrow">கையேடு</span>
+          <h1>OpenEmux-ஐப் பயன்படுத்துதல்</h1>
+          <p class="lede">இந்தக் கையேடு OpenEmux-ஐ ஒவ்வொரு பகுதியாக விளக்குகிறது, நிறுவுவதிலிருந்து அமைப்புகளின் கடைசி சுவிட்ச் வரை. ஒவ்வொரு திரைப்படமும் உரை பேசும் பகுதியைச் சட்டமிட்டுக் காட்டுகிறது. எந்தத் திரைப்படத்தையும் முழு அளவில் பார்க்க அதைக் கிளிக் செய்யுங்கள்.</p>
+
+          <h3 id="what">OpenEmux என்றால் என்ன</h3>
+          <p>OpenEmux ஒரு கட்டற்ற, திறந்த மூல எமுலேஷன் முகப்பு. உங்களிடம் ஏற்கனவே உள்ள விளையாட்டுகளைக் கன்சோல் வாரியாக, அட்டைப் படங்களுடன் ஒழுங்காக வைத்து, கட்டுப்பாடுகளும் ஷேடர்களும் ஏற்கனவே அமைக்கப்பட்ட நிலையில் அவற்றைத் தொடங்குகிறது. எமுலேஷனையே <a href="https://www.retroarch.com/">RetroArch</a> மற்றும் அதன் libretro கோர்கள் செய்கின்றன; அதைச் சுற்றியுள்ளவற்றை OpenEmux கவனித்துக்கொள்கிறது, எனவே விளையாடுவதற்கு முன் RetroArch-இன் மெனுக்களைக் கற்க வேண்டியதில்லை.</p>
+          <p>OpenEmux விளையாட்டுகள், ROM-கள் அல்லது BIOS கோப்புகளுடன் வருவதில்லை. உங்களுடையவற்றை நீங்களே சேர்க்க வேண்டும்.</p>
+          <p>OpenEmux-இன் முதன்மைத் தளம் Linux. Windows-உம் ஆதரிக்கப்படுகிறது, அதன் உருவாக்கம் இன்னும் பீட்டா நிலையில் உள்ளது.</p>
+
+          <h3 id="window">சாளரத்தைச் சுற்றிப் பார்த்தல்</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/overview.webp" alt="கார்ட்ரிட்ஜ் காட்சியில் Super Nintendo நூலகத்தைக் காட்டும் OpenEmux சாளரம்" />
+            <figcaption>முதன்மைச் சாளரம், கார்ட்ரிட்ஜ் காட்சியில் Super Nintendo பக்கத்தில்.</figcaption>
+          </figure>
+
+          <h4>பக்கப்பட்டி</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-sidebar.webp" alt="சட்டமிடப்பட்ட பக்கப்பட்டி" /></figure>
+          <p>பக்கப்பட்டி உங்கள் நூலகத்தின் பக்கங்களை மேலிருந்து கீழாகப் பட்டியலிடுகிறது:</p>
+          <ul>
+            <li><span class="ui">அனைத்தும்</span>: எல்லா விளையாட்டுகளும், கன்சோல் வாரியாகக் குழுவாக்கப்பட்டு.</li>
+            <li><span class="ui">பிடித்தவை</span>: நீங்கள் நட்சத்திரமிட்ட விளையாட்டுகள். ஏதாவது ஒன்றுக்கு நட்சத்திரமிட்ட பிறகுதான் இந்த வரிசை தோன்றும். <a href="#favorites">பிடித்தவை</a> பார்க்கவும்.</li>
+            <li>நீங்கள் உருவாக்கியிருந்தால், உங்கள் பிளேலிஸ்ட்கள். இங்கே, <span class="ui">Megaman</span>. <a href="#playlists">பிளேலிஸ்ட்கள்</a> பார்க்கவும்.</li>
+            <li>விளையாட்டுகள் உள்ள ஒவ்வொரு கன்சோலுக்கும் ஒரு வரிசை, அதன் குறு அடையாளமும் பெயரும் கொண்டு, எடுத்துக்காட்டாக <span class="ui">SFC - Super Nintendo (SNES)</span>.</li>
+          </ul>
+          <p>கன்சோல் மற்றும் பிளேலிஸ்ட் வரிசைகளுக்கு ஒரு மெனு உண்டு: அவற்றை வலது-கிளிக் செய்யுங்கள், அல்லது சுட்டியை மேலே வைத்து <span class="ui">⋮</span> பொத்தானைக் கிளிக் செய்யுங்கள். கன்சோல் வரிசைகளை இழுத்து அவற்றின் வரிசையையும் மாற்றலாம்.</p>
+
+          <h4>தலைப்புப் பட்டைப் பொத்தான்கள்</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-header.webp" alt="இருபுறமும் உள்ள பொத்தான்கள் சட்டமிடப்பட்ட தலைப்புப் பட்டை" /></figure>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>பொத்தான்</th>
+                <th>அது என்ன செய்கிறது</th>
+              </tr>
+              <tr>
+                <td>☰ <span class="ui">முதன்மை மெனு</span> (“நூலகம்” அருகில்)</td>
+                <td>அமைப்புகள், விசைப்பலகை குறுக்குவழிகள், வரவேற்பு, பிழையைப் புகாரளி… மற்றும் OpenEmux பற்றி.</td>
+              </tr>
+              <tr>
+                <td>⟳ <span class="ui">தெரியும் பக்கத்தை மீண்டும் ஏற்று</span></td>
+                <td>திரையில் உள்ள கன்சோலை, அல்லது <span class="ui">அனைத்தும்</span> பக்கத்தில் ஒவ்வொரு கன்சோலையும் மீண்டும் வருடுகிறது. <kbd>F5</kbd> அழுத்துவதற்குச் சமம்.</td>
+              </tr>
+              <tr>
+                <td>⤓ <span class="ui">ROM-களை இறக்குமதி செய்</span></td>
+                <td>விளையாட்டுகளைச் சேர்க்கக் கோப்புத் தேர்வியைத் திறக்கிறது. <a href="#import">விளையாட்டுகளை இறக்குமதி செய்தல்</a> பார்க்கவும்.</td>
+              </tr>
+              <tr>
+                <td>🖼 <span class="ui">அட்டைகளை ஒத்திசை</span></td>
+                <td>இல்லாத படங்களைப் பதிவிறக்குகிறது. <a href="#covers">அட்டைப் படங்களை ஒத்திசைத்தல்</a> பார்க்கவும்.</td>
+              </tr>
+              <tr>
+                <td>🎮 <span class="ui">இந்தக் கன்சோலுக்கான கன்ட்ரோலர் அமைப்புகள்</span></td>
+                <td>அமைப்புகளை உள்ளீடு பக்கத்தில் திறக்கிறது. ஒரு கன்சோலின் சொந்தப் பக்கத்தில் மட்டுமே காட்டப்படும்.</td>
+              </tr>
+              <tr>
+                <td>🛠 <span class="ui">அமைப்புகள்</span></td>
+                <td>அமைப்புகளைத் திறக்கிறது. <kbd>Ctrl</kbd>+<kbd>,</kbd> அழுத்துவதற்குச் சமம்.</td>
+              </tr>
+              <tr>
+                <td>இணைக்கப்பட்ட மூன்று பொத்தான்கள்</td>
+                <td><span class="ui">அட்டைக் கட்டம்</span>, <span class="ui">கார்ட்ரிட்ஜ் கட்டம்</span> மற்றும் <span class="ui">சுருக்கமான பட்டியல்</span>. <a href="#views">காட்சிகள்</a> பார்க்கவும்.</td>
+              </tr>
+              <tr>
+                <td>▦ <span class="ui">காட்சி முறை</span></td>
+                <td>அமைப்பு மெனு: இந்தப் பக்கத்துக்கான காட்சி, வரிசைப்படுத்தல், வடிகட்டி மற்றும் சிறுபட அளவு.</td>
+              </tr>
+              <tr>
+                <td>☀ / ☾</td>
+                <td>கரும் தீமுக்கும் வெளிர் தீமுக்கும் இடையே மாற்றுகிறது.</td>
+              </tr>
+              <tr>
+                <td>🔍 <span class="ui">தேடு</span></td>
+                <td>திரையில் உள்ள பக்கத்தை வடிகட்டுகிறது. <a href="#views-search">தேடல்</a> பார்க்கவும்.</td>
+              </tr>
+            </table>
+          </div>
+
+          <h4>சாளரத்தின் அடிப்பகுதி</h4>
+          <figure class="shot"><img loading="lazy" width="1880" height="320" src="../../manual/img/ui-bottom.webp" alt="சாளரத்தின் அடிப்பகுதி: பக்கப்பட்டிப் பொத்தான்கள், குறிப்புப் பட்டை மற்றும் பதிவு பொத்தான்" /></figure>
+          <ul>
+            <li><span class="ui">ROM-களை இறக்குமதி செய்</span> மற்றும் <span class="ui">புதிய பிளேலிஸ்ட்</span> பக்கப்பட்டியின் அடியில் உள்ளன.</li>
+            <li>குறிப்புப் பட்டை சில விநாடிகளுக்கு ஒருமுறை மாறும் சிறு குறிப்பைக் காட்டுகிறது. விசைப்பலகை அல்லது கேம்பேடு மூலம் நகரும்போது, எந்த விசை என்ன செய்கிறது என்பதையும் காட்டுகிறது.</li>
+            <li><span class="ui">பதிவு</span> பதிவுப் பலகத்தைத் திறக்கிறது. அதன் மேலுள்ள சிவப்பு எண் பிழைகளை எண்ணுகிறது. <a href="#help">ஏதாவது தவறாகும்போது</a> பார்க்கவும்.</li>
+          </ul>
+
+          <h4>ஒரு விளையாட்டு அட்டை</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="200" src="../../manual/img/ui-card-hover.webp" alt="சுட்டியின் கீழ் ஒரு கார்ட்ரிட்ஜ் அட்டை, நட்சத்திரம், மெனு பொத்தான் மற்றும் விளையாடு பொத்தானுடன்" /></figure>
+            <div>
+              <p>ஒரு விளையாட்டின் மேல் சுட்டியை வைத்தால் மூன்று கட்டுப்பாடுகள் தோன்றும்:</p>
+              <ul>
+                <li>மேல் இடதுபுறம் உள்ள <strong>நட்சத்திரம்</strong> அதைப் பிடித்ததாகக் குறிக்கிறது;</li>
+                <li>மேல் வலதுபுறம் உள்ள <strong>⋮</strong> விளையாட்டின் மெனுவைத் திறக்கிறது;</li>
+                <li>நடுவில் உள்ள <strong>விளையாடு</strong> பொத்தான் அதைத் தொடங்குகிறது. அட்டையில் எங்கும் ஒருமுறை கிளிக் செய்தாலும் இதையே செய்யும்.</li>
+              </ul>
+              <p>ஒரு அட்டையை வலது-கிளிக் செய்தாலும் அதன் மெனு திறக்கும்.</p>
+            </div>
+          </div>
+
+          <h4>முதன்மை மெனுவும் குறுக்குவழிகளும்</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="451" height="307" src="../../manual/img/ui-main-menu.webp" alt="திறந்திருக்கும் முதன்மை மெனு" /></figure>
+            <figure class="shot"><img loading="lazy" width="890" height="670" src="../../manual/img/ui-shortcuts.webp" alt="குறுக்குவழிகள் சாளரம்" /></figure>
+          </div>
+          <p><span class="ui">விசைப்பலகை குறுக்குவழிகள்</span> (<kbd>Ctrl</kbd>+<kbd>?</kbd>) நூலகத்தின் விசைகளைப் பட்டியலிடுகிறது. அவை <a href="#keys">குறுக்குவழிகளும் ஹாட்கீகளும்</a> பகுதியிலும் உள்ளன.</p>
+
+          <h3 id="welcome">வரவேற்புச் சுற்றுலா</h3>
+          <figure class="shot mid"><img loading="lazy" width="920" height="670" src="../../manual/img/ui-welcome.webp" alt="OpenEmux-க்கு வரவேற்கிறோம் சுற்றுலா" /></figure>
+          <p>OpenEmux முதல் முறை திறக்கும்போது, ஒரு சிறிய சுற்றுலா அதன் முக்கிய அம்சங்களை விளக்குகிறது: இறக்குமதி, அமைப்புகள், அட்டைப் படங்கள், வண்ணங்களும் ஷேடர்களும், குறுக்குவழிகள், விசைப்பலகையும் கேம்பேடும். அதன் முதல் பக்கத்தில் இடைமுக மொழியைத் தேர்ந்தெடுக்கலாம். அது தானாகத் திறக்காமல் இருக்க <span class="ui">தொடக்கத்தில் காட்டு</span> குறியை நீக்குங்கள்; அது முதன்மை மெனுவில் <span class="ui">வரவேற்பு</span> என்பதன் கீழ் எப்போதும் கிடைக்கும்.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="install">
+          <span class="eyebrow">நிறுவுதல்</span>
+          <h2>OpenEmux-ஐ நிறுவுதல்</h2>
+          <p>ஒவ்வொரு வெளியீடும் <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">வெளியீடுகள் பக்கத்தில்</a> உள்ளது. உங்கள் கணினிக்குப் பொருந்தும் வடிவத்தைத் தேர்ந்தெடுங்கள்; எல்லாமே ஒரே பயன்பாட்டை இயக்குகின்றன.</p>
+
+          <h3 id="install-appimage">AppImage (எந்த Linux விநியோகமும்)</h3>
+          <p>எதையும் நிறுவாமல் பெரும்பாலான விநியோகங்களில் இயங்கும் ஒரே கோப்பு:</p>
+          <pre><code>chmod +x OpenEmux-x86_64.AppImage
+./OpenEmux-x86_64.AppImage</code></pre>
+          <p>உங்கள் கணினியில் FUSE இல்லையென்றால், கட்டளைக்கு முன் <code>APPIMAGE_EXTRACT_AND_RUN=1</code> சேர்த்துத் தொடங்குங்கள்.</p>
+
+          <h3 id="install-deb">Debian / Ubuntu (.deb)</h3>
+          <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
+          <p>Ubuntu 24.04 LTS அல்லது அதற்குப் புதியது, அல்லது அதே காலத்து Debian தேவை.</p>
+
+          <h3 id="install-rpm">Fedora (.rpm)</h3>
+          <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
+          <p>Fedora 40 அல்லது அதற்குப் புதியது தேவை.</p>
+
+          <h3 id="install-flatpak">Flatpak</h3>
+          <p>சாண்ட்பாக்ஸில் இயங்குகிறது, உங்கள் மற்ற Flatpak-களுடன் சேர்ந்து புதுப்பிக்கப்படுகிறது:</p>
+          <pre><code>flatpak install -y flathub org.libretro.RetroArch
+flatpak remote-add --if-not-exists --no-gpg-verify \
+  openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
+flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
+          <p>பிறகு புதுப்பிப்புகள் <code>flatpak update</code> மூலம் வரும். ஒற்றைக் கோப்பு <code>.flatpak</code> தொகுப்பும் வெளியீடுகள் பக்கத்தில் உள்ளது.</p>
+
+          <h3 id="install-windows">Windows (பீட்டா)</h3>
+          <p>இரண்டு Windows உருவாக்கங்களும் GTK 4, Python இயக்கச்சூழல் மற்றும் RetroArch-ஐயே உள்ளடக்கியுள்ளன, எனவே வேறு எதையும் நிறுவ வேண்டியதில்லை. அவற்றுக்கு Windows 10 அல்லது 11, 64-பிட் தேவை.</p>
+          <ul>
+            <li><strong>நிறுவி</strong>, <code>OpenEmux-*-setup.exe</code>: உங்கள் பயனருக்கு மட்டும் நிறுவுகிறது, எனவே நிர்வாகி உரிமைகளைக் கேட்பதில்லை. உருவாக்கங்கள் இன்னும் குறியீட்டுக் கையொப்பம் இடப்படவில்லை, எனவே SmartScreen அவற்றைப் பற்றி எச்சரிக்கிறது; <span class="ui">More info → Run anyway</span> (மேலும் தகவல் → எப்படியும் இயக்கு) அதைக் கடக்க உதவும்.</li>
+            <li><strong>கையடக்கப் பதிப்பு</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: எங்கு வேண்டுமானாலும் பிரித்தெடுத்து, உள்ளே உள்ள <code>OpenEmux\</code> கோப்புறையிலிருந்து <code>OpenEmux.exe</code>-ஐ இயக்குங்கள். USB நினைவகத்தில் அல்லது மென்பொருளை நிறுவ முடியாத கணினியில் பயனுள்ளது.</li>
+          </ul>
+          <p>Windows உருவாக்கம் புதியது. ஏதாவது சரியாக வேலை செய்யவில்லையென்றால், தயவுசெய்து <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">ஒரு issue-ஐத் திறங்கள்</a>.</p>
+
+          <h3 id="install-verify">பதிவிறக்கத்தைச் சரிபார்த்தல்</h3>
+          <p>ஒவ்வொரு வெளியீட்டிலும் ஒரு <code>SHA256SUMS</code> கோப்பு உள்ளது. நீங்கள் பதிவிறக்கியதன் அருகில் அதை வைத்து இயக்குங்கள்:</p>
+          <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
+          <p><code>OK</code> என்றால் கோப்பு வெளியிடப்பட்டதைப் போலவே சரியாக உள்ளது. வேறு எதுவாக இருந்தாலும் அது சேதமடைந்துள்ளது அல்லது மாற்றப்பட்டுள்ளது; அதை இயக்காதீர்கள். Windows-இல், PowerShell ஹாஷை அச்சிடுகிறது, அதை <code>SHA256SUMS</code>-இல் பொருந்தும் வரியுடன் ஒப்பிடுங்கள்:</p>
+          <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
+
+          <h3 id="install-first">முதல் தொடக்கம்</h3>
+          <p>முதல் முறை இயங்கும்போது, OpenEmux தன் உள்ளமைவை உருவாக்கி, ROM, BIOS மற்றும் அட்டைக் கோப்புறைகளை அமைத்து, உள்ளீட்டுச் சுயவிவரங்களையும் பிளேலிஸ்ட்களையும் தயாரித்து, உங்கள் கன்சோல்களுக்குத் தேவையான libretro கோர்களைப் பதிவிறக்கும்போது <span class="ui">முதல் முறை அமைவு தயாராகிறது</span> சாளரத்தைக் காட்டுகிறது. இதற்கு வழக்கமாகப் பத்து விநாடிகள் ஆகும்; நீங்கள் பயன்பாட்டைப் பயன்படுத்தும்போதே மீதமுள்ள கோர்கள் பின்னணியில் பதிவிறக்கப்படும், தலைப்புப் பட்டையின் கீழ் ஒரு பதாகை அவற்றின் முன்னேற்றத்தைக் காட்டும்.</p>
+          <p>உங்கள் அமைப்புகள் <code>~/.openemux/</code>-இல் இருக்கும், உங்கள் விளையாட்டுகள் <code>~/games/roms/</code>-இல், ஒவ்வொரு கன்சோலுக்கும் ஒரு கோப்புறை.</p>
+
+          <h3 id="install-source">மூலநிரலிலிருந்து உருவாக்குதல்</h3>
+          <pre><code>make bootstrap &amp;&amp; make run</code></pre>
+          <p>விவரங்களுக்கு <a href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">உருவாக்க வழிமுறைகளைப்</a> பார்க்கவும்.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="import">
+          <span class="eyebrow">நூலகம்</span>
+          <h2>விளையாட்டுகளை இறக்குமதி செய்தல்</h2>
+          <p>OpenEmux உங்களிடம் ஏற்கனவே உள்ள ROM கோப்புகளை இயக்குகிறது. இறக்குமதி செய்வது அவற்றை ROM கோப்புறைக்குள் நகலெடுக்கிறது (அல்லது இணைக்கிறது), ஒவ்வொரு கன்சோலுக்கும் ஒரு துணைக் கோப்புறையில், பிறகு அவற்றை நூலகத்தில் சேர்க்கிறது.</p>
+
+          <h3 id="import-picker">ROM-களை இறக்குமதி செய்</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/import-buttons.webp" alt="சட்டமிடப்பட்ட இரண்டு ROM-களை இறக்குமதி செய் பொத்தான்கள்: ஒன்று பக்கப்பட்டியின் அடியில், ஒன்று தலைப்புப் பட்டையில்" /></figure>
+          <p>பக்கப்பட்டியின் அடியில் உள்ள <span class="ui">ROM-களை இறக்குமதி செய்</span> அல்லது தலைப்புப் பட்டையில் உள்ள ⤓ பொத்தானைக் கிளிக் செய்யுங்கள், அல்லது <kbd>Ctrl</kbd>+<kbd>O</kbd> அழுத்துங்கள். ஒரு கோப்புத் தேர்வி திறக்கும்; ஒரே நேரத்தில் பல கோப்புகளைத் தேர்ந்தெடுக்கலாம்.</p>
+          <figure class="shot mid"><img loading="lazy" width="830" height="420" src="../../manual/img/import-dialog.webp" alt="ROM-களும் காப்பகங்களும் வடிகட்டி சட்டமிடப்பட்ட, ROM-களை இறக்குமதி செய் கோப்புத் தேர்வி" /></figure>
+          <p><span class="ui">ROM-களும் காப்பகங்களும்</span> வடிகட்டி, <code>.zip</code> காப்பகங்கள் உட்பட, OpenEmux இறக்குமதி செய்யத் தெரிந்த கோப்புகளை மட்டுமே காட்டுகிறது. இறக்குமதி முடிந்ததும், எத்தனை விளையாட்டுகள் வந்தன, எத்தனை கோப்புகள் தவிர்க்கப்பட்டன என்று ஒரு செய்தி சொல்லும், OpenEmux புதிய விளையாட்டுகளுக்கான படங்களைத் தேடும்.</p>
+          <div class="note"><strong>Zip கோப்புகள்.</strong> ஒரு zip அதனுள் உள்ள கோப்புகளைப் பொறுத்து வைக்கப்படுகிறது. கன்சோலின் கோர் zip-இலிருந்து விளையாட்டுகளைப் படிக்க முடியாவிட்டால், OpenEmux உங்களுக்காக அதைப் பிரித்தெடுத்து அதைத் தெரிவிக்கும்.</div>
+
+          <h3 id="import-drop">இழுத்துவிடுதல்</h3>
+          <p>கோப்புகளையோ முழுக் கோப்புறைகளையோ சாளரத்தில் எங்கு வேண்டுமானாலும் இழுத்துவிடலாம். இழுக்கும்போது, ஒரு பதாகை <span class="ui">இறக்குமதி செய்ய கோப்புகளை இங்கே இழுத்துவிடுங்கள்</span> என்று சொல்லும். கோப்புறைகள் முழு ஆழம் வரை தேடப்படும்.</p>
+
+          <h3 id="import-console">எந்தக் கன்சோல்?</h3>
+          <p>OpenEmux கோப்பு நீட்டிப்பைக் கொண்டு கன்சோலைத் தீர்மானிக்கிறது (<code>.sfc</code> ஒரு Super Nintendo விளையாட்டு, <code>.gba</code> ஒரு Game Boy Advance விளையாட்டு, இப்படி). வழியில் இரண்டு உரையாடல்கள் தோன்றலாம்:</p>
+          <ul>
+            <li><span class="ui">அனைத்தும்</span>, <span class="ui">பிடித்தவை</span> அல்லது வெற்று நூலகத்திலிருந்து இறக்குமதி செய்யும்போது, அது முதலில் <span class="ui">எந்தக் கன்சோல்?</span> என்று கேட்கும், <span class="ui">தானாகக் கண்டறி</span> தேர்ந்தெடுக்கப்பட்ட நிலையில். எல்லாக் கோப்புகளையும் ஒரே கன்சோலுக்குக் கட்டாயப்படுத்த விரும்பினால் தவிர, அதையே விட்டுவிடுங்கள்.</li>
+            <li><code>.bin</code> அல்லது <code>.iso</code> போல ஒரு நீட்டிப்பைப் பல கன்சோல்கள் பகிர்ந்துகொள்ளும்போது, அது ஒவ்வொரு நீட்டிப்புக்கும் ஒருமுறை கேட்கும், சாத்தியமான ஒவ்வொரு கன்சோலுக்கும் ஒரு பொத்தானுடன். மிகவும் பொருத்தமானது முதலில் வரும்.</li>
+          </ul>
+
+          <h3 id="import-folder">ROM கோப்புறை</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="181" src="../../manual/img/settings-library-roms-folder.webp" alt="அமைப்புகள், நூலகம் பக்கம், ROM கோப்புறை குழு" /></figure>
+          <p><a href="#settings-library">அமைப்புகள் → நூலகம்</a> பகுதியில்:</p>
+          <ul>
+            <li><span class="ui">பாதை</span> என்பது நூலகம் இருக்கும் இடம். <span class="ui">தேர்ந்தெடு…</span> அதை வேறொரு கோப்புறைக்குக் காட்டுகிறது; கோப்புறைச் சின்னம் அதை உங்கள் கோப்பு மேலாளரில் திறக்கிறது.</li>
+            <li><span class="ui">ROM-கள் எப்படி இறக்குமதி செய்யப்படுகின்றன</span> என்பது <span class="ui">கோப்பை நகலெடு</span> (இயல்பு: மூலக் கோப்பு இருந்த இடத்திலேயே இருக்கும், நூலகம் தனக்கென ஒரு நகலைப் பெறும்) மற்றும் <span class="ui">மூலத்திற்கு இணைப்பு</span> (நகல் இல்லை; கோப்பு ஏற்கனவே இருக்கும் இடத்தை நூலகம் சுட்டுகிறது, எனவே மூலத்தை நகர்த்தினாலோ நீக்கினாலோ விளையாட்டு உடையும்) ஆகியவற்றுக்கு இடையே தேர்வு செய்கிறது.</li>
+          </ul>
+          <p>கோப்புகளை நீங்களே கன்சோல் கோப்புறைகளில் வைத்து, எடுத்துக்காட்டாக <code>~/games/roms/SFC/</code>, மீண்டும் வருடலாம்.</p>
+
+          <h3 id="import-rescan">மீண்டும் வருடுதல்</h3>
+          <figure class="shot"><img loading="lazy" width="900" height="160" src="../../manual/img/import-rescan.webp" alt="சட்டமிடப்பட்ட தெரியும் பக்கத்தை மீண்டும் ஏற்று பொத்தான்" /></figure>
+          <p>OpenEmux தொடங்கும் ஒவ்வொரு முறையும் நூலகம் வருடப்படுகிறது. பயன்பாட்டுக்கு வெளியே செய்த மாற்றங்களை எடுத்துக்கொள்ள, தலைப்புப் பட்டையில் உள்ள <span class="ui">⟳</span> (<kbd>F5</kbd>), ஒரு கன்சோலின் மெனுவில் உள்ள <span class="ui">இந்தக் கன்சோலை மீண்டும் வருடு</span>, அல்லது <span class="ui">ROM-களை வருடு</span> ஆகியவற்றைப் பயன்படுத்துங்கள்; கடைசியானது <a href="#settings-library">அமைப்புகள் → நூலகம்</a> பகுதியில் உள்ளது, ஒரு கன்சோலையோ அனைத்தையுமோ தேர்ந்தெடுக்க அனுமதிக்கிறது.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="covers">
+          <span class="eyebrow">படங்கள்</span>
+          <h2>அட்டைப் படங்களை ஒத்திசைத்தல்</h2>
+          <p>OpenEmux இரண்டு வகைப் படங்களைப் பதிவிறக்குகிறது: <strong>அட்டைகள்</strong> (பெட்டிப் படம்) மற்றும் <strong>லேபிள்கள்</strong> (கார்ட்ரிட்ஜ் ஸ்டிக்கரில் உள்ள படம், கார்ட்ரிட்ஜ் காட்சியில் பயன்படுகிறது). இல்லாதவற்றை மட்டுமே அது எடுக்கிறது; உங்களிடம் ஏற்கனவே உள்ள படங்கள் தொடப்படுவதில்லை.</p>
+
+          <h3 id="covers-sync">அட்டைகளை ஒத்திசை</h3>
+          <figure class="shot"><img loading="lazy" width="900" height="160" src="../../manual/img/covers-sync-button.webp" alt="தலைப்புப் பட்டையில் சட்டமிடப்பட்ட அட்டைகளை ஒத்திசை பொத்தான்" /></figure>
+          <p>தலைப்புப் பட்டையில் உள்ள 🖼 <span class="ui">அட்டைகளை ஒத்திசை</span> பொத்தானைக் கிளிக் செய்யுங்கள், அல்லது <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> அழுத்துங்கள். ஒரு கன்சோலின் பக்கத்தில் அது அந்தக் கன்சோலை ஒத்திசைக்கும்; வேறு எங்கும் முழு நூலகத்தையும் ஒத்திசைக்கும். தலைப்புப் பட்டையின் கீழ் ஒரு பதாகை முன்னேற்றத்தை <span class="ui">ரத்து</span> பொத்தானுடன் காட்டும், அட்டைகள் வந்து சேரச் சேரத் தோன்றும்.</p>
+          <p>இதே செயல் ஒரு கன்சோலின் மெனுவிலும் (<span class="ui">அட்டைகளை ஒத்திசை</span>), பல விளையாட்டுகள் தேர்ந்தெடுக்கப்படும்போது தோன்றும் பட்டையிலும், <a href="#settings-library">அமைப்புகள் → நூலகம் → பராமரிப்பு</a> பகுதியிலும் உள்ளது; கடைசியானதில் முதலில் கன்சோலைத் தேர்ந்தெடுக்க வேண்டும்.</p>
+
+          <h3 id="covers-providers">படங்கள் எங்கிருந்து வருகின்றன</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="251" src="../../manual/img/settings-library-artwork-providers.webp" alt="அமைப்புகள், நூலகம் பக்கம், படங்கள் வழங்குநர்கள் குழு" /></figure>
+          <p>மூன்று மூலங்கள் வரிசையாக முயலப்படுகின்றன, மேலே உள்ளது முதலில்; கீழே உள்ளவை மாற்று வழிகள். ஒவ்வொரு வரிசையிலும் அதை மேலே அல்லது கீழே நகர்த்த அம்புகளும், அணைக்க ஒரு சுவிட்சும் உள்ளன.</p>
+          <ul>
+            <li><span class="ui">libretro சிறுபடங்கள்</span>: சமூகச் சேகரிப்பிலிருந்து பெட்டிப் படங்கள். கணக்கு தேவையில்லை.</li>
+            <li><span class="ui">ScreenScraper</span>: பெட்டிப் படங்களும் கார்ட்ரிட்ஜ் லேபிள்களும், ROM-இன் ஹாஷ் மூலம் பொருத்தப்படுகின்றன, எனவே கோப்புப் பெயர் வழக்கத்துக்கு மாறாக இருந்தாலும் விளையாட்டுகளைக் கண்டுபிடிக்கும்.</li>
+            <li><span class="ui">OpenEmux நகல்</span>: திட்டத்தின் சொந்தத் தொகுப்பிலிருந்து பெட்டிப் படங்கள்.</li>
+          </ul>
+
+          <h3 id="covers-screenscraper">ScreenScraper கணக்கு</h3>
+          <figure class="shot mid"><img loading="lazy" width="642" height="373" src="../../manual/img/settings-library-screenscraper.webp" alt="அமைப்புகள், நூலகம் பக்கம், ScreenScraper கணக்கு குழு" /></figure>
+          <p>ScreenScraper கணக்கு இல்லாமலும் வேலை செய்யும்: OpenEmux டெவலப்பர் சான்றுகளுடனும் பகிரப்பட்ட ஒதுக்கீட்டுடனும் வருகிறது. உங்களுக்கென ஒரு இலவச ScreenScraper கணக்கு அதற்கென தினசரி ஒதுக்கீட்டைப் பெறும், இது பெரிய நூலகங்களுக்கு வேகமானதும் நம்பகமானதும் ஆகும். <span class="ui">ScreenScraper பயனர்பெயர்</span> மற்றும் <span class="ui">ScreenScraper கடவுச்சொல்</span> நிரப்புங்கள். <span class="ui">மேம்பட்டவை</span> ஒரு டெவலப்பர் ID-யையும் கடவுச்சொல்லையும் கொண்டுள்ளது; உங்களுக்கென டெவலப்பர் கணக்கு இருந்தால் மட்டுமே அவை தேவை.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="artwork">
+          <span class="eyebrow">படங்கள்</span>
+          <h2>அட்டைப் படங்களை நிர்வகித்தல்</h2>
+
+          <h3 id="artwork-missing">படம் இல்லாத விளையாட்டுகள்</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="520" src="../../manual/img/covers-missing.webp" alt="மூன்று கார்ட்ரிட்ஜ்களில் வெற்று லேபிள்கள் சட்டமிடப்பட்ட ஒரு Mega Drive பக்கம்" /></figure>
+          <p>லேபிள் கிடைக்கவில்லையென்றால், கார்ட்ரிட்ஜ் ஒரு வெற்று ஸ்டிக்கரைக் காட்டும்; அட்டை கிடைக்கவில்லையென்றால், அட்டைக் காட்சி வெற்று அட்டையில் <span class="ui">படங்களைத் தேடு…</span> பொத்தானைக் காட்டும். அந்த விளையாட்டுகளை மட்டும் பட்டியலிட, <span class="ui">படம் இல்லாதவை மட்டும்</span> இயக்குங்கள்; அது <a href="#views-layout">அமைப்பு மெனுவில்</a> உள்ளது.</p>
+
+          <h3 id="artwork-menu">ஒரு விளையாட்டின் பட உருப்படிகள்</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="470" src="../../manual/img/covers-card-menu.webp" alt="லேபிளை ஒத்திசை மற்றும் லேபிள் படம் சட்டமிடப்பட்ட ஒரு விளையாட்டின் மெனு" /></figure>
+            <div>
+              <p>ஒரு விளையாட்டை வலது-கிளிக் செய்யுங்கள், அல்லது அதன் <span class="ui">⋮</span> கிளிக் செய்யுங்கள். பட உருப்படிகள் கார்ட்ரிட்ஜ் காட்சியில் <strong>லேபிள்</strong> மீதும், மற்ற எல்லா இடங்களிலும் <strong>அட்டை</strong> மீதும் செயல்படுகின்றன, அவற்றின் பெயர்களும் அதற்கேற்ப மாறுகின்றன:</p>
+              <ul>
+                <li><span class="ui">லேபிளை ஒத்திசை…</span> / <span class="ui">அட்டையை ஒத்திசை…</span> இந்த விளையாட்டின் படத்தை உடனே எடுக்கிறது. நூலக ஒத்திசைவைப் போலன்றி, இது விளையாட்டில் ஏற்கனவே உள்ள படத்தை <strong>மாற்றிவிடும்</strong>.</li>
+                <li><span class="ui">லேபிள் படம் ▸</span> / <span class="ui">அட்டைப் படம் ▸</span> மற்ற மூன்றையும் கொண்டுள்ளது.</li>
+              </ul>
+            </div>
+          </div>
+          <figure class="shot mid"><img loading="lazy" width="711" height="576" src="../../manual/img/covers-label-submenu.webp" alt="சட்டமிடப்பட்ட லேபிள் படம் துணைமெனு" /></figure>
+          <ul>
+            <li><span class="ui">லேபிளை நிர்வகி…</span> கீழே விளக்கப்பட்டுள்ள பட மேலாளரைத் திறக்கிறது.</li>
+            <li><span class="ui">கார்ட்ரிட்ஜ் லேபிள் படத்தைத் தேர்ந்தெடு</span> உங்கள் கணினியில் உள்ள ஒரு படக் கோப்பை அப்படியே பயன்படுத்துகிறது.</li>
+            <li><span class="ui">கார்ட்ரிட்ஜ் லேபிள் படத்தை நீக்கு</span> விளையாட்டில் இப்போது உள்ள படத்தை நீக்குகிறது. நீக்க ஏதாவது இருக்கும்போது மட்டுமே இது தோன்றும்.</li>
+          </ul>
+
+          <h3 id="artwork-manager">பட மேலாளர்</h3>
+          <p>மேலாளர் <span class="ui">அட்டையை நிர்வகி…</span> / <span class="ui">லேபிளை நிர்வகி…</span> மூலமோ, வெற்று அட்டையில் உள்ள <span class="ui">படங்களைத் தேடு…</span> பொத்தான் மூலமோ திறக்கிறது. அதில் மூன்று தாவல்கள் உள்ளன.</p>
+          <h4>அட்டை மற்றும் லேபிள்</h4>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-cover.webp" alt="பெட்டிப் பட முடிவுகளுடன், அட்டை தாவலில் பட மேலாளர்" />
+              <figcaption>அட்டை தாவல்: பெட்டிப் படம்.</figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-label.webp" alt="லேபிள் முடிவுகளுடன், லேபிள் தாவலில் பட மேலாளர்" />
+              <figcaption>லேபிள் தாவல்: கார்ட்ரிட்ஜ் ஸ்டிக்கர்கள்.</figcaption>
+            </figure>
+          </div>
+          <ul>
+            <li><span class="ui">பெயர்</span> என்பது தேடலுக்குப் பயன்படும் தலைப்பு. கோப்புப் பெயர் விளையாட்டின் உண்மையான பெயர் இல்லையென்றால் அதைத் திருத்துங்கள்.</li>
+            <li><span class="ui">ஹாஷ்</span> என்பது கோப்பின் கைரேகை, உங்களுக்காகக் கணக்கிடப்படுகிறது.</li>
+            <li><span class="ui">பெயரால் தேடு</span> மற்றும் <span class="ui">ஹாஷால் தேடு</span> வழங்குநர்களிடம் வினவுகின்றன. ஹாஷ் தேடல் துல்லியமானது; பெயர் தேடல் அதிகம் விட்டுக்கொடுக்கும்.</li>
+            <li>பெயர் எழுதியபடி எதனுடனும் பொருந்தாதபோது, <span class="ui">பரிந்துரைகள்</span> (அட்டை தாவல்) விளையாட்டுப் பெயர்த் தரவுத்தளத்திலிருந்து நெருக்கமான தலைப்புகளை, எவ்வளவு ஒத்திருக்கின்றன என்ற வரிசையில் முன்மொழிகிறது.</li>
+          </ul>
+          <p>ஒரு முடிவைத் தேர்ந்தெடுக்க அதைக் கிளிக் செய்யுங்கள்; அதில் ஒரு சரிக்குறி தோன்றும். <span class="ui">சேமி</span> அதைப் பயன்படுத்திச் சாளரத்தைத் திறந்தே வைக்கும்; <span class="ui">முடிந்தது</span> அதைப் பயன்படுத்தி மூடும்; <span class="ui">ரத்து</span> எதையும் மாற்றாமல் மூடும். கார்ட்ரிட்ஜ் காட்சி உள்ள கன்சோல்களுக்கு மட்டுமே லேபிள் தாவல் இருக்கும்.</p>
+          <h4>இறக்குமதி</h4>
+          <figure class="shot mid"><img loading="lazy" width="1000" height="750" src="../../manual/img/covers-manager-import.webp" alt="திருத்தக் கருவிகளுடன், பட மேலாளரின் இறக்குமதி தாவல்" /></figure>
+          <p>ஒரு படத்தைத் தாவலில் இழுத்துவிடுங்கள், அல்லது ஒன்றைத் தேர்ந்தெடுக்க <span class="ui">சேர்…</span> கிளிக் செய்யுங்கள். பிறகு அதை <span class="ui">வெட்டு</span>, திருப்பு, சுழற்று, அல்லது உங்கள் திருத்தங்களை <span class="ui">மீட்டமை</span> செய்யலாம்; <span class="ui">இப்படிச் சேமி</span> என்பதன் கீழ் அது <span class="ui">அட்டை</span> ஆகுமா <span class="ui">லேபிள்</span> ஆகுமா என்று தேர்ந்தெடுக்கலாம்.</p>
+
+          <h3 id="artwork-color">கார்ட்ரிட்ஜ் நிறங்கள்</h3>
+          <figure class="shot mid"><img loading="lazy" width="587" height="595" src="../../manual/img/covers-cartridge-color.webp" alt="சட்டமிடப்பட்ட கார்ட்ரிட்ஜ் நிறம் துணைமெனு" /></figure>
+          <p>கார்ட்ரிட்ஜ் காட்சியில், <span class="ui">கார்ட்ரிட்ஜ் நிறம் ▸</span> ஒரு விளையாட்டின் கார்ட்ரிட்ஜ் உறைக்கு நிறம் தீட்டுகிறது: <span class="ui">இயல்பு</span>, அல்லது கருப்பு, வெள்ளை, சிவப்பு, ஆரஞ்சு, மஞ்சள், பச்சை, நீலப்பச்சை, நீலம், ஊதா, இளஞ்சிவப்பு, தங்கம் அல்லது ஒளிபுகும். சிவப்பு Pokémon FireRed போல, வண்ணக் கார்ட்ரிட்ஜில் வந்த விளையாட்டுகளுக்குப் பயனுள்ளது.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="views">
+          <span class="eyebrow">நூலகம்</span>
+          <h2>காட்சிகள்</h2>
+
+          <h3 id="views-modes">அட்டை, கார்ட்ரிட்ஜ், பட்டியல்</h3>
+          <p>தலைப்புப் பட்டையில் இணைக்கப்பட்ட மூன்று பொத்தான்கள் பக்கம் தன் விளையாட்டுகளை எப்படிக் காட்டுகிறது என்பதை மாற்றுகின்றன.</p>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-cover.webp" alt="பொத்தான் சட்டமிடப்பட்ட அட்டைக் கட்டம் காட்சி" />
+            <figcaption><span class="ui">அட்டைக் கட்டம்</span>: ஒவ்வொரு விளையாட்டின் முழுப் பெட்டிப் படம்.</figcaption>
+          </figure>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-cartridge.webp" alt="பொத்தான் சட்டமிடப்பட்ட கார்ட்ரிட்ஜ் கட்டம் காட்சி" />
+            <figcaption><span class="ui">கார்ட்ரிட்ஜ் கட்டம்</span> (இயல்பு): ஒவ்வொரு விளையாட்டும் அதன் கன்சோலின் கார்ட்ரிட்ஜில் வரையப்பட்டு, ஸ்டிக்கரில் அதன் லேபிளுடன். NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS, Mega Drive மற்றும் Master System-க்குக் கார்ட்ரிட்ஜ்கள் உள்ளன; மற்ற கன்சோல்கள் அவற்றின் அட்டைகளைக் காட்டுகின்றன.</figcaption>
+          </figure>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-list.webp" alt="பொத்தான் சட்டமிடப்பட்ட சுருக்கமான பட்டியல் காட்சி" />
+            <figcaption><span class="ui">சுருக்கமான பட்டியல்</span>: ஒவ்வொரு விளையாட்டுக்கும் ஒரு வரிசை, தேர்ந்தெடுக்க ஒரு தேர்வுப்பெட்டி, சிறிய சிறுபடம், தலைப்பு மற்றும் கன்சோலுடன்.</figcaption>
+          </figure>
+
+          <h3 id="views-layout">அமைப்பு மெனு</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="508" height="440" src="../../manual/img/views-layout-menu.webp" alt="சட்டமிடப்பட்ட அமைப்பு மெனு" /></figure>
+            <figure class="shot"><img loading="lazy" width="508" height="351" src="../../manual/img/views-sort.webp" alt="சட்டமிடப்பட்ட வரிசைப்படுத்து துணைமெனு" /></figure>
+          </div>
+          <p>▦ <span class="ui">காட்சி முறை</span> பொத்தான் திரையில் உள்ள பக்கத்தின் அமைப்பைத் திறக்கிறது:</p>
+          <ul>
+            <li><span class="ui">பொது அமைப்பைப் பயன்படுத்து</span>: குறியிடப்பட்டிருந்தால், சொந்த அமைப்பு இல்லாத எல்லாப் பக்கங்களும் பகிரும் அமைப்பை இந்தப் பக்கம் பின்பற்றும். குறி நீக்கப்பட்ட நிலையில் கீழே உள்ள எதையாவது மாற்றினால், பக்கம் தன் சொந்த அமைப்பை வைத்துக்கொள்ளும்.</li>
+            <li>மூன்று காட்சிகள்.</li>
+            <li><span class="ui">வரிசைப்படுத்து</span>: <span class="ui">பெயர் (A-Z)</span>, <span class="ui">பெயர் (Z-A)</span>, <span class="ui">சமீபத்தில் விளையாடியவை</span>, <span class="ui">சமீபத்தில் சேர்க்கப்பட்டவை</span>, <span class="ui">கோப்பு அளவு</span>, மேலும் கன்சோல்களைக் கலக்கும் பக்கங்களில் <span class="ui">தளம்</span>.</li>
+            <li><span class="ui">படம் இல்லாதவை மட்டும்</span>: இன்னும் படம் இல்லாத விளையாட்டுகளை மட்டுமே காட்டுகிறது. நீங்கள் OpenEmux-ஐ மூடும் வரை இது நீடிக்கும்.</li>
+            <li><span class="ui">−</span> / <span class="ui">+</span> பொத்தான்கள் சிறுபட அளவை 50% முதல் 200% வரை அமைக்கின்றன. <kbd>Ctrl</kbd>+<kbd>+</kbd>, <kbd>Ctrl</kbd>+<kbd>−</kbd> மற்றும் <kbd>Ctrl</kbd>+<kbd>0</kbd> இதையே செய்கின்றன.</li>
+          </ul>
+          <figure class="shot narrow"><img loading="lazy" width="482" height="515" src="../../manual/img/views-console-layout.webp" alt="அமைப்பு துணைமெனு சட்டமிடப்பட்ட ஒரு கன்சோலின் மெனு" /></figure>
+          <p>பக்கப்பட்டியில் உள்ள ஒரு கன்சோலின் மெனுவில் <span class="ui">அமைப்பு ▸</span> என்பதன் கீழ் இதே தேர்வு உள்ளது, எனவே ஒவ்வொரு கன்சோலும் தன் சொந்தக் காட்சியை வைத்துக்கொள்ளலாம். பிளேலிஸ்ட்களுக்கும் இது உண்டு.</p>
+
+          <h3 id="views-pages">அனைத்தும் மற்றும் குழுவாக்கப்பட்ட பக்கங்கள்</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/views-all.webp" alt="அனைத்தும் வரிசை சட்டமிடப்பட்ட, கன்சோல் வாரியாகக் குழுவாக்கப்பட்ட அனைத்தும் பக்கம்" /></figure>
+          <p><span class="ui">அனைத்தும்</span>, <span class="ui">பிடித்தவை</span> மற்றும் பிளேலிஸ்ட்கள் கன்சோல்களைக் கலக்கின்றன, எனவே அவை குழுவாக்கப்படுகின்றன: ஒவ்வொரு குழுவுக்கும் கன்சோலின் சின்னம், பெயர் மற்றும் விளையாட்டுகளின் எண்ணிக்கையுடன் ஒரு தலைப்பு உண்டு. பக்கப்பட்டியிலோ <a href="#settings-library">அமைப்புகள் → நூலகம்</a> பகுதியிலோ நீங்கள் அமைக்கும் கன்சோல் வரிசையைக் குழுக்கள் பின்பற்றுகின்றன.</p>
+
+          <h3 id="views-search">தேடல்</h3>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/ui-search.webp" alt="mario என்று தட்டச்சு செய்யப்பட்டு, அனைத்தும் பக்கத்தை வடிகட்டும் தேடல் பட்டை" /></figure>
+          <p>🔍 கிளிக் செய்யுங்கள், <kbd>Ctrl</kbd>+<kbd>F</kbd> அழுத்துங்கள், அல்லது நேரடியாகத் தட்டச்சு செய்யத் தொடங்குங்கள். தேடல் திரையில் உள்ள பக்கத்தை வடிகட்டுகிறது, எனவே முழு நூலகத்திலும் தேட <span class="ui">அனைத்தும்</span> பக்கத்திலிருந்து தேடுங்கள். <kbd>Esc</kbd> அதை மூடுகிறது.</p>
+
+          <h3 id="views-select">பல விளையாட்டுகளைத் தேர்ந்தெடுத்தல்</h3>
+          <figure class="shot"><img loading="lazy" width="1520" height="180" src="../../manual/img/ui-selection.webp" alt="இரண்டு விளையாட்டுகள் தேர்ந்தெடுக்கப்பட்ட நிலையில், சட்டமிடப்பட்ட தேர்வுப் பட்டை" /></figure>
+          <p>ஒருமுறை கிளிக் செய்தால் விளையாட்டு தொடங்கும், எனவே தேர்வு மாற்றி விசைகளுடன் வேலை செய்கிறது: <kbd>Ctrl</kbd>-கிளிக் ஒரு விளையாட்டைச் சேர்க்கிறது, <kbd>Shift</kbd>-கிளிக் ஒரு வரம்பைச் சேர்க்கிறது, வெற்று இடத்தில் இழுத்தால் ஒரு தேர்வுப் பெட்டி வரையப்படும், <kbd>Ctrl</kbd>+<kbd>A</kbd> முழுப் பக்கத்தையும் தேர்ந்தெடுக்கிறது. பட்டியல் காட்சியில் தேர்வுப்பெட்டிகளைப் பயன்படுத்துங்கள். அடியில் <span class="ui">அனைத்தையும் தேர்ந்தெடு</span>, <span class="ui">அட்டைகளை ஒத்திசை</span> மற்றும் <span class="ui">நீக்கு</span> கொண்ட ஒரு பட்டை தோன்றும்; அப்போது விளையாட்டு மெனுவின் <span class="ui">பிளேலிஸ்ட்டில் சேர்</span> முழுத் தேர்வின் மீதும் செயல்படும். தேர்வை அழிக்க வெற்று இடத்தையோ <span class="ui">×</span>-ஐயோ கிளிக் செய்யுங்கள்.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="playlists">
+          <span class="eyebrow">நூலகம்</span>
+          <h2>பிளேலிஸ்ட்கள்</h2>
+          <p>பிளேலிஸ்ட் என்பது எந்தக் கன்சோலிலிருந்தும் நீங்களே தொகுக்கும் விளையாட்டுகளின் பட்டியல்: ஒரு தொடர், நண்பர்களுடன் விளையாடும் விளையாட்டுகள், இப்போது நீங்கள் விளையாடிக்கொண்டிருப்பவை. ஒரு விளையாட்டைப் பிளேலிஸ்ட்டில் சேர்ப்பது அதை நகலெடுப்பதோ நகர்த்துவதோ இல்லை.</p>
+
+          <h3 id="playlists-create">பிளேலிஸ்ட்டை உருவாக்குதல்</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="440" height="320" src="../../manual/img/playlists-new.webp" alt="புதிய பிளேலிஸ்ட் உரையாடல்" /></figure>
+            <div>
+              <p>பக்கப்பட்டியின் அடியில் உள்ள <span class="ui">புதிய பிளேலிஸ்ட்</span> கிளிக் செய்யுங்கள் (அல்லது பக்கப்பட்டியின் வெற்று இடத்தை வலது-கிளிக் செய்யுங்கள்), ஒரு பெயரைத் தட்டச்சு செய்து <span class="ui">உருவாக்கு</span> கிளிக் செய்யுங்கள். பிளேலிஸ்ட் பக்கப்பட்டியில், பிடித்தவைக்கும் கன்சோல்களுக்கும் இடையே தோன்றும்.</p>
+            </div>
+          </div>
+
+          <h3 id="playlists-add">விளையாட்டுகளைச் சேர்த்தலும் நீக்குதலும்</h3>
+          <figure class="shot mid"><img loading="lazy" width="594" height="576" src="../../manual/img/playlists-add.webp" alt="சட்டமிடப்பட்ட பிளேலிஸ்ட்டில் சேர் துணைமெனு" /></figure>
+          <p>ஒரு விளையாட்டின் மெனுவில், <span class="ui">பிளேலிஸ்ட்டில் சேர் ▸</span> உங்கள் பிளேலிஸ்ட்களைப் பட்டியலிடுகிறது. சரிக்குறி என்றால் விளையாட்டு ஏற்கனவே அதில் உள்ளது; குறியிடப்பட்ட பிளேலிஸ்ட்டைக் கிளிக் செய்தால் விளையாட்டு அதிலிருந்து நீக்கப்படும். அடியில் உள்ள <span class="ui">புதிய பிளேலிஸ்ட்</span> இந்த விளையாட்டு ஏற்கனவே உள்ள ஒன்றை உருவாக்குகிறது. பல விளையாட்டுகள் தேர்ந்தெடுக்கப்பட்டிருந்தால், அனைத்தும் ஒரே நேரத்தில் சேர்க்கப்படும்.</p>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/playlists-view.webp" alt="Super Nintendo மற்றும் PlayStation விளையாட்டுகளுடன் Megaman பிளேலிஸ்ட்" /></figure>
+          <p>ஒரு பிளேலிஸ்ட்டுக்குள், விளையாட்டுகள் கன்சோல் வாரியாகக் குழுவாக்கப்படுகின்றன, விளையாட்டு மெனுவில் கூடுதலாக <span class="ui">இந்தப் பிளேலிஸ்ட்டிலிருந்து நீக்கு</span> என்ற உருப்படி இருக்கும்.</p>
+
+          <h3 id="playlists-manage">மறுபெயரிடுதலும் நீக்குதலும்</h3>
+          <figure class="shot narrow"><img loading="lazy" width="317" height="325" src="../../manual/img/playlists-menu.webp" alt="பக்கப்பட்டியில் சட்டமிடப்பட்ட ஒரு பிளேலிஸ்ட்டின் மெனு" /></figure>
+          <p>பக்கப்பட்டியில் பிளேலிஸ்ட்டை வலது-கிளிக் செய்யுங்கள், அல்லது அதன் <span class="ui">⋮</span> கிளிக் செய்யுங்கள்: <span class="ui">பிளேலிஸ்ட்டை மறுபெயரிடு…</span>, <span class="ui">அமைப்பு ▸</span> மற்றும் <span class="ui">பிளேலிஸ்ட்டை நீக்கு</span>. பிளேலிஸ்ட்டை நீக்குவது அதன் விளையாட்டுகளை ஒருபோதும் நீக்காது.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="favorites">
+          <span class="eyebrow">நூலகம்</span>
+          <h2>பிடித்தவை</h2>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="300" height="470" src="../../manual/img/favorites-menu.webp" alt="பிடித்தவற்றிலிருந்து நீக்கு சட்டமிடப்பட்ட ஒரு விளையாட்டின் மெனு" /></figure>
+            <div>
+              <p>ஒரு விளையாட்டுக்கு நட்சத்திரமிட, அதன் அட்டையில் உள்ள நட்சத்திரத்தைக் கிளிக் செய்யுங்கள், அதன் மெனுவில் <span class="ui">பிடித்தவற்றில் சேர்</span> தேர்ந்தெடுங்கள், அல்லது <kbd>Ctrl</kbd>+<kbd>D</kbd> அழுத்துங்கள் (கேம்பேடில் Ⓨ). இதே செயல்கள் நட்சத்திரத்தை நீக்கவும் செய்கின்றன.</p>
+              <p>நட்சத்திரமிட்ட விளையாட்டு எல்லாப் பக்கங்களிலும் தன் நட்சத்திரக் குறியை வைத்திருக்கும்.</p>
+            </div>
+          </div>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="வரிசை சட்டமிடப்பட்ட, கன்சோல் வாரியாகக் குழுவாக்கப்பட்ட பிடித்தவை பக்கம்" /></figure>
+          <p><span class="ui">பிடித்தவை</span> பக்கம் அவற்றைக் கன்சோல் வாரியாகக் குழுவாக்கித் திரட்டுகிறது. நீங்கள் ஒரு விளையாட்டுக்கு நட்சத்திரமிட்டதும் அதன் வரிசை பக்கப்பட்டியில் தோன்றும், திரும்பிச் செல்ல வேறு எதுவும் இல்லாதபோது OpenEmux அதிலேயே திறக்கும்.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="cores">
+          <span class="eyebrow">எமுலேஷன்</span>
+          <h2>கோர்களும் ஷேடர்களும்</h2>
+          <p><strong>கோர்</strong> என்பது ஒரு கன்சோலுக்காக RetroArch இயக்கும் எமுலேட்டர்: Super Nintendo-வுக்கு Snes9x, bsnes, Mesen-S மற்றும் பிற உள்ளன. ஒவ்வொரு கன்சோலும் ஒரு பொருத்தமான இயல்புடன் தொடங்குகிறது, அது <span class="ui">தானியங்கி (…)</span> எனக் காட்டப்படும். <strong>ஷேடர்</strong> படம் வரையப்படும் விதத்தை மாற்றுகிறது: ஒரு CRT ஷேடர் பழைய தொலைக்காட்சியின் ஸ்கேன்லைன்களையும் வளைவையும் மீண்டும் கொண்டுவருகிறது, <span class="ui">Disabled</span> மூலப் பிக்சல்களைக் காட்டுகிறது.</p>
+          <p>இரண்டையும் ஒரு முழு கன்சோலுக்கும், அதற்கு மேல் ஒரு தனி விளையாட்டுக்கும் அமைக்கலாம்.</p>
+
+          <h3 id="cores-game">ஒரு விளையாட்டுக்கு</h3>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="695" height="795" src="../../manual/img/cores-game-core.webp" alt="சட்டமிடப்பட்ட ஒரு விளையாட்டின் கோர் துணைமெனு" />
+              <figcaption>ஒரு விளையாட்டின் மெனுவில் <span class="ui">கோர் ▸</span>.</figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="721" height="536" src="../../manual/img/cores-game-shader.webp" alt="சட்டமிடப்பட்ட ஒரு விளையாட்டின் ஷேடர் துணைமெனு" />
+              <figcaption>ஒரு விளையாட்டின் மெனுவில் <span class="ui">ஷேடர் ▸</span>.</figcaption>
+            </figure>
+          </div>
+          <ul>
+            <li><span class="ui">கோர் ▸</span> கன்சோலுக்கு நிறுவப்பட்ட எல்லாக் கோர்களையும் பட்டியலிடுகிறது. முதல் உருப்படியான <span class="ui">தானியங்கி (…)</span> கன்சோலின் அமைப்பைப் பின்பற்றுகிறது. நீங்கள் தேர்ந்தெடுக்கும் கோருக்கு உங்களிடம் இல்லாத BIOS கோப்புகள் தேவைப்பட்டால், எவை என்று OpenEmux சொல்லும்.</li>
+            <li><span class="ui">ஷேடர் ▸</span> <span class="ui">கன்சோல் அமைப்பைப் பயன்படுத்து (…)</span> உடன் தொடங்குகிறது, பிறகு <span class="ui">Disabled</span>, <span class="ui">Dot</span>, <span class="ui">Geom CRT</span>, <span class="ui">NewPixie CRT</span>, <span class="ui">zfast CRT</span>, <span class="ui">CRT Royale</span> மற்றும் <span class="ui">Sharp Bilinear Simple</span>. RetroArch-இடம் உள்ள எல்லா ஷேடர்களையும் பட்டியலிட, <span class="ui">அனைத்து ஷேடர்களையும் காட்டு</span> இயக்குங்கள் (<a href="#settings-video">அமைப்புகள் → வீடியோ</a> பகுதியில்).</li>
+          </ul>
+
+          <h3 id="cores-console">ஒரு முழு கன்சோலுக்கு</h3>
+          <figure class="shot narrow"><img loading="lazy" width="332" height="515" src="../../manual/img/cores-console-menu.webp" alt="பக்கப்பட்டியில் சட்டமிடப்பட்ட ஒரு கன்சோலின் மெனு" /></figure>
+          <div class="pair">
+            <figure class="shot"><img loading="lazy" width="571" height="795" src="../../manual/img/cores-console-core.webp" alt="சட்டமிடப்பட்ட இயல்புக் கோர் துணைமெனு" />
+              <figcaption><span class="ui">இயல்புக் கோர் ▸</span></figcaption>
+            </figure>
+            <figure class="shot"><img loading="lazy" width="530" height="515" src="../../manual/img/cores-console-shader.webp" alt="சட்டமிடப்பட்ட இயல்பு ஷேடர் துணைமெனு" />
+              <figcaption><span class="ui">இயல்பு ஷேடர் ▸</span></figcaption>
+            </figure>
+          </div>
+          <p>பக்கப்பட்டியில் ஒரு கன்சோலை வலது-கிளிக் செய்யுங்கள். <span class="ui">இயல்புக் கோர் ▸</span> மற்றும் <span class="ui">இயல்பு ஷேடர் ▸</span> அந்தக் கன்சோலின் ஒவ்வொரு விளையாட்டும் பயன்படுத்துவதை அமைக்கின்றன, விளையாட்டுக்கென சொந்தத் தேர்வு இருந்தால் தவிர. இவை <a href="#settings-cores">அமைப்புகள் → கோர்கள்</a> மற்றும் <a href="#settings-video">அமைப்புகள் → வீடியோ → கன்சோலுக்கு ஏற்ற ஷேடர்கள்</a> பகுதிகளில் உள்ள அதே அமைப்புகள். இயல்பாக, கையடக்கக் கன்சோல்கள் (Game Boy, Game Boy Color, Game Boy Advance, DS) <span class="ui">Dot</span> பயன்படுத்துகின்றன, மற்றவை அனைத்தும் <span class="ui">Geom CRT</span>.</p>
+
+          <h3 id="cores-menus">எல்லாச் சூழல் மெனுக்களும்</h3>
+          <h4>ஒரு விளையாட்டின் மெனு</h4>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>உருப்படி</th>
+                <th>அது என்ன செய்கிறது</th>
+              </tr>
+              <tr>
+                <td><span class="ui">பிடித்தவற்றில் சேர்</span> / <span class="ui">பிடித்தவற்றிலிருந்து நீக்கு</span></td>
+                <td>விளையாட்டுக்கு நட்சத்திரமிடுகிறது அல்லது நட்சத்திரத்தை நீக்குகிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">அட்டையை ஒத்திசை…</span> / <span class="ui">லேபிளை ஒத்திசை…</span></td>
+                <td>இந்த விளையாட்டின் படத்தை மீண்டும் பதிவிறக்கி, தற்போதையதை மாற்றுகிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">அட்டைப் படம் ▸</span> / <span class="ui">லேபிள் படம் ▸</span></td>
+                <td>நிர்வகி…, ஒரு படக் கோப்பைத் தேர்ந்தெடு, அல்லது தற்போதைய படத்தை நீக்கு.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">நிலையை ஏற்று ▸</span></td>
+                <td>விளையாட்டை அதன் பத்து சேமிப்பு நிலை இடங்களில் ஒன்றிலிருந்து தொடங்குகிறது, ஒவ்வொன்றும் அதன் தேதியுடன். வெற்று இடங்கள் மங்கலாகக் காட்டப்படும்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">கோர் ▸</span></td>
+                <td>இந்த விளையாட்டுக்கு மட்டுமான கோர்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">ஷேடர் ▸</span></td>
+                <td>இந்த விளையாட்டுக்கு மட்டுமான ஷேடர்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">கார்ட்ரிட்ஜ் நிறம் ▸</span></td>
+                <td>கார்ட்ரிட்ஜ் காட்சியில் உறையின் நிறம்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">பிளேலிஸ்ட்டில் சேர் ▸</span></td>
+                <td>விளையாட்டை ஒரு பிளேலிஸ்ட்டில் சேர்க்கிறது, அல்லது அதிலிருந்து எடுக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">இந்தப் பிளேலிஸ்ட்டிலிருந்து நீக்கு</span></td>
+                <td>ஒரு பிளேலிஸ்ட்டுக்குள் மட்டும்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">கோப்பு மேலாளரில் காட்டு</span></td>
+                <td>ROM கோப்பு தேர்ந்தெடுக்கப்பட்ட நிலையில் கோப்புறையைத் திறக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">மறுபெயரிடு…</span></td>
+                <td>நீட்டிப்பை வைத்துக்கொண்டு, விளையாட்டையும் அதன் கோப்பையும் மறுபெயரிடுகிறது. <kbd>F2</kbd>.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">ROM ஐ நீக்கு…</span></td>
+                <td>உறுதிசெய்யக் கேட்ட பிறகு, கோப்பைக் குப்பைத்தொட்டிக்கு நகர்த்துகிறது. <kbd>Delete</kbd>.</td>
+              </tr>
+            </table>
+          </div>
+          <h4>ஒரு கன்சோலின் மெனு</h4>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>உருப்படி</th>
+                <th>அது என்ன செய்கிறது</th>
+              </tr>
+              <tr>
+                <td><span class="ui">இந்தக் கன்சோலை மீண்டும் வருடு</span></td>
+                <td>கன்சோலின் கோப்புறையை மீண்டும் படிக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">ROM-களை இறக்குமதி செய்</span></td>
+                <td>இறக்குமதித் தேர்வியைத் திறக்கிறது. கன்சோலை இப்போதும் நீட்டிப்பே தீர்மானிக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">அட்டைகளை ஒத்திசை</span></td>
+                <td>இந்தக் கன்சோலுக்கு இல்லாத படங்களைப் பதிவிறக்குகிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">அமைப்பு ▸</span></td>
+                <td><span class="ui">பொதுவைப் பயன்படுத்து</span>, அல்லது அதற்கென சொந்தக் காட்சி.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">இயல்புக் கோர் ▸</span></td>
+                <td>முழு கன்சோலுக்கான கோர்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">இயல்பு ஷேடர் ▸</span></td>
+                <td>முழு கன்சோலுக்கான ஷேடர்.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">கன்ட்ரோலர் அமைப்புகள்</span></td>
+                <td>இந்தக் கன்சோல் தேர்ந்தெடுக்கப்பட்ட நிலையில் அமைப்புகள் → உள்ளீடு திறக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">கோப்புறையைத் திற</span></td>
+                <td>கன்சோலின் கோப்புறையைக் கோப்பு மேலாளரில் திறக்கிறது.</td>
+              </tr>
+              <tr>
+                <td><span class="ui">மேலே நகர்த்து</span> / <span class="ui">கீழே நகர்த்து</span></td>
+                <td>பக்கப்பட்டியில் கன்சோலின் இடத்தை மாற்றுகிறது. <kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd>, அல்லது வரிசையை இழுங்கள்.</td>
+              </tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="settings">
+          <span class="eyebrow">அமைப்புகள்</span>
+          <h2>அமைப்புகள்</h2>
+          <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/settings-open.webp" alt="நூலகம் பக்கத்தில் திறந்திருக்கும் அமைப்புகள் சாளரம், அமைப்புகள் பொத்தானும் பக்கத் தாவல்களும் சட்டமிடப்பட்டு" /></figure>
+          <p>தலைப்புப் பட்டையில் உள்ள 🛠 பொத்தான் மூலம், முதன்மை மெனுவிலிருந்து, அல்லது <kbd>Ctrl</kbd>+<kbd>,</kbd> மூலம் அமைப்புகளைத் திறங்கள். பக்கங்கள் அடியில் வரிசையாக உள்ளன: <span class="ui">நூலகம்</span>, <span class="ui">BIOS</span>, <span class="ui">உள்ளீடு</span>, <span class="ui">வீடியோ</span>, <span class="ui">கோர்கள்</span> மற்றும் <span class="ui">அமைப்பு</span>. மேல் இடதுபுறம் உள்ள 🔍 எல்லாப் பக்கங்களிலும் தேடுகிறது. மாற்றங்கள் உடனே நடைமுறைக்கு வரும்; கட்டுப்பாடுகள் திருத்தியைத் தவிர, சேமிக்க வேண்டியது எதுவும் இல்லை.</p>
+
+          <!-- Library -->
+          <h3 id="settings-library">நூலகம்</h3>
+          <h4>ROM கோப்புறை</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="181" src="../../manual/img/settings-library-roms-folder.webp" alt="ROM கோப்புறை குழு" /></figure>
+          <p>நூலகம் எங்கே இருக்கிறது, இறக்குமதிகள் கோப்புகளை நகலெடுக்கின்றனவா இணைக்கின்றனவா. <a href="#import-folder">ROM கோப்புறை</a> பார்க்கவும்.</p>
+          <h4>பராமரிப்பு</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-library-maintenance.webp" alt="பராமரிப்பு குழு" /></figure>
+          <ul>
+            <li><span class="ui">ROM-களை வருடு</span> கோப்புறைகளிலிருந்து விளையாட்டுப் பட்டியல்களை மீண்டும் உருவாக்குகிறது. ஒரு உரையாடல் வரம்பைக் கேட்கும்: எல்லாக் கன்சோல்களும், அல்லது ஒன்று.</li>
+            <li><span class="ui">அட்டைகளை ஒத்திசை</span> எல்லாக் கன்சோல்களுக்கும் அல்லது ஒன்றுக்கு, இல்லாத படங்களைப் பின்னணியில் பதிவிறக்குகிறது.</li>
+          </ul>
+          <h4>கன்சோல் வரிசை</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="731" src="../../manual/img/settings-library-console-order.webp" alt="கன்சோல் வரிசை குழு" /></figure>
+          <p>பக்கப்பட்டியிலும், அனைத்தும், பிடித்தவை மற்றும் பிளேலிஸ்ட்களின் குழுக்களிலும் கன்சோல்களின் வரிசை. அம்புகளைப் பயன்படுத்துங்கள், அல்லது பக்கப்பட்டியில் கன்சோல்களை இழுங்கள். <span class="ui">இயல்பு வரிசையை மீட்டமை</span> அதைச் செயல்தவிர்க்கிறது. நீங்கள் வரிசைப்படுத்திய கன்சோல் விளையாட்டுகள் இல்லாதபோதும் தன் இடத்தை வைத்துக்கொள்ளும்.</p>
+          <h4>படங்கள் வழங்குநர்கள் மற்றும் ScreenScraper கணக்கு</h4>
+          <p><a href="#covers-providers">படங்கள் எங்கிருந்து வருகின்றன</a> மற்றும் <a href="#covers-screenscraper">ScreenScraper கணக்கு</a> பார்க்கவும்.</p>
+
+          <!-- BIOS -->
+          <h3 id="settings-bios">BIOS</h3>
+          <figure class="shot narrow"><img loading="lazy" width="642" height="1100" src="../../manual/img/settings-bios-expanded.webp" alt="இரண்டு கன்சோல்கள் திறக்கப்பட்டு சட்டமிடப்பட்ட BIOS பக்கம்" /></figure>
+          <p>சில கன்சோல்களுக்கு விளையாட்டுகளை இயக்க மூல இயந்திரத்தின் ஃபர்ம்வேர், அதாவது BIOS, தேவை. OpenEmux எதையும் வழங்குவதில்லை; உங்களுடையதை <code>&lt;ROMs folder&gt;/&lt;CONSOLE&gt;/bios</code>-க்குள் நகலெடுங்கள், எடுத்துக்காட்டாக <code>~/games/roms/PS/bios/</code>.</p>
+          <ul>
+            <li>BIOS கோப்புகளைப் பயன்படுத்தும் ஒவ்வொரு கன்சோலுக்கும் ஒரு வரிசை உண்டு, அது தெரிந்தவற்றில் எத்தனை உள்ளன என்பதைக் காட்டுகிறது, எடுத்துக்காட்டாக <span class="ui">0/1</span>. கோப்புறைப் பொத்தான் அந்தக் கன்சோலின் BIOS கோப்புறையைத் திறக்கிறது.</li>
+            <li>ஒவ்வொரு கோப்பையும் பார்க்க ஒரு வரிசையைத் திறங்கள்; அவை <span class="ui">தேவையான BIOS</span> அல்லது <span class="ui">விருப்ப BIOS</span> எனக் குறிக்கப்பட்டிருக்கும், இல்லாதபோது ⚠, இருக்கும்போது ✓ உடன். <span class="ui">இவற்றில் ஒன்று:</span> கொண்ட வரி பட்டியலிடப்பட்ட கோப்புகளில் எதுவொன்று இருந்தாலும் நிறைவடைகிறது; எடுத்துக்காட்டாக, PlayStation பல பிராந்திய BIOS கோப்புகளை ஏற்கிறது.</li>
+            <li>கோப்புகளை நகலெடுத்த பிறகு மேலே உள்ள ⟳ மீண்டும் சரிபார்க்கிறது.</li>
+          </ul>
+
+          <!-- Input -->
+          <h3 id="settings-input">உள்ளீடு</h3>
+          <p>இந்தப் பக்கம் ஒரு நேரத்தில் ஒரு கன்சோலின் கட்டுப்பாடுகளைத் திருத்துகிறது. அதன் பிறகு தொடங்கப்படும் விளையாட்டு அவற்றைப் பயன்படுத்தும்; நீங்கள் சேமிக்கும்போது அந்தக் கன்சோலின் விளையாட்டு இயங்கிக்கொண்டிருந்தால், உங்கள் முன்னேற்றம் காக்கப்பட்டு அது மறுதொடக்கம் ஆகும்.</p>
+          <h4>கன்ட்ரோலர்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="336" src="../../manual/img/settings-input-controller.webp" alt="கன்ட்ரோலர் குழு" /></figure>
+          <ul>
+            <li><span class="ui">கன்சோல்</span>: நீங்கள் திருத்தும் கன்சோல். திரையில் உள்ள கன்சோலுடன் தொடங்குகிறது.</li>
+            <li><span class="ui">உள்ளீட்டுச் சாதனம்</span>: <span class="ui">விசைப்பலகை</span>, அல்லது <span class="ui">கேம்பேட் போர்ட் 1</span> முதல் <span class="ui">4</span> வரை. விசைப்பலகையும் வீரர் 1-இன் கன்ட்ரோலரும் ஒரே நேரத்தில் வேலை செய்கின்றன. போர்ட் 2 முதல் 4 வரை, <span class="ui">இந்தப் போர்ட்டை இயக்கு</span> சுவிட்ச் அந்த வீரரின் வரைபடத்தை RetroArch-க்கு அனுப்புகிறது.</li>
+            <li><span class="ui">கன்ட்ரோலர் வகை</span>: எமுலேட் செய்யப்படும் கன்சோலிடம் என்ன இணைக்கப்பட்டுள்ளது எனச் சொல்லப்படுவது. எடுத்துக்காட்டாக, PlayStation-க்கு DualShock (அனலாக் கட்டுப்பாடுள்ள விளையாட்டுகளுக்குத் தேவை), Mega Drive-க்கு 6-பொத்தான் பேட் (Street Fighter II-க்கு), Super Nintendo-வுக்கு ஒரு சுட்டி அல்லது மல்டிடேப் கொடுக்கலாம். விருப்பங்கள் உள்ள கன்சோல்களுக்கு மட்டுமே காட்டப்படும்.</li>
+            <li><span class="ui">அனலாக் ஸ்டிக்கை D-பேடாக</span>: எதையும் மறுவரைபடமாக்காமல் ஸ்டிக் D-பேடை நகர்த்த அனுமதிக்கிறது. <span class="ui">(கட்டாயம்)</span> விருப்பங்கள் கோர் செய்யாதபோதும் இதைப் பயன்படுத்துகின்றன.</li>
+            <li><span class="ui">D-பேடும் அனலாக் ஸ்டிக்கை நகர்த்தும்</span>: மறுபக்கமாக, N64 அல்லது PlayStation போன்ற 3D கன்சோல்களுக்கு.</li>
+          </ul>
+          <h4>ஸ்டிக்கும் பின்னூட்டமும்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="508" src="../../manual/img/settings-input-stick.webp" alt="ஸ்டிக்கும் பின்னூட்டமும் குழு" /></figure>
+          <p>இவை எல்லாக் கன்சோல்களுக்கும் பொருந்தும்.</p>
+          <ul>
+            <li><span class="ui">அனலாக் டெட்சோன்</span>: ஸ்டிக் கணக்கில் எடுக்கப்பட எவ்வளவு நகர வேண்டும். தொடப்படாத ஸ்டிக் கதாபாத்திரத்தை நகர்த்தினால் இதை உயர்த்துங்கள்.</li>
+            <li><span class="ui">அனலாக் உணர்திறன்</span>: ஸ்டிக் அசைவைப் பெருக்குகிறது. 1.0 என்பது இயல்பானது.</li>
+            <li><span class="ui">அச்சு வரம்பு</span>: ஒரு ஸ்டிக் அல்லது ட்ரிகர் பொத்தான் அழுத்தமாகக் கணக்கிடப்பட எவ்வளவு செல்ல வேண்டும்.</li>
+            <li><span class="ui">அதிர்வு வலிமை</span>: அதிர்வு, 0 (அணை) முதல் 100 வரை.</li>
+            <li><span class="ui">உள்ளீட்டுத் தாமதம்</span>: ஒரு ஃபிரேமின்போது உள்ளீடு எப்போது படிக்கப்படுகிறது. முன்கூட்டியே என்பது மிக விரைவாகப் பதிலளிக்கும், ஆனால் மெதுவான கணினியில் மிகக் குறைவாக விட்டுக்கொடுக்கும்; தாமதமாக என்பது இயல்பு.</li>
+            <li><span class="ui">விளையாட்டுக் குவிப்பு</span>: விளையாட்டு இயங்கும்போது விசைப்பலகையைப் பிடித்துக்கொள்கிறது, எனவே கணினி விளையாட்டுக்குத் தேவையான விசைகளை RetroArch-இன் ஹாட்கீகள் பறிப்பதில்லை. அணை, மெனு மூடும்போது, அல்லது விளையாட்டு தொடங்கும்போது.</li>
+            <li><span class="ui">விளையாட்டின் சொந்தப் பொத்தான் பெயர்களைப் பயன்படுத்து</span>: கோர் வழங்கும்போது, RetroArch மெனுவில் ஒவ்வொரு பொத்தானின் விளையாட்டுக்குள்ளான செயலைக் காட்டுகிறது.</li>
+          </ul>
+          <h4>டர்போ</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="273" src="../../manual/img/settings-input-turbo.webp" alt="டர்போ குழு" /></figure>
+          <p>ஒரு பொத்தானைத் தொடர்ந்து அழுத்த வேண்டிய விளையாட்டுகளுக்கான தானியங்கி அழுத்தம். கீழே உள்ள விளையாட்டுக் கட்டுப்பாடுகளில் <span class="ui">டர்போ (மாற்றி)</span> விசையைப் பிணையுங்கள்.</p>
+          <ul>
+            <li><span class="ui">டர்போ கால அளவு</span>: ஒவ்வொரு அழுத்தச் சுழற்சிக்குமான ஃபிரேம்கள். குறைவாக இருந்தால் வேகம் அதிகம்.</li>
+            <li><span class="ui">டர்போ செயல் சுழற்சி</span>: ஒவ்வொரு சுழற்சியிலும் பொத்தான் அழுத்தப்பட்டிருக்கும் ஃபிரேம்கள்.</li>
+            <li><span class="ui">டர்போ முறை</span>: <span class="ui">பாரம்பரியம்</span> மாற்றியுடன் சேர்த்துப் பிடிக்கப்படும் எந்தப் பொத்தானையும் தொடர்ந்து அழுத்துகிறது; <span class="ui">ஒரே பொத்தான் (நிலைமாற்று)</span> மற்றும் ஒரே பொத்தான் (பிடி) ஆகிய இரண்டு முறைகளும் தேர்ந்தெடுத்த ஒரு பொத்தானை, நிலைமாற்றியோ பிடித்தோ, தொடர்ந்து அழுத்துகின்றன.</li>
+          </ul>
+          <h4>விளையாட்டுக் கட்டுப்பாடுகள்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="788" src="../../manual/img/settings-input-game-controls.webp" alt="விளையாட்டுக் கட்டுப்பாடுகள் குழு" /></figure>
+          <p>தேர்ந்தெடுத்த கன்சோலின் ஒவ்வொரு பொத்தானுக்கும் ஒரு வரிசை. ஒரு பிணைப்பைக் கிளிக் செய்து நீங்கள் விரும்பும் விசையையோ பொத்தானையோ அழுத்துங்கள்; காத்திருக்கும்போது அது <span class="ui">ஒரு விசையை அழுத்தவும்...</span> எனக் காட்டும், <kbd>Esc</kbd> அதை அழிக்கும். அந்த விசை வேறு இடத்தில் பயன்படுத்தப்பட்டிருந்தால், OpenEmux அதை அங்கிருந்து விடுவித்து உங்களுக்குத் தெரிவிக்கும்.</p>
+          <ul>
+            <li><span class="ui">அனைத்தையும் வரைபடமாக்கு</span> ஒவ்வொரு பொத்தானாக வரிசையாகச் செல்கிறது.</li>
+            <li><span class="ui">இயல்புகளை மீட்டமை</span> இந்தக் கன்சோலின் இயல்பு வரைபடத்தை மீண்டும் கொண்டுவருகிறது.</li>
+            <li><span class="ui">சேமி</span> உங்கள் மாற்றங்களை வைத்துக்கொள்கிறது. இதை நினைவில் கொள்ளுங்கள்; அமைப்புகளில் சேமிக்க வேண்டிய ஒரே இடம் இதுதான்.</li>
+          </ul>
+          <h4>அமைப்பு ஹாட்கீகள்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-input-hotkeys.webp" alt="அமைப்பு ஹாட்கீகள் குழு" /></figure>
+          <p>விளையாட்டுக்கு அல்லாமல் RetroArch-க்கான விசைகள்: மெனு, நிலையைச் சேமி மற்றும் ஏற்று, சேமிப்பு இடங்கள், ஒலியளவு, ஒலியடக்கம், வேகமாக்கல், முழுத்திரை, மறுதொடக்கம், பின்னோக்கு, இடைநிறுத்தம், மெதுவான இயக்கம், திரைப்படம், விளையாட்டுக் குவிப்பு மற்றும் வட்டு மாற்றுதல். <span class="ui">ஹாட்கீயை இயக்கு</span> என்பது மற்றவை வேலை செய்ய நீங்கள் பிடித்திருக்கும் பொத்தான்; விசைப்பலகையில் அது இயல்பாக வெறுமையாக உள்ளது, எனவே ஹாட்கீகள் தனியாகவே வேலை செய்கின்றன. இயல்புகள் <a href="#keys-game">விளையாடும்போது</a> பகுதியில் உள்ளன.</p>
+
+          <!-- Video -->
+          <h3 id="settings-video">வீடியோ</h3>
+          <h4>தோற்றம்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="291" src="../../manual/img/settings-video-appearance.webp" alt="தோற்றம் குழு" /></figure>
+          <ul>
+            <li><span class="ui">காட்சி முறை</span> மற்றும் <span class="ui">விளையாட்டுகளை வரிசைப்படுத்து</span>: பொது அமைப்பு. <a href="#views-layout">அமைப்பு மெனு</a> பார்க்கவும்.</li>
+            <li><span class="ui">அனைத்து ஷேடர்களையும் காட்டு</span>: சுருக்கமான பட்டியலுக்குப் பதிலாக, RetroArch-இடம் உள்ள எல்லா ஷேடர்களையும் ஷேடர் மெனுக்களில் பட்டியலிடுகிறது.</li>
+            <li><span class="ui">இயல்புகளை மீட்டமை</span>: ஒவ்வொரு கன்சோலையும் அதன் இயல்பு ஷேடருக்குத் திருப்புகிறது.</li>
+          </ul>
+          <h4>கன்சோலுக்கு ஏற்ற ஷேடர்கள்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-video-shaders.webp" alt="கன்சோலுக்கு ஏற்ற ஷேடர்கள் குழு" /></figure>
+          <p>ஒவ்வொரு கன்சோலுக்கும் அதன் இயல்பு ஷேடருடன் ஒரு வரிசை. கன்சோலின் மெனுவில் உள்ள <span class="ui">இயல்பு ஷேடர்</span> அமைப்பே இது.</p>
+
+          <!-- Cores -->
+          <h3 id="settings-cores">கோர்கள்</h3>
+          <h4>கன்சோலுக்கு ஏற்ற கோர்கள்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="820" src="../../manual/img/settings-cores-cores.webp" alt="கன்சோலுக்கு ஏற்ற கோர்கள் குழு" /></figure>
+          <figure class="shot narrow"><img loading="lazy" width="700" height="600" src="../../manual/img/settings-cores-dropdown.webp" alt="சட்டமிடப்பட்ட, திறந்திருக்கும் Super Nintendo கோர் பட்டியல்" /></figure>
+          <p>ஒவ்வொரு கன்சோலுக்கும் ஒரு வரிசை. <span class="ui">தானியங்கி</span> எந்தக் கோரைப் பயன்படுத்துகிறது என்பதைத் துணைத்தலைப்பு சொல்கிறது; நிறுவப்பட்ட வேறொரு கோரைத் தேர்ந்தெடுக்கப் பட்டியலைத் திறங்கள். கன்சோலின் மெனுவில் உள்ள <span class="ui">இயல்புக் கோர்</span> அமைப்பே இது. இன்னும் கோர் இல்லாத கன்சோல், பின்னணிப் பதிவிறக்கம் அதை அடையும் வரை <span class="ui">இந்த அமைப்புக்குக் கோர் எதுவும் நிறுவப்படவில்லை</span> எனக் காட்டும்.</p>
+          <h4>மேம்பட்டவை</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="196" src="../../manual/img/settings-cores-advanced.webp" alt="மேம்பட்டவை குழு" /></figure>
+          <p>சில கோர்கள் புரிந்துகொள்ளும் கூடுதல் விருப்பங்கள், தற்போதைய கோரில் அவை உள்ள கன்சோல்களுக்கு மட்டுமே பட்டியலிடப்படுகின்றன. PSP மற்றும் PlayStation-க்கு, இதன் பொருள் உள் தெளிவுத்திறன் (கூர்மையான படத்துக்காக 3D விளையாட்டுகளை அவற்றின் இயல் தெளிவுத்திறனுக்கு மேல் வரைதல், வேகத்தின் விலையில்), கிராபிக்ஸ் API மற்றும் டெக்ஸ்ச்சர் வடிகட்டல்.</p>
+
+          <!-- System -->
+          <h3 id="settings-system">அமைப்பு</h3>
+          <h4>மொழி</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="126" src="../../manual/img/settings-system-language.webp" alt="மொழி குழு" /></figure>
+          <p>இடைமுக மொழி: English, Deutsch, 日本語, Français, 简体中文, Português (Brasil), Español அல்லது தமிழ். அமைப்புகள் புதிய மொழியில் மீண்டும் திறக்கும்.</p>
+          <h4>இடைமுகம்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="238" src="../../manual/img/settings-system-interface.webp" alt="இடைமுகம் குழு" /></figure>
+          <ul>
+            <li><span class="ui">தீம்</span>: <span class="ui">அமைப்பு</span> (உங்கள் டெஸ்க்டாப்பைப் பின்பற்றும்), <span class="ui">வெளிர்</span> அல்லது <span class="ui">கரும்</span>.</li>
+            <li><span class="ui">குறிப்புகளைக் காட்டு</span>: சாளரத்தின் அடியில் சுழலும் குறிப்பு.</li>
+            <li><span class="ui">கேம்பேடு மூலம் இடைமுகத்தைக் கட்டுப்படுத்து</span>: ஒரு கன்ட்ரோலர் மூலம் நூலகத்தில் நகருங்கள். Ⓐ உறுதிசெய்கிறது, Ⓑ பின்செல்கிறது.</li>
+          </ul>
+          <h4>தொடங்குதல்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-getting-started.webp" alt="தொடங்குதல் குழு" /></figure>
+          <p>தொடக்கத்தில் வரவேற்புச் சுற்றுலா திறக்குமா என்பது, மற்றும் அதை இப்போதே திறக்க ஒரு பொத்தான்.</p>
+          <h4>சிக்கல் தீர்வு</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="251" src="../../manual/img/settings-system-troubleshooting.webp" alt="சிக்கல் தீர்வு குழு" /></figure>
+          <p><span class="ui">பதிவுப் பலகத்தைக் காட்டு</span> நூலகத்தின் கீழ் பதிவைத் திறந்தே வைக்கிறது; <span class="ui">பிழையைப் புகாரளி</span> பதிவையும் உங்கள் கணினி விவரங்களையும் நகலெடுத்து GitHub-இல் ஒரு புகாரைத் திறக்கிறது. <a href="#help">ஏதாவது தவறாகும்போது</a> பார்க்கவும்.</p>
+          <h4>சேமிப்புகள்</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-saves.webp" alt="சேமிப்புகள் குழு" /></figure>
+          <p><span class="ui">சேமிப்புகளை ஏற்றுமதி செய்</span> ஒவ்வொரு சேமிப்பு நிலையையும் பேட்டரி சேமிப்பையும் (கார்ட்ரிட்ஜ்களின் விளையாட்டுக்குள்ளான சேமிப்புகள்) ஒரே <code>.zip</code>-இல் அடைக்கிறது. <span class="ui">சேமிப்புகளை இறக்குமதி செய்</span> அத்தகைய கோப்பை மீட்டமைக்கிறது, எடுத்துக்காட்டாகப் புதிய கணினியில்; உங்களிடம் ஏற்கனவே உள்ள சேமிப்புகள் தொடப்படுவதில்லை.</p>
+          <h4>RetroAchievements</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="273" src="../../manual/img/settings-system-retroachievements.webp" alt="RetroAchievements குழு" /></figure>
+          <p>விளையாடும்போது சாதனைகளைத் திறக்க உங்கள் <a href="https://retroachievements.org/">RetroAchievements</a> கணக்கில் உள்நுழையுங்கள். உங்கள் கடவுச்சொல் ஒருமுறை டோக்கனாக மாற்றப்படுகிறது, சேமிக்கப்படுவதில்லை. உள்நுழைந்ததும், கண்காணிப்பை இயக்கி <span class="ui">ஹார்ட்கோர் முறை</span> தேர்ந்தெடுக்கலாம்; அது சேமிப்பு நிலைகள், பின்னோக்கு மற்றும் வேகமாக்கலை முடக்குகிறது.</p>
+          <h4>தொடக்க அமைவு</h4>
+          <figure class="shot mid"><img loading="lazy" width="642" height="183" src="../../manual/img/settings-system-initial-setup.webp" alt="தொடக்க அமைவு குழு" /></figure>
+          <p>முதல் தொடக்க அமைவு முடிந்ததா என்பதைக் காட்டுகிறது. ஒரு படி தோல்வியடைந்திருந்தால், எடுத்துக்காட்டாக நீங்கள் இணைப்பில் இல்லாததால், <span class="ui">தொடக்க அமைவை முடிக்கவும்</span> அதைப் பின்னணியில் மீண்டும் முயல்கிறது.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="keys">
+          <span class="eyebrow">குறிப்பு</span>
+          <h2>குறுக்குவழிகளும் ஹாட்கீகளும்</h2>
+
+          <h3 id="keys-library">நூலகத்தில்</h3>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>விசைகள்</th>
+                <th>செயல்</th>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>F</kbd></td>
+                <td>தேடு</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>,</kbd></td>
+                <td>அமைப்புகள்</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>?</kbd></td>
+                <td>விசைப்பலகை குறுக்குவழிகள்</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td>
+                <td>வெளியேறு</td>
+              </tr>
+              <tr>
+                <td><kbd>F5</kbd> அல்லது <kbd>Ctrl</kbd>+<kbd>R</kbd></td>
+                <td>தற்போதைய பக்கத்தை மீண்டும் வருடு</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>O</kbd></td>
+                <td>ROM-களை இறக்குமதி செய்</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td>
+                <td>அட்டைப் படங்களை ஒத்திசை</td>
+              </tr>
+              <tr>
+                <td><kbd>Tab</kbd> அல்லது <kbd>F6</kbd></td>
+                <td>பக்கப்பட்டிக்கும் விளையாட்டுகளுக்கும் இடையே மாறு</td>
+              </tr>
+              <tr>
+                <td><kbd>→</kbd> / <kbd>Backspace</kbd></td>
+                <td>கன்சோல் பட்டியலிலிருந்து விளையாட்டுகளுக்குள், மீண்டும் திரும்ப</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd></td>
+                <td>பெரிய, சிறிய, இயல்புச் சிறுபடங்கள்</td>
+              </tr>
+              <tr>
+                <td><kbd>Enter</kbd> அல்லது <kbd>Space</kbd></td>
+                <td>குவிந்துள்ள விளையாட்டை விளையாடு</td>
+              </tr>
+              <tr>
+                <td><kbd>Menu</kbd> அல்லது <kbd>Shift</kbd>+<kbd>F10</kbd></td>
+                <td>குவிந்துள்ள விளையாட்டின் மெனு</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>D</kbd></td>
+                <td>பிடித்ததை நிலைமாற்று</td>
+              </tr>
+              <tr>
+                <td><kbd>F2</kbd></td>
+                <td>விளையாட்டை மறுபெயரிடு</td>
+              </tr>
+              <tr>
+                <td><kbd>Delete</kbd></td>
+                <td>விளையாட்டை நீக்கு</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td>
+                <td>அனைத்தையும் தேர்ந்தெடு / தேர்வை அழி</td>
+              </tr>
+              <tr>
+                <td><kbd>Shift</kbd>+அம்புகள், <kbd>Ctrl</kbd>+<kbd>Space</kbd></td>
+                <td>தேர்வை நீட்டி, குவிந்துள்ள விளையாட்டை நிலைமாற்று</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> (பக்கப்பட்டி)</td>
+                <td>கன்சோலை மேலே அல்லது கீழே நகர்த்து</td>
+              </tr>
+              <tr>
+                <td><kbd>Esc</kbd></td>
+                <td>தேர்வை அழி, பிறகு பக்கப்பட்டிக்குத் திரும்பு</td>
+              </tr>
+            </table>
+          </div>
+
+          <h3 id="keys-game">விளையாடும்போது</h3>
+          <p>இயல்பு விசைப்பலகை விசைகள். அவற்றை <a href="#settings-input">அமைப்புகள் → உள்ளீடு → அமைப்பு ஹாட்கீகள்</a> பகுதியில் மாற்றுங்கள்.</p>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>விசை</th>
+                <th>செயல்</th>
+                <th>விசை</th>
+                <th>செயல்</th>
+              </tr>
+              <tr>
+                <td><kbd>F1</kbd></td>
+                <td>RetroArch மெனு</td>
+                <td><kbd>P</kbd></td>
+                <td>இடைநிறுத்து</td>
+              </tr>
+              <tr>
+                <td><kbd>F2</kbd></td>
+                <td>நிலையைச் சேமி</td>
+                <td><kbd>W</kbd></td>
+                <td>பின்னோக்கு</td>
+              </tr>
+              <tr>
+                <td><kbd>F4</kbd></td>
+                <td>நிலையை ஏற்று</td>
+                <td><kbd>R</kbd></td>
+                <td>மறுதொடக்கம்</td>
+              </tr>
+              <tr>
+                <td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td>
+                <td>அடுத்த / முந்தைய சேமிப்பு இடம்</td>
+                <td><kbd>O</kbd></td>
+                <td>மெதுவான இயக்கம்</td>
+              </tr>
+              <tr>
+                <td><kbd>F6</kbd></td>
+                <td>வேகமாக்கல் இயக்கு/அணை</td>
+                <td><kbd>H</kbd></td>
+                <td>பிடித்திருக்கும்போது வேகமாக்கல்</td>
+              </tr>
+              <tr>
+                <td><kbd>F</kbd></td>
+                <td>முழுத்திரை</td>
+                <td><kbd>F8</kbd></td>
+                <td>திரைப்படம்</td>
+              </tr>
+              <tr>
+                <td>எண் விசைப்பலகை <kbd>+</kbd> / <kbd>−</kbd></td>
+                <td>ஒலியளவு</td>
+                <td><kbd>M</kbd></td>
+                <td>ஒலியடக்கு</td>
+              </tr>
+              <tr>
+                <td><kbd>G</kbd></td>
+                <td>விளையாட்டுக் குவிப்பு</td>
+                <td><kbd>T</kbd></td>
+                <td>டர்போ</td>
+              </tr>
+              <tr>
+                <td><kbd>F9</kbd></td>
+                <td>வட்டை வெளியேற்று</td>
+                <td><kbd>N</kbd> / <kbd>B</kbd></td>
+                <td>அடுத்த / முந்தைய வட்டு</td>
+              </tr>
+            </table>
+          </div>
+          <p>இயல்பு விளையாட்டு விசைகள்: D-பேடுக்கு அம்புகள், <kbd>Z</kbd> A, <kbd>X</kbd> B, <kbd>S</kbd> X, <kbd>C</kbd> Y, <kbd>D</kbd> / <kbd>A</kbd> L1 / R1, <kbd>E</kbd> / <kbd>Q</kbd> L2 / R2, <kbd>Enter</kbd> Start, <kbd>Space</kbd> Select, மேலும் அனலாக் ஸ்டிக்குக்கு <kbd>I</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd>.</p>
+          <p>விளையாட்டுகள் அடியில் ஒரு கட்டுப்பாட்டுப் பட்டையுடன் ஒரு சாளரத்தில் திறக்கின்றன: மூடு, மெனு, இடைநிறுத்து, மீட்டமை, மெதுவான இயக்கம், வேகமாக்கல், டர்போ, நிலையைச் சேமி மற்றும் ஏற்று, ஒலியளவு, முழுத்திரை, மேலும் பட்டையை மறைக்க ஒரு பொத்தான்.</p>
+
+          <h3 id="keys-gamepad">கேம்பேடுடன்</h3>
+          <p>ஒரு விளையாட்டில், <strong>Select</strong> தான் ஹாட்கீ பொத்தான்: Select+Start RetroArch மெனுவைத் திறக்கிறது, Select+X ஒரு நிலையைச் சேமிக்கிறது, Select+Y அதை ஏற்றுகிறது, Select+L1 முழுத்திரையை நிலைமாற்றுகிறது, Select+R1 வேகமாக்குகிறது.</p>
+          <p>நூலகத்தில், <span class="ui">கேம்பேடு மூலம் இடைமுகத்தைக் கட்டுப்படுத்து</span> இயக்கப்பட்டிருக்கும்போது: Ⓐ விளையாடுகிறது, Ⓑ பின்செல்கிறது, Ⓧ விளையாட்டின் மெனுவைத் திறக்கிறது, Ⓨ பிடித்ததை நிலைமாற்றுகிறது, L1 / R1 கன்சோலை மாற்றுகின்றன, Ⓐ-ஐப் பிடித்திருந்தால் விளையாட்டுகளைத் தேர்ந்தெடுக்கத் தொடங்கும். நீங்கள் நகரும்போது குறிப்புப் பட்டை பொத்தான்களைக் காட்டும்.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="help">
+          <span class="eyebrow">உதவி</span>
+          <h2>ஏதாவது தவறாகும்போது</h2>
+          <figure class="shot"><img loading="lazy" width="1520" height="330" src="../../manual/img/ui-log.webp" alt="சாளரத்தின் அடியில் திறந்திருக்கும் பதிவுப் பலகம்" /></figure>
+          <p>கீழ் வலதுபுறம் உள்ள <span class="ui">பதிவு</span> கிளிக் செய்யுங்கள். OpenEmux என்ன செய்கிறது என்பதைப் பலகம் நடக்கும்போதே காட்டுகிறது: வருடல்கள், பதிவிறக்கங்கள், ஒவ்வொரு விளையாட்டும் தொடங்கப்பட்ட சரியான கட்டளை, ஒரு விளையாட்டு ஏன் உடனே மூடியது என்பது. <span class="ui">பதிவு + கணினித் தகவலை நகலெடு</span> அதைக் கிளிப்போர்டில் வைக்கிறது, <span class="ui">பிழையைப் புகாரளி…</span> அதை ஒட்டிய நிலையில் GitHub-இல் ஒரு புகாரைத் திறக்க உங்களுக்கு வழிகாட்டுகிறது.</p>
+          <p>சில பொதுவான சூழ்நிலைகள்:</p>
+          <ul>
+            <li><strong>ஒரு விளையாட்டு திறந்தவுடனே மூடுகிறது.</strong> பொதுவாகச் செய்தி காரணத்தைச் சொல்லும். BIOS தேவைப்படும் கன்சோல்களுக்கு <a href="#settings-bios">BIOS</a> சரிபாருங்கள், விளையாட்டின் <span class="ui">கோர் ▸</span> மெனுவிலிருந்து வேறொரு கோரை முயலுங்கள்.</li>
+            <li><strong>ஒரு விளையாட்டுக்குப் படம் இல்லை.</strong> <span class="ui">லேபிளை ஒத்திசை…</span> / <span class="ui">அட்டையை ஒத்திசை…</span> முயலுங்கள், அல்லது <a href="#artwork-manager">பட மேலாளரில்</a> வேறொரு பெயரால் தேடுங்கள்.</li>
+            <li><strong>கன்ட்ரோலர் எதுவும் செய்யவில்லை.</strong> <a href="#settings-input">அமைப்புகள் → உள்ளீடு</a> பகுதியில், அதன் போர்ட்டை <span class="ui">உள்ளீட்டுச் சாதனம்</span> ஆகத் தேர்ந்தெடுத்துச் சரிபாருங்கள். Linux-இல், உங்கள் பயனர் <code>input</code> குழுவில் இருக்க வேண்டியிருக்கலாம்.</li>
+          </ul>
+          <p>கேள்விகளும் யோசனைகளும் <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a>-இல் வரவேற்கப்படுகின்றன, பிழைகள் <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">GitHub</a>-இல்.</p>
+
+          <footer>
+            <p>OpenEmux என்பது MIT உரிமத்தின் கீழ் உள்ள கட்டற்ற மென்பொருள். இது ஒரு சுயாதீனத் திட்டம், OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari அல்லது வேறு எந்த நிறுவனத்துடனும் இணைந்தது அல்ல, மேலும் அது விளையாட்டுகள், ROM-கள் அல்லது BIOS கோப்புகள் எதையும் விநியோகிப்பதில்லை. <a href="../">OpenEmux தளத்துக்குத் திரும்பு</a>.</p>
+          </footer>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="திரைப்படப் பார்வையாளர்">
+    <button class="lightbox-close" id="lightboxClose" aria-label="மூடு">×</button>
+    <img id="lightboxImg" src="" alt="" />
+    <div class="lightbox-cap" id="lightboxCap"></div>
+  </div>
+
+  <script>
+    // Lightbox: click a screenshot to see it full size.
+    (function () {
+      var box = document.getElementById("lightbox");
+      var img = document.getElementById("lightboxImg");
+      var cap = document.getElementById("lightboxCap");
+      function close() {
+        box.classList.remove("open");
+        document.body.style.overflow = "";
+        img.src = "";
+      }
+      document.querySelectorAll("figure.shot img").forEach(function (el) {
+        el.addEventListener("click", function () {
+          var fc = el.closest("figure").querySelector("figcaption");
+          img.src = el.currentSrc || el.src;
+          img.alt = el.alt;
+          cap.textContent = fc ? fc.textContent : el.alt;
+          box.classList.add("open");
+          document.body.style.overflow = "hidden";
+        });
+      });
+      document.getElementById("lightboxClose").addEventListener("click", close);
+      box.addEventListener("click", function (e) { if (e.target === box) close(); });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && box.classList.contains("open")) close();
+      });
+    })();
+
+    // Contents: highlight the section on screen, and the menu button on narrow screens.
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+      var byId = {};
+      links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+      var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); })
+        .filter(Boolean);
+      var current = null;
+      function update() {
+        var y = window.scrollY + 120, pick = targets[0];
+        for (var i = 0; i < targets.length; i++) {
+          if (targets[i].getBoundingClientRect().top + window.scrollY <= y) pick = targets[i];
+        }
+        if (pick === current) return;
+        if (current) byId[current.id].classList.remove("active");
+        current = pick;
+        var a = byId[pick.id];
+        a.classList.add("active");
+        var aside = document.getElementById("toc");
+        var r = a.getBoundingClientRect(), ar = aside.getBoundingClientRect();
+        if (r.top < ar.top + 40 || r.bottom > ar.bottom - 40) {
+          aside.scrollTop += r.top - ar.top - ar.height / 3;
+        }
+      }
+      var ticking = false;
+      window.addEventListener("scroll", function () {
+        if (!ticking) { ticking = true; requestAnimationFrame(function () { ticking = false; update(); }); }
+      }, { passive: true });
+      update();
+
+      var toggle = document.getElementById("tocToggle");
+      toggle.addEventListener("click", function () {
+        var open = document.body.classList.toggle("toc-open");
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      links.forEach(function (a) {
+        a.addEventListener("click", function () {
+          document.body.classList.remove("toc-open");
+          toggle.setAttribute("aria-expanded", "false");
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>

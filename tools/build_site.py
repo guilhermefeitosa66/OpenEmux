@@ -7,6 +7,11 @@ table per language (``site/strings/<locale>.json``). This writes English to
 language to ``docs/<slug>/index.html``, with the language picker, ``hreflang``
 and ``lang`` set for that page.
 
+The manual is built the same way, from ``site/manual.html`` and
+``site/manual/<locale>.json``: English at ``docs/manual/``, the others at
+``docs/<slug>/manual/``. Its screenshots stay in ``docs/manual/img`` for every
+language.
+
 The languages are the app's own (``openemux.i18n.LANGUAGE_META``): the site
 offers exactly what the app offers, under the same flag and native name.
 
@@ -33,12 +38,14 @@ from openemux.i18n import LANGUAGE_META  # noqa: E402
 SITE_URL = "https://guilhermefeitosa66.github.io/OpenEmux/"
 TEMPLATE = REPO / "site" / "page.html"
 STRINGS = REPO / "site" / "strings"
+MANUAL_TEMPLATE = REPO / "site" / "manual.html"
+MANUAL_STRINGS = REPO / "site" / "manual"
 DOCS = REPO / "docs"
 
 #: The order the picker lists them in. English first, as the default page.
 ORDER = ("en", "pt_BR", "es", "fr", "de", "ja", "zh_CN", "ta")
 
-PLACEHOLDER = re.compile(r"\{\{([a-zA-Z0-9_.]+)\}\}")
+PLACEHOLDER = re.compile(r"\{\{([a-zA-Z0-9_.-]+)\}\}")
 
 
 def slug(locale):
@@ -51,35 +58,43 @@ def html_lang(locale):
     return locale.replace("_", "-")
 
 
-def page_url(locale):
-    return SITE_URL + (slug(locale) + "/" if slug(locale) else "")
+def page_url(locale, page=""):
+    """The page's public URL; ``page`` is ``"manual/"`` for the manual."""
+    return SITE_URL + (slug(locale) + "/" if slug(locale) else "") + page
 
 
 def load_strings(locale):
     return json.loads((STRINGS / f"{locale}.json").read_text(encoding="utf-8"))
 
 
-def hreflang_links():
+def load_manual_strings(locale):
+    return json.loads((MANUAL_STRINGS / f"{locale}.json").read_text(encoding="utf-8"))
+
+
+def hreflang_links(page=""):
     lines = [
-        f'  <link rel="alternate" hreflang="{html_lang(loc)}" href="{page_url(loc)}" />'
+        f'  <link rel="alternate" hreflang="{html_lang(loc)}" href="{page_url(loc, page)}" />'
         for loc in ORDER
     ]
-    lines.append(f'  <link rel="alternate" hreflang="x-default" href="{page_url("en")}" />')
+    lines.append(f'  <link rel="alternate" hreflang="x-default" href="{page_url("en", page)}" />')
     return "\n".join(lines)
 
 
-def lang_switcher(current, label):
+def lang_switcher(current, label, page=""):
     """The picker: a <details> menu of links, so it works without JavaScript.
 
     Each entry is a link to the same page in that language, named in that
     language under its flag, the way the app's own language list shows it.
+    ``page`` is ``"manual/"`` on the manual, whose pages sit one level deeper.
     """
     meta = LANGUAGE_META[current]
     root = "" if current == "en" else "../"
+    if page:
+        root += "../"
     items = []
     for loc in ORDER:
         entry = LANGUAGE_META[loc]
-        href = root + (slug(loc) + "/" if slug(loc) else "")
+        href = root + (slug(loc) + "/" if slug(loc) else "") + page
         if not href:
             href = "./"
         current_attr = ' aria-current="page"' if loc == current else ""
@@ -127,13 +142,46 @@ def render(locale, template=None, strings=None):
     return PLACEHOLDER.sub(_sub, template)
 
 
+def render_manual(locale, template=None, strings=None):
+    """The manual in ``locale``. Its own strings, plus the site's picker label."""
+    template = template if template is not None else MANUAL_TEMPLATE.read_text(encoding="utf-8")
+    values = dict(strings if strings is not None else load_manual_strings(locale))
+    values.update(
+        {
+            "html_lang": html_lang(locale),
+            "canonical": page_url(locale, "manual/"),
+            "hreflang_links": hreflang_links("manual/"),
+            "lang_switcher": lang_switcher(locale, load_strings(locale)["lang.label"], "manual/"),
+            # docs/manual/ or docs/<slug>/manual/: the shared assets and the
+            # screenshots, which every language reads from the English folder.
+            "assets": "../" if locale == "en" else "../../",
+            "img": "" if locale == "en" else "../../manual/",
+        }
+    )
+
+    def _sub(match):
+        key = match.group(1)
+        if key not in values:
+            raise KeyError(f"{locale}: no manual string for {{{{{key}}}}}")
+        return values[key]
+
+    return PLACEHOLDER.sub(_sub, template)
+
+
 def output_path(locale):
     return DOCS / (slug(locale) + "/index.html" if slug(locale) else "index.html")
 
 
+def manual_output_path(locale):
+    return DOCS / (slug(locale) + "/manual" if slug(locale) else "manual") / "index.html"
+
+
 def pages():
     template = TEMPLATE.read_text(encoding="utf-8")
-    return {output_path(loc): render(loc, template) for loc in ORDER}
+    manual = MANUAL_TEMPLATE.read_text(encoding="utf-8")
+    built = {output_path(loc): render(loc, template) for loc in ORDER}
+    built.update({manual_output_path(loc): render_manual(loc, manual) for loc in ORDER})
+    return built
 
 
 def main(argv=None):
