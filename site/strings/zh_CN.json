@@ -33,7 +33,7 @@
   "philosophy.own": "<li><strong>只使用你合法拥有的内容。</strong>自行提取你的卡带和光盘，或使用\n            你购买的游戏的备份。</li>",
   "philosophy.piracy": "<li><strong>本项目不是为盗版而生。</strong>在大多数国家，下载你并不拥有的受版权保护的游戏\n            都是违法的。</li>",
   "philosophy.history": "<li><strong>模拟有助于保存历史。</strong> 游戏的许多美术、音乐和设计都依存于日渐老化的硬件。让它们保持可玩是值得的，而尊重制作这些游戏的人，才能把这件事做好。</li>",
-  "philosophy.shot_alt": "<img src=\"assets/shelf/ps.png\" alt=\"OpenEmux — PlayStation 游戏库\" />\n      </div>\n    </div>\n  </section>",
+  "philosophy.shot_alt": "<img src=\"assets/openemux-all.png\" alt=\"OpenEmux — 游戏库中的所有主机\" />\n      </div>\n    </div>\n  </section>",
   "systems.eyebrow": "<span class=\"eyebrow\">31 个系统</span>",
   "systems.title": "<h2>支持的系统</h2>",
   "systems.lede": "<p class=\"lede\">每个系统都使用 RetroArch 自己的核心运行，并在 OpenEmux 中拥有各自的封面、按键和着色器设置。</p>",
@@ -91,5 +91,6 @@
   "cart.title": "<h2 id=\"cartridges-title\">每款游戏都在它所属主机的卡带上</h2>",
   "cart.lede": "<p class=\"lede\">在卡带视图中，你添加的游戏会以标签图案显示在所属主机的卡带上。下面的卡带就是这种视图的示例。</p>",
   "cart.wall_label": "aria-label=\"超级任天堂、Game Boy Advance、Nintendo 64 和 Mega Drive 卡带一排排滚动而过\">",
+  "shots.favorites": "alt=\"OpenEmux — 收藏\" />\n                <figcaption>收藏</figcaption>\n              </figure>",
   "lang.label": "语言"
 }

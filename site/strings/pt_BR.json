@@ -33,7 +33,7 @@
   "philosophy.own": "<li><strong>Use só conteúdo que você possui legalmente.</strong> Faça o dump dos seus próprios cartuchos e\n            discos, ou use backups de jogos que você comprou.</li>",
   "philosophy.piracy": "<li><strong>Pirataria não é o propósito.</strong> Baixar jogos protegidos por direitos autorais que você não\n            tem é ilegal na maioria dos países.</li>",
   "philosophy.history": "<li><strong>A emulação ajuda a preservar a história.</strong> Muito da arte, da música e do design dos games vive em hardware que está envelhecendo. Manter isso jogável vale a pena, e funciona melhor quando respeita quem fez esses jogos.</li>",
-  "philosophy.shot_alt": "<img src=\"assets/shelf/ps.png\" alt=\"OpenEmux — biblioteca de PlayStation\" />\n      </div>\n    </div>\n  </section>",
+  "philosophy.shot_alt": "<img src=\"assets/openemux-all.png\" alt=\"OpenEmux — todos os consoles da biblioteca\" />\n      </div>\n    </div>\n  </section>",
   "systems.eyebrow": "<span class=\"eyebrow\">31 sistemas</span>",
   "systems.title": "<h2>Sistemas suportados</h2>",
   "systems.lede": "<p class=\"lede\">Cada sistema roda com os cores do próprio RetroArch, e tem no OpenEmux as suas capas, controles e configurações de shader.</p>",
@@ -91,5 +91,6 @@
   "cart.title": "<h2 id=\"cartridges-title\">Cada jogo no cartucho do seu console</h2>",
   "cart.lede": "<p class=\"lede\">Na visão de cartucho, os jogos que você adicionou aparecem com a arte do rótulo no cartucho do console deles. Os cartuchos abaixo são um exemplo dessa visão.</p>",
   "cart.wall_label": "aria-label=\"Fileiras de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 e Mega Drive passando pela tela\">",
+  "shots.favorites": "alt=\"OpenEmux — Favoritos\" />\n                <figcaption>Favoritos</figcaption>\n              </figure>",
   "lang.label": "Idioma"
 }

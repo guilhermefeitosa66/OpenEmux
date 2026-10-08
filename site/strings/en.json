@@ -33,7 +33,7 @@
   "philosophy.own": "<li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of\n            games you purchased.</li>",
   "philosophy.piracy": "<li><strong>Piracy isn't what this is for.</strong> Downloading copyrighted games you don't own is illegal in\n            most countries.</li>",
   "philosophy.history": "<li><strong>Emulation helps preserve history.</strong> A lot of gaming's art, music and design lives on aging hardware. Keeping it playable is worthwhile, and it works best when it respects the people who made these games.</li>",
-  "philosophy.shot_alt": "<img src=\"assets/shelf/ps.png\" alt=\"OpenEmux — PlayStation library\" />\n      </div>\n    </div>\n  </section>",
+  "philosophy.shot_alt": "<img src=\"assets/openemux-all.png\" alt=\"OpenEmux — every console in the library\" />\n      </div>\n    </div>\n  </section>",
   "systems.eyebrow": "<span class=\"eyebrow\">31 systems</span>",
   "systems.title": "<h2>Supported systems</h2>",
   "systems.lede": "<p class=\"lede\">Each system runs on RetroArch's own cores, and has its own cover art, controls and shader settings in OpenEmux.</p>",
@@ -91,5 +91,6 @@
   "cart.title": "<h2 id=\"cartridges-title\">Each game on its console's cartridge</h2>",
   "cart.lede": "<p class=\"lede\">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>",
   "cart.wall_label": "aria-label=\"Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past\">",
+  "shots.favorites": "alt=\"OpenEmux — Favorites\" />\n                <figcaption>Favorites</figcaption>\n              </figure>",
   "lang.label": "Language"
 }

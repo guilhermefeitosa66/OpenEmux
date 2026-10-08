@@ -33,7 +33,7 @@
   "philosophy.own": "<li><strong>合法的に所有しているコンテンツだけを使ってください。</strong> 自分のカートリッジやディスクから吸い出すか、\n            購入したゲームのバックアップを使いましょう。</li>",
   "philosophy.piracy": "<li><strong>海賊行為のためのものではありません。</strong> 所有していない著作権付きゲームのダウンロードは、\n            ほとんどの国で違法です。</li>",
   "philosophy.history": "<li><strong>エミュレーションは歴史の保存に役立ちます。</strong> ゲームのアートや音楽、デザインの多くは、古くなっていくハードウェアの上にあります。それを遊べる状態に保つことには意味があり、ゲームを作った人たちへの敬意があってこそうまくいきます。</li>",
-  "philosophy.shot_alt": "<img src=\"assets/shelf/ps.png\" alt=\"OpenEmux — PlayStation のライブラリ\" />\n      </div>\n    </div>\n  </section>",
+  "philosophy.shot_alt": "<img src=\"assets/openemux-all.png\" alt=\"OpenEmux — ライブラリのすべてのコンソール\" />\n      </div>\n    </div>\n  </section>",
   "systems.eyebrow": "<span class=\"eyebrow\">31 システム</span>",
   "systems.title": "<h2>対応システム</h2>",
   "systems.lede": "<p class=\"lede\">どのシステムも RetroArch 自身のコアで動き、OpenEmux ではそれぞれにカバーアート、操作設定、シェーダー設定があります。</p>",
@@ -91,5 +91,6 @@
   "cart.title": "<h2 id=\"cartridges-title\">ゲームを、そのコンソールのカートリッジで</h2>",
   "cart.lede": "<p class=\"lede\">カートリッジ表示では、追加したゲームがそのコンソールのカートリッジに、ラベルのアートを載せて表示されます。下のカートリッジはその表示の例です。</p>",
   "cart.wall_label": "aria-label=\"スーパーファミコン、ゲームボーイアドバンス、NINTENDO64、メガドライブのカートリッジが流れていく列\">",
+  "shots.favorites": "alt=\"OpenEmux — お気に入り\" />\n                <figcaption>お気に入り</figcaption>\n              </figure>",
   "lang.label": "言語"
 }

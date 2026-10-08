@@ -33,7 +33,7 @@
   "philosophy.own": "<li><strong>N’utilisez que du contenu que vous possédez légalement.</strong> Copiez vos propres cartouches et\n            disques, ou utilisez des sauvegardes de jeux que vous avez achetés.</li>",
   "philosophy.piracy": "<li><strong>Ce n’est pas fait pour le piratage.</strong> Télécharger des jeux protégés par le droit d’auteur\n            que vous ne possédez pas est illégal dans la plupart des pays.</li>",
   "philosophy.history": "<li><strong>L’émulation aide à préserver l’histoire.</strong> Une grande partie de l’art, de la musique et du design du jeu vidéo vit sur du matériel qui vieillit. Le garder jouable en vaut la peine, et cela fonctionne mieux dans le respect de celles et ceux qui ont créé ces jeux.</li>",
-  "philosophy.shot_alt": "<img src=\"assets/shelf/ps.png\" alt=\"OpenEmux — bibliothèque PlayStation\" />\n      </div>\n    </div>\n  </section>",
+  "philosophy.shot_alt": "<img src=\"assets/openemux-all.png\" alt=\"OpenEmux — toutes les consoles de la ludothèque\" />\n      </div>\n    </div>\n  </section>",
   "systems.eyebrow": "<span class=\"eyebrow\">31 systèmes</span>",
   "systems.title": "<h2>Systèmes pris en charge</h2>",
   "systems.lede": "<p class=\"lede\">Chaque système tourne avec les cores de RetroArch lui-même, et a dans OpenEmux ses propres jaquettes, contrôles et réglages de shader.</p>",
@@ -91,5 +91,6 @@
   "cart.title": "<h2 id=\"cartridges-title\">Chaque jeu sur la cartouche de sa console</h2>",
   "cart.lede": "<p class=\"lede\">Dans la vue cartouches, les jeux que vous avez ajoutés apparaissent avec l’illustration de leur étiquette sur la cartouche de leur console. Les cartouches ci-dessous sont un exemple de cette vue.</p>",
   "cart.wall_label": "aria-label=\"Des rangées de cartouches Super Nintendo, Game Boy Advance, Nintendo 64 et Mega Drive qui défilent\">",
+  "shots.favorites": "alt=\"OpenEmux — Favoris\" />\n                <figcaption>Favoris</figcaption>\n              </figure>",
   "lang.label": "Langue"
 }
