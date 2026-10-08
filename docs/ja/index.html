@@ -177,14 +177,15 @@
     .nav-links {
       margin-left: auto;
       display: flex;
-      gap: 26px;
+      gap: 20px;
       align-items: center
     }
 
     .nav-links a {
       color: var(--muted);
       font-size: .92rem;
-      font-weight: 500
+      font-weight: 500;
+      white-space: nowrap
     }
 
     .nav-links a:hover {
@@ -192,9 +193,10 @@
       text-decoration: none
     }
 
-    /* The full link row needs ~832px next to the brand; collapse it before
-       that, or the Download button is pushed past the viewport edge. */
-    @media(max-width:860px) {
+    /* The full link row needs up to ~1100px next to the brand (French is the
+       longest); collapse it before that, or the links wrap onto two lines and
+       the Download button is pushed past the viewport edge. */
+    @media(max-width:1099px) {
       .nav-links a:not(.btn) {
         display: none
       }
@@ -956,6 +958,14 @@
     /* On a phone the header holds the brand, Download and the picker: the
        flag alone says which language is on. */
     @media(max-width:560px) {
+      .lang-switch .lang-name {
+        display: none
+      }
+    }
+
+    /* The longest link rows (French, German, Portuguese) only fit next to the
+       language name on a wide window; below that the flag is enough. */
+    @media(max-width:1279px) {
       .lang-switch .lang-name {
         display: none
       }
