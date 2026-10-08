@@ -6,14 +6,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenEmux — Retro gaming, built Linux first</title>
+  <title>OpenEmux — A simple way to play your retro collection</title>
   <meta name="description"
-    content="OpenEmux is a beautiful emulation frontend that makes RetroArch simple and enjoyable. Built Linux first, with a Windows build in beta. Browse your library with cover art, and play the games you own." />
+    content="OpenEmux is a free and open-source emulation frontend that uses RetroArch underneath. It makes RetroArch easier for anyone who just wants to play: add your own games, pick one, and it starts. Linux is its main platform; Windows is supported too, in beta." />
   <link rel="icon" href="assets/logo.png" />
-  <meta property="og:title" content="OpenEmux — Retro gaming, built Linux first" />
+  <meta property="og:title" content="OpenEmux — A simple way to play your retro collection" />
   <meta property="og:description"
-    content="A beautiful emulation frontend that makes RetroArch simple and enjoyable for everyone. Linux first, and now on Windows, in beta." />
-  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-roms-snes.png" />
+    content="A free and open-source emulation frontend that makes RetroArch easier to use. Linux is its main platform; Windows is supported too, in beta." />
+  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-library-snes.png" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
@@ -177,14 +177,15 @@
     .nav-links {
       margin-left: auto;
       display: flex;
-      gap: 26px;
+      gap: 20px;
       align-items: center
     }
 
     .nav-links a {
       color: var(--muted);
       font-size: .92rem;
-      font-weight: 500
+      font-weight: 500;
+      white-space: nowrap
     }
 
     .nav-links a:hover {
@@ -192,9 +193,10 @@
       text-decoration: none
     }
 
-    /* The full link row needs ~832px next to the brand; collapse it before
-       that, or the Download button is pushed past the viewport edge. */
-    @media(max-width:860px) {
+    /* The full link row needs up to ~1100px next to the brand (French is the
+       longest); collapse it before that, or the links wrap onto two lines and
+       the Download button is pushed past the viewport edge. */
+    @media(max-width:1099px) {
       .nav-links a:not(.btn) {
         display: none
       }
@@ -315,8 +317,16 @@
     .hero-logo {
       width: 118px;
       height: 118px;
-      margin: 0 auto 26px;
+      margin: 0 auto 12px;
       filter: drop-shadow(0 18px 40px rgba(139, 92, 246, .55))
+    }
+
+    .hero-name {
+      margin: 0 0 24px;
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      color: var(--text)
     }
 
     .hero h1 {
@@ -952,6 +962,14 @@
         display: none
       }
     }
+
+    /* The longest link rows (French, German, Portuguese) only fit next to the
+       language name on a wide window; below that the flag is enough. */
+    @media(max-width:1279px) {
+      .lang-switch .lang-name {
+        display: none
+      }
+    }
     /* ---------- cartridge wall ----------
        Four endless belts of real cartridge renders. Each row has its own size,
        speed and direction (smaller, dimmer and slower reads as farther away),
@@ -1050,31 +1068,6 @@
       }
     }
 
-    .cart-tally {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      row-gap: 4px;
-      color: var(--muted);
-      font-size: .9rem;
-      font-variant-numeric: tabular-nums
-    }
-
-    .cart-tally b {
-      color: var(--text);
-      font-weight: 600
-    }
-
-    .cart-tally span:not(.sep) {
-      white-space: nowrap
-    }
-
-    .cart-tally .sep {
-      opacity: .4;
-      margin: 0 .5em
-    }
-
     /* still and scrollable for anyone who asked for less motion */
     @media (prefers-reduced-motion: reduce) {
       .belt-row {
@@ -1111,6 +1104,7 @@
         <a href="#systems">Systems</a>
         <a href="#screenshots">Screenshots</a>
         <a href="#install">Install</a>
+        <a href="manual/">Manual</a>
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
         <a href="https://www.reddit.com/r/OpenEmux/">Community</a>
         <a class="btn btn-primary btn-sm"
@@ -1137,11 +1131,10 @@
     <div class="stars"></div>
     <div class="wrap hero-inner">
       <img class="hero-logo" src="assets/logo.png" alt="OpenEmux logo" />
+      <p class="hero-name">OpenEmux</p>
       <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux now runs on Windows →</a>
-      <h1>Retro gaming,<br /><span class="grad">built Linux first.</span></h1>
-      <p class="lede">OpenEmux wraps the power of RetroArch in a clean GNOME-native frontend — so you can browse your
-        collection with cover art, pick up a gamepad, and just play. No config files. No setup rabbit holes.
-        Linux is where it is designed, built and tested first; Windows runs the same app, in beta.</p>
+      <h1>A simple way to play<br /><span class="grad">your retro collection.</span></h1>
+      <p class="lede">OpenEmux is a free and open-source emulation frontend. Add the games you already have, and OpenEmux organizes them by console with cover art and opens each one with the controls and shaders already set, without digging through settings menus. Linux is its main platform; Windows is supported too, in beta.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
           Linux</a>
@@ -1152,7 +1145,7 @@
       <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak on Linux ·
         installer &amp; portable ZIP on Windows</p>
       <div class="shot">
-        <img src="assets/openemux-roms-snes.png" alt="OpenEmux library view showing SNES games with cover art" />
+        <img src="assets/openemux-library-snes.png" alt="OpenEmux library view showing SNES games with cover art" />
       </div>
     </div>
     <div class="hero-pad"></div>
@@ -1161,46 +1154,39 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap center">
-      <span class="eyebrow">Why OpenEmux</span>
-      <h2>Emulation without the homework</h2>
-      <p class="lede">RetroArch is one of the most powerful emulation platforms ever built. OpenEmux gives it an
-        interface that gets out of your way.</p>
+      <span class="eyebrow">Features</span>
+      <h2>What OpenEmux does</h2>
+      <p class="lede">Under the hood, the emulation is done by RetroArch. It is powerful, but its menus and settings can be a lot for someone who just wants to play. OpenEmux takes care of what is around it: organizing your games, downloading the cores, and setting up controls and shaders.</p>
       <div class="grid">
         <div class="card">
           <div class="ico">🎨</div>
-          <h3>A real game shelf</h3>
-          <p>Your library, organized by console with full cover art synced automatically from the libretro thumbnail
-            archive.</p>
+          <h3>Your games, by console</h3>
+          <p>The games you add are grouped by console, with cover art downloaded from the libretro thumbnail archive.</p>
         </div>
         <div class="card">
           <div class="ico">✨</div>
-          <h3>Zero-config first boot</h3>
-          <p>On first launch OpenEmux sets up its config and downloads the cores your consoles need, in about ten
-            seconds. The rest arrive in the background while you browse.</p>
+          <h3>Ready on first launch</h3>
+          <p>The first time it opens, OpenEmux creates its configuration and downloads the cores your consoles need, usually in about ten seconds. The rest keep downloading in the background.</p>
         </div>
         <div class="card">
           <div class="ico">🎮</div>
-          <h3>Per-console controls</h3>
-          <p>Map keyboard and gamepad inputs per system in a friendly panel. Bindings are injected into RetroArch at
-            launch time.</p>
+          <h3>Controls per console</h3>
+          <p>Set keyboard and gamepad buttons for each console in one panel. OpenEmux passes them to RetroArch when a game starts.</p>
         </div>
         <div class="card">
           <div class="ico">📺</div>
-          <h3>Shaders that look right</h3>
-          <p>Pick a CRT or scanline shader per console from a curated catalog and it just applies — no shader menu
-            spelunking.</p>
+          <h3>Shaders per console</h3>
+          <p>Choose a CRT or scanline shader for each console from a short list, without going through RetroArch's shader menu.</p>
         </div>
         <div class="card">
           <div class="ico">🐧</div>
           <h3>Linux first</h3>
-          <p>Built in GTK4 and Adwaita, following the GNOME HIG, and tested on Linux before anything else. Linux is a
-            first-class citizen here; Windows comes along, in beta.</p>
+          <p>Linux is OpenEmux's main platform. The app is built with GTK4 and Adwaita, follows the GNOME guidelines, and every change is tested on Linux first. Windows is supported too, with a build still in beta.</p>
         </div>
         <div class="card">
           <div class="ico">🔍</div>
-          <h3>BIOS at a glance</h3>
-          <p>A clear checklist of which BIOS files each console needs and which ones you already have. No more silent
-            launch failures.</p>
+          <h3>BIOS checklist</h3>
+          <p>Shows which BIOS files each console needs and which ones you already have, so a missing file does not end up as a game that silently fails to start.</p>
         </div>
       </div>
     </div>
@@ -1210,23 +1196,19 @@
   <section id="philosophy">
     <div class="wrap split">
       <div>
-        <span class="eyebrow">The philosophy</span>
+        <span class="eyebrow">About the games</span>
         <h2>Play the games you own</h2>
-        <p class="lede">OpenEmux is a front-end for RetroArch, built to make emulation approachable. It is
-          <strong>not</strong> a source of games — it ships no games, no ROMs, no BIOS files, and never will.
-        </p>
+        <p class="lede">OpenEmux is a frontend for RetroArch, made so that someone who just wants to play does not have to learn RetroArch's menus first. It is <strong>not</strong> a source of games: it ships no games, no ROMs and no BIOS files, and never will.</p>
         <ul class="checks">
           <li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of
             games you purchased.</li>
           <li><strong>Piracy isn't what this is for.</strong> Downloading copyrighted games you don't own is illegal in
             most countries.</li>
-          <li><strong>Emulation preserves history.</strong> So much of gaming's art, music and design lives on fragile
-            aging hardware. Keeping it playable is legitimate — and it works best when it respects the people who made
-            these games.</li>
+          <li><strong>Emulation helps preserve history.</strong> A lot of gaming's art, music and design lives on aging hardware. Keeping it playable is worthwhile, and it works best when it respects the people who made these games.</li>
         </ul>
       </div>
       <div>
-        <img src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+        <img src="assets/openemux-all.png" alt="OpenEmux — every console in the library" />
       </div>
     </div>
   </section>
@@ -1235,9 +1217,8 @@
   <section id="systems">
     <div class="wrap center">
       <span class="eyebrow">31 systems</span>
-      <h2>Four decades of consoles, one library</h2>
-      <p class="lede">Nintendo, Sega, Sony, Atari and more — each with its own cores, cover art, input profiles and
-        shader settings.</p>
+      <h2>Supported systems</h2>
+      <p class="lede">Each system runs on RetroArch's own cores, and has its own cover art, controls and shader settings in OpenEmux.</p>
       <div class="systems">
         <span class="chip">Nintendo (NES) / Famicom</span>
         <span class="chip">Famicom Disk System</span>
@@ -1278,22 +1259,18 @@
   <section id="cartridges" aria-labelledby="cartridges-title">
     <div class="wrap center">
       <span class="eyebrow">Cartridge view</span>
-      <h2 id="cartridges-title">Every game on the cartridge it came on</h2>
-      <p class="lede">OpenEmux prints each game’s label art onto the shell of its console, so the library reads like the shelf you grew up with.</p>
+      <h2 id="cartridges-title">Each game on its console's cartridge</h2>
+      <p class="lede">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>
     </div>
     <div class="cart-wall" id="cartWall" data-base="assets/carts/" role="img" aria-label="Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past"></div>
-    <p class="cart-tally wrap"><span><b>33</b> Super Nintendo</span><span class="sep">·</span><span><b>31</b>
-        Game Boy Advance</span><span class="sep">·</span><span><b>11</b> Mega Drive</span><span
-        class="sep">·</span><span><b>9</b> Nintendo 64</span></p>
   </section>
 
   <!-- SCREENSHOTS -->
   <section id="screenshots">
     <div class="wrap center">
       <span class="eyebrow">Screenshots</span>
-      <h2>Your collection, on a shelf</h2>
-      <p class="lede">Cover art, organized by console — the way a game library should look. Scroll through the
-        systems, and click any shot to view it full-size.</p>
+      <h2>Your games, console by console</h2>
+      <p class="lede">Each console gets its own page with the games you added to it. Use the arrows to go through them, and click a screenshot to see it full size.</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="Previous">‹</button>
@@ -1317,17 +1294,8 @@
               <figure><img src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="assets/shelf/nds.png" alt="OpenEmux — Nintendo DS library" />
-                <figcaption>Nintendo DS</figcaption>
-              </figure>
-              <figure><img src="assets/shelf/gb.png" alt="OpenEmux — Game Boy library" />
-                <figcaption>Game Boy</figcaption>
-              </figure>
-              <figure><img src="assets/shelf/gbc.png" alt="OpenEmux — Game Boy Color library" />
-                <figcaption>Game Boy Color</figcaption>
-              </figure>
-              <figure><img src="assets/shelf/fc.png" alt="OpenEmux — NES / Famicom library" />
-                <figcaption>NES / Famicom</figcaption>
+              <figure><img src="assets/shelf/favorites.png" alt="OpenEmux — Favorites" />
+                <figcaption>Favorites</figcaption>
               </figure>
             </div>
           </div>
@@ -1335,22 +1303,7 @@
         </div>
         <div class="carousel-dots" role="tablist" aria-label="Carousel navigation"></div>
       </div>
-      <div style="margin-top:64px">
-        <h2>Settings that make sense</h2>
-        <p class="lede">ROM paths, BIOS checks, input mappings and shaders — all in one clean panel, no config files.
-        </p>
-        <div class="gallery thirds" style="margin-top:32px">
-          <figure><img src="assets/openemux-settings.png" alt="General settings" />
-            <figcaption>ROMs &amp; cover art</figcaption>
-          </figure>
-          <figure><img src="assets/openemux-settings-bios.png" alt="BIOS settings" />
-            <figcaption>BIOS checklist</figcaption>
-          </figure>
-          <figure><img src="assets/openemux-settings-input.png" alt="Input settings" />
-            <figcaption>Input mapping</figcaption>
-          </figure>
-        </div>
-      </div>
+      <p style="margin-top:44px"><a class="btn btn-ghost" href="manual/">Read the manual →</a></p>
     </div>
   </section>
 
@@ -1358,9 +1311,8 @@
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">Get started</span>
-      <h2>Running in under a minute</h2>
-      <p class="lede">Grab a package for your distro, the universal AppImage, the Flatpak — or, on Windows, the
-        installer. OpenEmux handles the rest on first launch.</p>
+      <h2>Installing</h2>
+      <p class="lede">There are packages for Debian, Ubuntu and Fedora, an AppImage and a Flatpak, and an installer for Windows. On first launch OpenEmux sets up the rest.</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1441,14 +1393,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
-      <span class="eyebrow">Standing on shoulders</span>
+      <span class="eyebrow">Credits</span>
       <h2>Thanks to RetroArch, libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux was directly inspired by <a href="https://openemu.org/">OpenEmu</a>, the beloved macOS
-        emulator that made retro gaming feel effortless and beautiful. Since OpenEmu is macOS-only, OpenEmux exists to
-        bring that same polish to Linux first, and now to Windows too. None of it would be possible without the
-        incredible work of the <a href="https://www.retroarch.com/">RetroArch</a> and <a
-          href="https://www.libretro.com/">libretro</a> teams. ❤️
-      </p>
+      <p class="lede">OpenEmux is inspired by <a href="https://openemu.org/">OpenEmu</a>, the emulator frontend for macOS. OpenEmu only runs on macOS, so OpenEmux tries to offer something similar on Linux, and now on Windows too. The emulation itself comes from the <a href="https://www.retroarch.com/">RetroArch</a> and <a href="https://www.libretro.com/">libretro</a> projects, and none of this would exist without their work. ❤️</p>
     </div>
   </section>
 
@@ -1457,11 +1404,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <div class="wrap">
       <div class="support">
         <span class="eyebrow">Support the project</span>
-        <h2>OpenEmux is free — and stays free</h2>
-        <p class="lede center">If it made your retro shelf a little nicer, consider buying me a coffee. It helps me keep
-          improving features and stability. And come say hi on <a
-            href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> — share your setup, ask for help, or follow what's
-          coming next.</p>
+        <h2>OpenEmux is free software</h2>
+        <p class="lede center">It is free to use, and the code is open under the MIT license. If it is useful to you and you would like to help, a donation pays for some of the time that goes into fixes and new features. Bug reports, translations, code and ideas help just as much. On <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a> you can ask for help, share your setup or follow what is being worked on.</p>
         <div class="cta" style="margin-top:26px">
           <a class="btn btn-primary"
             href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&amp;no_recurring=0&amp;item_name=Support+OpenEmux%3A+a+Linux-first+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&amp;currency_code=BRL">☕
@@ -1478,6 +1422,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       <div class="foot">
         <div>Made with lots of love and care by <strong style="color:var(--text)">Guilherme Feitoza</strong> 🇧🇷</div>
         <div class="foot-links">
+          <a href="manual/">Manual</a>
           <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
           <a href="https://www.reddit.com/r/OpenEmux/">r/OpenEmux</a>
           <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases</a>
@@ -1595,13 +1540,14 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
         md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
       };
-      // Back to front. speed is px/s at full scale; drift is how far a full
-      // pass of page scroll pushes the row sideways.
+      // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
+      // N64 and Mega Drive sit behind them at the edges. speed is px/s at full
+      // scale; drift is how far a full pass of page scroll pushes the row sideways.
       var ROWS = [
-        { console: "gba", h: 92, speed: 22, dir: "left", depth: .5, drift: 50 },
-        { console: "sfc", h: 124, speed: 34, dir: "right", depth: .78, drift: -90 },
-        { console: "n64", h: 168, speed: 48, dir: "left", depth: 1, drift: 150 },
-        { console: "md", h: 132, speed: 36, dir: "right", depth: .82, drift: -100 }
+        { console: "n64", h: 96, speed: 22, dir: "left", depth: .5, drift: 50 },
+        { console: "sfc", h: 168, speed: 48, dir: "right", depth: 1, drift: -150 },
+        { console: "gba", h: 150, speed: 44, dir: "left", depth: 1, drift: 130 },
+        { console: "md", h: 104, speed: 26, dir: "right", depth: .55, drift: -60 }
       ];
       var base = wall.getAttribute("data-base");
       var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
