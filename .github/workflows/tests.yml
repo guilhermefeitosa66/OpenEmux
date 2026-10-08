@@ -18,6 +18,47 @@ permissions:
   contents: read
 
 jobs:
+  # Decides whether the pull request or push touches anything but the site.
+  # A change confined to docs/, site/ and Markdown cannot break the app, so the
+  # jobs below skip their work for it -- they still run and report success,
+  # because they are required checks and a check that never reports leaves the
+  # pull request unmergeable. Scheduled and manual runs always do the work.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Anything outside the site?
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          code=true
+          range=""
+          case "$EVENT" in
+            pull_request) range="$BASE...$HEAD" ;;
+            push) range="$BASE..$HEAD" ;;
+          esac
+          # A new branch pushes with an all-zero "before": nothing to compare,
+          # so it does the work.
+          if [ -n "$range" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$range")
+            printf '%s\n' "$files"
+            outside=$(printf '%s\n' "$files" | grep -vE '^(docs|site)/|\.md$' || true)
+            if [ -n "$files" ] && [ -z "$outside" ]; then
+              code=false
+            fi
+          fi
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -47,9 +88,22 @@ jobs:
         # formatting rules -- see [tool.ruff] in pyproject.toml.
         run: ruff check --output-format=github .
 
+      - name: The site is what its source builds
+        # docs/ is generated from site/ by tools/build_site.py, which needs only
+        # the standard library. A hand edit to docs/ that skipped the template
+        # used to reach develop unnoticed (#478); this is the one check a
+        # site-only change still runs.
+        run: python tools/build_site.py --check
+
   unittest:
     name: Unit tests (Python ${{ matrix.python-version }})
+    needs: changes
     runs-on: ubuntu-latest
+    # Gated step by step rather than with a job-level `if`: a matrix job that is
+    # skipped as a whole reports one check under its unexpanded name, so the
+    # four required "Unit tests (Python 3.1x)" checks would never arrive.
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
     strategy:
       # One version failing is information about that version; cancelling the
       # rest hides which ones are actually affected.
@@ -62,18 +116,26 @@ jobs:
         # 25.04, GNOME runtime 50). The suite takes ~30 s (issue #242).
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
+      - name: Site-only change, nothing to test
+        if: env.CODE != 'true'
+        run: echo "Only docs/, site/ or Markdown changed; the suite is skipped."
+
       - name: Checkout
+        if: env.CODE == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
+        if: env.CODE == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install system dependencies (GTK4 / libadwaita / GObject-introspection)
+        if: env.CODE == 'true'
         run: make install-sys-deps
 
       - name: Install a virtual X server
+        if: env.CODE == 'true'
         # A handful of tests build real GTK widgets, which needs a display --
         # without one GDK segfaults instead of failing, taking the whole run
         # down with no failing test to point at. Under xvfb they run; without
@@ -81,11 +143,13 @@ jobs:
         run: sudo apt-get install -y xvfb
 
       - name: Create virtualenv and install Python dependencies
+        if: env.CODE == 'true'
         run: |
           make venv
           make setup-dev
 
       - name: Run unit tests under coverage
+        if: env.CODE == 'true'
         # Two processes, and not for speed: one cannot hold every window the
         # suite builds. GTK keeps caches for the life of a process, so a run
         # that constructs a thousand application windows peaks at ~6 GB -- more
@@ -120,7 +184,8 @@ jobs:
         # One version owns the badge; four jobs computing it would race for no
         # gain.
         if: |
-          matrix.python-version == '3.12'
+          env.CODE == 'true'
+          && matrix.python-version == '3.12'
           && github.event_name == 'push'
           && github.ref == 'refs/heads/develop'
         run: |
@@ -141,7 +206,8 @@ jobs:
 
       - name: Upload the coverage badge data
         if: |
-          matrix.python-version == '3.12'
+          env.CODE == 'true'
+          && matrix.python-version == '3.12'
           && github.event_name == 'push'
           && github.ref == 'refs/heads/develop'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -153,10 +219,13 @@ jobs:
 
   badge:
     name: Publish the coverage badge
-    needs: unittest
+    needs: [changes, unittest]
     # Push to develop only. A pull request never reaches this job, which is
     # what keeps `contents: write` away from code that came in from outside.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    # A site-only push ran no suite, so there is no new number to publish.
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/develop'
+      && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       # The one job in this workflow that writes anything. It force-pushes a
@@ -186,6 +255,9 @@ jobs:
 
   windows:
     name: Unit tests (Windows / MSYS2)
+    needs: changes
+    # Skipped for a site-only change; a skipped job counts as passing.
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     # The suite is `unittest` over `TemporaryDirectory`, so most of it is
     # already portable -- and what is *not* is exactly what a Windows port has
@@ -258,6 +330,9 @@ jobs:
 
   smoke:
     name: Headless start-up
+    needs: changes
+    # Skipped for a site-only change; a skipped job counts as passing.
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

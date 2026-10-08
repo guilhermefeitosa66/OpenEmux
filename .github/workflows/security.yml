@@ -22,8 +22,53 @@ permissions:
   contents: read
 
 jobs:
+  # Decides whether the pull request or push touches anything but the site.
+  # A change confined to docs/, site/ and Markdown cannot break the app, so the
+  # jobs below skip their work for it -- they still run and report success,
+  # because they are required checks and a check that never reports leaves the
+  # pull request unmergeable. Scheduled and manual runs always do the work.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Anything outside the site?
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          code=true
+          range=""
+          case "$EVENT" in
+            pull_request) range="$BASE...$HEAD" ;;
+            push) range="$BASE..$HEAD" ;;
+          esac
+          # A new branch pushes with an all-zero "before": nothing to compare,
+          # so it does the work.
+          if [ -n "$range" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$range")
+            printf '%s\n' "$files"
+            outside=$(printf '%s\n' "$files" | grep -vE '^(docs|site)/|\.md$' || true)
+            if [ -n "$files" ] && [ -z "$outside" ]; then
+              code=false
+            fi
+          fi
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   scan:
     name: Static analysis & dependency audit
+    needs: changes
+    # Skipped for a site-only change; a skipped job counts as passing. The
+    # weekly schedule still audits the dependencies whatever changed.
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       # Actions are pinned by commit SHA, not by tag. A tag is mutable: whoever
