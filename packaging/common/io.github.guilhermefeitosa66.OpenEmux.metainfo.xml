@@ -88,6 +88,16 @@
   </keywords>
 
   <releases>
+    <release version="1.15.1" date="2026-10-08">
+      <description>
+        <p>The in-game control bar is back in the Flatpak, and it can be made semi-transparent.</p>
+        <ul>
+          <li>The control bar shows in the Flatpak build, which launches RetroArch's own Flatpak</li>
+          <li>A new setting draws the bar semi-transparent, over the game, so the game keeps the whole window</li>
+          <li>The manual on the website is available in all eight languages the app speaks</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.15.0" date="2026-10-07">
       <description>
         <p>The game's controls move inside RetroArch: a bar on the bottom edge of the game's own window, on every console.</p>

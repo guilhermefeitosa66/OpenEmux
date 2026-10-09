@@ -179,6 +179,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Thu Oct 08 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.15.1-1
+- The in-game control bar shows in the Flatpak build again
+- A setting draws the control bar semi-transparent, over the game
+- The manual on the website is available in every language the app speaks
+
 * Wed Oct 07 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.15.0-1
 - The game's controls are a bar RetroArch draws on the bottom edge of its own window, on every console
 - Pause, mute, slow motion, fast-forward and turbo show their state; hiding the bar gives its space back to the game
