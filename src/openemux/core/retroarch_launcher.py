@@ -382,7 +382,12 @@ class RetroArchLauncher:
                 return resolved
         return None
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None):
+    def _translucent_bar(self):
+        """Whether the in-game bar is drawn see-through, over the game (#477)."""
+        get_ui = getattr(self.config_manager, "get_ui_settings", None)
+        return bool(get_ui and get_ui().get("translucent_game_bar", False))
+
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
         Seven concerns, one file. They used to be one 170-line function whose
@@ -416,7 +421,7 @@ class RetroArchLauncher:
         overrides.update(self._savestate_overrides(states_dir, state_slot))
         overrides.update(self._window_overrides())
         # The game's controls are drawn by RetroArch itself (issue #469).
-        overrides.update(overlay_bar.runtime_overrides())
+        overrides.update(overlay_bar.runtime_overrides(overlay_dir, self._translucent_bar()))
         if shader_dir:
             # Where the bar's hide/show buttons' "next shader" looks.
             overrides["video_shader_dir"] = f'"{cfg_path(shader_dir)}"'
@@ -957,10 +962,15 @@ class RetroArchLauncher:
         # The console's own preset is kept apart: it is what the launch log
         # reports, since the pair below is always there.
         console_preset = shader_path
+        # RetroArch reads the bar from a copy beside the --appendconfig file,
+        # not from the package, which a RetroArch Flatpak cannot see (#482).
+        overlay_dir = overlay_bar.stage_assets(self.config_manager.get_runtime_dir())
         shader_path, shader_dir = overlay_bar.prepare_shaders(
             console_preset,
             video_driver,
             self.config_manager.get_runtime_dir(),
+            overlay_dir,
+            translucent=self._translucent_bar(),
         )
 
         cmd = [*launch_prefix, "-L", core_path]
@@ -973,6 +983,7 @@ class RetroArchLauncher:
             network_cmd_port=network_cmd_port,
             shader_dir=shader_dir,
             video_driver=video_driver if video_driver != configured_driver else None,
+            overlay_dir=overlay_dir,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:

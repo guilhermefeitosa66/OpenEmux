@@ -2063,6 +2063,44 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `~/.openemux/runtime/hw_drivers.json` names both cores with `"glcore"` after they ran. Suite
   files `tests/test_hw_driver.py`, `tests/test_retroarch_launcher.py`
   (`test_a_core_that_switches_to_glcore_starts_there_with_slang`).
+
+### RT-337 — The Flatpak build shows the in-game bar
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed as a Flatpak (`make flatpak`, or the openemux-flatpak
+  repo) with RetroArch from Flathub (`org.libretro.RetroArch`); a game of any console.
+- **Steps:**
+  1. Launch the game from the Flatpak OpenEmux.
+  2. Hide the bar with its down-chevron, then show it again.
+- **Expected:** The game opens with OpenEmux's bar on the bottom edge and the game above it, as
+  in RT-327; hiding and showing behave as in RT-329. `~/.openemux/runtime/overlay/` holds
+  `openemux-bar.cfg`, its PNGs and the margin shaders, and that is where the launch points
+  RetroArch — not at OpenEmux's `/app`, which the RetroArch Flatpak cannot see (issue #482).
+- **Check:** human only; `grep input_overlay ~/.openemux/runtime/runtime_*.cfg | tail -1` names
+  `~/.openemux/runtime/overlay/openemux-bar.cfg`. Suite files `tests/test_overlay_bar.py`
+  (`StageAssetsTests`) and `tests/test_retroarch_launcher.py`.
+
+### RT-338 — The semi-transparent bar is drawn over the full-size game
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** "Settings" → "Video" → "In-Game Bar" → "Semi-transparent control bar" turned
+  on; a console with no shader and one with a shader (e.g. `dot` on GBA).
+- **Steps:**
+  1. Launch a game on each console.
+  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+     bottom-right corner.
+  3. Turn the switch off again and launch one of the games.
+- **Expected:** With the switch on, the game fills the whole height of the window and the bar is
+  drawn over its bottom edge, see-through: the game shows through the strip and the buttons, which
+  still respond (issue #477). Hiding and showing the bar does not resize the game. The faded "show"
+  button is as visible as with the switch off. The console's shader is still applied. With the
+  switch off, the opaque bar in its own strip is back (RT-327).
+- **Check:** human only; `grep -E "input_overlay( |_opacity)" ~/.openemux/runtime/runtime_*.cfg |
+  tail -2` names `openemux-bar-translucent.cfg` and `0.600000` with the switch on. Suite files
+  `tests/test_overlay_bar.py` (`TranslucentBarTests`), `tests/test_retroarch_launcher.py`,
+  `tests/test_preferences.py`.
+- **Restore:** turn "Semi-transparent control bar" off.
+
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL

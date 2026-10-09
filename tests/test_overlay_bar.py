@@ -2,6 +2,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openemux.core import overlay_bar
 
@@ -30,6 +31,65 @@ class RuntimeOverridesTests(unittest.TestCase):
         overrides = overlay_bar.runtime_overrides()
         self.assertEqual(overrides["video_windowed_fullscreen"], '"true"')
         self.assertEqual(overrides["input_overlay_hide_when_gamepad_connected"], '"false"')
+
+
+class TranslucentBarTests(unittest.TestCase):
+    """The semi-transparent bar is drawn over the game (issue #477)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.runtime = Path(self._tmp.name) / "runtime"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_opaque_bar_is_the_default(self):
+        overrides = overlay_bar.runtime_overrides()
+        self.assertEqual(Path(overrides["input_overlay"].strip('"')).name, "openemux-bar.cfg")
+        self.assertEqual(overrides["input_overlay_opacity"], '"1.000000"')
+
+    def test_translucent_loads_its_own_pages_at_the_lower_opacity(self):
+        overrides = overlay_bar.runtime_overrides(translucent=True)
+        path = Path(overrides["input_overlay"].strip('"'))
+        self.assertEqual(path, overlay_bar.TRANSLUCENT_CFG)
+        self.assertTrue(path.is_file())
+        self.assertEqual(overrides["input_overlay_opacity"],
+                         f'"{overlay_bar.TRANSLUCENT_OPACITY:.6f}"')
+
+    def test_only_the_show_button_differs_between_the_two_bars(self):
+        # The show button compensates for the global opacity in its own
+        # image, so it stays as easy to spot as on the opaque bar.
+        opaque = overlay_bar.OVERLAY_CFG.read_text(encoding="utf-8").splitlines()
+        translucent = overlay_bar.TRANSLUCENT_CFG.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(opaque), len(translucent))
+        changed = [(a, b) for a, b in zip(opaque, translucent) if a != b]
+        self.assertEqual(len(changed), 32)  # one per hidden page
+        for a, b in changed:
+            self.assertTrue(a.endswith("= btn_show.png"), a)
+            self.assertTrue(b.endswith("= btn_show_translucent.png"), b)
+        self.assertTrue((overlay_bar.OVERLAY_DIR / "btn_show_translucent.png").is_file())
+
+    def test_the_opacity_agrees_with_the_generator(self):
+        script = (Path(__file__).resolve().parent.parent / "scripts" / "build_overlay.py").read_text()
+        value = re.search(r"^TRANSLUCENT_OPACITY = ([0-9.]+)$", script, re.M).group(1)
+        self.assertEqual(float(value), overlay_bar.TRANSLUCENT_OPACITY)
+
+    def test_no_strip_is_kept_with_or_without_a_console_shader(self):
+        _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, translucent=True)
+        folder = Path(shader_dir)
+        hidden = (folder / f"{overlay_bar.HIDDEN_PRESET}.glslp").read_text()
+        shown = (folder / f"{overlay_bar.SHOWN_PRESET}.glslp").read_text()
+        self.assertEqual(shown, hidden)
+        self.assertIn('MARGIN = "0.0"', shown)
+
+        preset = Path(self._tmp.name) / "crt" / "a.glslp"
+        preset.parent.mkdir(parents=True)
+        preset.write_text('shaders = 1\nshader0 = "a.glsl"\n', encoding="utf-8")
+        _, shader_dir = overlay_bar.prepare_shaders(str(preset), "gl", self.runtime,
+                                                    translucent=True)
+        shown = (Path(shader_dir) / f"{overlay_bar.SHOWN_PRESET}.glslp").read_text()
+        self.assertIn('shaders = "1"', shown)
+        self.assertNotIn("margin", shown)
 
 
 class ShippedAssetsTests(unittest.TestCase):
@@ -81,6 +141,65 @@ class ShippedAssetsTests(unittest.TestCase):
     def test_turbo_is_a_toggle_on_every_page(self):
         text = overlay_bar.OVERLAY_CFG.read_text(encoding="utf-8")
         self.assertEqual(text.count('"turbo|overlay_next,'), 32)
+
+
+class StageAssetsTests(unittest.TestCase):
+    """RetroArch reads the bar from a copy in the runtime folder (issue #482).
+
+    In the Flatpak the package sits under OpenEmux's own /app, which the
+    RetroArch Flatpak cannot see: handed those paths, it drew no bar at all.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.runtime = Path(self._tmp.name) / "runtime"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_copies_every_file_into_the_runtime_folder(self):
+        staged = overlay_bar.stage_assets(self.runtime)
+        self.assertEqual(staged, self.runtime / overlay_bar.STAGED_DIR_NAME)
+        shipped = sorted(p.name for p in overlay_bar.OVERLAY_DIR.iterdir() if p.is_file())
+        self.assertEqual(sorted(p.name for p in staged.iterdir()), shipped)
+        for name in shipped:
+            self.assertEqual((staged / name).read_bytes(),
+                             (overlay_bar.OVERLAY_DIR / name).read_bytes(), name)
+
+    def test_the_overrides_and_the_margin_point_at_the_copy(self):
+        staged = overlay_bar.stage_assets(self.runtime)
+        overlay = overlay_bar.runtime_overrides(staged)["input_overlay"].strip('"')
+        self.assertEqual(Path(overlay), staged / "openemux-bar.cfg")
+        _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, staged)
+        shown = (Path(shader_dir) / f"{overlay_bar.SHOWN_PRESET}.glslp").read_text()
+        self.assertIn(f'shader0 = "{staged / "margin.glsl"}"', shown)
+        self.assertNotIn(str(overlay_bar.OVERLAY_DIR), shown)
+
+    def test_an_identical_copy_is_left_alone_and_a_stale_one_refreshed(self):
+        staged = overlay_bar.stage_assets(self.runtime)
+        same, stale = staged / "openemux-bar.cfg", staged / "margin.glsl"
+        stale.write_text("old", encoding="utf-8")
+        with patch("openemux.core.overlay_bar.shutil.copyfile") as copy:
+            overlay_bar.stage_assets(self.runtime)
+        # By name: MSYS2 joins the package path with a backslash, and the
+        # same file then compares unequal as a Path.
+        self.assertEqual([(Path(src).name, Path(dst)) for (src, dst), _ in copy.call_args_list],
+                         [("margin.glsl", stale)])
+        self.assertTrue(same.is_file())
+
+    def test_only_files_are_copied(self):
+        shipped = Path(self._tmp.name) / "shipped"
+        (shipped / "sub").mkdir(parents=True)
+        (shipped / "bar.cfg").write_text("x", encoding="utf-8")
+        with patch.object(overlay_bar, "OVERLAY_DIR", shipped):
+            staged = overlay_bar.stage_assets(self.runtime)
+        self.assertEqual([p.name for p in staged.iterdir()], ["bar.cfg"])
+
+    def test_falls_back_to_the_package_when_the_copy_fails(self):
+        self.runtime.parent.mkdir(parents=True, exist_ok=True)
+        self.runtime.write_text("a file, not a folder", encoding="utf-8")
+        with self.assertLogs("openemux.core.overlay_bar", "WARNING"):
+            self.assertEqual(overlay_bar.stage_assets(self.runtime), overlay_bar.OVERLAY_DIR)
 
 
 class PrepareShadersTests(unittest.TestCase):

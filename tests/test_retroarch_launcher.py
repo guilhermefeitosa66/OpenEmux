@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from openemux.core import retroarch_command, retroarch_launcher
+from openemux.core import overlay_bar, retroarch_command, retroarch_launcher
 from openemux.core.input_actions import ANALOG_STICK_BINDINGS
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.platform import CORE_SUFFIX, VENDORED_RETROARCH
@@ -343,6 +343,11 @@ class RetroArchLauncherTests(unittest.TestCase):
         loaded = cmd[cmd.index("--set-shader") + 1]
         self.assertTrue(loaded.endswith("in_game_bar/Controls shown.slangp"), loaded)
         self.assertNotIn(".glslp", " ".join(cmd))
+        # RetroArch is pointed at the bar's copy in the runtime folder, never
+        # at the package, which a RetroArch Flatpak cannot read (issue #482).
+        overlay = next(line for line in self._last_override
+                       if line.startswith("input_overlay = "))
+        self.assertIn("/runtime/overlay/openemux-bar.cfg", overlay.replace("\\", "/"))
         self.assertIsNotNone(launcher.last_shader_notice)
         key, kwargs = launcher.last_shader_notice
         self.assertEqual(key, "toast.shader.preset_missing")
@@ -564,6 +569,21 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_overlay_enable = "true"', lines)
         self.assertIn(f'video_shader_dir = "{base / "pair"}"', lines)
         self.assertNotIn("video_shader_dir", plain)
+
+    def test_the_semi_transparent_bar_setting_reaches_the_launch(self):
+        # Issue #477: read from the UI settings at each launch.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            self.assertFalse(launcher._translucent_bar())
+            cfg.get_ui_settings = lambda: {"translucent_game_bar": True}
+            self.assertTrue(launcher._translucent_bar())
+            path = launcher._write_runtime_override("GBA")
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        overlay = next(line for line in lines if line.startswith("input_overlay = "))
+        self.assertIn("openemux-bar-translucent.cfg", overlay)
+        self.assertIn('input_overlay_opacity = "0.600000"', lines)
 
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
@@ -1778,9 +1798,14 @@ class TheLastResortLookupsTests(_ResolutionCase):
             def flush(self):
                 return None
 
+        # The bar's files are staged before the log opens; with every open()
+        # faked, the copy has nothing real to read.
         with patch("builtins.open", return_value=_Handle()), patch(
             "openemux.core.retroarch_launcher.subprocess.Popen",
             side_effect=OSError("ENOEXEC"),
+        ), patch(
+            "openemux.core.retroarch_launcher.overlay_bar.stage_assets",
+            return_value=overlay_bar.OVERLAY_DIR,
         ):
             with self.assertLogs("openemux.core.retroarch_launcher", level="WARNING"):
                 proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")

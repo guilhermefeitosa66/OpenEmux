@@ -20,10 +20,15 @@ Two pieces, both shipped in ``openemux/data/overlay``:
   viewport it follows the window through resizes and fullscreen. A console's
   own shader keeps working: the pass is appended to the end of its preset, and
   hiding the bar swaps to the same preset without it (``prepare_shaders``).
+
+RetroArch does not read them from the package: ``stage_assets`` copies them to
+the runtime directory first. In the Flatpak the package lives under OpenEmux's
+own ``/app``, which RetroArch's Flatpak cannot see (issue #482).
 """
 
 import logging
 import re
+import shutil
 from pathlib import Path
 
 from openemux.core.platform import cfg_path
@@ -33,6 +38,13 @@ logger = logging.getLogger(__name__)
 
 OVERLAY_DIR = Path(__file__).resolve().parent.parent / "data" / "overlay"
 OVERLAY_CFG = OVERLAY_DIR / "openemux-bar.cfg"
+#: The same pages for the semi-transparent bar, whose "show" button makes up
+#: for the lower opacity in its own image (issue #477).
+TRANSLUCENT_CFG = OVERLAY_DIR / "openemux-bar-translucent.cfg"
+
+#: RetroArch's overlay opacity for the semi-transparent bar. Must agree with
+#: TRANSLUCENT_OPACITY in scripts/build_overlay.py.
+TRANSLUCENT_OPACITY = 0.6
 
 #: The margin pass, per preset backend.
 MARGIN_SHADER = {"glsl": OVERLAY_DIR / "margin.glsl", "slang": OVERLAY_DIR / "margin.slang"}
@@ -48,22 +60,59 @@ WINDOW_SIZE = (1280, 720)
 #: scripts/build_overlay.py.
 MARGIN = 60.0 / 720.0
 
+#: Where ``stage_assets`` puts the copies, under the runtime directory.
+STAGED_DIR_NAME = "overlay"
+
 _KEY_VALUE = re.compile(r'^\s*([A-Za-z0-9_]+)\s*=\s*"?([^"]*)"?\s*$')
 _PASS_PATH = re.compile(r"^shader\d+$")
 
 
-def runtime_overrides():
-    """The ``--appendconfig`` lines that turn the bar on for one launch."""
+def stage_assets(runtime_dir):
+    """Copy the bar's files where RetroArch can read them; return the folder.
+
+    The package's own copy is only reachable from OpenEmux's side: in the
+    Flatpak it sits under OpenEmux's ``/app``, and the RetroArch Flatpak sees
+    neither that nor ``/usr``, ``/opt`` or an AppImage's mount -- the bar
+    simply never appeared (issue #482). The runtime directory already holds
+    the ``--appendconfig`` file, so every RetroArch reads it. A file already
+    there with the same bytes is left alone. Falls back to the package's
+    folder, with a warning, when the copy cannot be made.
+    """
+    target = Path(runtime_dir) / STAGED_DIR_NAME
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        for source in OVERLAY_DIR.iterdir():
+            if not source.is_file():
+                continue
+            copy = target / source.name
+            if copy.is_file() and copy.read_bytes() == source.read_bytes():
+                continue
+            shutil.copyfile(source, copy)
+    except OSError as exc:
+        logger.warning("in-game bar: cannot copy its files to %s: %s", target, exc)
+        return OVERLAY_DIR
+    return target
+
+
+def runtime_overrides(overlay_dir=OVERLAY_DIR, translucent=False):
+    """The ``--appendconfig`` lines that turn the bar on for one launch.
+
+    ``overlay_dir`` is where the bar's files are, as ``stage_assets`` left them.
+    ``translucent`` draws it see-through, over the game (issue #477); the
+    shaders then keep no strip for it (``prepare_shaders``).
+    """
     width, height = WINDOW_SIZE
+    overlay = TRANSLUCENT_CFG if translucent else OVERLAY_CFG
+    opacity = TRANSLUCENT_OPACITY if translucent else 1.0
     return {
         "input_overlay_enable": '"true"',
-        "input_overlay": f'"{cfg_path(OVERLAY_CFG)}"',
+        "input_overlay": f'"{cfg_path(Path(overlay_dir) / overlay.name)}"',
         # RetroArch's own default swaps the overlay for the system's
         # "preferred" one when content loads -- a touch gamepad, on a desktop
         # -- wherever it ships one: PlayStation and PSP do, so their games came
         # up with that gamepad over them and no bar at all (issue #471).
         "input_overlay_enable_autopreferred": '"false"',
-        "input_overlay_opacity": '"1.000000"',
+        "input_overlay_opacity": f'"{opacity:.6f}"',
         # The dock is a 16:9 layout: keep its buttons square whatever the
         # window's shape, instead of stretching them with it.
         "input_overlay_auto_scale": '"true"',
@@ -154,7 +203,8 @@ def _absolute_passes(source):
     return out, passes
 
 
-def prepare_shaders(user_preset, video_driver, runtime_dir):
+def prepare_shaders(user_preset, video_driver, runtime_dir, overlay_dir=OVERLAY_DIR,
+                    translucent=False):
     """The preset to load and the shader directory to point RetroArch at.
 
     Returns ``(preset, shader_dir)``. ``shader_dir`` holds exactly the two
@@ -162,12 +212,17 @@ def prepare_shaders(user_preset, video_driver, runtime_dir):
     none) with and without the margin pass appended. ``(user_preset, None)``
     when that cannot be done -- a driver with no shader pipeline, a preset
     for the other backend, one this cannot safely extend -- and then the bar
-    simply sits over the bottom of the game.
+    simply sits over the bottom of the game. The margin pass is read from
+    ``overlay_dir``, as ``stage_assets`` left it.
+
+    A ``translucent`` bar is drawn over the game on purpose, so both presets
+    are the margin-free one: the hide and show buttons still step through
+    the folder, and land on the same full-size image either way.
     """
     backend = _backend_for(video_driver)
     if backend is None:
         return user_preset, None
-    margin = cfg_path(MARGIN_SHADER[backend])
+    margin = cfg_path(Path(overlay_dir) / MARGIN_SHADER[backend].name)
 
     if user_preset:
         source = Path(user_preset)
@@ -202,6 +257,8 @@ def prepare_shaders(user_preset, video_driver, runtime_dir):
         # RetroArch would draw with no shader at all.
         hidden = [*plain, 'parameters = "MARGIN"', 'MARGIN = "0.0"']
         shown = plain
+    if translucent:
+        shown = hidden
 
     folder = Path(runtime_dir) / "in_game_bar"
     folder.mkdir(parents=True, exist_ok=True)
