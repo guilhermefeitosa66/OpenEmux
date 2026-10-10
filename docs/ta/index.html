@@ -371,6 +371,138 @@
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
     }
 
+    .shot-video {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: #08060f;
+    }
+
+    .shot-video video {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .video-controls {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .video-controls[hidden] {
+      display: none
+    }
+
+    .vbtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, .22);
+      background: rgba(8, 6, 15, .72);
+      backdrop-filter: blur(8px);
+      color: var(--text);
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease;
+    }
+
+    .vbtn:hover {
+      background: rgba(139, 92, 246, .35);
+      border-color: rgba(139, 92, 246, .8)
+    }
+
+    .vbtn:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px
+    }
+
+    .vbtn svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .vbtn .i-play {
+      fill: currentColor
+    }
+
+    /* The sound button is the one people are invited to press: gold, with
+       its label, until the sound is on. */
+    .vbtn-sound {
+      padding: 0 18px 0 14px;
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #1a1300
+    }
+
+    .vbtn-sound:hover {
+      background: #ffe066;
+      border-color: #ffe066
+    }
+
+    .vbtn-sound[aria-pressed="true"] {
+      background: rgba(8, 6, 15, .72);
+      border-color: rgba(255, 255, 255, .22);
+      color: var(--text)
+    }
+
+    #promoPlay .i-play,
+    #promoPlay.paused .i-pause,
+    .vbtn-sound .i-sound,
+    .vbtn-sound[aria-pressed="true"] .i-muted {
+      display: none
+    }
+
+    #promoPlay.paused .i-play,
+    .vbtn-sound[aria-pressed="true"] .i-sound {
+      display: block
+    }
+
+    /* On a phone the video is too short to carry buttons over it: they move
+       to a strip of their own underneath. */
+    @media(max-width:560px) {
+      .shot-video {
+        aspect-ratio: auto
+      }
+
+      .shot-video video {
+        height: auto;
+        aspect-ratio: 16 / 9
+      }
+
+      .video-controls {
+        position: static;
+        justify-content: flex-end;
+        padding: 10px;
+        border-top: 1px solid rgba(255, 255, 255, .1)
+      }
+
+      .vbtn-sound span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0)
+      }
+
+      .vbtn-sound {
+        padding: 0 12px
+      }
+    }
+
     .hero-pad {
       height: 130px
     }
@@ -1144,8 +1276,28 @@
       </div>
       <p class="cta-note">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·
         Windows-இல் installer &amp; portable ZIP</p>
-      <div class="shot">
-        <img src="../assets/openemux-library-snes.png" alt="அட்டைப் படங்களுடன் SNES விளையாட்டுகளைக் காட்டும் OpenEmux நூலகக் காட்சி" />
+      <!-- Promo video: plays muted on its own (browsers refuse sound without a
+           click), loops while it is on screen, and stays still for people who
+           asked for reduced motion. The native controls are the no-JS fallback. -->
+      <div class="shot shot-video" id="promo">
+        <video id="promoVideo" controls muted loop playsinline preload="metadata"
+          poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
+          aria-label="30 வினாடிகளில் OpenEmux: நூலகம், கார்ட்ரிட்ஜ் காட்சி, ஒவ்வொரு கன்சோலுக்கான கட்டுப்பாடுகள், இயங்கும் ஒரு விளையாட்டு">
+          <source src="../assets/openemux-promo.mp4" type="video/mp4" />
+        </video>
+        <div class="video-controls" hidden>
+          <button type="button" class="vbtn" id="promoPlay" aria-label="காணொளியை இடைநிறுத்து"
+            data-play="காணொளியை இயக்கு" data-pause="காணொளியை இடைநிறுத்து">
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
+          </button>
+          <button type="button" class="vbtn vbtn-sound" id="promoSound" aria-pressed="false"
+            data-on="ஒலியை இயக்கு" data-off="ஒலியை அணை">
+            <svg class="i-muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6" /></svg>
+            <svg class="i-sound" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" /></svg>
+            <span>ஒலியை இயக்கு</span>
+          </button>
+        </div>
       </div>
     </div>
     <div class="hero-pad"></div>
@@ -1476,6 +1628,70 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && box.classList.contains('open')) close();
       });
+    })();
+
+    // Promo video in the hero. Browsers only autoplay muted video, so it starts
+    // silent and the gold button turns the sound on -- from the top, so the
+    // music starts with the intro. It plays only while on screen, and never on
+    // its own for reduced motion or Save-Data.
+    (function () {
+      var video = document.getElementById('promoVideo');
+      if (!video) return;
+      var controls = video.parentNode.querySelector('.video-controls');
+      var playBtn = document.getElementById('promoPlay');
+      var soundBtn = document.getElementById('promoSound');
+      var soundLabel = soundBtn.querySelector('span');
+      var conn = navigator.connection || {};
+      var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches || conn.saveData;
+      var userPaused = still;
+      var visible = false;
+
+      video.removeAttribute('controls');
+      controls.hidden = false;
+
+      function sync() {
+        var paused = video.paused;
+        playBtn.classList.toggle('paused', paused);
+        playBtn.setAttribute('aria-label', paused ? playBtn.dataset.play : playBtn.dataset.pause);
+        soundBtn.setAttribute('aria-pressed', video.muted ? 'false' : 'true');
+        soundLabel.textContent = video.muted ? soundBtn.dataset.on : soundBtn.dataset.off;
+      }
+
+      function play() {
+        var p = video.play();
+        if (p && p.catch) p.catch(sync);
+      }
+
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (entries) {
+          visible = entries[0].isIntersecting;
+          if (visible && !userPaused) play();
+          else if (!visible && !video.paused) video.pause();
+        }, { threshold: .35 }).observe(video);
+      } else if (!userPaused) {
+        play();
+      }
+
+      playBtn.addEventListener('click', function () {
+        if (video.paused) { userPaused = false; play(); }
+        else { userPaused = true; video.pause(); }
+      });
+
+      soundBtn.addEventListener('click', function () {
+        if (video.muted) {
+          video.muted = false;
+          video.currentTime = 0;
+          userPaused = false;
+          play();
+        } else {
+          video.muted = true;
+        }
+        sync();
+      });
+
+      video.addEventListener('play', sync);
+      video.addEventListener('pause', sync);
+      sync();
     })();
 
     // Shelf carousel: 3 shots per slide (1 on mobile), dots, and wrap-around arrows.
