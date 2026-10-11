@@ -215,18 +215,6 @@ describes the private channel.
 
 ---
 
-## Support the Project
-
-OpenEmux is free and open source. If you find it useful, consider buying me a coffee!
-
-<p align="center">
-  <a href="https://www.paypal.com/donate?business=BGCLFHKKB6XTU&no_recurring=0&item_name=Support+OpenEmux%3A+a+Linux+retro+gaming+frontend+inspired+by+OpenEmu.+Your+donation+helps+improve+features+and+stability.&currency_code=BRL" target="_blank">
-    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="Donate with PayPal"/>
-  </a>
-</p>
-
----
-
 ## Build from Source
 
 If you want to hack on OpenEmux or build the packages yourself:
