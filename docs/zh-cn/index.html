@@ -660,6 +660,21 @@
       }
     }
 
+    /* Android: phone screens, four to a row (two on a phone) */
+    .gallery.phones {
+      grid-template-columns: repeat(4, 1fr)
+    }
+
+    @media(max-width:700px) {
+      .gallery.phones {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    .gallery.phones img {
+      border-radius: 22px
+    }
+
     figure {
       margin: 0
     }
@@ -1264,7 +1279,7 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux 标志" />
       <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux 现已支持 Windows →</a>
+      <a class="hero-pill" href="#android"><span class="beta">新</span> OpenEmux 现已支持 Android →</a>
       <h1>用简单的方式，<br /><span class="grad">畅玩你收藏的复古游戏。</span></h1>
       <p class="lede">OpenEmux 是一款自由开源的模拟器前端。添加你已有的游戏，OpenEmux 会按主机整理并显示封面，打开游戏时按键和着色器都已设置好，不用在设置菜单里翻来翻去。Linux 是它的主要平台；同时也支持 Windows，目前为测试版。</p>
       <div class="cta">
@@ -1272,17 +1287,19 @@
           Linux 版</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ 下载
           Windows 版 <span class="beta">Beta</span></a>
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ 下载
+          Android 版</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ 在 GitHub 上查看</a>
       </div>
       <p class="cta-note">免费开源 · MIT 许可 · Linux 提供 AppImage、.deb、.rpm &amp; Flatpak ·
-        Windows 提供安装程序 &amp; 便携版 ZIP</p>
+        Windows 提供安装程序 &amp; 便携版 ZIP · Android 提供 APK（GPLv3）</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
       <div class="shot shot-video" id="promo">
         <video id="promoVideo" controls muted loop playsinline preload="metadata"
           poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="30 秒了解 OpenEmux：游戏库、卡带视图、按主机设置的控制以及运行中的游戏">
+          aria-label="45 秒了解 OpenEmux：桌面版的游戏库、卡带视图和游戏运行，然后是 Android 应用的货架、屏幕手柄、竖屏与横屏以及 Nintendo DS">
           <source src="../assets/openemux-promo.mp4" type="video/mp4" />
         </video>
         <div class="video-controls" hidden>
@@ -1459,12 +1476,78 @@
     </div>
   </section>
 
+  <!-- ANDROID -->
+  <section id="android">
+    <div class="wrap center">
+      <span class="eyebrow">Android</span>
+      <h2>把你的货架装进口袋</h2>
+      <p class="lede">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。</p>
+      <div class="gallery phones">
+        <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android 版 OpenEmux 的货架" />
+          <figcaption>货架</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-roms-gba.png" alt="Android 版 OpenEmux 中某个主机的卡带" />
+          <figcaption>某个主机的游戏</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-gameplay-gba.png" alt="Android 版 OpenEmux 中带屏幕手柄的 Game Boy Advance 游戏" />
+          <figcaption>竖屏游玩</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-shelf-light.png" alt="Android 版 OpenEmux 浅色主题下的货架" />
+          <figcaption>浅色主题</figcaption>
+        </figure>
+      </div>
+      <div class="gallery">
+        <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" alt="Android 版 OpenEmux 横屏游戏" />
+          <figcaption>转动手机，手柄随之调整</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-nds-landscape.png" alt="Android 版 OpenEmux 中双屏的 Nintendo DS" />
+          <figcaption>Nintendo DS 双屏</figcaption>
+        </figure>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🕹️</div>
+          <h3>每个主机都有自己的手柄</h3>
+          <p>31 个主机各有一套屏幕手柄，按原版手柄的样子绘制，竖屏和横屏都能用。画面下方的按钮栏可以存档、读档、开启连发和加速游戏。</p>
+        </div>
+        <div class="card">
+          <div class="ico">📼</div>
+          <h3>卡带与封面</h3>
+          <p>游戏可以显示为带标签的卡带，也可以显示为封面或列表。货架可以按你喜欢的顺序排列。</p>
+        </div>
+        <div class="card">
+          <div class="ico">⬇️</div>
+          <h3>下载一次即可开玩</h3>
+          <p>应用不自带核心：首次打开时，会从 RetroArch 的 buildbot 下载所有主机的核心，以及 PSP 和 GameCube 需要的系统文件。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🎮</div>
+          <h3>也支持游戏手柄</h3>
+          <p>连接手柄后，屏幕手柄会让开，游戏占满整个屏幕，菜单也能用方向键和按键操作。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌗</div>
+          <h3>浅色与深色</h3>
+          <p>跟随手机主题，或在设置中选择。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          <h3>八种语言</h3>
+          <p>与桌面版相同的语言，跟随手机或在设置中选择。</p>
+        </div>
+      </div>
+      <p style="margin-top:44px"><a class="btn btn-primary"
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ 下载 APK</a></p>
+      <p class="cta-note">Android 8 或更新版本，64 位（arm64）。Android 应用是 RetroArch 的分支，因此采用 GPLv3 许可；源代码在 <a href="https://github.com/guilhermefeitosa66/open-emux-mobile">open-emux-mobile</a>。</p>
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">开始使用</span>
       <h2>安装</h2>
-      <p class="lede">提供 Debian、Ubuntu 和 Fedora 的软件包，以及 AppImage、Flatpak 和 Windows 安装程序。首次启动时，其余的由 OpenEmux 完成设置。</p>
+      <p class="lede">提供 Debian、Ubuntu 和 Fedora 的软件包，以及 AppImage、Flatpak、Windows 安装程序和 Android 的 APK。首次启动时，其余的由 OpenEmux 完成设置。</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1518,6 +1601,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
           <p style="margin-top:12px;font-size:.85rem">解压到任意位置，然后运行 <code>OpenEmux.exe</code>（位于其中的
             <code>OpenEmux\</code> 文件夹）。适合放在 U 盘里，或在无法安装软件的电脑上使用。</p>
+        </div>
+      </div>
+
+      <h3 class="platform-head">Android</h3>
+      <p class="lede">APK 暂未上架 Play 商店：请从 Releases 下载，并在 Android 提示时允许浏览器或文件管理器安装应用。需要 Android 8 或更新版本，64 位。</p>
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">APK</div>
+          <h3>安装 APK</h3>
+          <pre><code>OpenEmux-mobile.apk</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">打开下载的文件并确认。更新也用同样的方式，覆盖安装在旧版本之上。</p>
+        </div>
+        <div class="card">
+          <div class="step-n">首次运行</div>
+          <h3>等待下载核心</h3>
+          <p>首次打开时，应用会下载模拟器核心。然后通过“导入”添加 ROM，或把它们放到手机的 Android/data/com.openemux.mobile/files/roms。</p>
         </div>
       </div>
 

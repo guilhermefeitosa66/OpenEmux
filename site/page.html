@@ -652,6 +652,21 @@
       }
     }
 
+    /* Android: phone screens, four to a row (two on a phone) */
+    .gallery.phones {
+      grid-template-columns: repeat(4, 1fr)
+    }
+
+    @media(max-width:700px) {
+      .gallery.phones {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    .gallery.phones img {
+      border-radius: 22px
+    }
+
     figure {
       margin: 0
     }
@@ -1243,12 +1258,13 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="{{root}}assets/logo.png" {{hero.logo_alt}}
       <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#install">{{hero.pill}}
+      <a class="hero-pill" href="#android">{{hero.pill}}
       {{hero.title}}
       {{hero.lede}}
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_linux}}
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_windows}}
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">{{hero.download_android}}
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">{{hero.github}}
       </div>
       {{hero.note}}
@@ -1422,6 +1438,54 @@
     </div>
   </section>
 
+  <!-- ANDROID -->
+  <section id="android">
+    <div class="wrap center">
+      {{android.eyebrow}}
+      {{android.title}}
+      {{android.lede}}
+      <div class="gallery phones">
+        <figure><img src="{{root}}assets/openemux-mobile-shelf.png" {{android.shot_shelf}}
+        <figure><img src="{{root}}assets/openemux-mobile-roms-gba.png" {{android.shot_roms}}
+        <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba.png" {{android.shot_game}}
+        <figure><img src="{{root}}assets/openemux-mobile-shelf-light.png" {{android.shot_light}}
+      </div>
+      <div class="gallery">
+        <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba-landscape.png" {{android.shot_landscape}}
+        <figure><img src="{{root}}assets/openemux-mobile-nds-landscape.png" {{android.shot_nds}}
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🕹️</div>
+          {{android.skins}}
+        </div>
+        <div class="card">
+          <div class="ico">📼</div>
+          {{android.carts}}
+        </div>
+        <div class="card">
+          <div class="ico">⬇️</div>
+          {{android.setup}}
+        </div>
+        <div class="card">
+          <div class="ico">🎮</div>
+          {{android.gamepad}}
+        </div>
+        <div class="card">
+          <div class="ico">🌗</div>
+          {{android.themes}}
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          {{android.languages}}
+        </div>
+      </div>
+      <p style="margin-top:44px"><a class="btn btn-primary"
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">{{android.download}}
+      {{android.source}}
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
@@ -1474,6 +1538,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           {{install.portable_title}}
           <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
           {{install.portable_note}}
+        </div>
+      </div>
+
+      <h3 class="platform-head">Android</h3>
+      {{install.android_lede}}
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">APK</div>
+          {{install.android_title}}
+          <pre><code>OpenEmux-mobile.apk</code></pre>
+          {{install.android_note}}
+        </div>
+        <div class="card">
+          {{install.android_first_step}}
+          {{install.android_first_title}}
+          {{install.android_first_note}}
         </div>
       </div>
 
