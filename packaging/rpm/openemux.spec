@@ -179,6 +179,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Thu Oct 22 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.16.0-1
+- Every cartridge console draws its own cartridge, in every shell colour
+- OpenEmux for Android: the first release of the app, as an APK
+- The website presents the Android app, with a new promo video
+
 * Thu Oct 08 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.15.1-1
 - The in-game control bar shows in the Flatpak build again
 - A setting draws the control bar semi-transparent, over the game

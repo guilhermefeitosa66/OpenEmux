@@ -87,6 +87,16 @@
   </keywords>
 
   <releases>
+    <release version="1.16.0" date="2026-10-22">
+      <description>
+        <p>Every cartridge console gets its own cartridge, and OpenEmux arrives on Android.</p>
+        <ul>
+          <li>Atari 2600, 5200 and 7800, ColecoVision, Game Gear, Intellivision, Lynx, Neo Geo Pocket, Odyssey², PC Engine, 32X, SG-1000, Virtual Boy, Vectrex and WonderSwan games now sit in their own console's cartridge, in every shell color</li>
+          <li>The first release of OpenEmux for Android, published as an APK next to the desktop builds</li>
+          <li>The website presents the Android app, with a new promo video</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.15.1" date="2026-10-08">
       <description>
         <p>The in-game control bar is back in the Flatpak, and it can be made semi-transparent.</p>
