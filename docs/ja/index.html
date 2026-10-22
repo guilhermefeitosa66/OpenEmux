@@ -660,6 +660,21 @@
       }
     }
 
+    /* Android: phone screens, four to a row (two on a phone) */
+    .gallery.phones {
+      grid-template-columns: repeat(4, 1fr)
+    }
+
+    @media(max-width:700px) {
+      .gallery.phones {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    .gallery.phones img {
+      border-radius: 22px
+    }
+
     figure {
       margin: 0
     }
@@ -1264,7 +1279,7 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux のロゴ" />
       <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux が Windows でも動くようになりました →</a>
+      <a class="hero-pill" href="#android"><span class="beta">新着</span> OpenEmux が Android で動くようになりました →</a>
       <h1>レトロゲームのコレクションを、<br /><span class="grad">シンプルに遊ぶ。</span></h1>
       <p class="lede">OpenEmux は、自由でオープンソースのエミュレーションフロントエンドです。持っているゲームを追加すると、OpenEmux がコンソールごとにカバーアート付きで整理し、操作設定やシェーダーを設定済みの状態で起動します。設定メニューを探し回る必要はありません。メインプラットフォームは Linux で、Windows にもベータ版で対応しています。</p>
       <div class="cta">
@@ -1272,17 +1287,19 @@
           ダウンロード</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Windows 版を
           ダウンロード <span class="beta">Beta</span></a>
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Android 版を
+          ダウンロード</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ GitHub で見る</a>
       </div>
       <p class="cta-note">無料のオープンソース · MIT ライセンス · Linux 向けに AppImage、.deb、.rpm &amp; Flatpak ·
-        Windows 向けにインストーラー &amp; ポータブル ZIP</p>
+        Windows 向けにインストーラー &amp; ポータブル ZIP · Android 向けに APK（GPLv3）</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
       <div class="shot shot-video" id="promo">
         <video id="promoVideo" controls muted loop playsinline preload="metadata"
           poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="30 秒でわかる OpenEmux：ライブラリ、カートリッジ表示、機種ごとの操作設定、ゲームのプレイ画面">
+          aria-label="45 秒でわかる OpenEmux：デスクトップのライブラリ、カートリッジ表示、ゲームのプレイ、そして Android アプリの棚、画面コントローラー、縦と横、ニンテンドー DS">
           <source src="../assets/openemux-promo.mp4" type="video/mp4" />
         </video>
         <div class="video-controls" hidden>
@@ -1459,12 +1476,78 @@
     </div>
   </section>
 
+  <!-- ANDROID -->
+  <section id="android">
+    <div class="wrap center">
+      <span class="eyebrow">Android</span>
+      <h2>あなたの棚を、ポケットに</h2>
+      <p class="lede">Android 版 OpenEmux は、同じライブラリをスマートフォンに持ち出します。手持ちのゲームがコンソールごとの棚にカートリッジとして並び、機種ごとに描かれた画面コントローラーやゲームパッドで遊べます。</p>
+      <div class="gallery phones">
+        <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android 版 OpenEmux の棚" />
+          <figcaption>棚</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-roms-gba.png" alt="Android 版 OpenEmux のコンソールのカートリッジ" />
+          <figcaption>コンソールのゲーム</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-gameplay-gba.png" alt="Android 版 OpenEmux でコントローラー付きのゲームボーイアドバンスのゲーム" />
+          <figcaption>縦画面でプレイ</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-shelf-light.png" alt="Android 版 OpenEmux のライトテーマの棚" />
+          <figcaption>ライトテーマ</figcaption>
+        </figure>
+      </div>
+      <div class="gallery">
+        <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" alt="Android 版 OpenEmux の横画面のゲーム" />
+          <figcaption>回すとコントローラーもついてくる</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-nds-landscape.png" alt="Android 版 OpenEmux で 2 画面のニンテンドー DS" />
+          <figcaption>ニンテンドー DS、2 画面</figcaption>
+        </figure>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🕹️</div>
+          <h3>コンソールごとのコントローラー</h3>
+          <p>31 機種それぞれに、元のコントローラーをかたどった画面コントローラーがあり、縦でも横でも使えます。画面の下のバーからセーブ、ロード、連射、早送りができます。</p>
+        </div>
+        <div class="card">
+          <div class="ico">📼</div>
+          <h3>カートリッジとカバー</h3>
+          <p>ゲームはラベル付きのカートリッジ、カバー、リストで表示できます。棚は好きな順番に並べ替えられます。</p>
+        </div>
+        <div class="card">
+          <div class="ico">⬇️</div>
+          <h3>ダウンロード 1 回で準備完了</h3>
+          <p>アプリはコアを同梱していません。初回起動時に RetroArch の buildbot から全機種のコアと、PSP と GameCube が使うシステムファイルをダウンロードします。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🎮</div>
+          <h3>ゲームパッドにも対応</h3>
+          <p>コントローラーをつなぐと画面コントローラーは消え、ゲームが画面いっぱいに表示されます。メニューも十字キーとボタンで操作できます。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌗</div>
+          <h3>ライトとダーク</h3>
+          <p>スマートフォンのテーマに合わせるか、設定で選べます。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          <h3>8 つの言語</h3>
+          <p>デスクトップ版と同じ言語に対応し、スマートフォンに合わせるか設定で選べます。</p>
+        </div>
+      </div>
+      <p style="margin-top:44px"><a class="btn btn-primary"
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ APK をダウンロード</a></p>
+      <p class="cta-note">Android 8 以降、64 ビット（arm64）。Android アプリは RetroArch のフォークなので GPLv3 ライセンスです。ソースコードは <a href="https://github.com/guilhermefeitosa66/open-emux-mobile">open-emux-mobile</a> にあります。</p>
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">はじめよう</span>
       <h2>インストール</h2>
-      <p class="lede">Debian、Ubuntu、Fedora 向けのパッケージ、AppImage、Flatpak、そして Windows 向けのインストーラーがあります。初回起動時に、残りは OpenEmux が設定します。</p>
+      <p class="lede">Debian、Ubuntu、Fedora 向けのパッケージ、AppImage、Flatpak、Windows 向けのインストーラー、そして Android 向けの APK があります。初回起動時に、残りは OpenEmux が設定します。</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1518,6 +1601,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
           <p style="margin-top:12px;font-size:.85rem">好きな場所に展開して、<code>OpenEmux.exe</code> を実行してください（中にある
             <code>OpenEmux\</code> フォルダーに入っています）。USB メモリーや、ソフトウェアをインストールできないマシンにぴったりです。</p>
+        </div>
+      </div>
+
+      <h3 class="platform-head">Android</h3>
+      <p class="lede">APK はまだ Play ストアにありません。Releases からダウンロードし、Android に聞かれたらブラウザーやファイルマネージャーにアプリのインストールを許可してください。Android 8 以降、64 ビット。</p>
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">APK</div>
+          <h3>APK をインストール</h3>
+          <pre><code>OpenEmux-mobile.apk</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">ダウンロードしたファイルを開いて確認します。アップデートも同じ方法で、前のバージョンの上にインストールします。</p>
+        </div>
+        <div class="card">
+          <div class="step-n">初回起動</div>
+          <h3>コアのダウンロードを待つ</h3>
+          <p>初回起動時に、アプリがエミュレーターのコアをダウンロードします。その後、ROM を「インポート」から追加するか、スマートフォンの Android/data/com.openemux.mobile/files/roms に置いてください。</p>
         </div>
       </div>
 

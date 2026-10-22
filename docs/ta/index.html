@@ -660,6 +660,21 @@
       }
     }
 
+    /* Android: phone screens, four to a row (two on a phone) */
+    .gallery.phones {
+      grid-template-columns: repeat(4, 1fr)
+    }
+
+    @media(max-width:700px) {
+      .gallery.phones {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    .gallery.phones img {
+      border-radius: 22px
+    }
+
     figure {
       margin: 0
     }
@@ -1264,7 +1279,7 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux சின்னம்" />
       <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux இப்போது Windows-இலும் இயங்குகிறது →</a>
+      <a class="hero-pill" href="#android"><span class="beta">புதியது</span> OpenEmux இப்போது Android-இல் இயங்குகிறது →</a>
       <h1>உங்கள் ரெட்ரோ தொகுப்பை<br /><span class="grad">எளிதாக விளையாட ஒரு வழி.</span></h1>
       <p class="lede">OpenEmux என்பது இலவச, திறந்த மூல எமுலேஷன் முகப்பு. உங்களிடம் ஏற்கனவே உள்ள விளையாட்டுகளைச் சேர்த்தால், OpenEmux அவற்றை கன்சோல் வாரியாக அட்டைப் படங்களுடன் ஒழுங்குபடுத்தி, கட்டுப்பாடுகளும் ஷேடர்களும் அமைக்கப்பட்ட நிலையில் ஒவ்வொன்றையும் திறக்கிறது; அமைப்பு மெனுக்களுக்குள் தேட வேண்டியதில்லை. இதன் முதன்மைத் தளம் Linux; Windows-உம் பீட்டாவில் ஆதரிக்கப்படுகிறது.</p>
       <div class="cta">
@@ -1272,17 +1287,19 @@
           பதிவிறக்கு</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Windows-க்குப்
           பதிவிறக்கு <span class="beta">Beta</span></a>
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Android-க்கு
+          பதிவிறக்கு</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ GitHub-இல் பார்க்கவும்</a>
       </div>
       <p class="cta-note">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·
-        Windows-இல் installer &amp; portable ZIP</p>
+        Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
       <div class="shot shot-video" id="promo">
         <video id="promoVideo" controls muted loop playsinline preload="metadata"
           poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="30 வினாடிகளில் OpenEmux: நூலகம், கார்ட்ரிட்ஜ் காட்சி, ஒவ்வொரு கன்சோலுக்கான கட்டுப்பாடுகள், இயங்கும் ஒரு விளையாட்டு">
+          aria-label="45 விநாடிகளில் OpenEmux: கணினியில் நூலகம், கார்ட்ரிட்ஜ் காட்சி, இயங்கும் விளையாட்டு, பிறகு Android செயலியின் அலமாரி, திரைக் கட்டுப்பாடுகள், நெடுக்கு மற்றும் கிடைமட்டம், Nintendo DS">
           <source src="../assets/openemux-promo.mp4" type="video/mp4" />
         </video>
         <div class="video-controls" hidden>
@@ -1459,12 +1476,78 @@
     </div>
   </section>
 
+  <!-- ANDROID -->
+  <section id="android">
+    <div class="wrap center">
+      <span class="eyebrow">Android</span>
+      <h2>உங்கள் அலமாரி, உங்கள் பையில்</h2>
+      <p class="lede">Android-க்கான OpenEmux அதே நூலகத்தை தொலைபேசிக்குக் கொண்டுவருகிறது: உங்களிடம் உள்ள விளையாட்டுகள் ஒவ்வொரு கன்சோலுக்கும் ஒரு அலமாரியில் கார்ட்ரிட்ஜ்களாக, ஒவ்வொரு கணினிக்கும் வரையப்பட்ட திரைக் கட்டுப்பாடுகளுடனோ கேம்பேடுடனோ விளையாட.</p>
+      <div class="gallery phones">
+        <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android-இல் OpenEmux, அலமாரி" />
+          <figcaption>அலமாரி</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-roms-gba.png" alt="Android-இல் OpenEmux, ஒரு கன்சோலின் கார்ட்ரிட்ஜ்கள்" />
+          <figcaption>ஒரு கன்சோலின் விளையாட்டுகள்</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-gameplay-gba.png" alt="Android-இல் OpenEmux, கட்டுப்பாடுகளுடன் ஒரு Game Boy Advance விளையாட்டு" />
+          <figcaption>நெடுக்கில் விளையாடுதல்</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-shelf-light.png" alt="Android-இல் OpenEmux, வெளிர் தீமில் அலமாரி" />
+          <figcaption>வெளிர் தீம்</figcaption>
+        </figure>
+      </div>
+      <div class="gallery">
+        <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" alt="Android-இல் OpenEmux, கிடைமட்டத்தில் ஒரு விளையாட்டு" />
+          <figcaption>தொலைபேசியைத் திருப்புங்கள், கட்டுப்பாடுகள் பின்தொடரும்</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-nds-landscape.png" alt="Android-இல் OpenEmux, இரு திரைகளுடன் Nintendo DS" />
+          <figcaption>Nintendo DS, இரு திரைகள்</figcaption>
+        </figure>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🕹️</div>
+          <h3>ஒவ்வொரு கன்சோலுக்கும் ஒரு கட்டுப்பாடு</h3>
+          <p>31 கன்சோல்களுக்கும் அசல் கட்டுப்பாட்டியின் வடிவில் தனித் திரைக் கட்டுப்பாடு உண்டு, நெடுக்கிலும் கிடைமட்டத்திலும். படத்தின் கீழ் உள்ள பட்டை சேமிக்கிறது, ஏற்றுகிறது, டர்போவை இயக்குகிறது, விளையாட்டை வேகப்படுத்துகிறது.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📼</div>
+          <h3>கார்ட்ரிட்ஜ்களும் அட்டைகளும்</h3>
+          <p>விளையாட்டுகள் லேபிள்களுடன் கார்ட்ரிட்ஜ்களாகவோ, அட்டைகளாகவோ, பட்டியலாகவோ தெரியும். அலமாரிகளை நீங்கள் விரும்பும் வரிசையில் வைக்கலாம்.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⬇️</div>
+          <h3>ஒரு பதிவிறக்கத்தில் தயார்</h3>
+          <p>செயலி கோர்களைக் கொண்டுவருவதில்லை: முதல் முறை திறக்கும்போது RetroArch buildbot-இலிருந்து எல்லா கன்சோல்களுக்குமான கோர்களையும், PSP மற்றும் GameCube பயன்படுத்தும் கணினிக் கோப்புகளையும் பதிவிறக்குகிறது.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🎮</div>
+          <h3>கேம்பேடுடனும்</h3>
+          <p>கட்டுப்பாட்டியை இணைத்தால் திரைக் கட்டுப்பாடு விலகும்: விளையாட்டு முழுத் திரையையும் எடுக்கும், மெனுக்கள் திசைப் பொத்தானையும் பொத்தான்களையும் பின்பற்றும்.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌗</div>
+          <h3>வெளிர் மற்றும் இருள்</h3>
+          <p>தொலைபேசியின் தீமைப் பின்பற்றும், அல்லது அமைப்புகளில் ஒன்றைத் தேர்வு செய்யுங்கள்.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          <h3>எட்டு மொழிகள்</h3>
+          <p>கணினி செயலியின் அதே மொழிகள், தொலைபேசியைப் பின்பற்றியோ அமைப்புகளில் தேர்ந்தெடுத்தோ.</p>
+        </div>
+      </div>
+      <p style="margin-top:44px"><a class="btn btn-primary"
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ APK-ஐப் பதிவிறக்கு</a></p>
+      <p class="cta-note">Android 8 அல்லது புதியது, 64-பிட் (arm64). Android செயலி RetroArch-இன் ஃபோர்க் என்பதால் GPLv3 உரிமம் பெற்றது; மூலக் குறியீடு <a href="https://github.com/guilhermefeitosa66/open-emux-mobile">open-emux-mobile</a>-இல் உள்ளது.</p>
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">தொடங்குங்கள்</span>
       <h2>நிறுவுதல்</h2>
-      <p class="lede">Debian, Ubuntu, Fedora ஆகியவற்றுக்கான தொகுப்புகள், ஒரு AppImage, ஒரு Flatpak, Windows-க்கான நிறுவி ஆகியவை உள்ளன. முதல் துவக்கத்தில் மீதியை OpenEmux அமைக்கிறது.</p>
+      <p class="lede">Debian, Ubuntu, Fedora ஆகியவற்றுக்கான தொகுப்புகள், ஒரு AppImage, ஒரு Flatpak, Windows-க்கான நிறுவி, Android-க்கான APK ஆகியவை உள்ளன. முதல் துவக்கத்தில் மீதியை OpenEmux அமைக்கிறது.</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1518,6 +1601,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
           <p style="margin-top:12px;font-size:.85rem">எங்கு வேண்டுமானாலும் unzip செய்து, <code>OpenEmux.exe</code>-ஐ இயக்குங்கள்; அது உள்ளே உள்ள
             <code>OpenEmux\</code> கோப்புறையில் இருக்கும். USB stick-க்கோ, மென்பொருள் நிறுவ முடியாத கணினிக்கோ ஏற்றது.</p>
+        </div>
+      </div>
+
+      <h3 class="platform-head">Android</h3>
+      <p class="lede">APK இன்னும் Play Store-இல் இல்லை: Releases-இலிருந்து பதிவிறக்கி, Android கேட்கும்போது உலாவி அல்லது கோப்பு மேலாளருக்குச் செயலிகளை நிறுவ அனுமதி கொடுங்கள். Android 8 அல்லது புதியது, 64-பிட்.</p>
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">APK</div>
+          <h3>APK-ஐ நிறுவுங்கள்</h3>
+          <pre><code>OpenEmux-mobile.apk</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">பதிவிறக்கிய கோப்பைத் திறந்து உறுதிப்படுத்துங்கள். புதுப்பிப்புகளும் அதே வழியில், முந்தைய பதிப்பின் மேல் நிறுவப்படும்.</p>
+        </div>
+        <div class="card">
+          <div class="step-n">முதல் முறை</div>
+          <h3>கோர்களைப் பதிவிறக்க விடுங்கள்</h3>
+          <p>முதல் முறை திறக்கும்போது செயலி எமுலேட்டர் கோர்களைப் பதிவிறக்குகிறது. பிறகு உங்கள் ROM-களை இறக்குமதியில் சேருங்கள், அல்லது தொலைபேசியில் Android/data/com.openemux.mobile/files/roms-இல் வையுங்கள்.</p>
         </div>
       </div>
 

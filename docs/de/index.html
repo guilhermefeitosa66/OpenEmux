@@ -660,6 +660,21 @@
       }
     }
 
+    /* Android: phone screens, four to a row (two on a phone) */
+    .gallery.phones {
+      grid-template-columns: repeat(4, 1fr)
+    }
+
+    @media(max-width:700px) {
+      .gallery.phones {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    .gallery.phones img {
+      border-radius: 22px
+    }
+
     figure {
       margin: 0
     }
@@ -1264,7 +1279,7 @@
     <div class="wrap hero-inner">
       <img class="hero-logo" src="../assets/logo.png" alt="OpenEmux-Logo" />
       <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#install"><span class="beta">Beta</span> OpenEmux läuft jetzt auch unter Windows →</a>
+      <a class="hero-pill" href="#android"><span class="beta">Neu</span> OpenEmux läuft jetzt auf Android →</a>
       <h1>Ein einfacher Weg,<br /><span class="grad">deine Retro-Sammlung zu spielen.</span></h1>
       <p class="lede">OpenEmux ist ein freies Open-Source-Emulations-Frontend. Du fügst die Spiele hinzu, die du schon hast, und OpenEmux ordnet sie nach Konsole, mit Coverbildern, und startet jedes mit bereits eingerichteter Steuerung und Shadern, ohne dass du dich durch Einstellungsmenüs wühlen musst. Linux ist die Hauptplattform; Windows wird ebenfalls unterstützt, in der Beta.</p>
       <div class="cta">
@@ -1272,17 +1287,19 @@
           Linux herunterladen</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Für
           Windows herunterladen <span class="beta">Beta</span></a>
+        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Herunterladen für
+          Android</a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ Auf GitHub ansehen</a>
       </div>
       <p class="cta-note">Kostenlos und quelloffen · MIT-Lizenz · AppImage, .deb, .rpm &amp; Flatpak für Linux ·
-        Installer &amp; portables ZIP für Windows</p>
+        Installer &amp; portables ZIP für Windows · APK auf Android (GPLv3)</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
       <div class="shot shot-video" id="promo">
         <video id="promoVideo" controls muted loop playsinline preload="metadata"
           poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="OpenEmux in 30 Sekunden: die Bibliothek, die Modulansicht, die Steuerung pro Konsole und ein laufendes Spiel">
+          aria-label="OpenEmux in 45 Sekunden: die Bibliothek, die Modulansicht und ein laufendes Spiel am Desktop, dann die Android-App mit Regal, Bildschirm-Controllern, Hoch- und Querformat und dem Nintendo DS">
           <source src="../assets/openemux-promo.mp4" type="video/mp4" />
         </video>
         <div class="video-controls" hidden>
@@ -1459,12 +1476,78 @@
     </div>
   </section>
 
+  <!-- ANDROID -->
+  <section id="android">
+    <div class="wrap center">
+      <span class="eyebrow">Android</span>
+      <h2>Dein Regal für die Hosentasche</h2>
+      <p class="lede">OpenEmux für Android bringt dieselbe Bibliothek aufs Handy: deine Spiele als Module in einem Regal pro Konsole, gespielt mit Bildschirm-Controllern für jedes System oder mit einem Gamepad.</p>
+      <div class="gallery phones">
+        <figure><img src="../assets/openemux-mobile-shelf.png" alt="OpenEmux auf Android, das Regal" />
+          <figcaption>Das Regal</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-roms-gba.png" alt="OpenEmux auf Android, die Module einer Konsole" />
+          <figcaption>Die Spiele einer Konsole</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-gameplay-gba.png" alt="OpenEmux auf Android, ein Game-Boy-Advance-Spiel mit Steuerung" />
+          <figcaption>Spielen im Hochformat</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-shelf-light.png" alt="OpenEmux auf Android, das Regal im hellen Design" />
+          <figcaption>Helles Design</figcaption>
+        </figure>
+      </div>
+      <div class="gallery">
+        <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" alt="OpenEmux auf Android, ein Spiel im Querformat" />
+          <figcaption>Handy drehen, die Steuerung folgt</figcaption>
+        </figure>
+        <figure><img src="../assets/openemux-mobile-nds-landscape.png" alt="OpenEmux auf Android, Nintendo DS mit beiden Bildschirmen" />
+          <figcaption>Nintendo DS, beide Bildschirme</figcaption>
+        </figure>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🕹️</div>
+          <h3>Ein Controller pro Konsole</h3>
+          <p>Jede der 31 Konsolen hat ihren eigenen Bildschirm-Controller, gestaltet wie das Original, im Hoch- und Querformat. Eine Leiste unter dem Bild speichert, lädt, schaltet Turbo ein und beschleunigt das Spiel.</p>
+        </div>
+        <div class="card">
+          <div class="ico">📼</div>
+          <h3>Module und Cover</h3>
+          <p>Spiele erscheinen als Module mit ihren Etiketten, oder als Cover und Liste. Die Regale lassen sich beliebig ordnen.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⬇️</div>
+          <h3>Nach einem Download bereit</h3>
+          <p>Die App bringt keine Cores mit: Beim ersten Start lädt sie die aller Konsolen vom RetroArch-Buildbot, zusammen mit den Systemdateien für PSP und GameCube.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🎮</div>
+          <h3>Auch mit Gamepad</h3>
+          <p>Schließ einen Controller an und der Bildschirm-Controller tritt zur Seite: Das Spiel nutzt den ganzen Bildschirm, und die Menüs folgen Steuerkreuz und Tasten.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌗</div>
+          <h3>Hell und dunkel</h3>
+          <p>Folgt dem Design des Handys, oder wähle eines in den Einstellungen.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          <h3>Acht Sprachen</h3>
+          <p>Dieselben Sprachen wie die Desktop-App, nach dem Handy oder in den Einstellungen gewählt.</p>
+        </div>
+      </div>
+      <p style="margin-top:44px"><a class="btn btn-primary"
+          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ APK herunterladen</a></p>
+      <p class="cta-note">Android 8 oder neuer, 64 Bit (arm64). Die Android-App ist ein Fork von RetroArch und steht daher unter der GPLv3; der Quellcode liegt unter <a href="https://github.com/guilhermefeitosa66/open-emux-mobile">open-emux-mobile</a>.</p>
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section id="install">
     <div class="wrap center">
       <span class="eyebrow">Los geht’s</span>
       <h2>Installation</h2>
-      <p class="lede">Es gibt Pakete für Debian, Ubuntu und Fedora, ein AppImage und ein Flatpak sowie einen Installer für Windows. Beim ersten Start richtet OpenEmux den Rest ein.</p>
+      <p class="lede">Es gibt Pakete für Debian, Ubuntu und Fedora, ein AppImage, ein Flatpak, einen Installer für Windows und eine APK für Android. Beim ersten Start richtet OpenEmux den Rest ein.</p>
       <h3 class="platform-head">Linux</h3>
       <div class="steps">
         <div class="card">
@@ -1519,6 +1602,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <p style="margin-top:12px;font-size:.85rem">Entpacke es irgendwohin und starte <code>OpenEmux.exe</code> aus dem
             Ordner <code>OpenEmux\</code> darin. Ideal für einen USB-Stick oder einen Rechner, auf dem du keine Software
             installieren kannst.</p>
+        </div>
+      </div>
+
+      <h3 class="platform-head">Android</h3>
+      <p class="lede">Die APK ist noch nicht im Play Store: Lade sie unter Releases herunter und erlaube dem Browser oder Dateimanager, Apps zu installieren, wenn Android fragt. Android 8 oder neuer, 64 Bit.</p>
+      <div class="steps">
+        <div class="card">
+          <div class="step-n">APK</div>
+          <h3>APK installieren</h3>
+          <pre><code>OpenEmux-mobile.apk</code></pre>
+          <p style="margin-top:12px;font-size:.85rem">Öffne die heruntergeladene Datei und bestätige. Updates werden genauso installiert, über die vorherige Version.</p>
+        </div>
+        <div class="card">
+          <div class="step-n">Erster Start</div>
+          <h3>Lass die Cores herunterladen</h3>
+          <p>Beim ersten Start lädt die App die Emulator-Cores herunter. Leg dann deine ROMs unter Importieren ab, oder auf dem Handy in Android/data/com.openemux.mobile/files/roms.</p>
         </div>
       </div>
 
