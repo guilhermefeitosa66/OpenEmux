@@ -230,7 +230,7 @@
   "views-modes.alt1": "Cover Grid view, with its button framed",
   "views-modes.figcaption1": "<span class=\"ui\">Cover Grid</span>: the full box art of each game.",
   "views-modes.alt2": "Cartridge Grid view, with its button framed",
-  "views-modes.figcaption2": "<span class=\"ui\">Cartridge Grid</span> (the default): each game drawn on its console's\n              cartridge, with its label on the sticker. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS,\n              Mega Drive and Master System have cartridges; other consoles show their covers.",
+  "views-modes.figcaption2": "<span class=\"ui\">Cartridge Grid</span> (the default): each game drawn on its console's\n              cartridge, with its label on the sticker. Every cartridge console has\n              its own; the disc consoles and the Famicom Disk System show their covers.",
   "views-modes.alt3": "Compact List view, with its button framed",
   "views-modes.figcaption3": "<span class=\"ui\">Compact List</span>: one row per game, with a checkbox for selecting, a small\n              thumbnail, the title and the console.",
   "views-layout.h31": "The layout menu",

@@ -1459,6 +1459,33 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   are in `tests/test_rom_card_widget.py` (`WhatACartridgeLabelShowsTests`) and
   `tests/test_scraper.py` (`WhichArtIsALabelTests`).
 
+### RT-339 — Every cartridge console draws its own cartridge, in every shell colour
+- **Area:** View modes & layout
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open, in the cartridge view, a game of each cartridge console —
+  Atari 2600, 5200 and 7800, ColecoVision, Game Gear, Intellivision, Lynx, Neo Geo Pocket,
+  Odyssey², PC Engine, 32X, SG-1000, Virtual Boy, Vectrex and WonderSwan, besides the nine that had
+  one before — and pick "Cartridge color" ▸ "Red" on one of them.
+- **Expected:** Each game sits in its own console's cartridge with its label inside the sticker
+  window, and the colour repaints the shell, not the label. Only the disc consoles and the Famicom
+  Disk System fall back to covers.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from openemux.core import cartridge_render as cr
+  from openemux.core.systems import SYSTEMS
+  framed = set(cr.consoles_with_frames())
+  missing = {s['id'] for s in SYSTEMS} - framed
+  assert missing == {'FDS', 'GC', 'MCD', 'SATURN', 'PS', 'PSP', 'PCECD'}, missing
+  for c in framed:
+      assert len(cr.frame_colors_for(c)) == 13, c
+      for color in cr.frame_colors_for(c):
+          assert cr.cartridge_frame(c, color=color) is not None, (c, color)
+  print('RT-339 OK')"
+  ```
+  The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
+
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
 - **Mode:** AUTO-UI
