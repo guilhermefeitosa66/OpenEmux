@@ -230,7 +230,7 @@
   "views-modes.alt1": "Visualização Grade de capas, com o botão destacado",
   "views-modes.figcaption1": "<span class=\"ui\">Grade de capas</span>: a capa completa de cada jogo.",
   "views-modes.alt2": "Visualização Grade de cartuchos, com o botão destacado",
-  "views-modes.figcaption2": "<span class=\"ui\">Grade de cartuchos</span> (o padrão): cada jogo desenhado no cartucho do seu console, com o rótulo na etiqueta. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS, Mega Drive e Master System têm cartuchos; os outros consoles mostram as capas.",
+  "views-modes.figcaption2": "<span class=\"ui\">Grade de cartuchos</span> (o padrão): cada jogo desenhado no cartucho do seu console, com o rótulo na etiqueta. Todo console de cartucho tem o seu; os consoles de disco e o Famicom Disk System mostram as capas.",
   "views-modes.alt3": "Visualização Lista compacta, com o botão destacado",
   "views-modes.figcaption3": "<span class=\"ui\">Lista compacta</span>: uma linha por jogo, com uma caixa de seleção, uma miniatura pequena, o título e o console.",
   "views-layout.h31": "O menu de layout",
