@@ -230,7 +230,7 @@
   "views-modes.alt1": "Ansicht Cover-Raster, mit eingerahmter Schaltfläche",
   "views-modes.figcaption1": "<span class=\"ui\">Cover-Raster</span>: das vollständige Cover jedes Spiels.",
   "views-modes.alt2": "Ansicht Modul-Raster, mit eingerahmter Schaltfläche",
-  "views-modes.figcaption2": "<span class=\"ui\">Modul-Raster</span> (Standard): jedes Spiel auf dem Modul seiner Konsole, mit seinem Bild auf dem Aufkleber. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS, Mega Drive und Master System haben Module; andere Konsolen zeigen ihre Cover.",
+  "views-modes.figcaption2": "<span class=\"ui\">Modul-Raster</span> (Standard): jedes Spiel auf dem Modul seiner Konsole, mit seinem Bild auf dem Aufkleber. Jede Modulkonsole hat ihr eigenes Modul; Disc-Konsolen und das Famicom Disk System zeigen ihre Cover.",
   "views-modes.alt3": "Ansicht Kompakte Liste, mit eingerahmter Schaltfläche",
   "views-modes.figcaption3": "<span class=\"ui\">Kompakte Liste</span>: eine Zeile pro Spiel, mit Kontrollkästchen zum Auswählen, kleinem Vorschaubild, Titel und Konsole.",
   "views-layout.h31": "Das Layout-Menü",

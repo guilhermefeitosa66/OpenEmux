@@ -230,7 +230,7 @@
   "views-modes.alt1": "L’affichage Grille de jaquettes, avec son bouton encadré",
   "views-modes.figcaption1": "<span class=\"ui\">Grille de jaquettes</span> : la jaquette complète de chaque jeu.",
   "views-modes.alt2": "L’affichage Grille de cartouches, avec son bouton encadré",
-  "views-modes.figcaption2": "<span class=\"ui\">Grille de cartouches</span> (par défaut) : chaque jeu dessiné sur la cartouche de sa console, avec son étiquette sur l’autocollant. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS, Mega Drive et Master System ont des cartouches ; les autres consoles affichent leurs jaquettes.",
+  "views-modes.figcaption2": "<span class=\"ui\">Grille de cartouches</span> (par défaut) : chaque jeu dessiné sur la cartouche de sa console, avec son étiquette sur l’autocollant. Chaque console à cartouches a la sienne ; les consoles à disque et le Famicom Disk System affichent leurs jaquettes.",
   "views-modes.alt3": "L’affichage Liste compacte, avec son bouton encadré",
   "views-modes.figcaption3": "<span class=\"ui\">Liste compacte</span> : une ligne par jeu, avec une case à cocher pour la sélection, une petite vignette, le titre et la console.",
   "views-layout.h31": "Le menu de disposition",

@@ -83,8 +83,8 @@ class PackageDataTests(unittest.TestCase):
         )
 
     def test_the_cartridge_frames_are_covered(self):
-        # The specific regression: 117 SVG frames (9 consoles plus the colour
-        # variants) that a "*.png" pattern silently dropped.
+        # The specific regression: the SVG frames (one per console plus its
+        # colour variants) that a "*.png" pattern silently dropped.
         patterns = declared_patterns()
         frames = sorted(
             (PACKAGE_ROOT / "ui/assets/images/cartridges").glob("*.svg")

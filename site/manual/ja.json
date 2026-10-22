@@ -230,7 +230,7 @@
   "views-modes.alt1": "ボタンを枠で囲んだ「カバーのグリッド」表示",
   "views-modes.figcaption1": "<span class=\"ui\">カバーのグリッド</span>：各ゲームのパッケージアートを全体表示します。",
   "views-modes.alt2": "ボタンを枠で囲んだ「カートリッジのグリッド」表示",
-  "views-modes.figcaption2": "<span class=\"ui\">カートリッジのグリッド</span>（既定）：各ゲームをそのコンソールのカートリッジとして描き、シールの部分にラベルを表示します。カートリッジがあるのは NES、SNES、N64、Game Boy、Game Boy Color、Game Boy Advance、DS、Mega Drive、Master System で、それ以外のコンソールではカバーが表示されます。",
+  "views-modes.figcaption2": "<span class=\"ui\">カートリッジのグリッド</span>（既定）：各ゲームをそのコンソールのカートリッジとして描き、シールの部分にラベルを表示します。カートリッジ式のコンソールにはそれぞれ専用のカートリッジがあり、ディスク式のコンソールとファミコン ディスクシステムではカバーが表示されます。",
   "views-modes.alt3": "ボタンを枠で囲んだ「コンパクトなリスト」表示",
   "views-modes.figcaption3": "<span class=\"ui\">コンパクトなリスト</span>：1ゲーム1行で、選択用のチェックボックス、小さなサムネイル、タイトル、コンソールを表示します。",
   "views-layout.h31": "レイアウトメニュー",

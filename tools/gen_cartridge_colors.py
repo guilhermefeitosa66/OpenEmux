@@ -48,7 +48,11 @@ PALETTE = [
     ("clear", "Clear", "#B9C0C7"),
 ]
 
-BASE_FRAMES = ["FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"]
+BASE_FRAMES = [
+    "FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS",
+    "A2600", "A5200", "A7800", "CV", "GG", "INTV", "LYNX", "NGP", "O2",
+    "PCE", "S32X", "SG1000", "VB", "VECTREX", "WS",
+]
 
 # Where the normalised plastic should sit: mid-tone times the flood colour is
 # what the shell reads as, so 0.85 lands just under the nominal base, and the

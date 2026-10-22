@@ -376,6 +376,46 @@ if __name__ == "__main__":
     unittest.main()
 
 
+# Every console a cartridge frame was authored for.
+CARTRIDGE_CONSOLES = (
+    "FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS",
+    "A2600", "A5200", "A7800", "CV", "GG", "INTV", "LYNX", "NGP", "O2",
+    "PCE", "S32X", "SG1000", "VB", "VECTREX", "WS",
+)
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class EveryShippedFrameTests(unittest.TestCase):
+    """A frame that fails to load silently degrades its console to covers."""
+
+    def test_every_shell_of_every_console_loads(self):
+        for console in CARTRIDGE_CONSOLES:
+            for color in cartridge_render.frame_colors_for(console):
+                path = cartridge_render.frame_asset_for(console, color=color)
+                with self.subTest(frame=path.name):
+                    frame = CartridgeFrame(path)
+                    bx, by, bw, bh = frame._label_bbox(frame.width, frame.height)
+                    self.assertGreater(bw, 0)
+                    self.assertGreater(bh, 0)
+                    self.assertGreaterEqual(bx, -1)
+                    self.assertGreaterEqual(by, -1)
+                    self.assertLessEqual(bx + bw, frame.width + 1)
+                    self.assertLessEqual(by + bh, frame.height + 1)
+
+    def test_the_cover_shows_through_every_label_window(self):
+        with TemporaryDirectory() as tmp:
+            cover = _write_cover(Path(tmp) / "c.png", color=(255, 0, 0))
+            for console in CARTRIDGE_CONSOLES:
+                with self.subTest(console=console):
+                    frame = CartridgeFrame(cartridge_render.frame_asset_for(console))
+                    surface = frame.render(str(cover), width=200)
+                    bx, by, bw, bh = frame._label_bbox(surface.get_width(), surface.get_height())
+                    offset = int(by + bh / 2) * surface.get_stride() + int(bx + bw / 2) * 4
+                    b, g, r, _a = surface.get_data()[offset:offset + 4]
+                    self.assertGreater(r, 200)
+                    self.assertLess(g, 60)
+
+
 class FrameAssetLookupTests(unittest.TestCase):
     """Which consoles have a cartridge frame: the SVG assets are the list."""
 
@@ -383,7 +423,7 @@ class FrameAssetLookupTests(unittest.TestCase):
         consoles = cartridge_render.consoles_with_frames()
         # The frames actually authored so far. A new SVG opts a console in with
         # no code change, so this asserts membership rather than an exact set.
-        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+        for console in CARTRIDGE_CONSOLES:
             self.assertIn(console, consoles)
         # Disc-based consoles have no cartridge to frame.
         for console in ("PS", "MCD", "PCECD"):
@@ -468,7 +508,7 @@ class FrameAssetLookupTests(unittest.TestCase):
 
     def test_shipped_variants_resolve_for_every_console(self):
         # Every console with a frame got the full first batch of shells.
-        for console in ("FC", "SFC", "GBA", "GB", "GBC", "MD", "N64", "NDS", "SMS"):
+        for console in CARTRIDGE_CONSOLES:
             colors = cartridge_render.frame_colors_for(console)
             self.assertIn("red", colors, console)
             self.assertIn("white", colors, console)

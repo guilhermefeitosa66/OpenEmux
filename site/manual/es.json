@@ -230,7 +230,7 @@
   "views-modes.alt1": "Vista Cuadrícula de carátulas, con su botón enmarcado",
   "views-modes.figcaption1": "<span class=\"ui\">Cuadrícula de carátulas</span>: la portada completa de cada juego.",
   "views-modes.alt2": "Vista Cuadrícula de cartuchos, con su botón enmarcado",
-  "views-modes.figcaption2": "<span class=\"ui\">Cuadrícula de cartuchos</span> (la predeterminada): cada juego dibujado en el cartucho de su\n              consola, con su etiqueta en la pegatina. NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, DS,\n              Mega Drive y Master System tienen cartuchos; las demás consolas muestran sus carátulas.",
+  "views-modes.figcaption2": "<span class=\"ui\">Cuadrícula de cartuchos</span> (la predeterminada): cada juego dibujado en el cartucho de su\n              consola, con su etiqueta en la pegatina. Cada consola de cartuchos\n              tiene el suyo; las consolas de disco y el Famicom Disk System muestran sus carátulas.",
   "views-modes.alt3": "Vista Lista compacta, con su botón enmarcado",
   "views-modes.figcaption3": "<span class=\"ui\">Lista compacta</span>: una fila por juego, con una casilla para seleccionar, una\n              miniatura pequeña, el título y la consola.",
   "views-layout.h31": "El menú de disposición",
