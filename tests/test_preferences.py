@@ -1497,6 +1497,129 @@ class TheAchievementsAccountTests(_PreferencesCase):
 
 
 @needs_display
+class BezelRowsTests(_PreferencesCase):
+    """Issue #507: one bezel row per 4:3 console, without a real picker."""
+
+    def setUp(self):
+        super().setUp()
+        self.setUpToastCapture()
+        self.dialogs = []
+        patcher = mock.patch.object(prefs_module.Gtk, "FileDialog", self._dialog_factory)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _dialog_factory(self):
+        dialog = mock.Mock()
+        self.dialogs.append(dialog)
+        return dialog
+
+    def png(self, name="Frame.png", width=1920, height=1080):
+        import struct
+        path = self.tmp / name
+        ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+        path.write_bytes(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + b"\0" * 4)
+        return path
+
+    def chosen(self, path):
+        dialog = mock.Mock()
+        source = mock.Mock()
+        source.get_path.return_value = str(path) if path else ""
+        dialog.open_finish.return_value = source
+        return dialog
+
+    def select(self, console, mode):
+        self.prefs._bezel_rows[console].set_selected(prefs_module.bezels.BEZEL_MODES.index(mode))
+
+    def test_the_group_sits_between_the_bar_and_the_shaders(self):
+        groups = []
+        child = self.prefs._pages["video"].get_first_child()
+        stack = [child]
+        while stack:
+            widget = stack.pop()
+            while widget is not None:
+                if isinstance(widget, Adw.PreferencesGroup):
+                    groups.append(widget.get_title())
+                elif widget.get_first_child() is not None:
+                    stack.append(widget.get_first_child())
+                widget = widget.get_next_sibling()
+        bar = groups.index("prefs.group.game_bar")
+        self.assertEqual(groups[bar + 1], "prefs.group.bezels")
+        self.assertEqual(groups[bar + 2], "prefs.group.shaders")
+
+    def test_only_the_4_3_consoles_have_a_row_and_all_read_none(self):
+        self.assertEqual(set(self.prefs._bezel_rows), prefs_module.bezels.BEZEL_CONSOLES)
+        for row in self.prefs._bezel_rows.values():
+            self.assertEqual(row.get_selected(), 0)
+            self.assertFalse(row._bezel_button.get_visible())
+
+    def test_picking_simple_is_stored_and_none_clears_it(self):
+        self.select("MD", "simple")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "simple")
+        self.assertEqual(
+            OpenEmuxPreferences(self.win)._bezel_rows["MD"].get_selected(), 1)
+        self.select("MD", "none")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+
+    def test_an_impossible_selection_stores_nothing(self):
+        row = mock.Mock()
+        row.get_selected.return_value = 99
+        self.prefs._on_bezel_changed(row, None, "MD")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+
+    def test_custom_with_no_image_yet_opens_the_picker(self):
+        self.select("PS", "custom")
+        self.dialogs[0].open.assert_called_once()
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "none")
+
+    def test_a_chosen_image_is_imported_and_shown(self):
+        self.select("PS", "custom")
+        self.prefs._on_bezel_image_chosen(self.chosen(self.png()), None, "PS")
+        row = self.prefs._bezel_rows["PS"]
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
+        self.assertEqual(row.get_subtitle(), "Frame.png")
+        self.assertTrue(row._bezel_button.get_visible())
+        self.assertEqual(row.get_selected(), 2)
+
+    def test_custom_again_reuses_the_stored_image_without_asking(self):
+        self.config.set_custom_bezel("PS", self.png())
+        self.config.set_bezel_for_console("PS", "none")
+        prefs = OpenEmuxPreferences(self.win)
+        prefs._bezel_rows["PS"].set_selected(2)
+        self.assertEqual(self.dialogs, [])
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
+
+    def test_the_button_opens_the_picker_for_another_image(self):
+        self.config.set_custom_bezel("PS", self.png())
+        prefs = OpenEmuxPreferences(self.win)
+        prefs._bezel_rows["PS"]._bezel_button.emit("clicked")
+        self.dialogs[0].open.assert_called_once()
+
+    def test_a_dismissed_picker_goes_back_to_the_previous_choice(self):
+        self.select("FC", "simple")
+        self.select("FC", "custom")
+        dialog = mock.Mock()
+        dialog.open_finish.side_effect = GLib.Error("dismissed")
+        self.prefs._on_bezel_image_chosen(dialog, None, "FC")
+        self.assertEqual(self.prefs._bezel_rows["FC"].get_selected(), 1)
+        self.assertEqual(self.config.get_bezel_for_console("FC"), "simple")
+
+    def test_a_pick_with_no_local_path_goes_back_too(self):
+        self.select("FC", "custom")
+        self.prefs._on_bezel_image_chosen(self.chosen(None), None, "FC")
+        self.assertEqual(self.prefs._bezel_rows["FC"].get_selected(), 0)
+
+    def test_a_bad_image_is_refused_with_a_toast(self):
+        bad = self.tmp / "photo.png"
+        bad.write_bytes(b"\xff\xd8\xff" * 20)
+        self.select("SFC", "custom")
+        self.prefs._on_bezel_image_chosen(self.chosen(bad), None, "SFC")
+        self.prefs._on_bezel_image_chosen(self.chosen(self.png("s.png", 64, 64)), None, "SFC")
+        self.assertEqual(self.toasts(), ["toast.bezels.not_png", "toast.bezels.too_small"])
+        self.assertEqual(self.prefs._bezel_rows["SFC"].get_selected(), 0)
+        self.assertEqual(self.config.get_bezel_for_console("SFC"), "none")
+
+
+@needs_display
 class SaveBackupTests(_PreferencesCase):
     """Issue #293: export and import, without ever opening a real picker."""
 

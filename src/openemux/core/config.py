@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from openemux.i18n import detect_system_locale, normalize_locale
+from openemux.core import bezels
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.platform import (
     BUILDBOT_ARCH,
@@ -378,6 +379,10 @@ DEFAULT_CONFIG = {
         # Games open filling the screen instead of in a window (issue #505).
         "start_games_fullscreen": False,
     },
+    # A picture beside 4:3 games on a wide window, per console (issue #507).
+    # A console absent from console_overrides has none; custom_names keeps
+    # the name of the file a custom image was copied from, for display.
+    "bezels": {"console_overrides": {}, "custom_names": {}},
     "updates": {
         "check_on_startup": True,
         "api_url": DEFAULT_UPDATE_API_URL,
@@ -922,6 +927,65 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["start_games_fullscreen"] = bool(enabled)
         self.save_config()
+
+    def get_bezel_settings(self):
+        """Every console's bezel choice, and where custom images are kept."""
+        section = self.config.get("bezels") or {}
+        overrides = {}
+        for console, mode in (section.get("console_overrides") or {}).items():
+            mode = bezels.normalize_mode(mode)
+            if mode != bezels.NONE:
+                overrides[resolve_system_id(console)] = mode
+        names = {
+            resolve_system_id(console): str(name)
+            for console, name in (section.get("custom_names") or {}).items()
+        }
+        return {
+            "console_overrides": overrides,
+            "custom_names": names,
+            "custom_dir": self.store_path("bezels"),
+        }
+
+    def get_bezel_for_console(self, console):
+        return self.get_bezel_settings()["console_overrides"].get(
+            resolve_system_id(console), bezels.NONE
+        )
+
+    def get_custom_bezel_name(self, console):
+        """The file name a console's custom bezel came from, or ``None``."""
+        return self.get_bezel_settings()["custom_names"].get(resolve_system_id(console))
+
+    def set_bezel_for_console(self, console, mode):
+        """Store a console's bezel; "none" drops the key. Read at each launch."""
+        section = self.config.setdefault("bezels", {})
+        overrides = section.setdefault("console_overrides", {})
+        console = resolve_system_id(console)
+        mode = bezels.normalize_mode(mode)
+        if mode == bezels.NONE:
+            overrides.pop(console, None)
+        else:
+            overrides[console] = mode
+        self.save_config()
+
+    def set_custom_bezel(self, console, source_path):
+        """Import ``source_path`` as the console's bezel and select it.
+
+        ``None`` on success, otherwise the error key of
+        ``bezels.validate_png`` (``"unreadable"`` also covers a copy that
+        failed), and nothing is changed.
+        """
+        error = bezels.validate_png(source_path)
+        if error:
+            return error
+        try:
+            bezels.import_custom(console, source_path, self.store_path("bezels"))
+        except OSError as exc:
+            logger.warning("bezel: cannot import %s: %s", source_path, exc)
+            return "unreadable"
+        section = self.config.setdefault("bezels", {})
+        section.setdefault("custom_names", {})[resolve_system_id(console)] = Path(source_path).name
+        self.set_bezel_for_console(console, bezels.CUSTOM)
+        return None
 
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})

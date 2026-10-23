@@ -18,6 +18,7 @@ from threading import Thread
 from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
 from openemux.core import (
+    bezels,
     core_options,
     retroachievements,
     rom_importer,
@@ -55,6 +56,15 @@ from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
+
+
+#: What to say when a picked bezel image is refused, per
+#: ``bezels.validate_png`` error key (issue #507).
+_BEZEL_ERROR_TOASTS = {
+    "not_png": "toast.bezels.not_png",
+    "too_small": "toast.bezels.too_small",
+    "unreadable": "toast.bezels.unreadable",
+}
 
 
 class OpenEmuxPreferences(Adw.PreferencesDialog):
@@ -1467,11 +1477,120 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         game_bar.add(self._translucent_bar_row)
         page.add(game_bar)
 
+        page.add(self._build_bezels_group())
+
         self._shaders_group = Adw.PreferencesGroup(title=self.t("prefs.group.shaders"))
         page.add(self._shaders_group)
         self._shader_rows = []
         self._rebuild_shader_rows()
         return page
+
+    # ----- bezels (issue #507) ---------------------------------------------
+    def _build_bezels_group(self):
+        """One row per 4:3 console: no bezel, the built-in one, or an image.
+
+        Read at each launch, like the bar above it. Only the consoles whose
+        games are 4:3 are listed (``bezels.BEZEL_CONSOLES``).
+        """
+        group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.bezels"),
+            description=self.t("settings.bezels.description"),
+        )
+        labels = [self.t("bezel.none"), self.t("bezel.simple"), self.t("bezel.custom")]
+        self._bezel_rows = {}
+        for console_id in SYSTEM_IDS:
+            if console_id not in bezels.BEZEL_CONSOLES:
+                continue
+            row = Adw.ComboRow(
+                title=f"{console_id} — {get_system_display_name(console_id)}"
+            )
+            row.add_prefix(console_icon(console_id))
+            row.set_model(Gtk.StringList.new(labels))
+            row.set_subtitle_lines(1)
+            row._bezel_mode = self.config.get_bezel_for_console(console_id)
+            row.set_selected(bezels.BEZEL_MODES.index(row._bezel_mode))
+            button = Gtk.Button(icon_name="folder-open-symbolic")
+            button.set_valign(Gtk.Align.CENTER)
+            button.add_css_class("flat")
+            button.set_tooltip_text(self.t("bezels.change_image"))
+            button.update_property(
+                [Gtk.AccessibleProperty.LABEL], [self.t("bezels.change_image")]
+            )
+            button.connect("clicked", lambda _b, c=console_id: self._choose_custom_bezel(c))
+            row.add_suffix(button)
+            row._bezel_button = button
+            row.connect("notify::selected", self._on_bezel_changed, console_id)
+            self._refresh_bezel_row(row, console_id)
+            group.add(row)
+            self._bezel_rows[console_id] = row
+        footer = Gtk.Label(label=self.t("settings.bezels.footer"), wrap=True, xalign=0)
+        footer.add_css_class("dim-label")
+        footer.add_css_class("caption")
+        footer.set_margin_top(12)
+        group.add(footer)
+        return group
+
+    def _refresh_bezel_row(self, row, console_id):
+        custom = row._bezel_mode == bezels.CUSTOM
+        name = self.config.get_custom_bezel_name(console_id) if custom else None
+        row.set_subtitle(name or "")
+        row._bezel_button.set_visible(custom)
+
+    def _revert_bezel_row(self, row):
+        # Back to what is stored; the notify that follows sees no change.
+        row.set_selected(bezels.BEZEL_MODES.index(row._bezel_mode))
+
+    def _on_bezel_changed(self, row, _param, console_id):
+        idx = row.get_selected()
+        if not 0 <= idx < len(bezels.BEZEL_MODES):
+            return
+        mode = bezels.BEZEL_MODES[idx]
+        if mode == row._bezel_mode:
+            return
+        if mode == bezels.CUSTOM:
+            stored = bezels.custom_path(
+                console_id, self.config.get_bezel_settings()["custom_dir"]
+            )
+            if not stored.is_file():
+                # Nothing to go back to yet: the picker decides.
+                self._choose_custom_bezel(console_id)
+                return
+        self.config.set_bezel_for_console(console_id, mode)
+        row._bezel_mode = mode
+        self._refresh_bezel_row(row, console_id)
+
+    def _choose_custom_bezel(self, console_id):
+        png = Gtk.FileFilter()
+        png.set_name(self.t("bezels.dialog.filter"))
+        png.add_pattern("*.png")
+        png.add_mime_type("image/png")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(png)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("bezels.dialog.title"))
+        dialog.set_modal(True)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(png)
+        dialog.open(self, None, self._on_bezel_image_chosen, console_id)
+
+    def _on_bezel_image_chosen(self, dialog, result, console_id):
+        row = self._bezel_rows[console_id]
+        try:
+            source = dialog.open_finish(result)
+        except GLib.Error:
+            source = None  # dismissed
+        path = source.get_path() if source is not None else None
+        if not path:
+            self._revert_bezel_row(row)
+            return
+        error = self.config.set_custom_bezel(console_id, path)
+        if error:
+            self._toast(self.t(_BEZEL_ERROR_TOASTS[error]))
+            self._revert_bezel_row(row)
+            return
+        row._bezel_mode = bezels.CUSTOM
+        row.set_selected(bezels.BEZEL_MODES.index(bezels.CUSTOM))
+        self._refresh_bezel_row(row, console_id)
 
     def _shader_options_for_console(self, console_id):
         show_all = bool(self._show_all_switch.get_active())

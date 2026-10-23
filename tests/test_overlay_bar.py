@@ -324,3 +324,92 @@ class PrepareShadersTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BezelOverlayTests(unittest.TestCase):
+    """The bezel drawn under every page of the bar (issue #507)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.staged = overlay_bar.stage_assets(Path(self._tmp.name) / "runtime")
+        self.image = Path(self._tmp.name) / "frame.png"
+        self.image.write_bytes(b"\x89PNG fake bezel")
+
+    @staticmethod
+    def values(path):
+        out = {}
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = (part.strip() for part in line.split("=", 1))
+                out[key] = value.strip('"')
+        return out
+
+    def write(self, **kwargs):
+        path = overlay_bar.write_bezel_overlay(self.staged, self.image, **kwargs)
+        self.assertIsNotNone(path)
+        return path
+
+    def test_every_page_draws_the_bezel_first_and_keeps_its_own_descs(self):
+        plain = self.values(self.staged / "openemux-bar.cfg")
+        path = self.write()
+        self.assertEqual(path, self.staged / overlay_bar.BEZEL_CFG_NAME)
+        bezel = self.values(path)
+        self.assertEqual((self.staged / "bezel.png").read_bytes(), self.image.read_bytes())
+        for page in range(int(plain["overlays"])):
+            descs = int(plain[f"overlay{page}_descs"])
+            self.assertEqual(int(bezel[f"overlay{page}_descs"]), descs + 1)
+            self.assertEqual(bezel[f"overlay{page}_desc0_overlay"], "bezel.png")
+            self.assertTrue(bezel[f"overlay{page}_desc0"].startswith("nul,"))
+            for index in range(descs):
+                for suffix in ("", "_overlay", "_next_target"):
+                    old = plain.get(f"overlay{page}_desc{index}{suffix}")
+                    self.assertEqual(bezel.get(f"overlay{page}_desc{index + 1}{suffix}"), old)
+        self.assertEqual(bezel["overlays"], plain["overlays"])
+
+    def geometry(self, values, page_name):
+        page = next(key[len("overlay"):-len("_name")] for key, value in values.items()
+                    if key.endswith("_name") and value == page_name)
+        fields = values[f"overlay{page}_desc0"].split(",")
+        return tuple(float(v) for v in (fields[1], fields[2], fields[4], fields[5]))
+
+    def assertGeometry(self, actual, expected):
+        for a, e in zip(actual, expected):
+            self.assertAlmostEqual(a, e, places=4)
+
+    def test_the_shown_pages_shrink_with_the_game_and_the_hidden_ones_do_not(self):
+        values = self.values(self.write(margin_active=True))
+        full = (0.5, 0.5, 2.0 / 3.0, 0.5)
+        s = 1.0 - overlay_bar.MARGIN
+        self.assertGeometry(self.geometry(values, "bpmfst"), (0.5, 0.5 * s, 2.0 / 3.0 * s, 0.5 * s))
+        self.assertGeometry(self.geometry(values, "hpmfst"), full)
+
+    def test_with_no_margin_every_page_frames_the_full_game(self):
+        values = self.values(self.write(margin_active=False))
+        self.assertGeometry(self.geometry(values, "bpmfst"), (0.5, 0.5, 2.0 / 3.0, 0.5))
+
+    def test_the_translucent_bar_is_extended_and_never_shrinks(self):
+        values = self.values(self.write(translucent=True, margin_active=True))
+        self.assertGeometry(self.geometry(values, "bpmfst"), (0.5, 0.5, 2.0 / 3.0, 0.5))
+        # Its own pages, with their own "show" button, one place further on.
+        translucent = self.values(self.staged / "openemux-bar-translucent.cfg")
+        key = next(k for k, v in translucent.items() if v == "btn_show_translucent.png")
+        page, index = re.match(r"overlay(\d+)_desc(\d+)_overlay", key).groups()
+        self.assertEqual(values[f"overlay{page}_desc{int(index) + 1}_overlay"],
+                         "btn_show_translucent.png")
+
+    def test_an_identical_image_is_not_copied_again(self):
+        self.write()
+        with patch.object(Path, "write_bytes") as write_bytes:
+            self.write()
+        write_bytes.assert_not_called()
+
+    def test_a_bezel_that_cannot_be_read_falls_back_to_the_plain_bar(self):
+        with self.assertLogs("openemux.core.overlay_bar", level="WARNING"):
+            self.assertIsNone(
+                overlay_bar.write_bezel_overlay(self.staged, Path(self._tmp.name) / "nope.png"))
+
+    def test_the_launch_loads_the_bezel_pages_when_given(self):
+        path = self.write()
+        overrides = overlay_bar.runtime_overrides(self.staged, overlay_cfg=path)
+        self.assertEqual(Path(overrides["input_overlay"].strip('"')), path)

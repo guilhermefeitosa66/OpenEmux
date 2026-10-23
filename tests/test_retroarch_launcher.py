@@ -602,6 +602,62 @@ class RetroArchLauncherTests(unittest.TestCase):
         for lines in (windowed, full):
             self.assertIn('video_windowed_fullscreen = "true"', lines)
             self.assertIn('config_save_on_exit = "false"', lines)
+    def test_a_console_with_a_bezel_loads_the_bar_with_it_under(self):
+        # Issue #507: the bezel is drawn as part of the bar's own overlay.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"genesis_plus_gx_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core)
+            cfg.get_bezel_settings = lambda: {
+                "console_overrides": {"MD": "simple"}, "custom_names": {},
+                "custom_dir": base / "bezels"}
+            launcher = RetroArchLauncher(base, cfg)
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock, \
+                    self.assertLogs("openemux.core.retroarch_launcher", level="INFO") as logs:
+                popen_mock.return_value = Mock()
+                proc, _error = launcher.launch_process("/tmp/game.md", "MD")
+                _close_log(proc)
+            cmd = popen_mock.call_args[0][0]
+            lines = Path(cmd[cmd.index("--appendconfig") + 1]).read_text(
+                encoding="utf-8").splitlines()
+            bezel_cfg = base / "runtime" / "overlay" / "openemux-bar-bezel.cfg"
+            self.assertTrue(bezel_cfg.is_file())
+        self.assertIn(f'input_overlay = "{bezel_cfg}"', lines)
+        self.assertTrue(any("bezel: console=MD mode=simple image=simple.png margin=True" in line
+                            for line in logs.output))
+
+    def _bezel_launcher(self, base, console_overrides):
+        cfg = _DummyConfig(base, base / "retroarch", base / f"core{CORE_SUFFIX}")
+        cfg.get_bezel_settings = lambda: {
+            "console_overrides": console_overrides, "custom_names": {},
+            "custom_dir": base / "bezels"}
+        return cfg, RetroArchLauncher(base, cfg)
+
+    def test_no_bezel_getter_or_no_bezel_leaves_the_plain_bar(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            plain = RetroArchLauncher(base, _DummyConfig(base, base / "ra", base / "core"))
+            self.assertIsNone(plain._bezel_overlay("MD", base, base))
+            _cfg, launcher = self._bezel_launcher(base, {"GBA": "simple"})
+            self.assertIsNone(launcher._bezel_overlay("GBA", base, base))
+            self.assertIsNone(launcher._bezel_overlay("MD", base, base))
+
+    def test_the_bezel_only_shrinks_where_the_margin_pass_runs(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg, launcher = self._bezel_launcher(base, {"MD": "simple"})
+            with patch.object(overlay_bar, "write_bezel_overlay", return_value="x") as write:
+                self.assertEqual(launcher._bezel_overlay("MD", base, base / "pair"), "x")
+                self.assertTrue(write.call_args.kwargs["margin_active"])
+                launcher._bezel_overlay("MD", base, None)
+                self.assertFalse(write.call_args.kwargs["margin_active"])
+                cfg.get_ui_settings = lambda: {"translucent_game_bar": True}
+                launcher._bezel_overlay("MD", base, base / "pair")
+                self.assertFalse(write.call_args.kwargs["margin_active"])
+                self.assertTrue(write.call_args.kwargs["translucent"])
 
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:

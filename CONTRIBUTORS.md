@@ -76,6 +76,12 @@ Japanese box on a landscape Super Nintendo card) was filled into it and lost up
 to 60% of its art. Now only a cover close to the card's shape fills it, and any
 other is shown whole on the card's backdrop.
 
+The same thread also suggested decorative borders for 4:3 games, so the black
+bars beside them on a wide screen are not just black. That became
+[#507](https://github.com/guilhermefeitosa66/OpenEmux/issues/507): a bezel per
+console, built in or picked from an image, drawn by RetroArch under the
+in-game bar.
+
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage
