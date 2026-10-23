@@ -3771,6 +3771,25 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   Unit-level: `tests/test_privacy.py`, `tests/test_startup_logging.py`
   (`test_every_handler_writes_the_home_as_a_tilde`), `tests/test_sysinfo.py`.
 
+### RT-340 — "About OpenEmux" states the relationship with OpenEmu and credits its icons
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, language English.
+- **Steps:**
+  1. Open "Main Menu" → "About OpenEmux", then "Details".
+  2. Go back and open "Acknowledgements".
+  3. Go back and open "Legal".
+  4. Switch the app to "Português (Brasil)" and repeat steps 1 to 3.
+- **Expected:** Step 1 shows the description "A native emulator frontend for Linux and Windows,
+  inspired by OpenEmu for macOS. It is a separate codebase, not a fork, and uses RetroArch for
+  emulation." Step 2 lists "Inspired by" → OpenEmu and "Emulation by" → RetroArch, libretro, each
+  name a link. Step 3 shows the OpenEmux MIT entry first, then "Console icons" with
+  "© 2009-2023 OpenEmu Team" and the BSD 3-Clause license. Step 4 shows the description and the
+  three section titles translated, with the project names left as they are (issue #504).
+- **Check:** Screenshot of each page, in both languages.
+  Unit-level: `tests/test_window.py` (`test_the_about_dialog_credits_openemu_and_retroarch`).
+- **Restore:** Close the dialog and switch the language back to English.
+
 ## Destructive file operations
 
 ### RT-140 — Deleting a ROM asks for confirmation
@@ -5148,6 +5167,60 @@ or into an environment that cannot run the tests.
   assert "1.9.0" not in home, "README.md cites a stale version"
   assert "OpenEmux-<version>-x86_64.AppImage" in home, "the checksum example is not version-neutral"
   print("RT-291 OK")
+  EOF
+  ```
+
+
+### RT-341 — The site states the relationship with OpenEmu in every language
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the line under
+  the download buttons, the credits section and the Android section.
+- **Expected:** Under the download buttons, one line says OpenEmux is inspired by OpenEmu for
+  macOS but is not a fork, with RetroArch as the backend, and links to the credits. The credits say
+  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, and say
+  it is not affiliated with the OpenEmu Team. The Android section says the app is its own design
+  (issue #504).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      hero = html.split('id="promo"')[0]
+      assert 'href="https://openemu.org/"' in hero and 'href="#thanks"' in hero, page
+      thanks = re.search(r'<section id="thanks">(.*?)</section>', html, re.S).group(1)
+      assert 'href="https://openemu.org/"' in thanks, page
+      assert "ATTRIBUTION.md" in thanks, page
+  print("RT-341 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
+
+### RT-342 — The README states the relationship with OpenEmu
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the README on GitHub and read the "About" section.
+- **Expected:** An "OpenEmux and OpenEmu" block says the desktop app is inspired by OpenEmu, is not
+  a fork and uses no OpenEmu code, runs on RetroArch/libretro, that the Android app is independent
+  and that the console icons are OpenEmu's artwork. An "Artwork credits" line links to
+  `ATTRIBUTION.md`, and the link resolves (issue #504).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  from pathlib import Path
+  readme = Path("README.md").read_text(encoding="utf-8")
+  assert "### OpenEmux and OpenEmu" in readme
+  assert "not a fork" in readme
+  assert "(src/openemux/ui/assets/icons/ATTRIBUTION.md)" in readme
+  assert Path("src/openemux/ui/assets/icons/ATTRIBUTION.md").exists()
+  print("RT-342 OK")
   EOF
   ```
 

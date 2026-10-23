@@ -1854,6 +1854,28 @@ class TheDialogsAndMenusTests(WindowCase):
         with mock.patch.object(Adw.AboutDialog, "present"):
             self.win._show_about()
 
+    def test_the_about_dialog_credits_openemu_and_retroarch(self):
+        with mock.patch.object(Adw.AboutDialog, "present") as present, \
+                mock.patch.object(Adw.AboutDialog, "set_comments") as comments, \
+                mock.patch.object(Adw.AboutDialog, "add_acknowledgement_section") as ack, \
+                mock.patch.object(Adw.AboutDialog, "add_legal_section") as legal:
+            self.win._show_about()
+        present.assert_called_once()
+        comments.assert_called_once_with(self.win.t("about.comments"))
+        self.assertEqual(
+            [call.args for call in ack.call_args_list],
+            [
+                (self.win.t("about.ack.inspired_by"), ["OpenEmu https://openemu.org/"]),
+                (self.win.t("about.ack.emulation"),
+                 ["RetroArch https://www.retroarch.com/", "libretro https://www.libretro.com/"]),
+            ],
+        )
+        legal.assert_called_once()
+        name, copyright, license_type, _license = legal.call_args.args
+        self.assertEqual(name, self.win.t("about.legal.console_icons"))
+        self.assertIn("OpenEmu Team", copyright)
+        self.assertEqual(license_type, Gtk.License.BSD_3)
+
     def test_the_shortcuts_window_lists_every_group(self):
         with mock.patch.object(Gtk.ShortcutsWindow, "present"):
             self.win._show_shortcuts()

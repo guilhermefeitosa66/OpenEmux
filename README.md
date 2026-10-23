@@ -46,7 +46,14 @@
 
 [RetroArch](https://www.retroarch.com/) is one of the most powerful and versatile emulation platforms ever created — but its interface can be intimidating, especially for users who just want to pick up a controller and play. OpenEmux wraps RetroArch in a clean, intuitive frontend so you can enjoy your retro game library without touching a single config file.
 
-OpenEmux was directly inspired by [OpenEmu](https://openemu.org/), the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. Since OpenEmu is exclusive to macOS, I built OpenEmux to bring that same polished experience to Linux.
+### OpenEmux and OpenEmu
+
+- **The desktop app is inspired by [OpenEmu](https://openemu.org/)**, the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. OpenEmu is macOS-only, so OpenEmux brings a similar experience to Linux and Windows.
+- **It is not a fork and uses no OpenEmu code.** OpenEmux is a separate codebase in Python, GTK 4 and libadwaita, with [RetroArch](https://www.retroarch.com/)/[libretro](https://www.libretro.com/) as the emulation backend.
+- **The Android app is an independent design**: there is no OpenEmu for phones, so nothing in it comes from OpenEmu.
+- **The console icons are OpenEmu's artwork**, redistributed under OpenEmu's BSD license. OpenEmux is not affiliated with or endorsed by the OpenEmu Team.
+
+**Artwork credits:** console icons © OpenEmu Team, see [ATTRIBUTION.md](src/openemux/ui/assets/icons/ATTRIBUTION.md).
 
 > This project would not be possible without the incredible work done by the [RetroArch](https://www.retroarch.com/) and [libretro](https://www.libretro.com/) teams, and the design philosophy of [OpenEmu](https://openemu.org/). Huge thanks to both projects. ❤️
 

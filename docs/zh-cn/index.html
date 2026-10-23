@@ -1293,6 +1293,7 @@
       </div>
       <p class="cta-note">免费开源 · MIT 许可 · Linux 提供 AppImage、.deb、.rpm &amp; Flatpak ·
         Windows 提供安装程序 &amp; 便携版 ZIP · Android 提供 APK（GPLv3）</p>
+      <p class="cta-note">受 macOS 上的 <a href="https://openemu.org/">OpenEmu</a> 启发，但并非分支（fork）：这是一套独立的代码，以 RetroArch 作为模拟后端。<a href="#thanks">了解更多</a>。</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
@@ -1481,7 +1482,7 @@
     <div class="wrap center">
       <span class="eyebrow">Android</span>
       <h2>把你的货架装进口袋</h2>
-      <p class="lede">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。</p>
+      <p class="lede">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。 Android 应用是独立设计的：OpenEmu 没有移动版，所以其中没有任何内容来自 OpenEmu。</p>
       <div class="gallery phones">
         <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android 版 OpenEmux 的货架" />
           <figcaption>货架</figcaption>
@@ -1645,8 +1646,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <section id="thanks">
     <div class="wrap center">
       <span class="eyebrow">致谢</span>
-      <h2>感谢 RetroArch、libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux 的灵感来自 macOS 上的模拟器前端 <a href="https://openemu.org/">OpenEmu</a>。OpenEmu 只能在 macOS 上运行，所以 OpenEmux 尝试在 Linux 上提供类似的体验，现在也支持 Windows。模拟本身来自 <a href="https://www.retroarch.com/">RetroArch</a> 和 <a href="https://www.libretro.com/">libretro</a> 项目，没有他们的工作，这一切都不会存在。❤️</p>
+      <h2>受 OpenEmu 启发，由 RetroArch 驱动</h2>
+      <p class="lede">OpenEmux 受 macOS 模拟器前端 <a href="https://openemu.org/">OpenEmu</a> 启发。OpenEmu 只能在 macOS 上运行，所以 OpenEmux 尝试在 Linux 上，现在也在 Windows 上，提供类似的体验。它不是 OpenEmu 的分支，也不共享任何 OpenEmu 的代码：这是一套用 Python、GTK 4 和 libadwaita 编写的独立代码，模拟本身来自 <a href="https://www.retroarch.com/">RetroArch</a> 和 <a href="https://www.libretro.com/">libretro</a> 项目。主机图标是 OpenEmu 的美术作品，<a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/src/openemux/ui/assets/icons/ATTRIBUTION.md">依照 OpenEmu 的 BSD 许可证署名</a>。Android 应用是独立设计的（手机上并没有 OpenEmu）。OpenEmux 与 OpenEmu Team 没有隶属关系，也未获其认可。没有这些项目的付出，这一切都不会存在。❤️</p>
     </div>
   </section>
 
