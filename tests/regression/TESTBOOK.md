@@ -5174,6 +5174,153 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 - **Check:** human only.
 
 
+## Android — RetroAchievements
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) signing in to RetroAchievements and handing the account to the engine
+(#515). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone or a
+headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. Scenarios that need a
+real RetroAchievements account say so; without one they are handed to the maintainer.
+`$PKG` is `com.openemux.mobile`.
+
+### RT-350 — Settings has a RetroAchievements row that opens the sign-in screen
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, not signed in.
+- **Steps:**
+  1. Open the "Settings" tab.
+  2. Under "Achievements", tap "RetroAchievements".
+  3. Repeat in the light theme and with the phone in landscape.
+- **Expected:** The row reads "RetroAchievements" with "Not signed in" under it and a trophy icon.
+  The screen shows "Username", "Password" (masked, with an eye button), "Sign in" and the
+  "Create one at retroachievements.org" link. Nothing is clipped; in landscape the screen scrolls.
+- **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
+
+### RT-351 — A valid sign-in survives an app restart
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** RT-350's screen; a real RetroAchievements account.
+- **Steps:**
+  1. Enter the account's username and password and tap "Sign in".
+  2. `adb shell am force-stop $PKG`, then open the app and go back to the screen.
+- **Expected:** "Signed in as <user>" with "Sign out", "Track achievements" on and "Hardcore mode"
+  off, before and after the restart. The Settings row reads "Signed in as <user>".
+- **Check:** human only.
+
+### RT-352 — A wrong password shows the service's error and leaks nowhere
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Not signed in; network on.
+- **Steps:**
+  1. Enter any username and a made-up password (e.g. `Wr0ngPass515`) and tap "Sign in".
+  2. Launch any game, then quit it.
+- **Expected:** A red box with RetroAchievements' own message (e.g. "Invalid user/password
+  combination. Please try again."), both fields outlined in red, the password field emptied, still
+  signed out. The password is in no log and no file.
+- **Check:**
+  ```bash
+  adb logcat -d | grep -c 'Wr0ngPass515'                                 # 0
+  adb shell run-as $PKG grep -rl 'Wr0ngPass515' . ; echo "exit=$?"       # no file listed
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep cheevos_password
+  # cheevos_password = ""
+  ```
+
+### RT-353 — With tracking on, the engine signs in and unlocks reach the profile
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in (RT-351), "Track achievements" on, a game that has an achievement
+  set (e.g. a GBA title).
+- **Steps:**
+  1. Launch the game.
+  2. Unlock an achievement.
+- **Expected:** RetroArch's RetroAchievements login / game summary notification appears at the
+  top centre at launch; the unlock toast appears, and the unlock is listed on the user's profile at
+  retroachievements.org.
+- **Check:** human only. `adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep cheevos_`
+  shows `cheevos_enable = "true"`, the username, a token and `cheevos_password = ""`.
+
+### RT-354 — Tracking off or signed out launches with no account
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in.
+- **Steps:**
+  1. Turn "Track achievements" off and launch a game; quit it.
+  2. Turn it back on, tap "Sign out", launch a game; quit it.
+- **Expected:** No RetroAchievements notification in either game. After step 1 the Settings row
+  reads "Signed in as <user> · tracking off". After step 2 the sign-in form comes back with the
+  username already filled in.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep -E 'cheevos_(enable|username|token)'
+  # cheevos_enable = "false", cheevos_username = "", cheevos_token = ""
+  adb shell run-as $PKG cat shared_prefs/cheevos.xml | grep -c token    # 0 after "Sign out"
+  ```
+  Right after "Sign out" (before the next launch) `files/launch/current/retroarch.cfg` does not
+  exist.
+- **Restore:** sign in again if the following scenarios need the account.
+
+### RT-355 — Hardcore mode is off by default and, on, blocks loading in the app too
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in, tracking on, a game with save states (including an auto state).
+- **Steps:**
+  1. Check "Hardcore mode" is off; turn it on.
+  2. Open the game's page.
+  3. Tap a save state thumbnail.
+  4. Tap "Play"; in game, open the pause sheet.
+  5. Turn "Hardcore mode" off again and reopen the game page.
+- **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
+  hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
+  notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load",
+  the "Save states" row and "Fast forward" are faded and do nothing (also with a gamepad), "Save
+  state" still works; the skin's load and fast-forward buttons are refused by RetroArch. Step 5:
+  "Continue" is back. Same in landscape.
+- **Check:** human only. With hardcore on, `retroarch.cfg` has
+  `cheevos_hardcore_mode_enable = "true"` and `savestate_auto_load = "false"`.
+- **Restore:** hardcore off (step 5).
+
+### RT-356 — Achievement notifications stay clear of the on-screen controls
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** RT-353's setup.
+- **Steps:**
+  1. Launch the game in portrait, then again in landscape, on a GBA and a SNES skin.
+- **Expected:** The login / game summary notification sits at the top centre, over the picture and
+  under no skin button, in both orientations.
+- **Check:** human only (a screenshot per orientation).
+
+### RT-357 — The RetroAchievements strings are translated in every app language
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** none.
+- **Steps:**
+  1. For each language in "Settings" ▸ "Language", open the RetroAchievements screen, signed out
+     and signed in, and a game's pause sheet with hardcore on.
+- **Expected:** Every new text is in that language; only the name "RetroAchievements" and the
+  site address stay as they are.
+- **Check:** in `pkg/android/openemux/src/main/res`, every `ra_*`, `game_hardcore_*` and
+  `detail_hardcore_no_load` key in `values/` exists in each `values-*/` folder:
+  ```bash
+  for d in values-*; do for k in $(grep -ho 'name="\(ra_\|game_hardcore_\|detail_hardcore_\)[a-z_]*"' values/*.xml | grep -v ra_title); do
+    grep -q "$k" $d/*.xml || echo "$d missing $k"; done; done   # prints nothing
+  ```
+
+### RT-358 — The token is kept out of Android backup and device transfer
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** A built APK.
+- **Steps:**
+  1. Inspect the APK's manifest and the two rule files.
+- **Expected:** `<application>` names `fullBackupContent` and `dataExtractionRules`; both exclude
+  `sharedpref/cheevos.xml` and the `launch` directory, the latter for `cloud-backup` and
+  `device-transfer`.
+- **Check:**
+  ```bash
+  aapt dump xmltree OpenEmuxMobile-debug.apk AndroidManifest.xml | grep -E 'fullBackupContent|dataExtractionRules'
+  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/data_extraction_rules.xml | grep -c cheevos.xml   # 2
+  ```
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`

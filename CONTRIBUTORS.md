@@ -142,6 +142,13 @@ library, little by little as it was scrolled and resized. That report became
 pages ("All", "Favorites", the collections) now keep every game on screen
 however long a console's group is.
 
+### McPoon (Reddit)
+
+Asked *"Any retroachievements?"* on Reddit, in the thread presenting the Android app. That
+question became [#515](https://github.com/guilhermefeitosa66/OpenEmux/issues/515): the Android app
+signs in to RetroAchievements once in Settings, hands the account to every game it launches, and
+keeps hardcore mode off until the player asks for it.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

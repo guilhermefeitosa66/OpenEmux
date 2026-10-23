@@ -110,6 +110,7 @@
   "android.gamepad": "<h3>也支持游戏手柄</h3>\n          <p>连接手柄后，屏幕手柄会让开，游戏占满整个屏幕，菜单也能用方向键和按键操作。</p>",
   "android.themes": "<h3>浅色与深色</h3>\n          <p>跟随手机主题，或在设置中选择。</p>",
   "android.languages": "<h3>八种语言</h3>\n          <p>与桌面版相同的语言，跟随手机或在设置中选择。</p>",
+  "android.achievements": "<h3>RetroAchievements</h3>\n          <p>在设置中登录一次，每个游戏都会在你的 RetroAchievements 个人资料上解锁成就，也可以开启硬核模式。</p>",
   "android.download": "⬇ 下载 APK</a></p>",
   "android.source": "<p class=\"cta-note\">Android 8 或更新版本，64 位（arm64）。Android 应用是 RetroArch 的分支，因此采用 GPLv3 许可；源代码在 <a href=\"https://github.com/guilhermefeitosa66/open-emux-mobile\">open-emux-mobile</a>。</p>",
   "install.android_lede": "<p class=\"lede\">APK 暂未上架 Play 商店：请从 Releases 下载，并在 Android 提示时允许浏览器或文件管理器安装应用。需要 Android 8 或更新版本，64 位。</p>",
