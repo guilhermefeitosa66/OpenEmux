@@ -81,6 +81,13 @@ The same work brought the native **Arch Linux package**, the packaged icons fina
 the folder they sit in claims, and **தமிழ் (Tamil)**, the project's first locale contributed by
 someone other than the maintainer.
 
+### McPoon (Reddit)
+
+Asked *"Any retroachievements?"* on Reddit, in the thread presenting the Android app. That
+question became [#515](https://github.com/guilhermefeitosa66/OpenEmux/issues/515): the Android app
+signs in to RetroAchievements once in Settings, hands the account to every game it launches, and
+keeps hardcore mode off until the player asks for it.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

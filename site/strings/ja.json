@@ -109,6 +109,7 @@
   "android.gamepad": "<h3>ゲームパッドにも対応</h3>\n          <p>コントローラーをつなぐと画面コントローラーは消え、ゲームが画面いっぱいに表示されます。メニューも十字キーとボタンで操作できます。</p>",
   "android.themes": "<h3>ライトとダーク</h3>\n          <p>スマートフォンのテーマに合わせるか、設定で選べます。</p>",
   "android.languages": "<h3>8 つの言語</h3>\n          <p>デスクトップ版と同じ言語に対応し、スマートフォンに合わせるか設定で選べます。</p>",
+  "android.achievements": "<h3>RetroAchievements</h3>\n          <p>設定で一度ログインすれば、すべてのゲームで RetroAchievements のプロフィールに実績が解除されます。ハードコアモードにも対応。</p>",
   "android.download": "⬇ APK をダウンロード</a></p>",
   "android.source": "<p class=\"cta-note\">Android 8 以降、64 ビット（arm64）。Android アプリは RetroArch のフォークなので GPLv3 ライセンスです。ソースコードは <a href=\"https://github.com/guilhermefeitosa66/open-emux-mobile\">open-emux-mobile</a> にあります。</p>",
   "install.android_lede": "<p class=\"lede\">APK はまだ Play ストアにありません。Releases からダウンロードし、Android に聞かれたらブラウザーやファイルマネージャーにアプリのインストールを許可してください。Android 8 以降、64 ビット。</p>",
