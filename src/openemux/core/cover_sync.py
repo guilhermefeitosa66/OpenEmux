@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Thread
 
-from openemux.core import embedded_credentials, hasher, screenscraper
+from openemux.core import artwork_sources, embedded_credentials, hasher, screenscraper
 from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.config import (
     ARTWORK_PROVIDER_KINDS_AVAILABLE,
@@ -902,6 +902,8 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
     # is a generator now, so the candidates past the one that won were never
     # built (issue #220). This is also what the FTS stage has to exclude.
     tried = []
+    # What won, for the provenance record (issue #510).
+    found = {}
 
     def _try_candidates(triples):
         """First candidate that resolves: (stage or None, cancelled)."""
@@ -933,6 +935,7 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
                 stage,
                 screenscraper.redact(url),
             )
+            found.update(provider=provider, path=written)
             return stage, False
         return None, False
 
@@ -951,7 +954,8 @@ def _process_rom(console, rom, roms_dir_path, art_dir, art_kind, sync_settings,
 
     if stage is not None:
         return {"status": "downloaded", "console": console, "rom_name": name,
-                "rom_path": rom_path, "stage": stage}
+                "rom_path": rom_path, "stage": stage,
+                "provider": found.get("provider"), "path": found.get("path")}
     if cancelled:
         return {"status": "cancelled", "console": console, "rom_name": name,
                 "rom_path": rom_path}
@@ -1035,7 +1039,9 @@ def _sync_covers(
     # observability, so reports like mozertdev's are answerable from a log.
     stage_tally = {STAGE_HASH: 0, STAGE_EXACT: 0, STAGE_NORMALIZED: 0, STAGE_FTS: 0}
 
-    with ThreadPoolExecutor(
+    # Provenance (issue #510) is buffered and written once per console when
+    # the run ends -- cancelled or not -- rather than once per ROM.
+    with artwork_sources.batch(roms_dir_path) as sources, ThreadPoolExecutor(
         max_workers=workers, thread_name_prefix="openemux-cover-sync"
     ) as pool:
         futures = [
@@ -1068,6 +1074,12 @@ def _sync_covers(
             if status == "downloaded":
                 downloaded += 1
                 stage_tally[result["stage"]] = stage_tally.get(result["stage"], 0) + 1
+                if isinstance(result.get("path"), Path):
+                    sources.record(
+                        result["console"], art_dir, result["rom_name"], result["path"],
+                        artwork_sources.SOURCE_SYNCED,
+                        provider=result.get("provider"), stage=result["stage"],
+                    )
             elif status == "skipped":
                 skipped += 1
             else:

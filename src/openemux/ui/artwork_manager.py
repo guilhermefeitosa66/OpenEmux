@@ -1,9 +1,11 @@
 """Per-ROM artwork manager (issue #77).
 
-One window, three tabs. Cover and Label search the same provider chain the
-bulk sync uses (issue #76) and show every image found, one click to pick.
-Import brings a file from the computer -- drag-and-drop or a chooser -- with
-crop/flip/rotate applied to a working copy, never to the source file.
+One window, four tabs. Current (issue #510) opens first: the art the game has
+now, where it came from, and the ways to change it. Cover and Label search
+the same provider chain the bulk sync uses (issue #76) and show every image
+found, one click to pick. Import brings a file from the computer --
+drag-and-drop or a chooser -- with crop/flip/rotate applied to a working copy,
+never to the source file.
 
 Temporary downloads and the import working copy live in a per-window folder
 under the XDG cache dir, removed when the window closes.
@@ -22,7 +24,7 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
-from openemux.core import artwork_search
+from openemux.core import artwork_search, artwork_sources
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core import cover_cache
 from openemux.core.hasher import compute_crc32
@@ -42,6 +44,18 @@ _KIND_BY_PAGE = {
 #: Results are laid out like the library's own shelf, at the largest zoom the
 #: grid offers: this is where a cover is judged, so it is worth the room.
 _RESULT_ZOOM = ZOOM_LEVELS[-1]
+
+#: Each art directory's search page, sync kind and word for the strings.
+_PAGE_BY_DIR = {COVER_ART: "cover", LABEL_ART: "label"}
+_SYNC_KIND_BY_DIR = {art_dir: kind for kind, art_dir in _KIND_BY_PAGE.values()}
+
+#: A label is wider than tall; the box matches what the frames are drawn for.
+_LABEL_PREVIEW_SIZE = (200, 150)
+
+#: Below this the Current tab stacks, and the tabs move to the bottom.
+NARROW_BREAKPOINT = "max-width: 560sp"
+
+_FORMAT_NAMES = {"jpeg": "JPG"}
 
 
 class _SearchTab(Gtk.Box):
@@ -496,6 +510,9 @@ class _ImportTab(Gtk.Box):
         self.manager = manager
         self._original = None
         self.pixbuf = None
+        #: Where the loaded image came from, for the provenance record:
+        #: "file" (picked or dropped) or "adjusted" (the current art).
+        self.origin = "file"
         t = manager.t
 
         self.set_margin_top(12)
@@ -640,7 +657,7 @@ class _ImportTab(Gtk.Box):
         return self._dest_dirs[self.dest_dropdown.get_selected()]
 
     # -- loading -----------------------------------------------------------
-    def _choose_file(self):
+    def _choose_file(self, on_loaded=None):
         # Gtk.FileDialog goes through the XDG portal where one exists; the
         # deprecated Gtk.FileChooserDialog it replaces never did, so under
         # Flatpak this picker could not see anything outside the sandbox
@@ -662,7 +679,8 @@ class _ImportTab(Gtk.Box):
                 # Dismissed by the user; nothing to report.
                 return
             if selected is not None and selected.get_path():
-                self.load_file(selected.get_path())
+                if self.load_file(selected.get_path()) and on_loaded is not None:
+                    on_loaded()
 
         dialog.open(self.manager, None, _on_chosen)
 
@@ -674,7 +692,7 @@ class _ImportTab(Gtk.Box):
                 return True
         return False
 
-    def load_file(self, path):
+    def load_file(self, path, origin="file"):
         suffix = Path(path).suffix.lower().lstrip(".")
         if suffix not in SUPPORTED_COVER_EXTS:
             self.manager.toast(self.manager.t("toast.cover.invalid_extension"))
@@ -686,6 +704,7 @@ class _ImportTab(Gtk.Box):
             return False
         self._original = pixbuf
         self.pixbuf = pixbuf
+        self.origin = origin
         self.preview.set_pixbuf(pixbuf)
         self.crop_toggle.set_active(False)
         self._show_image(True)
@@ -719,6 +738,346 @@ class _ImportTab(Gtk.Box):
         self._transform(lambda p: p.new_subpixbuf(x, y, w, h).copy())
 
 
+class _ArtSection(Gtk.Box):
+    """One art kind on the Current tab: the image, its source, what to do."""
+
+    def __init__(self, manager, art_dir):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.manager = manager
+        self.art_dir = art_dir
+        self.noun = _PAGE_BY_DIR[art_dir]
+        self.state = None
+        self._syncing = None
+        self._preview_seq = 0
+        t = manager.t
+
+        title_text = t(f"artwork.current.title.{self.noun}")
+        title = Gtk.Label(label=title_text, xalign=0)
+        title.add_css_class("heading")
+        self.append(title)
+
+        self.card = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=18,
+            accessible_role=Gtk.AccessibleRole.GROUP,
+        )
+        self.card.add_css_class("card")
+        self.card.update_property([Gtk.AccessibleProperty.LABEL], [title_text])
+        self.append(self.card)
+
+        self.card.append(self._build_preview(t))
+        self.card.append(self._build_info(t))
+
+    # -- building ------------------------------------------------------------
+    def _build_preview(self, t):
+        if self.art_dir == COVER_ART:
+            # The card's own size at the grid's default zoom: the results'
+            # top zoom left no room for the label section below it.
+            width, height = cover_size_for_console(self.manager.rom.get("console"))
+        else:
+            width, height = _LABEL_PREVIEW_SIZE
+        self.preview_size = (width, height)
+        backdrop = Gtk.Box()
+        backdrop.add_css_class("rom-cover-backdrop")
+        backdrop.set_valign(Gtk.Align.START)
+        backdrop.set_halign(Gtk.Align.CENTER)
+        backdrop.set_margin_top(18)
+        backdrop.set_margin_bottom(18)
+        backdrop.set_margin_start(18)
+        self.backdrop = backdrop
+
+        self.preview_stack = Gtk.Stack()
+        self.picture = FixedSizePicture(width, height)
+        self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.picture.add_css_class("rom-cover")
+        self.picture.update_property(
+            [Gtk.AccessibleProperty.LABEL],
+            [t(f"artwork.current.preview_a11y_{self.noun}", name=self.manager.rom.get("name", ""))],
+        )
+        self.preview_stack.add_named(self.picture, "picture")
+
+        missing = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        missing.set_size_request(width, height)
+        missing.set_valign(Gtk.Align.CENTER)
+        icon = Gtk.Image.new_from_icon_name("image-missing-symbolic")
+        icon.set_pixel_size(48)
+        icon.set_vexpand(True)
+        icon.set_valign(Gtk.Align.END)
+        icon.add_css_class("dim-label")
+        missing.append(icon)
+        self.missing_label = Gtk.Label(label=t(f"artwork.current.missing.{self.noun}"))
+        self.missing_label.add_css_class("dim-label")
+        self.missing_label.set_vexpand(True)
+        self.missing_label.set_valign(Gtk.Align.START)
+        missing.append(self.missing_label)
+        self.preview_stack.add_named(missing, "missing")
+        backdrop.append(self.preview_stack)
+        return backdrop
+
+    def _button(self, label, handler):
+        button = Gtk.Button(label=label)
+        button.connect("clicked", lambda _b: handler())
+        self.actions.append(button)
+        return button
+
+    def _build_info(self, t):
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, hexpand=True)
+        info.set_margin_top(18)
+        info.set_margin_bottom(18)
+        info.set_margin_end(18)
+        self.info = info
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.source_title = Gtk.Label(xalign=0, wrap=True)
+        self.source_title.add_css_class("title-4")
+        head.append(self.source_title)
+        self.pill = Gtk.Label(valign=Gtk.Align.CENTER)
+        self.pill.add_css_class("artwork-source-pill")
+        head.append(self.pill)
+        info.append(head)
+
+        self.details = Gtk.Label(xalign=0, wrap=True)
+        self.details.add_css_class("dim-label")
+        info.append(self.details)
+
+        self.actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        manager = self.manager
+        self.pick_btn = self._button(
+            t("artwork.current.pick"), lambda: manager.search_from_current(self.art_dir)
+        )
+        self.replace_btn = self._button(
+            t("artwork.current.replace"), lambda: manager.import_from_current(self.art_dir)
+        )
+        self.adjust_btn = self._button(t("artwork.current.adjust"), self._adjust)
+        self.sync_btn = self._button(t("artwork.current.sync_now"), self._sync_now)
+        self.search_btn = self._button(
+            t(f"artwork.current.search_{self.noun}s"),
+            lambda: manager.search_from_current(self.art_dir),
+        )
+        self.import_btn = self._button(
+            t("artwork.current.import"), lambda: manager.import_from_current(self.art_dir)
+        )
+        info.append(self.actions)
+
+        self.reset_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.reset_box.append(Gtk.Separator())
+        hint = Gtk.Label(label=t(f"artwork.current.reset_hint_{self.noun}"), xalign=0, wrap=True)
+        hint.add_css_class("dim-label")
+        self.reset_box.append(hint)
+        self.reset_btn = Gtk.Button(
+            label=t(f"artwork.current.reset_{self.noun}"), halign=Gtk.Align.START
+        )
+        self.reset_btn.add_css_class("flat")
+        self.reset_btn.add_css_class("destructive-action")
+        self.reset_btn.connect("clicked", lambda _b: self._confirm_reset())
+        self.reset_box.append(self.reset_btn)
+        info.append(self.reset_box)
+        return info
+
+    def first_button(self):
+        for button in (self.pick_btn, self.sync_btn):
+            if button.get_visible():
+                return button
+        return None  # pragma: no cover - one of the two is always shown
+
+    # -- state ---------------------------------------------------------------
+    def refresh(self):
+        """Re-read the art on disk and show it as it is now."""
+        t = self.manager.t
+        rom = self.manager.rom
+        state = artwork_sources.describe(
+            Path(self.manager.win.roms_path), rom["console"], rom["name"], self.art_dir
+        )
+        self.state = state
+        for source in ("synced", "manual", "local", "missing"):
+            self.pill.remove_css_class(source)
+        has_art = state is not None
+        for button in (self.pick_btn, self.replace_btn, self.adjust_btn):
+            button.set_visible(has_art)
+        for button in (self.sync_btn, self.search_btn, self.import_btn):
+            button.set_visible(not has_art)
+
+        if not has_art:
+            self.source_title.set_text(t(f"artwork.current.missing.{self.noun}"))
+            self.pill.set_text(t("artwork.current.pill.missing"))
+            self.pill.add_css_class("missing")
+            self.details.set_text(t(f"artwork.current.missing.{self.noun}_hint"))
+            self.reset_box.set_visible(False)
+            self._show_missing(t(f"artwork.current.missing.{self.noun}"))
+            return
+
+        self.source_title.set_text(t(f"artwork.current.source.{state.source}"))
+        self.pill.set_text(t(f"artwork.current.pill.{state.source}"))
+        self.pill.add_css_class(state.source)
+        self.reset_box.set_visible(state.source != artwork_sources.SOURCE_SYNCED)
+        # Only the header: the decode itself happens off the main thread.
+        file_format, width, height = GdkPixbuf.Pixbuf.get_file_info(str(state.path))
+        if file_format is None:
+            unreadable = t("artwork.current.unreadable")
+            self.details.set_text(unreadable)
+            self._show_missing(unreadable)
+            return
+        self.details.set_text(self._details_text(state, file_format, width, height))
+        self._load_preview(state.path)
+
+    def _details_text(self, state, file_format, width, height):
+        t = self.manager.t
+        name = file_format.get_name()
+        parts = [
+            t(
+                "artwork.current.details",
+                format=_FORMAT_NAMES.get(name, name.upper()),
+                width=width,
+                height=height,
+            )
+        ]
+        if state.source == artwork_sources.SOURCE_LOCAL:
+            parts.append(t("artwork.current.local_hint"))
+        elif state.updated is not None:
+            date = GLib.DateTime.new_from_unix_local(int(state.updated.timestamp())).format("%x")
+            key = (
+                "artwork.current.synced_on"
+                if state.source == artwork_sources.SOURCE_SYNCED
+                else "artwork.current.saved_on"
+            )
+            parts.append(t(key, date=date))
+        return " · ".join(parts)
+
+    def _show_missing(self, text):
+        self._preview_seq += 1
+        self.missing_label.set_text(text)
+        self.picture.set_paintable(None)
+        self.preview_stack.set_visible_child_name("missing")
+
+    def _load_preview(self, path):
+        """Decode on the shared cover pool, like the result cards do."""
+        self._preview_seq += 1
+        seq = self._preview_seq
+        width, height = self.preview_size
+
+        def _worker():
+            pixbuf = cover_cache.load_cover(path, width, height)
+            GLib.idle_add(self._set_preview, seq, pixbuf)
+
+        cover_cache.submit(_worker)
+
+    def _set_preview(self, seq, pixbuf):
+        if seq != self._preview_seq or self.manager.closed:
+            return False
+        texture = None
+        if pixbuf is not None:
+            try:
+                texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+            except GLib.Error:
+                texture = None
+        if texture is None:
+            self.missing_label.set_text(self.manager.t("artwork.current.unreadable"))
+            self.preview_stack.set_visible_child_name("missing")
+            return False
+        self.picture.set_paintable(texture)
+        self.preview_stack.set_visible_child_name("picture")
+        return False
+
+    def set_narrow(self, narrow):
+        """Stack the card and its buttons below the breakpoint."""
+        vertical = Gtk.Orientation.VERTICAL
+        horizontal = Gtk.Orientation.HORIZONTAL
+        self.card.set_orientation(vertical if narrow else horizontal)
+        self.actions.set_orientation(vertical if narrow else horizontal)
+        self.backdrop.set_margin_end(18 if narrow else 0)
+        self.backdrop.set_margin_bottom(0 if narrow else 18)
+        self.info.set_margin_start(18 if narrow else 0)
+        self.info.set_margin_top(0 if narrow else 18)
+        self.reset_btn.set_halign(Gtk.Align.FILL if narrow else Gtk.Align.START)
+
+    # -- actions -------------------------------------------------------------
+    def _adjust(self):
+        if self.state is not None:
+            self.manager.adjust_from_current(self.art_dir, self.state.path)
+
+    def _sync_now(self):
+        self._start_sync(self.sync_btn)
+
+    def _confirm_reset(self):
+        t = self.manager.t
+        dialog = Adw.AlertDialog(
+            heading=t(f"artwork.reset.title_{self.noun}"),
+            body=t(f"artwork.reset.body_{self.noun}"),
+        )
+        dialog.add_response("cancel", t("dialog.cancel"))
+        dialog.add_response("reset", t("artwork.reset.confirm"))
+        dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_reset_response)
+        dialog.present(self.manager)
+
+    def _on_reset_response(self, _dialog, response):
+        if response == "reset":
+            self._start_sync(self.reset_btn)
+
+    def _start_sync(self, button):
+        """The single-ROM sync for this kind; ``button`` says it is running."""
+        if self._syncing is not None:
+            return
+        self._syncing = (button, button.get_label())
+        button.set_label(self.manager.t("artwork.current.syncing"))
+        button.set_sensitive(False)
+        started = self.manager.win.sync_rom_artwork(
+            self.manager.rom,
+            _SYNC_KIND_BY_DIR[self.art_dir],
+            on_finished=self.refresh_after_sync,
+        )
+        if not started:
+            # A library-wide sync is running; the main window already said so.
+            self._restore_button()
+
+    def _restore_button(self):
+        button, label = self._syncing
+        self._syncing = None
+        button.set_label(label)
+        button.set_sensitive(True)
+
+    def refresh_after_sync(self):
+        if self.manager.closed:
+            return
+        self._restore_button()
+        self.refresh()
+        if self.state is None or self.state.source != artwork_sources.SOURCE_SYNCED:
+            self.manager.toast(
+                self.manager.t("artwork.toast.reset_not_found", name=self.manager.rom.get("name", ""))
+            )
+
+
+class _CurrentTab(Gtk.ScrolledWindow):
+    """The art the game has now, one section per kind (issue #510)."""
+
+    def __init__(self, manager, label_supported):
+        super().__init__(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        self.clamp = Adw.Clamp(maximum_size=760)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        self.sections = {COVER_ART: _ArtSection(manager, COVER_ART)}
+        if label_supported:
+            self.sections[LABEL_ART] = _ArtSection(manager, LABEL_ART)
+        for section in self.sections.values():
+            box.append(section)
+        self.clamp.set_child(box)
+        self.set_child(self.clamp)
+        self.set_narrow(False)
+        self.refresh()
+
+    def refresh(self):
+        for section in self.sections.values():
+            section.refresh()
+
+    def set_narrow(self, narrow):
+        margin = 12 if narrow else 24
+        for side in ("top", "bottom", "start", "end"):
+            getattr(self.clamp, f"set_margin_{side}")(margin)
+        for section in self.sections.values():
+            section.set_narrow(narrow)
+
+
 class ArtworkManagerWindow(Adw.Window):
     """Search, pick or import artwork for a single ROM."""
 
@@ -738,6 +1097,12 @@ class ArtworkManagerWindow(Adw.Window):
 
         stack = Adw.ViewStack()
         self.stack = stack
+        # The art as it is now opens first, whichever menu entry opened the
+        # window (issue #510); the search tabs are one click away.
+        self.current_tab = _CurrentTab(self, label_supported)
+        stack.add_titled_with_icon(
+            self.current_tab, "current", self.t("artwork.tab.current"), "emblem-photos-symbolic"
+        )
         self.cover_tab = _SearchTab(self, "cover")
         stack.add_titled_with_icon(
             self.cover_tab, "cover", self.t("artwork.tab.cover"), "image-x-generic-symbolic"
@@ -753,12 +1118,12 @@ class ArtworkManagerWindow(Adw.Window):
             self.import_tab, "import", self.t("artwork.tab.import"), "document-open-symbolic"
         )
         self.import_tab.set_default_destination(art_dir)
-        if art_dir == LABEL_ART and self.label_tab is not None:
-            stack.set_visible_child_name("label")
+        stack.set_visible_child_name("current")
 
         header = Adw.HeaderBar()
         switcher = Adw.ViewSwitcher(stack=stack, policy=Adw.ViewSwitcherPolicy.WIDE)
         header.set_title_widget(switcher)
+        self.switcher_bar = Adw.ViewSwitcherBar(stack=stack)
 
         footer = Gtk.ActionBar()
         cancel = Gtk.Button(label=self.t("dialog.cancel"))
@@ -771,21 +1136,71 @@ class ArtworkManagerWindow(Adw.Window):
         save = Gtk.Button(label=self.t("artwork.action.save"))
         save.connect("clicked", lambda _b: self._save(close_after=False))
         footer.pack_end(save)
+        self.save_btn = save
+        # Nothing is pending on the Current tab, so there is nothing to save.
+        stack.connect("notify::visible-child-name", lambda *_a: self._sync_save_button())
+        self._sync_save_button()
 
         view = Adw.ToolbarView()
         view.add_top_bar(header)
         view.set_content(stack)
+        view.add_bottom_bar(self.switcher_bar)
         view.add_bottom_bar(footer)
         self.set_content(view)
+        # The menu entry that opened the window decides whose actions are
+        # under the keyboard.
+        section = self.current_tab.sections.get(art_dir, self.current_tab.sections[COVER_ART])
+        self.set_focus(section.first_button())
+
+        # Narrow: the tabs move to the bottom and the window title takes the
+        # header back; the Current tab stacks its sections.
+        self.set_size_request(360, 400)
+        narrow = Adw.Breakpoint.new(Adw.BreakpointCondition.parse(NARROW_BREAKPOINT))
+        narrow.add_setter(self.switcher_bar, "reveal", True)
+        narrow.add_setter(header, "title-widget", Adw.WindowTitle(title=self.get_title()))
+        narrow.connect("apply", lambda _b: self.current_tab.set_narrow(True))
+        narrow.connect("unapply", lambda _b: self.current_tab.set_narrow(False))
+        self.add_breakpoint(narrow)
+        self.narrow_breakpoint = narrow
 
         self.connect("close-request", self._on_close_request)
 
     def toast(self, text):
         self.win._toast(text)
 
+    # -- from the Current tab (issue #510) -----------------------------------
+    def search_from_current(self, art_dir):
+        """Pick another match: that kind's search tab, searching if idle."""
+        page = _PAGE_BY_DIR[art_dir]
+        tab = self.cover_tab if page == "cover" else self.label_tab
+        self.stack.set_visible_child_name(page)
+        if not tab._candidates and not tab._running:
+            tab._start_search(by_hash=False)
+
+    def import_from_current(self, art_dir):
+        """Replace from a file: the chooser, then the Import tab with it."""
+        self.import_tab.set_default_destination(art_dir)
+        self.import_tab._choose_file(
+            on_loaded=lambda: self.stack.set_visible_child_name("import")
+        )
+
+    def adjust_from_current(self, art_dir, path):
+        """The current file, loaded into the Import tab's editor."""
+        self.import_tab.set_default_destination(art_dir)
+        if self.import_tab.load_file(path, origin="adjusted"):
+            self.stack.set_visible_child_name("import")
+
+    def _sync_save_button(self):
+        self.save_btn.set_sensitive(self.stack.get_visible_child_name() != "current")
+
     # -- saving --------------------------------------------------------------
     def _save(self, close_after):
         page = self.stack.get_visible_child_name()
+        if page == "current":
+            # Nothing pending: "Done" just closes.
+            if close_after:
+                self.close()
+            return
         try:
             if page in ("cover", "label"):
                 saved = self._save_search_selection(page)
@@ -802,6 +1217,7 @@ class ArtworkManagerWindow(Adw.Window):
         key = "toast.label.updated" if kind == LABEL_ART else "toast.cover.updated"
         self.toast(self.t(key, name=self.rom.get("name", "")))
         self.win.refresh_rom_artwork(self.rom)
+        self.current_tab.refresh()
         if close_after:
             self.close()
 
@@ -810,13 +1226,14 @@ class ArtworkManagerWindow(Adw.Window):
         candidate = tab.selected_candidate() if tab else None
         if candidate is None:
             return None
-        save_local_art(
+        saved = save_local_art(
             Path(self.win.roms_path),
             self.rom["console"],
             self.rom["name"],
             candidate.path,
             tab.art_dir,
         )
+        self._record_manual(tab.art_dir, saved, origin="search", provider=candidate.provider)
         return tab.art_dir
 
     def _save_import(self):
@@ -825,10 +1242,17 @@ class ArtworkManagerWindow(Adw.Window):
         working = self.temp_dir / "import-result.png"
         self.import_tab.pixbuf.savev(str(working), "png", [], [])
         art_dir = self.import_tab.destination_dir()
-        save_local_art(
+        saved = save_local_art(
             Path(self.win.roms_path), self.rom["console"], self.rom["name"], working, art_dir
         )
+        self._record_manual(art_dir, saved, origin=self.import_tab.origin)
         return art_dir
+
+    def _record_manual(self, art_dir, path, **meta):
+        artwork_sources.record(
+            Path(self.win.roms_path), self.rom["console"], art_dir, self.rom["name"], path,
+            artwork_sources.SOURCE_MANUAL, **meta,
+        )
 
     # -- teardown ------------------------------------------------------------
     def _on_close_request(self, _window):

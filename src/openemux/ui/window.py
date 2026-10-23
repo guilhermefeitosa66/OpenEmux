@@ -31,7 +31,7 @@ from openemux.core.library_view import (
 )
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
-from openemux.core import cartridge_render
+from openemux.core import artwork_sources, cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.cover_sync import (
     build_artwork_passes,
@@ -2237,26 +2237,33 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
 
-    def sync_rom_artwork(self, rom, art_kind):
+    def sync_rom_artwork(self, rom, art_kind, on_finished=None):
         """Fetch one ROM's artwork of ``art_kind`` right away, in the background.
 
         The context menu's sync entries are a quick single-ROM action: no
         window, no picking -- the same provider chain the library-wide sync
         uses, aimed at one game. Art already on disk is replaced, because the
         reason to sync one game by hand is usually that what it has is wrong.
+
+        ``on_finished`` runs after the card refresh (the artwork manager's
+        reset re-reads its state there, issue #510). Returns whether a sync
+        started: one already running refuses this one.
         """
         if self._cover_sync_running:
             self._toast(self.t("toast.sync_running"), timeout=3)
-            return
+            return False
         passes = [(art_kind, {rom["console"]: [rom]})]
         logger.info(
             "rom artwork sync: rom=%s console=%s kind=%s", rom["name"], rom["console"], art_kind
         )
-        self._start_artwork_sync(
-            passes,
-            replace_existing=True,
-            on_finished=lambda: self.refresh_rom_artwork(rom),
-        )
+
+        def _finished():
+            self.refresh_rom_artwork(rom)
+            if callable(on_finished):
+                on_finished()
+
+        self._start_artwork_sync(passes, replace_existing=True, on_finished=_finished)
+        return True
 
     def open_artwork_manager(self, rom, art_dir=COVER_ART):
         """The per-ROM artwork manager (issue #77), on the tab for ``art_dir``."""
@@ -2327,7 +2334,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 toast.set_timeout(4)
                 self.toast_overlay.add_toast(toast)
                 return
-            save_local_art(Path(self.roms_path), rom["console"], rom["name"], path, kind)
+            saved = save_local_art(Path(self.roms_path), rom["console"], rom["name"], path, kind)
+            artwork_sources.record(
+                Path(self.roms_path), rom["console"], kind, rom["name"], saved,
+                artwork_sources.SOURCE_MANUAL, origin="menu",
+            )
             updated_key = "toast.label.updated" if kind == LABEL_ART else "toast.cover.updated"
             toast = Adw.Toast(title=self.t(updated_key, name=rom["name"]))
             toast.set_timeout(3)
@@ -2340,6 +2351,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _remove_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
         removed = remove_local_art(Path(self.roms_path), rom["console"], rom["name"], kind)
         if removed:
+            artwork_sources.forget(Path(self.roms_path), rom["console"], kind, rom["name"])
             removed_key = "toast.label.removed" if kind == LABEL_ART else "toast.cover.removed"
             toast = Adw.Toast(title=self.t(removed_key, name=rom["name"]))
             toast.set_timeout(3)

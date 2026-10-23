@@ -65,6 +65,17 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
+### felipeonline (Reddit)
+
+Asked in the Reddit feedback thread on OpenEmux 1.16.0, running the Windows zip
+build, for the cover manager to open on the cover the game already has, with
+ways to adjust it from there. That became
+[#510](https://github.com/guilhermefeitosa66/OpenEmux/issues/510): the artwork
+manager now opens on a "Current" tab that shows the cover and label as they
+are, says whether the sync wrote them, you chose them or they were simply found
+in the folder, and offers picking another match, replacing, adjusting and
+resetting to the synced art right there.
+
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage

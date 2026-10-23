@@ -32,6 +32,7 @@ if HAVE_DISPLAY:
 
     Adw.init()
 
+    from openemux.core import artwork_sources
     from openemux.core.rom_actions import RomActionError
     from openemux.core.scraper import COVER_ART, LABEL_ART
     from openemux.ui import window as window_module
@@ -1122,6 +1123,19 @@ class CoverFilesTests(WindowCase):
         self.win._remove_cover_for_rom(rom, kind=LABEL_ART)
         self.assertIn(self.said("toast.label.removed", name=rom["name"]), self.toasts)
 
+    def test_removing_a_cover_forgets_where_it_came_from(self):
+        rom = self.rom()
+        target = self._write_cover(rom)
+        artwork_sources.record(
+            self.home.roms, rom["console"], COVER_ART, rom["name"], target,
+            artwork_sources.SOURCE_MANUAL,
+        )
+        self.win._remove_cover_for_rom(rom)
+        entries = artwork_sources._load(
+            artwork_sources.sources_path(self.home.roms, rom["console"], COVER_ART)
+        )
+        self.assertNotIn(rom["name"], entries)
+
     def test_removing_a_cover_that_is_not_there_says_nothing(self):
         self.win._remove_cover_for_rom(self.rom())
         self.assertEqual(self.toasts, [])
@@ -1164,6 +1178,8 @@ class TheCoverPickerTests(WindowCase):
             (self.home.roms / "SFC" / COVER_ART / f"{rom['name']}.png").is_file()
         )
         self.assertEqual(done, [True])
+        state = artwork_sources.describe(self.home.roms, "SFC", rom["name"], COVER_ART)
+        self.assertEqual(state.source, artwork_sources.SOURCE_MANUAL)
 
     def test_a_chosen_file_that_is_not_an_image_is_refused(self):
         rom = self.rom()
@@ -1648,8 +1664,35 @@ class TheArtworkSyncTests(WindowCase):
 
     def test_a_single_rom_sync_is_refused_while_another_sync_runs(self):
         self.win._cover_sync_running = True
-        self.win.sync_rom_artwork(self.rom(), COVER_ART)
+        self.assertFalse(self.win.sync_rom_artwork(self.rom(), COVER_ART))
         self.assertIn(self.said("toast.sync_running"), self.toasts)
+
+    def test_a_single_rom_sync_says_it_started(self):
+        self.assertTrue(self.win.sync_rom_artwork(self.rom(), COVER_ART))
+
+    def test_a_single_rom_sync_runs_the_callers_hook_after_the_card_refresh(self):
+        # The artwork manager's reset re-reads its state there (issue #510).
+        rom = self.rom()
+        calls = []
+        with (
+            mock.patch.object(self.win, "_start_artwork_sync") as start,
+            mock.patch.object(
+                self.win, "refresh_rom_artwork", side_effect=lambda r: calls.append("refresh")
+            ),
+        ):
+            self.win.sync_rom_artwork(rom, COVER_ART, on_finished=lambda: calls.append("hook"))
+            start.call_args.kwargs["on_finished"]()
+        self.assertEqual(calls, ["refresh", "hook"])
+
+    def test_a_single_rom_sync_without_a_hook_only_refreshes_the_card(self):
+        rom = self.rom()
+        with (
+            mock.patch.object(self.win, "_start_artwork_sync") as start,
+            mock.patch.object(self.win, "refresh_rom_artwork") as refresh,
+        ):
+            self.win.sync_rom_artwork(rom, COVER_ART)
+            start.call_args.kwargs["on_finished"]()
+        refresh.assert_called_once_with(rom)
 
     def test_a_post_import_sync_covers_only_what_was_imported(self):
         rom = self.rom()
