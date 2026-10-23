@@ -481,17 +481,14 @@ class OnAPageThatMixesConsolesTests(_CardCase):
         self.card._show_placeholder()
         self.assertIsNot(self.card._backdrop.get_first_child(), self.card.cover_image)
 
-
     def test_even_a_cover_of_the_box_shape_keeps_its_own_size(self):
         # There is no one box shape on a page that mixes consoles.
-        self.card._apply_cover_pixbuf(
-            self.card._generation,
-            self.pixbuf(self.card.cover_width, self.card.cover_height - 1),
-            False,
-        )
+        art = (self.card.cover_width, self.card.cover_height - 1)
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(*art), False)
         self.assertEqual(
             self.card.cover_image.get_content_fit(), Gtk.ContentFit.CONTAIN
         )
+        self.assertEqual(self.card.cover_image.get_size_request(), art)
 
 
 @needs_display

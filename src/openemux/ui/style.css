@@ -105,8 +105,9 @@ flowboxchild:focus-visible {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
-/* Fills the leftover area on pages that mix consoles, where covers keep their
-   own proportions inside a uniform box. */
+/* Fills the leftover area around a cover kept at its own proportions inside
+   the card's box: on pages that mix consoles, and on a console page for a
+   cover whose shape differs from the console's box (issue #508). */
 .rom-cover-backdrop {
     background-color: alpha(@card_shade_color, 0.35);
     border-radius: 8px;

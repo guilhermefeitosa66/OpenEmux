@@ -698,8 +698,8 @@ class RomItem(Gtk.Box):
         """Fill the card with this cover, or show it whole on the backdrop.
 
         Both the fit and the size are set every time, whichever way it goes:
-        the grid recycles cards, and one that last showed a fitted cover must
-        not hand its fit to the filled one bound after it.
+        the grid recycles cards, and one that last showed a cover whole must
+        not hand its fit and size to a filling cover bound after it.
         """
         art_size = (pixbuf.get_width(), pixbuf.get_height())
         card_size = (self.cover_width, self.cover_height)
