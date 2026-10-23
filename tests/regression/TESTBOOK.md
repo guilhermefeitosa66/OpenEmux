@@ -1486,6 +1486,46 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
   The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
 
+### RT-340 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
+- **Area:** View modes & layout
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A Game Boy game kept as `Tetris (World).zip` (holding `Tetris (World).gb`)
+  under `<roms>/GB/`, a ScreenScraper account in "Settings" ▸ "Library", and a game ScreenScraper
+  has a cartridge label for.
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Open the console in the cartridge view.
+- **Expected:** The ScreenScraper lookup identifies the game by the `.gb` file inside the archive
+  (its CRC, MD5, size and file name with the extension), not by the archive's own bytes, which
+  match no game: the cartridge shows its label. A Game Boy game ScreenScraper files under Game Boy
+  Color (or the other way round) is found on one more try under the other system; no other console
+  retries. Before issue #506 zipped Game Boy and Game Boy Color libraries never got a label.
+- **Check:** `tests/test_screenscraper.py` (`AZippedRomIsLookedUpByTheRomInsideTests`,
+  `SiblingRetryTests`), `tests/test_hasher.py` (`RomIdentityTests`), `tests/test_archives.py`
+  (`WhichEntryIdentifiesTheRomTests`) and `tests/test_cover_sync.py`
+  (`test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside`).
+
+### RT-341 — A ScreenScraper refusal during an artwork sync is reported, not counted as a miss
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app, with the ScreenScraper HTTP layer stubbed to answer `403`
+  (never live credentials).
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Wait for the sync to end.
+  3. Click "Settings" on the second toast.
+- **Expected:** The usual "Cover sync done" toast, then "ScreenScraper refused the request.
+  Cartridge labels were not fetched. Check your ScreenScraper account." with a "Settings" button
+  that opens Settings on the "Library" page, where the ScreenScraper account is. A daily-quota
+  answer (`430`) says "ScreenScraper daily quota reached…" and a connection error says
+  "ScreenScraper could not be reached…". A sync where ScreenScraper only answered or said "not
+  found" shows no second toast, and neither does a cancelled sync.
+- **Check:** screenshot of the toast (`make devbox-shot OUT=$SCRATCH/rt341.png WIN=1`). The rules
+  are in `tests/test_screenscraper.py` (`WhatALookupReportsTests`), `tests/test_cover_sync.py`
+  (`MultiPassArtworkSyncTests`) and `tests/test_window.py`
+  (`test_a_screenscraper_problem_follows_the_tally`,
+  `test_the_problem_toast_opens_the_screenscraper_settings`).
+
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
 - **Mode:** AUTO-UI

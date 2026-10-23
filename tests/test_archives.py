@@ -9,6 +9,7 @@ from pathlib import Path
 from openemux.core import archives as archives_module
 from openemux.core.archives import (
     _safe_target,
+    archive_rom_entry,
     archive_rom_name,
     rename_archive_rom_entry,
     extract_archive,
@@ -86,6 +87,41 @@ class ArchiveHelpersTest(unittest.TestCase):
         extract_archive(path, dest)
         self.assertFalse((self.tmp.parent / "escaped.sfc").exists())
         self.assertFalse((self.tmp / "escaped.sfc").exists())
+
+
+class WhichEntryIdentifiesTheRomTests(unittest.TestCase):
+    """archive_rom_entry: the file a content lookup hashes (issue #506)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_matching_entry_is_returned(self):
+        archive = _zip(self.tmp / "t.zip", {"readme.txt": b"x", "Tetris (World).gb": b"rom"})
+        info = archive_rom_entry(archive, [".gb"])
+        self.assertEqual(info.filename, "Tetris (World).gb")
+        self.assertEqual(info.file_size, 3)
+
+    def test_junk_and_folders_are_ignored(self):
+        archive = _zip(self.tmp / "t.zip", {
+            "__MACOSX/._Tetris.gb": b"junk",
+            "sub/": b"",
+            ".hidden.gb": b"junk",
+            "sub/Tetris.gb": b"rom",
+        })
+        self.assertEqual(archive_rom_entry(archive, [".gb"]).filename, "sub/Tetris.gb")
+
+    def test_no_match_is_none(self):
+        archive = _zip(self.tmp / "t.zip", {"readme.txt": b"x"})
+        self.assertIsNone(archive_rom_entry(archive, [".gb"]))
+
+    def test_a_corrupt_archive_is_none(self):
+        archive = self.tmp / "broken.zip"
+        archive.write_bytes(b"not a zip at all")
+        self.assertIsNone(archive_rom_entry(archive, [".gb"]))
 
 
 class ExtractIntegrityTests(unittest.TestCase):

@@ -33,6 +33,7 @@ from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
 from openemux.core import cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core.screenscraper import PROBLEM_QUOTA, PROBLEM_REFUSED, PROBLEM_UNREACHABLE
 from openemux.core.cover_sync import (
     build_artwork_passes,
     sync_artwork_async,
@@ -2933,6 +2934,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
+        if not summary.get("cancelled"):
+            self._toast_screenscraper_problem(summary.get("screenscraper_problem"))
         if self.current_console == ALL_CONSOLES_ID:
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
@@ -2942,6 +2945,30 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if on_finished:
             on_finished()
         return False
+
+    #: ScreenScraper problems a sync reports, to the text that explains each.
+    SCREENSCRAPER_PROBLEM_TOASTS = {
+        PROBLEM_REFUSED: "toast.screenscraper.refused",
+        PROBLEM_QUOTA: "toast.screenscraper.quota",
+        PROBLEM_UNREACHABLE: "toast.screenscraper.unreachable",
+    }
+
+    def _toast_screenscraper_problem(self, problem):
+        """Say that ScreenScraper refused or never answered during a sync.
+
+        Those ROMs are counted as missed like any game without art, which is
+        how a wrong account used to fail with no word at all (issue #506).
+        The button opens the page holding the ScreenScraper account.
+        """
+        key = self.SCREENSCRAPER_PROBLEM_TOASTS.get(problem)
+        if key is None:
+            return None
+        toast = Adw.Toast(title=self.t(key))
+        toast.set_timeout(8)
+        toast.set_button_label(self.t("toast.screenscraper.open_prefs"))
+        toast.connect("button-clicked", lambda _t: self._open_preferences(page="library"))
+        self.toast_overlay.add_toast(toast)
+        return toast
 
     def _on_refresh_clicked(self, _button):
         selected_console = self.sidebar.selected_id() or self.current_console
