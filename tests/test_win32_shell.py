@@ -187,7 +187,22 @@ class ApplyingTheWindowIdentityTests(_FakeDllCase):
             self.user32.DestroyIcon.call_args_list, [mock.call(0x111), mock.call(0x222)]
         )
         self.assertEqual(ws._window_icons[0x42], [0x333])
-        self.user32.SendMessageW.assert_called_with(0x42, ws.WM_SETICON, ws.ICON_BIG, 0x333)
+        # The new icon goes in before the old ones are freed, and the slot it
+        # has nothing for is emptied rather than left on a freed handle.
+        self.assertEqual(self.user32.mock_calls[-4:], [
+            mock.call.SendMessageW(0x42, ws.WM_SETICON, ws.ICON_BIG, 0x333),
+            mock.call.SendMessageW(0x42, ws.WM_SETICON, ws.ICON_SMALL, 0),
+            mock.call.DestroyIcon(0x111),
+            mock.call.DestroyIcon(0x222),
+        ])
+
+    def test_a_launcher_with_only_a_large_icon_leaves_the_small_slot_alone(self):
+        self.give_store(FakePropertyStore())
+        self.give_icons(0x111, 0)
+        self.assertTrue(ws.apply_window_identity(0x42, APP_ID, LAUNCHER))
+        self.user32.SendMessageW.assert_called_once_with(
+            0x42, ws.WM_SETICON, ws.ICON_BIG, 0x111
+        )
 
     def test_a_launcher_with_no_icon_sends_nothing_but_still_sets_the_keys(self):
         store = FakePropertyStore()
@@ -249,9 +264,13 @@ class ClearingTheWindowIdentityTests(_FakeDllCase):
             (ws.PID_APP_USER_MODEL_ID, ws.VT_EMPTY, None),
         ])
         self.assertEqual((store.commits, store.releases), (1, 1))
-        self.assertEqual(
-            self.user32.DestroyIcon.call_args_list, [mock.call(0x111), mock.call(0x222)]
-        )
+        # Taken back from the still-living window before they are freed.
+        self.assertEqual(self.user32.mock_calls, [
+            mock.call.SendMessageW(0x42, ws.WM_SETICON, ws.ICON_BIG, 0),
+            mock.call.SendMessageW(0x42, ws.WM_SETICON, ws.ICON_SMALL, 0),
+            mock.call.DestroyIcon(0x111),
+            mock.call.DestroyIcon(0x222),
+        ])
         self.assertNotIn(0x42, ws._window_icons)
 
     def test_a_window_that_never_got_icons_is_cleared_all_the_same(self):
@@ -259,6 +278,7 @@ class ClearingTheWindowIdentityTests(_FakeDllCase):
         self.give_store(store)
         self.assertTrue(ws.clear_window_identity(0x42))
         self.user32.DestroyIcon.assert_not_called()
+        self.user32.SendMessageW.assert_not_called()
         self.assertEqual(len(store.values), 4)
 
     def test_a_store_failure_still_frees_the_icons(self):

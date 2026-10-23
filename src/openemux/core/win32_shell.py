@@ -274,8 +274,19 @@ def _write_properties(hwnd, values):
 
 
 def _destroy_icons(hwnd):
+    """Take the window's icons back, then free them.
+
+    Runs on unrealize, while the window still exists and the taskbar and
+    Alt-Tab may still draw it: freeing an icon the window still holds leaves
+    them painting a dead handle until the window is gone.
+    """
+    icons = _window_icons.pop(hwnd, ())
+    if not icons:
+        return
     user32 = _dlls().user32
-    for icon in _window_icons.pop(hwnd, ()):
+    for slot in (ICON_BIG, ICON_SMALL):
+        user32.SendMessageW(hwnd, WM_SETICON, slot, 0)
+    for icon in icons:
         user32.DestroyIcon(icon)
 
 
@@ -290,11 +301,15 @@ def _set_icons(hwnd, launcher):
     icons = [icon for icon in (large.value, small.value) if icon]
     if not icons:
         raise OSError(f"no icon in {launcher}")
-    _destroy_icons(hwnd)
+    # The new icons go in before the old ones are freed, and a slot the new
+    # set has nothing for is emptied rather than left on a freed handle.
+    previous = _window_icons.pop(hwnd, ())
     _window_icons[hwnd] = icons
     for slot, icon in ((ICON_BIG, large.value), (ICON_SMALL, small.value)):
-        if icon:
-            dlls.user32.SendMessageW(hwnd, WM_SETICON, slot, icon)
+        if icon or previous:
+            dlls.user32.SendMessageW(hwnd, WM_SETICON, slot, icon or 0)
+    for icon in previous:
+        dlls.user32.DestroyIcon(icon)
 
 
 def apply_window_identity(hwnd, app_id, launcher):
