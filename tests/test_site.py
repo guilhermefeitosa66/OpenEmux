@@ -55,6 +55,18 @@ class TheLanguagesTests(unittest.TestCase):
                     self.assertEqual(skeleton(strings[key]), skeleton(english[key]))
 
 
+    def test_every_language_states_the_relationship_with_openemu(self):
+        # The hero line and the credits say the same thing in every language,
+        # and the credits point at the icon attribution.
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            with self.subTest(locale=locale):
+                self.assertIn('href="https://openemu.org/"', strings["hero.relation"])
+                self.assertIn('href="#thanks"', strings["hero.relation"])
+                self.assertIn('href="https://openemu.org/"', strings["thanks.lede"])
+                self.assertIn("ATTRIBUTION.md", strings["thanks.lede"])
+
+
 class ThePublishedPagesTests(unittest.TestCase):
     def test_docs_is_what_the_source_builds(self):
         # A template or string edit that was not rebuilt would ship half a

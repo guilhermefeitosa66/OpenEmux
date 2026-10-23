@@ -398,5 +398,23 @@ class TheLogPanelSettingTests(_ConfigCase):
         self.assertTrue(self.config.get_ui_settings()["show_log_panel"])
 
 
+class TheStartFullscreenSettingTests(_ConfigCase):
+    """Windowed until asked for; read by the launcher at each launch (issue #505)."""
+
+    def test_it_starts_off(self):
+        self.assertFalse(self.config.get_ui_settings()["start_games_fullscreen"])
+
+    def test_it_is_stored_in_the_file(self):
+        self.config.set_start_games_fullscreen(True)
+        self.assertTrue(self.config.get_ui_settings()["start_games_fullscreen"])
+        reloaded = ConfigManager(self.tmp / "config.yaml")
+        self.assertIs(reloaded.get_ui_settings()["start_games_fullscreen"], True)
+
+    def test_a_hand_edited_value_comes_back_a_bool(self):
+        for stored, expected in (("yes", True), (1, True), (0, False)):
+            self.config.config["ui"]["start_games_fullscreen"] = stored
+            self.assertIs(self.config.get_ui_settings()["start_games_fullscreen"], expected)
+
+
 if __name__ == "__main__":
     unittest.main()

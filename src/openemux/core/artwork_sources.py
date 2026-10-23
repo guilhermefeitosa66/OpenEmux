@@ -215,10 +215,26 @@ class _Batch:
     def flush(self):
         pending, self._pending = self._pending, {}
         for (console, kind), new_entries in pending.items():
+            path = sources_path(self.roms_dir, console, kind)
             _apply(
-                sources_path(self.roms_dir, console, kind),
-                lambda entries, new=new_entries: entries.update(new),
+                path,
+                lambda entries, new=new_entries, art_dir=path.parent: entries.update(
+                    {name: entry for name, entry in new.items() if _still_current(art_dir, entry)}
+                ),
             )
+
+
+def _still_current(art_dir, entry):
+    """Whether the file ``entry`` was taken from is still the one on disk.
+
+    A run can last minutes, and the user may choose another cover for a game
+    the sync already reached: that save records itself at once, and the
+    buffered entry written over it would make it read as a plain local file.
+    """
+    try:
+        return (art_dir / entry["file"]).stat().st_mtime_ns == entry["mtime_ns"]
+    except OSError:
+        return False
 
 
 @contextmanager

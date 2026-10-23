@@ -585,6 +585,24 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn("openemux-bar-translucent.cfg", overlay)
         self.assertIn('input_overlay_opacity = "0.600000"', lines)
 
+    def test_the_launch_mode_setting_reaches_the_launch_both_ways(self):
+        # Issue #505: video_fullscreen is always written, so the app's switch
+        # decides it, and the bar's windowed fullscreen stays on either way.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            self.assertFalse(launcher._start_fullscreen())
+            windowed = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
+            cfg.get_ui_settings = lambda: {"start_games_fullscreen": True}
+            self.assertTrue(launcher._start_fullscreen())
+            full = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
+        self.assertIn('video_fullscreen = "false"', windowed)
+        self.assertIn('video_fullscreen = "true"', full)
+        for lines in (windowed, full):
+            self.assertIn('video_windowed_fullscreen = "true"', lines)
+            self.assertIn('config_save_on_exit = "false"', lines)
+
     def test_override_seeds_the_state_slot_when_asked(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

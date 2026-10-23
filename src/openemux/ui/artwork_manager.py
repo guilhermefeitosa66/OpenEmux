@@ -159,6 +159,11 @@ class _SearchTab(Gtk.Box):
         return False
 
     # -- searching ---------------------------------------------------------
+    def search_if_idle(self):
+        """Search by name unless results are shown or a search is running."""
+        if not self._candidates and not self._running:
+            self._start_search(by_hash=False)
+
     def _start_search(self, by_hash):
         self._search_seq += 1
         seq = self._search_seq
@@ -1174,15 +1179,18 @@ class ArtworkManagerWindow(Adw.Window):
         page = _PAGE_BY_DIR[art_dir]
         tab = self.cover_tab if page == "cover" else self.label_tab
         self.stack.set_visible_child_name(page)
-        if not tab._candidates and not tab._running:
-            tab._start_search(by_hash=False)
+        tab.search_if_idle()
 
     def import_from_current(self, art_dir):
         """Replace from a file: the chooser, then the Import tab with it."""
-        self.import_tab.set_default_destination(art_dir)
-        self.import_tab._choose_file(
-            on_loaded=lambda: self.stack.set_visible_child_name("import")
-        )
+
+        def _loaded():
+            # Only once a file is in: a dismissed chooser must not leave the
+            # Import tab aimed at another kind than the user had set.
+            self.import_tab.set_default_destination(art_dir)
+            self.stack.set_visible_child_name("import")
+
+        self.import_tab._choose_file(on_loaded=_loaded)
 
     def adjust_from_current(self, art_dir, path):
         """The current file, loaded into the Import tab's editor."""

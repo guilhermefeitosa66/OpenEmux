@@ -281,6 +281,23 @@ class BatchTests(_Case):
                 sources.record("GB", COVER_ART, "A", self.roms / "nope.png", SOURCE_SYNCED)
         self.assertFalse(sources_path(self.roms, "GB", COVER_ART).exists())
 
+    def test_a_batch_does_not_overwrite_art_replaced_during_the_run(self):
+        art = _art(self.roms, "GB", "Kirby")
+        with batch(self.roms) as sources:
+            sources.record("GB", COVER_ART, "Kirby", art, SOURCE_SYNCED)
+            # The user picks another cover while the run is still going.
+            stat = art.stat()
+            os.utime(art, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+            record(self.roms, "GB", COVER_ART, "Kirby", art, SOURCE_MANUAL)
+        self.assertEqual(_entries(self.roms, "GB")["Kirby"]["source"], SOURCE_MANUAL)
+
+    def test_a_batch_drops_art_removed_during_the_run(self):
+        art = _art(self.roms, "GB", "Kirby")
+        with batch(self.roms) as sources:
+            sources.record("GB", COVER_ART, "Kirby", art, SOURCE_SYNCED)
+            art.unlink()
+        self.assertNotIn("Kirby", _entries(self.roms, "GB"))
+
     def test_concurrent_records_keep_every_entry(self):
         names = [f"Game {i}" for i in range(40)]
         arts = {name: _art(self.roms, "GB", name) for name in names}

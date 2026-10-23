@@ -1215,9 +1215,12 @@ class TheCurrentTabActionsTests(_CurrentTabCase):
 
         with mock.patch.object(artwork_manager.Gtk, "FileDialog", _Dialog):
             self.section(LABEL_ART).import_btn.emit("clicked")
-        self.assertEqual(self.manager.import_tab.destination_dir(), LABEL_ART)
+        # Nothing moves until a file is in: a dismissed chooser leaves the
+        # Import tab aimed where it was.
+        self.assertEqual(self.manager.import_tab.destination_dir(), COVER_ART)
         self.assertEqual(self.manager.stack.get_visible_child_name(), "current")
         dialogs[0](_Result(), None)
+        self.assertEqual(self.manager.import_tab.destination_dir(), LABEL_ART)
         self.assertEqual(self.manager.stack.get_visible_child_name(), "import")
         self.assertEqual(self.manager.import_tab.origin, "file")
 
