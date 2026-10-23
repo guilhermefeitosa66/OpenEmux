@@ -4914,10 +4914,11 @@ real RetroAchievements account say so; without one they are handed to the mainta
      and signed in, and a game's pause sheet with hardcore on.
 - **Expected:** Every new text is in that language; only the name "RetroAchievements" and the
   site address stay as they are.
-- **Check:** in `pkg/android/openemux/src/main/res`, every `ra_*`, `game_hardcore_*` and
-  `detail_hardcore_no_load` key in `values/` exists in each `values-*/` folder:
+- **Check:** in `pkg/android/openemux/src/main/res`, every `ra_*`, `game_hardcore_*`,
+  `detail_hardcore_no_load` and `settings_section_achievements` key in `values/` exists in each
+  `values-*/` folder:
   ```bash
-  for d in values-*; do for k in $(grep -ho 'name="\(ra_\|game_hardcore_\|detail_hardcore_\)[a-z_]*"' values/*.xml | grep -v ra_title); do
+  for d in values-*; do for k in $(grep -ho 'name="\(ra_\|game_hardcore_\|detail_hardcore_\|settings_section_achievements\)[a-z_]*"' values/*.xml | grep -v ra_title); do
     grep -q "$k" $d/*.xml || echo "$d missing $k"; done; done   # prints nothing
   ```
 
@@ -4933,7 +4934,8 @@ real RetroAchievements account say so; without one they are handed to the mainta
 - **Check:**
   ```bash
   aapt dump xmltree OpenEmuxMobile-debug.apk AndroidManifest.xml | grep -E 'fullBackupContent|dataExtractionRules'
-  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/data_extraction_rules.xml | grep -c cheevos.xml   # 2
+  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/data_extraction_rules.xml | grep -cE '"(cheevos\.xml|launch)"'   # 4
+  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/backup_rules.xml | grep -cE '"(cheevos\.xml|launch)"'            # 2
   ```
 
 
