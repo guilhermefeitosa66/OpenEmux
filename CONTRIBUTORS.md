@@ -65,6 +65,17 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
+### felipeonline (Reddit)
+
+Reported in the Reddit feedback thread on OpenEmux 1.16.0, running the Windows
+zip build, that some covers showed up cropped at the top or the bottom of the
+library grid. That report became
+[#508](https://github.com/guilhermefeitosa66/OpenEmux/issues/508): a card has
+its console's typical box shape, and a cover of another shape (a portrait
+Japanese box on a landscape Super Nintendo card) was filled into it and lost up
+to 60% of its art. Now only a cover close to the card's shape fills it, and any
+other is shown whole on the card's backdrop.
+
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage

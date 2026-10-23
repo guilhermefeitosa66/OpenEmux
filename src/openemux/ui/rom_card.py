@@ -20,7 +20,12 @@ from gi.repository import Adw, Gdk, GLib, GObject, Gio, Gtk, Pango
 
 from openemux.core import cartridge_render, cover_cache
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
-from openemux.core.library_view import list_thumb_column_width, normalize_zoom, scale_length
+from openemux.core.library_view import (
+    cover_fills_box,
+    list_thumb_column_width,
+    normalize_zoom,
+    scale_length,
+)
 from openemux.core.paths import display_text
 from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover, is_label_art
 from openemux.core.systems import get_system_display_name
@@ -219,6 +224,9 @@ class RomItem(Gtk.Box):
         self.cartridge_frame_path = None
         # Pages that mix consoles cannot size the card to one box art shape, so
         # the cover is centred at its own proportions over a uniform backdrop.
+        # On a single-console page the card has that console's box shape, and
+        # a cover of another shape gets the same treatment, cover by cover
+        # (issue #508).
         self.mixed_consoles = ctx.mixed_consoles
         self._backdrop = None
         # Inside a cartridge frame the label sticker is what belongs there.
@@ -675,15 +683,8 @@ class RomItem(Gtk.Box):
             if full_resolution:
                 self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
             else:
-                if self.mixed_consoles and not self.compact:
-                    # Shrink the widget to the scaled art so the rounded
-                    # corners and shadow hug the cover, not the empty area
-                    # around it. Not in a row: there the thumbnail box is a
-                    # column shared with every other row, and resizing it per
-                    # cover would stagger the titles.
-                    self.cover_image.set_size_request(
-                        pixbuf.get_width(), pixbuf.get_height()
-                    )
+                if self._backdrop is not None:
+                    self._fit_cover_to(pixbuf)
                 self.cover_image.set_pixbuf(pixbuf)
             self._show_cover_image()
             if self._fade_next_apply:
@@ -693,6 +694,26 @@ class RomItem(Gtk.Box):
             logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
 
+    def _fit_cover_to(self, pixbuf):
+        """Fill the card with this cover, or show it whole on the backdrop.
+
+        Both the fit and the size are set every time, whichever way it goes:
+        the grid recycles cards, and one that last showed a fitted cover must
+        not hand its fit to the filled one bound after it.
+        """
+        art_size = (pixbuf.get_width(), pixbuf.get_height())
+        card_size = (self.cover_width, self.cover_height)
+        if not self.mixed_consoles and cover_fills_box(art_size, card_size):
+            self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
+            self.cover_image.set_size_request(*card_size)
+            return
+        # Shrink the widget to the scaled art so the rounded corners and
+        # shadow hug the cover, not the empty area around it. Never in a row
+        # (it has no backdrop): there the thumbnail box is a column shared with
+        # every other row, and resizing it per cover would stagger the titles.
+        self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.cover_image.set_size_request(*art_size)
+
     def _cover_target_size(self):
         if self.compact:
             # The shared column, so a wide cover can use all of it and a narrow
@@ -701,13 +722,14 @@ class RomItem(Gtk.Box):
         return self.cover_width, self.cover_height
 
     def _setup_cover_host(self):
-        # A row never gets the backdrop: it exists to fill a uniform *card* box
-        # on pages that mix consoles, and inside a horizontal row its expanding
-        # child makes the whole thumbnail column stretch, shoving every title to
-        # a different indent.
-        if self.mixed_consoles and not self.compact:
-            # Uniform box: the cover keeps its own shape and the leftover area
-            # is filled by a subtle backdrop instead of cropping the art.
+        # A row never gets the backdrop: it exists to fill a uniform *card* box,
+        # and inside a horizontal row its expanding child makes the whole
+        # thumbnail column stretch, shoving every title to a different indent.
+        # Nor does a cartridge: the composite is already the card's shape.
+        if not self.compact and (self.mixed_consoles or not self.ctx.cartridge):
+            # Uniform box: a cover that does not match it keeps its own shape
+            # and the leftover area is filled by a subtle backdrop instead of
+            # cropping the art.
             self._backdrop = Gtk.Box()
             self._backdrop.set_size_request(self.cover_width, self.cover_height)
             self._backdrop.add_css_class("rom-cover-backdrop")
