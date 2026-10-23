@@ -1428,6 +1428,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         about.set_comments(self.t("about.comments"))
         about.set_website("https://github.com/guilhermefeitosa66/OpenEmux")
         about.set_license_type(Gtk.License.MIT_X11)
+        # Project names stay untranslated; libadwaita turns the URL into a link.
+        about.add_acknowledgement_section(self.t("about.ack.inspired_by"), ["OpenEmu https://openemu.org/"])
+        about.add_acknowledgement_section(
+            self.t("about.ack.emulation"),
+            ["RetroArch https://www.retroarch.com/", "libretro https://www.libretro.com/"],
+        )
+        # The console icons are OpenEmu's artwork (see assets/icons/ATTRIBUTION.md).
+        about.add_legal_section(
+            self.t("about.legal.console_icons"), "© 2009-2023 OpenEmu Team", Gtk.License.BSD_3, None
+        )
         about.present(self)
 
     def _show_shortcuts(self):
