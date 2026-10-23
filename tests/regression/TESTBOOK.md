@@ -4492,7 +4492,8 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   1. Run the build from a clean staging tree.
 - **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
   build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
-  caught.
+  caught -- and a launcher that no longer exports `OPENEMUX_LAUNCHER`, without which a pinned
+  taskbar button points at a bare `pythonw.exe` (RT-340).
 - **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
 ### RT-195 — The bundle carries no path from the machine that built it
@@ -4751,6 +4752,45 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   moved to the trash and leave it on disk -- never report success and delete nothing, and never
   delete permanently without saying so.
 - **Check:** human only.
+
+### RT-340 — OpenEmux owns its taskbar button on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine with the artifacts of `make windows` (the portable zip
+  and the installer), and some other Python or MSYS2 GTK program available to run alongside.
+- **Steps:**
+  1. Unzip `OpenEmux-<ver>-windows-x86_64.zip` and double-click `OpenEmux.exe`. Look at the
+     taskbar button, the title bar and Alt-Tab, on the first-boot progress window and on the
+     library window.
+  2. With OpenEmux running, start another `pythonw` program or MSYS2 GTK app.
+  3. Right-click the running OpenEmux taskbar button, choose "Pin to taskbar", close the app and
+     click the pinned button.
+  4. Install with `OpenEmux-<ver>-setup.exe`, start OpenEmux from the Start Menu, pin the Start Menu
+     entry to the taskbar, close the app and start it from that pin.
+- **Expected:** Steps 1–3: the taskbar button, the title bar and Alt-Tab show the OpenEmux logo,
+  the same one Explorer shows on `OpenEmux.exe`, never Python's; OpenEmux keeps a taskbar button of
+  its own, not grouped with the other program; the pinned button shows the logo, is labelled
+  "OpenEmux", starts the app normally (the library loads) and the running window lands on it rather
+  than on a second button. Step 4: one taskbar button for the pin and the running window, with the
+  OpenEmux icon throughout. The RetroArch game window is its own process and keeps its own button.
+- **Check:** human only.
+
+### RT-341 — The Windows shell identity is wired, and stays off everywhere else
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The packaged process declares the AppUserModelID `APP_ID` before GTK is imported;
+  every toplevel window, once mapped, gets the icons out of `OpenEmux.exe` and the four
+  `PKEY_AppUserModel_*` keys (id, relaunch command, display name, icon), which are cleared again on
+  unrealize; any failing shell call is a logged warning, never a failed start. Off the packaged
+  Windows bundle -- Linux, or a Windows source run with no `OPENEMUX_LAUNCHER` -- nothing reaches
+  the shell. The launcher exports its own path, and the installer writes the same id on its Start
+  Menu shortcut. The "Unit tests (Windows / MSYS2)" job *runs* (does not skip) the round trips
+  through the real shell, which are what prove the COM layout.
+- **Check:** suite files `tests/test_win32_shell.py`, `tests/test_windows_shell_identity.py`,
+  `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
 
 ## ARM (aarch64)
 

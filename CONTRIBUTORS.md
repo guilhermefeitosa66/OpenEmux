@@ -108,6 +108,15 @@ itself, a Game Boy game filed under Game Boy Color is found on one more try, and
 a sync that ScreenScraper refused or never answered says so instead of counting
 every game as a plain miss.
 
+Running the Windows zip build, also reported there that the app's taskbar icon
+did not match the one on `OpenEmux.exe`. That report became
+[#509](https://github.com/guilhermefeitosa66/OpenEmux/issues/509): the app's
+windows belonged to `pythonw.exe`, so Windows showed Python's icon, grouped
+OpenEmux with any other Python program and pinned a bare interpreter that could
+not start the app. The process now tells the shell it is OpenEmux, takes its
+icon from the launcher, and a pinned button starts the app through
+`OpenEmux.exe`.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

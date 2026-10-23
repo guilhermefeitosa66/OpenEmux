@@ -22,6 +22,7 @@ Unicode true
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 Name "OpenEmux ${VERSION}"
 OutFile "${OUTPUT_FILE}"
@@ -73,6 +74,42 @@ VIAddVersionKey "LegalCopyright" "MIT Licensed. See LICENSE."
 !insertmacro MUI_LANGUAGE "German"
 !insertmacro MUI_LANGUAGE "Spanish"
 
+; The AppUserModelID the app declares for its process and every window
+; (APP_ID in src/openemux/main.py -- tests/test_windows_shell_identity.py keeps
+; the two equal). The app's windows belong to pythonw.exe, not to OpenEmux.exe,
+; so without one shared id a pinned Start Menu shortcut and the running window
+; are two taskbar buttons (issue #509).
+!define APP_USER_MODEL_ID "io.github.guilhermefeitosa66.OpenEmux"
+
+; Write APP_USER_MODEL_ID into the shortcut at LNK. Through the System plugin
+; that ships with NSIS, so the build image needs nothing new: the .lnk's
+; IPropertyStore (SHGetPropertyStoreFromParsingName, GPS_READWRITE = 2), then
+; SetValue (vtable slot 6) of PKEY_AppUserModel_ID as a VT_LPWSTR (31) and
+; Commit (slot 7). Best-effort: a failure leaves a shortcut that still starts
+; the app, only as a second taskbar button, and never stops the install.
+!macro SetShortcutAppId LNK
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  System::Call 'shell32::SHGetPropertyStoreFromParsingName(w "${LNK}", p 0, i 2, g "{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}", *p .r1) i .r0'
+  ${If} $0 = 0
+    System::Call '*(&g16 "{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}", i 5) p .r2'
+    System::Call '*(&i2 31, &i2 0, &i2 0, &i2 0, w "${APP_USER_MODEL_ID}") p .r3'
+    System::Call '$1->6(p r2, p r3) i .r0'
+    ${If} $0 = 0
+      System::Call '$1->7() i .r0'
+    ${EndIf}
+    System::Free $2
+    System::Free $3
+    System::Call '$1->2()'
+  ${EndIf}
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+!macroend
+
 Section "OpenEmux" SecMain
   SectionIn RO
 
@@ -96,6 +133,7 @@ Section "OpenEmux" SecMain
   CreateDirectory "$SMPROGRAMS\OpenEmux"
   CreateShortCut "$SMPROGRAMS\OpenEmux\OpenEmux.lnk" "$INSTDIR\OpenEmux.exe" \
     "" "$INSTDIR\OpenEmux.exe" 0 SW_SHOWNORMAL "" "OpenEmux"
+  !insertmacro SetShortcutAppId "$SMPROGRAMS\OpenEmux\OpenEmux.lnk"
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortCut "$SMPROGRAMS\OpenEmux\Uninstall OpenEmux.lnk" "$INSTDIR\Uninstall.exe"

@@ -12,6 +12,7 @@ developer's own `~/.openemux`.
 """
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
@@ -259,6 +260,104 @@ class TheBootstrapFlowTests(_ApplicationCase):
         result = {"success": False, "failed_step": "cores_download"}
         self.app._finish_bootstrap_flow(result, initial_boot=False)
         window.on_bootstrap_finished.assert_called_once_with(result)
+
+
+@needs_display
+class TheWindowsShellIdentityTests(_ApplicationCase):
+    """Issue #509: every toplevel tells the Windows shell it is OpenEmux.
+
+    ``win32_shell`` is replaced whole: what is under test is when the app
+    calls it, for which window, and that it does not at all off the packaged
+    Windows bundle.
+    """
+
+    launcher = Path("C:/OpenEmux/OpenEmux.exe")
+
+    def setUp(self):
+        shell = mock.patch.object(app_module, "win32_shell")
+        self.shell = shell.start()
+        self.addCleanup(shell.stop)
+        self.shell.launcher_path.return_value = self.launcher
+        self.shell.find_toplevel_hwnds.return_value = [0x10]
+        super().setUp()
+
+    def _window(self, mapped=True):
+        window = mock.Mock()
+        window.get_mapped.return_value = mapped
+        return window
+
+    def _connections(self, launcher):
+        # Not by emitting window-added: GtkApplication's own handler for it
+        # refuses a window before startup, and this application never starts.
+        self.shell.launcher_path.return_value = launcher
+        with mock.patch.object(OpenEmuxApplication, "connect") as connect:
+            app = OpenEmuxApplication()
+        return app, connect
+
+    def test_the_packaged_bundle_watches_every_window_added(self):
+        app, connect = self._connections(self.launcher)
+        connect.assert_called_once_with("window-added", app._on_window_added)
+
+    def test_without_a_launcher_no_window_is_watched(self):
+        _app, connect = self._connections(None)
+        connect.assert_not_called()
+
+    def test_a_window_is_claimed_when_mapped_and_released_when_unrealized(self):
+        window = mock.Mock()
+        self.app._on_window_added(self.app, window)
+        window.connect.assert_has_calls([
+            mock.call("map", self.app._on_window_mapped),
+            mock.call("unrealize", self.app._on_window_unrealized),
+        ])
+
+    def test_the_claim_waits_for_the_map_to_finish(self):
+        window = self._window()
+        with mock.patch.object(app_module.GLib, "idle_add") as idle_add:
+            self.app._on_window_mapped(window)
+        idle_add.assert_called_once_with(self.app._claim_window, window)
+
+    def test_a_mapped_window_takes_the_new_handle(self):
+        window = self._window()
+        self.assertFalse(self.app._claim_window(window))
+        self.shell.apply_window_identity.assert_called_once_with(
+            0x10, app_module.APP_ID, self.launcher
+        )
+
+    def test_a_second_window_takes_the_handle_the_first_does_not_have(self):
+        self.app._claim_window(self._window())
+        self.shell.find_toplevel_hwnds.return_value = [0x10, 0x20]
+        self.app._claim_window(self._window())
+        self.shell.apply_window_identity.assert_called_with(
+            0x20, app_module.APP_ID, self.launcher
+        )
+
+    def test_a_window_mapped_again_is_not_claimed_twice(self):
+        window = self._window()
+        self.app._claim_window(window)
+        self.app._claim_window(window)
+        self.shell.apply_window_identity.assert_called_once()
+
+    def test_a_window_hidden_before_the_claim_ran_is_left_alone(self):
+        self.app._claim_window(self._window(mapped=False))
+        self.shell.find_toplevel_hwnds.assert_not_called()
+
+    def test_no_new_handle_means_nothing_to_claim(self):
+        self.shell.find_toplevel_hwnds.return_value = []
+        self.app._claim_window(self._window())
+        self.shell.apply_window_identity.assert_not_called()
+
+    def test_unrealizing_a_claimed_window_clears_it(self):
+        window = self._window()
+        self.app._claim_window(window)
+        self.app._on_window_unrealized(window)
+        self.shell.clear_window_identity.assert_called_once_with(0x10)
+        # And its handle is free for the next window to take.
+        self.app._claim_window(self._window())
+        self.assertEqual(self.shell.apply_window_identity.call_count, 2)
+
+    def test_unrealizing_a_window_never_claimed_clears_nothing(self):
+        self.app._on_window_unrealized(self._window())
+        self.shell.clear_window_identity.assert_not_called()
 
 
 class TheGuardedBootstrapWorkerTests(unittest.TestCase):

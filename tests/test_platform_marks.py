@@ -12,7 +12,7 @@ import re
 import unittest
 from pathlib import Path
 
-from tests.platform_marks import IS_LINUX, IS_WINDOWS, linux_only, posix_only
+from tests.platform_marks import IS_LINUX, IS_WINDOWS, linux_only, posix_only, windows_only
 
 TESTS_DIR = Path(__file__).resolve().parent
 
@@ -22,7 +22,7 @@ _RAW_PLATFORM_SKIP = re.compile(
 )
 
 #: A call to one of the marks, with whatever reason it was given.
-_MARK_CALL = re.compile(r"@(posix_only|linux_only)\(\s*[\"\']([^\"\']*)")
+_MARK_CALL = re.compile(r"@(posix_only|linux_only|windows_only)\(\s*[\"\']([^\"\']*)")
 
 
 class MarksAreCentralisedTests(unittest.TestCase):
@@ -60,6 +60,15 @@ class ReasonsAreStatedTests(unittest.TestCase):
             self.assertFalse(getattr(case, "__unittest_skip__", False))
         else:
             self.assertIn("Linux-only: struct input_event is the kernel ABI",
+                          case.__unittest_skip_why__)
+
+    def test_a_windows_skip_names_the_windows_behaviour(self):
+        decorator = windows_only("IPropertyStore on a real window")
+        case = decorator(unittest.TestCase)
+        if IS_WINDOWS:
+            self.assertFalse(getattr(case, "__unittest_skip__", False))
+        else:
+            self.assertIn("Windows-only: IPropertyStore on a real window",
                           case.__unittest_skip_why__)
 
     def test_every_use_in_the_suite_gives_a_reason(self):

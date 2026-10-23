@@ -28,3 +28,8 @@ def posix_only(reason):
 def linux_only(reason):
     """Skip anywhere but Linux: the kernel ABI, /proc, the FHS, AppImages."""
     return unittest.skipUnless(IS_LINUX, f"Linux-only: {reason}")
+
+
+def windows_only(reason):
+    """Skip anywhere but Windows: the shell, COM, the Win32 window manager."""
+    return unittest.skipUnless(IS_WINDOWS, f"Windows-only: {reason}")
