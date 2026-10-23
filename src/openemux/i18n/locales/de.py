@@ -226,7 +226,7 @@ TRANSLATIONS = {
     "toast.sync_running": "Cover-Synchronisierung läuft bereits",
     "toast.sync_started": "Cover-Synchronisierung im Hintergrund gestartet",
     "toast.sync_done": "Cover-Synchronisierung fertig: {downloaded} geladen, {skipped} übersprungen, {errors} nicht gefunden",
-    "toast.screenscraper.refused": "ScreenScraper hat die Anfrage abgelehnt. Modul-Aufkleber wurden nicht geladen. Prüfe dein ScreenScraper-Konto.",
+    "toast.screenscraper.refused": "ScreenScraper hat die Anfrage abgelehnt. Einige Cover wurden nicht geladen. Prüfe dein ScreenScraper-Konto.",
     "toast.screenscraper.quota": "Tageskontingent von ScreenScraper erreicht. Einige Cover wurden nicht geladen; versuche es morgen erneut.",
     "toast.screenscraper.unreachable": "ScreenScraper ist nicht erreichbar. Einige Cover wurden nicht geladen.",
     "toast.screenscraper.open_prefs": "Einstellungen",

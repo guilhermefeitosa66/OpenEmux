@@ -25,8 +25,9 @@ from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 from openemux.core import artwork_search
 from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core import cover_cache
-from openemux.core.hasher import compute_crc32
+from openemux.core.hasher import rom_identity
 from openemux.core.library_view import ZOOM_LEVELS, scale_spacing
+from openemux.core.systems import get_supported_extensions
 from openemux.core.scraper import COVER_ART, LABEL_ART, SUPPORTED_COVER_EXTS, save_local_art
 from openemux.ui.file_dialogs import image_filters
 from openemux.ui.grid import GRID_SPACING, FixedSizePicture, cover_size_for_console
@@ -125,11 +126,12 @@ class _SearchTab(Gtk.Box):
             self.hash_entry.set_placeholder_text("")
             return
 
+        extensions = get_supported_extensions(self.manager.rom.get("console"))
+
         def _worker():
-            try:
-                digest = compute_crc32(rom_path)
-            except OSError:
-                digest = ""
+            # The CRC the lookup sends: for a zipped ROM, the entry inside the
+            # archive, not the archive itself (issue #506). Never raises.
+            digest = rom_identity(rom_path, extensions).crc32 or ""
             GLib.idle_add(self._set_hash, digest)
 
         Thread(target=_worker, daemon=True).start()

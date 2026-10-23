@@ -228,7 +228,7 @@ TRANSLATIONS = {
     "toast.sync_running": "Cover sync already running",
     "toast.sync_started": "Cover sync started in background",
     "toast.sync_done": "Cover sync done: {downloaded} downloaded, {skipped} skipped, {errors} missed",
-    "toast.screenscraper.refused": "ScreenScraper refused the request. Cartridge labels were not fetched. Check your ScreenScraper account.",
+    "toast.screenscraper.refused": "ScreenScraper refused the request. Some artwork was not fetched. Check your ScreenScraper account.",
     "toast.screenscraper.quota": "ScreenScraper daily quota reached. Some artwork was not fetched; try again tomorrow.",
     "toast.screenscraper.unreachable": "ScreenScraper could not be reached. Some artwork was not fetched.",
     "toast.screenscraper.open_prefs": "Settings",

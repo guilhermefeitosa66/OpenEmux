@@ -1515,7 +1515,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Wait for the sync to end.
   3. Click "Settings" on the second toast.
 - **Expected:** The usual "Cover sync done" toast, then "ScreenScraper refused the request.
-  Cartridge labels were not fetched. Check your ScreenScraper account." with a "Settings" button
+  Some artwork was not fetched. Check your ScreenScraper account." with a "Settings" button
   that opens Settings on the "Library" page, where the ScreenScraper account is. A daily-quota
   answer (`430`) says "ScreenScraper daily quota reached…" and a connection error says
   "ScreenScraper could not be reached…". A sync where ScreenScraper only answered or said "not

@@ -228,7 +228,7 @@ TRANSLATIONS = {
     "toast.sync_running": "அட்டை ஒத்திசைவு ஏற்கனவே இயங்குகிறது",
     "toast.sync_started": "அட்டை ஒத்திசைவு பின்னணியில் தொடங்கியது",
     "toast.sync_done": "அட்டை ஒத்திசைவு முடிந்தது: {downloaded} பதிவிறக்கம், {skipped} தவிர்க்கப்பட்டது, {errors} தவறியது",
-    "toast.screenscraper.refused": "ScreenScraper கோரிக்கையை மறுத்தது. கார்ட்ரிட்ஜ் லேபிள்கள் பெறப்படவில்லை. உங்கள் ScreenScraper கணக்கைச் சரிபார்க்கவும்.",
+    "toast.screenscraper.refused": "ScreenScraper கோரிக்கையை மறுத்தது. சில அட்டைப்படங்கள் பெறப்படவில்லை. உங்கள் ScreenScraper கணக்கைச் சரிபார்க்கவும்.",
     "toast.screenscraper.quota": "ScreenScraper தினசரி ஒதுக்கீடு முடிந்தது. சில அட்டைப்படங்கள் பெறப்படவில்லை; நாளை மீண்டும் முயற்சிக்கவும்.",
     "toast.screenscraper.unreachable": "ScreenScraper ஐ அணுக முடியவில்லை. சில அட்டைப்படங்கள் பெறப்படவில்லை.",
     "toast.screenscraper.open_prefs": "அமைப்புகள்",

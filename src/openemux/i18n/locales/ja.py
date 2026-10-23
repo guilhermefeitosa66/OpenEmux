@@ -226,7 +226,7 @@ TRANSLATIONS = {
     "toast.sync_running": "カバーの同期はすでに実行中です",
     "toast.sync_started": "カバーの同期をバックグラウンドで開始しました",
     "toast.sync_done": "カバーの同期が完了: {downloaded} 件ダウンロード、{skipped} 件スキップ、{errors} 件見つからず",
-    "toast.screenscraper.refused": "ScreenScraper にリクエストを拒否されました。カートリッジラベルは取得されていません。ScreenScraper アカウントを確認してください。",
+    "toast.screenscraper.refused": "ScreenScraper にリクエストを拒否されました。一部のアートワークは取得されていません。ScreenScraper アカウントを確認してください。",
     "toast.screenscraper.quota": "ScreenScraper の1日の上限に達しました。一部のアートワークは取得されていません。明日もう一度お試しください。",
     "toast.screenscraper.unreachable": "ScreenScraper に接続できませんでした。一部のアートワークは取得されていません。",
     "toast.screenscraper.open_prefs": "設定",

@@ -226,7 +226,7 @@ TRANSLATIONS = {
     "toast.sync_running": "Ya hay una sincronización de carátulas en curso",
     "toast.sync_started": "Sincronización de carátulas iniciada en segundo plano",
     "toast.sync_done": "Sincronización terminada: {downloaded} descargadas, {skipped} omitidas, {errors} sin encontrar",
-    "toast.screenscraper.refused": "ScreenScraper rechazó la solicitud. No se descargaron las etiquetas de cartucho. Revisa tu cuenta de ScreenScraper.",
+    "toast.screenscraper.refused": "ScreenScraper rechazó la solicitud. Parte de las portadas no se descargó. Revisa tu cuenta de ScreenScraper.",
     "toast.screenscraper.quota": "Se alcanzó la cuota diaria de ScreenScraper. Parte de las portadas no se descargó; inténtalo de nuevo mañana.",
     "toast.screenscraper.unreachable": "No se pudo conectar con ScreenScraper. Parte de las portadas no se descargó.",
     "toast.screenscraper.open_prefs": "Configuración",

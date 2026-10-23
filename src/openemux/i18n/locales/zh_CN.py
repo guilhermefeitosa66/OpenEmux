@@ -226,7 +226,7 @@ TRANSLATIONS = {
     "toast.sync_running": "封面同步已在进行中",
     "toast.sync_started": "封面同步已在后台开始",
     "toast.sync_done": "封面同步完成：下载 {downloaded} 个，跳过 {skipped} 个，未找到 {errors} 个",
-    "toast.screenscraper.refused": "ScreenScraper 拒绝了请求，卡带贴纸未能获取。请检查你的 ScreenScraper 账号。",
+    "toast.screenscraper.refused": "ScreenScraper 拒绝了请求，部分封面未能获取。请检查你的 ScreenScraper 账号。",
     "toast.screenscraper.quota": "已达到 ScreenScraper 每日配额，部分封面未能获取，请明天再试。",
     "toast.screenscraper.unreachable": "无法连接 ScreenScraper，部分封面未能获取。",
     "toast.screenscraper.open_prefs": "设置",

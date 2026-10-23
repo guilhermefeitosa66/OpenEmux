@@ -226,7 +226,7 @@ TRANSLATIONS = {
     "toast.sync_running": "Une synchronisation des jaquettes est déjà en cours",
     "toast.sync_started": "Synchronisation des jaquettes lancée en arrière-plan",
     "toast.sync_done": "Synchronisation terminée : {downloaded} téléchargées, {skipped} ignorées, {errors} introuvables",
-    "toast.screenscraper.refused": "ScreenScraper a refusé la requête. Les étiquettes de cartouche n’ont pas été téléchargées. Vérifiez votre compte ScreenScraper.",
+    "toast.screenscraper.refused": "ScreenScraper a refusé la requête. Certaines jaquettes n’ont pas été téléchargées. Vérifiez votre compte ScreenScraper.",
     "toast.screenscraper.quota": "Quota journalier de ScreenScraper atteint. Certaines jaquettes n’ont pas été téléchargées ; réessayez demain.",
     "toast.screenscraper.unreachable": "Impossible de joindre ScreenScraper. Certaines jaquettes n’ont pas été téléchargées.",
     "toast.screenscraper.open_prefs": "Paramètres",
