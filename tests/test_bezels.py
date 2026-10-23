@@ -105,6 +105,13 @@ class ValidatingAnImageTests(_TmpCase):
         with mock.patch.object(bezels, "MAX_BYTES", 10):
             self.assertEqual(bezels.validate_png(path), "unreadable")
 
+    def test_a_picture_over_the_size_cap_is_refused(self):
+        self.assertEqual(bezels.validate_png(self.write("a.png", png_bytes(16000, 9000))),
+                         "unreadable")
+        self.assertEqual(bezels.validate_png(self.write("b.png", png_bytes(1920, 4000))),
+                         "unreadable")
+        self.assertIsNone(bezels.validate_png(self.write("c.png", png_bytes(3840, 2160))))
+
     def test_a_missing_file_is_unreadable(self):
         self.assertEqual(bezels.validate_png(self.tmp / "nope.png"), "unreadable")
 
@@ -126,17 +133,26 @@ class ImportingACustomImageTests(_TmpCase):
         stored = bezels.import_custom("PS", second, self.tmp / "b")
         self.assertEqual(stored.read_bytes(), second.read_bytes())
 
-    def test_a_failed_copy_leaves_no_temporary_file_and_raises(self):
+    def test_a_missing_source_raises_and_writes_nothing(self):
         target = self.tmp / "bezels"
         with self.assertRaises(OSError):
             bezels.import_custom("PS", self.tmp / "missing.png", target)
-        self.assertEqual(list(target.iterdir()), [])
+        self.assertFalse((target / "PS.png").exists())
 
-    def test_a_temporary_file_that_cannot_be_removed_still_raises(self):
+    def test_a_copy_that_fails_halfway_keeps_the_previous_image(self):
         target = self.tmp / "bezels"
-        with mock.patch.object(bezels.os, "unlink", side_effect=OSError("busy")):
+        first = bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), target)
+        before = first.read_bytes()
+        with mock.patch("openemux.core.atomic_write._copy_stream", side_effect=OSError("full")):
             with self.assertRaises(OSError):
-                bezels.import_custom("PS", self.tmp / "missing.png", target)
+                bezels.import_custom("PS", self.write("c.png", png_bytes(1280, 720)), target)
+        self.assertEqual(first.read_bytes(), before)
+        self.assertEqual([p.name for p in target.iterdir()], ["PS.png"])
+
+    def test_the_stored_image_is_readable_by_others(self):
+        # mkstemp opens owner-only; atomic_write gives a new file 0o644.
+        stored = bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), self.tmp)
+        self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
 
 
 class ResolvingTheImageTests(_TmpCase):

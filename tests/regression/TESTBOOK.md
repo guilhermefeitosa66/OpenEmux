@@ -2258,7 +2258,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   button. SFC shows the toast "That file is not a PNG image" and goes back to "None". FC goes back
   to what it was. The PS game is framed by the picked image. Deleting
   `~/.openemux/bezels/PS.png` and launching again starts the game with no bezel and a warning in the
-  log, never a failed launch.
+  log, never a failed launch. A PNG larger than 3840×2160 is refused with the toast "That image
+  could not be read".
 - **Check:** `ls ~/.openemux/bezels/PS.png`; suite files `tests/test_preferences.py`
   (`BezelRowsTests`), `tests/test_bezels.py`, `tests/test_config_accessors.py`.
 - **Restore:** set PS back to "None" and delete `~/.openemux/bezels/PS.png`.

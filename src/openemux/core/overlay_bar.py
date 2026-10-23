@@ -130,7 +130,8 @@ def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active
     try:
         image = folder / BEZEL_IMAGE_NAME
         data = Path(bezel_png).read_bytes()
-        if not (image.is_file() and image.read_bytes() == data):
+        if not (image.is_file() and image.stat().st_size == len(data)
+                and image.read_bytes() == data):
             image.write_bytes(data)
         lines = source.read_text(encoding="utf-8").splitlines()
         names, out = {}, []

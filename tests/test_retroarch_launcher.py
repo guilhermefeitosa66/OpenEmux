@@ -645,6 +645,16 @@ class RetroArchLauncherTests(unittest.TestCase):
             self.assertIsNone(launcher._bezel_overlay("GBA", base, base))
             self.assertIsNone(launcher._bezel_overlay("MD", base, base))
 
+    def test_no_bezel_when_the_bar_fell_back_to_the_package_folder(self):
+        # stage_assets returns OVERLAY_DIR when it cannot copy: never write there.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            _cfg, launcher = self._bezel_launcher(base, {"MD": "simple"})
+            with patch.object(overlay_bar, "write_bezel_overlay") as write:
+                self.assertIsNone(
+                    launcher._bezel_overlay("MD", overlay_bar.OVERLAY_DIR, base / "pair"))
+            write.assert_not_called()
+
     def test_the_bezel_only_shrinks_where_the_margin_pass_runs(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

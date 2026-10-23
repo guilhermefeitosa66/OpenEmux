@@ -415,6 +415,10 @@ class RetroArchLauncher:
         get_settings = getattr(self.config_manager, "get_bezel_settings", None)
         if get_settings is None:
             return None
+        if Path(overlay_dir) == overlay_bar.OVERLAY_DIR:
+            # stage_assets could not copy the bar and fell back to the
+            # package's own folder: the bezel's files are never written there.
+            return None
         settings = get_settings()
         image = bezels.resolve_image(console, settings)
         if image is None:

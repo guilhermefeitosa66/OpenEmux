@@ -18,11 +18,10 @@ and moving the original does not break it.
 
 import logging
 import os
-import shutil
 import struct
-import tempfile
 from pathlib import Path
 
+from openemux.core.atomic_write import atomic_write_stream
 from openemux.core.systems import resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -44,7 +43,11 @@ BUILTIN = {SIMPLE: DATA_DIR / "bezels" / "simple.png"}
 
 #: Limits on a custom image: a picture smaller than this is not worth
 #: stretching over a screen, and a bigger file only slows the first frame.
+#: ``MAX_SIZE`` bounds what RetroArch decodes: a few compressed megabytes can
+#: describe a picture of gigabytes once unpacked, and the image is decoded
+#: once per page of the bar.
 MIN_SIZE = (320, 180)
+MAX_SIZE = (3840, 2160)
 MAX_BYTES = 16 * 1024 * 1024
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -62,7 +65,8 @@ def normalize_mode(value):
 def validate_png(path):
     """``None`` when ``path`` is a usable bezel, otherwise an error key.
 
-    ``"unreadable"``, ``"not_png"`` or ``"too_small"``. Only the signature
+    ``"unreadable"`` (also a file or a picture over the caps), ``"not_png"``
+    or ``"too_small"``. Only the signature
     and the IHDR header are read, with ``struct``: the core does not load
     GTK, and the image itself is RetroArch's to decode.
     """
@@ -78,6 +82,8 @@ def validate_png(path):
     width, height = struct.unpack(">II", head[16:24])
     if width < MIN_SIZE[0] or height < MIN_SIZE[1]:
         return "too_small"
+    if width > MAX_SIZE[0] or height > MAX_SIZE[1]:
+        return "unreadable"
     return None
 
 
@@ -89,23 +95,13 @@ def custom_path(console, target_dir):
 def import_custom(console, source_path, target_dir):
     """Copy ``source_path`` in as the console's custom bezel; return its path.
 
-    Written beside its final name and moved over it, so a copy that fails
+    Written atomically (``atomic_write_stream``), so a copy that fails
     halfway leaves the previous image, not half of a new one. Raises
     ``OSError`` when it cannot be done.
     """
     target = custom_path(console, target_dir)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "wb") as out, open(source_path, "rb") as src:
-            shutil.copyfileobj(src, out)
-        os.replace(temp, target)
-    except OSError:
-        try:
-            os.unlink(temp)
-        except OSError:
-            pass
-        raise
+    with open(source_path, "rb") as src:
+        atomic_write_stream(target, src)
     return target
 
 
