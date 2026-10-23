@@ -110,6 +110,7 @@
   "android.gamepad": "<h3>También con mando</h3>\n          <p>Conecta un mando y el control en pantalla se aparta: el juego ocupa toda la pantalla y los menús siguen la cruceta y los botones.</p>",
   "android.themes": "<h3>Claro y oscuro</h3>\n          <p>Sigue el tema del teléfono, o elige uno en Ajustes.</p>",
   "android.languages": "<h3>Ocho idiomas</h3>\n          <p>Los mismos idiomas que la app de escritorio, siguiendo el teléfono o elegidos en Ajustes.</p>",
+  "android.achievements": "<h3>RetroAchievements</h3>\n          <p>Inicia sesión una vez en Ajustes y cada juego desbloquea logros en tu perfil de RetroAchievements, con modo hardcore cuando quieras.</p>",
   "android.download": "⬇ Descargar el APK</a></p>",
   "android.source": "<p class=\"cta-note\">Android 8 o posterior, 64 bits (arm64). La app de Android es un fork de RetroArch, por eso tiene licencia GPLv3; su código está en <a href=\"https://github.com/guilhermefeitosa66/open-emux-mobile\">open-emux-mobile</a>.</p>",
   "install.android_lede": "<p class=\"lede\">El APK todavía no está en Play Store: descárgalo de Releases y permite que el navegador o el gestor de archivos instale apps cuando Android lo pida. Android 8 o posterior, 64 bits.</p>",
