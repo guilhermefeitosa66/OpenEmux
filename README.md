@@ -50,7 +50,7 @@
 
 - **The desktop app is inspired by [OpenEmu](https://openemu.org/)**, the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. OpenEmu is macOS-only, so OpenEmux brings a similar experience to Linux and Windows.
 - **It is not a fork and uses no OpenEmu code.** OpenEmux is a separate codebase in Python, GTK 4 and libadwaita, with [RetroArch](https://www.retroarch.com/)/[libretro](https://www.libretro.com/) as the emulation backend.
-- **The Android app is an independent design**: there is no OpenEmu for phones, so nothing in it comes from OpenEmu.
+- **The Android app is an independent design**: there is no OpenEmu for phones, so apart from the console icons nothing in it comes from OpenEmu.
 - **The console icons are OpenEmu's artwork**, redistributed under OpenEmu's BSD license. OpenEmux is not affiliated with or endorsed by the OpenEmu Team.
 
 **Artwork credits:** console icons © OpenEmu Team, see [ATTRIBUTION.md](src/openemux/ui/assets/icons/ATTRIBUTION.md).

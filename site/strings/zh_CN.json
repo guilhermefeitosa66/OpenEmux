@@ -97,7 +97,7 @@
   "hero.download_android": "⬇ 下载\n          Android 版</a>",
   "android.eyebrow": "<span class=\"eyebrow\">Android</span>",
   "android.title": "<h2>把你的货架装进口袋</h2>",
-  "android.lede": "<p class=\"lede\">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。 Android 应用是独立设计的：OpenEmu 没有移动版，所以其中没有任何内容来自 OpenEmu。</p>",
+  "android.lede": "<p class=\"lede\">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。Android 应用是独立设计的：OpenEmu 没有移动版，所以其中只有主机图标来自 OpenEmu。</p>",
   "android.shot_shelf": "alt=\"Android 版 OpenEmux 的货架\" />\n          <figcaption>货架</figcaption>\n        </figure>",
   "android.shot_roms": "alt=\"Android 版 OpenEmux 中某个主机的卡带\" />\n          <figcaption>某个主机的游戏</figcaption>\n        </figure>",
   "android.shot_game": "alt=\"Android 版 OpenEmux 中带屏幕手柄的 Game Boy Advance 游戏\" />\n          <figcaption>竖屏游玩</figcaption>\n        </figure>",

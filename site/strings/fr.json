@@ -97,7 +97,7 @@
   "hero.download_android": "⬇ Télécharger pour\n          Android</a>",
   "android.eyebrow": "<span class=\"eyebrow\">Android</span>",
   "android.title": "<h2>Votre étagère, dans la poche</h2>",
-  "android.lede": "<p class=\"lede\">OpenEmux pour Android met la même bibliothèque sur le téléphone : vos jeux, comme des cartouches sur une étagère par console, joués avec des commandes à l’écran dessinées pour chaque système ou avec une manette. L’application Android a sa propre conception : OpenEmu n’a pas de version mobile, donc rien en elle ne vient d’OpenEmu.</p>",
+  "android.lede": "<p class=\"lede\">OpenEmux pour Android met la même bibliothèque sur le téléphone : vos jeux, comme des cartouches sur une étagère par console, joués avec des commandes à l’écran dessinées pour chaque système ou avec une manette. L’application Android a sa propre conception : OpenEmu n’a pas de version mobile, donc seules les icônes des consoles viennent d’OpenEmu.</p>",
   "android.shot_shelf": "alt=\"OpenEmux sur Android, l’étagère\" />\n          <figcaption>L’étagère</figcaption>\n        </figure>",
   "android.shot_roms": "alt=\"OpenEmux sur Android, les cartouches d’une console\" />\n          <figcaption>Les jeux d’une console</figcaption>\n        </figure>",
   "android.shot_game": "alt=\"OpenEmux sur Android, un jeu Game Boy Advance avec ses commandes\" />\n          <figcaption>En jeu, en portrait</figcaption>\n        </figure>",

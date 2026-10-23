@@ -1871,9 +1871,9 @@ class TheDialogsAndMenusTests(WindowCase):
             ],
         )
         legal.assert_called_once()
-        name, copyright, license_type, _license = legal.call_args.args
+        name, notice, license_type, _license = legal.call_args.args
         self.assertEqual(name, self.win.t("about.legal.console_icons"))
-        self.assertIn("OpenEmu Team", copyright)
+        self.assertIn("OpenEmu Team", notice)
         self.assertEqual(license_type, Gtk.License.BSD_3)
 
     def test_the_shortcuts_window_lists_every_group(self):

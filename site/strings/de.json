@@ -97,7 +97,7 @@
   "hero.download_android": "⬇ Herunterladen für\n          Android</a>",
   "android.eyebrow": "<span class=\"eyebrow\">Android</span>",
   "android.title": "<h2>Dein Regal für die Hosentasche</h2>",
-  "android.lede": "<p class=\"lede\">OpenEmux für Android bringt dieselbe Bibliothek aufs Handy: deine Spiele als Module in einem Regal pro Konsole, gespielt mit Bildschirm-Controllern für jedes System oder mit einem Gamepad. Die Android-App hat ein eigenes Design: OpenEmu hat keine mobile Version, also stammt nichts darin von OpenEmu.</p>",
+  "android.lede": "<p class=\"lede\">OpenEmux für Android bringt dieselbe Bibliothek aufs Handy: deine Spiele als Module in einem Regal pro Konsole, gespielt mit Bildschirm-Controllern für jedes System oder mit einem Gamepad. Die Android-App hat ein eigenes Design: OpenEmu hat keine mobile Version, also stammen nur die Konsolen-Icons von OpenEmu.</p>",
   "android.shot_shelf": "alt=\"OpenEmux auf Android, das Regal\" />\n          <figcaption>Das Regal</figcaption>\n        </figure>",
   "android.shot_roms": "alt=\"OpenEmux auf Android, die Module einer Konsole\" />\n          <figcaption>Die Spiele einer Konsole</figcaption>\n        </figure>",
   "android.shot_game": "alt=\"OpenEmux auf Android, ein Game-Boy-Advance-Spiel mit Steuerung\" />\n          <figcaption>Spielen im Hochformat</figcaption>\n        </figure>",
