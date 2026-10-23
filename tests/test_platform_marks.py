@@ -46,7 +46,7 @@ class MarksAreCentralisedTests(unittest.TestCase):
 class ReasonsAreStatedTests(unittest.TestCase):
     def test_a_posix_skip_names_the_posix_behaviour(self):
         decorator = posix_only("0o600 on the token file")
-        case = decorator(unittest.TestCase)
+        case = decorator(type("Case", (unittest.TestCase,), {}))
         if IS_WINDOWS:
             self.assertIn("POSIX-only: 0o600 on the token file",
                           case.__unittest_skip_why__)
@@ -55,7 +55,7 @@ class ReasonsAreStatedTests(unittest.TestCase):
 
     def test_a_linux_skip_names_the_linux_behaviour(self):
         decorator = linux_only("struct input_event is the kernel ABI")
-        case = decorator(unittest.TestCase)
+        case = decorator(type("Case", (unittest.TestCase,), {}))
         if IS_LINUX:
             self.assertFalse(getattr(case, "__unittest_skip__", False))
         else:
@@ -64,7 +64,9 @@ class ReasonsAreStatedTests(unittest.TestCase):
 
     def test_a_windows_skip_names_the_windows_behaviour(self):
         decorator = windows_only("IPropertyStore on a real window")
-        case = decorator(unittest.TestCase)
+        # A throwaway subclass, here and above: where a mark does skip,
+        # applying it to unittest.TestCase itself skips every test run after.
+        case = decorator(type("Case", (unittest.TestCase,), {}))
         if IS_WINDOWS:
             self.assertFalse(getattr(case, "__unittest_skip__", False))
         else:
