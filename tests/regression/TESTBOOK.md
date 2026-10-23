@@ -2128,6 +2128,29 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_preferences.py`.
 - **Restore:** turn "Semi-transparent control bar" off.
 
+### RT-340 — Games start in the launch mode chosen in Settings
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM; "Settings" → "Video" → "Game Window" → "Start games in
+  fullscreen" off (the default).
+- **Steps:**
+  1. Open "Settings" → "Video": the "Game Window" group sits above "In-Game Bar". Launch a game, then
+     quit it.
+  2. Turn "Start games in fullscreen" on, close "Settings" and launch a game.
+  3. In that game, hide the bar with its down-chevron and show it again with the faded button; press
+     the fullscreen hotkey (`F` by default) twice.
+  4. Turn the switch off while the game is still running, quit the game and launch it again.
+- **Expected:** With the switch off the game opens in a decorated window. With it on, the game window
+  covers the whole screen with no decorations (windowed fullscreen, issue #505); the bar still hides,
+  shows and responds to clicks; the hotkey drops the game to a window and back. Changing the switch
+  does not affect the running game, only the next launch, which opens windowed again. Nothing is
+  written back to the user's `retroarch.cfg`.
+- **Check:** human only; `grep -E "^video_(windowed_)?fullscreen" "$(ls -t
+  ~/.openemux/runtime/runtime_*.cfg | head -1)"` shows `video_fullscreen = "true"` with the switch on
+  and `"false"` with it off, and `video_windowed_fullscreen = "true"` in both. Suite files
+  `tests/test_retroarch_launcher.py`, `tests/test_preferences.py`, `tests/test_config_accessors.py`.
+- **Restore:** turn "Start games in fullscreen" off.
+
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL

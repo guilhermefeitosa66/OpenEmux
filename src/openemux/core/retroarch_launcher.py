@@ -387,6 +387,11 @@ class RetroArchLauncher:
         get_ui = getattr(self.config_manager, "get_ui_settings", None)
         return bool(get_ui and get_ui().get("translucent_game_bar", False))
 
+    def _start_fullscreen(self):
+        """Whether games open filling the screen rather than windowed (#505)."""
+        get_ui = getattr(self.config_manager, "get_ui_settings", None)
+        return bool(get_ui and get_ui().get("start_games_fullscreen", False))
+
     def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
@@ -420,6 +425,12 @@ class RetroArchLauncher:
             overrides["video_driver"] = f'"{video_driver}"'
         overrides.update(self._savestate_overrides(states_dir, state_slot))
         overrides.update(self._window_overrides())
+        # The launch mode is the app's setting, written both ways so a
+        # video_fullscreen in the user's retroarch.cfg does not decide it
+        # (issue #505). It is windowed fullscreen -- the bar below keeps
+        # video_windowed_fullscreen on, since exclusive fullscreen loses its
+        # clicks -- and the fullscreen hotkey still toggles it in-game.
+        overrides["video_fullscreen"] = '"true"' if self._start_fullscreen() else '"false"'
         # The game's controls are drawn by RetroArch itself (issue #469).
         overrides.update(overlay_bar.runtime_overrides(overlay_dir, self._translucent_bar()))
         if shader_dir:
