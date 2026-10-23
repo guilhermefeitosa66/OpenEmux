@@ -1352,6 +1352,14 @@ class TheSystemPageTests(_PreferencesCase):
         prefs = prefs_module.OpenEmuxPreferences(self.win)
         self.assertTrue(prefs._translucent_bar_row.get_active())
 
+    def test_the_start_fullscreen_switch_is_stored(self):
+        # Issue #505: windowed by default, read again at the next launch.
+        self.assertFalse(self.prefs._start_fullscreen_row.get_active())
+        self.prefs._start_fullscreen_row.set_active(True)
+        self.assertTrue(self.config.get_ui_settings()["start_games_fullscreen"])
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertTrue(prefs._start_fullscreen_row.get_active())
+
     def test_the_log_panel_switch_is_applied_by_the_window(self):
         # The window owns the setting, the panel and the bar button, and keeps
         # all three in step (issue #461).

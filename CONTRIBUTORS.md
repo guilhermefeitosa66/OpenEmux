@@ -81,6 +81,14 @@ The same work brought the native **Arch Linux package**, the packaged icons fina
 the folder they sit in claims, and **தமிழ் (Tamil)**, the project's first locale contributed by
 someone other than the maintainer.
 
+### felipeonline (Reddit)
+
+Asked, in the Reddit feedback thread on **v1.16.0** while playing on the
+Windows build, for a way to start games in fullscreen instead of toggling it on
+every launch. That request became
+[#505](https://github.com/guilhermefeitosa66/OpenEmux/issues/505): a "Start
+games in fullscreen" switch in Settings → Video that every launch now follows.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

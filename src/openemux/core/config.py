@@ -375,6 +375,8 @@ DEFAULT_CONFIG = {
         # The in-game bar drawn over the game, see-through, instead of in a
         # strip of its own below it (issue #477).
         "translucent_game_bar": False,
+        # Games open filling the screen instead of in a window (issue #505).
+        "start_games_fullscreen": False,
     },
     "updates": {
         "check_on_startup": True,
@@ -804,6 +806,7 @@ class ConfigManager:
             "show_welcome_on_startup": bool(ui.get("show_welcome_on_startup", True)),
             "theme": normalize_theme(ui.get("theme", DEFAULT_THEME)),
             "translucent_game_bar": bool(ui.get("translucent_game_bar", False)),
+            "start_games_fullscreen": bool(ui.get("start_games_fullscreen", False)),
         }
 
     def set_theme(self, theme):
@@ -912,6 +915,12 @@ class ConfigManager:
         """See-through in-game bar over the game; read at the next launch."""
         ui = self.config.setdefault("ui", {})
         ui["translucent_game_bar"] = bool(enabled)
+        self.save_config()
+
+    def set_start_games_fullscreen(self, enabled):
+        """Games open fullscreen rather than windowed; read at the next launch."""
+        ui = self.config.setdefault("ui", {})
+        ui["start_games_fullscreen"] = bool(enabled)
         self.save_config()
 
     def set_show_log_panel(self, enabled):

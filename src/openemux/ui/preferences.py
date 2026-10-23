@@ -1439,6 +1439,20 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         appearance.add(restore_row)
         page.add(appearance)
 
+        # Windowed or fullscreen, for every game (issue #505). Read at each
+        # launch, like the bar below.
+        launch_mode = Adw.PreferencesGroup(title=self.t("prefs.group.launch_mode"))
+        self._start_fullscreen_row = Adw.SwitchRow(
+            title=self.t("settings.launch_mode.fullscreen.title"),
+            subtitle=self.t("settings.launch_mode.fullscreen.subtitle"),
+        )
+        self._start_fullscreen_row.set_active(
+            self.config.get_ui_settings()["start_games_fullscreen"]
+        )
+        self._start_fullscreen_row.connect("notify::active", self._on_start_fullscreen_changed)
+        launch_mode.add(self._start_fullscreen_row)
+        page.add(launch_mode)
+
         # The in-game bar RetroArch draws (issue #469). Read at each launch, so
         # a change reaches the next game, not the one already running.
         game_bar = Adw.PreferencesGroup(title=self.t("prefs.group.game_bar"))
@@ -2014,6 +2028,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_translucent_bar_changed(self, row, *_a):
         self.config.set_translucent_game_bar(row.get_active())
+
+    def _on_start_fullscreen_changed(self, row, *_a):
+        self.config.set_start_games_fullscreen(row.get_active())
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())
