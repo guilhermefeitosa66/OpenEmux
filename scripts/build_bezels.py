@@ -5,7 +5,11 @@ A bezel decorates the black bars beside a 4:3 game on a wide window. It is
 drawn by RetroArch as one more image of the in-game bar's overlay (see
 ``core/bezels.py`` and ``overlay_bar.write_bezel_overlay``), so it is a 16:9
 picture with a fully transparent 4:3 hole in the middle, where the game shows
-through: 1920x1080, hole 1440x1080.
+through: 640x360, hole 480x360.
+
+Small on purpose: RetroArch decodes the image once for every page of the
+bar (64 of them) and keeps each copy, so a 1920x1080 frame would hold about
+half a gigabyte. A soft gradient scales up to any screen without showing it.
 
 The art is OpenEmux's own, drawn here from an SVG: a dark radial gradient, a
 thin rim around the hole and a soft shadow falling into the frame. No
@@ -26,13 +30,14 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf  # noqa: E402
 
 OUT = Path(__file__).resolve().parent.parent / "src" / "openemux" / "data" / "bezels"
-W, H = 1920, 1080
+W, H = 640, 360
+#: Must fit in ``bezels.MAX_DECODED``.
 #: The 4:3 hole the game shows through. Must agree with the geometry in
 #: ``core/bezels.py``: the bezel is the 16:9 box around the 4:3 one.
 HOLE_W = H * 4 // 3
 HOLE_X = (W - HOLE_W) // 2
-RIM = 6
-SHADOW = 28
+RIM = 2
+SHADOW = 10
 
 
 def simple_svg():

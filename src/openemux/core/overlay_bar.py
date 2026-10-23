@@ -147,6 +147,11 @@ def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active
                 out.append(f"overlay{page}_descs = {int(descs) + 1}")
                 out.append(f'overlay{page}_desc0 = "nul,{cx:.5f},{cy:.5f},rect,{hw:.5f},{hh:.5f}"')
                 out.append(f"overlay{page}_desc0_overlay = {BEZEL_IMAGE_NAME}")
+                # No reach: a descriptor spanning the window would count every
+                # pointer as on the overlay, and RetroArch would keep mouse
+                # and lightgun input from the game.
+                out.append(f"overlay{page}_desc0_reach_x = 0")
+                out.append(f"overlay{page}_desc0_reach_y = 0")
                 continue
             desc = _DESC_KEY.match(raw)
             if desc:

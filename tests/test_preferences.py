@@ -1513,7 +1513,7 @@ class BezelRowsTests(_PreferencesCase):
         self.dialogs.append(dialog)
         return dialog
 
-    def png(self, name="Frame.png", width=1920, height=1080):
+    def png(self, name="Frame.png", width=960, height=540):
         import struct
         path = self.tmp / name
         ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)

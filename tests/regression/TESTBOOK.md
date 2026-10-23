@@ -2240,7 +2240,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   a bezel (RT-328). Resized to 4:3, the window shows no frame at all.
 - **Check:** human only; the launch log has `bezel: console=MD mode=simple image=simple.png
   margin=True`, and `~/.openemux/runtime/overlay/openemux-bar-bezel.cfg` has
-  `overlay0_desc0_overlay = bezel.png`. Suite files `tests/test_overlay_bar.py`
+  `overlay0_desc0_overlay = bezel.png` and `overlay0_desc0_reach_x = 0` (the frame has no
+  hitbox, so the game keeps the mouse and a lightgun). Suite files `tests/test_overlay_bar.py`
   (`BezelOverlayTests`), `tests/test_retroarch_launcher.py`.
 - **Restore:** set MD back to "None".
 
@@ -2259,8 +2260,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   to what it was. The PS game is framed by the picked image. Deleting
   `~/.openemux/bezels/PS.png` and launching again starts the game with no bezel and a warning in the
   log, never a failed launch. A PNG larger than 3840×2160 is refused with the toast "That image
-  could not be read".
-- **Check:** `ls ~/.openemux/bezels/PS.png`; suite files `tests/test_preferences.py`
+  could not be read". The stored copy is scaled down to fit 960×540 (RetroArch holds it once per
+  page of the bar), keeping its shape; the picked original is left untouched.
+- **Check:** `ls ~/.openemux/bezels/PS.png`; `file ~/.openemux/bezels/PS.png` reports
+  `960 x 540`; suite files `tests/test_preferences.py`
   (`BezelRowsTests`), `tests/test_bezels.py`, `tests/test_config_accessors.py`.
 - **Restore:** set PS back to "None" and delete `~/.openemux/bezels/PS.png`.
 

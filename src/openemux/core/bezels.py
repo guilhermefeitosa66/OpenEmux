@@ -14,6 +14,12 @@ The choice is per console and is one of :data:`BEZEL_MODES`: nothing, the
 built-in "Simple" frame (``scripts/build_bezels.py``), or an image the user
 picked, copied into OpenEmux's own folder so a Flatpak RetroArch can read it
 and moving the original does not break it.
+
+Every image is kept within :data:`MAX_DECODED`. RetroArch decodes an overlay
+image once per descriptor that names it, and keeps every copy (no release up
+to 1.22 shares them), so the bezel is held once for each of the bar's 64
+pages: a 1920x1080 picture would cost about half a gigabyte. A custom image
+over the cap is scaled down as it is imported.
 """
 
 import logging
@@ -21,7 +27,12 @@ import os
 import struct
 from pathlib import Path
 
-from openemux.core.atomic_write import atomic_write_stream
+import gi
+
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GLib, GdkPixbuf  # noqa: E402
+
+from openemux.core.atomic_write import atomic_write_bytes, atomic_write_stream
 from openemux.core.systems import resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -41,14 +52,18 @@ BEZEL_CONSOLES = frozenset({
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 BUILTIN = {SIMPLE: DATA_DIR / "bezels" / "simple.png"}
 
-#: Limits on a custom image: a picture smaller than this is not worth
-#: stretching over a screen, and a bigger file only slows the first frame.
-#: ``MAX_SIZE`` bounds what RetroArch decodes: a few compressed megabytes can
-#: describe a picture of gigabytes once unpacked, and the image is decoded
-#: once per page of the bar.
+#: Limits on a picked image: a picture smaller than this is not worth
+#: stretching over a screen, and a bigger file only slows the import.
+#: ``MAX_SIZE`` bounds what the import decodes: a few compressed megabytes
+#: can describe a picture of gigabytes once unpacked.
 MIN_SIZE = (320, 180)
 MAX_SIZE = (3840, 2160)
 MAX_BYTES = 16 * 1024 * 1024
+
+#: The biggest picture handed to RetroArch, which holds it once per page of
+#: the bar: 960x540 is about 2 MB decoded, 130 MB over the 64 pages. Half of
+#: a 1080p screen, so a bezel pack's usual 1920x1080 art halves cleanly.
+MAX_DECODED = (960, 540)
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -77,14 +92,29 @@ def validate_png(path):
             head = handle.read(24)
     except OSError:
         return "unreadable"
-    if len(head) < 24 or head[:8] != _PNG_SIGNATURE or head[12:16] != b"IHDR":
+    size = _png_size(head)
+    if size is None:
         return "not_png"
-    width, height = struct.unpack(">II", head[16:24])
+    width, height = size
     if width < MIN_SIZE[0] or height < MIN_SIZE[1]:
         return "too_small"
     if width > MAX_SIZE[0] or height > MAX_SIZE[1]:
         return "unreadable"
     return None
+
+
+def _png_size(head):
+    """``(width, height)`` from a PNG's first 24 bytes, or ``None``."""
+    if len(head) < 24 or head[:8] != _PNG_SIGNATURE or head[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", head[16:24])
+
+
+def _fits(path):
+    """Whether the PNG at ``path`` is within :data:`MAX_DECODED`."""
+    with open(path, "rb") as handle:
+        size = _png_size(handle.read(24))
+    return size is not None and size[0] <= MAX_DECODED[0] and size[1] <= MAX_DECODED[1]
 
 
 def custom_path(console, target_dir):
@@ -95,13 +125,23 @@ def custom_path(console, target_dir):
 def import_custom(console, source_path, target_dir):
     """Copy ``source_path`` in as the console's custom bezel; return its path.
 
-    Written atomically (``atomic_write_stream``), so a copy that fails
-    halfway leaves the previous image, not half of a new one. Raises
-    ``OSError`` when it cannot be done.
+    A picture over :data:`MAX_DECODED` is scaled down to fit, keeping its
+    shape; one within it is copied as it is. Written atomically, so a copy
+    that fails halfway leaves the previous image, not half of a new one.
+    Raises ``OSError`` when it cannot be done, a picture GdkPixbuf cannot
+    decode included.
     """
     target = custom_path(console, target_dir)
-    with open(source_path, "rb") as src:
-        atomic_write_stream(target, src)
+    if _fits(source_path):
+        with open(source_path, "rb") as src:
+            atomic_write_stream(target, src)
+        return target
+    try:
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(str(source_path), *MAX_DECODED)
+        _ok, data = pixbuf.save_to_bufferv("png", [], [])
+    except GLib.Error as exc:
+        raise OSError(f"cannot scale {source_path}: {exc.message}") from exc
+    atomic_write_bytes(target, data)
     return target
 
 
@@ -121,13 +161,21 @@ def resolve_image(console, settings):
     if mode == SIMPLE:
         return BUILTIN[SIMPLE]
     image = custom_path(console, settings["custom_dir"])
-    if image.is_file():
-        _warned_missing.discard(image)
-        return image
+    try:
+        fits = _fits(image)
+    except OSError:
+        problem = "is missing"
+    else:
+        if fits:
+            _warned_missing.discard(image)
+            return image
+        # Only the import writes there, and it scales: a file put there by
+        # hand would cost RetroArch its size 64 times over.
+        problem = "is not a PNG within %dx%d" % MAX_DECODED
     if image not in _warned_missing:
         _warned_missing.add(image)
-        logger.warning("bezel: custom image for %s is missing (%s); launching without one",
-                       console, image)
+        logger.warning("bezel: custom image for %s %s (%s); launching without one",
+                       console, problem, image)
     return None
 
 

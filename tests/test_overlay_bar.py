@@ -361,6 +361,9 @@ class BezelOverlayTests(unittest.TestCase):
             self.assertEqual(int(bezel[f"overlay{page}_descs"]), descs + 1)
             self.assertEqual(bezel[f"overlay{page}_desc0_overlay"], "bezel.png")
             self.assertTrue(bezel[f"overlay{page}_desc0"].startswith("nul,"))
+            # No hitbox: the game keeps the mouse and the lightgun under it.
+            self.assertEqual(bezel[f"overlay{page}_desc0_reach_x"], "0")
+            self.assertEqual(bezel[f"overlay{page}_desc0_reach_y"], "0")
             for index in range(descs):
                 for suffix in ("", "_overlay", "_next_target"):
                     old = plain.get(f"overlay{page}_desc{index}{suffix}")

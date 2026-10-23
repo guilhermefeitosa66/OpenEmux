@@ -417,7 +417,7 @@ class TheStartFullscreenSettingTests(_ConfigCase):
 class TheBezelSettingsTests(_ConfigCase):
     """One bezel per 4:3 console, none by default (issue #507)."""
 
-    def png(self, name="My Frame.png", width=1920, height=1080):
+    def png(self, name="My Frame.png", width=960, height=540):
         import struct
         path = self.tmp / name
         ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)

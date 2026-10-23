@@ -17,6 +17,23 @@ from openemux.core import bezels, overlay_bar
 from openemux.core.systems import SYSTEM_IDS
 
 
+def real_png(path, width, height):
+    """A decodable PNG, for the import that scales it."""
+    import gi
+
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+
+    pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height)
+    pixbuf.fill(0x204060FF)
+    pixbuf.savev(str(path), "png", [], [])
+    return path
+
+
+def png_size(path):
+    return struct.unpack(">II", Path(path).read_bytes()[16:24])
+
+
 def png_bytes(width, height):
     """A minimal valid PNG header, enough for ``validate_png``."""
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
@@ -56,8 +73,13 @@ class TheBuiltInBezelTests(unittest.TestCase):
         path = bezels.BUILTIN[bezels.SIMPLE]
         self.assertTrue(path.is_file(), path)
         self.assertIsNone(bezels.validate_png(path))
-        width, height = struct.unpack(">II", path.read_bytes()[16:24])
-        self.assertEqual((width, height), (1920, 1080))
+        self.assertEqual(png_size(path), (640, 360))
+
+    def test_it_fits_what_retroarch_is_handed(self):
+        # Decoded once per page of the bar: the cap is what keeps that small.
+        width, height = png_size(bezels.BUILTIN[bezels.SIMPLE])
+        self.assertLessEqual(width, bezels.MAX_DECODED[0])
+        self.assertLessEqual(height, bezels.MAX_DECODED[1])
 
     def test_its_centre_is_see_through_and_its_corner_is_not(self):
         try:
@@ -73,7 +95,7 @@ class TheBuiltInBezelTests(unittest.TestCase):
         def alpha(x, y):
             return pixels[y * stride + x * 4 + 3]
 
-        self.assertEqual(alpha(960, 540), 0)
+        self.assertEqual(alpha(320, 180), 0)
         self.assertEqual(alpha(0, 0), 255)
 
 
@@ -118,18 +140,18 @@ class ValidatingAnImageTests(_TmpCase):
 
 class ImportingACustomImageTests(_TmpCase):
     def test_the_image_is_copied_under_the_console_name(self):
-        source = self.write("My Frame.png", png_bytes(1920, 1080))
+        source = self.write("My Frame.png", png_bytes(960, 540))
         stored = bezels.import_custom("PS", source, self.tmp / "bezels")
         self.assertEqual(stored, self.tmp / "bezels" / "PS.png")
         self.assertEqual(stored.read_bytes(), source.read_bytes())
 
     def test_an_alias_is_stored_under_the_canonical_id(self):
-        source = self.write("a.png", png_bytes(1920, 1080))
+        source = self.write("a.png", png_bytes(960, 540))
         self.assertEqual(bezels.import_custom("SNES", source, self.tmp).name, "SFC.png")
 
     def test_a_new_image_replaces_the_old_one(self):
-        bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), self.tmp / "b")
-        second = self.write("c.png", png_bytes(1280, 720))
+        bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), self.tmp / "b")
+        second = self.write("c.png", png_bytes(640, 360))
         stored = bezels.import_custom("PS", second, self.tmp / "b")
         self.assertEqual(stored.read_bytes(), second.read_bytes())
 
@@ -141,18 +163,37 @@ class ImportingACustomImageTests(_TmpCase):
 
     def test_a_copy_that_fails_halfway_keeps_the_previous_image(self):
         target = self.tmp / "bezels"
-        first = bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), target)
+        first = bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), target)
         before = first.read_bytes()
         with mock.patch("openemux.core.atomic_write._copy_stream", side_effect=OSError("full")):
             with self.assertRaises(OSError):
-                bezels.import_custom("PS", self.write("c.png", png_bytes(1280, 720)), target)
+                bezels.import_custom("PS", self.write("c.png", png_bytes(640, 360)), target)
         self.assertEqual(first.read_bytes(), before)
         self.assertEqual([p.name for p in target.iterdir()], ["PS.png"])
 
     def test_the_stored_image_is_readable_by_others(self):
         # mkstemp opens owner-only; atomic_write gives a new file 0o644.
-        stored = bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), self.tmp)
+        stored = bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), self.tmp)
         self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
+
+    def test_a_picture_over_the_cap_is_scaled_down_keeping_its_shape(self):
+        source = real_png(self.tmp / "pack.png", 1920, 1080)
+        stored = bezels.import_custom("PS", source, self.tmp / "bezels")
+        self.assertEqual(png_size(stored), bezels.MAX_DECODED)
+        self.assertEqual(png_size(source), (1920, 1080))  # the original is left alone
+        wide = bezels.import_custom("MD", real_png(self.tmp / "w.png", 3840, 1080),
+                                    self.tmp / "bezels")
+        self.assertEqual(png_size(wide), (960, 270))
+
+    def test_a_scaled_import_is_readable_by_others_too(self):
+        stored = bezels.import_custom("PS", real_png(self.tmp / "p.png", 1920, 1080), self.tmp)
+        self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
+
+    def test_a_picture_over_the_cap_that_cannot_be_decoded_raises(self):
+        target = self.tmp / "bezels"
+        with self.assertRaises(OSError):
+            bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), target)
+        self.assertFalse((target / "PS.png").exists())
 
 
 class ResolvingTheImageTests(_TmpCase):
@@ -170,7 +211,7 @@ class ResolvingTheImageTests(_TmpCase):
                          bezels.BUILTIN[bezels.SIMPLE])
 
     def test_custom_is_the_imported_image(self):
-        stored = self.write("PS.png", png_bytes(1920, 1080))
+        stored = self.write("PS.png", png_bytes(960, 540))
         self.assertEqual(bezels.resolve_image("PS", self.settings(PS="custom")), stored)
 
     def test_a_missing_custom_image_warns_once_and_gives_none(self):
@@ -181,9 +222,24 @@ class ResolvingTheImageTests(_TmpCase):
             self.assertIsNone(bezels.resolve_image("PS", settings))
         self.assertEqual(len(logs.records), 1)
         # Back again, it is used, and a later loss is reported anew.
-        self.write("PS.png", png_bytes(1920, 1080))
+        self.write("PS.png", png_bytes(960, 540))
         self.assertIsNotNone(bezels.resolve_image("PS", settings))
         self.assertNotIn(self.tmp / "PS.png", bezels._warned_missing)
+
+    def test_a_custom_image_over_the_cap_is_not_handed_to_retroarch(self):
+        # Only the import writes there, and it scales; one put there by hand
+        # would be decoded once per page of the bar.
+        bezels._warned_missing.clear()
+        self.write("PS.png", png_bytes(1920, 1080))
+        with self.assertLogs("openemux.core.bezels", level="WARNING") as logs:
+            self.assertIsNone(bezels.resolve_image("PS", self.settings(PS="custom")))
+        self.assertIn("960x540", logs.output[0])
+
+    def test_a_custom_file_that_is_not_a_png_is_not_used(self):
+        bezels._warned_missing.clear()
+        self.write("PS.png", b"not a png at all, just text")
+        with self.assertLogs("openemux.core.bezels", level="WARNING"):
+            self.assertIsNone(bezels.resolve_image("PS", self.settings(PS="custom")))
 
 
 class TheBezelsBoxTests(unittest.TestCase):
