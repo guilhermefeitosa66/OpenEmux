@@ -140,18 +140,18 @@ class ValidatingAnImageTests(_TmpCase):
 
 class ImportingACustomImageTests(_TmpCase):
     def test_the_image_is_copied_under_the_console_name(self):
-        source = self.write("My Frame.png", png_bytes(960, 540))
+        source = real_png(self.tmp / "My Frame.png", 960, 540)
         stored = bezels.import_custom("PS", source, self.tmp / "bezels")
         self.assertEqual(stored, self.tmp / "bezels" / "PS.png")
         self.assertEqual(stored.read_bytes(), source.read_bytes())
 
     def test_an_alias_is_stored_under_the_canonical_id(self):
-        source = self.write("a.png", png_bytes(960, 540))
+        source = real_png(self.tmp / "a.png", 960, 540)
         self.assertEqual(bezels.import_custom("SNES", source, self.tmp).name, "SFC.png")
 
     def test_a_new_image_replaces_the_old_one(self):
-        bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), self.tmp / "b")
-        second = self.write("c.png", png_bytes(640, 360))
+        bezels.import_custom("PS", real_png(self.tmp / "a.png", 960, 540), self.tmp / "b")
+        second = real_png(self.tmp / "c.png", 640, 360)
         stored = bezels.import_custom("PS", second, self.tmp / "b")
         self.assertEqual(stored.read_bytes(), second.read_bytes())
 
@@ -163,17 +163,17 @@ class ImportingACustomImageTests(_TmpCase):
 
     def test_a_copy_that_fails_halfway_keeps_the_previous_image(self):
         target = self.tmp / "bezels"
-        first = bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), target)
+        first = bezels.import_custom("PS", real_png(self.tmp / "a.png", 960, 540), target)
         before = first.read_bytes()
         with mock.patch("openemux.core.atomic_write._copy_stream", side_effect=OSError("full")):
             with self.assertRaises(OSError):
-                bezels.import_custom("PS", self.write("c.png", png_bytes(640, 360)), target)
+                bezels.import_custom("PS", real_png(self.tmp / "c.png", 640, 360), target)
         self.assertEqual(first.read_bytes(), before)
         self.assertEqual([p.name for p in target.iterdir()], ["PS.png"])
 
     def test_the_stored_image_is_readable_by_others(self):
         # mkstemp opens owner-only; atomic_write gives a new file 0o644.
-        stored = bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), self.tmp)
+        stored = bezels.import_custom("PS", real_png(self.tmp / "a.png", 960, 540), self.tmp)
         self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
 
     def test_a_picture_over_the_cap_is_scaled_down_keeping_its_shape(self):
@@ -188,6 +188,13 @@ class ImportingACustomImageTests(_TmpCase):
     def test_a_scaled_import_is_readable_by_others_too(self):
         stored = bezels.import_custom("PS", real_png(self.tmp / "p.png", 1920, 1080), self.tmp)
         self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
+
+    def test_a_picture_within_the_cap_that_cannot_be_decoded_raises(self):
+        # The header alone passes validate_png; the import must not store it.
+        target = self.tmp / "bezels"
+        with self.assertRaises(OSError):
+            bezels.import_custom("PS", self.write("a.png", png_bytes(960, 540)), target)
+        self.assertFalse((target / "PS.png").exists())
 
     def test_a_picture_over_the_cap_that_cannot_be_decoded_raises(self):
         target = self.tmp / "bezels"

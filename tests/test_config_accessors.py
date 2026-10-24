@@ -418,10 +418,14 @@ class TheBezelSettingsTests(_ConfigCase):
     """One bezel per 4:3 console, none by default (issue #507)."""
 
     def png(self, name="My Frame.png", width=960, height=540):
-        import struct
+        # Decodable: the import decodes it, not only its header.
+        import gi
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
         path = self.tmp / name
-        ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-        path.write_bytes(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + b"\0" * 4)
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height)
+        pixbuf.fill(0x204060FF)
+        pixbuf.savev(str(path), "png", [], [])
         return path
 
     def test_every_console_starts_with_none(self):
@@ -449,6 +453,16 @@ class TheBezelSettingsTests(_ConfigCase):
         self.assertIsNone(self.config.get_custom_bezel_name("MD"))
         self.config.set_bezel_for_console("MD", "simple")
         self.assertEqual(self.config.get_bezel_for_console("MD"), "simple")
+
+    def test_a_hand_emptied_section_is_written_into_again(self):
+        # ``bezels:`` or ``console_overrides:`` left empty loads as None.
+        self.config.config["bezels"] = None
+        self.config.set_bezel_for_console("MD", "simple")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "simple")
+        self.config.config["bezels"] = {"console_overrides": None, "custom_names": None}
+        self.assertIsNone(self.config.set_custom_bezel("PS", self.png()))
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
+        self.assertEqual(self.config.get_custom_bezel_name("PS"), "My Frame.png")
 
     def test_a_custom_image_is_imported_and_selected(self):
         self.assertIsNone(self.config.set_custom_bezel("PS", self.png()))

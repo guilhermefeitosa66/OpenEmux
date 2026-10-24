@@ -27,11 +27,6 @@ import os
 import struct
 from pathlib import Path
 
-import gi
-
-gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GLib, GdkPixbuf  # noqa: E402
-
 from openemux.core.atomic_write import atomic_write_bytes, atomic_write_stream
 from openemux.core.systems import resolve_system_id
 
@@ -131,17 +126,31 @@ def import_custom(console, source_path, target_dir):
     Raises ``OSError`` when it cannot be done, a picture GdkPixbuf cannot
     decode included.
     """
+    # Imported here, not at the top: ``config`` and ``overlay_bar`` import
+    # this module, and nothing else they do needs the GTK stack.
+    import gi
+
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GLib, GdkPixbuf
+
     target = custom_path(console, target_dir)
-    if _fits(source_path):
+    fits = _fits(source_path)
+    try:
+        if fits:
+            # Decoded once even when it is copied as it is: validate_png only
+            # read the header, and a truncated or corrupt file past it would
+            # be stored, selected, and then drawn by RetroArch as nothing.
+            GdkPixbuf.Pixbuf.new_from_file(str(source_path))
+        else:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(str(source_path), *MAX_DECODED)
+            _ok, data = pixbuf.save_to_bufferv("png", [], [])
+    except GLib.Error as exc:
+        raise OSError(f"cannot decode {source_path}: {exc.message}") from exc
+    if fits:
         with open(source_path, "rb") as src:
             atomic_write_stream(target, src)
-        return target
-    try:
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(str(source_path), *MAX_DECODED)
-        _ok, data = pixbuf.save_to_bufferv("png", [], [])
-    except GLib.Error as exc:
-        raise OSError(f"cannot scale {source_path}: {exc.message}") from exc
-    atomic_write_bytes(target, data)
+    else:
+        atomic_write_bytes(target, data)
     return target
 
 

@@ -1514,10 +1514,14 @@ class BezelRowsTests(_PreferencesCase):
         return dialog
 
     def png(self, name="Frame.png", width=960, height=540):
-        import struct
+        # Decodable: the import decodes it, not only its header.
+        import gi
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
         path = self.tmp / name
-        ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-        path.write_bytes(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + b"\0" * 4)
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height)
+        pixbuf.fill(0x204060FF)
+        pixbuf.savev(str(path), "png", [], [])
         return path
 
     def chosen(self, path):

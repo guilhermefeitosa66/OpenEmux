@@ -955,10 +955,23 @@ class ConfigManager:
         """The file name a console's custom bezel came from, or ``None``."""
         return self.get_bezel_settings()["custom_names"].get(resolve_system_id(console))
 
+    def _bezel_section(self):
+        """The ``bezels`` section to write into, made a mapping if it is not.
+
+        A hand-edited ``bezels:`` left empty loads as ``None``, which the
+        getters read as no bezels; the setters must not crash on it either.
+        """
+        section = self.config.get("bezels")
+        if not isinstance(section, dict):
+            section = self.config["bezels"] = {}
+        return section
+
     def set_bezel_for_console(self, console, mode):
         """Store a console's bezel; "none" drops the key. Read at each launch."""
-        section = self.config.setdefault("bezels", {})
-        overrides = section.setdefault("console_overrides", {})
+        section = self._bezel_section()
+        overrides = section.get("console_overrides")
+        if not isinstance(overrides, dict):
+            overrides = section["console_overrides"] = {}
         console = resolve_system_id(console)
         mode = bezels.normalize_mode(mode)
         if mode == bezels.NONE:
@@ -982,8 +995,11 @@ class ConfigManager:
         except OSError as exc:
             logger.warning("bezel: cannot import %s: %s", source_path, exc)
             return "unreadable"
-        section = self.config.setdefault("bezels", {})
-        section.setdefault("custom_names", {})[resolve_system_id(console)] = Path(source_path).name
+        section = self._bezel_section()
+        names = section.get("custom_names")
+        if not isinstance(names, dict):
+            names = section["custom_names"] = {}
+        names[resolve_system_id(console)] = Path(source_path).name
         self.set_bezel_for_console(console, bezels.CUSTOM)
         return None
 
