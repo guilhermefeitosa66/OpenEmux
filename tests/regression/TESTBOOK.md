@@ -2207,6 +2207,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   and `"false"` with it off, and `video_windowed_fullscreen = "true"` in both. Suite files
   `tests/test_retroarch_launcher.py`, `tests/test_preferences.py`, `tests/test_config_accessors.py`.
 - **Restore:** turn "Start games in fullscreen" off.
+
 ### RT-343 — The bezel setting lists only the 4:3 consoles and is remembered
 - **Area:** Settings
 - **Mode:** AUTO-SUITE

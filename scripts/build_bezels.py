@@ -30,8 +30,8 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf  # noqa: E402
 
 OUT = Path(__file__).resolve().parent.parent / "src" / "openemux" / "data" / "bezels"
-W, H = 640, 360
 #: Must fit in ``bezels.MAX_DECODED``.
+W, H = 640, 360
 #: The 4:3 hole the game shows through. Must agree with the geometry in
 #: ``core/bezels.py``: the bezel is the 16:9 box around the 4:3 one.
 HOLE_W = H * 4 // 3
