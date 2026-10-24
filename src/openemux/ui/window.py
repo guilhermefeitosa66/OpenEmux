@@ -354,8 +354,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.tasks.update(self._core_repair_task, current, total)
             return GLib.SOURCE_REMOVE
 
+        # An idle callback is starved while the row's spinner animates on a
+        # slow renderer -- the frame clock is always due before it -- so the
+        # repair reports back at the default priority instead.
         def _on_progress(evt):
-            GLib.idle_add(_update_task, evt.get("current", 0), evt.get("total", 0))
+            GLib.idle_add(
+                _update_task,
+                evt.get("current", 0),
+                evt.get("total", 0),
+                priority=GLib.PRIORITY_DEFAULT,
+            )
 
         def _worker():
             # The check touches the disk, so it runs here and not on the main
@@ -365,13 +373,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                     on_progress=_on_progress,
                     cancel_event=cancel_event,
                     manual=manual,
-                    on_missing=lambda missing: GLib.idle_add(_begin_task, missing),
+                    on_missing=lambda missing: GLib.idle_add(
+                        _begin_task, missing, priority=GLib.PRIORITY_DEFAULT
+                    ),
                 )
             except Exception as exc:
                 # The done handler is what clears the running flag (#214).
                 logger.exception("core repair crashed")
                 summary = {"error": str(exc)}
-            GLib.idle_add(self._on_core_repair_done_ui, manual, summary)
+            GLib.idle_add(
+                self._on_core_repair_done_ui, manual, summary, priority=GLib.PRIORITY_DEFAULT
+            )
 
         Thread(target=_worker, daemon=True).start()
         return True
@@ -440,6 +452,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return None
 
     def _core_toast(self, text, timeout=3):
+        # A toast title is markup, and a download error carries text like
+        # "<urlopen error ...>" that would leave the toast blank.
+        text = GLib.markup_escape_text(text)
         dialog = self._open_preferences_dialog()
         if dialog is not None:
             dialog._toast(text, timeout)

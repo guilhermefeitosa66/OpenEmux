@@ -390,7 +390,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
   (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
   pending`); inside Flatpak, or with the updater off, nothing is owed. Cores that later go
-  missing from disk are restored at start-up without re-running the first boot (RT-343).
+  missing from disk are restored at start-up without re-running the first boot (RT-370).
 - **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
   `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
@@ -409,7 +409,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   while the library is already usable. When it ends, `setup.bootstrap.deferred_assets` in
   `config.yaml` reads `done`, and step 3 lists more cores than the console's curated ones
   without restarting the app — the core catalog is rescanned when the download finishes (issue
-  #442). When the start-up check of RT-343 restores missing cores, this download starts after it,
+  #442). When the start-up check of RT-370 restores missing cores, this download starts after it,
   never at the same time.
 - **Check:** screenshots of steps 1 and 3; `grep deferred_assets
   ~/.local/share/openemux-devbox/home/.openemux/config.yaml` prints `done`. The rules in
@@ -431,7 +431,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_config_bootstrap_defaults.py` (`TheDeferredAssetDebtTests`), `tests/test_window.py`
   (`test_cancel_on_the_banner_reaches_the_download`, `test_a_crashed_worker_still_ends_the_task`).
 
-### RT-343 — Cores lost after an upgrade come back on their own
+### RT-370 — Cores lost after an upgrade come back on their own
 - **Area:** Startup
 - **Mode:** AUTO-UI
 - **Preconditions:** A **throwaway** `HOME` with a completed first boot, the updater on and network
@@ -3821,7 +3821,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the launch log gained no `Traceback` and no cover-sync or scan task line.
 
 
-### RT-344 — "Verify cores" downloads only what is missing
+### RT-371 — "Verify cores" downloads only what is missing
 - **Area:** Settings
 - **Mode:** AUTO-UI
 - **Preconditions:** App running in the devbox, first boot completed, network on.

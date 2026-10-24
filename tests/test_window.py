@@ -2855,6 +2855,32 @@ class TheMissingCoreRepairTests(WindowCase):
         # Owed before, or owed again: the deferred sweep follows the repair.
         seen["deferred"].assert_called_once_with()
 
+    def test_the_repair_reports_back_ahead_of_the_spinner(self):
+        # Every callback of the repair, the done handler above all, outranks
+        # the frame clock that keeps the Verify cores spinner animating; at
+        # the idle priority a manual repair never finished (issue #512, QA).
+        real_idle_add = window_module.GLib.idle_add
+        priorities = []
+
+        ours = {"_begin_task", "_update_task", "_on_core_repair_done_ui"}
+
+        def _idle_add(function, *args, **kwargs):
+            name = getattr(function, "__name__", "")
+            if name in ours:
+                priorities.append((name, kwargs.get("priority")))
+            return real_idle_add(function, *args, **kwargs)
+
+        with mock.patch.object(window_module.GLib, "idle_add", _idle_add):
+            self._run(manual=True)
+        self.assertEqual(
+            priorities,
+            [
+                ("_begin_task", GLib.PRIORITY_DEFAULT),
+                ("_update_task", GLib.PRIORITY_DEFAULT),
+                ("_on_core_repair_done_ui", GLib.PRIORITY_DEFAULT),
+            ],
+        )
+
     def test_a_cancelled_repair_does_not_start_the_deferred_sweep(self):
         seen = self._run(summary={"missing": ["a_libretro.so"], "cancelled": True})
         seen["deferred"].assert_not_called()
@@ -2996,6 +3022,12 @@ class TheMissingCoreRepairTests(WindowCase):
         self.win._notify_core_repair_running(True)
         dialog.set_core_job_running.assert_called_once_with(True)
         self.assertEqual(self.toasts, [])
+
+    def test_an_error_with_markup_characters_still_reads(self):
+        self.win._core_toast("manifest: <urlopen error [Errno 111]> & more", 6)
+        self.assertEqual(
+            self.toasts, ["manifest: &lt;urlopen error [Errno 111]&gt; &amp; more"]
+        )
 
     def test_a_closed_preferences_dialog_is_left_alone(self):
         dialog = mock.Mock()
