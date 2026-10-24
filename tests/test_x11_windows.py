@@ -200,7 +200,6 @@ def _embedder_with_no_display():
     return embedder
 
 
-@unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "python-xlib is not installed")
 class OpeningAndClosingTheDisplayTests(unittest.TestCase):
     """The one place `Xlib.display` is reached for (issue #364)."""
 
@@ -209,6 +208,7 @@ class OpeningAndClosingTheDisplayTests(unittest.TestCase):
         with mock.patch.object(x11_windows, "XLIB_AVAILABLE", False):
             self.assertIsNone(embedder._dpy())
 
+    @unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "imports the real Xlib package")
     def test_the_first_call_opens_one_and_the_rest_reuse_it(self):
         opened = []
 
@@ -225,6 +225,7 @@ class OpeningAndClosingTheDisplayTests(unittest.TestCase):
                 self.assertEqual(embedder._dpy(), "the display")
         self.assertEqual(len(opened), 1)
 
+    @unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "imports the real Xlib package")
     def test_a_display_that_will_not_open_is_reported_not_raised(self):
         class _Module:
             @staticmethod
