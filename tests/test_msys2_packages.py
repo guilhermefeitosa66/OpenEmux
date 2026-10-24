@@ -5,8 +5,10 @@ staging step, the CI job and the developer setup all follow it. These tests run
 offline: nothing here reaches ``repo.msys2.org``.
 """
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -126,7 +128,8 @@ class StaleLockTests(unittest.TestCase):
             ],
         }
         with tempfile.TemporaryDirectory() as tmp, \
-                mock.patch.object(msys2, "_fetch", return_value=blob) as fetch:
+                mock.patch.object(msys2, "_fetch", return_value=blob) as fetch, \
+                contextlib.redirect_stdout(io.StringIO()):
             paths = msys2.download(document, Path(tmp) / "cache")
             self.assertEqual(paths[0].read_bytes(), blob)
         fetch.assert_called_once_with(
