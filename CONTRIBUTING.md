@@ -7,7 +7,8 @@ see [CONTRIBUTORS.md](CONTRIBUTORS.md) for how that is recorded.
 
 This file describes the *process*. For how to install the dependencies, run the
 app, build the packages or develop on Windows, read the
-[Developer Guide](docs/DEVELOPMENT.md); nothing here repeats it.
+[Developer Guide](docs/DEVELOPMENT.md); nothing here repeats it. What the app
+should be, and how it should look, is in the [Product direction](docs/PRODUCT.md).
 
 ## Ways to contribute
 
@@ -46,6 +47,11 @@ costs you five minutes; a rejected pull request costs you an evening.
 
 Issues labelled [`good first issue`](https://github.com/guilhermefeitosa66/OpenEmux/labels/good%20first%20issue)
 are scoped so that you can finish one without knowing the rest of the codebase.
+
+**Read the [Product direction](docs/PRODUCT.md).** It says what OpenEmux is,
+what it deliberately is not, and how the interface looks and speaks: the
+principles, the non-goals, the design system and which changes need an issue
+first. It is the document reviews point to when a change does not fit.
 
 ## The branch model
 
