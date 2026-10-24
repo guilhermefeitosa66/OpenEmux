@@ -84,7 +84,8 @@ class EveryWindowGoesThroughTheGuardTests(unittest.TestCase):
     """A widget test outside gtk_display would still draw on a bare run."""
 
     BUILDS_WINDOWS = re.compile(
-        r"\.present\(|Gtk\.Window\(|Adw\.\w*Window\(|Adw\.\w*Dialog\(")
+        # Any Gtk/Adw window or dialog constructor, but not one quoted in a string.
+        r"\.present\(|(?<![\"'])(?:Gtk|Adw)\.\w*(?:Window|Dialog)\(")
 
     def test_files_that_build_windows_import_the_guard(self):
         unguarded = [

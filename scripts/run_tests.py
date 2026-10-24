@@ -12,7 +12,8 @@ and steal focus for the whole run (issue #528). This is what ``make test`` and
   ``xvfb-run -a``, with every route back to the real session closed --
   ``WAYLAND_DISPLAY`` unset, GDK pinned to X11, the file-chooser portals off --
   and ``OPENEMUX_TESTS_PRIVATE_DISPLAY=1`` so ``tests/gtk_display.py`` knows
-  the display is a private one and runs the widget tests;
+  the display is a private one and runs the widget tests -- on a throwaway
+  session bus too (``dbus-run-session``) when that is installed;
 * on Linux without it, the command runs as it is after one message saying what
   is missing; ``tests/gtk_display.py`` then skips the widget tests rather than
   drawing on the desktop;
@@ -78,8 +79,14 @@ def main(argv=None, env=None, platform=None, which=shutil.which,
         return 2
     mode = decide(env, platform, which)
     if mode == "xvfb":
+        command = ["xvfb-run", "-a", *argv]
+        # The session bus is the developer's too: an app registered on it, a
+        # FileManager1 call or a browser's D-Bus remote reaches their screen
+        # whatever DISPLAY says. A throwaway bus closes that, as the devbox does.
+        if which("dbus-run-session"):
+            command = ["dbus-run-session", "--", *command]
         # Replaces this process, so Ctrl+C and the exit code are the suite's.
-        return execvpe("xvfb-run", ["xvfb-run", "-a", *argv], headless_env(env))
+        return execvpe(command[0], command, headless_env(env))
     if mode == "missing":
         stderr.write(MISSING_XVFB)
     return call(argv, env=env)

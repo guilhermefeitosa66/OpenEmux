@@ -184,13 +184,8 @@ provision() {
 # Everything that runs inside goes through here. --no-tty keeps the output
 # clean enough to pipe: distrobox allocates a terminal otherwise, and the
 # escape codes end up in whatever is capturing the result.
-#
-# OPENEMUX_TESTS_PRIVATE_DISPLAY tells tests/gtk_display.py that the display is
-# the box's own Xvnc, not somebody's desktop (issue #528). devbox-tests sets it
-# too, but the tools come from the checkout the container was created from, and
-# this driver is the one in the checkout being tested.
 inside() {
-	distrobox enter --no-tty --name "${NAME}" -- env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 "$@"
+	distrobox enter --no-tty --name "${NAME}" -- "$@"
 }
 
 cmd_up() {
@@ -281,7 +276,13 @@ main() {
 		xdo)     ensure_up; inside devbox-xdo "$@" ;;
 		res)     ensure_up; inside devbox-res "$@" ;;
 		rec)     ensure_up; inside devbox-rec "$@" ;;
-		tests)   ensure_up; inside devbox-tests "$@" ;;
+		# OPENEMUX_TESTS_PRIVATE_DISPLAY tells tests/gtk_display.py the display
+		# is the box's own Xvnc, not somebody's desktop (issue #528). devbox-tests
+		# sets it too, but the tools come from the checkout the container was
+		# created from, and this driver is the one in the checkout being tested.
+		# Only here: devbox-tests points DISPLAY at the Xvnc, while a bare
+		# `exec` keeps the host's DISPLAY, where the marker would be a lie.
+		tests)   ensure_up; inside env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 devbox-tests "$@" ;;
 		verify)  ensure_up; inside devbox-verify ;;
 		x)       ensure_up; inside devbox-x "$@" ;;
 
