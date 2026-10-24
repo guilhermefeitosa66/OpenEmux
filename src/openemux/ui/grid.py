@@ -51,6 +51,7 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
 )
 from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
+from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
     CardContext,
     RomEntry,
@@ -439,6 +440,12 @@ class RomGrid(Gtk.GridView):
         if card.entry is not None:
             self._focused_entry = card.entry
         card.set_focus_visual(True)
+        # On a grouped page the scrolling is the page's, not this grid's: a
+        # card focused off screen -- crossing into the next group, or walking
+        # down a group taller than the window -- is brought in by the page.
+        parent = self.get_parent()
+        if isinstance(parent, GroupedScroll):
+            parent.reveal(card)
 
     # -- cartridge shells ----------------------------------------------------
 
