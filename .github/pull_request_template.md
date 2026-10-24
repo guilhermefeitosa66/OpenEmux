@@ -28,6 +28,7 @@ Related to #
 
 ## Checklist
 
+- [ ] I read [docs/PRODUCT.md](https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/docs/PRODUCT.md) and this change fits it.
 - [ ] Targets `develop`.
 - [ ] Commits follow `[issue-<id>] <type>: <summary>`.
 - [ ] `make test` and `make lint` pass locally.
