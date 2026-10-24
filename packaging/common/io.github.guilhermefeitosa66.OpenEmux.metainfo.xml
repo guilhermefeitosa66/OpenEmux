@@ -47,11 +47,11 @@
   <screenshots>
     <screenshot type="default">
       <caption>The cover-art library for a console</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-roms-nes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/0eb5ee3d4972d9f1bb61f2b3eb622c51da132dca/docs/assets/openemux-roms-nes.png</image>
     </screenshot>
     <screenshot>
       <caption>Browsing another console's games</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-roms-snes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/0eb5ee3d4972d9f1bb61f2b3eb622c51da132dca/docs/assets/openemux-roms-snes.png</image>
     </screenshot>
     <screenshot>
       <caption>Playing a game through RetroArch</caption>
@@ -59,7 +59,7 @@
     </screenshot>
     <screenshot>
       <caption>Preferences</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/5aff4d60042a9004380f9d08d02e2eb77d9e2083/docs/assets/openemux-settings.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/0eb5ee3d4972d9f1bb61f2b3eb622c51da132dca/docs/assets/openemux-settings.png</image>
     </screenshot>
   </screenshots>
 
