@@ -60,7 +60,9 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         #: Set during a layout pass, when the page's own scroll is not news.
         self._allocating = False
         self.set_overflow(Gtk.Overflow.HIDDEN)
-        self.connect("destroy", self._on_destroy)
+        # Not a bound method: the page can be destroyed after its Python
+        # wrapper is gone, and the handler must not need it.
+        self.connect("destroy", _unparent_children)
 
     # -- Gtk.Scrollable ----------------------------------------------------
 
@@ -107,10 +109,6 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
             yield header
             yield grid
 
-    def _on_destroy(self, *_args):
-        for child in list(self._children()):
-            child.unparent()
-        self._sections = []
 
     # -- layout ------------------------------------------------------------
 
@@ -245,6 +243,14 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         if target != vadj.get_value():
             vadj.set_value(target)
         return True
+
+def _unparent_children(widget):
+    """Let go of every child, walked from GTK's side rather than ``_sections``."""
+    child = widget.get_first_child()
+    while child is not None:
+        child.unparent()
+        child = widget.get_first_child()
+
 
 def _rect(x, y, width, height):
     rect = Gdk.Rectangle()

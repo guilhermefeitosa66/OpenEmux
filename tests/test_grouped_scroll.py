@@ -205,6 +205,23 @@ class TheWidgetTests(unittest.TestCase):
         _settle()
         self.assertTrue(self.body.reveal_position(grid, 0))
 
+    def test_a_scroll_during_a_layout_pass_lays_the_page_out_again(self):
+        # A card focused while the grids are allocated reveals itself then.
+        self.scroll_to(0)
+        original = self.body._allocate_children
+        passes = []
+
+        def allocate(width, height, scroll):
+            passes.append(scroll)
+            original(width, height, scroll)
+            if len(passes) == 1:
+                self.vadj.set_value(500)
+
+        self.body._allocate_children = allocate
+        self.body.queue_allocate()
+        _settle()
+        self.assertEqual(passes[:2], [0, 500])
+
     def test_the_width_is_the_widest_child_and_never_scrolls(self):
         minimum, natural, _, _ = self.body.measure(Gtk.Orientation.HORIZONTAL, -1)
         self.assertGreaterEqual(natural, minimum)
