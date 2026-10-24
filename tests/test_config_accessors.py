@@ -414,6 +414,85 @@ class TheStartFullscreenSettingTests(_ConfigCase):
         for stored, expected in (("yes", True), (1, True), (0, False)):
             self.config.config["ui"]["start_games_fullscreen"] = stored
             self.assertIs(self.config.get_ui_settings()["start_games_fullscreen"], expected)
+class TheBezelSettingsTests(_ConfigCase):
+    """One bezel per 4:3 console, none by default (issue #507)."""
+
+    def png(self, name="My Frame.png", width=960, height=540):
+        # Decodable: the import decodes it, not only its header.
+        import gi
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
+        path = self.tmp / name
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height)
+        pixbuf.fill(0x204060FF)
+        pixbuf.savev(str(path), "png", [], [])
+        return path
+
+    def test_every_console_starts_with_none(self):
+        settings = self.config.get_bezel_settings()
+        self.assertEqual(settings["console_overrides"], {})
+        self.assertEqual(settings["custom_dir"], self.tmp / "bezels")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+
+    def test_a_choice_is_stored_under_the_canonical_id_and_none_drops_it(self):
+        self.config.set_bezel_for_console("SNES", "simple")
+        self.assertEqual(self.config.get_bezel_for_console("SFC"), "simple")
+        self.assertEqual(ConfigManager(self.tmp / "config.yaml").get_bezel_for_console("SFC"),
+                         "simple")
+        self.config.set_bezel_for_console("SFC", "none")
+        self.assertNotIn("SFC", self.config.config["bezels"]["console_overrides"])
+
+    def test_an_unknown_stored_mode_reads_as_none(self):
+        self.config.config["bezels"]["console_overrides"]["MD"] = "fancy"
+        self.config.config["bezels"]["console_overrides"]["SNES"] = "simple"
+        self.assertEqual(self.config.get_bezel_settings()["console_overrides"], {"SFC": "simple"})
+
+    def test_an_old_config_without_the_section_has_none_anywhere(self):
+        del self.config.config["bezels"]
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+        self.assertIsNone(self.config.get_custom_bezel_name("MD"))
+        self.config.set_bezel_for_console("MD", "simple")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "simple")
+
+    def test_a_hand_emptied_section_is_written_into_again(self):
+        # ``bezels:`` or ``console_overrides:`` left empty loads as None.
+        self.config.config["bezels"] = None
+        self.config.set_bezel_for_console("MD", "simple")
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "simple")
+        self.config.config["bezels"] = {"console_overrides": None, "custom_names": None}
+        self.assertIsNone(self.config.set_custom_bezel("PS", self.png()))
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
+        self.assertEqual(self.config.get_custom_bezel_name("PS"), "My Frame.png")
+
+    def test_a_section_that_is_not_a_mapping_reads_as_no_bezels(self):
+        # A launch reads this on every start: a hand-edited scalar must not
+        # crash it, nor the Video page.
+        self.config.config["bezels"] = "simple"
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+        self.config.config["bezels"] = {"console_overrides": ["MD"],
+                                        "custom_names": {"PS": None}}
+        self.assertEqual(self.config.get_bezel_settings()["console_overrides"], {})
+        self.assertIsNone(self.config.get_custom_bezel_name("PS"))
+
+    def test_a_custom_image_is_imported_and_selected(self):
+        self.assertIsNone(self.config.set_custom_bezel("PS", self.png()))
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
+        self.assertEqual(self.config.get_custom_bezel_name("PS"), "My Frame.png")
+        self.assertTrue((self.tmp / "bezels" / "PS.png").is_file())
+
+    def test_a_bad_image_changes_nothing(self):
+        bad = self.tmp / "photo.png"
+        bad.write_bytes(b"\xff\xd8\xff" * 20)
+        self.assertEqual(self.config.set_custom_bezel("PS", bad), "not_png")
+        self.assertEqual(self.config.set_custom_bezel("PS", self.png("s.png", 100, 100)),
+                         "too_small")
+        self.assertEqual(self.config.set_custom_bezel("PS", self.tmp / "gone.png"), "unreadable")
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "none")
+
+    def test_a_copy_that_fails_is_unreadable(self):
+        with mock.patch.object(config_module.bezels, "import_custom", side_effect=OSError("full")):
+            self.assertEqual(self.config.set_custom_bezel("PS", self.png()), "unreadable")
+        self.assertEqual(self.config.get_bezel_for_console("PS"), "none")
 
 
 if __name__ == "__main__":

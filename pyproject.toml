@@ -102,4 +102,6 @@ openemux = [
     "data/overlay/*.png",
     "data/overlay/*.glsl",
     "data/overlay/*.slang",
+    # The built-in bezel drawn beside 4:3 games (issue #507).
+    "data/bezels/*.png",
 ]
