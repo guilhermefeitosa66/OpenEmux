@@ -1093,7 +1093,9 @@ class PerRomOverridesTests(WindowCase):
 
 @needs_display
 class CoverFilesTests(WindowCase):
-    def _write_cover(self, rom, kind=COVER_ART):
+    def _write_cover(self, rom, kind=None):
+        # Not a module-level default: the class body runs even when skipped.
+        kind = COVER_ART if kind is None else kind
         target = self.home.roms / rom["console"] / kind / f"{rom['name']}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"\x89PNG\r\n\x1a\n")
