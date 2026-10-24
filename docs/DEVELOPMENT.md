@@ -84,8 +84,9 @@ make run
 
 `make install-sys-deps` targets Debian/Ubuntu (`apt`). On Fedora, install the
 equivalents (`gtk4`, `libadwaita`, `python3-gobject`, `python3-cairo`,
-`python3-pyyaml`, `librsvg2`, `gobject-introspection`) with `dnf`, then run
-`make venv setup`.
+`python3-pyyaml`, `librsvg2`, `gobject-introspection`, and
+`xorg-x11-server-Xvfb` for the tests) with `dnf`, then run `make venv setup`.
+On Arch the test display is `xorg-server-xvfb`.
 
 RetroArch is resolved at launch from
 `vendors/RetroArch-Linux-x86_64/usr/bin/retroarch` (fetched by `make
@@ -191,7 +192,7 @@ Three constraints that are easy to break:
 
 ```bash
 make test
-# or directly:
+# or directly (skips the widget tests on a desktop session, see below):
 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 
 # with a coverage report (needs `make setup-dev` once):
@@ -219,9 +220,21 @@ taking the run down with no failing test to point at, which is how CI ran red
 for weeks (issue #242). So `tests/gtk_display.py` asks
 `Gdk.Display.get_default()` once and exposes `@needs_display`; a class that
 builds widgets carries that decorator and skips itself on a headless box. CI
-runs the suite under `xvfb-run`, where nothing is skipped — run it the same way
-locally (`xvfb-run make test`) if you want the full set without opening a
-window.
+runs the suite under `xvfb-run`, where nothing is skipped.
+
+On a developer's machine the display is their own screen, and a run that used
+it flashed windows and stole focus for its whole length (issue #528). So
+`make test` and `make coverage` go through
+[`scripts/run_tests.py`](../scripts/run_tests.py), which runs the suite under
+`xvfb-run -a` the way CI does — `WAYLAND_DISPLAY` unset, GDK pinned to X11, the
+file-chooser portals off — so every widget test runs and nothing appears.
+`make install-sys-deps` installs Xvfb (`xorg-x11-server-Xvfb` on Fedora,
+`xorg-server-xvfb` on Arch); without it the run says what is missing and skips
+the widget tests rather than drawing on your desktop. A bare
+`python -m unittest` on a desktop session (Wayland, an X11 session, a desktop
+name in the environment) skips them too, with a note saying why. Set
+`OPENEMUX_TESTS_ON_DESKTOP=1` to run them on your screen anyway. Windows has no
+Xvfb, and its runs are unchanged.
 
 Add a `test_<module>.py` alongside any new core module. One file per module is
 the default, not a rule: `config.py` is covered by a `test_config_<concern>.py`
@@ -241,9 +254,10 @@ push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
 
 **Run it under a display.** The UI is measured like everything else, and the
-tests that build real widgets skip themselves on a headless box, so
-`make coverage` on its own reports far less than the suite covers. `xvfb-run -a
-make coverage` is the honest number, and the one CI enforces.
+tests that build real widgets skip themselves without a display they may use.
+`make coverage` runs them on a private Xvfb display, so with Xvfb installed it
+is the honest number, and the one CI enforces; a bare `coverage run` reports far
+less than the suite covers.
 
 `make smoke` runs [`scripts/smoke_start.py`](../scripts/smoke_start.py), which
 is the one check the unit suite cannot make: it constructs the real
