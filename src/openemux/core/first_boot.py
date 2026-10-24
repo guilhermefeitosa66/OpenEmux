@@ -341,7 +341,13 @@ class FirstBootBootstrapper:
                 self.updater.install_core_info()
             if not summary["failed"]:
                 # Only a listing that answered says what is not built here.
-                self.config_manager.set_unavailable_cores(__version__, summary["unlisted"])
+                # The start-up check never asked about the names it already
+                # knew, so it keeps them; the manual check asked about all.
+                unavailable = set(summary["unlisted"])
+                stored = self.config_manager.get_unavailable_cores()
+                if not manual and stored["version"] == __version__:
+                    unavailable.update(stored["names"])
+                self.config_manager.set_unavailable_cores(__version__, unavailable)
             if not had_cores:
                 self.config_manager.mark_deferred_assets_pending()
         except Exception as exc:

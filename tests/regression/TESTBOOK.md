@@ -446,6 +446,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   "Cancel" button, and when it ends a toast says "Restored N missing cores". The game launches.
   `setup.bootstrap.status` in `config.yaml` still reads `completed`, no setting changed, and
   `setup.bootstrap.deferred_assets` reads `pending`, so the remaining cores come back too (RT-317).
+  Clicking "Cancel" on that banner ends it there: the remaining-cores download does not start in
+  its place, and both are tried again at the next launch.
   On a healthy install nothing is shown and no request reaches the buildbot. Before this, the
   completed first boot was never re-run, and the only way out was deleting `~/.openemux`, settings
   and all (issue #512). Inside Flatpak, or with the updater off, nothing starts.
