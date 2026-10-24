@@ -12,6 +12,12 @@ cover in ``<roms>/<CONSOLE>/covers/`` and a cartridge label in
     demo_library.py <roms_dir> --configure         # ...and point the app at it
     demo_library.py <roms_dir> --wall docs/assets/carts   # site cartridge wall
 
+``--wall`` composites the labels already in ``<roms_dir>`` and writes nothing
+else: the labels are drawn in the devbox, where the captures are taken, and the
+wall can then be encoded on a machine whose GdkPixbuf WebP saver honours
+``quality`` -- the one the devbox's Ubuntu resolves first is lossless only,
+which makes the 84 files four times their size.
+
 The art follows the #513 spec: a flat GNOME-palette ground, one geometric
 emblem, the title in bold sans, and an era word ("16-BIT") in the top band --
 never a console or company name. The SVG is rendered through librsvg, the same
@@ -139,7 +145,7 @@ FAVORITES = [
 #: The consoles on the site's cartridge wall, which ``site/page.html`` lists.
 WALL = ["GBA", "SFC", "N64", "MD"]
 WALL_WIDTH = 400
-WALL_QUALITY = "90"
+WALL_QUALITY = "80"
 
 # (bg, band, fg, fg2, title), from the GNOME palette and its shades. Dark and
 # light grounds alternate, so neighbouring titles differ in lightness and not
@@ -403,6 +409,9 @@ def configure(roms_dir, config=None):
 def wall(roms_dir, out_dir):
     """The site's cartridge wall: each demo label on its console's frame.
 
+    Reads the labels ``write()`` left in ``roms_dir``; it never draws them, so
+    the wall shows exactly the labels the screenshots show.
+
     Rendered by the app's own compositor at ``WALL_WIDTH`` and saved as WebP,
     named ``<console>-<slug>.webp``. Returns ``{console: [slug, ...]}``, the
     ``games`` lists ``site/page.html`` needs.
@@ -430,17 +439,21 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("roms_dir", type=Path)
     parser.add_argument("--configure", action="store_true", help="point the app's config at the library")
-    parser.add_argument("--wall", type=Path, metavar="OUT_DIR", help="also render the site's cartridge wall")
+    parser.add_argument(
+        "--wall", type=Path, metavar="OUT_DIR",
+        help="render the site's cartridge wall from the labels already in roms_dir, and nothing else",
+    )
     args = parser.parse_args(argv)
 
     roms_dir = args.roms_dir.expanduser().resolve()
+    if args.wall:
+        for console, slugs in wall(roms_dir, args.wall).items():
+            print(f"{console.lower()}: " + ", ".join(f'"{s}"' for s in slugs))
+        return 0
     print(f"{write(roms_dir)} files written to {roms_dir}")
     if args.configure:
         config = configure(roms_dir)
         print(f"roms_path set in {config.config_file}")
-    if args.wall:
-        for console, slugs in wall(roms_dir, args.wall).items():
-            print(f'{console.lower()}: {", ".join(f"{s!r}" for s in slugs)}'.replace("'", '"'))
     return 0
 
 

@@ -291,17 +291,24 @@ class MainTest(unittest.TestCase):
             self.assertIn("files written", output)
             self.assertTrue((Path(tmp) / "PS" / "Paper Pinwheels (World).cue").is_file())
 
-    def test_configure_and_wall(self):
+    def test_configure_then_wall(self):
         home = IsolatedHome()
         config = home.start()
         self.addCleanup(home.stop)
         roms = home.root / "demo"
         with mock.patch("openemux.core.config.ConfigManager", return_value=config):
-            output = self._run(str(roms), "--configure", "--wall", str(home.root / "carts"))
+            output = self._run(str(roms), "--configure")
         self.assertIn("roms_path set in", output)
-        self.assertIn('gba: "moss-knight", "teacup-tempest"', output)
         self.assertEqual(config.get_roms_path(), roms)
+
+        label = roms / "GBA" / "labels" / "Moss Knight (World).png"
+        before = label.read_bytes()
+        output = self._run(str(roms), "--wall", str(home.root / "carts"))
+        self.assertIn('gba: "moss-knight", "teacup-tempest"', output)
+        self.assertNotIn("files written", output)
         self.assertTrue((home.root / "carts" / "gba-teacup-tempest.webp").is_file())
+        # The wall reads the labels; it never redraws them.
+        self.assertEqual(label.read_bytes(), before)
 
 
 if __name__ == "__main__":
