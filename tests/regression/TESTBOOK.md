@@ -5312,7 +5312,8 @@ or into an environment that cannot run the tests.
   keep working in another window while it runs.
 - **Expected:** No OpenEmux window appears and nothing steals focus, yet the widget tests run
   rather than skip. `make test` and `make coverage` go through `scripts/run_tests.py`, which
-  replaces itself with `xvfb-run -a <the suite>` and gives it an environment with
+  replaces itself with `xvfb-run -a <the suite>` (on a throwaway `dbus-run-session` bus when that
+  is installed) and gives it an environment with
   `WAYLAND_DISPLAY` unset, `GDK_BACKEND=x11`, the portals off (`GDK_DEBUG=no-portals`,
   `GTK_USE_PORTAL=0`) and `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (issue #528).
 - **Check:**
@@ -5338,7 +5339,7 @@ or into an environment that cannot run the tests.
   calls = []
   rt.main(["python", "-m", "unittest"], env=desk, platform="linux",
           which=lambda n: "/usr/bin/" + n, execvpe=lambda *a: calls.append(a) or 0)
-  assert calls[0][1] == ["xvfb-run", "-a", "python", "-m", "unittest"]
+  assert calls[0][1] == ["dbus-run-session", "--", "xvfb-run", "-a", "python", "-m", "unittest"]
   print("RT-363 OK")
   EOF
   ```
@@ -5423,15 +5424,16 @@ or into an environment that cannot run the tests.
 - **Preconditions:** the devbox exists (`make devbox-up`) for the second half of the check.
 - **Steps:** As a QA person: run `make devbox-tests CMD=tests.test_file_dialogs`.
 - **Expected:** The widget tests run on the container's own Xvnc (`:77`) and none is skipped as
-  "would draw on your desktop": the host driver `devbox/devbox.sh` runs every command inside with
-  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1`, and `devbox/bin/devbox-tests` exports it too, because
+  "would draw on your desktop": the host driver `devbox/devbox.sh` runs `devbox-tests` with
+  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (only that command: a bare `exec` keeps the host's
+  `DISPLAY`), and `devbox/bin/devbox-tests` exports it too, because
   distrobox forwards the host's `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` into the box (issue #528).
   The driver matters because the tools inside come from the checkout the container was created
   from, not from the one being tested.
 - **Check:**
   ```bash
   grep -n "export OPENEMUX_TESTS_PRIVATE_DISPLAY=1" devbox/bin/devbox-tests   # expect a match
-  grep -n -- '-- env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 "$@"' devbox/devbox.sh  # expect a match
+  grep -n 'inside env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 devbox-tests' devbox/devbox.sh  # expect a match
   make devbox-tests CMD="-v tests.test_file_dialogs" 2>&1 | grep -c "would draw on your desktop"
   # expect 0
   ```

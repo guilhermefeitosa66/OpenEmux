@@ -101,11 +101,17 @@ class MainTests(unittest.TestCase):
         self.run_main(DESKTOP)
         self.execvpe.assert_called_once()
         file, argv, env = self.execvpe.call_args.args
-        self.assertEqual(file, "xvfb-run")
-        self.assertEqual(argv, ["xvfb-run", "-a", *self.CMD])
+        self.assertEqual(file, "dbus-run-session")
+        self.assertEqual(argv, ["dbus-run-session", "--", "xvfb-run", "-a", *self.CMD])
         self.assertEqual(env, launcher.headless_env(DESKTOP))
         self.call.assert_not_called()
         self.assertEqual(self.stderr.getvalue(), "")
+
+    def test_xvfb_without_dbus_run_session_keeps_the_bus(self):
+        self.run_main(DESKTOP, which=lambda name: found(name) if name == "xvfb-run" else None)
+        file, argv, _env = self.execvpe.call_args.args
+        self.assertEqual(file, "xvfb-run")
+        self.assertEqual(argv, ["xvfb-run", "-a", *self.CMD])
 
     def test_missing_xvfb_says_so_once_and_runs_the_command(self):
         code = self.run_main(DESKTOP, which=not_found)
