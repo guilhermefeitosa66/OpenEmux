@@ -4686,7 +4686,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   else: how the OpenSSL CA bundle broke.
 - **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux && test ! -e build/win/OpenEmux/ucrt64 && test ! -e build/win/OpenEmux/mingw64`
 
-### RT-366 — CI, the Windows bundle and the dev setup install one MSYS2 package set
+### RT-371 — CI, the Windows bundle and the dev setup install one MSYS2 package set
 - **Area:** Packaging (Windows)
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A checkout of the branch under test.
