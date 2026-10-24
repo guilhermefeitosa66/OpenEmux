@@ -1944,7 +1944,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
-### RT-363 — The artwork manager opens on the current cover and says where it came from
+### RT-365 — The artwork manager opens on the current cover and says where it came from
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`). A PNG
@@ -1953,7 +1953,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `make devbox-app ACTION=restart`.
 - **Steps:**
   1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
-  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-363.png WIN=1`).
+  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-365.png WIN=1`).
 - **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
   the PNG whole, titled "Local file" with a "Local" pill; the details read
   `PNG · <width> × <height> · Found in the library folder`; the buttons are "Pick Another Match…",
@@ -1962,10 +1962,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** The screenshot shows all of the above; the app log has no `Traceback`.
 - **Restore:** Delete the copied PNG (it lives in the throwaway devbox home).
 
-### RT-364 — Adjusting the current cover saves it as chosen by you
+### RT-366 — Adjusting the current cover saves it as chosen by you
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
-- **Preconditions:** RT-363's state (a hand-copied cover, the manager open on "Current").
+- **Preconditions:** RT-365's state (a hand-copied cover, the manager open on "Current").
 - **Steps:**
   1. Press "Adjust…". The "Import" tab opens with the cover loaded and "Save as" on "Cover".
   2. Press "Rotate right", then "Done".
@@ -1977,7 +1977,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `Sonic the Hedgehog (USA, Europe)` with `"source": "manual"` and `"origin": "adjusted"`.
 - **Restore:** Delete the cover and `.openemux-sources.json` from the devbox home.
 
-### RT-365 — Reset to the synced cover replaces a chosen cover
+### RT-367 — Reset to the synced cover replaces a chosen cover
 - **Area:** Covers & artwork
 - **Mode:** MANUAL
 - **Preconditions:** Network access; a well-known game whose cover the sync finds, with a cover
@@ -1995,7 +1995,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only; suite file `tests/test_artwork_manager.py`
   (`test_a_sync_that_found_nothing_says_the_cover_stays`, `test_a_toast_shows_on_the_manager_not_under_it`).
 
-### RT-366 — A game without art offers sync, search and import
+### RT-368 — A game without art offers sync, search and import
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running on its synthetic library (no covers).
@@ -2010,7 +2010,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   no cartridge frame ("Sony PlayStation") only the "Cover" section exists.
 - **Check:** The screenshots show it; the app log has no `Traceback`.
 
-### RT-367 — The artwork manager works in a narrow window
+### RT-369 — The artwork manager works in a narrow window
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running.
