@@ -89,6 +89,12 @@ every launch. That request became
 [#505](https://github.com/guilhermefeitosa66/OpenEmux/issues/505): a "Start
 games in fullscreen" switch in Settings → Video that every launch now follows.
 
+In the same thread, reported that games vanished from the "All" view on a big
+library, little by little as it was scrolled and resized. That report became
+[#511](https://github.com/guilhermefeitosa66/OpenEmux/issues/511): the grouped
+pages ("All", "Favorites", the collections) now keep every game on screen
+however long a console's group is.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
