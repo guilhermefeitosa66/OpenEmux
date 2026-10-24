@@ -136,13 +136,19 @@ def import_custom(console, source_path, target_dir):
     target = custom_path(console, target_dir)
     fits = _fits(source_path)
     try:
-        if fits:
-            # Decoded once even when it is copied as it is: validate_png only
-            # read the header, and a truncated or corrupt file past it would
-            # be stored, selected, and then drawn by RetroArch as nothing.
-            GdkPixbuf.Pixbuf.new_from_file(str(source_path))
-        else:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(str(source_path), *MAX_DECODED)
+        # Decoded in full even when it is copied as it is: validate_png only
+        # read the header, and a truncated or corrupt file past it would be
+        # stored, selected, and then drawn by RetroArch as nothing. Not
+        # new_from_file_at_size: GdkPixbuf 2.42 (Ubuntu 24.04) returns a
+        # scaled picture of a truncated file with no error, the missing rows
+        # filled in opaque grey over the hole.
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(source_path))
+        if not fits:
+            width, height = pixbuf.get_width(), pixbuf.get_height()
+            scale = min(MAX_DECODED[0] / width, MAX_DECODED[1] / height)
+            pixbuf = pixbuf.scale_simple(max(1, round(width * scale)),
+                                         max(1, round(height * scale)),
+                                         GdkPixbuf.InterpType.BILINEAR)
             _ok, data = pixbuf.save_to_bufferv("png", [], [])
     except GLib.Error as exc:
         raise OSError(f"cannot decode {source_path}: {exc.message}") from exc

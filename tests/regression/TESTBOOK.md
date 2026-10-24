@@ -2261,7 +2261,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   to what it was. The PS game is framed by the picked image. Deleting
   `~/.openemux/bezels/PS.png` and launching again starts the game with no bezel and a warning in the
   log, never a failed launch. A PNG larger than 3840×2160 is refused with the toast "That image
-  could not be read". The stored copy is scaled down to fit 960×540 (RetroArch holds it once per
+  could not be read", and so is a 1920×1080 PNG cut short (the first third of its bytes) — on
+  Ubuntu 24.04's GdkPixbuf 2.42 too. The stored copy is scaled down to fit 960×540 (RetroArch holds it once per
   page of the bar), keeping its shape; the picked original is left untouched.
 - **Check:** `ls ~/.openemux/bezels/PS.png`; `file ~/.openemux/bezels/PS.png` reports
   `960 x 540`; suite files `tests/test_preferences.py`

@@ -202,6 +202,16 @@ class ImportingACustomImageTests(_TmpCase):
             bezels.import_custom("PS", self.write("a.png", png_bytes(1920, 1080)), target)
         self.assertFalse((target / "PS.png").exists())
 
+    def test_a_truncated_picture_over_the_cap_is_refused(self):
+        # GdkPixbuf 2.42 scales a truncated file at load with no error and
+        # fills the missing rows with opaque grey; the full decode refuses it.
+        whole = real_png(self.tmp / "whole.png", 1920, 1080).read_bytes()
+        source = self.write("cut.png", whole[: len(whole) // 3])
+        target = self.tmp / "bezels"
+        with self.assertRaises(OSError):
+            bezels.import_custom("PS", source, target)
+        self.assertFalse((target / "PS.png").exists())
+
 
 class ResolvingTheImageTests(_TmpCase):
     def settings(self, **overrides):
