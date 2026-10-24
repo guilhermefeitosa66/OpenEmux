@@ -13,7 +13,21 @@ def _run_returning(stdout="", stderr=""):
     return mock.Mock(return_value=mock.Mock(stdout=stdout, stderr=stderr))
 
 
+def _on_linux(case):
+    """Take the Linux branches wherever the suite runs.
+
+    Each class below is about what a Linux machine reports; on Windows
+    ``sysinfo`` answers from ``platform`` before reading any of it.
+    """
+    patcher = mock.patch.object(sysinfo.sys, "platform", "linux")
+    patcher.start()
+    case.addCleanup(patcher.stop)
+
+
 class TheDistributionTests(unittest.TestCase):
+    def setUp(self):
+        _on_linux(self)
+
     def _release(self, text):
         handle = tempfile.NamedTemporaryFile("w", suffix="os-release", delete=False)
         handle.write(text)
@@ -56,6 +70,9 @@ class TheDistributionTests(unittest.TestCase):
 
 
 class TheDesktopTests(unittest.TestCase):
+    def setUp(self):
+        _on_linux(self)
+
     def test_desktop_and_session_as_announced(self):
         env = {"XDG_CURRENT_DESKTOP": "GNOME", "XDG_SESSION_TYPE": "wayland"}
         self.assertEqual(sysinfo.desktop(env), "GNOME · Wayland")
@@ -72,6 +89,7 @@ class TheDesktopTests(unittest.TestCase):
 
 class TheInstallFormatTests(unittest.TestCase):
     def setUp(self):
+        _on_linux(self)
         patcher = mock.patch.object(sysinfo, "is_running_in_flatpak", return_value=False)
         self.flatpak = patcher.start()
         self.addCleanup(patcher.stop)

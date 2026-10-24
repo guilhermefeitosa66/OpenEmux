@@ -298,14 +298,17 @@ class TheSaveFilesThatTravelWithARenameTests(unittest.TestCase):
     def test_a_save_that_cannot_be_moved_does_not_fail_the_rename(self):
         with TemporaryDirectory() as tmp_dir:
             rom, save = self._rom_with_save(tmp_dir)
-            real_rename = Path.rename
+            path_class = type(save)
+            real_rename = path_class.rename
 
+            # Patched on the concrete class and matched by name, so what is
+            # refused does not depend on how this platform's paths compare.
             def _refuse(self, target):
-                if self == save:
+                if self.name == save.name:
                     raise OSError("read-only")
                 return real_rename(self, target)
 
-            with mock.patch.object(Path, "rename", _refuse):
+            with mock.patch.object(path_class, "rename", _refuse):
                 with self.assertLogs("openemux.core.rom_actions", level="WARNING"):
                     renamed = rename_rom(Path(tmp_dir), rom, "Kirby 2")
 

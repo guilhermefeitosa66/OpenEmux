@@ -191,14 +191,17 @@ class WhenAStateWillNotBudgeTests(unittest.TestCase):
             stuck = console / "Chrono Trigger (USA).state1"
             stuck.write_bytes(b"state")
             (console / "Chrono Trigger (USA).state2").write_bytes(b"state")
-            real_rename = Path.rename
+            path_class = type(stuck)
+            real_rename = path_class.rename
 
+            # Patched on the concrete class and matched by name, so what is
+            # refused does not depend on how this platform's paths compare.
             def _refuse(self, target):
-                if self == stuck:
+                if self.name == stuck.name:
                     raise OSError("read-only")
                 return real_rename(self, target)
 
-            with mock.patch.object(Path, "rename", _refuse):
+            with mock.patch.object(path_class, "rename", _refuse):
                 with self.assertLogs("openemux.core.save_states", level="WARNING"):
                     moved = save_states.rename_states(
                         tmp_dir, "Chrono Trigger (USA)", "Chrono Trigger"

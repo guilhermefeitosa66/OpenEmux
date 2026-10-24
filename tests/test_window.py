@@ -1305,7 +1305,7 @@ class OpeningFoldersTests(WindowCase):
         self.assertEqual(self.toasts, [])
 
     def test_a_desktop_with_no_uri_handler_falls_back_to_xdg_open(self):
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio.AppInfo,
             "launch_default_for_uri",
             side_effect=GLib.Error("no handler"),
@@ -1317,7 +1317,7 @@ class OpeningFoldersTests(WindowCase):
     def test_a_folder_nothing_can_open_reports_the_error(self):
         # Issue #234: the mkdir used to sit outside the try, so this raised
         # past the toast and the button simply did nothing.
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio.AppInfo,
             "launch_default_for_uri",
             side_effect=GLib.Error("no handler"),
@@ -1372,7 +1372,7 @@ class OpeningFoldersTests(WindowCase):
     def test_revealing_a_rom_asks_the_file_manager_to_select_it(self):
         rom = self.rom()
         connection = mock.Mock()
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio, "bus_get_sync", return_value=connection
         ):
             self.win._reveal_rom_in_files(rom)
@@ -1380,7 +1380,7 @@ class OpeningFoldersTests(WindowCase):
 
     def test_a_desktop_with_no_file_manager_service_opens_the_folder(self):
         rom = self.rom()
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio, "bus_get_sync", side_effect=GLib.Error("no bus")
         ), mock.patch.object(self.win, "_open_path_in_file_manager") as open_path:
             self.win._reveal_rom_in_files(rom)

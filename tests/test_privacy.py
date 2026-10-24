@@ -65,6 +65,18 @@ class AWindowsHomeTests(_HomeCase):
         )
 
 
+class AnMsys2HomeTests(_HomeCase):
+    # MSYS2's Python spells the same home with forward slashes.
+    home = "C:/Users/Guilherme"
+    real_home = "C:/Users/Guilherme"
+
+    def test_both_separators(self):
+        self.assertEqual(
+            redact_home("C:\\Users\\Guilherme\\.openemux and C:/Users/Guilherme/roms"),
+            "~\\.openemux and ~/roms",
+        )
+
+
 class AHomeTooShortToRedactTests(_HomeCase):
     home = "/"
     real_home = "/"
