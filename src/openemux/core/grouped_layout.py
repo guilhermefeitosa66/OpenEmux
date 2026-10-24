@@ -37,3 +37,17 @@ def scroll_to_show(scroll, viewport, top, height):
     if top + height > scroll + viewport:
         return top + height - viewport
     return scroll
+
+
+def item_span(position, columns, count, height):
+    """Where item ``position`` of a grid sits inside it, as ``(top, height)``.
+
+    A grid of ``count`` items in ``columns`` columns, ``height`` tall, whose
+    rows all have the same height -- the cards of one view mode do. Computed
+    from the index rather than read off the card's widget, which a grid only
+    places where its own scroll last put it (issue #511, QA round 1).
+    """
+    columns = max(1, columns)
+    rows = max(1, -(-count // columns))
+    row_height = height / rows
+    return (position // columns) * row_height, row_height

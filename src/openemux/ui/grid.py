@@ -443,9 +443,13 @@ class RomGrid(Gtk.GridView):
         # On a grouped page the scrolling is the page's, not this grid's: a
         # card focused off screen -- crossing into the next group, or walking
         # down a group taller than the window -- is brought in by the page.
+        self._reveal_on_page(self._position_of(card.entry))
+
+    def _reveal_on_page(self, position):
+        """On a grouped page, scroll the page to card ``position``."""
         parent = self.get_parent()
-        if isinstance(parent, GroupedScroll):
-            parent.reveal(card)
+        if position is not None and isinstance(parent, GroupedScroll):
+            parent.reveal_position(self, position)
 
     # -- cartridge shells ----------------------------------------------------
 
@@ -687,6 +691,7 @@ class RomGrid(Gtk.GridView):
         entry = visible[position]
         if self._grab_focus_on(entry):
             return True
+        self._reveal_on_page(position)
         self.scroll_to(position, Gtk.ListScrollFlags.FOCUS, None)
         GLib.idle_add(self._grab_focus_when_realized, entry)
         return True

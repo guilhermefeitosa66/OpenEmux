@@ -160,45 +160,50 @@ class TheWidgetTests(unittest.TestCase):
         )
         self.assertIn("b39", self.bound)
 
-    def test_a_grid_scrolling_itself_scrolls_the_page_instead(self):
-        # Keyboard focus walking down past the slice on screen.
+    def test_a_grid_scrolling_itself_is_put_back_to_its_slice(self):
+        # GTK scrolls a grid to the card that takes focus; on this page the
+        # scrolling is the page's, so the grid stays where the page has it.
         self.scroll_to(0)
         self.grids[0].scroll_to(300, Gtk.ListScrollFlags.FOCUS, None)
-        _pump_until(lambda: self.vadj.get_value() > 0)
-        self.assertGreater(self.vadj.get_value(), 0)
+        _settle()
+        self.assertEqual(self.vadj.get_value(), 0)
+        self.assertEqual(self.grids[0].get_vadjustment().get_value(), 0)
+        self.assertIn("a0", self.bound)
+
+    def test_revealing_an_item_below_the_window_scrolls_down_to_it(self):
+        self.scroll_to(0)
+        self.assertTrue(self.body.reveal_position(self.grids[0], 300))
         _settle()
         self.assertIn("a300", self.bound)
+        self.assertIs(self.bound["a300"].get_mapped(), True)
+        ok, bounds = self.bound["a300"].compute_bounds(self.body)
+        self.assertTrue(ok)
+        self.assertGreaterEqual(bounds.get_y(), 0)
+        self.assertLessEqual(
+            bounds.get_y() + bounds.get_height(), self.vadj.get_page_size() + 1
+        )
 
-    def test_a_grid_scrolled_from_outside_a_layout_moves_the_page(self):
-        self.scroll_to(0)
-        self.grids[0].get_vadjustment().set_value(500)
-        self.assertEqual(self.vadj.get_value(), 500)
-
-    def test_revealing_a_card_below_the_window_scrolls_down_to_it(self):
-        self.scroll_to(0)
-        self.grids[1].scroll_to(0, Gtk.ListScrollFlags.FOCUS, None)
-        self.assertTrue(_pump_until(lambda: "b0" in self.bound))
-        self.assertTrue(self.body.reveal(self.bound["b0"]))
+    def test_revealing_an_item_above_the_window_scrolls_up_to_it(self):
+        self.scroll_to(1)
+        self.assertTrue(self.body.reveal_position(self.grids[0], 0))
         _settle()
-        top, _height = self.body._layout[self.grids[1]]
-        self.assertGreater(self.vadj.get_value(), top - self.vadj.get_page_size())
+        top, _height = self.body._layout[self.grids[0]]
+        self.assertEqual(self.vadj.get_value(), top)
+        self.assertIn("a0", self.bound)
 
-    def test_revealing_a_card_already_on_screen_leaves_the_page_alone(self):
+    def test_revealing_an_item_already_on_screen_leaves_the_page_alone(self):
         self.scroll_to(0)
-        self.assertTrue(self.body.reveal(self.bound["a0"]))
+        self.assertTrue(self.body.reveal_position(self.grids[0], 0))
         self.assertEqual(self.vadj.get_value(), 0)
 
-    def test_a_widget_that_is_in_none_of_the_grids_is_not_revealed(self):
-        self.assertFalse(self.body.reveal(Gtk.Label()))
-
     def test_a_grid_that_was_never_laid_out_is_not_revealed(self):
-        self.body._layout = {}
-        self.assertFalse(self.body.reveal(self.grids[0]))
+        self.assertFalse(self.body.reveal_position(Gtk.GridView(), 0))
 
-    def test_a_card_whose_place_cannot_be_computed_is_not_revealed(self):
-        card = self.bound["a0"]
-        card.compute_point = lambda *_args: (False, None)
-        self.assertFalse(self.body.reveal(card))
+    def test_a_grid_with_no_model_is_one_row(self):
+        grid = Gtk.GridView()
+        self.body.add_section(Gtk.Label(label="c"), grid)
+        _settle()
+        self.assertTrue(self.body.reveal_position(grid, 0))
 
     def test_the_width_is_the_widest_child_and_never_scrolls(self):
         minimum, natural, _, _ = self.body.measure(Gtk.Orientation.HORIZONTAL, -1)
@@ -227,7 +232,7 @@ class WithNoScrollerTests(unittest.TestCase):
         window.present()
         _settle()
         self.assertIsNone(body.get_vadjustment())
-        self.assertFalse(body.reveal(Gtk.Label()))
+        self.assertFalse(body.reveal_position(body._sections[0][1], 0))
 
     def test_a_new_adjustment_replaces_the_old_one(self):
         body = GroupedScroll()
@@ -325,6 +330,37 @@ class TheAllPageTests(WindowCase):
         self.pump_until(lambda: self.vadj.get_value() > before)
         top, _height = self.sfc.get_parent()._layout[self.sfc]
         self.assertGreater(self.vadj.get_value() + self.vadj.get_page_size(), top)
+
+    def focused_card_is_on_screen(self):
+        focus = self.win.get_focus()
+        body = self.fc.get_parent()
+        ok, bounds = focus.compute_bounds(body)
+        if not ok:
+            return False
+        top = bounds.get_y()
+        bottom = top + bounds.get_height()
+        return bottom > 0 and top < body.get_height()
+
+    def walk(self, direction, presses, settle_every):
+        """Press ``direction`` like a key held down; check the focus as it goes."""
+        lost = []
+        for press in range(1, presses + 1):
+            self.win.navigation._cmd_move(direction)
+            self.pump()
+            if press % settle_every == 0:
+                _settle()
+                if not self.focused_card_is_on_screen():
+                    lost.append(press)
+        return lost
+
+    def test_walking_down_a_tall_group_keeps_the_focused_card_on_screen(self):
+        # QA round 1 of #511: after a hundred-odd presses the page scrolled
+        # back up and left the focused card below the window.
+        self.scroll_to(0)
+        self.assertTrue(self.fc.focus_first_card())
+        self.assertTrue(self.pump_until(lambda: self.win.get_focus() is not None))
+        self.assertEqual(self.walk("down", 200, 10), [])
+        self.assertEqual(self.walk("up", 60, 10), [])
 
 
 if __name__ == "__main__":

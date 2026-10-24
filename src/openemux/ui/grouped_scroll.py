@@ -15,6 +15,13 @@ adjustment set to where that slice falls inside the grid. Each grid then
 builds exactly the cards on screen, as it does on a console page, where it is
 the scroller's own child.
 
+The page is the only thing that scrolls. A grid moving its own adjustment
+-- GTK does that whenever a card takes the keyboard focus -- is put back to
+its slice, and the page is scrolled to the focused card instead, from the
+card's index (``reveal_position``). Letting the two scroll each other made the
+page drift away from the card while focus walked down a tall group (issue
+#511, QA round 1).
+
 A grid that is off screen is still allocated -- one pixel, just outside the
 viewport, where the clip hides it -- rather than hidden: hiding a widget
 unmaps it, and a grid attaches its selection and its focus watcher on map and
@@ -24,9 +31,9 @@ dismisses its popovers on unmap, which scrolling must never trigger.
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GObject, Graphene, Gtk
+from gi.repository import Gdk, GObject, Gtk
 
-from openemux.core.grouped_layout import scroll_to_show, slice_for
+from openemux.core.grouped_layout import item_span, scroll_to_show, slice_for
 
 
 class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
@@ -50,10 +57,7 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         self._sections = []
         #: Each child's ``(top, height)`` in the content, from the last layout.
         self._layout = {}
-        #: The inner scroll each grid was last given.
-        self._inner = {}
-        #: Set while this widget moves its grids' adjustments itself, so the
-        #: handler can tell that from a grid scrolling on its own.
+        #: Set during a layout pass, when the page's own scroll is not news.
         self._allocating = False
         self.set_overflow(Gtk.Overflow.HIDDEN)
         self.connect("destroy", self._on_destroy)
@@ -94,10 +98,8 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         """Append one group: its header, then its grid."""
         header.set_parent(self)
         grid.set_parent(self)
-        # The grid's own adjustment: this widget moves it to the slice on
-        # screen, and the grid moves it when focus asks to scroll.
+        # The grid's own adjustment: this widget sets it to the slice on screen.
         grid.set_vadjustment(Gtk.Adjustment())
-        grid.get_vadjustment().connect("value-changed", self._on_grid_scrolled, grid)
         self._sections.append((header, grid))
 
     def _children(self):
@@ -155,26 +157,17 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
                 return
             scroll = max(0, min(vadj.get_value(), total - height))
             vadj.configure(scroll, 0, max(total, height), height * 0.1, height * 0.9, height)
-            # A grid that scrolls itself while being allocated -- focus moved
-            # to a card below its slice -- has asked the page to follow it.
-            # One more pass lays everything out at the scroll it asked for.
-            # The drift is measured from the scroll this pass used, not from
-            # the adjustment's value now: a card bound and focused during the
-            # pass may already have had the page revealed to it, and adding
-            # the drift on top of that would overshoot. The second pass always
-            # runs when the page moved, so the children never stay laid out
-            # at a scroll the adjustment no longer shows.
-            moved = self._allocate_children(width, height, scroll)
-            if moved:
-                vadj.set_value(max(0, min(scroll + moved, total - height)))
+            self._allocate_children(width, height, scroll)
+            # A card that took focus during the pass may have had the page
+            # revealed to it: lay the children out again at that scroll, so
+            # they never stay where the adjustment no longer is.
             if vadj.get_value() != scroll:
                 self._allocate_children(width, height, vadj.get_value())
         finally:
             self._allocating = False
 
     def _allocate_children(self, width, height, scroll):
-        """Allocate every child at ``scroll``; how far a grid moved itself."""
-        moved = 0
+        """Allocate every child at ``scroll``."""
         for header, grid in self._sections:
             if header in self._layout:
                 top, child_height = self._layout[header]
@@ -201,7 +194,6 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
             adjustment.configure(
                 inner, 0, max(content_height, slice_height), 1, slice_height, slice_height
             )
-            self._inner[grid] = inner
             grid.size_allocate(
                 _rect(
                     0,
@@ -211,23 +203,15 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
                 ),
                 -1,
             )
-            if visible is not None:
-                drift = adjustment.get_value() - inner
-                if abs(drift) >= 1:
-                    moved = drift
-        return moved
+            # A focused card makes GTK scroll the grid to it as the grid is
+            # allocated. The scrolling is the page's: back to the slice (GTK
+            # follows the adjustment, and lays its cards out again there).
+            if abs(adjustment.get_value() - inner) >= 1:
+                adjustment.set_value(inner)
 
     def _on_page_scrolled(self, *_args):
         if not self._allocating:
             self.queue_allocate()
-
-    def _on_grid_scrolled(self, adjustment, grid):
-        if self._allocating or self._vadjustment is None or grid not in self._inner:
-            return
-        # The grid scrolled outside of a layout pass; it is page content, so
-        # the page scrolls by as much instead.
-        drift = adjustment.get_value() - self._inner[grid]
-        self._vadjustment.set_value(self._vadjustment.get_value() + drift)
 
     def do_snapshot(self, snapshot):
         for child in self._children():
@@ -236,39 +220,31 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
 
     # -- focus -------------------------------------------------------------
 
-    def reveal(self, widget):
-        """Scroll the page so ``widget``, inside one of the grids, is on screen."""
-        vadj = self._vadjustment
-        if vadj is None:
-            return False
-        for _header, grid in self._sections:
-            if widget is not grid and not widget.is_ancestor(grid):
-                continue
-            layout = self._layout.get(grid)
-            if layout is None:
-                return False
-            ok, point = widget.compute_point(grid, Graphene.Point())
-            if not ok:
-                return False
-            # A grid's own coordinates start at its content, inside its margins.
-            top = (
-                layout[0]
-                + grid.get_margin_top()
-                + grid.get_vadjustment().get_value()
-                + point.y
-            )
-            # A card bound in a grid that is off screen may not have been
-            # allocated yet (GTK 4.14 leaves it at zero height); its measured
-            # height is where it will be.
-            height = widget.get_height() or widget.measure(
-                Gtk.Orientation.VERTICAL, -1
-            )[1]
-            target = scroll_to_show(vadj.get_value(), vadj.get_page_size(), top, height)
-            if target != vadj.get_value():
-                vadj.set_value(target)
-            return True
-        return False
+    def reveal_position(self, grid, position):
+        """Scroll the page so item ``position`` of ``grid`` is on screen.
 
+        The grids of a grouped page hold one column count (``RomGrid`` sets
+        its minimum and maximum together), so the item's place follows from
+        its index alone.
+        """
+        vadj = self._vadjustment
+        layout = self._layout.get(grid)
+        if vadj is None or layout is None:
+            return False
+        top, child_height = layout
+        margin_top = grid.get_margin_top()
+        content_height = max(0, child_height - margin_top - grid.get_margin_bottom())
+        model = grid.get_model()
+        count = model.get_n_items() if model is not None else 0
+        item_top, item_height = item_span(
+            position, grid.get_max_columns(), count, content_height
+        )
+        target = scroll_to_show(
+            vadj.get_value(), vadj.get_page_size(), top + margin_top + item_top, item_height
+        )
+        if target != vadj.get_value():
+            vadj.set_value(target)
+        return True
 
 def _rect(x, y, width, height):
     rect = Gdk.Rectangle()
