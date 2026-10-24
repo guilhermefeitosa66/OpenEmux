@@ -254,7 +254,7 @@ def find_sevenzip():
             return found
     raise VendorError(
         "no 7-Zip CLI found (looked for: " + ", ".join(SEVENZIP_CANDIDATES) + ").\n"
-        "  Windows (MSYS2):  pacman -S mingw-w64-x86_64-7zip\n"
+        "  Windows (MSYS2):  pacman -S mingw-w64-ucrt-x86_64-7zip\n"
         "  Debian/Ubuntu:    apt-get install 7zip\n"
         "  Fedora:           dnf install p7zip"
     )

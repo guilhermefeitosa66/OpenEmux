@@ -1,7 +1,7 @@
 /*
  * Entry point of the Windows bundle: OpenEmux.exe.
  *
- * The bundle is a relocated MSYS2 MINGW64 prefix -- bin/, lib/, share/, etc/ --
+ * The bundle is a relocated MSYS2 UCRT64 prefix -- bin/, lib/, share/, etc/ --
  * with the app's src/ and the vendored RetroArch beside it. Nothing in it knows
  * where the user installed it, so something has to look around at startup and
  * say so. That is all this program does: work out its own directory, point the
@@ -101,7 +101,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
                L"\\lib\\gdk-pixbuf-2.0\\2.10.0\\loaders.cache");
 
     /* HTTPS. OpenSSL bakes its default CA path in at build time, and MSYS2
-     * builds it as C:\msys64\mingw64\etc\ssl\cert.pem -- a path that does not
+     * builds it as C:\msys64\ucrt64\etc\ssl\cert.pem -- a path that does not
      * exist on a user's machine. Without this every HTTPS request fails to
      * verify, which on first boot means no cores download and no cover art:
      * the app installs cleanly and then cannot fetch anything. Both variables

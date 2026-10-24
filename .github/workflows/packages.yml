@@ -135,7 +135,7 @@ jobs:
       - name: Reclaim runner disk space
         # The AppImage and the Flatpak pull a whole GTK stack (and, for the
         # Flatpak, the GNOME SDK) into the container, and the Windows build
-        # unpacks RetroArch *and* a MINGW64 GTK stack. A stock runner has
+        # unpacks RetroArch *and* a UCRT64 GTK stack. A stock runner has
         # ~14 GB free, which the SDK alone can eat; the preinstalled toolchains
         # below are worth ~25 GB and nothing here uses them.
         if: matrix.target != 'deb' && matrix.target != 'rpm'
