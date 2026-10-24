@@ -4493,7 +4493,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
   build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
   caught -- and a launcher that no longer exports `OPENEMUX_LAUNCHER`, without which a pinned
-  taskbar button points at a bare `pythonw.exe` (RT-340).
+  taskbar button points at a bare `pythonw.exe` (RT-363).
 - **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
 ### RT-195 — The bundle carries no path from the machine that built it
@@ -4753,7 +4753,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   delete permanently without saying so.
 - **Check:** human only.
 
-### RT-340 — OpenEmux owns its taskbar button on Windows
+### RT-363 — OpenEmux owns its taskbar button on Windows
 - **Area:** Windows platform
 - **Mode:** MANUAL
 - **Preconditions:** A Windows 10/11 machine with the artifacts of `make windows` (the portable zip
@@ -4775,7 +4775,7 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   OpenEmux icon throughout. The RetroArch game window is its own process and keeps its own button.
 - **Check:** human only.
 
-### RT-341 — The Windows shell identity is wired, and stays off everywhere else
+### RT-364 — The Windows shell identity is wired, and stays off everywhere else
 - **Area:** Windows platform
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.
