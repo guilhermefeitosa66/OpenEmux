@@ -215,6 +215,8 @@ are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 Want to help? [CONTRIBUTING.md](CONTRIBUTING.md) covers everything from filing a
 good bug report to opening your first pull request, and you do not need to write
 Python to be useful — testing a release and translating the interface both count.
+What OpenEmux is, and what it deliberately is not, is written down in
+[docs/PRODUCT.md](docs/PRODUCT.md): read it before proposing a change to the experience.
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Found a security problem? Do not open a public issue — [SECURITY.md](SECURITY.md)
