@@ -106,6 +106,10 @@ conversation around it happened in.
 make test
 ```
 
+It runs on a private Xvfb display, so the tests that build real windows never
+open them on your desktop; `make install-sys-deps` installs Xvfb, and the run
+tells you what to install when it is missing.
+
 Continuous integration also runs correctness-only lint (`make lint`), the suite
 on Python 3.10 through 3.13, the suite under MSYS2 on Windows, a headless
 start-up smoke test, Bandit and `pip-audit`. Coverage has a floor, so a change
