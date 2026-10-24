@@ -5554,10 +5554,10 @@ or into an environment that cannot run the tests.
 - **Check:**
   ```bash
   env -u OPENEMUX_TESTS_PRIVATE_DISPLAY -u OPENEMUX_TESTS_ON_DESKTOP XDG_SESSION_TYPE=x11 \
-    PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs > /tmp/rt364.log 2>&1
+    PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs > /tmp/rt371.log 2>&1
   echo "exit=$?"                                                   # expect exit=0
-  grep -c "would draw on your desktop" /tmp/rt364.log              # expect > 0
-  grep -c "this run is on your desktop session" /tmp/rt364.log     # expect 1
+  grep -c "would draw on your desktop" /tmp/rt371.log              # expect > 0
+  grep -c "this run is on your desktop session" /tmp/rt371.log     # expect 1
   ```
 
 ### RT-372 — `OPENEMUX_TESTS_ON_DESKTOP=1` brings the old behavior back
