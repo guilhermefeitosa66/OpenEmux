@@ -12,8 +12,12 @@ from pathlib import Path
 
 import yaml
 
+from tests.test_msys2_packages import load_msys2_packages
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = REPO_ROOT / ".github/workflows"
+
+msys2 = load_msys2_packages()
 
 
 def _workflow(name):
@@ -204,39 +208,54 @@ class TestsWorkflowTests(unittest.TestCase):
             "the Windows job does not run the suite",
         )
 
-    def test_the_windows_job_uses_the_stack_the_bundle_ships(self):
-        # Running against some other Python would test a stack no user has:
-        # the bundle is MSYS2's MINGW64 packages, and PyGObject cannot be
-        # pip-built under it anyway.
+    def _windows_setup(self):
         job = self.data["jobs"]["windows"]
-        setup = next(
+        return next(
             step for step in job["steps"]
             if str(step.get("uses", "")).startswith("msys2/setup-msys2")
         )
-        self.assertEqual(setup["with"]["msystem"], "MINGW64")
+
+    def test_the_windows_job_uses_the_stack_the_bundle_ships(self):
+        # Running against some other Python would test a stack no user has:
+        # the bundle is MSYS2's UCRT64 packages, and PyGObject cannot be
+        # pip-built under it anyway. Every bundle root is installed, not a
+        # hand-picked few, so the WebP and SVG loaders the tests read are the
+        # ones users get (issue #527).
+        setup = self._windows_setup()
+        self.assertEqual(setup["with"]["msystem"], msys2.ENVIRONMENT.upper())
         installed = setup["with"]["install"].split()
-        bundle = (REPO_ROOT / "packaging/windows/msys2_packages.py").read_text(
-            encoding="utf-8"
-        )
-        for package in ("mingw-w64-x86_64-python-gobject",
-                        "mingw-w64-x86_64-gtk4",
-                        "mingw-w64-x86_64-libadwaita",
-                        "mingw-w64-x86_64-SDL2"):
+        for package in msys2.ROOT_PACKAGES:
             with self.subTest(package=package):
                 self.assertIn(package, installed)
-                self.assertIn(package, bundle)
+
+    def test_the_windows_job_installs_nothing_from_another_environment(self):
+        installed = self._windows_setup()["with"]["install"].split()
+        for package in installed:
+            with self.subTest(package=package):
+                self.assertTrue(
+                    package == "make" or package.startswith(msys2.PACKAGE_PREFIX),
+                    f"{package} is not a {msys2.ENVIRONMENT} package",
+                )
+
+    def test_the_windows_job_cannot_pass_with_a_failed_step(self):
+        # A package that cannot be installed has to turn the job red: that is
+        # the only reason the two-week MINGW64 outage was visible at all.
+        job = self.data["jobs"]["windows"]
+        self.assertNotIn("continue-on-error", job)
+        for step in job["steps"]:
+            with self.subTest(step=step.get("name")):
+                self.assertNotIn("continue-on-error", step)
 
     def test_the_windows_job_installs_the_cairo_the_bundle_ships(self):
-        # This job takes MSYS2's updates, and mingw-w64-x86_64-cairo 1.18.6-1
-        # aborts GTK 4 at the first window it presents -- exit code 3, no
-        # failing test, a third of the way into the suite, on every branch at
-        # once. It installs the cairo named by the bundle's lock instead: one
-        # version rather than two that can drift, and it moves the day the
-        # lock moves to a fixed release.
+        # This job takes MSYS2's updates, and cairo 1.18.6-1 once aborted GTK 4
+        # at the first window it presented -- exit code 3, no failing test, a
+        # third of the way into the suite, on every branch at once. It installs
+        # the cairo named by the bundle's lock instead: one version rather than
+        # two that can drift, and it moves the day the lock moves.
         job = self.data["jobs"]["windows"]
         run = " ".join(str(step.get("run", "")) for step in job["steps"])
         self.assertIn("packaging/windows/packages.lock", run)
-        self.assertIn("mingw-w64-x86_64-cairo", run)
+        self.assertIn(msys2.PACKAGE_PREFIX + "cairo", run)
         self.assertIn("pacman -U", run)
 
     def test_the_matrix_covers_every_supported_python(self):
@@ -489,3 +508,63 @@ class HeadlessHostRunTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsPackageSetTests(unittest.TestCase):
+    """CI, the bundle and the developer setup install one MSYS2 set (#527).
+
+    The bundle's roots in ``msys2_packages.py`` are the reference. The CI job
+    is checked above; the two developer entry points are checked here. Each
+    may install more (make, git, coverage, 7zip), never less.
+    """
+
+    def test_make_install_sys_deps_windows_holds_every_bundle_root(self):
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        recipe = makefile.split("install-sys-deps-windows:\n", 1)[1].split("\n\n", 1)[0]
+        installed = recipe.replace("\\", " ").split()
+        for package in msys2.ROOT_PACKAGES:
+            with self.subTest(package=package):
+                self.assertIn(package, installed)
+
+    def test_setup_dev_ps1_holds_every_bundle_root(self):
+        script = (REPO_ROOT / "scripts/windows/setup-dev.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f'"{msys2.PACKAGE_PREFIX}$_"', script)
+        self.assertIn(f"$Msystem = '{msys2.ENVIRONMENT.upper()}'", script)
+        listed = script.split("$MingwPackages = @(", 1)[1].split("\n)", 1)[0]
+        names = {msys2.PACKAGE_PREFIX + name for name in re.findall(r"'([^']+)'", listed)}
+        for package in msys2.ROOT_PACKAGES:
+            with self.subTest(package=package):
+                self.assertIn(package, names)
+
+    def test_dev_shell_opens_the_same_environment(self):
+        script = (REPO_ROOT / "scripts/windows/dev-shell.cmd").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"msys2_shell.cmd\" -{msys2.ENVIRONMENT} ", script)
+
+    def test_nothing_left_points_at_mingw64(self):
+        # MSYS2 no longer ships GTK 4 or libadwaita for MINGW64, so any
+        # reference left in the build, CI or the setup scripts is a step that
+        # will fail -- or, worse, install a stack nothing else tests.
+        roots = [
+            REPO_ROOT / ".github/workflows",
+            REPO_ROOT / "packaging/windows",
+            REPO_ROOT / "packaging/docker/windows.Dockerfile",
+            REPO_ROOT / "scripts/windows",
+            REPO_ROOT / "scripts/vendor_retroarch.py",
+            REPO_ROOT / "Makefile",
+            REPO_ROOT / "THIRD_PARTY_NOTICES.md",
+        ]
+        stale = re.compile(r"mingw64|mingw-w64-x86_64-", re.IGNORECASE)
+        for root in roots:
+            files = [root] if root.is_file() else sorted(
+                path for path in root.rglob("*")
+                if path.is_file() and path.suffix != ".pyc"
+            )
+            for path in files:
+                text = path.read_text(encoding="utf-8", errors="replace")
+                with self.subTest(path=str(path.relative_to(REPO_ROOT))):
+                    self.assertIsNone(stale.search(text))
+

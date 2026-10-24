@@ -56,7 +56,7 @@ components OpenEmux ships or fetches.
 The Linux packages depend on the distribution's GTK stack and install nothing of
 it. The Windows installer and portable zip have nowhere to depend on, so they
 **redistribute** a Windows build of that whole stack, taken unmodified from the
-MSYS2 MINGW64 repository (https://repo.msys2.org/mingw/mingw64/). The exact
+MSYS2 UCRT64 repository (https://repo.msys2.org/mingw/ucrt64/). The exact
 package set and versions are pinned in
 [`packaging/windows/packages.lock`](packaging/windows/packages.lock), which is
 the authoritative list of what any given build shipped.

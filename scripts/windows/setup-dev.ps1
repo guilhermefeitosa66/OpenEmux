@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     OpenEmux is a GTK4/libadwaita app driven by PyGObject. On Windows the only
-    practical source of that stack is MSYS2's MINGW64 environment: GTK 4,
+    practical source of that stack is MSYS2's UCRT64 environment: GTK 4,
     libadwaita, Python and the GObject bindings all come from one pacman
     repository -- and it is the same repository the shipped Windows bundle is
     assembled from, so what runs here and what we ship share one ABI.
@@ -22,7 +22,7 @@
       * Inno Setup  - the installer is produced on Linux too.
       * Python      - a Windows-native Python cannot import MSYS2's PyGObject.
       * make        - MSYS2 supplies it; a second one on PATH is the classic
-                      "works in cmd, fails in mingw64" bug.
+                      "works in cmd, fails in ucrt64" bug.
 
     Nothing here needs winget, and the system PATH is never modified. The only
     thing installed outside the repository is MSYS2 itself, under $Msys2Root.
@@ -70,19 +70,19 @@ $Msys2Sha256 = 'C105946E64E08F099AC0E4647461CE762B95333AD211777666476A9A41451D65
 # --- Package set -------------------------------------------------------------
 #
 # Kept in sync with docs/DEVELOPMENT.md and, for the runtime half, with the seed
-# list in packaging/windows/msys2_bundle.py. Versions are whatever the rolling
+# list in packaging/windows/msys2_packages.py. Versions are whatever the rolling
 # repository holds; the shipped bundle pins them with a lockfile, a development
 # checkout does not need to.
 
 # MSYS (POSIX layer) packages. `make` must be this one, not
-# mingw-w64-x86_64-make: the Makefile recipes are POSIX sh, and only the MSYS
+# mingw-w64-ucrt-x86_64-make: the Makefile recipes are POSIX sh, and only the MSYS
 # build runs them through /bin/sh.
 $MsysPackages = @(
     'make',
     'git'
 )
 
-# MINGW64 packages -- the native Windows DLLs the app actually loads.
+# UCRT64 packages -- the native Windows DLLs the app actually loads.
 $MingwPackages = @(
     # GTK stack
     'gtk4',                            # toolkit
@@ -144,12 +144,12 @@ function Invoke-Msys {
 
       `bash -lc` rather than msys2_shell.cmd: the launcher does not reliably
       hand back the command's exit status, and we need to fail loudly.
-      MSYSTEM selects the environment (MINGW64 puts /mingw64/bin first) and
+      MSYSTEM selects the environment (UCRT64 puts /ucrt64/bin first) and
       CHERE_INVOKING keeps the working directory instead of jumping to $HOME.
     #>
     param(
         [Parameter(Mandatory)] [string] $Command,
-        [string] $Msystem = 'MINGW64',
+        [string] $Msystem = 'UCRT64',
         [string] $WorkingDirectory,
         [switch] $AllowFailure
     )
@@ -288,7 +288,7 @@ Invoke-Msys -Msystem 'MSYS' -Command 'pacman -Syu --noconfirm' | Out-Null
 
 Write-Step 'Installing the GTK4 / Python stack'
 
-$mingwPrefixed = $MingwPackages | ForEach-Object { "mingw-w64-x86_64-$_" }
+$mingwPrefixed = $MingwPackages | ForEach-Object { "mingw-w64-ucrt-x86_64-$_" }
 $allPackages = @($MsysPackages) + @($mingwPrefixed)
 
 Write-Host "    $($allPackages.Count) packages"
@@ -340,7 +340,7 @@ Write-Host ''
 Write-Host '  Open the development shell:  scripts\windows\dev-shell.cmd'
 Write-Host '  Then, inside it:             make run'
 Write-Host ''
-Write-Host '  The system PATH was left alone on purpose: putting mingw64\bin on it'
+Write-Host '  The system PATH was left alone on purpose: putting ucrt64\bin on it'
 Write-Host '  would shadow system DLLs for every process on the machine. dev-shell.cmd'
 Write-Host '  sets up the environment for that one shell instead.'
 Write-Host ''

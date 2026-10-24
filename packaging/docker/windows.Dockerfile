@@ -6,7 +6,7 @@
 #
 #   * the mingw-w64 cross compiler, which turns openemux-launcher.c into the
 #     OpenEmux.exe that starts the bundle;
-#   * zstd + tar, which unpack the MSYS2 MINGW64 packages providing GTK 4,
+#   * zstd + tar, which unpack the MSYS2 UCRT64 packages providing GTK 4,
 #     libadwaita and Python *for Windows*;
 #   * NSIS, which has a native Linux build -- makensis compiles the installer
 #     here as an ordinary Linux program.

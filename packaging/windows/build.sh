@@ -27,7 +27,7 @@ CACHE="$BUILD_DIR/msys2-cache"
 rm -rf "$EXTRACTED" "$BUNDLE"
 mkdir -p "$BUILD_DIR" dist
 
-echo "==> phase 1: fetch the MINGW64 runtime from MSYS2"
+echo "==> phase 1: fetch the UCRT64 runtime from MSYS2"
 python3 packaging/windows/msys2_packages.py --prefix "$EXTRACTED" --cache "$CACHE"
 
 echo "==> phase 2: stage the bundle tree"
