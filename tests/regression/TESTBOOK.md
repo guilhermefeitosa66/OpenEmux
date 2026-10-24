@@ -1486,6 +1486,46 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
   The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
 
+### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
+- **Area:** View modes & layout
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A Game Boy game kept as `Tetris (World).zip` (holding `Tetris (World).gb`)
+  under `<roms>/GB/`, a ScreenScraper account in "Settings" ▸ "Library", and a game ScreenScraper
+  has a cartridge label for.
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Open the console in the cartridge view.
+- **Expected:** The ScreenScraper lookup identifies the game by the `.gb` file inside the archive
+  (its CRC, MD5, size and file name with the extension), not by the archive's own bytes, which
+  match no game: the cartridge shows its label. A Game Boy game ScreenScraper files under Game Boy
+  Color (or the other way round) is found on one more try under the other system; no other console
+  retries. Before issue #506 zipped Game Boy and Game Boy Color libraries never got a label.
+- **Check:** `tests/test_screenscraper.py` (`AZippedRomIsLookedUpByTheRomInsideTests`,
+  `SiblingRetryTests`), `tests/test_hasher.py` (`RomIdentityTests`), `tests/test_archives.py`
+  (`WhichEntryIdentifiesTheRomTests`) and `tests/test_cover_sync.py`
+  (`test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside`).
+
+### RT-362 — A ScreenScraper refusal during an artwork sync is reported, not counted as a miss
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app, with the ScreenScraper HTTP layer stubbed to answer `403`
+  (never live credentials).
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Wait for the sync to end.
+  3. Click "Settings" on the second toast.
+- **Expected:** The usual "Cover sync done" toast, then "ScreenScraper refused the request.
+  Some artwork was not fetched. Check your ScreenScraper account." with a "Settings" button
+  that opens Settings on the "Library" page, where the ScreenScraper account is. A daily-quota
+  answer (`430`) says "ScreenScraper daily quota reached…" and a connection error says
+  "ScreenScraper could not be reached…". A sync where ScreenScraper only answered or said "not
+  found" shows no second toast, and neither does a cancelled sync.
+- **Check:** screenshot of the toast (`make devbox-shot OUT=$SCRATCH/rt362.png WIN=1`). The rules
+  are in `tests/test_screenscraper.py` (`WhatALookupReportsTests`), `tests/test_cover_sync.py`
+  (`MultiPassArtworkSyncTests`) and `tests/test_window.py`
+  (`test_a_screenscraper_problem_follows_the_tally`,
+  `test_the_problem_toast_opens_the_screenscraper_settings`).
+
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
 - **Mode:** AUTO-UI
@@ -1710,6 +1750,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Cards show artwork, not the "missing artwork" placeholder.
 - **Check:** Screenshot; no placeholder tiles visible.
 
+### RT-360 — A cover that does not match the console's box shape is shown whole
+- **Area:** Covers
+- **Mode:** AUTO-UI
+- **Preconditions:** A console page in the "Covers" view mode with two games given a local cover
+  each, in `<roms_dir>/covers/SFC/<displayed title>.png`: one of the console's box shape (SFC,
+  560×400) and one of another shape (a portrait 400×714 box). Each image has a distinct stripe at
+  its top and its bottom. Copies only: remove both files afterwards.
+- **Steps:**
+  1. Open "Super Nintendo" and switch the view mode to "Covers".
+  2. Look at both cards, then zoom in and out through every level (Ctrl+plus / Ctrl+minus) and
+     scroll down and back.
+- **Expected:** The matching cover fills its card edge to edge. The portrait cover is shown whole,
+  both stripes visible, centred on the card's subtle backdrop, with rounded corners and a shadow
+  on the art. Card size and the grid lattice do not change, and every card keeps its own state
+  after zooming and scrolling (issue #508).
+- **Check:** `make devbox-shot` per zoom level; both stripes of each cover visible in every shot.
+
 ### RT-054 — Leaving a page stops its covers from bothering the next one
 - **Area:** Covers
 - **Mode:** MANUAL
@@ -1887,7 +1944,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
-### RT-361 — The artwork manager opens on the current cover and says where it came from
+### RT-363 — The artwork manager opens on the current cover and says where it came from
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`). A PNG
@@ -1896,7 +1953,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `make devbox-app ACTION=restart`.
 - **Steps:**
   1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
-  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-361.png WIN=1`).
+  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-363.png WIN=1`).
 - **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
   the PNG whole, titled "Local file" with a "Local" pill; the details read
   `PNG · <width> × <height> · Found in the library folder`; the buttons are "Pick Another Match…",
@@ -1905,10 +1962,10 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** The screenshot shows all of the above; the app log has no `Traceback`.
 - **Restore:** Delete the copied PNG (it lives in the throwaway devbox home).
 
-### RT-362 — Adjusting the current cover saves it as chosen by you
+### RT-364 — Adjusting the current cover saves it as chosen by you
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
-- **Preconditions:** RT-361's state (a hand-copied cover, the manager open on "Current").
+- **Preconditions:** RT-363's state (a hand-copied cover, the manager open on "Current").
 - **Steps:**
   1. Press "Adjust…". The "Import" tab opens with the cover loaded and "Save as" on "Cover".
   2. Press "Rotate right", then "Done".
@@ -1920,7 +1977,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `Sonic the Hedgehog (USA, Europe)` with `"source": "manual"` and `"origin": "adjusted"`.
 - **Restore:** Delete the cover and `.openemux-sources.json` from the devbox home.
 
-### RT-363 — Reset to the synced cover replaces a chosen cover
+### RT-365 — Reset to the synced cover replaces a chosen cover
 - **Area:** Covers & artwork
 - **Mode:** MANUAL
 - **Preconditions:** Network access; a well-known game whose cover the sync finds, with a cover
@@ -1938,7 +1995,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only; suite file `tests/test_artwork_manager.py`
   (`test_a_sync_that_found_nothing_says_the_cover_stays`, `test_a_toast_shows_on_the_manager_not_under_it`).
 
-### RT-364 — A game without art offers sync, search and import
+### RT-366 — A game without art offers sync, search and import
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running on its synthetic library (no covers).
@@ -1953,7 +2010,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   no cartridge frame ("Sony PlayStation") only the "Cover" section exists.
 - **Check:** The screenshots show it; the app log has no `Traceback`.
 
-### RT-365 — The artwork manager works in a narrow window
+### RT-367 — The artwork manager works in a narrow window
 - **Area:** Covers & artwork
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running.

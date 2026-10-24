@@ -1739,6 +1739,53 @@ class TheArtworkSyncTests(WindowCase):
         self.win._on_cover_sync_done_ui("task", summary, on_finished=lambda: done.append(1))
         self.assertEqual(done, [1])
 
+    def test_a_screenscraper_problem_follows_the_tally(self):
+        """A refusal used to be counted as a plain miss, silently (#506)."""
+        for problem, key in (
+            ("refused", "toast.screenscraper.refused"),
+            ("quota", "toast.screenscraper.quota"),
+            ("unreachable", "toast.screenscraper.unreachable"),
+        ):
+            with self.subTest(problem=problem):
+                self.toasts.clear()
+                summary = {
+                    "downloaded": 0, "skipped": 0, "errors": 2,
+                    "screenscraper_problem": problem,
+                }
+                self.win._on_cover_sync_done_ui("task", summary)
+                self.assertEqual(
+                    self.toasts,
+                    [
+                        self.said("toast.sync_done", downloaded=0, skipped=0, errors=2),
+                        self.said(key),
+                    ],
+                )
+
+    def test_no_problem_adds_no_toast(self):
+        summary = {"downloaded": 0, "skipped": 0, "errors": 2, "screenscraper_problem": None}
+        self.win._on_cover_sync_done_ui("task", summary)
+        self.assertEqual(len(self.toasts), 1)
+
+    def test_a_cancelled_sync_keeps_quiet_about_screenscraper(self):
+        summary = {
+            "downloaded": 0, "skipped": 0, "errors": 0, "cancelled": True,
+            "screenscraper_problem": "refused",
+        }
+        self.win._on_cover_sync_done_ui("task", summary)
+        self.assertNotIn(self.said("toast.screenscraper.refused"), self.toasts)
+
+    def test_the_problem_toast_opens_the_screenscraper_settings(self):
+        toast = self.win._toast_screenscraper_problem("refused")
+        self.assertEqual(toast.get_button_label(), self.said("toast.screenscraper.open_prefs"))
+        self.assertEqual(toast.get_timeout(), 8)
+        with mock.patch.object(self.win, "_open_preferences") as open_prefs:
+            toast.emit("button-clicked")
+        open_prefs.assert_called_once_with(page="library")
+
+    def test_an_unknown_problem_shows_nothing(self):
+        self.assertIsNone(self.win._toast_screenscraper_problem("something-else"))
+        self.assertEqual(self.toasts, [])
+
 
 @needs_display
 class TheIncrementalCoverRevealTests(WindowCase):

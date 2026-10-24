@@ -34,8 +34,8 @@ import threading
 import time
 import urllib.parse
 
-from openemux.core.hasher import rom_digests
-from openemux.core.systems import resolve_system_id
+from openemux.core.hasher import rom_digests, rom_identity
+from openemux.core.systems import get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,31 @@ REQUEST_TIMEOUT_SECONDS = 15
 # HTTP status codes the API uses for quota/throttling. 429 = too many
 # simultaneous threads for this account, 430 = daily scrape quota exhausted.
 QUOTA_STATUS_CODES = (429, 430)
+
+# HTTP status codes that mean "this account may not ask": a bad login, a
+# banned or unvalidated account, an outdated client.
+REFUSED_STATUS_CODES = (401, 403, 426)
+
+# What one request came back as. NOT_FOUND is the ordinary "no such game";
+# the rest are reasons the API never answered the question at all.
+STATUS_OK = "ok"
+STATUS_NOT_FOUND = "not_found"
+STATUS_REFUSED = "refused"
+STATUS_QUOTA = "quota"
+STATUS_UNREACHABLE = "unreachable"
+STATUS_MALFORMED = "malformed"
+STATUS_NO_CREDENTIALS = "no_credentials"
+
+# The problems a sync reports to the user, from the one they can act on first.
+PROBLEM_REFUSED = "refused"
+PROBLEM_QUOTA = "quota"
+PROBLEM_UNREACHABLE = "unreachable"
+_PROBLEM_PRECEDENCE = (PROBLEM_REFUSED, PROBLEM_QUOTA, PROBLEM_UNREACHABLE)
+
+# Many Game Boy libraries keep .gb and .gbc dumps in one folder (dual-mode
+# carts), so a game ScreenScraper files under the other system gets one more
+# try there before it counts as not found (issue #506).
+_SIBLING_SYSTEMS = {"GB": "GBC", "GBC": "GB"}
 
 # Parameters that must never reach a log line or an error message.
 _SECRET_PARAMS = ("devpassword", "sspassword", "devid", "ssid")
@@ -149,8 +174,10 @@ def throttle():
 MAX_CONSECUTIVE_THROTTLES = 3
 
 
-class QuotaLatch:
-    """Remembers that the API said it is done answering, for one sync run.
+class ScreenScraperRun:
+    """What the API said during one sync run: the quota latch and the report.
+
+    **The latch.** Remembers that the API said it is done answering.
 
     Every quota answer used to cost the same as a successful one: the client
     logged the 429/430 and returned "no candidates" without remembering it, so
@@ -162,13 +189,18 @@ class QuotaLatch:
     closes it after MAX_CONSECUTIVE_THROTTLES in a row; a successful request
     forgets them.
 
-    Thread-safe: the sync fans out across ROMs and they share one latch.
+    **The report.** Every request's outcome is noted, so the end of the sync
+    can tell the user that ScreenScraper refused or never answered, instead
+    of counting those ROMs as plain misses (issue #506).
+
+    Thread-safe: the sync fans out across ROMs and they share one run.
     """
 
     def __init__(self):
         self._lock = threading.Lock()
         self._closed = False
         self._throttles = 0
+        self._outcomes = set()
 
     @property
     def closed(self):
@@ -202,6 +234,43 @@ class QuotaLatch:
     def note_success(self):
         with self._lock:
             self._throttles = 0
+
+    def note_outcome(self, status):
+        """Record what one lookup came back as (a ``STATUS_*`` value)."""
+        with self._lock:
+            self._outcomes.add(status)
+
+    def worst_problem(self, labels=False):
+        """The ``PROBLEM_*`` to report for this run, or None.
+
+        A run that only ever saw answers and "not found" has nothing to
+        report. Missing developer credentials only count for a label pass:
+        ScreenScraper is the only source of labels, while box art has others
+        that may well have answered.
+        """
+        with self._lock:
+            outcomes = set(self._outcomes)
+            closed = self._closed
+        problems = set()
+        if STATUS_REFUSED in outcomes or (labels and STATUS_NO_CREDENTIALS in outcomes):
+            problems.add(PROBLEM_REFUSED)
+        if closed:
+            problems.add(PROBLEM_QUOTA)
+        if outcomes & {STATUS_UNREACHABLE, STATUS_MALFORMED}:
+            problems.add(PROBLEM_UNREACHABLE)
+        return worst_problem_of(problems)
+
+
+# The name the latch was introduced under (issue #220).
+QuotaLatch = ScreenScraperRun
+
+
+def worst_problem_of(problems):
+    """The most actionable of several ``PROBLEM_*`` values (Nones ignored)."""
+    for problem in _PROBLEM_PRECEDENCE:
+        if problem in problems:
+            return problem
+    return None
 
 
 def redact(text):
@@ -382,7 +451,11 @@ def parse_media_urls(payload, art_kind=DEFAULT_ART_KIND, region_priority=None):
 
 
 def _fetch_json(url, opener=None, quota=None):
-    """GET `url` and decode JSON. Returns None on any failure."""
+    """GET `url` and decode JSON: ``(payload, status)``.
+
+    ``payload`` is None on any failure; ``status`` is the ``STATUS_*`` saying
+    which one, so a refusal is not mistaken for a game without art.
+    """
     # Imported here, not at module scope: urllib.request brings http.client
     # and ssl with it -- ~13 ms of every launch -- and this is the only
     # thing in the module that speaks HTTP (issue #364).
@@ -403,12 +476,17 @@ def _fetch_json(url, opener=None, quota=None):
             )
             if quota is not None:
                 quota.note_status(exc.code)
-        else:
-            logger.info("screenscraper http_error: status=%s", exc.code)
-        return None
+            return None, STATUS_QUOTA
+        logger.info("screenscraper http_error: status=%s", exc.code)
+        if exc.code == 404:
+            return None, STATUS_NOT_FOUND
+        if exc.code in REFUSED_STATUS_CODES:
+            return None, STATUS_REFUSED
+        # 423 (API closed), 5xx and anything unexpected: no answer either way.
+        return None, STATUS_UNREACHABLE
     except Exception as exc:  # noqa: BLE001 - never escape into the sync loop
         logger.warning("screenscraper request_error: error=%s", redact(exc))
-        return None
+        return None, STATUS_UNREACHABLE
 
     if quota is not None:
         quota.note_success()
@@ -419,12 +497,20 @@ def _fetch_json(url, opener=None, quota=None):
         text = str(raw)
 
     try:
-        return json.loads(text)
+        return json.loads(text), STATUS_OK
     except (ValueError, TypeError) as exc:
         # The API returns plain-text error bodies (e.g. quota messages) with a
         # 200 status in some cases; treat those as "no result".
         logger.info("screenscraper malformed_json: error=%s", redact(exc))
-        return None
+        return None, STATUS_MALFORMED
+
+
+def _ask(url, opener, quota):
+    """Fetch one jeuInfos URL and note its outcome on the run."""
+    payload, status = _fetch_json(url, opener=opener, quota=quota)
+    if quota is not None:
+        quota.note_outcome(status)
+    return payload, status
 
 
 def lookup_media_urls(
@@ -442,13 +528,21 @@ def lookup_media_urls(
     Returns [] whenever the source is unusable: no credentials, unmapped
     console, HTTP/quota error, malformed JSON, or no matching media.
 
-    ``quota`` is a QuotaLatch shared by one sync run. Once it is closed this
-    returns immediately -- no hash, no throttle wait, no request -- which is
-    the difference between a library finishing after the quota runs out and
-    one spending a second per remaining ROM to be told the same thing again.
+    ``quota`` is the ScreenScraperRun shared by one sync run. Once its latch
+    is closed this returns immediately -- no hash, no throttle wait, no
+    request -- which is the difference between a library finishing after the
+    quota runs out and one spending a second per remaining ROM to be told the
+    same thing again. Every lookup's outcome is noted on it for the report.
+
+    With ``rom_path`` the ROM is identified by its content -- for a ``.zip``,
+    the ROM inside it (issue #506) -- and ``romnom`` is that file's name with
+    its extension, as webapi2 documents it. A Game Boy or Game Boy Color ROM
+    not found under its own system is asked for once under the other.
     """
     if credentials is None or not credentials.is_usable():
         logger.debug("screenscraper skipped: credentials not configured")
+        if quota is not None:
+            quota.note_outcome(STATUS_NO_CREDENTIALS)
         return []
 
     if quota is not None and quota.closed:
@@ -460,27 +554,17 @@ def lookup_media_urls(
         logger.info("screenscraper unmapped_console: console=%s", console)
         return []
 
-    crc = None
-    md5 = None
-    rom_size = None
+    query = {"rom_name": rom_name}
     if rom_path:
-        crc = compute_crc(rom_path)
-        md5 = compute_md5(rom_path)
-        try:
-            import os
+        identity = rom_identity(rom_path, get_supported_extensions(console))
+        query = {
+            "rom_name": identity.file_name,
+            "crc": identity.crc32,
+            "md5": identity.md5,
+            "rom_size": identity.size,
+        }
 
-            rom_size = os.path.getsize(rom_path)
-        except OSError:
-            rom_size = None
-
-    url = build_jeu_infos_url(
-        credentials=credentials,
-        systemeid=systemeid,
-        rom_name=rom_name,
-        crc=crc,
-        md5=md5,
-        rom_size=rom_size,
-    )
+    url = build_jeu_infos_url(credentials=credentials, systemeid=systemeid, **query)
     if not url:
         return []
 
@@ -491,7 +575,23 @@ def lookup_media_urls(
         rom_name,
         redact(url),
     )
-    payload = _fetch_json(url, opener=opener, quota=quota)
+    payload, status = _ask(url, opener, quota)
+
+    sibling = _SIBLING_SYSTEMS.get(resolve_system_id(console))
+    if status == STATUS_NOT_FOUND and sibling and not (quota is not None and quota.closed):
+        logger.info("screenscraper sibling_retry: console=%s sibling=%s", console, sibling)
+        url = build_jeu_infos_url(
+            credentials=credentials, systemeid=SYSTEM_ID_MAP[sibling], **query
+        )
+        logger.info(
+            "screenscraper lookup: console=%s systemeid=%s rom=%s url=%s",
+            console,
+            SYSTEM_ID_MAP[sibling],
+            rom_name,
+            redact(url),
+        )
+        payload, status = _ask(url, opener, quota)
+
     if payload is None:
         return []
 

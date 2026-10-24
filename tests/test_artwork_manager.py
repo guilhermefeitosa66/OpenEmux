@@ -343,6 +343,25 @@ class TheSearchTabTests(_ArtworkManagerCase):
         self.assertEqual(callback, tab._set_hash)
         self.assertEqual(digest, compute_crc32(rom_file))
 
+    def test_a_zipped_rom_shows_the_crc_of_the_rom_inside(self):
+        # The picker shows the CRC the lookup sends, and for a zip that is the
+        # entry inside, not the archive (issue #506).
+        import zipfile
+        import zlib
+
+        data = b"super famicom contents"
+        archive = self.tmp / "game.zip"
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("game.sfc", data)
+        self.manager.rom["path"] = str(archive)
+        tab = self.cover_tab()
+        with mock.patch.object(artwork_manager.GLib, "idle_add") as idle_add:
+            tab._prefill_hash()
+            _wait_for(lambda: idle_add.call_count == 1)
+        digest = idle_add.call_args[0][1]
+        self.assertEqual(digest, format(zlib.crc32(data) & 0xFFFFFFFF, "08X"))
+        self.assertNotEqual(digest, compute_crc32(archive))
+
     def test_a_rom_that_cannot_be_read_yields_an_empty_hash(self):
         self.manager.rom["path"] = str(self.tmp / "gone.sfc")
         tab = self.cover_tab()

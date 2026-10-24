@@ -1,12 +1,14 @@
 import re
 import threading
 import unittest
+import zipfile
+import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import patch
 
-from openemux.core import artwork_sources, cover_sync
+from openemux.core import artwork_sources, cover_sync, hasher, screenscraper
 from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.cover_sync import (
     _build_cover_url,
@@ -462,6 +464,7 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(received["crashed"], "boom")
         self.assertEqual(received["total"], 0)
         self.assertFalse(received["cancelled"])
+        self.assertIsNone(received["screenscraper_problem"])
 
     def test_a_crashed_artwork_sync_still_reports_back(self):
         from openemux.core.cover_sync import sync_artwork_async
@@ -759,6 +762,56 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
             [e["art_kind"] for e in events], ["boxart", "boxart", "cartridge_label"]
         )
 
+    @staticmethod
+    def _candidates_noting(outcomes_by_kind):
+        """A ladder stub that reports ScreenScraper outcomes on the run (#506)."""
+
+        def _staged(console, rom_name, sync_settings, rom_path=None, quota=None, **_kw):
+            for status in outcomes_by_kind.get(sync_settings["cover_art_type"], ()):
+                quota.note_outcome(status)
+            return []
+
+        return _staged
+
+    def _run_noting(self, outcomes_by_kind):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      side_effect=self._candidates_noting(outcomes_by_kind)),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
+            ):
+                return _sync_artwork(passes=self._passes(), covers_dir=tmp_dir)
+
+    def test_a_refused_lookup_is_reported_rather_than_only_counted(self):
+        summary = self._run_noting({"cartridge_label": [screenscraper.STATUS_REFUSED]})
+        self.assertEqual(summary["errors"], 3)
+        self.assertEqual(summary["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+        self.assertEqual(
+            [p["screenscraper_problem"] for p in summary["passes"]],
+            [None, screenscraper.PROBLEM_REFUSED],
+        )
+
+    def test_the_worst_problem_across_passes_wins(self):
+        summary = self._run_noting({
+            "boxart": [screenscraper.STATUS_UNREACHABLE],
+            "cartridge_label": [screenscraper.STATUS_REFUSED],
+        })
+        self.assertEqual(summary["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+
+    def test_plain_misses_report_nothing(self):
+        summary = self._run_noting({
+            "boxart": [screenscraper.STATUS_NOT_FOUND],
+            "cartridge_label": [screenscraper.STATUS_NOT_FOUND, screenscraper.STATUS_OK],
+        })
+        self.assertIsNone(summary["screenscraper_problem"])
+
+    def test_missing_credentials_only_matter_to_the_label_pass(self):
+        """Labels have no other source; box art has libretro and the mirror."""
+        boxart_only = self._run_noting({"boxart": [screenscraper.STATUS_NO_CREDENTIALS]})
+        self.assertIsNone(boxart_only["screenscraper_problem"])
+        labels = self._run_noting({"cartridge_label": [screenscraper.STATUS_NO_CREDENTIALS]})
+        self.assertEqual(labels["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+
     def test_empty_passes_are_dropped(self):
         with TemporaryDirectory() as tmp_dir:
             with patch("openemux.core.cover_sync._download_cover", return_value=True):
@@ -1051,7 +1104,7 @@ class StagedCandidateTests(unittest.TestCase):
 
         with (
             patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
-            patch("openemux.core.cover_sync.hasher.compute_crc32") as crc_mock,
+            patch("openemux.core.cover_sync.hasher.rom_identity") as crc_mock,
         ):
             stem = cover_sync._resolve_hash_stem("SFC", "/tmp/ct.sfc", {})
         self.assertIsNone(stem)
@@ -1069,10 +1122,48 @@ class StagedCandidateTests(unittest.TestCase):
 
         with (
             patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
-            patch("openemux.core.cover_sync.hasher.compute_crc32", return_value="AABBCCDD"),
+            patch(
+                "openemux.core.cover_sync.hasher.rom_identity",
+                return_value=hasher.RomIdentity("rom001.md", 8, "AABBCCDD", None),
+            ),
         ):
             stem = cover_sync._resolve_hash_stem("SFC", "/tmp/rom001.md", {})
         self.assertEqual(stem, "Chrono Trigger (USA)")
+
+    def test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside(self):
+        """The archive's own CRC matches nothing in the index (#506)."""
+        seen = []
+
+        class _Index:
+            def has_crc_index(self):
+                return True
+
+            def resolve_by_crc(self, system, crc):
+                seen.append(crc)
+                return "Tetris (World)"
+
+        hasher.forget_rom_digests()
+        with TemporaryDirectory() as tmp_dir:
+            archive = Path(tmp_dir) / "Tetris (World).zip"
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("Tetris (World).gb", b"tetris-rom-bytes")
+            with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+                stem = cover_sync._resolve_hash_stem("GB", str(archive), {})
+        hasher.forget_rom_digests()
+        self.assertEqual(stem, "Tetris (World)")
+        self.assertEqual(seen, [format(zlib.crc32(b"tetris-rom-bytes"), "08X")])
+
+    def test_an_unreadable_rom_has_no_crc_to_look_up(self):
+        class _Index:
+            def has_crc_index(self):
+                return True
+
+            def resolve_by_crc(self, system, crc):  # pragma: no cover - must not run
+                raise AssertionError("looked up without a CRC")
+
+        with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+            stem = cover_sync._resolve_hash_stem("GB", "/nowhere/at/all.gb", {})
+        self.assertIsNone(stem)
 
 
 class ParallelSyncTests(unittest.TestCase):

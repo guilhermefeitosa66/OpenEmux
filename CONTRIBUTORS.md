@@ -89,8 +89,24 @@ every launch. That request became
 [#505](https://github.com/guilhermefeitosa66/OpenEmux/issues/505): a "Start
 games in fullscreen" switch in Settings → Video that every launch now follows.
 
-In the same thread asked for the cover manager to open on the cover the game
-already has, with ways to adjust it from there. That became
+In the same thread, also reported that cartridge labels never synced for Game
+Boy and Game Boy Color even with a ScreenScraper account set. That report became
+[#506](https://github.com/guilhermefeitosa66/OpenEmux/issues/506): a zipped ROM
+is now looked up by the game inside the archive rather than by the archive
+itself, a Game Boy game filed under Game Boy Color is found on one more try, and
+a sync that ScreenScraper refused or never answered says so instead of counting
+every game as a plain miss.
+
+In the same thread, also reported that some covers showed up cropped at the
+top or the bottom of the library grid. That report became
+[#508](https://github.com/guilhermefeitosa66/OpenEmux/issues/508): a card has
+its console's typical box shape, and a cover of another shape (a portrait
+Japanese box on a landscape Super Nintendo card) was filled into it and lost up
+to 60% of its art. Now only a cover close to the card's shape fills it, and any
+other is shown whole on the card's backdrop.
+
+In the same thread, also asked for the cover manager to open on the cover the
+game already has, with ways to adjust it from there. That became
 [#510](https://github.com/guilhermefeitosa66/OpenEmux/issues/510): the artwork
 manager now opens on a "Current" tab that shows the cover and label as they
 are, says whether the sync wrote them, you chose them or they were simply found
