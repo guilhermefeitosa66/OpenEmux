@@ -2759,7 +2759,7 @@ class TheMissingCoreRepairTests(WindowCase):
         self.assertEqual(seen["updates"], [(1, 1)])
         self.assertEqual(len(self.win.tasks), 0)
         self.assertEqual(sorted(seen["refreshed"]), ["core", "launcher core"])
-        self.assertEqual(self.toasts, [self.said("toast.cores.restored", count=1)])
+        self.assertEqual(self.toasts, [self.said("toast.cores.restored.one")])
         self.assertIsNotNone(seen["fake"].cancel_event)
         self.assertFalse(seen["fake"].repair_missing_cores.call_args.kwargs["manual"])
         # Owed before, or owed again: the deferred sweep follows the repair.
@@ -2792,7 +2792,7 @@ class TheMissingCoreRepairTests(WindowCase):
         self.assertFalse(self.win._core_repair_running)
         self.assertEqual(len(self.win.tasks), 0)
         self.assertEqual(
-            self.toasts, [self.said("toast.cores.verify.failed", count=1, error="boom")]
+            self.toasts, [self.said("toast.cores.verify.failed.one", error="boom")]
         )
 
     def test_cancel_on_the_banner_reaches_the_repair(self):
@@ -2885,6 +2885,10 @@ class TheMissingCoreRepairTests(WindowCase):
             ({"downloaded": 3}, False, (self.said("toast.cores.restored", count=3), 3)),
             ({"downloaded": 3}, True,
              (self.said("toast.cores.verify.downloaded", count=3), 3)),
+            ({"downloaded": 1}, True,
+             (self.said("toast.cores.verify.downloaded.one"), 3)),
+            (dict(failure, failed=1), True,
+             (self.said("toast.cores.verify.failed.one", error="x.zip: reset"), 6)),
             ({}, False, None),
             ({}, True, (self.said("toast.cores.verify.ok"), 3)),
             ({"cancelled": True}, True, None),
