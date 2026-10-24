@@ -389,7 +389,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   Every console is playable when the main window opens. The first boot used to block on every core
   and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
   (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
-  pending`); inside Flatpak, or with the updater off, nothing is owed.
+  pending`); inside Flatpak, or with the updater off, nothing is owed. Cores that later go
+  missing from disk are restored at start-up without re-running the first boot (RT-343).
 - **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
   `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
@@ -408,7 +409,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   while the library is already usable. When it ends, `setup.bootstrap.deferred_assets` in
   `config.yaml` reads `done`, and step 3 lists more cores than the console's curated ones
   without restarting the app — the core catalog is rescanned when the download finishes (issue
-  #442).
+  #442). When the start-up check of RT-343 restores missing cores, this download starts after it,
+  never at the same time.
 - **Check:** screenshots of steps 1 and 3; `grep deferred_assets
   ~/.local/share/openemux-devbox/home/.openemux/config.yaml` prints `done`. The rules in
   `tests/test_window.py` (`TheDeferredAssetDownloadTests`) and `tests/test_cores.py`
@@ -428,6 +430,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite files `tests/test_first_boot.py` (`TheDeferredDownloadTests`),
   `tests/test_config_bootstrap_defaults.py` (`TheDeferredAssetDebtTests`), `tests/test_window.py`
   (`test_cancel_on_the_banner_reaches_the_download`, `test_a_crashed_worker_still_ends_the_task`).
+
+### RT-343 — Cores lost after an upgrade come back on their own
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with a completed first boot, the updater on and network
+  (the devbox: `make devbox-app` once, then quit it).
+- **Steps:**
+  1. With the app closed, delete every `*_libretro.so` and `*.info` in the core download folder
+     (`~/.local/share/openemux-devbox/home/.config/retroarch/cores`) — what replacing the Windows
+     app folder with a new release does to `vendors\RetroArch-Win64\cores`.
+  2. Start the app and read the banner at the top.
+  3. Wait for it to end, then launch a "Super Nintendo" game.
+- **Expected:** The library opens at once; step 2 shows "Restoring missing cores (n/total)" with a
+  "Cancel" button, and when it ends a toast says "Restored N missing cores". The game launches.
+  `setup.bootstrap.status` in `config.yaml` still reads `completed`, no setting changed, and
+  `setup.bootstrap.deferred_assets` reads `pending`, so the remaining cores come back too (RT-317).
+  On a healthy install nothing is shown and no request reaches the buildbot. Before this, the
+  completed first boot was never re-run, and the only way out was deleting `~/.openemux`, settings
+  and all (issue #512). Inside Flatpak, or with the updater off, nothing starts.
+- **Check:** screenshots of steps 2 and 3; `grep -A3 "status: completed"
+  ~/.local/share/openemux-devbox/home/.openemux/config.yaml`; `ls
+  ~/.local/share/openemux-devbox/home/.config/retroarch/cores | grep -c _libretro` is not 0. The
+  rules in `tests/test_first_boot.py` (`MissingCuratedCoresTests`, `RepairingMissingCoresTests`)
+  and `tests/test_window.py` (`TheMissingCoreRepairTests`).
 
 ### RT-319 — The core info files are installed, so cores show their real names
 - **Area:** Startup
@@ -3577,6 +3603,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   of the app (issue #235).
 - **Check:** one screenshot per dialog showing the heading, the dropdown and the two responses;
   the launch log gained no `Traceback` and no cover-sync or scan task line.
+
+
+### RT-344 — "Verify cores" downloads only what is missing
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App running in the devbox, first boot completed, network on.
+- **Steps:**
+  1. Open "Settings" (`Ctrl+,`) → "System" and read the last row of "Initial Setup".
+  2. Activate "Verify cores".
+  3. Keep the app open, delete `snes9x_libretro.so` and `mgba_libretro.so` from
+     `~/.local/share/openemux-devbox/home/.config/retroarch/cores`, then activate "Verify cores"
+     again and watch the row and the banner.
+- **Expected:** Step 1 shows "Verify cores" with "Check that every console has its core and
+  download the missing ones". Step 2 toasts "All cores are installed" and downloads nothing. In
+  step 3 the row reads "Checking cores…" with a spinner and cannot be activated, the banner shows
+  "Downloading missing cores", and a toast says "Downloaded 2 missing cores"; both files are back
+  and the row returns to normal. Offline, the toast is "Could not download N cores: <reason>";
+  while the background download of the remaining cores runs, it is "Cores are already being
+  downloaded"; with the updater off, "Core downloads are turned off". The row is hidden in the
+  Flatpak, whose cores belong to the RetroArch Flatpak (issue #512).
+- **Check:** screenshots of steps 1 and 3; `ls
+  ~/.local/share/openemux-devbox/home/.config/retroarch/cores | grep -E "snes9x|mgba"` lists both
+  files. The rules in `tests/test_preferences.py` (`TheSystemPageTests`) and
+  `tests/test_window.py` (`TheMissingCoreRepairTests.test_what_each_outcome_says`).
 
 
 ## Internationalization

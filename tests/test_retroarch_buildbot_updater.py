@@ -870,6 +870,13 @@ class ASweepOverPartOfTheListingTests(unittest.TestCase):
             _, summary, fetched = self._sweep(tmp_dir, only=[_core("snes9x"), _core("dolphin")])
         self.assertEqual(fetched, [_core("snes9x")])
         self.assertEqual(summary["failed"], 0)
+        # Named, so the missing-core repair stops asking for it (#512).
+        self.assertEqual(summary["unlisted"], [_core("dolphin")])
+
+    def test_a_sweep_without_only_lists_nothing_as_unlisted(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, summary, _ = self._sweep(tmp_dir, skip=[_core("snes9x")])
+        self.assertEqual(summary["unlisted"], [])
 
     def test_skip_fetches_everything_else(self):
         with TemporaryDirectory() as tmp_dir:

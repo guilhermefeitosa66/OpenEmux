@@ -197,8 +197,10 @@ class RetroArchBuildbotUpdater:
 
         # Filtered only now: an empty listing is a broken listing whatever the
         # caller asked for, while a filter that keeps nothing is just done.
+        unlisted = []
         if only is not None:
             wanted = set(only)
+            unlisted = sorted(wanted - {artifact["core_name"] for artifact in artifacts})
             artifacts = [artifact for artifact in artifacts if artifact["core_name"] in wanted]
         if skip:
             unwanted = set(skip)
@@ -253,6 +255,8 @@ class RetroArchBuildbotUpdater:
             "cancelled": cancelled,
             "failures": failures,
             "core_dir": str(self.core_dir),
+            # The names in ``only`` the buildbot does not build here (#512).
+            "unlisted": unlisted,
         }
         logger.info(
             "buildbot core download finished: total=%d downloaded=%d failed=%d cancelled=%d",
