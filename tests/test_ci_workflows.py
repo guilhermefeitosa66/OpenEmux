@@ -481,6 +481,8 @@ class HeadlessHostRunTests(unittest.TestCase):
     def test_the_devbox_marks_its_display_as_private(self):
         script = (REPO_ROOT / "devbox/bin/devbox-tests").read_text(encoding="utf-8")
         self.assertIn("export OPENEMUX_TESTS_PRIVATE_DISPLAY=1", script)
+        driver = (REPO_ROOT / "devbox/devbox.sh").read_text(encoding="utf-8")
+        self.assertIn("-- env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 \"$@\"", driver)
 
 
 if __name__ == "__main__":

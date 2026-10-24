@@ -72,7 +72,8 @@ Two traps inside the container:
   `make devbox-rm PURGE=1 && make devbox-up`).
 
 Running the suite on the host is still right for a core-only change: those
-tests need no display and take seconds. `devbox/bin/devbox-tests` sets
+tests need no display and take seconds. `devbox/devbox.sh` (every command it
+runs inside) and `devbox/bin/devbox-tests` set
 `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` so the guard knows `:77` is nobody's screen;
 without it, the host's `XDG_SESSION_TYPE` that distrobox forwards would skip
 every widget test in there. Anything under `src/openemux/ui/` goes

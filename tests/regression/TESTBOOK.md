@@ -5620,12 +5620,15 @@ or into an environment that cannot run the tests.
 - **Preconditions:** the devbox exists (`make devbox-up`) for the second half of the check.
 - **Steps:** As a QA person: run `make devbox-tests CMD=tests.test_file_dialogs`.
 - **Expected:** The widget tests run on the container's own Xvnc (`:77`) and none is skipped as
-  "would draw on your desktop": `devbox/bin/devbox-tests` exports
-  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1`, because distrobox forwards the host's `XDG_SESSION_TYPE` and
-  `WAYLAND_DISPLAY` into the box (issue #528).
+  "would draw on your desktop": the host driver `devbox/devbox.sh` runs every command inside with
+  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1`, and `devbox/bin/devbox-tests` exports it too, because
+  distrobox forwards the host's `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` into the box (issue #528).
+  The driver matters because the tools inside come from the checkout the container was created
+  from, not from the one being tested.
 - **Check:**
   ```bash
   grep -n "export OPENEMUX_TESTS_PRIVATE_DISPLAY=1" devbox/bin/devbox-tests   # expect a match
+  grep -n -- '-- env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 "$@"' devbox/devbox.sh  # expect a match
   make devbox-tests CMD="-v tests.test_file_dialogs" 2>&1 | grep -c "would draw on your desktop"
   # expect 0
   ```
