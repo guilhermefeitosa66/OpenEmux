@@ -406,25 +406,31 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             if not manual:
                 return None
             count = len(summary.get("missing") or []) or 1
-            return self.t("toast.cores.verify.failed", count=count, error=summary["error"]), 6
+            return self._counted("toast.cores.verify.failed", count, error=summary["error"]), 6
         if summary.get("disabled"):
             return (self.t("toast.cores.verify.disabled"), 3) if manual else None
         if summary.get("failed"):
             if not manual:
                 return None
-            text = self.t(
+            text = self._counted(
                 "toast.cores.verify.failed",
-                count=summary["failed"],
+                summary["failed"],
                 error=_first_failure_reason(summary),
             )
             return text, 6
         downloaded = summary.get("downloaded", 0)
         if downloaded:
             key = "toast.cores.verify.downloaded" if manual else "toast.cores.restored"
-            return self.t(key, count=downloaded), 3
+            return self._counted(key, downloaded), 3
         if manual and not summary.get("cancelled"):
             return self.t("toast.cores.verify.ok"), 3
         return None
+
+    def _counted(self, key, count, **kwargs):
+        """The ``.one`` variant of ``key`` for a single item, ``key`` otherwise."""
+        if count == 1:
+            return self.t(f"{key}.one", **kwargs)
+        return self.t(key, count=count, **kwargs)
 
     def _open_preferences_dialog(self):
         """The Preferences dialog when it is on screen, else None."""
