@@ -161,6 +161,12 @@ class _ArtworkManagerCase(unittest.TestCase):
             kwargs["art_dir"] = self.art_dir
         self.manager = ArtworkManagerWindow(self.win, self.rom, **kwargs)
         self.addCleanup(self.manager.destroy)
+        # What the manager's own overlay showed; ``self.win.toasts`` is what
+        # went to the main window instead.
+        self.toasts = []
+        overlay = self.manager.toast_overlay
+        add_toast = overlay.add_toast
+        overlay.add_toast = lambda toast: (self.toasts.append(toast.get_title()), add_toast(toast))
 
     def cover_tab(self):
         return self.manager.cover_tab
@@ -199,9 +205,15 @@ class TheWindowIsBuiltFromWhatTheConsoleSupportsTests(_ArtworkManagerCase):
     def test_the_hash_search_waits_for_a_hash_before_it_can_be_used(self):
         self.assertFalse(self.cover_tab().by_hash_btn.get_sensitive())
 
-    def test_a_toast_is_forwarded_to_the_main_window(self):
+    def test_a_toast_shows_on_the_manager_not_under_it(self):
         self.manager.toast("hello")
-        self.assertEqual(self.win.toasts, ["hello"])
+        self.assertEqual(self.toasts, ["hello"])
+        self.assertEqual(self.win.toasts, [])
+
+    def test_a_toast_said_while_closing_goes_to_the_main_window(self):
+        self.manager.toast("bye", after_close=True)
+        self.assertEqual(self.win.toasts, ["bye"])
+        self.assertEqual(self.toasts, [])
 
 
 @needs_display
@@ -548,13 +560,13 @@ class TheImportTabTests(_ArtworkManagerCase):
         path = self.tmp / "notes.txt"
         path.write_text("not an image")
         self.assertFalse(self.tab.load_file(path))
-        self.assertEqual(self.win.toasts, ["toast.cover.invalid_extension"])
+        self.assertEqual(self.toasts, ["toast.cover.invalid_extension"])
 
     def test_a_png_that_is_not_really_a_png_is_refused_too(self):
         path = self.tmp / "broken.png"
         path.write_bytes(b"nope")
         self.assertFalse(self.tab.load_file(path))
-        self.assertEqual(self.win.toasts, ["toast.cover.invalid_extension"])
+        self.assertEqual(self.toasts, ["toast.cover.invalid_extension"])
         self.assertIsNone(self.tab.pixbuf)
 
     def test_clearing_goes_back_to_the_drop_area(self):
@@ -730,7 +742,7 @@ class SavingTests(_ArtworkManagerCase):
         self.add_result(tab, _Candidate(_write_png(self.tmp / "a.png")))
         self.manager._save(close_after=False)
         self.assertTrue((self.roms / "SFC" / COVER_ART / "Chrono Trigger.png").is_file())
-        self.assertEqual(self.win.toasts, ["toast.cover.updated"])
+        self.assertEqual(self.toasts, ["toast.cover.updated"])
         self.assertEqual(self.win.refreshed, [self.rom])
 
     def test_saving_a_picked_label_says_label_not_cover(self):
@@ -739,11 +751,11 @@ class SavingTests(_ArtworkManagerCase):
         self.add_result(tab, _Candidate(_write_png(self.tmp / "a.png")))
         self.manager._save(close_after=False)
         self.assertTrue((self.roms / "SFC" / LABEL_ART / "Chrono Trigger.png").is_file())
-        self.assertEqual(self.win.toasts, ["toast.label.updated"])
+        self.assertEqual(self.toasts, ["toast.label.updated"])
 
     def test_saving_with_nothing_picked_says_so_and_writes_nothing(self):
         self.manager._save(close_after=False)
-        self.assertEqual(self.win.toasts, ["artwork.toast.nothing_selected"])
+        self.assertEqual(self.toasts, ["artwork.toast.nothing_selected"])
         self.assertEqual(self.win.refreshed, [])
 
     def test_saving_an_imported_image_writes_the_edited_copy(self):
@@ -762,7 +774,7 @@ class SavingTests(_ArtworkManagerCase):
     def test_saving_an_empty_import_tab_says_nothing_was_picked(self):
         self.manager.stack.set_visible_child_name("import")
         self.manager._save(close_after=False)
-        self.assertEqual(self.win.toasts, ["artwork.toast.nothing_selected"])
+        self.assertEqual(self.toasts, ["artwork.toast.nothing_selected"])
 
     def test_a_failed_write_is_reported_rather_than_raised(self):
         tab = self.cover_tab()
@@ -771,7 +783,7 @@ class SavingTests(_ArtworkManagerCase):
             artwork_manager, "save_local_art", side_effect=OSError("disk full")
         ):
             self.manager._save(close_after=False)
-        self.assertEqual(self.win.toasts, ["artwork.toast.save_failed"])
+        self.assertEqual(self.toasts, ["artwork.toast.save_failed"])
         self.assertEqual(self.win.refreshed, [])
 
     def test_done_saves_and_closes(self):
@@ -780,6 +792,9 @@ class SavingTests(_ArtworkManagerCase):
         with mock.patch.object(self.manager, "close") as close:
             self.manager._save(close_after=True)
         close.assert_called_once()
+        # The manager is gone by the time the toast would show.
+        self.assertEqual(self.win.toasts, ["toast.cover.updated"])
+        self.assertEqual(self.toasts, [])
 
 
 @needs_display
@@ -1279,13 +1294,14 @@ class SavingFromTheCurrentTabTests(_CurrentTabCase):
         with mock.patch.object(self.manager, "close") as close:
             self.manager._save(close_after=True)
         close.assert_called_once()
+        self.assertEqual(self.toasts, [])
         self.assertEqual(self.win.toasts, [])
 
     def test_save_on_current_does_nothing(self):
         with mock.patch.object(self.manager, "close") as close:
             self.manager._save(close_after=False)
         close.assert_not_called()
-        self.assertEqual(self.win.toasts, [])
+        self.assertEqual(self.toasts, [])
 
     def test_an_adjusted_save_is_recorded_and_shown_as_chosen(self):
         self.write_art(source=artwork_sources.SOURCE_SYNCED)
@@ -1365,6 +1381,7 @@ class ResettingToTheSyncedArtTests(_CurrentTabCase):
         section._start_sync(section.reset_btn)
         self.assertEqual(section.reset_btn.get_label(), "artwork.current.reset_cover")
         self.assertTrue(section.reset_btn.get_sensitive())
+        self.assertEqual(self.toasts, ["toast.sync_running"])
 
     def test_a_second_press_while_syncing_is_ignored(self):
         section = self.section()
@@ -1379,13 +1396,13 @@ class ResettingToTheSyncedArtTests(_CurrentTabCase):
         self.win.synced[0][2]()
         self.assertEqual(section.state.source, artwork_sources.SOURCE_SYNCED)
         self.assertEqual(section.reset_btn.get_label(), "artwork.current.reset_cover")
-        self.assertEqual(self.win.toasts, [])
+        self.assertEqual(self.toasts, [])
 
     def test_a_sync_that_found_nothing_says_the_cover_stays(self):
         section = self.section()
         section._start_sync(section.reset_btn)
         self.win.synced[0][2]()
-        self.assertEqual(self.win.toasts, ["artwork.toast.reset_not_found"])
+        self.assertEqual(self.toasts, ["artwork.toast.reset_not_found"])
         self.assertEqual(section.state.source, artwork_sources.SOURCE_MANUAL)
 
     def test_sync_now_on_a_missing_cover_that_finds_nothing_says_so(self):
@@ -1396,14 +1413,14 @@ class ResettingToTheSyncedArtTests(_CurrentTabCase):
         self.assertEqual(section.sync_btn.get_label(), "artwork.current.syncing")
         self.win.synced[0][2]()
         self.assertEqual(section.sync_btn.get_label(), "artwork.current.sync_now")
-        self.assertEqual(self.win.toasts, ["artwork.toast.reset_not_found"])
+        self.assertEqual(self.toasts, ["artwork.toast.reset_not_found"])
 
     def test_a_sync_finishing_after_the_window_closed_is_ignored(self):
         section = self.section()
         section._start_sync(section.reset_btn)
         self.manager.closed = True
         self.win.synced[0][2]()
-        self.assertEqual(self.win.toasts, [])
+        self.assertEqual(self.toasts, [])
 
 
 @needs_display

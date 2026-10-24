@@ -1932,8 +1932,11 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** "Cancel" changes nothing. "Reset" turns the button into "Syncing…" until the sync
   ends, then the section shows the synced cover, "Synced" with an "Automatic" pill, and the reset
   row is gone. Offline, the toast "No synced artwork was found for <name>. The current one stays."
-  appears and the chosen cover is still there.
-- **Check:** human only.
+  appears inside the artwork manager, not on the library window under it, and the chosen cover is
+  still there. The toast used to go to the main window, where the manager hid it (issue #510, QA
+  round 1).
+- **Check:** human only; suite file `tests/test_artwork_manager.py`
+  (`test_a_sync_that_found_nothing_says_the_cover_stays`, `test_a_toast_shows_on_the_manager_not_under_it`).
 
 ### RT-364 — A game without art offers sync, search and import
 - **Area:** Covers & artwork

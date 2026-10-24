@@ -1034,7 +1034,9 @@ class _ArtSection(Gtk.Box):
             on_finished=self.refresh_after_sync,
         )
         if not started:
-            # A library-wide sync is running; the main window already said so.
+            # A library-wide sync is running. The main window says so too, but
+            # under the manager, where nobody sees it.
+            self.manager.toast(self.manager.t("toast.sync_running"))
             self._restore_button()
 
     def _restore_button(self):
@@ -1151,7 +1153,11 @@ class ArtworkManagerWindow(Adw.Window):
         view.set_content(stack)
         view.add_bottom_bar(self.switcher_bar)
         view.add_bottom_bar(footer)
-        self.set_content(view)
+        # Toasts land on the manager itself: the main window's overlay sits
+        # under it, where a message is hidden as soon as it shows.
+        self.toast_overlay = Adw.ToastOverlay()
+        self.toast_overlay.set_child(view)
+        self.set_content(self.toast_overlay)
         # The menu entry that opened the window decides whose actions are
         # under the keyboard.
         section = self.current_tab.sections.get(art_dir, self.current_tab.sections[COVER_ART])
@@ -1170,8 +1176,12 @@ class ArtworkManagerWindow(Adw.Window):
 
         self.connect("close-request", self._on_close_request)
 
-    def toast(self, text):
-        self.win._toast(text)
+    def toast(self, text, after_close=False):
+        """Say ``text`` in the manager, or on the main window when it closes."""
+        if after_close:
+            self.win._toast(text)
+            return
+        self.toast_overlay.add_toast(Adw.Toast(title=text))
 
     # -- from the Current tab (issue #510) -----------------------------------
     def search_from_current(self, art_dir):
@@ -1223,7 +1233,7 @@ class ArtworkManagerWindow(Adw.Window):
             return
         kind = saved
         key = "toast.label.updated" if kind == LABEL_ART else "toast.cover.updated"
-        self.toast(self.t(key, name=self.rom.get("name", "")))
+        self.toast(self.t(key, name=self.rom.get("name", "")), after_close=close_after)
         self.win.refresh_rom_artwork(self.rom)
         self.current_tab.refresh()
         if close_after:
