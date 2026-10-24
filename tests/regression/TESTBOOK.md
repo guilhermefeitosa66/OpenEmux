@@ -5501,7 +5501,7 @@ or into an environment that cannot run the tests.
   EOF
   ```
 
-### RT-363 — `make test` on a desktop runs on a private display
+### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads the `Makefile` and probes `scripts/run_tests.py`).
@@ -5537,11 +5537,11 @@ or into an environment that cannot run the tests.
   rt.main(["python", "-m", "unittest"], env=desk, platform="linux",
           which=lambda n: "/usr/bin/" + n, execvpe=lambda *a: calls.append(a) or 0)
   assert calls[0][1] == ["dbus-run-session", "--", "xvfb-run", "-a", "python", "-m", "unittest"]
-  print("RT-363 OK")
+  print("RT-370 OK")
   EOF
   ```
 
-### RT-364 — A bare unittest run on a desktop skips the widget tests instead of drawing
+### RT-371 — A bare unittest run on a desktop skips the widget tests instead of drawing
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
 - **Preconditions:** the GTK stack is installed (`make install-sys-deps`).
@@ -5560,7 +5560,7 @@ or into an environment that cannot run the tests.
   grep -c "this run is on your desktop session" /tmp/rt364.log     # expect 1
   ```
 
-### RT-365 — `OPENEMUX_TESTS_ON_DESKTOP=1` brings the old behavior back
+### RT-372 — `OPENEMUX_TESTS_ON_DESKTOP=1` brings the old behavior back
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
@@ -5583,11 +5583,11 @@ or into an environment that cannot run the tests.
   spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
   rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
   assert rt.decide(dict(desk, OPENEMUX_TESTS_ON_DESKTOP="1"), "linux", lambda n: n) == "direct"
-  print("RT-365 OK")
+  print("RT-372 OK")
   EOF
   ```
 
-### RT-366 — Without Xvfb the run says what is missing
+### RT-373 — Without Xvfb the run says what is missing
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
@@ -5611,11 +5611,11 @@ or into an environment that cannot run the tests.
   assert code == 7 and text.count("Xvfb not found") == 1
   for hint in ("make install-sys-deps", "xorg-x11-server-Xvfb", "xorg-server-xvfb"):
       assert hint in text, hint
-  print("RT-366 OK")
+  print("RT-373 OK")
   EOF
   ```
 
-### RT-367 — The devbox run still executes every widget test
+### RT-374 — The devbox run still executes every widget test
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
 - **Preconditions:** the devbox exists (`make devbox-up`) for the second half of the check.
