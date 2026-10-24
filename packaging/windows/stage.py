@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assemble the Windows bundle tree from an extracted MSYS2 prefix.
 
-Runs inside the container, after ``msys2_packages.py`` has unpacked the MINGW64
+Runs inside the container, after ``msys2_packages.py`` has unpacked the UCRT64
 runtime. Produces the directory that becomes both artifacts -- the portable zip
 and the Inno Setup installer read the same tree.
 
@@ -40,6 +40,11 @@ REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 from openemux.i18n import SUPPORTED_LOCALES  # noqa: E402 - needs sys.path above
 
+# The environment directory the packages unpack into is msys2_packages.py's to
+# name; repeating the string here is how the two drift apart.
+sys.path.insert(0, str(HERE))
+from msys2_packages import ENVIRONMENT  # noqa: E402 - needs sys.path above
+
 #: Build-time-only files inside the MSYS2 prefix. Headers, static libraries and
 #: pkg-config metadata exist to compile against this stack; the bundle only runs
 #: it. Documentation is the same story and is the larger half.
@@ -75,7 +80,7 @@ PREFIX_PRUNE_DIRS = [
     "lib/terminfo",
     # The tzdata tree. Two independent reasons it is unreachable on Windows:
     # Python's TZPATH is baked at build time to the POSIX string
-    # "/mingw64/share/zoneinfo", which resolves to nothing on a user's machine
+    # "/ucrt64/share/zoneinfo", which resolves to nothing on a user's machine
     # and never to this directory; and GLib reads time zones from the Windows
     # registry, not from a tzdata tree. Nothing in src/ imports zoneinfo either.
     "share/zoneinfo",
@@ -158,13 +163,13 @@ def rmtree(path):
 
 
 def relocate_prefix(extracted, bundle):
-    """Move ``<extracted>/mingw64/*`` up to the bundle root.
+    """Move ``<extracted>/<ENVIRONMENT>/*`` up to the bundle root.
 
-    MSYS2 packages unpack into a ``mingw64/`` prefix. The bundle drops that
+    MSYS2 packages unpack into a ``ucrt64/`` prefix. The bundle drops that
     level so ``bin/`` sits beside ``OpenEmux.exe``, which is what lets Python
     and GTK find their own prefix without being told where they are.
     """
-    prefix = extracted / "mingw64"
+    prefix = extracted / ENVIRONMENT
     if not prefix.is_dir():
         raise SystemExit(f"{prefix} is missing -- did msys2_packages.py run?")
     bundle.mkdir(parents=True, exist_ok=True)

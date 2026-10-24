@@ -4452,8 +4452,9 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   1. Run the build from a clean staging tree.
 - **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
   build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
-  caught.
-- **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
+  caught. The runtime inside them comes from the UCRT64 lock: `packages.lock` names the
+  `mingw/ucrt64` repository.
+- **Check:** `grep -q '"repository": "https://repo.msys2.org/mingw/ucrt64"' packaging/windows/packages.lock && make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
 ### RT-195 — The bundle carries no path from the machine that built it
 - **Area:** Packaging (Windows)
@@ -4461,9 +4462,24 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Preconditions:** RT-194 has run, so `build/win/OpenEmux` exists.
 - **Steps:**
   1. Search the staged bundle for the build container's MSYS2 prefix.
-- **Expected:** No match outside `vendors/`. A baked-in `C:\msys64` path is a file that resolves
-  on a developer's machine and nowhere else -- how the OpenSSL CA bundle broke.
-- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux`
+- **Expected:** No match outside `vendors/`, and no `ucrt64/` or `mingw64/` directory left at
+  the bundle root. A baked-in `C:\msys64` path -- `C:\msys64\ucrt64` included, the prefix the
+  UCRT64 packages are built for -- is a file that resolves on a developer's machine and nowhere
+  else: how the OpenSSL CA bundle broke.
+- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' -e 'C:/msys64/ucrt64' -e 'C:\msys64\ucrt64' build/win/OpenEmux && test ! -e build/win/OpenEmux/ucrt64 && test ! -e build/win/OpenEmux/mingw64`
+
+### RT-343 — CI, the Windows bundle and the dev setup install one MSYS2 package set
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A checkout of the branch under test.
+- **Steps:**
+  1. Run the workflow and package-set tests.
+- **Expected:** The **Unit tests (Windows / MSYS2)** job runs under UCRT64 and installs every
+  bundle root from `packaging/windows/msys2_packages.py`, with no `continue-on-error`;
+  `make install-sys-deps-windows`, `setup-dev.ps1` and `dev-shell.cmd` use the same environment
+  and hold every root; the lock names only `mingw-w64-ucrt-x86_64-` packages; and nothing in the
+  build, CI or setup scripts still points at MINGW64, which no longer ships GTK 4 or libadwaita.
+- **Check:** `PYTHONPATH=src .venv/bin/python -m unittest tests.test_ci_workflows tests.test_msys2_packages tests.test_windows_bundle_prune`
 
 ### RT-196 — No libretro core ships inside the installer
 - **Area:** Packaging (Windows)
