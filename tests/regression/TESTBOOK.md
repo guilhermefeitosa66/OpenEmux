@@ -1486,7 +1486,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
   The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
 
-### RT-340 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
+### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A Game Boy game kept as `Tetris (World).zip` (holding `Tetris (World).gb`)
@@ -1505,7 +1505,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   (`WhichEntryIdentifiesTheRomTests`) and `tests/test_cover_sync.py`
   (`test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside`).
 
-### RT-341 — A ScreenScraper refusal during an artwork sync is reported, not counted as a miss
+### RT-362 — A ScreenScraper refusal during an artwork sync is reported, not counted as a miss
 - **Area:** View modes & layout
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app, with the ScreenScraper HTTP layer stubbed to answer `403`
@@ -1520,7 +1520,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   answer (`430`) says "ScreenScraper daily quota reached…" and a connection error says
   "ScreenScraper could not be reached…". A sync where ScreenScraper only answered or said "not
   found" shows no second toast, and neither does a cancelled sync.
-- **Check:** screenshot of the toast (`make devbox-shot OUT=$SCRATCH/rt341.png WIN=1`). The rules
+- **Check:** screenshot of the toast (`make devbox-shot OUT=$SCRATCH/rt362.png WIN=1`). The rules
   are in `tests/test_screenscraper.py` (`WhatALookupReportsTests`), `tests/test_cover_sync.py`
   (`MultiPassArtworkSyncTests`) and `tests/test_window.py`
   (`test_a_screenscraper_problem_follows_the_tally`,
