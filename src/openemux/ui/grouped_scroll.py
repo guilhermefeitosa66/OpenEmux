@@ -109,7 +109,6 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
             yield header
             yield grid
 
-
     # -- layout ------------------------------------------------------------
 
     def do_measure(self, orientation, for_size):
@@ -243,6 +242,7 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         if target != vadj.get_value():
             vadj.set_value(target)
         return True
+
 
 def _unparent_children(widget):
     """Let go of every child, walked from GTK's side rather than ``_sections``."""
