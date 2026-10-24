@@ -1,7 +1,10 @@
 import logging
 from dataclasses import dataclass
 
-from openemux.core.paths import is_running_in_flatpak
+from openemux import __version__
+from openemux.core.cores import core_search_dirs
+from openemux.core.paths import get_project_root, is_running_in_flatpak
+from openemux.core.platform import CORE_SUFFIX
 from openemux.core.playlist_manager import PlaylistManager
 from openemux.core.retroarch_buildbot_updater import (
     SHADER_PACKS,
@@ -263,3 +266,93 @@ class FirstBootBootstrapper:
             "failed": failed,
             "cancelled": cancelled,
         }
+
+    def missing_curated_cores(self, ignore_unavailable=True):
+        """The cores some console names that no searched directory holds.
+
+        A completed first boot is not proof the cores are still there: the
+        Windows zip keeps them inside the app folder, so replacing that folder
+        with a new release drops every one while the config still says the
+        step is done (issue #512). Looked up through the same directories the
+        launcher resolves Automatic through, so a core it could run -- bundled,
+        from the distribution or from the user's own RetroArch -- is never
+        missing. ``ignore_unavailable`` leaves out the names this version
+        already learned the buildbot does not build for this machine.
+        """
+        if is_running_in_flatpak():
+            return []
+        dirs = core_search_dirs(get_project_root())
+        missing = [
+            name
+            for name in curated_core_filenames()
+            if not any((directory / name).exists() for directory in dirs)
+        ]
+        if ignore_unavailable:
+            stored = self.config_manager.get_unavailable_cores()
+            if stored["version"] == __version__:
+                unavailable = set(stored["names"])
+                missing = [name for name in missing if name not in unavailable]
+        return missing
+
+    def repair_missing_cores(self, on_progress=None, cancel_event=None, manual=False, on_missing=None):
+        """Download the curated cores that went missing, and nothing else.
+
+        The bootstrap stays completed and no setting is touched. When the
+        download folder came back with no core at all, the rest are owed again
+        so the deferred sweep refetches them. ``manual`` re-checks the names
+        remembered as unavailable. ``on_missing`` is told the missing names
+        before any download starts, so a caller can show progress only when
+        there is something to fetch. Never raises.
+        """
+        summary = {
+            "missing": [],
+            "downloaded": 0,
+            "failed": 0,
+            "failures": [],
+            "cancelled": False,
+            "disabled": False,
+            "unlisted": [],
+        }
+        try:
+            missing = self.missing_curated_cores(ignore_unavailable=not manual)
+            summary["missing"] = missing
+            if not missing:
+                return summary
+            if not self.updater.settings.get("enabled", True):
+                summary["disabled"] = True
+                return summary
+            if on_missing:
+                on_missing(missing)
+            core_dir = self.updater.core_dir
+            had_cores = core_dir.is_dir() and any(core_dir.glob("*_libretro" + CORE_SUFFIX))
+            cores_summary = self.updater.download_all(
+                on_progress=on_progress, only=missing, cancel_event=cancel_event
+            )
+            summary["downloaded"] = int(cores_summary.get("downloaded", 0))
+            summary["failed"] = int(cores_summary.get("failed", 0))
+            summary["failures"] = list(cores_summary.get("failures") or [])
+            summary["cancelled"] = bool(
+                cores_summary.get("cancelled")
+                or (cancel_event is not None and cancel_event.is_set())
+            )
+            summary["unlisted"] = list(cores_summary.get("unlisted") or [])
+            if summary["downloaded"]:
+                # The .info files lived in the same folder that was wiped.
+                self.updater.install_core_info()
+            if not summary["failed"]:
+                # Only a listing that answered says what is not built here.
+                self.config_manager.set_unavailable_cores(__version__, summary["unlisted"])
+            if not had_cores:
+                self.config_manager.mark_deferred_assets_pending()
+        except Exception as exc:
+            logger.exception("core repair crashed")
+            summary["failed"] = max(1, summary["failed"])
+            summary["failures"] = [{"artifact": "repair", "error": str(exc)}]
+        logger.info(
+            "core repair finished: missing=%d downloaded=%d failed=%d cancelled=%s",
+            len(summary["missing"]),
+            summary["downloaded"],
+            summary["failed"],
+            summary["cancelled"],
+        )
+        return summary

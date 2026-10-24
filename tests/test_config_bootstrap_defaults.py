@@ -131,5 +131,36 @@ class TheDeferredAssetDebtTests(unittest.TestCase):
             self.assertFalse(ConfigManager(config_file=cfg_path).deferred_assets_pending())
 
 
+class TheUnavailableCoresTests(unittest.TestCase):
+    """The curated cores the buildbot does not build here (issue #512)."""
+
+    def test_a_config_without_the_key_has_none(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertEqual(manager.get_unavailable_cores(), {"version": None, "names": []})
+
+    def test_they_survive_a_restart(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            ConfigManager(config_file=cfg_path).set_unavailable_cores(
+                "1.17.0", ["b_libretro.so", "a_libretro.so"]
+            )
+            self.assertEqual(
+                ConfigManager(config_file=cfg_path).get_unavailable_cores(),
+                {"version": "1.17.0", "names": ["a_libretro.so", "b_libretro.so"]},
+            )
+
+    def test_a_hand_edited_value_reads_as_none(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            bootstrap = manager.config.setdefault("setup", {}).setdefault("bootstrap", {})
+            bootstrap["cores_unavailable"] = "junk"
+            self.assertEqual(manager.get_unavailable_cores()["names"], [])
+            bootstrap["cores_unavailable"] = {"version": "1.17.0", "names": "junk"}
+            self.assertEqual(
+                manager.get_unavailable_cores(), {"version": "1.17.0", "names": []}
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

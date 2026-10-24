@@ -98,6 +98,12 @@ class _FakeConfigManager:
     def mark_deferred_assets_done(self):
         self.state["deferred_assets"] = "done"
 
+    def get_unavailable_cores(self):
+        return self.state.get("cores_unavailable") or {"version": None, "names": []}
+
+    def set_unavailable_cores(self, version, names):
+        self.state["cores_unavailable"] = {"version": version, "names": sorted(names)}
+
     def finish_bootstrap_failure(self, step_id, error_message):
         self.state["status"] = "failed"
         self.state["failed_step"] = step_id
@@ -357,6 +363,229 @@ class TheDeferredDownloadTests(unittest.TestCase):
                 cfg, _, result = self._run(tmp_dir, cores=_clean(cancelled=1))
         self.assertTrue(result["cancelled"])
         self.assertTrue(cfg.deferred_assets_pending())
+
+
+class _CoreFolders:
+    """Two core folders standing in for every directory the launcher searches."""
+
+    def __init__(self, tmp_dir):
+        self.download = Path(tmp_dir) / "download"
+        self.system = Path(tmp_dir) / "system"
+        self.download.mkdir()
+        self.system.mkdir()
+
+    def put(self, folder, *names):
+        for name in names:
+            (folder / name).write_bytes(b"core")
+
+    def everything_in(self, folder, but=()):
+        self.put(folder, *[name for name in curated_core_filenames() if name not in but])
+
+    def patches(self, flatpak=False):
+        return (
+            patch(
+                "openemux.core.first_boot.core_search_dirs",
+                return_value=[self.download, self.system],
+            ),
+            patch("openemux.core.first_boot.is_running_in_flatpak", return_value=flatpak),
+        )
+
+
+class MissingCuratedCoresTests(unittest.TestCase):
+    """The start-up check behind issue #512: what no searched folder holds."""
+
+    def _missing(self, tmp_dir, arrange, flatpak=False, **kwargs):
+        folders = _CoreFolders(tmp_dir)
+        cfg = _FakeConfigManager(tmp_dir)
+        arrange(folders, cfg)
+        bootstrapper = FirstBootBootstrapper(cfg)
+        dirs_patch, flatpak_patch = folders.patches(flatpak)
+        with dirs_patch, flatpak_patch:
+            return bootstrapper.missing_curated_cores(**kwargs)
+
+    def test_nothing_is_missing_when_every_core_is_there(self):
+        with TemporaryDirectory() as tmp_dir:
+            missing = self._missing(tmp_dir, lambda f, _c: f.everything_in(f.download))
+        self.assertEqual(missing, [])
+
+    def test_a_core_in_a_system_folder_is_not_missing(self):
+        first = curated_core_filenames()[0]
+
+        def arrange(folders, _cfg):
+            folders.everything_in(folders.download, but=[first])
+            folders.put(folders.system, first)
+
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._missing(tmp_dir, arrange), [])
+
+    def test_an_empty_folder_misses_the_whole_curated_set(self):
+        with TemporaryDirectory() as tmp_dir:
+            missing = self._missing(tmp_dir, lambda _f, _c: None)
+        self.assertEqual(missing, curated_core_filenames())
+
+    def test_names_known_as_unavailable_are_left_out(self):
+        first, second = curated_core_filenames()[:2]
+
+        def arrange(folders, cfg):
+            folders.everything_in(folders.download, but=[first, second])
+            cfg.set_unavailable_cores(first_boot.__version__, [first])
+
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._missing(tmp_dir, arrange), [second])
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(
+                self._missing(tmp_dir, arrange, ignore_unavailable=False), [first, second]
+            )
+
+    def test_names_remembered_by_another_version_are_checked_again(self):
+        first = curated_core_filenames()[0]
+
+        def arrange(folders, cfg):
+            folders.everything_in(folders.download, but=[first])
+            cfg.set_unavailable_cores("0.0.1", [first])
+
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._missing(tmp_dir, arrange), [first])
+
+    def test_inside_a_flatpak_nothing_is_missing(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._missing(tmp_dir, lambda _f, _c: None, flatpak=True), [])
+
+
+class RepairingMissingCoresTests(unittest.TestCase):
+    """Bringing back the curated cores without touching the setup (#512)."""
+
+    def _repair(self, tmp_dir, arrange=None, enabled=True, cores=None, **kwargs):
+        folders = _CoreFolders(tmp_dir)
+        cfg = _FakeConfigManager(tmp_dir)
+        cfg.state["status"] = "completed"
+        cfg.state["completed_steps"] = ["retroarch_download_all_cores"]
+        cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = enabled
+        if arrange:
+            arrange(folders, cfg)
+        bootstrapper = FirstBootBootstrapper(cfg)
+        bootstrapper.updater.core_dir = folders.download
+        recorder = _RecordingUpdater(bootstrapper.updater, cores=cores)
+        dirs_patch, flatpak_patch = folders.patches()
+        with dirs_patch, flatpak_patch:
+            summary = bootstrapper.repair_missing_cores(**kwargs)
+        return cfg, recorder, summary
+
+    def _two_missing(self, folders, _cfg):
+        folders.everything_in(folders.download, but=curated_core_filenames()[:2])
+
+    def test_a_healthy_install_asks_the_network_nothing(self):
+        told = []
+        with TemporaryDirectory() as tmp_dir:
+            cfg, recorder, summary = self._repair(
+                tmp_dir, lambda f, _c: f.everything_in(f.download), on_missing=told.append
+            )
+        self.assertEqual(recorder.calls, {})
+        self.assertEqual(summary["missing"], [])
+        self.assertEqual(told, [])
+        self.assertNotIn("cores_unavailable", cfg.state)
+
+    def test_only_the_missing_cores_are_downloaded(self):
+        told = []
+        cancel = threading.Event()
+        with TemporaryDirectory() as tmp_dir:
+            cfg, recorder, summary = self._repair(
+                tmp_dir,
+                self._two_missing,
+                cores=_clean(downloaded=2, unlisted=[]),
+                on_missing=told.append,
+                cancel_event=cancel,
+            )
+        missing = curated_core_filenames()[:2]
+        self.assertEqual(recorder.calls["download_all"]["only"], missing)
+        self.assertIs(recorder.calls["download_all"]["cancel_event"], cancel)
+        self.assertEqual(told, [missing])
+        self.assertEqual(summary["downloaded"], 2)
+        self.assertIn("core_info", recorder.calls)
+        self.assertEqual(cfg.state["status"], "completed")
+        self.assertEqual(cfg.state["completed_steps"], ["retroarch_download_all_cores"])
+        # The folder still had cores: the rest are not owed again.
+        self.assertNotIn("deferred_assets", cfg.state)
+
+    def test_an_empty_download_folder_owes_the_rest_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg, _, _ = self._repair(tmp_dir, cores=_clean(downloaded=35))
+        self.assertTrue(cfg.deferred_assets_pending())
+
+    def test_unlisted_names_are_remembered_for_this_version(self):
+        first = curated_core_filenames()[0]
+        with TemporaryDirectory() as tmp_dir:
+            cfg, recorder, summary = self._repair(
+                tmp_dir, self._two_missing, cores=_clean(downloaded=1, unlisted=[first])
+            )
+        self.assertEqual(
+            cfg.state["cores_unavailable"],
+            {"version": first_boot.__version__, "names": [first]},
+        )
+        self.assertEqual(summary["unlisted"], [first])
+
+    def test_the_manual_check_looks_at_unavailable_names_again(self):
+        first = curated_core_filenames()[0]
+
+        def arrange(folders, cfg):
+            folders.everything_in(folders.download, but=[first])
+            cfg.set_unavailable_cores(first_boot.__version__, [first])
+
+        with TemporaryDirectory() as tmp_dir:
+            _, recorder, _ = self._repair(tmp_dir, arrange)
+        self.assertEqual(recorder.calls, {})
+        with TemporaryDirectory() as tmp_dir:
+            cfg, recorder, _ = self._repair(tmp_dir, arrange, manual=True)
+        self.assertEqual(recorder.calls["download_all"]["only"], [first])
+        # Listed this time: it is no longer remembered as unavailable.
+        self.assertEqual(cfg.state["cores_unavailable"]["names"], [])
+
+    def test_nothing_downloaded_installs_no_core_info(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, recorder, _ = self._repair(tmp_dir, self._two_missing, cores=_clean())
+        self.assertNotIn("core_info", recorder.calls)
+
+    def test_with_the_updater_off_nothing_is_fetched(self):
+        with TemporaryDirectory() as tmp_dir:
+            _, recorder, summary = self._repair(tmp_dir, self._two_missing, enabled=False)
+        self.assertTrue(summary["disabled"])
+        self.assertEqual(recorder.calls, {})
+
+    def test_a_failure_is_reported_and_remembers_nothing(self):
+        cores = _clean(failed=1, failures=[{"artifact": "manifest", "error": "offline"}])
+        with TemporaryDirectory() as tmp_dir:
+            cfg, _, summary = self._repair(tmp_dir, self._two_missing, cores=cores)
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["failures"], cores["failures"])
+        self.assertNotIn("cores_unavailable", cfg.state)
+
+    def test_a_cancellation_is_reported(self):
+        cancel = threading.Event()
+        cancel.set()
+        with TemporaryDirectory() as tmp_dir:
+            _, _, summary = self._repair(tmp_dir, self._two_missing, cancel_event=cancel)
+        self.assertTrue(summary["cancelled"])
+        with TemporaryDirectory() as tmp_dir:
+            _, _, summary = self._repair(tmp_dir, self._two_missing, cores=_clean(cancelled=2))
+        self.assertTrue(summary["cancelled"])
+
+    def test_an_updater_exception_does_not_escape(self):
+        with TemporaryDirectory() as tmp_dir:
+            folders = _CoreFolders(tmp_dir)
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = True
+            bootstrapper = FirstBootBootstrapper(cfg)
+            bootstrapper.updater.core_dir = folders.download
+
+            def _boom(**_kwargs):
+                raise OSError("disk full")
+
+            bootstrapper.updater.download_all = _boom
+            dirs_patch, flatpak_patch = folders.patches()
+            with dirs_patch, flatpak_patch, self.assertLogs("openemux.core.first_boot", "ERROR"):
+                summary = bootstrapper.repair_missing_cores()
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["failures"], [{"artifact": "repair", "error": "disk full"}])
 
 
 class WhatTheFailureMessageSaysTests(unittest.TestCase):

@@ -1311,6 +1311,27 @@ class ConfigManager:
         bootstrap["deferred_assets"] = value
         self.save_config()
 
+    def get_unavailable_cores(self):
+        """The curated cores the buildbot did not list, and for which version.
+
+        Some cores are not built for every architecture; remembering them keeps
+        the start-up check from asking the buildbot for them on every launch
+        (issue #512). A config without the key reads as none.
+        """
+        stored = self.get_bootstrap_state().get("cores_unavailable")
+        if not isinstance(stored, dict):
+            return {"version": None, "names": []}
+        names = stored.get("names")
+        return {
+            "version": stored.get("version"),
+            "names": [str(name) for name in names] if isinstance(names, list) else [],
+        }
+
+    def set_unavailable_cores(self, version, names):
+        bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
+        bootstrap["cores_unavailable"] = {"version": version, "names": sorted(names)}
+        self.save_config()
+
     def finish_bootstrap_success(self):
         bootstrap = self.config.setdefault("setup", {}).setdefault("bootstrap", {})
         bootstrap["status"] = "completed"
