@@ -425,6 +425,10 @@ def wall(roms_dir, out_dir):
         for title in TITLES[console]:
             stem = Path(rom_filename(title, console)).stem
             label = get_art_path_candidates(roms_dir, console, stem, LABEL_ART)[0]
+            if not label.is_file():
+                # The compositor draws a blank sticker for a missing cover, so
+                # a wrong roms_dir would quietly publish blank cartridges.
+                raise FileNotFoundError(f"{label} is missing: run demo_library.py {roms_dir} first")
             png = io.BytesIO()
             frame.render(label, width=WALL_WIDTH).write_to_png(png)
             stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(png.getvalue()))
@@ -444,6 +448,8 @@ def main(argv=None):
         help="render the site's cartridge wall from the labels already in roms_dir, and nothing else",
     )
     args = parser.parse_args(argv)
+    if args.wall and args.configure:
+        parser.error("--wall only composites the labels; run --configure separately")
 
     roms_dir = args.roms_dir.expanduser().resolve()
     if args.wall:

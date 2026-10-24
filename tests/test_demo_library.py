@@ -130,6 +130,11 @@ class PaletteTest(unittest.TestCase):
             for left, right in zip(grounds, grounds[1:]):
                 self.assertGreater(demo_library.contrast_ratio(left, right), 1.5, (console, left, right))
 
+    def test_era_reads_on_its_band(self):
+        # The era word is white, 26 px bold: large text, so WCAG asks 3:1.
+        for _bg, band, _fg, _fg2, _title in demo_library.PALETTE:
+            self.assertGreaterEqual(demo_library.contrast_ratio("#ffffff", band), 3.0, band)
+
     def test_consoles_open_on_different_colours(self):
         firsts = [demo_library.palette_for(c, 0) for c in demo_library.TITLES]
         self.assertGreater(len(set(firsts)), len(firsts) // 2)
@@ -251,6 +256,15 @@ class FramesTest(unittest.TestCase):
             data = webp.read_bytes()
             self.assertEqual((data[:4], data[8:12]), (b"RIFF", b"WEBP"))
 
+    def test_wall_refuses_a_library_without_labels(self):
+        # A wrong roms_dir must not publish a wall of blank cartridges.
+        with TemporaryDirectory() as tmp, \
+                mock.patch.dict(demo_library.TITLES, _SMALL, clear=True), \
+                mock.patch.object(demo_library, "WALL", ["GBA"]):
+            with self.assertRaises(FileNotFoundError):
+                demo_library.wall(Path(tmp) / "empty", Path(tmp) / "carts")
+            self.assertEqual(list((Path(tmp) / "carts").iterdir()), [])
+
 
 class ConfigureTest(unittest.TestCase):
     def setUp(self):
@@ -307,6 +321,11 @@ class MainTest(unittest.TestCase):
             output = self._run(str(roms), "--configure")
         self.assertIn("roms_path set in", output)
         self.assertEqual(config.get_roms_path(), roms)
+
+    def test_wall_and_configure_are_exclusive(self):
+        with TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                demo_library.main([tmp, "--wall", str(Path(tmp) / "carts"), "--configure"])
 
     @unittest.skipUnless(_webp_writable(), "no WebP saver for GdkPixbuf")
     def test_wall_reads_the_labels_and_writes_nothing_else(self):
