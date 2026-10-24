@@ -506,10 +506,6 @@ class HeadlessHostRunTests(unittest.TestCase):
         self.assertNotIn("-- env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 \"$@\"", driver)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class WindowsPackageSetTests(unittest.TestCase):
     """CI, the bundle and the developer setup install one MSYS2 set (#527).
 
@@ -568,3 +564,6 @@ class WindowsPackageSetTests(unittest.TestCase):
                 with self.subTest(path=str(path.relative_to(REPO_ROOT))):
                     self.assertIsNone(stale.search(text))
 
+
+if __name__ == "__main__":
+    unittest.main()

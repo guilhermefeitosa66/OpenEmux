@@ -135,7 +135,6 @@ class PruneDropsWhatNothingReadsTests(unittest.TestCase):
         self.assertKept("etc/ssl/certs/ca-bundle.crt")
 
 
-
 class RelocatePrefixTests(unittest.TestCase):
     def test_the_environment_directory_comes_from_the_package_resolver(self):
         # One name for the directory the packages unpack into: a second copy
@@ -153,6 +152,7 @@ class RelocatePrefixTests(unittest.TestCase):
                 stage.relocate_prefix(extracted, Path(tmp) / "OpenEmux")
         self.assertIn("ucrt64 is missing", str(raised.exception))
         self.assertIn("msys2_packages.py", str(raised.exception))
+
 
 class LocaleKeepFollowsTheAppTests(unittest.TestCase):
     def test_every_language_the_app_ships_is_kept(self):
