@@ -100,6 +100,14 @@ every launch. That request became
 [#505](https://github.com/guilhermefeitosa66/OpenEmux/issues/505): a "Start
 games in fullscreen" switch in Settings → Video that every launch now follows.
 
+In the same thread, also reported that cartridge labels never synced for Game
+Boy and Game Boy Color even with a ScreenScraper account set. That report became
+[#506](https://github.com/guilhermefeitosa66/OpenEmux/issues/506): a zipped ROM
+is now looked up by the game inside the archive rather than by the archive
+itself, a Game Boy game filed under Game Boy Color is found on one more try, and
+a sync that ScreenScraper refused or never answered says so instead of counting
+every game as a plain miss.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

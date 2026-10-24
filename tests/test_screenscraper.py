@@ -1,6 +1,9 @@
 """Tests for the ScreenScraper cover source. All network I/O is mocked."""
+import hashlib
 import json
 import unittest
+import zipfile
+import zlib
 import urllib.error
 import urllib.parse
 from pathlib import Path
@@ -493,6 +496,8 @@ class ARomThatCannotBeHashedTests(unittest.TestCase):
         self.assertIn("crc=", asked["url"])
         self.assertIn("md5=", asked["url"])
         self.assertIn("romtaille=8", asked["url"])
+        # webapi2 documents romnom as the file name *with* its extension.
+        self.assertIn("romnom=Chrono+Trigger+%28USA%29.sfc", asked["url"])
 
     def test_a_rom_whose_size_cannot_be_read_is_looked_up_without_one(self):
         asked = {}
@@ -504,7 +509,7 @@ class ARomThatCannotBeHashedTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             rom = Path(tmp_dir) / "Chrono Trigger (USA).sfc"
             rom.write_bytes(b"rom-data")
-            with patch("os.path.getsize", side_effect=OSError("gone")):
+            with patch("openemux.core.hasher.Path.stat", side_effect=OSError("gone")):
                 lookup_media_urls(
                     credentials=_creds(),
                     console="SFC",
@@ -561,6 +566,238 @@ class WhatTheFetcherAcceptsTests(unittest.TestCase):
             quota=latch,
         )
         self.assertFalse(latch.closed)
+
+
+def _query(url):
+    return dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+
+
+class AZippedRomIsLookedUpByTheRomInsideTests(unittest.TestCase):
+    """The archive's CRC, MD5 and size match no game on ScreenScraper (#506)."""
+
+    ROM = b"tetris-cartridge" * 64
+
+    def setUp(self):
+        from openemux.core import hasher
+
+        self.hasher = hasher
+        hasher.forget_rom_digests()
+        self._tmp = TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        self.hasher.forget_rom_digests()
+
+    def _lookup(self, console, rom_path):
+        asked = []
+
+        def fake_open(url, timeout=None):
+            asked.append(url)
+            return _FakeResponse(SAMPLE_PAYLOAD)
+
+        with patch("openemux.core.screenscraper.throttle"):
+            lookup_media_urls(
+                credentials=_creds(),
+                console=console,
+                rom_name=Path(rom_path).stem,
+                rom_path=str(rom_path),
+                art_kind="cartridge_label",
+                opener=fake_open,
+            )
+        return [_query(url) for url in asked]
+
+    def test_a_zipped_game_boy_rom_sends_the_inner_identity(self):
+        archive = self.tmp / "Tetris (World).zip"
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("Tetris (World).gb", self.ROM)
+
+        (query,) = self._lookup("GB", archive)
+
+        self.assertEqual(query["systemeid"], "9")
+        self.assertEqual(query["romnom"], "Tetris (World).gb")
+        self.assertEqual(query["crc"], format(zlib.crc32(self.ROM), "08X"))
+        self.assertEqual(query["md5"], hashlib.md5(self.ROM).hexdigest().upper())
+        self.assertEqual(query["romtaille"], str(len(self.ROM)))
+
+    def test_a_plain_game_boy_color_rom_sends_its_own_name_with_extension(self):
+        rom = self.tmp / "Pokemon Gold (USA).gbc"
+        rom.write_bytes(self.ROM)
+
+        (query,) = self._lookup("GBC", rom)
+
+        self.assertEqual(query["systemeid"], "10")
+        self.assertEqual(query["romnom"], "Pokemon Gold (USA).gbc")
+        self.assertEqual(query["romtaille"], str(len(self.ROM)))
+
+
+class _Answers:
+    """A fake opener answering per ``systemeid``: an HTTP status or a body."""
+
+    def __init__(self, by_system, on_call=None):
+        self.by_system = by_system
+        self.on_call = on_call
+        self.asked = []
+
+    def __call__(self, url, timeout=None):
+        query = _query(url)
+        self.asked.append(query["systemeid"])
+        if self.on_call:
+            self.on_call()
+        answer = self.by_system[query["systemeid"]]
+        if isinstance(answer, int):
+            raise urllib.error.HTTPError(url, answer, "status", {}, None)
+        return _FakeResponse(answer)
+
+
+class SiblingRetryTests(unittest.TestCase):
+    """Game Boy and Game Boy Color dumps share folders; ask the other once."""
+
+    def _lookup(self, console, opener, quota=None):
+        with patch("openemux.core.screenscraper.throttle"):
+            return lookup_media_urls(
+                credentials=_creds(),
+                console=console,
+                rom_name="Tetris.gb",
+                art_kind="cartridge_label",
+                opener=opener,
+                quota=quota,
+            )
+
+    def test_a_game_boy_rom_not_found_is_asked_as_game_boy_color(self):
+        answers = _Answers({"9": 404, "10": SAMPLE_PAYLOAD})
+        with self.assertLogs("openemux.core.screenscraper", level="INFO") as logs:
+            urls = self._lookup("GB", answers)
+        self.assertEqual(answers.asked, ["9", "10"])
+        self.assertTrue(urls)
+        self.assertIn("support-texture", urls[0])
+        self.assertTrue(any("sibling_retry" in line for line in logs.output))
+
+    def test_a_game_boy_color_rom_not_found_is_asked_as_game_boy(self):
+        answers = _Answers({"10": 404, "9": SAMPLE_PAYLOAD})
+        self.assertTrue(self._lookup("GBC", answers))
+        self.assertEqual(answers.asked, ["10", "9"])
+
+    def test_both_not_found_is_an_ordinary_miss(self):
+        run = screenscraper.ScreenScraperRun()
+        answers = _Answers({"9": 404, "10": 404})
+        self.assertEqual(self._lookup("GB", answers, quota=run), [])
+        self.assertEqual(answers.asked, ["9", "10"])
+        self.assertIsNone(run.worst_problem(labels=True))
+
+    def test_no_retry_after_an_answer(self):
+        answers = _Answers({"9": SAMPLE_PAYLOAD})
+        self._lookup("GB", answers)
+        self.assertEqual(answers.asked, ["9"])
+
+    def test_no_retry_after_a_refusal(self):
+        answers = _Answers({"9": 403})
+        self.assertEqual(self._lookup("GB", answers), [])
+        self.assertEqual(answers.asked, ["9"])
+
+    def test_no_retry_for_other_consoles(self):
+        answers = _Answers({"4": 404})
+        self.assertEqual(self._lookup("SFC", answers), [])
+        self.assertEqual(answers.asked, ["4"])
+
+    def test_no_retry_once_the_quota_is_gone(self):
+        run = screenscraper.ScreenScraperRun()
+        # Another worker hears 430 while this one is waiting on its answer.
+        answers = _Answers({"9": 404}, on_call=lambda: run.note_status(430))
+        self.assertEqual(self._lookup("GB", answers, quota=run), [])
+        self.assertEqual(answers.asked, ["9"])
+
+
+class WhatALookupReportsTests(unittest.TestCase):
+    """Each answer is classified, so a refusal is not a game without art."""
+
+    def _run_with(self, opener):
+        run = screenscraper.ScreenScraperRun()
+        with patch("openemux.core.screenscraper.throttle"):
+            lookup_media_urls(
+                credentials=_creds(), console="SFC", rom_name="X.sfc",
+                opener=opener, quota=run,
+            )
+        return run
+
+    @staticmethod
+    def _status(code):
+        def fake_open(url, timeout=None):
+            raise urllib.error.HTTPError(url, code, "status", {}, None)
+
+        return fake_open
+
+    def test_each_http_status_maps_to_its_problem(self):
+        expected = {
+            404: None,
+            401: screenscraper.PROBLEM_REFUSED,
+            403: screenscraper.PROBLEM_REFUSED,
+            426: screenscraper.PROBLEM_REFUSED,
+            423: screenscraper.PROBLEM_UNREACHABLE,
+            500: screenscraper.PROBLEM_UNREACHABLE,
+            503: screenscraper.PROBLEM_UNREACHABLE,
+            430: screenscraper.PROBLEM_QUOTA,
+        }
+        for code, problem in expected.items():
+            with self.subTest(code=code):
+                self.assertEqual(self._run_with(self._status(code)).worst_problem(), problem)
+
+    def test_a_single_thread_limit_is_not_reported(self):
+        """429 is transient; only a run of them closes the latch."""
+        self.assertIsNone(self._run_with(self._status(429)).worst_problem())
+
+    def test_a_network_error_is_unreachable(self):
+        def fake_open(url, timeout=None):
+            raise urllib.error.URLError("connection refused")
+
+        self.assertEqual(
+            self._run_with(fake_open).worst_problem(), screenscraper.PROBLEM_UNREACHABLE
+        )
+
+    def test_a_body_that_is_not_json_is_unreachable(self):
+        run = self._run_with(lambda url, timeout=None: _FakeResponse("Erreur"))
+        self.assertEqual(run.worst_problem(), screenscraper.PROBLEM_UNREACHABLE)
+
+    def test_an_answer_reports_nothing(self):
+        run = self._run_with(lambda url, timeout=None: _FakeResponse(SAMPLE_PAYLOAD))
+        self.assertIsNone(run.worst_problem())
+
+    def test_missing_credentials_are_noted_for_the_label_pass(self):
+        run = screenscraper.ScreenScraperRun()
+        lookup_media_urls(
+            credentials=ScreenScraperCredentials(), console="GB", rom_name="X.gb", quota=run
+        )
+        self.assertIsNone(run.worst_problem())
+        self.assertEqual(run.worst_problem(labels=True), screenscraper.PROBLEM_REFUSED)
+
+    def test_refused_outranks_quota_outranks_unreachable(self):
+        run = screenscraper.ScreenScraperRun()
+        run.note_outcome(screenscraper.STATUS_UNREACHABLE)
+        self.assertEqual(run.worst_problem(), screenscraper.PROBLEM_UNREACHABLE)
+        run.note_status(430)
+        self.assertEqual(run.worst_problem(), screenscraper.PROBLEM_QUOTA)
+        run.note_outcome(screenscraper.STATUS_REFUSED)
+        self.assertEqual(run.worst_problem(), screenscraper.PROBLEM_REFUSED)
+
+    def test_worst_problem_of_ignores_nothing(self):
+        self.assertIsNone(screenscraper.worst_problem_of({None}))
+        self.assertEqual(
+            screenscraper.worst_problem_of({None, screenscraper.PROBLEM_QUOTA}),
+            screenscraper.PROBLEM_QUOTA,
+        )
+
+    def test_a_refusal_never_logs_credentials(self):
+        with self.assertLogs("openemux.core.screenscraper", level="DEBUG") as logs:
+            self._run_with(self._status(403))
+            run = screenscraper.ScreenScraperRun()
+            with patch("openemux.core.screenscraper.throttle"):
+                lookup_media_urls(
+                    credentials=_creds(), console="GB", rom_name="X.gb",
+                    opener=_Answers({"9": 404, "10": 403}), quota=run,
+                )
+        joined = "\n".join(logs.output)
+        for secret in ("devuser", "devsecret", "player1", "secretpw"):
+            self.assertNotIn(secret, joined)
 
 
 if __name__ == "__main__":

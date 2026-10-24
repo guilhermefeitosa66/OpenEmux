@@ -25,7 +25,11 @@ from openemux.core.scraper import (
     is_image,
     is_image_file,
 )
-from openemux.core.systems import get_thumbnail_system, resolve_system_id
+from openemux.core.systems import (
+    get_supported_extensions,
+    get_thumbnail_system,
+    resolve_system_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -559,7 +563,12 @@ def _resolve_hash_stem(console, rom_path, sync_settings):
         thumb_system = get_thumbnail_system(resolve_system_id(console))
         if not thumb_system:
             return None
-        return index.resolve_by_crc(thumb_system, hasher.compute_crc32(rom_path))
+        # The CRC of the ROM itself: a zipped ROM's archive matches nothing
+        # in the index, the entry inside it does (issue #506).
+        identity = hasher.rom_identity(rom_path, get_supported_extensions(console))
+        if not identity.crc32:
+            return None
+        return index.resolve_by_crc(thumb_system, identity.crc32)
     except Exception as exc:  # noqa: BLE001
         logger.warning("cover_sync hash stage failed: rom=%s error=%s", rom_path, exc)
         return None
@@ -1022,8 +1031,9 @@ def _sync_covers(
     workers = max(1, int(max_workers or SYNC_WORKERS))
     gates = _HostGates()
     # One per run: the first ROM told the daily quota is gone spares every ROM
-    # after it a request and a second of throttle (issue #220).
-    quota = screenscraper.QuotaLatch()
+    # after it a request and a second of throttle (issue #220), and the end of
+    # the run can say whether ScreenScraper refused or never answered (#506).
+    quota = screenscraper.ScreenScraperRun()
 
     cancelled = False
     total = 0
@@ -1105,6 +1115,11 @@ def _sync_covers(
         "missed": missed,
         # Which ladder stage each downloaded cover came from (#175).
         "stages": stage_tally,
+        # Why ScreenScraper did not answer, if it did not (#506): a
+        # screenscraper.PROBLEM_* value, or None.
+        "screenscraper_problem": quota.worst_problem(
+            labels=art_kind == COVER_ART_TYPE_CARTRIDGE_LABEL
+        ),
     }
     logger.info(
         "cover_sync %s: scope=%s selected_console=%s total=%d downloaded=%d skipped=%d errors=%d stages=%s",
@@ -1137,6 +1152,7 @@ def _crashed_summary(scope, selected_console, error):
         "errors": 0,
         "error_roms": [],
         "stages": {},
+        "screenscraper_problem": None,
         "crashed": str(error),
     }
 
@@ -1249,6 +1265,7 @@ def _sync_artwork(
         "errors": 0,
         "stages": {STAGE_HASH: 0, STAGE_EXACT: 0, STAGE_NORMALIZED: 0, STAGE_FTS: 0},
         "passes": [],
+        "screenscraper_problem": None,
     }
     processed_before = 0
 
@@ -1284,6 +1301,9 @@ def _sync_artwork(
             aggregate[key] += summary[key]
         for stage, count in summary.get("stages", {}).items():
             aggregate["stages"][stage] = aggregate["stages"].get(stage, 0) + count
+        aggregate["screenscraper_problem"] = screenscraper.worst_problem_of(
+            {aggregate["screenscraper_problem"], summary.get("screenscraper_problem")}
+        )
         processed_before += summary["total"]
         if summary["cancelled"]:
             aggregate["cancelled"] = True
