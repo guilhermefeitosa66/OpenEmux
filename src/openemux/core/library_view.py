@@ -177,6 +177,39 @@ def normalize_view_mode(value):
     return DEFAULT_VIEW_MODE
 
 
+#: How much of a cover may be trimmed to fill its card edge to edge, as a
+#: fraction of the art (split between the two edges that lose it). Below this
+#: the trim is a few pixels and a full card looks better than a hairline band
+#: of backdrop; above it logos and rating bands start to go (issue #508).
+COVER_FILL_TOLERANCE = 0.06
+
+# Absorbs float error, so a cover exactly at the tolerance still fills.
+_COVER_FILL_EPSILON = 1e-9
+
+
+def cover_crop_fraction(image_size, box_size):
+    """Fraction of the art lost when ``image_size`` is scaled to fill ``box_size``.
+
+    Zero when the shapes match; a degenerate size counts as nothing to crop.
+    """
+    image_width, image_height = image_size
+    box_width, box_height = box_size
+    if min(image_width, image_height, box_width, box_height) <= 0:
+        return 0.0
+    ratio = (image_width / image_height) / (box_width / box_height)
+    return 1.0 - min(ratio, 1.0 / ratio)
+
+
+def cover_fills_box(image_size, box_size, tolerance=COVER_FILL_TOLERANCE):
+    """Should this cover fill its card, or be shown whole on the backdrop?
+
+    A card has its console's typical box shape, and a cover of another shape
+    (a portrait Japanese box on a landscape SFC card) filled into it loses its
+    top and bottom. Only a cover close enough to the card's shape fills it.
+    """
+    return cover_crop_fraction(image_size, box_size) <= tolerance + _COVER_FILL_EPSILON
+
+
 #: The display settings that can be set globally and overridden per scope.
 DISPLAY_KEYS = ("view_mode", "sort_order", "zoom")
 

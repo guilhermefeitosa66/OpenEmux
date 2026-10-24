@@ -1710,6 +1710,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Cards show artwork, not the "missing artwork" placeholder.
 - **Check:** Screenshot; no placeholder tiles visible.
 
+### RT-360 — A cover that does not match the console's box shape is shown whole
+- **Area:** Covers
+- **Mode:** AUTO-UI
+- **Preconditions:** A console page in the "Covers" view mode with two games given a local cover
+  each, in `<roms_dir>/covers/SFC/<displayed title>.png`: one of the console's box shape (SFC,
+  560×400) and one of another shape (a portrait 400×714 box). Each image has a distinct stripe at
+  its top and its bottom. Copies only: remove both files afterwards.
+- **Steps:**
+  1. Open "Super Nintendo" and switch the view mode to "Covers".
+  2. Look at both cards, then zoom in and out through every level (Ctrl+plus / Ctrl+minus) and
+     scroll down and back.
+- **Expected:** The matching cover fills its card edge to edge. The portrait cover is shown whole,
+  both stripes visible, centred on the card's subtle backdrop, with rounded corners and a shadow
+  on the art. Card size and the grid lattice do not change, and every card keeps its own state
+  after zooming and scrolling (issue #508).
+- **Check:** `make devbox-shot` per zoom level; both stripes of each cover visible in every shot.
+
 ### RT-054 — Leaving a page stops its covers from bothering the next one
 - **Area:** Covers
 - **Mode:** MANUAL
