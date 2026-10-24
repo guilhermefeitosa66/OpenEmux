@@ -455,5 +455,33 @@ class LintGateTests(unittest.TestCase):
         self.assertIn("ruff check", runs)
 
 
+class HeadlessHostRunTests(unittest.TestCase):
+    """A host test run never draws on the developer's screen (issue #528)."""
+
+    def setUp(self):
+        self.makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+
+    def recipe(self, target):
+        match = re.search(rf"^{target}:\n((?:\t.*\n)+)", self.makefile, re.M)
+        self.assertIsNotNone(match, f"no {target} target")
+        return match.group(1)
+
+    def test_test_and_coverage_go_through_the_launcher(self):
+        self.assertIn("scripts/run_tests.py $(PYTHON) -m unittest discover",
+                      self.recipe("test"))
+        coverage = self.recipe("coverage")
+        self.assertIn("scripts/run_tests.py $(PYTHON) -m coverage run", coverage)
+        # The report reads a data file; it needs no display.
+        self.assertIn("\t$(PYTHON) -m coverage report", coverage)
+        self.assertTrue((REPO_ROOT / "scripts/run_tests.py").exists())
+
+    def test_install_sys_deps_installs_xvfb(self):
+        self.assertRegex(self.recipe("install-sys-deps"), r"\bxvfb\b")
+
+    def test_the_devbox_marks_its_display_as_private(self):
+        script = (REPO_ROOT / "devbox/bin/devbox-tests").read_text(encoding="utf-8")
+        self.assertIn("export OPENEMUX_TESTS_PRIVATE_DISPLAY=1", script)
+
+
 if __name__ == "__main__":
     unittest.main()
