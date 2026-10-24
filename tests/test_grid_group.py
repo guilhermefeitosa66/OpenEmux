@@ -24,7 +24,7 @@ class _Entry:
         return f"<{self.name}>"
 
 
-class _Container:
+class _Widget:
     def __init__(self):
         self._visible = True
 
@@ -35,10 +35,11 @@ class _Container:
         return self._visible
 
 
-class _Grid:
+class _Grid(_Widget):
     """Everything the group asks of a grid, and nothing that needs a display."""
 
     def __init__(self, console, names):
+        super().__init__()
         self.console = console
         self._entries = [_Entry(name) for name in names]
         self._query = ""
@@ -115,7 +116,7 @@ def _group(*specs):
     for console, names in specs:
         grid = _Grid(console, names)
         grids.append(grid)
-        group.add_section(GridSection(console, grid, _Container(), object()))
+        group.add_section(GridSection(console, grid, _Widget()))
     return group, grids
 
 
@@ -147,14 +148,21 @@ class FilteringTests(unittest.TestCase):
     def test_a_group_the_search_empties_is_hidden(self):
         group, _ = _group(("FC", ["Contra"]), ("SFC", ["Mario Kart"]))
         group.set_filter("mario")
-        visible = [s.console for s in group.sections if s.container.get_visible()]
+        visible = [s.console for s in group.sections if s.is_visible()]
         self.assertEqual(visible, ["SFC"])
+
+    def test_a_hidden_group_takes_its_header_with_it(self):
+        group, _ = _group(("FC", ["Contra"]), ("SFC", ["Mario Kart"]))
+        group.set_filter("mario")
+        self.assertEqual(
+            [s.header.get_visible() for s in group.sections], [False, True]
+        )
 
     def test_clearing_the_search_brings_the_groups_back(self):
         group, _ = _group(("FC", ["Contra"]), ("SFC", ["Mario Kart"]))
         group.set_filter("mario")
         group.set_filter("")
-        visible = [s.console for s in group.sections if s.container.get_visible()]
+        visible = [s.console for s in group.sections if s.is_visible()]
         self.assertEqual(visible, ["FC", "SFC"])
 
     def test_the_count_follows_the_filter(self):

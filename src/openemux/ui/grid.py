@@ -439,6 +439,12 @@ class RomGrid(Gtk.GridView):
         if card.entry is not None:
             self._focused_entry = card.entry
         card.set_focus_visual(True)
+        # On a grouped page the scrolling is the page's, not this grid's: a
+        # card focused off screen -- crossing into the next group, or walking
+        # down a group taller than the window -- is brought in by the page.
+        reveal = getattr(self.get_parent(), "reveal", None)
+        if reveal is not None:
+            reveal(card)
 
     # -- cartridge shells ----------------------------------------------------
 

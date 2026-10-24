@@ -10,12 +10,10 @@ The cost is that "the grid of this page" is no longer one object, and a dozen
 places in the window and the navigation controller assume it is. This is the
 façade they talk to instead: the same verbs, fanned out over the groups.
 
-The trade-off worth stating plainly: each group's grid is allocated its
-natural height inside the page's scroller, so it builds a card per ROM instead
-of a screenful. Virtualization (issue #219) still applies *within* a console
-page, which is where a single console's few thousand ROMs live; a mixed page
-now pays for what it shows. Fixing that needs a layout that can virtualize
-across sections, which is a different piece of work from grouping.
+The groups sit in a ``GroupedScroll``, which hands each grid only the slice
+of the page that is on screen, so every grid stays virtualized (issue #219)
+and builds a screenful of cards, not one per ROM -- nor, as a plain box did,
+a fixed block of them that never followed the scroll (issue #511).
 """
 
 import logging
@@ -26,18 +24,25 @@ logger = logging.getLogger(__name__)
 
 
 class GridSection:
-    """One console's group: its header, its grid, and the box holding both."""
+    """One console's group: its header and its grid.
 
-    def __init__(self, console, grid, container, header, set_count=None):
+    Both are the page's direct children, not a box of their own: a grid
+    inside a box is a grid the page cannot scroll (see ``GroupedScroll``).
+    """
+
+    def __init__(self, console, grid, header, set_count=None):
         self.console = console
         self.grid = grid
-        self.container = container
         self.header = header
         #: Writes the header's game count; the search changes it.
         self._set_count = set_count
 
     def set_visible(self, visible):
-        self.container.set_visible(bool(visible))
+        self.header.set_visible(bool(visible))
+        self.grid.set_visible(bool(visible))
+
+    def is_visible(self):
+        return self.grid.get_visible()
 
     def update_count(self):
         if self._set_count is not None:
@@ -83,7 +88,7 @@ class GridGroup:
 
     def visible_grids(self):
         """The grids of the groups the search has not emptied."""
-        return [s.grid for s in self.sections if s.container.get_visible()]
+        return [s.grid for s in self.sections if s.is_visible()]
 
     def grid_after(self, grid):
         """The next group's grid, or None at the bottom of the page."""
