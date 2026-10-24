@@ -2855,6 +2855,10 @@ class TheMissingCoreRepairTests(WindowCase):
         # Owed before, or owed again: the deferred sweep follows the repair.
         seen["deferred"].assert_called_once_with()
 
+    def test_a_cancelled_repair_does_not_start_the_deferred_sweep(self):
+        seen = self._run(summary={"missing": ["a_libretro.so"], "cancelled": True})
+        seen["deferred"].assert_not_called()
+
     def test_the_manual_check_names_its_own_work(self):
         seen = self._run(manual=True, missing=("a_libretro.so", "b_libretro.so"))
         self.assertEqual(seen["labels"], [self.said("status.cores.repairing")])

@@ -524,6 +524,19 @@ class RepairingMissingCoresTests(unittest.TestCase):
         )
         self.assertEqual(summary["unlisted"], [first])
 
+    def test_the_start_up_check_keeps_the_names_it_already_knew(self):
+        known, lost = curated_core_filenames()[:2]
+
+        def arrange(folders, cfg):
+            folders.everything_in(folders.download, but=[known, lost])
+            cfg.set_unavailable_cores(first_boot.__version__, [known])
+
+        with TemporaryDirectory() as tmp_dir:
+            cfg, recorder, _ = self._repair(tmp_dir, arrange, cores=_clean(downloaded=1, unlisted=[]))
+        self.assertEqual(recorder.calls["download_all"]["only"], [lost])
+        # Not asked about this time, so still remembered as unavailable.
+        self.assertEqual(cfg.state["cores_unavailable"]["names"], [known])
+
     def test_the_manual_check_looks_at_unavailable_names_again(self):
         first = curated_core_filenames()[0]
 

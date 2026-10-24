@@ -390,7 +390,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._core_toast(*message)
         self._notify_core_repair_running(False)
         # Owed before the repair, or owed again because the folder was empty.
-        self._start_deferred_asset_download()
+        # Not right after the user cancelled a core download, though: the
+        # debt stays recorded and the next launch picks it up.
+        if not summary.get("cancelled"):
+            self._start_deferred_asset_download()
         return GLib.SOURCE_REMOVE
 
     def _core_repair_message(self, manual, summary):
