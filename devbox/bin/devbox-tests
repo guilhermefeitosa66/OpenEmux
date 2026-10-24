@@ -26,6 +26,10 @@ load_bus
 cd "${DEVBOX_REPO}"
 export PYTHONPATH=src
 export GDK_BACKEND=x11
+# The display is the box's own Xvnc, not the developer's. distrobox forwards the
+# host's XDG_SESSION_TYPE and WAYLAND_DISPLAY, which tests/gtk_display.py reads
+# as "this is somebody's desktop" and skips the widget tests for (issue #528).
+export OPENEMUX_TESTS_PRIVATE_DISPLAY=1
 
 if [ $# -gt 0 ]; then
 	exec "${DEVBOX_PYTHON}" -m unittest "$@"
