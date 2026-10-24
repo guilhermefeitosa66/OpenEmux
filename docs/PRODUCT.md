@@ -107,7 +107,8 @@ The window is one shape, everywhere:
   `src/openemux/ui/console_sidebar.py`).
 - Each pane is an `Adw.NavigationPage` holding an `Adw.ToolbarView` with an
   `Adw.HeaderBar`. Primary actions sit in the header bar; the primary menu
-  holds Settings, Keyboard Shortcuts and About OpenEmux.
+  holds Settings, Keyboard Shortcuts, Welcome, Report a Bug… and About
+  OpenEmux.
 - Settings live in one `Adw.PreferencesDialog` built from
   `Adw.PreferencesGroup`s and stock rows: `ActionRow`, `ComboRow`, `SwitchRow`,
   `SpinRow`, `EntryRow`, `PasswordEntryRow`, `ExpanderRow`
@@ -115,6 +116,10 @@ The window is one shape, everywhere:
   group before it is a new group, and a new group before it is a new page.
 - Empty states are `Adw.StatusPage`s: an icon, one line saying what is
   missing, and the action that fixes it (`src/openemux/ui/library_pages.py`).
+  Today they stop short of that: none carries an action button, and a
+  console's empty page shows its playlist path as the description. New empty
+  states follow the rule, and existing ones gain the action when a change
+  touches them.
 - The welcome tour is an `Adw.Carousel` inside an `Adw.Clamp`
   (`src/openemux/ui/welcome.py`).
 
@@ -128,14 +133,14 @@ Telling the user something has one right widget for each situation:
 
 ### Color and themes
 
-- **No custom palette.** `style.css` defines no colors of its own; it uses
+- **No custom palette.** `style.css` defines no theme colors of its own; it uses
   Adwaita's named colors (`@accent_bg_color`, `@window_bg_color`,
   `@card_bg_color`, `@headerbar_bg_color`, `@warning_color`, `@error_bg_color`
   and so on), with tints made by `alpha()`. That is what keeps the app right in
   both themes and with every accent color the desktop offers.
-- **The exceptions are few and deliberate:** the favorite gold (`#f6c90e`) and
-  the dark scrims laid over cover art, which have to read on any image rather
-  than on the theme. A new hard-coded color needs the same kind of reason.
+- **The exceptions are few and deliberate:** the favorite gold (`#f6c90e`),
+  and the white glyphs, dark scrims and drop shadows laid over cover art,
+  which have to read on any image rather than on the theme. A new hard-coded color needs the same kind of reason.
 - **Light and dark come from Adwaita.** There is no dark-specific CSS. The
   user's choice (System, Light, Dark; `ui.theme` in the config) is applied by
   `src/openemux/ui/theming.py`, the only module that sets the color scheme; the
@@ -146,7 +151,7 @@ Telling the user something has one right widget for each situation:
 - **Spacing and padding** come from Adwaita's containers and style classes
   first. Where `style.css` sets padding, it uses small steps (mostly 4, 6, 8
   and 12 px); match the rule next to the one you are adding.
-- **Corners** are 6–12 px, with 8 px the most common, and pills use `999px`.
+- **Corners** are 5–13 px, with 8 px the most common, and pills use `999px`.
 - **Type** comes from Adwaita's style classes: `title-1`…`title-4`,
   `heading`, `caption`, `dim-label`, `monospace`. The only custom font sizes
   are the small ones already present (0.8–0.95em, for badges and key hints).
@@ -219,7 +224,8 @@ control must work at 360 px wide. Check with `make devbox-res RES=520x900`
 **Welcome without discussion** (open the pull request directly):
 
 - bug fixes;
-- translations and corrections to existing ones;
+- corrections to existing translations (a new language is claimed through
+  the translation form first, see [CONTRIBUTING.md](../CONTRIBUTING.md));
 - polish that brings the app closer to this document (a missing tooltip, a
   Title Case label, a hard-coded color that has an Adwaita name);
 - tests and documentation.

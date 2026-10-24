@@ -43,7 +43,10 @@ project has a roadmap on a public
 [board](https://github.com/users/guilhermefeitosa66/projects/1), and a pull
 request that arrives without one may be duplicating work already in flight or
 solving a problem in a direction the project has already ruled out. An issue
-costs you five minutes; a rejected pull request costs you an evening.
+costs you five minutes; a rejected pull request costs you an evening. The
+exceptions are the small changes listed as welcome without discussion in the
+[Product direction](docs/PRODUCT.md#contribution-fit): bug fixes, translation
+corrections, polish toward that document, tests and documentation.
 
 Issues labelled [`good first issue`](https://github.com/guilhermefeitosa66/OpenEmux/labels/good%20first%20issue)
 are scoped so that you can finish one without knowing the rest of the codebase.

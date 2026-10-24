@@ -35,6 +35,27 @@ def _relative_links(text):
         yield target.split("#", 1)[0]
 
 
+def _relative_anchors(text):
+    """(path, anchor) for every relative link into another Markdown file."""
+    for target in LINK.findall(text):
+        if re.match(r"^[a-z]+:", target) or "#" not in target:
+            continue
+        path, anchor = target.split("#", 1)
+        if path.endswith(".md"):
+            yield path, anchor
+
+
+def _slug(heading):
+    """GitHub's anchor for a heading: lower case, punctuation dropped."""
+    heading = re.sub(r"[`*_]", "", heading.strip().lower())
+    return re.sub(r"[^\w\- ]", "", heading).replace(" ", "-")
+
+
+def _anchors_of(path):
+    text = path.read_text(encoding="utf-8")
+    return {_slug(h) for h in re.findall(r"^#{1,6} (.+)$", text, flags=re.MULTILINE)}
+
+
 class ProductDocTests(unittest.TestCase):
     def setUp(self):
         self.text = PRODUCT.read_text(encoding="utf-8")
@@ -49,6 +70,17 @@ class ProductDocTests(unittest.TestCase):
         for target in targets:
             with self.subTest(target=target):
                 self.assertTrue((PRODUCT.parent / target).resolve().exists())
+
+    def test_relative_anchors_resolve(self):
+        anchors = list(_relative_anchors(self.text))
+        self.assertTrue(anchors)
+        for path, anchor in anchors:
+            with self.subTest(path=path, anchor=anchor):
+                self.assertIn(anchor, _anchors_of((PRODUCT.parent / path).resolve()))
+
+    def test_slug_matches_github(self):
+        self.assertEqual(_slug("OpenEmux and OpenEmu"), "openemux-and-openemu")
+        self.assertEqual(_slug("Debian / Ubuntu (`.deb`)"), "debian--ubuntu-deb")
 
     def test_cited_repository_paths_exist(self):
         paths = CODE_PATH.findall(self.text)
