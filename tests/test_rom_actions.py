@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from openemux.core import artwork_sources
 from openemux.core.archives import archive_rom_name, rename_archive_rom_entry
 from openemux.core.rom_actions import (
     RomActionError,
@@ -96,6 +97,22 @@ class RenameRomTests(unittest.TestCase):
             self.assertIsNotNone(find_local_art(roms_dir, "GB", "Kirby's Dream Land 2", COVER_ART))
             self.assertIsNotNone(find_local_art(roms_dir, "GB", "Kirby's Dream Land 2", LABEL_ART))
             self.assertIsNone(find_local_art(roms_dir, "GB", "Kirby", COVER_ART))
+
+    def test_the_artwork_source_follows_the_rename(self):
+        # Issue #510: a chosen cover is still "chosen by you" after a rename.
+        with TemporaryDirectory() as tmp:
+            roms_dir = Path(tmp) / "roms"
+            rom = _rom(roms_dir, name="Kirby", suffix=".gb")
+            _art(roms_dir, "GB", "Kirby", COVER_ART, "png")
+            art = find_local_art(roms_dir, "GB", "Kirby", COVER_ART)
+            artwork_sources.record(
+                roms_dir, "GB", COVER_ART, "Kirby", art, artwork_sources.SOURCE_MANUAL
+            )
+
+            rename_rom(roms_dir, rom, "Kirby 2")
+
+            state = artwork_sources.describe(roms_dir, "GB", "Kirby 2", COVER_ART)
+            self.assertEqual(state.source, artwork_sources.SOURCE_MANUAL)
 
     def test_refuses_to_overwrite_an_existing_rom(self):
         with TemporaryDirectory() as tmp:

@@ -65,23 +65,6 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
-### felipeonline (Reddit)
-
-Reported in the Reddit feedback thread on OpenEmux 1.16.0, running the Windows
-zip build, that some covers showed up cropped at the top or the bottom of the
-library grid. That report became
-[#508](https://github.com/guilhermefeitosa66/OpenEmux/issues/508): a card has
-its console's typical box shape, and a cover of another shape (a portrait
-Japanese box on a landscape Super Nintendo card) was filled into it and lost up
-to 60% of its art. Now only a cover close to the card's shape fills it, and any
-other is shown whole on the card's backdrop.
-
-The same thread also suggested decorative borders for 4:3 games, so the black
-bars beside them on a wide screen are not just black. That became
-[#507](https://github.com/guilhermefeitosa66/OpenEmux/issues/507): a bezel per
-console, built in or picked from an image, drawn by RetroArch under the
-in-game bar.
-
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage
@@ -114,6 +97,20 @@ itself, a Game Boy game filed under Game Boy Color is found on one more try, and
 a sync that ScreenScraper refused or never answered says so instead of counting
 every game as a plain miss.
 
+In the same thread, also reported that some covers showed up cropped at the
+top or the bottom of the library grid. That report became
+[#508](https://github.com/guilhermefeitosa66/OpenEmux/issues/508): a card has
+its console's typical box shape, and a cover of another shape (a portrait
+Japanese box on a landscape Super Nintendo card) was filled into it and lost up
+to 60% of its art. Now only a cover close to the card's shape fills it, and any
+other is shown whole on the card's backdrop.
+
+In the same thread, also suggested decorative borders for 4:3 games, so the
+black bars beside them on a wide screen are not just black. That became
+[#507](https://github.com/guilhermefeitosa66/OpenEmux/issues/507): a bezel per
+console, built in or picked from an image, drawn by RetroArch under the
+in-game bar.
+
 Running the Windows zip build, also reported there that the app's taskbar icon
 did not match the one on `OpenEmux.exe`. That report became
 [#509](https://github.com/guilhermefeitosa66/OpenEmux/issues/509): the app's
@@ -122,6 +119,14 @@ OpenEmux with any other Python program and pinned a bare interpreter that could
 not start the app. The process now tells the shell it is OpenEmux, takes its
 icon from the launcher, and a pinned button starts the app through
 `OpenEmux.exe`.
+
+In the same thread, also asked for the cover manager to open on the cover the
+game already has, with ways to adjust it from there. That became
+[#510](https://github.com/guilhermefeitosa66/OpenEmux/issues/510): the artwork
+manager now opens on a "Current" tab that shows the cover and label as they
+are, says whether the sync wrote them, you chose them or they were simply found
+in the folder, and offers picking another match, replacing, adjusting and
+resetting to the synced art right there.
 
 ## How contributions are credited
 

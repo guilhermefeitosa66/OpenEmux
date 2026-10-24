@@ -31,6 +31,18 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(roms[0]["console"], "FC")
         self.assertEqual(roms[0]["name"], "Super Mario Bros")
 
+    def test_the_artwork_sources_record_is_not_a_game(self):
+        # Issue #510 keeps a hidden JSON beside the art of every console.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            (base / "FC" / "covers").mkdir(parents=True)
+            (base / "FC" / "Super Mario Bros.nes").write_bytes(b"rom-data")
+            (base / "FC" / "covers" / ".openemux-sources.json").write_text("{}")
+
+            roms = RomScanner(base).scan_console("FC")
+
+        self.assertEqual([rom["name"] for rom in roms], ["Super Mario Bros"])
+
     def test_scan_console_resolves_legacy_alias(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

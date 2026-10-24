@@ -1944,6 +1944,86 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
 
+### RT-365 — The artwork manager opens on the current cover and says where it came from
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`). A PNG
+  copied by hand to `~/games/roms/MD/covers/Sonic the Hedgehog (USA, Europe).png` inside the
+  devbox home (`~/.local/share/openemux-devbox/home/` from the host), then
+  `make devbox-app ACTION=restart`.
+- **Steps:**
+  1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
+  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-365.png WIN=1`).
+- **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
+  the PNG whole, titled "Local file" with a "Local" pill; the details read
+  `PNG · <width> × <height> · Found in the library folder`; the buttons are "Pick Another Match…",
+  "Replace From File…" and "Adjust…", and below a separator "Reset to Synced Cover". "Save" in the
+  footer is greyed out.
+- **Check:** The screenshot shows all of the above; the app log has no `Traceback`.
+- **Restore:** Delete the copied PNG (it lives in the throwaway devbox home).
+
+### RT-366 — Adjusting the current cover saves it as chosen by you
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-365's state (a hand-copied cover, the manager open on "Current").
+- **Steps:**
+  1. Press "Adjust…". The "Import" tab opens with the cover loaded and "Save as" on "Cover".
+  2. Press "Rotate right", then "Done".
+  3. Right-click the same game, "Manage cover…" again, and capture the window.
+- **Expected:** The card in the grid shows the rotated cover. The reopened "Current" tab says
+  "Chosen by you" with a "Manual" pill and `Saved <today's date>`.
+- **Check:** The screenshot shows it, and
+  `~/games/roms/MD/covers/.openemux-sources.json` (devbox home) holds an entry for
+  `Sonic the Hedgehog (USA, Europe)` with `"source": "manual"` and `"origin": "adjusted"`.
+- **Restore:** Delete the cover and `.openemux-sources.json` from the devbox home.
+
+### RT-367 — Reset to the synced cover replaces a chosen cover
+- **Area:** Covers & artwork
+- **Mode:** MANUAL
+- **Preconditions:** Network access; a well-known game whose cover the sync finds, with a cover
+  chosen by hand ("Choose cover image" in its context menu).
+- **Steps:**
+  1. "Manage cover…" → "Reset to Synced Cover" → "Cancel".
+  2. "Reset to Synced Cover" again → "Reset".
+  3. Repeat with the network off on another game with a chosen cover.
+- **Expected:** "Cancel" changes nothing. "Reset" turns the button into "Syncing…" until the sync
+  ends, then the section shows the synced cover, "Synced" with an "Automatic" pill, and the reset
+  row is gone. Offline, the toast "No synced artwork was found for <name>. The current one stays."
+  appears inside the artwork manager, not on the library window under it, and the chosen cover is
+  still there. The toast used to go to the main window, where the manager hid it (issue #510, QA
+  round 1).
+- **Check:** human only; suite file `tests/test_artwork_manager.py`
+  (`test_a_sync_that_found_nothing_says_the_cover_stays`, `test_a_toast_shows_on_the_manager_not_under_it`).
+
+### RT-368 — A game without art offers sync, search and import
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (no covers).
+- **Steps:**
+  1. Open "Game Boy", right-click any game and choose "Manage label…".
+  2. Capture the window.
+  3. Press "Search Labels…".
+- **Expected:** "Current" shows two sections, "Cover" and "Label", each with "No cover yet" /
+  "No label yet", a "Missing" pill, and the buttons "Sync Now", "Search Covers…" (or
+  "Search Labels…") and "Import From File…"; keyboard focus is on the Label section's "Sync Now".
+  "Search Labels…" switches to the "Label" tab with a by-name search running. On a console with
+  no cartridge frame ("Sony PlayStation") only the "Cover" section exists.
+- **Check:** The screenshots show it; the app log has no `Traceback`.
+
+### RT-369 — The artwork manager works in a narrow window
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. `make devbox-res RES=520x900`.
+  2. Open "Manage cover…" on any game and maximise the manager window.
+  3. Capture it.
+- **Expected:** The tabs sit at the bottom of the window above "Cancel"/"Done", the header shows
+  the window title, the section stacks the preview above its text, and the buttons take the full
+  width. Nothing is cut off and there is no horizontal scroll.
+- **Check:** The screenshot shows it.
+- **Restore:** `make devbox-res RES=1600x1000` (or the resolution the devbox had before).
+
 ## Launch & runtime
 
 ### RT-060 — RetroArch is available

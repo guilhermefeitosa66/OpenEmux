@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import patch
 
-from openemux.core import cover_sync, hasher, screenscraper
+from openemux.core import artwork_sources, cover_sync, hasher, screenscraper
 from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.cover_sync import (
     _build_cover_url,
@@ -211,7 +211,9 @@ class CoverSyncTests(unittest.TestCase):
                     sync_settings={},
                     replace_existing=True,
                 )
-            self.assertEqual(sorted(p.name for p in covers.iterdir()), ["Castlevania.jpg"])
+            # The provenance record (issue #510) is not art.
+            art = sorted(p.name for p in covers.iterdir() if not p.name.startswith("."))
+            self.assertEqual(art, ["Castlevania.jpg"])
 
     def test_replace_existing_keeps_the_file_it_just_wrote(self):
         # Same extension in and out: the cleanup must not delete the download.
@@ -1907,3 +1909,97 @@ class TheFuzzyCandidateNamesTests(unittest.TestCase):
     def test_a_name_with_no_article_is_offered_as_it_is(self):
         names = cover_sync.fuzzy_candidate_names("Chrono Trigger (USA)")
         self.assertIn("Chrono Trigger", names)
+
+
+class ProvenanceTests(unittest.TestCase):
+    """The sync says which covers it wrote (issue #510)."""
+
+    def _library(self, count):
+        return {"SFC": [{"name": f"Game {i}", "path": f"/roms/SFC/Game {i}.sfc"} for i in range(count)]}
+
+    @staticmethod
+    def _write(url, dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(_PNG_BYTES)
+        return dest
+
+    def _sync(self, tmp_dir, count=1, **kwargs):
+        with patch(
+            "openemux.core.cover_sync._staged_cover_candidates",
+            return_value=[("libretro", "exact", "u1")],
+        ):
+            return _sync_covers(
+                library_by_console=self._library(count),
+                covers_dir=tmp_dir,
+                scope="all",
+                selected_console=None,
+                sync_settings={},
+                **kwargs,
+            )
+
+    def test_a_downloaded_cover_is_recorded_as_synced_with_provider_and_stage(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch.object(cover_sync, "_download_cover", self._write):
+                self._sync(tmp_dir)
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+            state = artwork_sources.describe(tmp_dir, "SFC", "Game 0", "covers")
+        self.assertEqual(state.source, artwork_sources.SOURCE_SYNCED)
+        self.assertEqual(entries["Game 0"]["provider"], "libretro")
+        self.assertEqual(entries["Game 0"]["stage"], "exact")
+
+    def test_art_already_there_and_skipped_records_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "SFC" / "covers"
+            covers.mkdir(parents=True)
+            (covers / "Game 0.png").write_bytes(_PNG_BYTES)
+            with patch.object(cover_sync, "_download_cover", self._write):
+                summary = self._sync(tmp_dir)
+            self.assertEqual(summary["skipped"], 1)
+            self.assertFalse(artwork_sources.sources_path(tmp_dir, "SFC", "covers").exists())
+
+    def test_a_bulk_run_writes_the_record_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(cover_sync, "_download_cover", self._write),
+                patch.object(
+                    artwork_sources, "_store", wraps=artwork_sources._store
+                ) as store,
+            ):
+                self._sync(tmp_dir, count=6)
+            self.assertEqual(store.call_count, 1)
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+        self.assertEqual(len(entries), 6)
+
+    def test_a_cancelled_run_still_records_what_it_downloaded(self):
+        written = []
+
+        def _download(url, dest):
+            written.append(dest)
+            return self._write(url, dest)
+
+        with TemporaryDirectory() as tmp_dir:
+            with patch.object(cover_sync, "_download_cover", _download):
+                summary = self._sync(
+                    tmp_dir, count=30, should_cancel=lambda: len(written) >= 2
+                )
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+        self.assertTrue(summary["cancelled"])
+        self.assertEqual(len(entries), summary["downloaded"])
+        self.assertGreater(len(entries), 0)
+
+    def test_a_provenance_write_failure_does_not_fail_the_rom(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(cover_sync, "_download_cover", self._write),
+                patch.object(
+                    artwork_sources, "atomic_write_text", side_effect=OSError("read-only")
+                ),
+            ):
+                summary = self._sync(tmp_dir)
+        self.assertEqual((summary["downloaded"], summary["errors"]), (1, 0))
