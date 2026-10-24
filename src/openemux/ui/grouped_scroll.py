@@ -252,9 +252,13 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
                 + grid.get_vadjustment().get_value()
                 + point.y
             )
-            target = scroll_to_show(
-                vadj.get_value(), vadj.get_page_size(), top, widget.get_height()
-            )
+            # A card bound in a grid that is off screen may not have been
+            # allocated yet (GTK 4.14 leaves it at zero height); its measured
+            # height is where it will be.
+            height = widget.get_height() or widget.measure(
+                Gtk.Orientation.VERTICAL, -1
+            )[1]
+            target = scroll_to_show(vadj.get_value(), vadj.get_page_size(), top, height)
             if target != vadj.get_value():
                 vadj.set_value(target)
             return True
