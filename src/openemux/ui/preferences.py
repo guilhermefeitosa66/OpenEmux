@@ -1559,6 +1559,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         row._bezel_mode = mode
         self._refresh_bezel_row(row, console_id)
 
+    def _dialog_parent(self):
+        """The window a file picker belongs to.
+
+        `Gtk.FileDialog` wants a `Gtk.Window`, and this is an `Adw.Dialog`:
+        passing `self` raises `TypeError` and no picker opens (#507). The
+        window it is shown in is its root; not shown yet, there is none.
+        """
+        root = self.get_root()
+        return root if isinstance(root, Gtk.Window) else None
+
     def _choose_custom_bezel(self, console_id):
         png = Gtk.FileFilter()
         png.set_name(self.t("bezels.dialog.filter"))
@@ -1571,7 +1581,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         dialog.set_modal(True)
         dialog.set_filters(filters)
         dialog.set_default_filter(png)
-        dialog.open(self, None, self._on_bezel_image_chosen, console_id)
+        dialog.open(self._dialog_parent(), None, self._on_bezel_image_chosen, console_id)
 
     def _on_bezel_image_chosen(self, dialog, result, console_id):
         row = self._bezel_rows[console_id]
@@ -2064,7 +2074,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         filters, default = self._saves_filter()
         dialog.set_filters(filters)
         dialog.set_default_filter(default)
-        dialog.save(self, None, self._on_export_target_chosen)
+        dialog.save(self._dialog_parent(), None, self._on_export_target_chosen)
 
     def _on_export_target_chosen(self, dialog, result):
         try:
@@ -2100,7 +2110,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         filters, default = self._saves_filter()
         dialog.set_filters(filters)
         dialog.set_default_filter(default)
-        dialog.open(self, None, self._on_import_source_chosen)
+        dialog.open(self._dialog_parent(), None, self._on_import_source_chosen)
 
     def _on_import_source_chosen(self, dialog, result):
         try:

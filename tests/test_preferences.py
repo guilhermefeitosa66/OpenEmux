@@ -1571,6 +1571,18 @@ class BezelRowsTests(_PreferencesCase):
         self.dialogs[0].open.assert_called_once()
         self.assertEqual(self.config.get_bezel_for_console("PS"), "none")
 
+    def test_the_picker_never_gets_the_dialog_itself_as_its_parent(self):
+        # Gtk.FileDialog.open() raises TypeError for an Adw.Dialog parent.
+        self.select("PS", "custom")
+        self.assertIsNone(self.dialogs[0].open.call_args[0][0])
+
+    def test_the_picker_belongs_to_the_window_the_dialog_is_shown_in(self):
+        window = Gtk.Window()
+        self.addCleanup(window.destroy)
+        with mock.patch.object(self.prefs, "get_root", return_value=window):
+            self.select("PS", "custom")
+        self.assertIs(self.dialogs[0].open.call_args[0][0], window)
+
     def test_a_chosen_image_is_imported_and_shown(self):
         self.select("PS", "custom")
         self.prefs._on_bezel_image_chosen(self.chosen(self.png()), None, "PS")
@@ -1645,6 +1657,7 @@ class SaveBackupTests(_PreferencesCase):
             save_backup.default_backup_name()
         )
         dialog.save.assert_called_once()
+        self.assertIsNone(dialog.save.call_args[0][0])  # not the Adw.Dialog
 
     def test_a_chosen_export_target_starts_the_backup(self):
         target = mock.Mock()
@@ -1682,6 +1695,7 @@ class SaveBackupTests(_PreferencesCase):
     def test_the_import_picker_opens_for_reading(self):
         self.prefs._on_import_saves(None)
         self.dialogs[0].open.assert_called_once()
+        self.assertIsNone(self.dialogs[0].open.call_args[0][0])
 
     def test_a_chosen_archive_starts_the_restore(self):
         source = mock.Mock()
