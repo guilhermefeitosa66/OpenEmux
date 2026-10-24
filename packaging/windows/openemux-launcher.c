@@ -63,6 +63,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
         return 1;
     }
 
+    /* Our own full path, before it is cut down to the directory below. The
+     * app's windows belong to pythonw.exe, so the Windows shell would pin
+     * *that* -- and pythonw.exe started on its own has none of the
+     * environment set here, so it cannot start the app. core/win32_shell.py
+     * reads this to point a pinned taskbar button back at OpenEmux.exe and to
+     * take the window icon from its resources (issue #509). */
+    SetEnvironmentVariableW(L"OPENEMUX_LAUNCHER", self);
+
     /* Strip "\OpenEmux.exe" to leave the install root. */
     wchar_t *separator = wcsrchr(self, L'\\');
     if (separator == NULL) {

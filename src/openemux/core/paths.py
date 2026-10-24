@@ -59,6 +59,8 @@ STORE_FILENAMES = {
     "session": "session.json",
     "artwork_index": "artwork-index",
     "cartridge_cache": "cache/cartridges",
+    # Custom bezel images, one per console (issue #507).
+    "bezels": "bezels",
 }
 
 

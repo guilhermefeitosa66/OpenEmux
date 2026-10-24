@@ -21,6 +21,11 @@ Two pieces, both shipped in ``openemux/data/overlay``:
   own shader keeps working: the pass is appended to the end of its preset, and
   hiding the bar swaps to the same preset without it (``prepare_shaders``).
 
+A third piece is optional: the bezel (issue #507), a picture framing a 4:3
+game on a wide window. RetroArch shows one overlay only, so it is drawn as
+the first image of every page of the bar's own (``write_bezel_overlay``),
+under the buttons, and follows the bar as it is shown and hidden.
+
 RetroArch does not read them from the package: ``stage_assets`` copies them to
 the runtime directory first. In the Flatpak the package lives under OpenEmux's
 own ``/app``, which RetroArch's Flatpak cannot see (issue #482).
@@ -31,6 +36,8 @@ import re
 import shutil
 from pathlib import Path
 
+from openemux.core import bezels
+from openemux.core.atomic_write import atomic_write_bytes, atomic_write_text
 from openemux.core.platform import cfg_path
 from openemux.core.video_driver import preset_backends
 
@@ -63,6 +70,14 @@ MARGIN = 60.0 / 720.0
 #: Where ``stage_assets`` puts the copies, under the runtime directory.
 STAGED_DIR_NAME = "overlay"
 
+#: The bar's pages with a bezel drawn under them, written per launch beside
+#: the staged bar (``write_bezel_overlay``), and the bezel's image there.
+BEZEL_CFG_NAME = "openemux-bar-bezel.cfg"
+BEZEL_IMAGE_NAME = "bezel.png"
+
+_DESC_KEY = re.compile(r"^(\s*overlay\d+_desc)(\d+)(_\w+)?(\s*=.*)$")
+_DESCS_KEY = re.compile(r"^\s*overlay(\d+)_descs\s*=\s*(\d+)\s*$")
+_NAME_KEY = re.compile(r'^\s*overlay(\d+)_name\s*=\s*"?([^"]*)"?\s*$')
 _KEY_VALUE = re.compile(r'^\s*([A-Za-z0-9_]+)\s*=\s*"?([^"]*)"?\s*$')
 _PASS_PATH = re.compile(r"^shader\d+$")
 
@@ -94,19 +109,81 @@ def stage_assets(runtime_dir):
     return target
 
 
-def runtime_overrides(overlay_dir=OVERLAY_DIR, translucent=False):
+def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active=True):
+    """The bar's pages with ``bezel_png`` drawn under them; return the cfg.
+
+    Every page gets the bezel as a new image-only descriptor 0, so it is
+    drawn first and the bar's buttons stay on top of it, and the bar's own
+    descriptors move up by one. Where the bar is shown on its opaque strip
+    (``margin_active``, pages named ``b...``), the margin pass has shrunk the
+    game and the bezel shrinks with it; on the hidden pages, and on every
+    page when the bar is translucent or no margin pass runs, it frames the
+    full-size game. ``next_target`` values are page names, untouched.
+
+    The image is copied beside the bar first, for the same reason the bar's
+    files are (``stage_assets``). ``None``, with a warning, when anything
+    cannot be read or written: the game then starts with the plain bar.
+    """
+    folder = Path(overlay_dir)
+    source = folder / (TRANSLUCENT_CFG if translucent else OVERLAY_CFG).name
+    full = bezels.bezel_desc_geometry()
+    shrunk = bezels.bezel_desc_geometry(MARGIN if margin_active and not translucent else 0.0)
+    try:
+        image = folder / BEZEL_IMAGE_NAME
+        data = Path(bezel_png).read_bytes()
+        if not (image.is_file() and image.stat().st_size == len(data)
+                and image.read_bytes() == data):
+            atomic_write_bytes(image, data)
+        lines = source.read_text(encoding="utf-8").splitlines()
+        names, out = {}, []
+        for raw in lines:
+            name = _NAME_KEY.match(raw)
+            if name:
+                names[name.group(1)] = name.group(2)
+            count = _DESCS_KEY.match(raw)
+            if count:
+                page, descs = count.groups()
+                geometry = shrunk if names.get(page, "").startswith("b") else full
+                cx, cy, hw, hh = geometry
+                out.append(f"overlay{page}_descs = {int(descs) + 1}")
+                out.append(f'overlay{page}_desc0 = "nul,{cx:.5f},{cy:.5f},rect,{hw:.5f},{hh:.5f}"')
+                out.append(f"overlay{page}_desc0_overlay = {BEZEL_IMAGE_NAME}")
+                # No reach: a descriptor spanning the window would count every
+                # pointer as on the overlay, and RetroArch would keep mouse
+                # and lightgun input from the game.
+                out.append(f"overlay{page}_desc0_reach_x = 0")
+                out.append(f"overlay{page}_desc0_reach_y = 0")
+                continue
+            desc = _DESC_KEY.match(raw)
+            if desc:
+                prefix, index, suffix, rest = desc.groups()
+                raw = f"{prefix}{int(index) + 1}{suffix or ''}{rest}"
+            out.append(raw)
+        target = folder / BEZEL_CFG_NAME
+        atomic_write_text(target, "\n".join(out) + "\n")
+    except OSError as exc:
+        logger.warning("bezel: cannot write it beside the bar in %s: %s", folder, exc)
+        return None
+    return target
+
+
+def runtime_overrides(overlay_dir=OVERLAY_DIR, translucent=False, overlay_cfg=None):
     """The ``--appendconfig`` lines that turn the bar on for one launch.
 
     ``overlay_dir`` is where the bar's files are, as ``stage_assets`` left them.
     ``translucent`` draws it see-through, over the game (issue #477); the
-    shaders then keep no strip for it (``prepare_shaders``).
+    shaders then keep no strip for it (``prepare_shaders``). ``overlay_cfg``
+    is the bar with a bezel under it, from ``write_bezel_overlay``, loaded in
+    place of the plain bar (issue #507).
     """
     width, height = WINDOW_SIZE
     overlay = TRANSLUCENT_CFG if translucent else OVERLAY_CFG
     opacity = TRANSLUCENT_OPACITY if translucent else 1.0
+    if overlay_cfg is None:
+        overlay_cfg = Path(overlay_dir) / overlay.name
     return {
         "input_overlay_enable": '"true"',
-        "input_overlay": f'"{cfg_path(Path(overlay_dir) / overlay.name)}"',
+        "input_overlay": f'"{cfg_path(overlay_cfg)}"',
         # RetroArch's own default swaps the overlay for the system's
         # "preferred" one when content loads -- a touch gamepad, on a desktop
         # -- wherever it ships one: PlayStation and PSP do, so their games came

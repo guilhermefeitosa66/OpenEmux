@@ -2288,6 +2288,83 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_retroarch_launcher.py`, `tests/test_preferences.py`, `tests/test_config_accessors.py`.
 - **Restore:** turn "Start games in fullscreen" off.
 
+### RT-343 — The bezel setting lists only the 4:3 consoles and is remembered
+- **Area:** Settings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Open "Settings" → "Video" and find the "Bezels" group, between "In-Game Bar" and "Shaders".
+  2. Look at which consoles it lists, then set "MD — Sega Genesis / Mega Drive" to "Simple".
+  3. Close and reopen "Settings".
+- **Expected:** Every row reads "None" on a fresh config. There are rows for the home consoles (FC,
+  SFC, MD, PS, N64, ...) and none for GB, GBC, GBA, GG, NDS, PSP, NGP, WS, VB, LYNX or VECTREX
+  (issue #507). MD still reads "Simple" after reopening.
+- **Check:** suite files `tests/test_preferences.py` (`BezelRowsTests`),
+  `tests/test_config_accessors.py`, `tests/test_bezels.py`; `config.yaml` holds
+  `bezels: console_overrides: {MD: simple}`.
+- **Restore:** set MD back to "None".
+
+### RT-344 — The simple bezel frames a 4:3 game and follows the bar
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working MD core and ROM; "Settings" → "Video" → "Bezels" → MD set to
+  "Simple"; the game window 16:9 (its default shape).
+- **Steps:**
+  1. Launch the MD game.
+  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+     bottom-right corner.
+  3. Click every button on the bar: pause, reset, slow motion, fast-forward, turbo, save, load,
+     mute, volume, fullscreen, menu, close.
+- **Expected:** The black bars beside the game show a dark frame with a thin rim hugging the game,
+  and the bar sits along the bottom edge as usual (RT-327). Hidden, the game grows to the full
+  height and the frame grows with it, still hugging it. Every bar button does what it does without
+  a bezel (RT-328). Resized to 4:3, the window shows no frame at all.
+- **Check:** human only; the launch log has `bezel: console=MD mode=simple image=simple.png
+  margin=True`, and `~/.openemux/runtime/overlay/openemux-bar-bezel.cfg` has
+  `overlay0_desc0_overlay = bezel.png` and `overlay0_desc0_reach_x = 0` (the frame has no
+  hitbox, so the game keeps the mouse and a lightgun). Suite files `tests/test_overlay_bar.py`
+  (`BezelOverlayTests`), `tests/test_retroarch_launcher.py`.
+- **Restore:** set MD back to "None".
+
+### RT-345 — A custom bezel image is copied in and used; a bad file is refused
+- **Area:** Settings
+- **Mode:** MANUAL
+- **Preconditions:** A 1920×1080 PNG and a JPEG renamed to `.png`, both in a throwaway folder.
+- **Steps:**
+  1. "Settings" → "Video" → "Bezels": set "PS — Sony PlayStation" to "Custom image…" and pick the
+     PNG.
+  2. Set "SFC — Super Nintendo (SNES)" to "Custom image…" and pick the renamed JPEG.
+  3. Set "FC — Nintendo (NES) / Famicom" to "Custom image…" and cancel the picker.
+  4. Launch a PS game.
+- **Expected:** PS shows the picked file's name under its title and a "Choose another image"
+  button. SFC shows the toast "That file is not a PNG image" and goes back to "None". FC goes back
+  to what it was. The PS game is framed by the picked image. Deleting
+  `~/.openemux/bezels/PS.png` and launching again starts the game with no bezel and a warning in the
+  log, never a failed launch. A PNG larger than 3840×2160 is refused with the toast "That image
+  could not be read", and so is a 1920×1080 PNG cut short (the first third of its bytes) — on
+  Ubuntu 24.04's GdkPixbuf 2.42 too. The stored copy is scaled down to fit 960×540 (RetroArch holds it once per
+  page of the bar), keeping its shape; the picked original is left untouched.
+- **Check:** `ls ~/.openemux/bezels/PS.png`; `file ~/.openemux/bezels/PS.png` reports
+  `960 x 540`; suite files `tests/test_preferences.py`
+  (`BezelRowsTests`), `tests/test_bezels.py`, `tests/test_config_accessors.py`.
+- **Restore:** set PS back to "None" and delete `~/.openemux/bezels/PS.png`.
+
+### RT-346 — A bezel with the semi-transparent bar and with a shader
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** MD set to "Simple" in "Bezels" and to a shader (e.g. `zfast-crt`) in
+  "Shaders".
+- **Steps:**
+  1. Launch an MD game; then turn "Semi-transparent control bar" on and launch it again.
+- **Expected:** With the shader, the CRT effect is drawn inside the frame's hole only and the frame
+  hugs the game. With the semi-transparent bar, the game fills the whole height, the frame covers
+  the full window beside it, slightly dimmer (the bar's overlay opacity applies to it too), and the
+  bar's buttons all still respond.
+- **Check:** human only; with the switch on the launch log has `bezel: console=MD mode=simple
+  image=simple.png margin=False`. Suite files `tests/test_overlay_bar.py` (`BezelOverlayTests`),
+  `tests/test_retroarch_launcher.py`.
+- **Restore:** turn "Semi-transparent control bar" off; set MD's bezel and shader back.
+
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
 - **Mode:** MANUAL
@@ -4572,7 +4649,8 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   1. Run the build from a clean staging tree.
 - **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
   build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
-  caught.
+  caught -- and a launcher that no longer exports `OPENEMUX_LAUNCHER`, without which a pinned
+  taskbar button points at a bare `pythonw.exe` (RT-363).
 - **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
 ### RT-195 — The bundle carries no path from the machine that built it
@@ -4831,6 +4909,45 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   moved to the trash and leave it on disk -- never report success and delete nothing, and never
   delete permanently without saying so.
 - **Check:** human only.
+
+### RT-363 — OpenEmux owns its taskbar button on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine with the artifacts of `make windows` (the portable zip
+  and the installer), and some other Python or MSYS2 GTK program available to run alongside.
+- **Steps:**
+  1. Unzip `OpenEmux-<ver>-windows-x86_64.zip` and double-click `OpenEmux.exe`. Look at the
+     taskbar button, the title bar and Alt-Tab, on the first-boot progress window and on the
+     library window.
+  2. With OpenEmux running, start another `pythonw` program or MSYS2 GTK app.
+  3. Right-click the running OpenEmux taskbar button, choose "Pin to taskbar", close the app and
+     click the pinned button.
+  4. Install with `OpenEmux-<ver>-setup.exe`, start OpenEmux from the Start Menu, pin the Start Menu
+     entry to the taskbar, close the app and start it from that pin.
+- **Expected:** Steps 1–3: the taskbar button, the title bar and Alt-Tab show the OpenEmux logo,
+  the same one Explorer shows on `OpenEmux.exe`, never Python's; OpenEmux keeps a taskbar button of
+  its own, not grouped with the other program; the pinned button shows the logo, is labelled
+  "OpenEmux", starts the app normally (the library loads) and the running window lands on it rather
+  than on a second button. Step 4: one taskbar button for the pin and the running window, with the
+  OpenEmux icon throughout. The RetroArch game window is its own process and keeps its own button.
+- **Check:** human only.
+
+### RT-364 — The Windows shell identity is wired, and stays off everywhere else
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The packaged process declares the AppUserModelID `APP_ID` before GTK is imported;
+  every toplevel window, once mapped, gets the icons out of `OpenEmux.exe` and the four
+  `PKEY_AppUserModel_*` keys (id, relaunch command, display name, icon), which are cleared again on
+  unrealize; any failing shell call is a logged warning, never a failed start. Off the packaged
+  Windows bundle -- Linux, or a Windows source run with no `OPENEMUX_LAUNCHER` -- nothing reaches
+  the shell. The launcher exports its own path, and the installer writes the same id on its Start
+  Menu shortcut. The "Unit tests (Windows / MSYS2)" job *runs* (does not skip) the round trips
+  through the real shell, which are what prove the COM layout.
+- **Check:** suite files `tests/test_win32_shell.py`, `tests/test_windows_shell_identity.py`,
+  `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
 
 ## ARM (aarch64)
 

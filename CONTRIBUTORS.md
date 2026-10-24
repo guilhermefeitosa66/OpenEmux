@@ -105,6 +105,21 @@ Japanese box on a landscape Super Nintendo card) was filled into it and lost up
 to 60% of its art. Now only a cover close to the card's shape fills it, and any
 other is shown whole on the card's backdrop.
 
+In the same thread, also suggested decorative borders for 4:3 games, so the
+black bars beside them on a wide screen are not just black. That became
+[#507](https://github.com/guilhermefeitosa66/OpenEmux/issues/507): a bezel per
+console, built in or picked from an image, drawn by RetroArch under the
+in-game bar.
+
+Running the Windows zip build, also reported there that the app's taskbar icon
+did not match the one on `OpenEmux.exe`. That report became
+[#509](https://github.com/guilhermefeitosa66/OpenEmux/issues/509): the app's
+windows belonged to `pythonw.exe`, so Windows showed Python's icon, grouped
+OpenEmux with any other Python program and pinned a bare interpreter that could
+not start the app. The process now tells the shell it is OpenEmux, takes its
+icon from the launcher, and a pinned button starts the app through
+`OpenEmux.exe`.
+
 In the same thread, also asked for the cover manager to open on the cover the
 game already has, with ways to adjust it from there. That became
 [#510](https://github.com/guilhermefeitosa66/OpenEmux/issues/510): the artwork
