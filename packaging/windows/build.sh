@@ -79,6 +79,11 @@ echo "==> phase 5: verify the bundle"
 # Cheap checks for the failures that are invisible until a user double-clicks:
 # a missing typelib, uncompiled schemas, or a RetroArch that did not come along.
 test -f "$BUNDLE/OpenEmux.exe"
+# The launcher exports its own path, which is what points a pinned taskbar
+# button back at OpenEmux.exe instead of at a bare pythonw.exe that cannot
+# start the app (issue #509). A wide-string literal, so UTF-16LE in the binary.
+python3 -c 'import sys; sys.exit("OPENEMUX_LAUNCHER".encode("utf-16-le") not in open(sys.argv[1], "rb").read())' \
+  "$BUNDLE/OpenEmux.exe"
 test -f "$BUNDLE/bin/pythonw.exe"
 test -f "$BUNDLE/lib/girepository-1.0/Adw-1.typelib"
 test -f "$BUNDLE/lib/girepository-1.0/Gtk-4.0.typelib"
