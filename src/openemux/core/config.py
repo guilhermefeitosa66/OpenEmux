@@ -447,6 +447,11 @@ def _merge_defaults(defaults, data):
     return merged
 
 
+def _mapping(value):
+    """``value`` when it is a dict, otherwise an empty one."""
+    return value if isinstance(value, dict) else {}
+
+
 class ConfigManager:
     def __init__(self, config_file=DEFAULT_CONFIG_FILE):
         self.config_file = Path(config_file)
@@ -930,15 +935,19 @@ class ConfigManager:
 
     def get_bezel_settings(self):
         """Every console's bezel choice, and where custom images are kept."""
-        section = self.config.get("bezels") or {}
+        # Anything that is not a mapping -- a hand-edited ``bezels:`` left
+        # empty or given a scalar -- reads as no bezels rather than crashing
+        # every launch and the Video page, as the setters already tolerate.
+        section = _mapping(self.config.get("bezels"))
         overrides = {}
-        for console, mode in (section.get("console_overrides") or {}).items():
+        for console, mode in _mapping(section.get("console_overrides")).items():
             mode = bezels.normalize_mode(mode)
             if mode != bezels.NONE:
                 overrides[resolve_system_id(console)] = mode
         names = {
             resolve_system_id(console): str(name)
-            for console, name in (section.get("custom_names") or {}).items()
+            for console, name in _mapping(section.get("custom_names")).items()
+            if name
         }
         return {
             "console_overrides": overrides,

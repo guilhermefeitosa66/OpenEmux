@@ -1548,9 +1548,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if mode == row._bezel_mode:
             return
         if mode == bezels.CUSTOM:
-            stored = bezels.custom_path(
-                console_id, self.config.get_bezel_settings()["custom_dir"]
-            )
+            stored = bezels.custom_path(console_id, self.config.store_path("bezels"))
             if not stored.is_file():
                 # Nothing to go back to yet: the picker decides.
                 self._choose_custom_bezel(console_id)

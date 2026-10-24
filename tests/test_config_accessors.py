@@ -464,6 +464,16 @@ class TheBezelSettingsTests(_ConfigCase):
         self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")
         self.assertEqual(self.config.get_custom_bezel_name("PS"), "My Frame.png")
 
+    def test_a_section_that_is_not_a_mapping_reads_as_no_bezels(self):
+        # A launch reads this on every start: a hand-edited scalar must not
+        # crash it, nor the Video page.
+        self.config.config["bezels"] = "simple"
+        self.assertEqual(self.config.get_bezel_for_console("MD"), "none")
+        self.config.config["bezels"] = {"console_overrides": ["MD"],
+                                        "custom_names": {"PS": None}}
+        self.assertEqual(self.config.get_bezel_settings()["console_overrides"], {})
+        self.assertIsNone(self.config.get_custom_bezel_name("PS"))
+
     def test_a_custom_image_is_imported_and_selected(self):
         self.assertIsNone(self.config.set_custom_bezel("PS", self.png()))
         self.assertEqual(self.config.get_bezel_for_console("PS"), "custom")

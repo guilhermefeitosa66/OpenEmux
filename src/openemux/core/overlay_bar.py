@@ -37,6 +37,7 @@ import shutil
 from pathlib import Path
 
 from openemux.core import bezels
+from openemux.core.atomic_write import atomic_write_bytes, atomic_write_text
 from openemux.core.platform import cfg_path
 from openemux.core.video_driver import preset_backends
 
@@ -132,7 +133,7 @@ def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active
         data = Path(bezel_png).read_bytes()
         if not (image.is_file() and image.stat().st_size == len(data)
                 and image.read_bytes() == data):
-            image.write_bytes(data)
+            atomic_write_bytes(image, data)
         lines = source.read_text(encoding="utf-8").splitlines()
         names, out = {}, []
         for raw in lines:
@@ -159,7 +160,7 @@ def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active
                 raw = f"{prefix}{int(index) + 1}{suffix or ''}{rest}"
             out.append(raw)
         target = folder / BEZEL_CFG_NAME
-        target.write_text("\n".join(out) + "\n", encoding="utf-8")
+        atomic_write_text(target, "\n".join(out) + "\n")
     except OSError as exc:
         logger.warning("bezel: cannot write it beside the bar in %s: %s", folder, exc)
         return None

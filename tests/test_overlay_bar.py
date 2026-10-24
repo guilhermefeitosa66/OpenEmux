@@ -403,7 +403,7 @@ class BezelOverlayTests(unittest.TestCase):
 
     def test_an_identical_image_is_not_copied_again(self):
         self.write()
-        with patch.object(Path, "write_bytes") as write_bytes:
+        with patch.object(overlay_bar, "atomic_write_bytes") as write_bytes:
             self.write()
         write_bytes.assert_not_called()
 
