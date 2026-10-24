@@ -32,6 +32,12 @@ _BRANDS = [
     "snes", "game boy", "gameboy", "advance", "master system", "mega drive",
 ]
 
+def _webp_writable():
+    """Whether this GdkPixbuf can save WebP; the CI runners' cannot."""
+    return any(f.get_name() == "webp" and f.is_writable()
+               for f in demo_library.GdkPixbuf.Pixbuf.get_formats())
+
+
 #: A library small enough to render in a blink, for the CLI and wall tests.
 _SMALL = {"GBA": ["Moss Knight", "Teacup Tempest"], "PS": ["Paper Pinwheels"]}
 
@@ -233,6 +239,7 @@ class FramesTest(unittest.TestCase):
             for chunk in (b"tEXt", b"tIME", b"zTXt", b"iTXt"):
                 self.assertNotIn(chunk, data)
 
+    @unittest.skipUnless(_webp_writable(), "no WebP saver for GdkPixbuf")
     def test_wall_composites_every_label(self):
         with TemporaryDirectory() as tmp, \
                 mock.patch.dict(demo_library.TITLES, _SMALL, clear=True), \
@@ -291,7 +298,7 @@ class MainTest(unittest.TestCase):
             self.assertIn("files written", output)
             self.assertTrue((Path(tmp) / "PS" / "Paper Pinwheels (World).cue").is_file())
 
-    def test_configure_then_wall(self):
+    def test_configure(self):
         home = IsolatedHome()
         config = home.start()
         self.addCleanup(home.stop)
@@ -301,15 +308,19 @@ class MainTest(unittest.TestCase):
         self.assertIn("roms_path set in", output)
         self.assertEqual(config.get_roms_path(), roms)
 
-        label = roms / "GBA" / "labels" / "Moss Knight (World).png"
-        before = label.read_bytes()
-        output = self._run(str(roms), "--wall", str(home.root / "carts"))
-        self.assertIn('gba: "moss-knight", "teacup-tempest"', output)
-        self.assertNotIn("files written", output)
-        self.assertTrue((home.root / "carts" / "gba-teacup-tempest.webp").is_file())
-        # The wall reads the labels; it never redraws them.
-        self.assertEqual(label.read_bytes(), before)
-
+    @unittest.skipUnless(_webp_writable(), "no WebP saver for GdkPixbuf")
+    def test_wall_reads_the_labels_and_writes_nothing_else(self):
+        with TemporaryDirectory() as tmp:
+            roms = Path(tmp) / "demo"
+            self._run(str(roms))
+            label = roms / "GBA" / "labels" / "Moss Knight (World).png"
+            before = label.read_bytes()
+            output = self._run(str(roms), "--wall", str(Path(tmp) / "carts"))
+            self.assertIn('gba: "moss-knight", "teacup-tempest"', output)
+            self.assertNotIn("files written", output)
+            self.assertTrue((Path(tmp) / "carts" / "gba-teacup-tempest.webp").is_file())
+            # The wall reads the labels; it never redraws them.
+            self.assertEqual(label.read_bytes(), before)
 
 if __name__ == "__main__":
     unittest.main()
