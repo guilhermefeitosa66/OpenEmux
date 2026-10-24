@@ -158,12 +158,17 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
             # A grid that scrolls itself while being allocated -- focus moved
             # to a card below its slice -- has asked the page to follow it.
             # One more pass lays everything out at the scroll it asked for.
-            for _ in range(2):
-                moved = self._allocate_children(width, height, vadj.get_value())
-                if not moved:
-                    break
-                target = max(0, min(vadj.get_value() + moved, total - height))
-                vadj.set_value(target)
+            # The drift is measured from the scroll this pass used, not from
+            # the adjustment's value now: a card bound and focused during the
+            # pass may already have had the page revealed to it, and adding
+            # the drift on top of that would overshoot. The second pass always
+            # runs when the page moved, so the children never stay laid out
+            # at a scroll the adjustment no longer shows.
+            moved = self._allocate_children(width, height, scroll)
+            if moved:
+                vadj.set_value(max(0, min(scroll + moved, total - height)))
+            if vadj.get_value() != scroll:
+                self._allocate_children(width, height, vadj.get_value())
         finally:
             self._allocating = False
 
