@@ -13,7 +13,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 from openemux.core.appimage_env import host_env
 from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
 from openemux.core.cores import CoreCatalog
-from openemux.core.first_boot import FirstBootBootstrapper
+from openemux.core.first_boot import FirstBootBootstrapper, _first_failure_reason
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
@@ -133,7 +133,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # is one write and not one per row (issue #383).
         self._remember_view_source = None
         self._cover_sync_running = False
-        self._deferred_assets_running = False
+        # Every job that writes to the core folder -- the deferred sweep and
+        # the missing-core repair -- holds this one flag, so they never run
+        # at the same time (issue #512).
+        self._core_job_running = False
+        # The repair alone, which is what the Preferences row shows.
+        self._core_repair_running = False
+        self._core_repair_task = None
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
         self._rescan_pending = None
@@ -246,7 +252,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
-        self._start_deferred_asset_download()
+        # A repair that starts chains the deferred sweep from its done handler.
+        if not self._start_core_repair():
+            self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
 
@@ -259,11 +267,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Owed until a sweep finishes clean, so a sweep cut short by closing the
         app resumes at the next launch.
         """
-        if self._deferred_assets_running:
+        if self._core_job_running:
             return False
         if is_running_in_flatpak() or not self.config_manager.deferred_assets_pending():
             return False
-        self._deferred_assets_running = True
+        self._core_job_running = True
         cancel_event = Event()
         task_id = self.tasks.begin(
             "cores", self.t("status.cores.downloading"), on_cancel=cancel_event.set
@@ -290,7 +298,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return True
 
     def _on_deferred_assets_done_ui(self, task_id, summary):
-        self._deferred_assets_running = False
+        self._core_job_running = False
         self.tasks.finish(task_id)
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
@@ -306,6 +314,134 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             summary.get("error"),
         )
         return GLib.SOURCE_REMOVE
+
+    def _start_core_repair(self, manual=False):
+        """Bring back the cores some console names that are no longer on disk.
+
+        The first boot is never re-run: replacing the Windows app folder with
+        a new release drops every core it held while the config still says
+        they were downloaded (issue #512). At start-up this runs only after a
+        completed first boot with the updater on, and stays silent unless
+        something is actually missing; ``manual`` is the Preferences row, which
+        always reports. Returns whether a repair started.
+        """
+        if self._core_job_running:
+            if manual:
+                self._core_toast(self.t("toast.cores.verify.busy"))
+            return False
+        if is_running_in_flatpak():
+            return False
+        if not manual:
+            if self.config_manager.get_bootstrap_state().get("status") != "completed":
+                return False
+            if not self.config_manager.get_retroarch_updater_settings()["enabled"]:
+                return False
+        self._core_job_running = True
+        self._core_repair_running = True
+        self._notify_core_repair_running(True)
+        cancel_event = Event()
+        label = self.t("status.cores.repairing" if manual else "status.cores.restoring")
+
+        def _begin_task(_missing):
+            self._core_repair_task = self.tasks.begin(
+                "cores", label, on_cancel=cancel_event.set
+            )
+            return GLib.SOURCE_REMOVE
+
+        def _update_task(current, total):
+            if self._core_repair_task:
+                self.tasks.update(self._core_repair_task, current, total)
+            return GLib.SOURCE_REMOVE
+
+        def _on_progress(evt):
+            GLib.idle_add(_update_task, evt.get("current", 0), evt.get("total", 0))
+
+        def _worker():
+            # The check touches the disk, so it runs here and not on the main
+            # loop; the banner only appears once something is found missing.
+            try:
+                summary = FirstBootBootstrapper(self.config_manager).repair_missing_cores(
+                    on_progress=_on_progress,
+                    cancel_event=cancel_event,
+                    manual=manual,
+                    on_missing=lambda missing: GLib.idle_add(_begin_task, missing),
+                )
+            except Exception as exc:
+                # The done handler is what clears the running flag (#214).
+                logger.exception("core repair crashed")
+                summary = {"error": str(exc)}
+            GLib.idle_add(self._on_core_repair_done_ui, manual, summary)
+
+        Thread(target=_worker, daemon=True).start()
+        return True
+
+    def _on_core_repair_done_ui(self, manual, summary):
+        self._core_job_running = False
+        self._core_repair_running = False
+        if self._core_repair_task:
+            self.tasks.finish(self._core_repair_task)
+            self._core_repair_task = None
+        if summary.get("downloaded"):
+            self.core_catalog.refresh()
+            self.runtime_manager.retroarch_launcher.core_catalog.refresh()
+        message = self._core_repair_message(manual, summary)
+        if message:
+            self._core_toast(*message)
+        self._notify_core_repair_running(False)
+        # Owed before the repair, or owed again because the folder was empty.
+        self._start_deferred_asset_download()
+        return GLib.SOURCE_REMOVE
+
+    def _core_repair_message(self, manual, summary):
+        """The toast for a finished repair, as (text, timeout), or None.
+
+        The start-up repair speaks only when it brought something back; a
+        failure there is logged and retried at the next launch.
+        """
+        if summary.get("error"):
+            if not manual:
+                return None
+            count = len(summary.get("missing") or []) or 1
+            return self.t("toast.cores.verify.failed", count=count, error=summary["error"]), 6
+        if summary.get("disabled"):
+            return (self.t("toast.cores.verify.disabled"), 3) if manual else None
+        if summary.get("failed"):
+            if not manual:
+                return None
+            text = self.t(
+                "toast.cores.verify.failed",
+                count=summary["failed"],
+                error=_first_failure_reason(summary),
+            )
+            return text, 6
+        downloaded = summary.get("downloaded", 0)
+        if downloaded:
+            key = "toast.cores.verify.downloaded" if manual else "toast.cores.restored"
+            return self.t(key, count=downloaded), 3
+        if manual and not summary.get("cancelled"):
+            return self.t("toast.cores.verify.ok"), 3
+        return None
+
+    def _open_preferences_dialog(self):
+        """The Preferences dialog when it is on screen, else None."""
+        dialog = self._preferences_dialog
+        if dialog is not None and dialog.get_parent() is not None:
+            return dialog
+        return None
+
+    def _core_toast(self, text, timeout=3):
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog._toast(text, timeout)
+            return
+        toast = Adw.Toast(title=text)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
+
+    def _notify_core_repair_running(self, running):
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog.set_core_job_running(running)
 
     def _start_update_check(self):
         settings = self.config_manager.get_update_settings()
