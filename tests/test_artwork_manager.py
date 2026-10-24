@@ -20,6 +20,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from openemux.core.scraper import COVER_ART, LABEL_ART
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
 if HAVE_DISPLAY:
@@ -34,7 +35,6 @@ if HAVE_DISPLAY:
 
     from openemux.core import artwork_search
     from openemux.core.hasher import compute_crc32
-    from openemux.core.scraper import COVER_ART, LABEL_ART
     from openemux.ui import artwork_manager
     from openemux.ui.artwork_manager import ArtworkManagerWindow, _PreviewArea
 
@@ -87,7 +87,9 @@ def _write_png(path, width=40, height=60, colour=0xFF0000FF):
     return Path(path)
 
 
-class _MainWindow(Gtk.Window):
+# `object` without a display only so the module still imports, and its
+# @needs_display classes skip, instead of failing at collection.
+class _MainWindow(Gtk.Window if HAVE_DISPLAY else object):
     """Only what the artwork manager reaches for on its parent window.
 
     A real `Gtk.Window`, because the manager passes it as `transient_for` and
