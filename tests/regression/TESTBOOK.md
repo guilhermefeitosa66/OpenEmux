@@ -1390,12 +1390,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   page full. Step 4 walks out of the first group and into the next one instead of stopping at its
   last row; `Up` walks back into the previous group's last card (issue #384). Walking `Down`
   through a group taller than the window keeps the focused card on screen the whole way: the page
-  scrolls with it (issue #511).
+  scrolls with it, never back up and never past it (issue #511).
 - **Check:** a screenshot per step; the selection bar's count equals the window subtitle's; suite
   files `tests/test_grid_group.py` and `tests/test_grouped_scroll.py` (`TheAllPageTests`).
 - **Restore:** clear the selection and the search; step 4 leaves nothing behind.
 
-### RT-343 — "All" keeps every game on screen in a big library
+### RT-370 — "All" keeps every game on screen in a big library
 - **Area:** Views
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app with a big console: inside the devbox home, 600 empty files
