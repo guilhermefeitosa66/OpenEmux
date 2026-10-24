@@ -81,9 +81,9 @@ def validate_png(path):
     """``None`` when ``path`` is a usable bezel, otherwise an error key.
 
     ``"unreadable"`` (also a file or a picture over the caps), ``"not_png"``
-    or ``"too_small"``. Only the signature
-    and the IHDR header are read, with ``struct``: the core does not load
-    GTK, and the image itself is RetroArch's to decode.
+    or ``"too_small"``. Only the signature and the IHDR header are read,
+    with ``struct``: the picture is decoded later, by :func:`import_custom`
+    when it has to be scaled, and by RetroArch at launch.
     """
     try:
         if os.path.getsize(path) > MAX_BYTES:
