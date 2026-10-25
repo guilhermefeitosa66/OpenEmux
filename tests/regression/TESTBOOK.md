@@ -5461,7 +5461,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   keypad overlays (which hide the fires) send `*` on `start`, `#` on `select`, 9 on `l_y_minus` and 0
   on `l_x_plus`:
   ```bash
-  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -A1 -E '^overlay0_desc[0-9]+ = "(a|b),' | head   # the portrait overlay carries both fires
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '^overlay0_desc[0-9]+ = "(a|b),' | grep -oE '"(a|b)' | sort -u   # "a and "b (portrait overlay)
   adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '"(l_y_minus|l_x_plus),' | sort -u   # both present
   adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -cE '"r_x_(minus|plus),'                   # 0
   ```
