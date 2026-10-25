@@ -5335,7 +5335,7 @@ restores it on a fresh install. `MANUAL`, like the other Android sections: a pho
 emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.mobile`,
 `$EXT` is `/sdcard/Android/data/$PKG/files`.
 
-### RT-408 — Settings has a Back up and restore screen
+### RT-414 — Settings has a Back up and restore screen
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, a few games in the library.
@@ -5351,7 +5351,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   your games back with Import ROMs…". Nothing is clipped; in landscape the screen scrolls.
 - **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
 
-### RT-409 — Keep app data on uninstall, reinstall the same APK
+### RT-415 — Keep app data on uninstall, reinstall the same APK
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** Android 10 or newer; the library, a save state and a theme choice in place.
@@ -5369,10 +5369,10 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   adb shell run-as $PKG ls files/setup.done                          # still there
   ```
 
-### RT-410 — Export writes one archive with exactly what it should
+### RT-416 — Export writes one archive with exactly what it should
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** RT-408's screen; signed in to RetroAchievements (or `shared_prefs/cheevos.xml`
+- **Preconditions:** RT-414's screen; signed in to RetroAchievements (or `shared_prefs/cheevos.xml`
   seeded through `run-as`); a save state, a favorite and a cart colour set.
 - **Steps:**
   1. Leave "Include ROMs" on and tap "Export data · <total>".
@@ -5389,10 +5389,10 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   unzip -p backup.zip | grep -ac '<ra-username>\|cheevos_token'           # 0
   ```
 
-### RT-411 — Import on a fresh install brings the app back as it was
+### RT-417 — Import on a fresh install brings the app back as it was
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** RT-410's archive in Downloads.
+- **Preconditions:** RT-416's archive in Downloads.
 - **Steps:**
   1. `adb uninstall $PKG` (no keep), install the APK again and finish the first-run setup.
   2. Settings → "Back up and restore" → "Import data", pick the archive.
@@ -5411,10 +5411,10 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   adb shell run-as $PKG ls shared_prefs                   # no cheevos.xml
   ```
 
-### RT-412 — A damaged, foreign or newer archive changes nothing
+### RT-418 — A damaged, foreign or newer archive changes nothing
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** A library with saves; RT-410's archive.
+- **Preconditions:** A library with saves; RT-416's archive.
 - **Steps:**
   1. Import any `.zip` that is not a backup (e.g. a zipped ROM).
   2. Import a copy cut inside the manifest: `head -c 100 backup.zip > cut.zip`, pushed to Downloads.
@@ -5435,7 +5435,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   diff before.txt after.txt && echo unchanged
   ```
 
-### RT-413 — Export without ROMs, then Import ROMs reattaches the saves
+### RT-419 — Export without ROMs, then Import ROMs reattaches the saves
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** A game with a save state; its ROM file at hand.
@@ -5448,10 +5448,10 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   that game.
 - **Check:** human only.
 
-### RT-414 — Cancelling an export leaves no file behind
+### RT-420 — Cancelling an export leaves no file behind
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** RT-408's screen with "Include ROMs" on and a library large enough for the
+- **Preconditions:** RT-414's screen with "Include ROMs" on and a library large enough for the
   export to take a few seconds.
 - **Steps:**
   1. Tap "Export data · <total>" and save in "Downloads".
