@@ -5174,6 +5174,54 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 - **Check:** human only.
 
 
+## Android — Closing the device mid-game
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) writing the automatic save state when the game stops being visible (a Flip
+closed, the screen turned off, Home) and coming back paused under the pause sheet (#563). The
+runner has no Android device, so these are `MANUAL`: a person runs them on a phone, a Flip, or a
+headless emulator with `adb`. On an emulator, `adb shell input keyevent KEYCODE_SLEEP` stands in for
+closing the device (a `pixel_fold` AVD can also be closed with `adb emu fold`), and
+`KEYCODE_WAKEUP` followed by `adb shell wm dismiss-keyguard` for opening it. The state is
+`<rom>.state.auto` under the app's save-state folder, shown in the pause sheet's "Load" list as
+"Auto"; the engine logs each write as `[State] Auto save state to "<path>" succeeded` in
+`adb logcat -s RetroArch`. RetroAchievements hardcore must be off, since it turns auto save off.
+
+### RT-456 — Closing the device saves the game and reopening shows it paused
+- **Area:** Android — Closing the device mid-game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a Game Boy Advance or Super
+  Nintendo game in the library, RetroAchievements hardcore off.
+- **Steps:**
+  1. Start the game and play for about 20 seconds, then close the device (or turn the screen off).
+  2. Open the device again and unlock it.
+  3. Press "Resume".
+  4. Open the pause sheet, then "Load", and pick "Auto".
+- **Expected:** After step 1 the log shows one auto save state write and the `.state.auto` file is
+  newer than the start of the game. After step 2 the game shows the frame it was closed on, with no
+  sound and the pause sheet open, "Resume" focused when a gamepad is used. After step 3 the game
+  continues from that moment. Step 4 returns to the moment the device was closed. Home instead of
+  closing, then reopening from Recents, behaves the same.
+- **Check:** human only (`adb logcat -d -s RetroArch | grep "Auto save state"` after step 1, a
+  screenshot after step 2).
+
+### RT-457 — A paused game stays paused when the device is closed, and killed games resume
+- **Area:** Android — Closing the device mid-game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-456.
+- **Steps:**
+  1. During a game, open the pause sheet, then close the device and open it again.
+  2. Press "Resume", play a few seconds, press Home, then
+     `adb shell am force-stop com.openemux.mobile` to stand in for Android reclaiming the process.
+  3. Open the app and continue the same game.
+  4. During a game, pull down the notification shade, wait a few seconds, and put it away.
+- **Expected:** After step 1 the sheet is still open and the game behind it is not running (the
+  frame does not move, no sound). After step 3 the game starts where it was when Home was pressed.
+  In step 4 nothing is saved (no new log line) and no sheet opens. With RetroAchievements hardcore
+  on, or a core without save states, closing writes nothing but the game still comes back paused
+  with the sheet.
+- **Check:** human only (a screenshot after step 1, the log after steps 2 and 4).
+
 ## Android — RetroAchievements
 
 The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
