@@ -305,12 +305,16 @@ class TheAllPageTests(WindowCase):
 
     def test_fewer_columns_still_reach_the_end(self):
         columns = self.fc.get_max_columns()
-        # Shrink from the width the window got, not the one it asked for: a
-        # toplevel is clamped to the monitor, and a CI runner's screen can be
-        # narrower than 1400 (the Windows one is 1024). Stay above the 700sp
-        # breakpoint, past which the layout changes for other reasons.
+        # Shrink by what one column takes, from the width the window got rather
+        # than the one it asked for: a toplevel is clamped to the monitor, and
+        # a CI runner's screen can be narrower than 1400 (the Windows one is
+        # 1024, which leaves room for only two columns). Half a column of
+        # slack each way keeps it off the boundary.
+        self.assertGreater(columns, 1)
         width = self.win.get_width()
-        self.win.set_default_size(max(800, width - 400), 700)
+        column = self.fc._card_allocation_width() + self.fc._spacing
+        excess = self.fc._available_width() - (columns - 0.5) * column
+        self.win.set_default_size(int(width - excess), 700)
         self.assertTrue(
             self.pump_until(lambda: self.fc.get_max_columns() < columns),
             f"{columns} columns at {width}px, {self.fc.get_max_columns()} after",
