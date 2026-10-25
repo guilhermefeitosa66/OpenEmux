@@ -5418,6 +5418,82 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
+## Android — Gamepad navigation
+
+The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
+never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
+gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
+`adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
+`KEYCODE_BUTTON_START`). The first D-pad press only enters gamepad mode. A library of a few games
+over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
+
+### RT-434 — The landscape row keeps the focused game in the middle
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a console with 10 or more games; the phone in landscape.
+- **Steps:**
+  1. Open that console's shelf in the "Cartridges" view and press DOWN until a game is focused.
+  2. Press RIGHT one game at a time to the last one, then LEFT back to the first.
+  3. With the last game focused, press RIGHT once more.
+  4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
+  5. Press UP into the header (back link, search, sort, view toggle).
+- **Expected:** The first games take focus without the row scrolling, and the first one rests at the
+  row's left padding with nothing empty before it. From there on the focused game stays in the
+  middle of the screen and the row scrolls under it; near the end focus moves on to the right and
+  the last game rests at the right padding. The focused game's title is bold and the others are
+  dimmed. Headers never take focus. RIGHT past the last game leaves focus on it, it never jumps up
+  to the header. In the header the ring and its halo are whole, not cut by the top of the screen.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-435 — No focus ring is cut or covered, on any screen
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a library as in the section's header.
+- **Steps:**
+  1. In portrait, walk every edge of a console's grid in the "Cartridges", covers and list views
+     (first and last column, first and last row).
+  2. Press UP into the console chips; walk LEFT to "All" and RIGHT to the last chip.
+  3. Open a game's detail; walk the cartridge colour swatches to both ends and open "See all" on the
+     save states, then walk its grid.
+  4. Press START for "Settings" and walk every page, BIOS included, with the swatches of a console's
+     page; then the in-game pause sheet (START during a game) and its "Load state" grid.
+  5. Repeat 1 to 4 in landscape, and in the light theme.
+- **Expected:** The ring and its halo are whole around every focused item: not cut by the screen's
+  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items.
+  The view toggle's buttons keep their whole ring. Rows inside a card show the inside highlight,
+  never scaled and never past the card.
+- **Check:** human only (a screenshot per screen).
+
+### RT-436 — Vertical lists keep the focused item clear of the edges and the hint bar
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; enough consoles for the shelf to scroll (or a small
+  window), and a console with 10 or more games.
+- **Steps:**
+  1. On the shelf, press DOWN through every shelf to the last one, then UP back to the top.
+  2. In a console's grid, press DOWN to the last row.
+  3. In "Settings" and in a game's detail, press DOWN to the last item.
+  4. On the last item of the shelf, the grid and "Settings", press DOWN twice more, then UP.
+- **Expected:** The list scrolls only when the focused item would come closer than a margin to the
+  top or to the hint bar; the focused item is never under the hint bar or the tab bar, and the
+  last item can be focused in full above them. Every hint bar is the same height, with "A" filled
+  first and multi-letter badges ("SELECT", "L1 R1") as pills. DOWN past the last item leaves focus
+  on it (it never moves into the tab bar), and UP walks back up the list.
+- **Check:** human only.
+
+### RT-437 — Touch still works as before next to the gamepad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; gamepad mode on with a game focused.
+- **Steps:**
+  1. Tap the screen, then scroll and fling the grid with a finger.
+  2. Open the search and type a few letters.
+  3. Press a D-pad key.
+  4. Long-press a shelf and drag it to another place.
+- **Expected:** The tap hides the highlight and the hint bar; scrolling and flinging feel as they did.
+  The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
+  the item that had it. The dragged shelf stays drawn above the others while it moves.
+- **Check:** human only.
 
 ## Developer tooling & docs
 
