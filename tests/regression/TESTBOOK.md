@@ -6148,7 +6148,7 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a *-knob<N>.png per D-pad
   ```
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
-  `_reach_x = _reach_y = 1.5273`, `_range_mod = 20.0`, `_range_mod_exclusive = true`,
+  `_reach_x = _reach_y = 1.4182`, `_range_mod = 20.0`, `_range_mod_exclusive = true`,
   `_dead_zone = 0.25`, `_overlay = "<overlay>-knob<N>.png"` and `_movable = true`.
 
 ### RT-409 — Sliding off the D-pad keeps steering
