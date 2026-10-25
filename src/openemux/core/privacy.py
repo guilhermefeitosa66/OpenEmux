@@ -35,7 +35,10 @@ def _homes():
         # A home of "/" or "" would rewrite every path on the machine.
         if len(text) > 1:
             homes.add(text)
+            # Both ways round: MSYS2's Python writes Windows paths with "/",
+            # and what it logs may still have come from Windows with "\\".
             homes.add(text.replace("\\", "/"))
+            homes.add(text.replace("/", "\\"))
     return tuple(sorted(homes))
 
 

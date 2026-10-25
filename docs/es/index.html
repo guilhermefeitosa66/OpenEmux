@@ -1293,6 +1293,7 @@
       </div>
       <p class="cta-note">Libre y de código abierto · Licencia MIT · AppImage, .deb, .rpm &amp; Flatpak en Linux ·
         instalador &amp; ZIP portátil en Windows · APK en Android (GPLv3)</p>
+      <p class="cta-note">Inspirado en <a href="https://openemu.org/">OpenEmu</a> para macOS, pero no es un fork: es un código aparte, con RetroArch como motor de emulación. <a href="#thanks">Más sobre esto</a>.</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
@@ -1481,7 +1482,7 @@
     <div class="wrap center">
       <span class="eyebrow">Android</span>
       <h2>Tu estantería, en el bolsillo</h2>
-      <p class="lede">OpenEmux para Android lleva la misma biblioteca al teléfono: los juegos que tienes, como cartuchos en una estantería por consola, jugados con controles en pantalla dibujados para cada sistema o con un mando.</p>
+      <p class="lede">OpenEmux para Android lleva la misma biblioteca al teléfono: los juegos que tienes, como cartuchos en una estantería por consola, jugados con controles en pantalla dibujados para cada sistema o con un mando. La app para Android tiene un diseño propio: OpenEmu no tiene versión móvil, así que solo los iconos de las consolas vienen de OpenEmu.</p>
       <div class="gallery phones">
         <figure><img src="../assets/openemux-mobile-shelf.png" alt="OpenEmux en Android, la estantería" />
           <figcaption>La estantería</figcaption>
@@ -1534,6 +1535,11 @@
           <div class="ico">🌐</div>
           <h3>Ocho idiomas</h3>
           <p>Los mismos idiomas que la app de escritorio, siguiendo el teléfono o elegidos en Ajustes.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🏆</div>
+          <h3>RetroAchievements</h3>
+          <p>Inicia sesión una vez en Ajustes y cada juego desbloquea logros en tu perfil de RetroAchievements, con modo hardcore cuando quieras.</p>
         </div>
       </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
@@ -1645,8 +1651,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <section id="thanks">
     <div class="wrap center">
       <span class="eyebrow">Créditos</span>
-      <h2>Gracias a RetroArch, libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux está inspirado en <a href="https://openemu.org/">OpenEmu</a>, el frontend de emuladores para macOS. Como OpenEmu solo funciona en macOS, OpenEmux intenta ofrecer algo parecido en Linux, y ahora también en Windows. La emulación en sí viene de los proyectos <a href="https://www.retroarch.com/">RetroArch</a> y <a href="https://www.libretro.com/">libretro</a>, y nada de esto existiría sin su trabajo. ❤️</p>
+      <h2>Inspirado en OpenEmu, impulsado por RetroArch</h2>
+      <p class="lede">OpenEmux está inspirado en <a href="https://openemu.org/">OpenEmu</a>, la interfaz de emuladores para macOS. Como OpenEmu solo funciona en macOS, OpenEmux intenta ofrecer algo parecido en Linux, y ahora también en Windows. No es un fork y no comparte código con OpenEmu: es un proyecto aparte, escrito en Python, GTK 4 y libadwaita, y la emulación en sí viene de los proyectos <a href="https://www.retroarch.com/">RetroArch</a> y <a href="https://www.libretro.com/">libretro</a>. Los iconos de las consolas son obra de OpenEmu, <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/src/openemux/ui/assets/icons/ATTRIBUTION.md">acreditados bajo la licencia BSD de OpenEmu</a>. La app para Android es un diseño independiente (no existe OpenEmu para móviles). OpenEmux no está afiliado al OpenEmu Team ni cuenta con su respaldo. Nada de esto existiría sin el trabajo de todos estos proyectos. ❤️</p>
     </div>
   </section>
 
@@ -1847,10 +1853,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       if (!wall) return;
       // Cartridge renders are 400 px wide; ratio = width / height.
       var CONSOLES = {
-        gba: { ratio: 400 / 230, games: ["bust-a-move", "castlevania-aria-of-sorrow", "castlevania-circle-of-the-moon", "castlevania-harmony-of-dissonance", "donkey-kong-country-1", "donkey-kong-country-2", "donkey-kong-country-3", "dragonball-advanced-adventure", "kirby-nightmare-in-dreamland", "kirby-the-amazing-mirror", "mario-kart-super-circuit", "megaman-bass", "megaman-zero-1", "megaman-zero-2", "megaman-zero-3", "megaman-zero-4", "metal-slug-advance", "metroid-fusion", "metroid-zero-mission", "poke-mon-1-1-fire-red-version", "poke-mon-1-2-leaf-green-version", "poke-mon-3-1-ruby-version", "poke-mon-3-2-sapphire-version", "poke-mon-3-3-emerald-version", "sonic-advance", "super-mario-advance", "super-mario-advance-2-super-mario-world", "super-mario-advance-3-yoshi-s-island", "super-mario-advance-4-super-mario-bros", "the-legend-of-zelda-the-minish-cap", "wario-land-4"] },
-        sfc: { ratio: 400 / 255, games: ["asterix", "bust-a-move", "chrono-trigger", "dolucky-no-a-league-soccer", "donkey-kong-1", "donkey-kong-2", "donkey-kong-3", "goof-troop", "mega-man-x", "mega-man-x2", "mega-man-x3", "mighty-morphin-power-rangers", "mighty-morphin-power-rangers-the-movie", "mortal-kombat-1", "mortal-kombat-2", "mortal-kombat-3", "mortal-kombat-3-ultimate", "prince-of-persia", "street-fighter-ii-turbo", "super-bomberman-1", "super-bomberman-2", "super-bomberman-3", "super-bomberman-4", "super-bomberman-5", "super-mario-all-stars", "super-mario-kart", "super-mario-world", "super-mario-world-2-yoshi-s-island", "super-metroid", "the-legend-of-zelda-a-link-to-the-past", "top-gear-1", "top-gear-2", "top-gear-3000"] },
-        n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
-        md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
+        gba: { ratio: 400 / 230, games: ["acorn-arcade", "basalt-bells", "brass-beetles", "cactus-courier", "chalk-comets", "driftwood-diaries", "fennel-fields", "glass-canyon", "gondola-gambit", "hollow-harp", "ivy-ironworks", "kite-kingdom", "lemon-lightning", "lychee-lane", "maple-mosaic", "moss-knight", "nimbus-noodles", "pixel-pantry", "plum-parade", "pocket-planetarium", "pumice-patrol", "raincoat-rangers", "ripple-runners", "saltmarsh-sprint", "sorrel-speedway", "sparrow-signal", "tangerine-tides", "teacup-tempest", "tinker-tram", "velvet-vortex"] },
+        sfc: { ratio: 400 / 255, games: ["biscuit-brigade", "cinder-bay", "clockwork-orchard", "cobalt-caravan", "copper-lighthouse", "ferris-fortress", "granite-garden", "harbor-hopscotch", "hazel-hollow", "juniper-station", "kettle-knights", "lagoon-lullaby", "lantern-keep", "mango-monsoon", "marble-meadow-rally", "meadow-mechanic", "orchard-siege", "paprika-pass", "pebble-patrol", "puddle-pilots", "rooftop-regatta", "saffron-skyway", "spindle-spire", "sundial-saga", "thimble-quest", "tundra-tailors", "turnip-tactics", "velvet-glacier", "walnut-wanderers", "willow-circuit"] },
+        n64: { ratio: 400 / 257, games: ["canyon-carousel", "glacier-grand-prix", "hover-hamlet", "lunar-laundry", "neon-harbor", "orbit-orchard", "polygon-prairie", "prism-pagoda", "skyline-sledders", "thunder-teapot", "velvet-voltage", "zephyr-zoo"] },
+        md: { ratio: 400 / 271, games: ["blast-bayou", "chrome-canyon", "granite-gale", "harbor-havoc", "iron-iguana", "magma-mailman", "nitro-nectar", "rapid-reef", "static-sunset", "tidepool-racers", "turbo-tortoise", "voltage-valley"] }
       };
       // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
       // N64 and Mega Drive sit behind them at the edges. speed is px/s at full

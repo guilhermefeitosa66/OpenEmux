@@ -323,7 +323,9 @@ class HoverAndFocusTests(_CardCase):
 
 @needs_display
 class ClickingACardTests(_CardCase):
-    def _gesture(self, button=Gdk.BUTTON_PRIMARY, state=0):
+    def _gesture(self, button=None, state=0):
+        # Not a Gdk default: the class body runs even when it is skipped.
+        button = Gdk.BUTTON_PRIMARY if button is None else button
         gesture = mock.Mock()
         gesture.get_current_button.return_value = button
         gesture.get_current_event_state.return_value = state
@@ -403,6 +405,10 @@ class InAListRowTests(_CardCase):
         if self.card is None or self.card.select_check is None:
             self.skipTest("the list page realized no row for the first game")
 
+    def test_a_row_has_no_backdrop(self):
+        # Its expanding child would stretch the shared thumbnail column.
+        self.assertIsNone(self.card._backdrop)
+
     def test_a_row_carries_the_console_name_as_its_platform_column(self):
         self.assertIsNotNone(self.card.console_label)
         self.assertTrue(self.card.console_label.get_label())
@@ -476,6 +482,102 @@ class OnAPageThatMixesConsolesTests(_CardCase):
         self.card._show_cover_image()
         self.card._show_placeholder()
         self.assertIsNot(self.card._backdrop.get_first_child(), self.card.cover_image)
+
+    def test_even_a_cover_of_the_box_shape_keeps_its_own_size(self):
+        # There is no one box shape on a page that mixes consoles.
+        art = (self.card.cover_width, self.card.cover_height - 1)
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(*art), False)
+        self.assertEqual(
+            self.card.cover_image.get_content_fit(), Gtk.ContentFit.CONTAIN
+        )
+        self.assertEqual(self.card.cover_image.get_size_request(), art)
+
+
+@needs_display
+class OnASingleConsoleCoverPageTests(_CardCase):
+    """Issue #508: the card has the console's box shape, and only a cover of
+    that shape fills it; any other is shown whole on the backdrop."""
+
+    def setUp(self):
+        super().setUp()
+        self.card = self.cover_card(self.grid._card_ctx)
+        self.card.bind(self.entry)
+        self.box = (self.card.cover_width, self.card.cover_height)
+
+    def cover_card(self, base_ctx, **changes):
+        ctx = copy.copy(base_ctx)
+        ctx.mixed_consoles = False
+        ctx.cartridge = False
+        ctx.compact = False
+        for name, value in changes.items():
+            setattr(ctx, name, value)
+        # Rooted in a real window: a card with no root counts as abandoned.
+        host = Gtk.Window()
+        self.addCleanup(host.destroy)
+        card = RomItem(ctx)
+        host.set_child(card)
+        host.present()
+        self.pump()
+        return card
+
+    def apply(self, width, height):
+        self.card._apply_cover_pixbuf(
+            self.card._generation, self.pixbuf(width, height), False
+        )
+
+    def matching(self):
+        # What cover_cache hands back for art of the card's shape: scaled to
+        # fit, so a pixel short of the box on one side.
+        width, height = self.box
+        return width, height - 1
+
+    def mismatched(self):
+        # A portrait box on a landscape card, or a square on a portrait one.
+        width, height = self.box
+        return (height // 2, height) if width >= height else (width, width // 3)
+
+    def test_the_cover_has_a_backdrop_to_sit_on(self):
+        self.assertIsNotNone(self.card._backdrop)
+
+    def test_a_cover_of_the_box_shape_fills_the_card(self):
+        self.apply(*self.matching())
+        self.assertEqual(self.card.cover_image.get_content_fit(), Gtk.ContentFit.COVER)
+        self.assertEqual(self.card.cover_image.get_size_request(), self.box)
+
+    def test_a_cover_of_another_shape_is_shown_whole(self):
+        art = self.mismatched()
+        self.apply(*art)
+        self.assertEqual(
+            self.card.cover_image.get_content_fit(), Gtk.ContentFit.CONTAIN
+        )
+        self.assertEqual(self.card.cover_image.get_size_request(), art)
+
+    def test_a_recycled_card_does_not_keep_the_last_covers_fit(self):
+        self.apply(*self.mismatched())
+        self.apply(*self.matching())
+        self.assertEqual(self.card.cover_image.get_content_fit(), Gtk.ContentFit.COVER)
+        self.assertEqual(self.card.cover_image.get_size_request(), self.box)
+        art = self.mismatched()
+        self.apply(*art)
+        self.assertEqual(
+            self.card.cover_image.get_content_fit(), Gtk.ContentFit.CONTAIN
+        )
+        self.assertEqual(self.card.cover_image.get_size_request(), art)
+
+    def test_the_placeholder_takes_the_whole_box_back(self):
+        self.apply(*self.mismatched())
+        self.card._show_placeholder()
+        self.assertEqual(self.card.cover_image.get_size_request(), self.box)
+
+    def test_a_cartridge_card_has_no_backdrop(self):
+        card = self.cover_card(self.grid._card_ctx, cartridge=True)
+        self.assertIsNone(card._backdrop)
+
+    def test_a_cartridge_card_on_a_mixed_page_keeps_the_backdrop(self):
+        card = self.cover_card(
+            self.grid._card_ctx, cartridge=True, mixed_consoles=True
+        )
+        self.assertIsNotNone(card._backdrop)
 
 
 @needs_display
@@ -660,6 +762,8 @@ class FindingTheCardBehindAWidgetTests(_CardCase):
         self.assertIsNone(item_for_widget(None))
 
 
+# No widgets, but openemux.ui.rom_card imports GTK.
+@needs_display
 class EntryMatchingTests(unittest.TestCase):
     """The filter the grid applies, which needs no widgets at all."""
 

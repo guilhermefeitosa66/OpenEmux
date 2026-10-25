@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from openemux.core import core_options, hw_driver, overlay_bar, retroachievements
+from openemux.core import bezels, core_options, hw_driver, overlay_bar, retroachievements
 from openemux.core.appimage_env import host_env
 from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
@@ -382,12 +382,61 @@ class RetroArchLauncher:
                 return resolved
         return None
 
+    def _ui_flag(self, key):
+        """A boolean UI setting, off when the config has no UI settings."""
+        get_ui = getattr(self.config_manager, "get_ui_settings", None)
+        return bool(get_ui and get_ui().get(key, False))
+
     def _translucent_bar(self):
         """Whether the in-game bar is drawn see-through, over the game (#477)."""
-        get_ui = getattr(self.config_manager, "get_ui_settings", None)
-        return bool(get_ui and get_ui().get("translucent_game_bar", False))
+        return self._ui_flag("translucent_game_bar")
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR):
+    def _start_fullscreen(self):
+        """Whether games open filling the screen rather than windowed (#505)."""
+        return self._ui_flag("start_games_fullscreen")
+
+    def _launch_mode_overrides(self):
+        """Windowed or fullscreen, as the app's setting says (issue #505).
+
+        Written both ways, so a ``video_fullscreen`` in the user's
+        retroarch.cfg does not decide it. It is windowed fullscreen -- the
+        bar's overrides keep ``video_windowed_fullscreen`` on, since exclusive
+        fullscreen loses its clicks -- and the fullscreen hotkey still toggles
+        it in-game.
+        """
+        return {"video_fullscreen": '"true"' if self._start_fullscreen() else '"false"'}
+
+    def _bezel_overlay(self, console, overlay_dir, shader_dir):
+        """The bar with the console's bezel under it, or ``None`` (issue #507).
+
+        The bezel shrinks with the game only where the margin pass runs: a
+        shader pipeline to run it in (``shader_dir``), and an opaque bar.
+        """
+        get_settings = getattr(self.config_manager, "get_bezel_settings", None)
+        if get_settings is None:
+            return None
+        if Path(overlay_dir) == overlay_bar.OVERLAY_DIR:
+            # stage_assets could not copy the bar and fell back to the
+            # package's own folder: the bezel's files are never written there.
+            return None
+        settings = get_settings()
+        image = bezels.resolve_image(console, settings)
+        if image is None:
+            return None
+        translucent = self._translucent_bar()
+        margin_active = shader_dir is not None and not translucent
+        logger.info(
+            "bezel: console=%s mode=%s image=%s margin=%s",
+            console,
+            settings["console_overrides"].get(console),
+            image.name,
+            margin_active,
+        )
+        return overlay_bar.write_bezel_overlay(
+            overlay_dir, image, translucent=translucent, margin_active=margin_active
+        )
+
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR, overlay_cfg=None):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
         Seven concerns, one file. They used to be one 170-line function whose
@@ -420,8 +469,11 @@ class RetroArchLauncher:
             overrides["video_driver"] = f'"{video_driver}"'
         overrides.update(self._savestate_overrides(states_dir, state_slot))
         overrides.update(self._window_overrides())
+        overrides.update(self._launch_mode_overrides())
         # The game's controls are drawn by RetroArch itself (issue #469).
-        overrides.update(overlay_bar.runtime_overrides(overlay_dir, self._translucent_bar()))
+        # With a bezel, the bar's pages with it drawn under them (issue #507).
+        overrides.update(overlay_bar.runtime_overrides(
+            overlay_dir, self._translucent_bar(), overlay_cfg=overlay_cfg))
         if shader_dir:
             # Where the bar's hide/show buttons' "next shader" looks.
             overrides["video_shader_dir"] = f'"{cfg_path(shader_dir)}"'
@@ -972,6 +1024,7 @@ class RetroArchLauncher:
             overlay_dir,
             translucent=self._translucent_bar(),
         )
+        overlay_cfg = self._bezel_overlay(system_id, overlay_dir, shader_dir)
 
         cmd = [*launch_prefix, "-L", core_path]
         runtime_override = self._write_runtime_override(
@@ -984,6 +1037,7 @@ class RetroArchLauncher:
             shader_dir=shader_dir,
             video_driver=video_driver if video_driver != configured_driver else None,
             overlay_dir=overlay_dir,
+            overlay_cfg=overlay_cfg,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:

@@ -1,6 +1,9 @@
 import unittest
 
 from openemux.core.library_view import (
+    COVER_FILL_TOLERANCE,
+    cover_crop_fraction,
+    cover_fills_box,
     normalize_display_value,
     DEFAULT_VIEW_MODE,
     DEFAULT_ZOOM,
@@ -131,6 +134,46 @@ class ListThumbTests(unittest.TestCase):
         self.assertEqual(
             list_thumb_size((0, 0)), (LIST_ROW_MAX_THUMB_WIDTH, LIST_ROW_THUMB_HEIGHT)
         )
+
+
+class CoverFitTests(unittest.TestCase):
+    """Fill the card with a cover only when that crops next to nothing (#508)."""
+
+    def test_a_cover_of_the_card_shape_loses_nothing_and_fills(self):
+        self.assertEqual(cover_crop_fraction((280, 200), (140, 100)), 0.0)
+        self.assertTrue(cover_fills_box((280, 200), (140, 100)))
+
+    def test_a_portrait_box_on_a_landscape_card_is_not_filled(self):
+        # A Japanese SFC box (0.56) on the SFC card (1.40): filling it would
+        # lose 60% of the art.
+        self.assertAlmostEqual(cover_crop_fraction((56, 100), (140, 100)), 0.6)
+        self.assertFalse(cover_fills_box((56, 100), (140, 100)))
+
+    def test_a_square_scan_on_a_portrait_card_is_not_filled(self):
+        self.assertAlmostEqual(cover_crop_fraction((100, 100), (70, 100)), 0.3)
+        self.assertFalse(cover_fills_box((100, 100), (70, 100)))
+
+    def test_a_cover_exactly_at_the_tolerance_still_fills(self):
+        width = round(100 * (1 - COVER_FILL_TOLERANCE))
+        self.assertTrue(cover_fills_box((width, 100), (100, 100)))
+
+    def test_a_cover_just_past_the_tolerance_does_not(self):
+        width = round(100 * (1 - COVER_FILL_TOLERANCE)) - 1
+        self.assertFalse(cover_fills_box((width, 100), (100, 100)))
+
+    def test_a_near_match_fills(self):
+        # Chrono Trigger's 1.33 on the SFC card's 1.41.
+        self.assertTrue(cover_fills_box((532, 400), (141, 100)))
+
+    def test_a_degenerate_size_counts_as_nothing_to_crop(self):
+        for image, box in (((0, 100), (140, 100)), ((56, 100), (140, 0)), ((-1, 5), (5, 5))):
+            with self.subTest(image=image, box=box):
+                self.assertEqual(cover_crop_fraction(image, box), 0.0)
+                self.assertTrue(cover_fills_box(image, box))
+
+    def test_the_tolerance_can_be_tightened(self):
+        self.assertTrue(cover_fills_box((97, 100), (100, 100)))
+        self.assertFalse(cover_fills_box((97, 100), (100, 100), tolerance=0.01))
 
 
 def rom(name, console="SFC", path=None):

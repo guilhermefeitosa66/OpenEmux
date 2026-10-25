@@ -92,10 +92,13 @@ class RotatingStartupLogTests(unittest.TestCase):
         self._saved_thread_excepthook = threading.excepthook
 
     def tearDown(self):
+        self._release()
+
+    def _release(self):
         root = logging.getLogger()
         for handler in list(root.handlers):
             handler.close()
-        root.handlers = self._saved
+        root.handlers = list(self._saved)
         root.setLevel(self._saved_level)
         # configure_startup_logging installs the crash handlers; leaving them
         # behind would make every later test report through this module.
@@ -105,6 +108,16 @@ class RotatingStartupLogTests(unittest.TestCase):
         # the temp directory can go away cleanly.
         faulthandler.enable(file=sys.__stderr__, all_threads=True)
         startup_logging._release_crash_log()
+
+    @contextlib.contextmanager
+    def _runtime_dir(self):
+        # Released before the directory goes, not after in tearDown: Windows
+        # refuses to delete a file a handler still has open.
+        with TemporaryDirectory() as tmp_dir:
+            try:
+                yield tmp_dir
+            finally:
+                self._release()
 
     @staticmethod
     def _rotating_handler():
@@ -117,7 +130,7 @@ class RotatingStartupLogTests(unittest.TestCase):
     def test_a_log_file_that_cannot_be_opened_still_leaves_a_console(self):
         # A read-only runtime directory: the app starts, and everything it
         # logs still reaches the terminal.
-        with TemporaryDirectory() as tmp_dir:
+        with self._runtime_dir() as tmp_dir:
             with mock.patch.object(
                 logging.handlers,
                 "RotatingFileHandler",
@@ -135,7 +148,7 @@ class RotatingStartupLogTests(unittest.TestCase):
         # What the log panel and bug reports read (issue #461).
         from openemux.core import log_buffer
 
-        with TemporaryDirectory() as tmp_dir:
+        with self._runtime_dir() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)
             self.assertIn(log_buffer.BUFFER, logging.getLogger().handlers)
 
@@ -144,20 +157,20 @@ class RotatingStartupLogTests(unittest.TestCase):
         # must not be in it either (issue #461).
         from openemux.core import log_buffer
 
-        with TemporaryDirectory() as tmp_dir:
+        with self._runtime_dir() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)
             for handler in logging.getLogger().handlers:
                 self.assertIsInstance(handler.formatter, log_buffer.RedactingFormatter)
 
     def test_the_file_handler_rotates(self):
-        with TemporaryDirectory() as tmp_dir:
+        with self._runtime_dir() as tmp_dir:
             configure_startup_logging(runtime_dir=tmp_dir)
             handler = self._rotating_handler()
             self.assertEqual(handler.maxBytes, LOG_MAX_BYTES)
             self.assertEqual(handler.backupCount, LOG_BACKUP_COUNT)
 
     def test_total_size_stays_bounded(self):
-        with TemporaryDirectory() as tmp_dir:
+        with self._runtime_dir() as tmp_dir:
             log_path = configure_startup_logging(runtime_dir=tmp_dir)
             handler = self._rotating_handler()
             handler.maxBytes = 1024

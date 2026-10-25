@@ -1293,6 +1293,7 @@
       </div>
       <p class="cta-note">免费开源 · MIT 许可 · Linux 提供 AppImage、.deb、.rpm &amp; Flatpak ·
         Windows 提供安装程序 &amp; 便携版 ZIP · Android 提供 APK（GPLv3）</p>
+      <p class="cta-note">受 macOS 上的 <a href="https://openemu.org/">OpenEmu</a> 启发，但并非分支（fork）：这是一套独立的代码，以 RetroArch 作为模拟后端。<a href="#thanks">了解更多</a>。</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
@@ -1481,7 +1482,7 @@
     <div class="wrap center">
       <span class="eyebrow">Android</span>
       <h2>把你的货架装进口袋</h2>
-      <p class="lede">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。</p>
+      <p class="lede">Android 版 OpenEmux 把同样的游戏库带到手机上：你拥有的游戏以卡带形式摆在各个主机的货架上，可以用为每个机型绘制的屏幕手柄或游戏手柄来玩。Android 应用是独立设计的：OpenEmu 没有移动版，所以其中只有主机图标来自 OpenEmu。</p>
       <div class="gallery phones">
         <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android 版 OpenEmux 的货架" />
           <figcaption>货架</figcaption>
@@ -1534,6 +1535,11 @@
           <div class="ico">🌐</div>
           <h3>八种语言</h3>
           <p>与桌面版相同的语言，跟随手机或在设置中选择。</p>
+        </div>
+        <div class="card">
+          <div class="ico">🏆</div>
+          <h3>RetroAchievements</h3>
+          <p>在设置中登录一次，每个游戏都会在你的 RetroAchievements 个人资料上解锁成就，也可以开启硬核模式。</p>
         </div>
       </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
@@ -1645,8 +1651,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <section id="thanks">
     <div class="wrap center">
       <span class="eyebrow">致谢</span>
-      <h2>感谢 RetroArch、libretro &amp; OpenEmu</h2>
-      <p class="lede">OpenEmux 的灵感来自 macOS 上的模拟器前端 <a href="https://openemu.org/">OpenEmu</a>。OpenEmu 只能在 macOS 上运行，所以 OpenEmux 尝试在 Linux 上提供类似的体验，现在也支持 Windows。模拟本身来自 <a href="https://www.retroarch.com/">RetroArch</a> 和 <a href="https://www.libretro.com/">libretro</a> 项目，没有他们的工作，这一切都不会存在。❤️</p>
+      <h2>受 OpenEmu 启发，由 RetroArch 驱动</h2>
+      <p class="lede">OpenEmux 受 macOS 模拟器前端 <a href="https://openemu.org/">OpenEmu</a> 启发。OpenEmu 只能在 macOS 上运行，所以 OpenEmux 尝试在 Linux 上，现在也在 Windows 上，提供类似的体验。它不是 OpenEmu 的分支，也不共享任何 OpenEmu 的代码：这是一套用 Python、GTK 4 和 libadwaita 编写的独立代码，模拟本身来自 <a href="https://www.retroarch.com/">RetroArch</a> 和 <a href="https://www.libretro.com/">libretro</a> 项目。主机图标是 OpenEmu 的美术作品，<a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/src/openemux/ui/assets/icons/ATTRIBUTION.md">依照 OpenEmu 的 BSD 许可证署名</a>。Android 应用是独立设计的（手机上并没有 OpenEmu）。OpenEmux 与 OpenEmu Team 没有隶属关系，也未获其认可。没有这些项目的付出，这一切都不会存在。❤️</p>
     </div>
   </section>
 
@@ -1847,10 +1853,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       if (!wall) return;
       // Cartridge renders are 400 px wide; ratio = width / height.
       var CONSOLES = {
-        gba: { ratio: 400 / 230, games: ["bust-a-move", "castlevania-aria-of-sorrow", "castlevania-circle-of-the-moon", "castlevania-harmony-of-dissonance", "donkey-kong-country-1", "donkey-kong-country-2", "donkey-kong-country-3", "dragonball-advanced-adventure", "kirby-nightmare-in-dreamland", "kirby-the-amazing-mirror", "mario-kart-super-circuit", "megaman-bass", "megaman-zero-1", "megaman-zero-2", "megaman-zero-3", "megaman-zero-4", "metal-slug-advance", "metroid-fusion", "metroid-zero-mission", "poke-mon-1-1-fire-red-version", "poke-mon-1-2-leaf-green-version", "poke-mon-3-1-ruby-version", "poke-mon-3-2-sapphire-version", "poke-mon-3-3-emerald-version", "sonic-advance", "super-mario-advance", "super-mario-advance-2-super-mario-world", "super-mario-advance-3-yoshi-s-island", "super-mario-advance-4-super-mario-bros", "the-legend-of-zelda-the-minish-cap", "wario-land-4"] },
-        sfc: { ratio: 400 / 255, games: ["asterix", "bust-a-move", "chrono-trigger", "dolucky-no-a-league-soccer", "donkey-kong-1", "donkey-kong-2", "donkey-kong-3", "goof-troop", "mega-man-x", "mega-man-x2", "mega-man-x3", "mighty-morphin-power-rangers", "mighty-morphin-power-rangers-the-movie", "mortal-kombat-1", "mortal-kombat-2", "mortal-kombat-3", "mortal-kombat-3-ultimate", "prince-of-persia", "street-fighter-ii-turbo", "super-bomberman-1", "super-bomberman-2", "super-bomberman-3", "super-bomberman-4", "super-bomberman-5", "super-mario-all-stars", "super-mario-kart", "super-mario-world", "super-mario-world-2-yoshi-s-island", "super-metroid", "the-legend-of-zelda-a-link-to-the-past", "top-gear-1", "top-gear-2", "top-gear-3000"] },
-        n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
-        md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
+        gba: { ratio: 400 / 230, games: ["acorn-arcade", "basalt-bells", "brass-beetles", "cactus-courier", "chalk-comets", "driftwood-diaries", "fennel-fields", "glass-canyon", "gondola-gambit", "hollow-harp", "ivy-ironworks", "kite-kingdom", "lemon-lightning", "lychee-lane", "maple-mosaic", "moss-knight", "nimbus-noodles", "pixel-pantry", "plum-parade", "pocket-planetarium", "pumice-patrol", "raincoat-rangers", "ripple-runners", "saltmarsh-sprint", "sorrel-speedway", "sparrow-signal", "tangerine-tides", "teacup-tempest", "tinker-tram", "velvet-vortex"] },
+        sfc: { ratio: 400 / 255, games: ["biscuit-brigade", "cinder-bay", "clockwork-orchard", "cobalt-caravan", "copper-lighthouse", "ferris-fortress", "granite-garden", "harbor-hopscotch", "hazel-hollow", "juniper-station", "kettle-knights", "lagoon-lullaby", "lantern-keep", "mango-monsoon", "marble-meadow-rally", "meadow-mechanic", "orchard-siege", "paprika-pass", "pebble-patrol", "puddle-pilots", "rooftop-regatta", "saffron-skyway", "spindle-spire", "sundial-saga", "thimble-quest", "tundra-tailors", "turnip-tactics", "velvet-glacier", "walnut-wanderers", "willow-circuit"] },
+        n64: { ratio: 400 / 257, games: ["canyon-carousel", "glacier-grand-prix", "hover-hamlet", "lunar-laundry", "neon-harbor", "orbit-orchard", "polygon-prairie", "prism-pagoda", "skyline-sledders", "thunder-teapot", "velvet-voltage", "zephyr-zoo"] },
+        md: { ratio: 400 / 271, games: ["blast-bayou", "chrome-canyon", "granite-gale", "harbor-havoc", "iron-iguana", "magma-mailman", "nitro-nectar", "rapid-reef", "static-sunset", "tidepool-racers", "turbo-tortoise", "voltage-valley"] }
       };
       // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
       // N64 and Mega Drive sit behind them at the edges. speed is px/s at full

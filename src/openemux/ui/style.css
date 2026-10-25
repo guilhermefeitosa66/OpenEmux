@@ -105,8 +105,9 @@ flowboxchild:focus-visible {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
-/* Fills the leftover area on pages that mix consoles, where covers keep their
-   own proportions inside a uniform box. */
+/* Fills the leftover area around a cover kept at its own proportions inside
+   the card's box: on pages that mix consoles, and on a console page for a
+   cover whose shape differs from the console's box (issue #508). */
 .rom-cover-backdrop {
     background-color: alpha(@card_shade_color, 0.35);
     border-radius: 8px;
@@ -180,6 +181,31 @@ flowboxchild:focus-visible {
     border-radius: 999px;
     padding: 12px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* Where the art on the manager's Current tab came from (issue #510). The
+   text says it; the colour only backs it up, in named colours so dark and
+   high contrast follow. */
+.artwork-source-pill {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 99px;
+}
+
+.artwork-source-pill.synced {
+    background-color: alpha(@success_bg_color, 0.2);
+    color: mix(@success_color, @window_fg_color, 0.35);
+}
+
+.artwork-source-pill.manual {
+    background-color: alpha(@accent_bg_color, 0.2);
+    color: mix(@accent_color, @window_fg_color, 0.35);
+}
+
+.artwork-source-pill.local,
+.artwork-source-pill.missing {
+    background-color: alpha(currentColor, 0.1);
 }
 
 /* Stamped on a card whose ROM has no artwork (issue #127). Muted rather than

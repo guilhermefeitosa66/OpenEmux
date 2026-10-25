@@ -389,7 +389,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   Every console is playable when the main window opens. The first boot used to block on every core
   and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
   (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
-  pending`); inside Flatpak, or with the updater off, nothing is owed.
+  pending`); inside Flatpak, or with the updater off, nothing is owed. Cores that later go
+  missing from disk are restored at start-up without re-running the first boot (RT-370).
 - **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
   `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
@@ -408,7 +409,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   while the library is already usable. When it ends, `setup.bootstrap.deferred_assets` in
   `config.yaml` reads `done`, and step 3 lists more cores than the console's curated ones
   without restarting the app — the core catalog is rescanned when the download finishes (issue
-  #442).
+  #442). When the start-up check of RT-370 restores missing cores, this download starts after it,
+  never at the same time.
 - **Check:** screenshots of steps 1 and 3; `grep deferred_assets
   ~/.local/share/openemux-devbox/home/.openemux/config.yaml` prints `done`. The rules in
   `tests/test_window.py` (`TheDeferredAssetDownloadTests`) and `tests/test_cores.py`
@@ -428,6 +430,32 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite files `tests/test_first_boot.py` (`TheDeferredDownloadTests`),
   `tests/test_config_bootstrap_defaults.py` (`TheDeferredAssetDebtTests`), `tests/test_window.py`
   (`test_cancel_on_the_banner_reaches_the_download`, `test_a_crashed_worker_still_ends_the_task`).
+
+### RT-370 — Cores lost after an upgrade come back on their own
+- **Area:** Startup
+- **Mode:** AUTO-UI
+- **Preconditions:** A **throwaway** `HOME` with a completed first boot, the updater on and network
+  (the devbox: `make devbox-app` once, then quit it).
+- **Steps:**
+  1. With the app closed, delete every `*_libretro.so` and `*.info` in the core download folder
+     (`~/.local/share/openemux-devbox/home/.config/retroarch/cores`) — what replacing the Windows
+     app folder with a new release does to `vendors\RetroArch-Win64\cores`.
+  2. Start the app and read the banner at the top.
+  3. Wait for it to end, then launch a "Super Nintendo" game.
+- **Expected:** The library opens at once; step 2 shows "Restoring missing cores (n/total)" with a
+  "Cancel" button, and when it ends a toast says "Restored N missing cores". The game launches.
+  `setup.bootstrap.status` in `config.yaml` still reads `completed`, no setting changed, and
+  `setup.bootstrap.deferred_assets` reads `pending`, so the remaining cores come back too (RT-317).
+  Clicking "Cancel" on that banner ends it there: the remaining-cores download does not start in
+  its place, and both are tried again at the next launch.
+  On a healthy install nothing is shown and no request reaches the buildbot. Before this, the
+  completed first boot was never re-run, and the only way out was deleting `~/.openemux`, settings
+  and all (issue #512). Inside Flatpak, or with the updater off, nothing starts.
+- **Check:** screenshots of steps 2 and 3; `grep -A3 "status: completed"
+  ~/.local/share/openemux-devbox/home/.openemux/config.yaml`; `ls
+  ~/.local/share/openemux-devbox/home/.config/retroarch/cores | grep -c _libretro` is not 0. The
+  rules in `tests/test_first_boot.py` (`MissingCuratedCoresTests`, `RepairingMissingCoresTests`)
+  and `tests/test_window.py` (`TheMissingCoreRepairTests`).
 
 ### RT-319 — The core info files are installed, so cores show their real names
 - **Area:** Startup
@@ -1388,10 +1416,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the groups the query empties are hidden, headers and all. Step 2 brings them all back. Step 3
   selects **every** game on the page and the selection bar says so — one group full is not the
   page full. Step 4 walks out of the first group and into the next one instead of stopping at its
-  last row; `Up` walks back into the previous group's last card (issue #384).
+  last row; `Up` walks back into the previous group's last card (issue #384). Walking `Down`
+  through a group taller than the window keeps the focused card on screen the whole way: the page
+  scrolls with it, never back up and never past it (issue #511).
 - **Check:** a screenshot per step; the selection bar's count equals the window subtitle's; suite
-  file `tests/test_grid_group.py`.
+  files `tests/test_grid_group.py` and `tests/test_grouped_scroll.py` (`TheAllPageTests`).
 - **Restore:** clear the selection and the search; step 4 leaves nothing behind.
+
+### RT-370 — "All" keeps every game on screen in a big library
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app with a big console: inside the devbox home, 600 empty files
+  `Game 001 (USA).nes` … `Game 600 (USA).nes` in the ROM directory's `FC` folder and 60 more in a
+  second console's folder, then a rescan, so "All" opens with two groups taller than the window.
+- **Steps:**
+  1. Open "All" and scroll slowly to the bottom with the mouse wheel or `Page Down`.
+  2. `make devbox-res RES=700x900`, scroll from the top to the bottom again, then restore the size.
+  3. Press `End` (or drag the scrollbar to the bottom), then drag it to the middle, then to the top.
+- **Expected:** at every position every cell of both groups shows a card with its title — no blank
+  cells, no blank rows; the last game of each group is reachable. With fewer columns (step 2) the
+  same holds, and still after the size comes back. A cover placeholder for a moment is fine; an
+  empty cell with no title is the bug (issue #511).
+- **Check:** screenshots at the top, middle and bottom of steps 1–3 (`make devbox-shot`); suite file
+  `tests/test_grouped_scroll.py` (`TheAllPageTests`, `TheWidgetTests`).
+- **Restore:** delete the 660 placeholder files and rescan.
 
 ### RT-304 — "Platform" is not offered where it would do nothing
 - **Area:** Views
@@ -1485,6 +1533,46 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print('RT-339 OK')"
   ```
   The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
+
+### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
+- **Area:** View modes & layout
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A Game Boy game kept as `Tetris (World).zip` (holding `Tetris (World).gb`)
+  under `<roms>/GB/`, a ScreenScraper account in "Settings" ▸ "Library", and a game ScreenScraper
+  has a cartridge label for.
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Open the console in the cartridge view.
+- **Expected:** The ScreenScraper lookup identifies the game by the `.gb` file inside the archive
+  (its CRC, MD5, size and file name with the extension), not by the archive's own bytes, which
+  match no game: the cartridge shows its label. A Game Boy game ScreenScraper files under Game Boy
+  Color (or the other way round) is found on one more try under the other system; no other console
+  retries. Before issue #506 zipped Game Boy and Game Boy Color libraries never got a label.
+- **Check:** `tests/test_screenscraper.py` (`AZippedRomIsLookedUpByTheRomInsideTests`,
+  `SiblingRetryTests`), `tests/test_hasher.py` (`RomIdentityTests`), `tests/test_archives.py`
+  (`WhichEntryIdentifiesTheRomTests`) and `tests/test_cover_sync.py`
+  (`test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside`).
+
+### RT-362 — A ScreenScraper refusal during an artwork sync is reported, not counted as a miss
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app, with the ScreenScraper HTTP layer stubbed to answer `403`
+  (never live credentials).
+- **Steps:**
+  1. Run "Sync Covers" for the Game Boy console.
+  2. Wait for the sync to end.
+  3. Click "Settings" on the second toast.
+- **Expected:** The usual "Cover sync done" toast, then "ScreenScraper refused the request.
+  Some artwork was not fetched. Check your ScreenScraper account." with a "Settings" button
+  that opens Settings on the "Library" page, where the ScreenScraper account is. A daily-quota
+  answer (`430`) says "ScreenScraper daily quota reached…" and a connection error says
+  "ScreenScraper could not be reached…". A sync where ScreenScraper only answered or said "not
+  found" shows no second toast, and neither does a cancelled sync.
+- **Check:** screenshot of the toast (`make devbox-shot OUT=$SCRATCH/rt362.png WIN=1`). The rules
+  are in `tests/test_screenscraper.py` (`WhatALookupReportsTests`), `tests/test_cover_sync.py`
+  (`MultiPassArtworkSyncTests`) and `tests/test_window.py`
+  (`test_a_screenscraper_problem_follows_the_tally`,
+  `test_the_problem_toast_opens_the_screenscraper_settings`).
 
 ### RT-307 — A console can be dragged into place, and stays there
 - **Area:** Views
@@ -1710,6 +1798,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** Cards show artwork, not the "missing artwork" placeholder.
 - **Check:** Screenshot; no placeholder tiles visible.
 
+### RT-360 — A cover that does not match the console's box shape is shown whole
+- **Area:** Covers
+- **Mode:** AUTO-UI
+- **Preconditions:** A console page in the "Covers" view mode with two games given a local cover
+  each, in `<roms_dir>/covers/SFC/<displayed title>.png`: one of the console's box shape (SFC,
+  560×400) and one of another shape (a portrait 400×714 box). Each image has a distinct stripe at
+  its top and its bottom. Copies only: remove both files afterwards.
+- **Steps:**
+  1. Open "Super Nintendo" and switch the view mode to "Covers".
+  2. Look at both cards, then zoom in and out through every level (Ctrl+plus / Ctrl+minus) and
+     scroll down and back.
+- **Expected:** The matching cover fills its card edge to edge. The portrait cover is shown whole,
+  both stripes visible, centred on the card's subtle backdrop, with rounded corners and a shadow
+  on the art. Card size and the grid lattice do not change, and every card keeps its own state
+  after zooming and scrolling (issue #508).
+- **Check:** `make devbox-shot` per zoom level; both stripes of each cover visible in every shot.
+
 ### RT-054 — Leaving a page stops its covers from bothering the next one
 - **Area:** Covers
 - **Mode:** MANUAL
@@ -1886,6 +1991,86 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 - **Restore:** none — the probe works entirely inside `$SCRATCH`.
+
+### RT-365 — The artwork manager opens on the current cover and says where it came from
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`). A PNG
+  copied by hand to `~/games/roms/MD/covers/Sonic the Hedgehog (USA, Europe).png` inside the
+  devbox home (`~/.local/share/openemux-devbox/home/` from the host), then
+  `make devbox-app ACTION=restart`.
+- **Steps:**
+  1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
+  2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-365.png WIN=1`).
+- **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
+  the PNG whole, titled "Local file" with a "Local" pill; the details read
+  `PNG · <width> × <height> · Found in the library folder`; the buttons are "Pick Another Match…",
+  "Replace From File…" and "Adjust…", and below a separator "Reset to Synced Cover". "Save" in the
+  footer is greyed out.
+- **Check:** The screenshot shows all of the above; the app log has no `Traceback`.
+- **Restore:** Delete the copied PNG (it lives in the throwaway devbox home).
+
+### RT-366 — Adjusting the current cover saves it as chosen by you
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-365's state (a hand-copied cover, the manager open on "Current").
+- **Steps:**
+  1. Press "Adjust…". The "Import" tab opens with the cover loaded and "Save as" on "Cover".
+  2. Press "Rotate right", then "Done".
+  3. Right-click the same game, "Manage cover…" again, and capture the window.
+- **Expected:** The card in the grid shows the rotated cover. The reopened "Current" tab says
+  "Chosen by you" with a "Manual" pill and `Saved <today's date>`.
+- **Check:** The screenshot shows it, and
+  `~/games/roms/MD/covers/.openemux-sources.json` (devbox home) holds an entry for
+  `Sonic the Hedgehog (USA, Europe)` with `"source": "manual"` and `"origin": "adjusted"`.
+- **Restore:** Delete the cover and `.openemux-sources.json` from the devbox home.
+
+### RT-367 — Reset to the synced cover replaces a chosen cover
+- **Area:** Covers & artwork
+- **Mode:** MANUAL
+- **Preconditions:** Network access; a well-known game whose cover the sync finds, with a cover
+  chosen by hand ("Choose cover image" in its context menu).
+- **Steps:**
+  1. "Manage cover…" → "Reset to Synced Cover" → "Cancel".
+  2. "Reset to Synced Cover" again → "Reset".
+  3. Repeat with the network off on another game with a chosen cover.
+- **Expected:** "Cancel" changes nothing. "Reset" turns the button into "Syncing…" until the sync
+  ends, then the section shows the synced cover, "Synced" with an "Automatic" pill, and the reset
+  row is gone. Offline, the toast "No synced artwork was found for <name>. The current one stays."
+  appears inside the artwork manager, not on the library window under it, and the chosen cover is
+  still there. The toast used to go to the main window, where the manager hid it (issue #510, QA
+  round 1).
+- **Check:** human only; suite file `tests/test_artwork_manager.py`
+  (`test_a_sync_that_found_nothing_says_the_cover_stays`, `test_a_toast_shows_on_the_manager_not_under_it`).
+
+### RT-368 — A game without art offers sync, search and import
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (no covers).
+- **Steps:**
+  1. Open "Game Boy", right-click any game and choose "Manage label…".
+  2. Capture the window.
+  3. Press "Search Labels…".
+- **Expected:** "Current" shows two sections, "Cover" and "Label", each with "No cover yet" /
+  "No label yet", a "Missing" pill, and the buttons "Sync Now", "Search Covers…" (or
+  "Search Labels…") and "Import From File…"; keyboard focus is on the Label section's "Sync Now".
+  "Search Labels…" switches to the "Label" tab with a by-name search running. On a console with
+  no cartridge frame ("Sony PlayStation") only the "Cover" section exists.
+- **Check:** The screenshots show it; the app log has no `Traceback`.
+
+### RT-369 — The artwork manager works in a narrow window
+- **Area:** Covers & artwork
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. `make devbox-res RES=520x900`.
+  2. Open "Manage cover…" on any game and maximise the manager window.
+  3. Capture it.
+- **Expected:** The tabs sit at the bottom of the window above "Cancel"/"Done", the header shows
+  the window title, the section stacks the preview above its text, and the buttons take the full
+  width. Nothing is cut off and there is no horizontal scroll.
+- **Check:** The screenshot shows it.
+- **Restore:** `make devbox-res RES=1600x1000` (or the resolution the devbox had before).
 
 ## Launch & runtime
 
@@ -2127,6 +2312,106 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   `tests/test_overlay_bar.py` (`TranslucentBarTests`), `tests/test_retroarch_launcher.py`,
   `tests/test_preferences.py`.
 - **Restore:** turn "Semi-transparent control bar" off.
+
+### RT-340 — Games start in the launch mode chosen in Settings
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working core and ROM; "Settings" → "Video" → "Game Window" → "Start games in
+  fullscreen" off (the default).
+- **Steps:**
+  1. Open "Settings" → "Video": the "Game Window" group sits above "In-Game Bar". Launch a game, then
+     quit it.
+  2. Turn "Start games in fullscreen" on, close "Settings" and launch a game.
+  3. In that game, hide the bar with its down-chevron and show it again with the faded button; press
+     the fullscreen hotkey (`F` by default) twice.
+  4. Turn the switch off while the game is still running, quit the game and launch it again.
+- **Expected:** With the switch off the game opens in a decorated window. With it on, the game window
+  covers the whole screen with no decorations (windowed fullscreen, issue #505); the bar still hides,
+  shows and responds to clicks; the hotkey drops the game to a window and back. Changing the switch
+  does not affect the running game, only the next launch, which opens windowed again. Nothing is
+  written back to the user's `retroarch.cfg`.
+- **Check:** human only; `grep -E "^video_(windowed_)?fullscreen" "$(ls -t
+  ~/.openemux/runtime/runtime_*.cfg | head -1)"` shows `video_fullscreen = "true"` with the switch on
+  and `"false"` with it off, and `video_windowed_fullscreen = "true"` in both. Suite files
+  `tests/test_retroarch_launcher.py`, `tests/test_preferences.py`, `tests/test_config_accessors.py`.
+- **Restore:** turn "Start games in fullscreen" off.
+
+### RT-343 — The bezel setting lists only the 4:3 consoles and is remembered
+- **Area:** Settings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Open "Settings" → "Video" and find the "Bezels" group, between "In-Game Bar" and "Shaders".
+  2. Look at which consoles it lists, then set "MD — Sega Genesis / Mega Drive" to "Simple".
+  3. Close and reopen "Settings".
+- **Expected:** Every row reads "None" on a fresh config. There are rows for the home consoles (FC,
+  SFC, MD, PS, N64, ...) and none for GB, GBC, GBA, GG, NDS, PSP, NGP, WS, VB, LYNX or VECTREX
+  (issue #507). MD still reads "Simple" after reopening.
+- **Check:** suite files `tests/test_preferences.py` (`BezelRowsTests`),
+  `tests/test_config_accessors.py`, `tests/test_bezels.py`; `config.yaml` holds
+  `bezels: console_overrides: {MD: simple}`.
+- **Restore:** set MD back to "None".
+
+### RT-344 — The simple bezel frames a 4:3 game and follows the bar
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** A working MD core and ROM; "Settings" → "Video" → "Bezels" → MD set to
+  "Simple"; the game window 16:9 (its default shape).
+- **Steps:**
+  1. Launch the MD game.
+  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+     bottom-right corner.
+  3. Click every button on the bar: pause, reset, slow motion, fast-forward, turbo, save, load,
+     mute, volume, fullscreen, menu, close.
+- **Expected:** The black bars beside the game show a dark frame with a thin rim hugging the game,
+  and the bar sits along the bottom edge as usual (RT-327). Hidden, the game grows to the full
+  height and the frame grows with it, still hugging it. Every bar button does what it does without
+  a bezel (RT-328). Resized to 4:3, the window shows no frame at all.
+- **Check:** human only; the launch log has `bezel: console=MD mode=simple image=simple.png
+  margin=True`, and `~/.openemux/runtime/overlay/openemux-bar-bezel.cfg` has
+  `overlay0_desc0_overlay = bezel.png` and `overlay0_desc0_reach_x = 0` (the frame has no
+  hitbox, so the game keeps the mouse and a lightgun). Suite files `tests/test_overlay_bar.py`
+  (`BezelOverlayTests`), `tests/test_retroarch_launcher.py`.
+- **Restore:** set MD back to "None".
+
+### RT-345 — A custom bezel image is copied in and used; a bad file is refused
+- **Area:** Settings
+- **Mode:** MANUAL
+- **Preconditions:** A 1920×1080 PNG and a JPEG renamed to `.png`, both in a throwaway folder.
+- **Steps:**
+  1. "Settings" → "Video" → "Bezels": set "PS — Sony PlayStation" to "Custom image…" and pick the
+     PNG.
+  2. Set "SFC — Super Nintendo (SNES)" to "Custom image…" and pick the renamed JPEG.
+  3. Set "FC — Nintendo (NES) / Famicom" to "Custom image…" and cancel the picker.
+  4. Launch a PS game.
+- **Expected:** PS shows the picked file's name under its title and a "Choose another image"
+  button. SFC shows the toast "That file is not a PNG image" and goes back to "None". FC goes back
+  to what it was. The PS game is framed by the picked image. Deleting
+  `~/.openemux/bezels/PS.png` and launching again starts the game with no bezel and a warning in the
+  log, never a failed launch. A PNG larger than 3840×2160 is refused with the toast "That image
+  could not be read", and so is a 1920×1080 PNG cut short (the first third of its bytes) — on
+  Ubuntu 24.04's GdkPixbuf 2.42 too. The stored copy is scaled down to fit 960×540 (RetroArch holds it once per
+  page of the bar), keeping its shape; the picked original is left untouched.
+- **Check:** `ls ~/.openemux/bezels/PS.png`; `file ~/.openemux/bezels/PS.png` reports
+  `960 x 540`; suite files `tests/test_preferences.py`
+  (`BezelRowsTests`), `tests/test_bezels.py`, `tests/test_config_accessors.py`.
+- **Restore:** set PS back to "None" and delete `~/.openemux/bezels/PS.png`.
+
+### RT-346 — A bezel with the semi-transparent bar and with a shader
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** MD set to "Simple" in "Bezels" and to a shader (e.g. `zfast-crt`) in
+  "Shaders".
+- **Steps:**
+  1. Launch an MD game; then turn "Semi-transparent control bar" on and launch it again.
+- **Expected:** With the shader, the CRT effect is drawn inside the frame's hole only and the frame
+  hugs the game. With the semi-transparent bar, the game fills the whole height, the frame covers
+  the full window beside it, slightly dimmer (the bar's overlay opacity applies to it too), and the
+  bar's buttons all still respond.
+- **Check:** human only; with the switch on the launch log has `bezel: console=MD mode=simple
+  image=simple.png margin=False`. Suite files `tests/test_overlay_bar.py` (`BezelOverlayTests`),
+  `tests/test_retroarch_launcher.py`.
+- **Restore:** turn "Semi-transparent control bar" off; set MD's bezel and shader back.
 
 ### RT-083 — Double-clicking a game launches it once
 - **Area:** Launch
@@ -3556,6 +3841,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the launch log gained no `Traceback` and no cover-sync or scan task line.
 
 
+### RT-371 — "Verify cores" downloads only what is missing
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App running in the devbox, first boot completed, network on.
+- **Steps:**
+  1. Open "Settings" (`Ctrl+,`) → "System" and read the last row of "Initial Setup".
+  2. Activate "Verify cores".
+  3. Keep the app open, delete `snes9x_libretro.so` and `mgba_libretro.so` from
+     `~/.local/share/openemux-devbox/home/.config/retroarch/cores`, then activate "Verify cores"
+     again and watch the row and the banner.
+- **Expected:** Step 1 shows "Verify cores" with "Check that every console has its core and
+  download the missing ones". Step 2 toasts "All cores are installed" and downloads nothing. In
+  step 3 the row reads "Checking cores…" with a spinner and cannot be activated, the banner shows
+  "Downloading missing cores", and a toast says "Downloaded 2 missing cores"; both files are back
+  and the row returns to normal. Offline, the toast is "Could not download N cores: <reason>";
+  while the background download of the remaining cores runs, it is "Cores are already being
+  downloaded"; with the updater off, "Core downloads are turned off". The row is hidden in the
+  Flatpak, whose cores belong to the RetroArch Flatpak (issue #512).
+- **Check:** screenshots of steps 1 and 3; `ls
+  ~/.local/share/openemux-devbox/home/.config/retroarch/cores | grep -E "snes9x|mgba"` lists both
+  files. The rules in `tests/test_preferences.py` (`TheSystemPageTests`) and
+  `tests/test_window.py` (`TheMissingCoreRepairTests.test_what_each_outcome_says`).
+
+
 ## Internationalization
 
 ### RT-110 — Switching locale translates the UI
@@ -3770,6 +4079,25 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
   Unit-level: `tests/test_privacy.py`, `tests/test_startup_logging.py`
   (`test_every_handler_writes_the_home_as_a_tilde`), `tests/test_sysinfo.py`.
+
+### RT-340 — "About OpenEmux" states the relationship with OpenEmu and credits its icons
+- **Area:** Help
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, language English.
+- **Steps:**
+  1. Open "Main Menu" → "About OpenEmux", then "Details".
+  2. Go back and open "Acknowledgements".
+  3. Go back and open "Legal".
+  4. Switch the app to "Português (Brasil)" and repeat steps 1 to 3.
+- **Expected:** Step 1 shows the description "A native emulator frontend for Linux and Windows,
+  inspired by OpenEmu for macOS. It is a separate codebase, not a fork, and uses RetroArch for
+  emulation." Step 2 lists "Inspired by" → OpenEmu and "Emulation by" → RetroArch, libretro, each
+  name a link. Step 3 shows the OpenEmux MIT entry first, then "Console icons" with
+  "© 2009-2023 OpenEmu Team" and the BSD 3-Clause license. Step 4 shows the description and the
+  three section titles translated, with the project names left as they are (issue #504).
+- **Check:** Screenshot of each page, in both languages.
+  Unit-level: `tests/test_window.py` (`test_the_about_dialog_credits_openemu_and_retroarch`).
+- **Restore:** Close the dialog and switch the language back to English.
 
 ## Destructive file operations
 
@@ -4393,8 +4721,10 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   1. Run the build from a clean staging tree.
 - **Expected:** Both artifacts appear in `dist/`: a portable zip and an installer .exe. The
   build's own phase-5 checks pass, which is where a missing typelib or uncompiled schema is
-  caught.
-- **Check:** `make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
+  caught -- and a launcher that no longer exports `OPENEMUX_LAUNCHER`, without which a pinned
+  taskbar button points at a bare `pythonw.exe` (RT-363). The runtime inside them comes from the
+  UCRT64 lock: `packages.lock` names the `mingw/ucrt64` repository.
+- **Check:** `grep -q '"repository": "https://repo.msys2.org/mingw/ucrt64"' packaging/windows/packages.lock && make vendor-retroarch && make windows-clean && make windows && ls dist/OpenEmux-*-windows-x86_64.zip dist/OpenEmux-*-setup.exe`
 
 ### RT-195 — The bundle carries no path from the machine that built it
 - **Area:** Packaging (Windows)
@@ -4402,9 +4732,24 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
 - **Preconditions:** RT-194 has run, so `build/win/OpenEmux` exists.
 - **Steps:**
   1. Search the staged bundle for the build container's MSYS2 prefix.
-- **Expected:** No match outside `vendors/`. A baked-in `C:\msys64` path is a file that resolves
-  on a developer's machine and nowhere else -- how the OpenSSL CA bundle broke.
-- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux`
+- **Expected:** No match outside `vendors/`, and no `ucrt64/` or `mingw64/` directory left at
+  the bundle root. A baked-in `C:\msys64` path -- `C:\msys64\ucrt64` included, the prefix the
+  UCRT64 packages are built for -- is a file that resolves on a developer's machine and nowhere
+  else: how the OpenSSL CA bundle broke.
+- **Check:** `! grep -rIl --exclude-dir=vendors -e 'C:/msys64' -e 'C:\msys64' build/win/OpenEmux && test ! -e build/win/OpenEmux/ucrt64 && test ! -e build/win/OpenEmux/mingw64`
+
+### RT-375 — CI, the Windows bundle and the dev setup install one MSYS2 package set
+- **Area:** Packaging (Windows)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** A checkout of the branch under test.
+- **Steps:**
+  1. Run the workflow and package-set tests.
+- **Expected:** The **Unit tests (Windows / MSYS2)** job runs under UCRT64 and installs every
+  bundle root from `packaging/windows/msys2_packages.py`, with no `continue-on-error`;
+  `make install-sys-deps-windows`, `setup-dev.ps1` and `dev-shell.cmd` use the same environment
+  and hold every root; the lock names only `mingw-w64-ucrt-x86_64-` packages; and nothing in the
+  build, CI or setup scripts still points at MINGW64, which no longer ships GTK 4 or libadwaita.
+- **Check:** `PYTHONPATH=src .venv/bin/python -m unittest tests.test_ci_workflows tests.test_msys2_packages tests.test_windows_bundle_prune`
 
 ### RT-196 — No libretro core ships inside the installer
 - **Area:** Packaging (Windows)
@@ -4653,6 +4998,45 @@ Windows paths. Anything needing a real Windows desktop is `MANUAL`.
   delete permanently without saying so.
 - **Check:** human only.
 
+### RT-363 — OpenEmux owns its taskbar button on Windows
+- **Area:** Windows platform
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine with the artifacts of `make windows` (the portable zip
+  and the installer), and some other Python or MSYS2 GTK program available to run alongside.
+- **Steps:**
+  1. Unzip `OpenEmux-<ver>-windows-x86_64.zip` and double-click `OpenEmux.exe`. Look at the
+     taskbar button, the title bar and Alt-Tab, on the first-boot progress window and on the
+     library window.
+  2. With OpenEmux running, start another `pythonw` program or MSYS2 GTK app.
+  3. Right-click the running OpenEmux taskbar button, choose "Pin to taskbar", close the app and
+     click the pinned button.
+  4. Install with `OpenEmux-<ver>-setup.exe`, start OpenEmux from the Start Menu, pin the Start Menu
+     entry to the taskbar, close the app and start it from that pin.
+- **Expected:** Steps 1–3: the taskbar button, the title bar and Alt-Tab show the OpenEmux logo,
+  the same one Explorer shows on `OpenEmux.exe`, never Python's; OpenEmux keeps a taskbar button of
+  its own, not grouped with the other program; the pinned button shows the logo, is labelled
+  "OpenEmux", starts the app normally (the library loads) and the running window lands on it rather
+  than on a second button. Step 4: one taskbar button for the pin and the running window, with the
+  OpenEmux icon throughout. The RetroArch game window is its own process and keeps its own button.
+- **Check:** human only.
+
+### RT-364 — The Windows shell identity is wired, and stays off everywhere else
+- **Area:** Windows platform
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The packaged process declares the AppUserModelID `APP_ID` before GTK is imported;
+  every toplevel window, once mapped, gets the icons out of `OpenEmux.exe` and the four
+  `PKEY_AppUserModel_*` keys (id, relaunch command, display name, icon), which are cleared again on
+  unrealize; any failing shell call is a logged warning, never a failed start. Off the packaged
+  Windows bundle -- Linux, or a Windows source run with no `OPENEMUX_LAUNCHER` -- nothing reaches
+  the shell. The launcher exports its own path, and the installer writes the same id on its Start
+  Menu shortcut. The "Unit tests (Windows / MSYS2)" job *runs* (does not skip) the round trips
+  through the real shell, which are what prove the COM layout.
+- **Check:** suite files `tests/test_win32_shell.py`, `tests/test_windows_shell_identity.py`,
+  `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
+
 ## ARM (aarch64)
 
 Scenarios for the aarch64 Linux builds (issue #119). The `AUTO-SUITE`/`AUTO-PROBE` ones run
@@ -4788,6 +5172,159 @@ desk. Anything needing a real ARM machine is `MANUAL`.
   have an aarch64 leg pushing into it -- which is why this scenario exists rather than being
   assumed.
 - **Check:** human only.
+
+
+## Android — RetroAchievements
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) signing in to RetroAchievements and handing the account to the engine
+(#515). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone or a
+headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. Scenarios that need a
+real RetroAchievements account say so; without one they are handed to the maintainer.
+`$PKG` is `com.openemux.mobile`.
+
+### RT-350 — Settings has a RetroAchievements row that opens the sign-in screen
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, not signed in.
+- **Steps:**
+  1. Open the "Settings" tab.
+  2. Under "Achievements", tap "RetroAchievements".
+  3. Repeat in the light theme and with the phone in landscape.
+- **Expected:** The row reads "RetroAchievements" with "Not signed in" under it and a trophy icon.
+  The screen shows "Username", "Password" (masked, with an eye button), "Sign in" and the
+  "Create one at retroachievements.org" link. Nothing is clipped; in landscape the screen scrolls.
+- **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
+
+### RT-351 — A valid sign-in survives an app restart
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** RT-350's screen; a real RetroAchievements account.
+- **Steps:**
+  1. Enter the account's username and password and tap "Sign in".
+  2. `adb shell am force-stop $PKG`, then open the app and go back to the screen.
+- **Expected:** "Signed in as <user>" with "Sign out", "Track achievements" on and "Hardcore mode"
+  off, before and after the restart. The Settings row reads "Signed in as <user>".
+- **Check:** human only.
+
+### RT-352 — A wrong password shows the service's error and leaks nowhere
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Not signed in; network on.
+- **Steps:**
+  1. Enter any username and a made-up password (e.g. `Wr0ngPass515`) and tap "Sign in".
+  2. Launch any game, then quit it.
+- **Expected:** A red box with RetroAchievements' own message (e.g. "Invalid user/password
+  combination. Please try again."), both fields outlined in red, the password field emptied, still
+  signed out. The password is in no log and no file.
+- **Check:**
+  ```bash
+  adb logcat -d | grep -c 'Wr0ngPass515'                                 # 0
+  adb shell run-as $PKG grep -rl 'Wr0ngPass515' . ; echo "exit=$?"       # no file listed
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep cheevos_password
+  # cheevos_password = ""
+  ```
+
+### RT-353 — With tracking on, the engine signs in and unlocks reach the profile
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in (RT-351), "Track achievements" on, a game that has an achievement
+  set (e.g. a GBA title).
+- **Steps:**
+  1. Launch the game.
+  2. Unlock an achievement.
+- **Expected:** RetroArch's RetroAchievements login / game summary notification appears at the
+  top centre at launch; the unlock toast appears, and the unlock is listed on the user's profile at
+  retroachievements.org.
+- **Check:** human only. `adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep cheevos_`
+  shows `cheevos_enable = "true"`, the username, a token and `cheevos_password = ""`.
+
+### RT-354 — Tracking off or signed out launches with no account
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in.
+- **Steps:**
+  1. Turn "Track achievements" off and launch a game; quit it.
+  2. Turn it back on, tap "Sign out", launch a game; quit it.
+- **Expected:** No RetroAchievements notification in either game. After step 1 the Settings row
+  reads "Signed in as <user> · tracking off". After step 2 the sign-in form comes back with the
+  username already filled in.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep -E 'cheevos_(enable|username|token)'
+  # cheevos_enable = "false", cheevos_username = "", cheevos_token = ""
+  adb shell run-as $PKG cat shared_prefs/cheevos.xml | grep -c token    # 0 after "Sign out"
+  ```
+  Right after "Sign out" (before the next launch) `files/launch/current/retroarch.cfg` does not
+  exist.
+- **Restore:** sign in again if the following scenarios need the account.
+
+### RT-355 — Hardcore mode is off by default and, on, blocks loading in the app too
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** Signed in, tracking on, a game with save states (including an auto state).
+- **Steps:**
+  1. Check "Hardcore mode" is off; turn it on.
+  2. Open the game's page.
+  3. Tap a save state thumbnail.
+  4. Tap "Play"; in game, open the pause sheet.
+  5. Turn "Hardcore mode" off again and reopen the game page.
+- **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
+  hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
+  notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load",
+  the "Save states" row and "Fast forward" are faded and do nothing (also with a gamepad), "Save
+  state" still works; the skin's load button is refused by RetroArch, and its fast-forward button
+  is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
+  it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
+- **Check:** human only. With hardcore on, `retroarch.cfg` has
+  `cheevos_hardcore_mode_enable = "true"`, `savestate_auto_load = "false"`,
+  `input_toggle_fast_forward = "nul"` and `input_hold_fast_forward = "nul"`, and
+  `skin/skin.cfg` has no `toggle_fast_forward` descriptor
+  (`grep -c toggle_fast_forward skin/skin.cfg` prints `0`; with hardcore off it does not).
+- **Restore:** hardcore off (step 5).
+
+### RT-356 — Achievement notifications stay clear of the on-screen controls
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** RT-353's setup.
+- **Steps:**
+  1. Launch the game in portrait, then again in landscape, on a GBA and a SNES skin.
+- **Expected:** The login / game summary notification sits at the top centre, over the picture and
+  under no skin button, in both orientations.
+- **Check:** human only (a screenshot per orientation).
+
+### RT-357 — The RetroAchievements strings are translated in every app language
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** none.
+- **Steps:**
+  1. For each language in "Settings" ▸ "Language", open the RetroAchievements screen, signed out
+     and signed in, and a game's pause sheet with hardcore on.
+- **Expected:** Every new text is in that language; only the name "RetroAchievements" and the
+  site address stay as they are.
+- **Check:** in `pkg/android/openemux/src/main/res`, every `ra_*`, `game_hardcore_*`,
+  `detail_hardcore_no_load` and `settings_section_achievements` key in `values/` exists in each
+  `values-*/` folder:
+  ```bash
+  for d in values-*; do for k in $(grep -ho 'name="\(ra_\|game_hardcore_\|detail_hardcore_\|settings_section_achievements\)[a-z_]*"' values/*.xml | grep -v ra_title); do
+    grep -q "$k" $d/*.xml || echo "$d missing $k"; done; done   # prints nothing
+  ```
+
+### RT-358 — The token is kept out of Android backup and device transfer
+- **Area:** Android — RetroAchievements
+- **Mode:** MANUAL
+- **Preconditions:** A built APK.
+- **Steps:**
+  1. Inspect the APK's manifest and the two rule files.
+- **Expected:** `<application>` names `fullBackupContent` and `dataExtractionRules`; both exclude
+  `sharedpref/cheevos.xml` and the `launch` directory, the latter for `cloud-backup` and
+  `device-transfer`.
+- **Check:**
+  ```bash
+  aapt dump xmltree OpenEmuxMobile-debug.apk AndroidManifest.xml | grep -E 'fullBackupContent|dataExtractionRules'
+  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/data_extraction_rules.xml | grep -cE '"(cheevos\.xml|launch)"'   # 4
+  aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/backup_rules.xml | grep -cE '"(cheevos\.xml|launch)"'            # 2
+  ```
 
 
 ## Developer tooling & docs
@@ -5149,6 +5686,194 @@ or into an environment that cannot run the tests.
   assert "OpenEmux-<version>-x86_64.AppImage" in home, "the checksum example is not version-neutral"
   print("RT-291 OK")
   EOF
+  ```
+
+
+### RT-341 — The site states the relationship with OpenEmu in every language
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the line under
+  the download buttons, the credits section and the Android section.
+- **Expected:** Under the download buttons, one line says OpenEmux is inspired by OpenEmu for
+  macOS but is not a fork, with RetroArch as the backend, and links to the credits. The credits say
+  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, and say
+  it is not affiliated with the OpenEmu Team. The Android section says the app is its own design
+  (issue #504).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      hero = html.split('id="promo"')[0]
+      assert 'href="https://openemu.org/"' in hero and 'href="#thanks"' in hero, page
+      thanks = re.search(r'<section id="thanks">(.*?)</section>', html, re.S).group(1)
+      assert 'href="https://openemu.org/"' in thanks, page
+      assert "ATTRIBUTION.md" in thanks, page
+  print("RT-341 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
+
+### RT-342 — The README states the relationship with OpenEmu
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the README on GitHub and read the "About" section.
+- **Expected:** An "OpenEmux and OpenEmu" block says the desktop app is inspired by OpenEmu, is not
+  a fork and uses no OpenEmu code, runs on RetroArch/libretro, that the Android app is independent
+  and that the console icons are OpenEmu's artwork. An "Artwork credits" line links to
+  `ATTRIBUTION.md`, and the link resolves (issue #504).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  from pathlib import Path
+  readme = Path("README.md").read_text(encoding="utf-8")
+  assert "### OpenEmux and OpenEmu" in readme
+  assert "not a fork" in readme
+  assert "(src/openemux/ui/assets/icons/ATTRIBUTION.md)" in readme
+  assert Path("src/openemux/ui/assets/icons/ATTRIBUTION.md").exists()
+  print("RT-342 OK")
+  EOF
+  ```
+
+### RT-370 — `make test` on a desktop runs on a private display
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the `Makefile` and probes `scripts/run_tests.py`).
+- **Steps:** As a QA person: on a Linux desktop session with Xvfb installed, run `make test` and
+  keep working in another window while it runs.
+- **Expected:** No OpenEmux window appears and nothing steals focus, yet the widget tests run
+  rather than skip. `make test` and `make coverage` go through `scripts/run_tests.py`, which
+  replaces itself with `xvfb-run -a <the suite>` (on a throwaway `dbus-run-session` bus when that
+  is installed) and gives it an environment with
+  `WAYLAND_DISPLAY` unset, `GDK_BACKEND=x11`, the portals off (`GDK_DEBUG=no-portals`,
+  `GTK_USE_PORTAL=0`) and `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (issue #528).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util, re
+  from pathlib import Path
+
+  mk = Path("Makefile").read_text()
+  test = re.search(r"^test:\n((?:\t.*\n)+)", mk, re.M).group(1)
+  cov = re.search(r"^coverage:\n((?:\t.*\n)+)", mk, re.M).group(1)
+  assert "scripts/run_tests.py $(PYTHON) -m unittest discover" in test
+  assert "scripts/run_tests.py $(PYTHON) -m coverage run" in cov
+
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  desk = {"WAYLAND_DISPLAY": "wayland-0", "XDG_SESSION_TYPE": "wayland"}
+  assert rt.decide(desk, "linux", lambda n: "/usr/bin/" + n) == "xvfb"
+  env = rt.headless_env(desk)
+  assert "WAYLAND_DISPLAY" not in env and env["GDK_BACKEND"] == "x11"
+  assert env["OPENEMUX_TESTS_PRIVATE_DISPLAY"] == "1"
+  assert "no-portals" in env["GDK_DEBUG"] and env["GTK_USE_PORTAL"] == "0"
+  calls = []
+  rt.main(["python", "-m", "unittest"], env=desk, platform="linux",
+          which=lambda n: "/usr/bin/" + n, execvpe=lambda *a: calls.append(a) or 0)
+  assert calls[0][1] == ["dbus-run-session", "--", "xvfb-run", "-a", "python", "-m", "unittest"]
+  print("RT-370 OK")
+  EOF
+  ```
+
+### RT-371 — A bare unittest run on a desktop skips the widget tests instead of drawing
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** the GTK stack is installed (`make install-sys-deps`).
+- **Steps:** As a QA person: on a desktop session, run
+  `PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs`.
+- **Expected:** No window opens. The tests that build widgets are reported as skipped with
+  "would draw on your desktop: run `make test` (private Xvfb display) or set
+  OPENEMUX_TESTS_ON_DESKTOP=1", a one-line note on stderr says the same once at the start, and the
+  run exits 0 (issue #528).
+- **Check:**
+  ```bash
+  env -u OPENEMUX_TESTS_PRIVATE_DISPLAY -u OPENEMUX_TESTS_ON_DESKTOP XDG_SESSION_TYPE=x11 \
+    PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs > /tmp/rt371.log 2>&1
+  echo "exit=$?"                                                   # expect exit=0
+  grep -c "would draw on your desktop" /tmp/rt371.log              # expect > 0
+  grep -c "this run is on your desktop session" /tmp/rt371.log     # expect 1
+  ```
+
+### RT-372 — `OPENEMUX_TESTS_ON_DESKTOP=1` brings the old behavior back
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a desktop session, run
+  `OPENEMUX_TESTS_ON_DESKTOP=1 PYTHONPATH=src .venv/bin/python -m unittest tests.test_file_dialogs`.
+- **Expected:** The widget tests run on the screen you are sitting at, as they did before
+  issue #528, and the launcher passes the command through untouched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util
+  from tests.gtk_display import on_developer_desktop
+
+  desk = {"WAYLAND_DISPLAY": "wayland-0", "XDG_SESSION_TYPE": "wayland"}
+  assert on_developer_desktop(desk, "linux")
+  assert not on_developer_desktop(dict(desk, OPENEMUX_TESTS_ON_DESKTOP="1"), "linux")
+  assert not on_developer_desktop({}, "linux"), "a CI-like environment must not be refused"
+  assert not on_developer_desktop({"WAYLAND_DISPLAY": "w"}, "win32")
+
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  assert rt.decide(dict(desk, OPENEMUX_TESTS_ON_DESKTOP="1"), "linux", lambda n: n) == "direct"
+  print("RT-372 OK")
+  EOF
+  ```
+
+### RT-373 — Without Xvfb the run says what is missing
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a desktop with no `xvfb-run` on `PATH`, run `make test`.
+- **Expected:** One message, before the suite starts, says Xvfb was not found, that the widget tests
+  will be skipped so nothing opens on the desktop, and how to install it on Debian/Ubuntu
+  (`make install-sys-deps`), Fedora (`xorg-x11-server-Xvfb`) and Arch (`xorg-server-xvfb`). The
+  suite then runs with the widget tests skipped and its exit code is the suite's. `make
+  install-sys-deps` lists `xvfb` (issue #528).
+- **Check:**
+  ```bash
+  grep -A4 "^install-sys-deps:" Makefile | grep -w xvfb       # expect a match
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util, io
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  err = io.StringIO()
+  code = rt.main(["python", "-m", "unittest"], env={"XDG_SESSION_TYPE": "x11"},
+                 platform="linux", which=lambda n: None, call=lambda a, env: 7, stderr=err)
+  text = err.getvalue()
+  assert code == 7 and text.count("Xvfb not found") == 1
+  for hint in ("make install-sys-deps", "xorg-x11-server-Xvfb", "xorg-server-xvfb"):
+      assert hint in text, hint
+  print("RT-373 OK")
+  EOF
+  ```
+
+### RT-374 — The devbox run still executes every widget test
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** the devbox exists (`make devbox-up`) for the second half of the check.
+- **Steps:** As a QA person: run `make devbox-tests CMD=tests.test_file_dialogs`.
+- **Expected:** The widget tests run on the container's own Xvnc (`:77`) and none is skipped as
+  "would draw on your desktop": the host driver `devbox/devbox.sh` runs `devbox-tests` with
+  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (only that command: a bare `exec` keeps the host's
+  `DISPLAY`), and `devbox/bin/devbox-tests` exports it too, because
+  distrobox forwards the host's `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` into the box (issue #528).
+  The driver matters because the tools inside come from the checkout the container was created
+  from, not from the one being tested.
+- **Check:**
+  ```bash
+  grep -n "export OPENEMUX_TESTS_PRIVATE_DISPLAY=1" devbox/bin/devbox-tests   # expect a match
+  grep -n 'inside env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 devbox-tests' devbox/devbox.sh  # expect a match
+  make devbox-tests CMD="-v tests.test_file_dialogs" 2>&1 | grep -c "would draw on your desktop"
+  # expect 0
   ```
 
 

@@ -21,7 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
-from tests.window_harness import REAL_STARTUP_SCAN, WindowCase
+from tests.window_harness import REAL_CORE_REPAIR, REAL_STARTUP_SCAN, WindowCase
 
 if HAVE_DISPLAY:
     import gi
@@ -32,6 +32,7 @@ if HAVE_DISPLAY:
 
     Adw.init()
 
+    from openemux.core import artwork_sources
     from openemux.core.rom_actions import RomActionError
     from openemux.core.scraper import COVER_ART, LABEL_ART
     from openemux.ui import window as window_module
@@ -1093,7 +1094,9 @@ class PerRomOverridesTests(WindowCase):
 
 @needs_display
 class CoverFilesTests(WindowCase):
-    def _write_cover(self, rom, kind=COVER_ART):
+    def _write_cover(self, rom, kind=None):
+        # Not a module-level default: the class body runs even when skipped.
+        kind = COVER_ART if kind is None else kind
         target = self.home.roms / rom["console"] / kind / f"{rom['name']}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"\x89PNG\r\n\x1a\n")
@@ -1121,6 +1124,19 @@ class CoverFilesTests(WindowCase):
         self._write_cover(rom, LABEL_ART)
         self.win._remove_cover_for_rom(rom, kind=LABEL_ART)
         self.assertIn(self.said("toast.label.removed", name=rom["name"]), self.toasts)
+
+    def test_removing_a_cover_forgets_where_it_came_from(self):
+        rom = self.rom()
+        target = self._write_cover(rom)
+        artwork_sources.record(
+            self.home.roms, rom["console"], COVER_ART, rom["name"], target,
+            artwork_sources.SOURCE_MANUAL,
+        )
+        self.win._remove_cover_for_rom(rom)
+        entries = artwork_sources._load(
+            artwork_sources.sources_path(self.home.roms, rom["console"], COVER_ART)
+        )
+        self.assertNotIn(rom["name"], entries)
 
     def test_removing_a_cover_that_is_not_there_says_nothing(self):
         self.win._remove_cover_for_rom(self.rom())
@@ -1164,6 +1180,8 @@ class TheCoverPickerTests(WindowCase):
             (self.home.roms / "SFC" / COVER_ART / f"{rom['name']}.png").is_file()
         )
         self.assertEqual(done, [True])
+        state = artwork_sources.describe(self.home.roms, "SFC", rom["name"], COVER_ART)
+        self.assertEqual(state.source, artwork_sources.SOURCE_MANUAL)
 
     def test_a_chosen_file_that_is_not_an_image_is_refused(self):
         rom = self.rom()
@@ -1287,7 +1305,7 @@ class OpeningFoldersTests(WindowCase):
         self.assertEqual(self.toasts, [])
 
     def test_a_desktop_with_no_uri_handler_falls_back_to_xdg_open(self):
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio.AppInfo,
             "launch_default_for_uri",
             side_effect=GLib.Error("no handler"),
@@ -1299,7 +1317,7 @@ class OpeningFoldersTests(WindowCase):
     def test_a_folder_nothing_can_open_reports_the_error(self):
         # Issue #234: the mkdir used to sit outside the try, so this raised
         # past the toast and the button simply did nothing.
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio.AppInfo,
             "launch_default_for_uri",
             side_effect=GLib.Error("no handler"),
@@ -1354,7 +1372,7 @@ class OpeningFoldersTests(WindowCase):
     def test_revealing_a_rom_asks_the_file_manager_to_select_it(self):
         rom = self.rom()
         connection = mock.Mock()
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio, "bus_get_sync", return_value=connection
         ):
             self.win._reveal_rom_in_files(rom)
@@ -1362,7 +1380,7 @@ class OpeningFoldersTests(WindowCase):
 
     def test_a_desktop_with_no_file_manager_service_opens_the_folder(self):
         rom = self.rom()
-        with mock.patch.object(
+        with mock.patch.object(window_module, "IS_WINDOWS", False), mock.patch.object(
             window_module.Gio, "bus_get_sync", side_effect=GLib.Error("no bus")
         ), mock.patch.object(self.win, "_open_path_in_file_manager") as open_path:
             self.win._reveal_rom_in_files(rom)
@@ -1648,8 +1666,35 @@ class TheArtworkSyncTests(WindowCase):
 
     def test_a_single_rom_sync_is_refused_while_another_sync_runs(self):
         self.win._cover_sync_running = True
-        self.win.sync_rom_artwork(self.rom(), COVER_ART)
+        self.assertFalse(self.win.sync_rom_artwork(self.rom(), COVER_ART))
         self.assertIn(self.said("toast.sync_running"), self.toasts)
+
+    def test_a_single_rom_sync_says_it_started(self):
+        self.assertTrue(self.win.sync_rom_artwork(self.rom(), COVER_ART))
+
+    def test_a_single_rom_sync_runs_the_callers_hook_after_the_card_refresh(self):
+        # The artwork manager's reset re-reads its state there (issue #510).
+        rom = self.rom()
+        calls = []
+        with (
+            mock.patch.object(self.win, "_start_artwork_sync") as start,
+            mock.patch.object(
+                self.win, "refresh_rom_artwork", side_effect=lambda r: calls.append("refresh")
+            ),
+        ):
+            self.win.sync_rom_artwork(rom, COVER_ART, on_finished=lambda: calls.append("hook"))
+            start.call_args.kwargs["on_finished"]()
+        self.assertEqual(calls, ["refresh", "hook"])
+
+    def test_a_single_rom_sync_without_a_hook_only_refreshes_the_card(self):
+        rom = self.rom()
+        with (
+            mock.patch.object(self.win, "_start_artwork_sync") as start,
+            mock.patch.object(self.win, "refresh_rom_artwork") as refresh,
+        ):
+            self.win.sync_rom_artwork(rom, COVER_ART)
+            start.call_args.kwargs["on_finished"]()
+        refresh.assert_called_once_with(rom)
 
     def test_a_post_import_sync_covers_only_what_was_imported(self):
         rom = self.rom()
@@ -1695,6 +1740,53 @@ class TheArtworkSyncTests(WindowCase):
         summary = {"downloaded": 0, "skipped": 0, "errors": 0}
         self.win._on_cover_sync_done_ui("task", summary, on_finished=lambda: done.append(1))
         self.assertEqual(done, [1])
+
+    def test_a_screenscraper_problem_follows_the_tally(self):
+        """A refusal used to be counted as a plain miss, silently (#506)."""
+        for problem, key in (
+            ("refused", "toast.screenscraper.refused"),
+            ("quota", "toast.screenscraper.quota"),
+            ("unreachable", "toast.screenscraper.unreachable"),
+        ):
+            with self.subTest(problem=problem):
+                self.toasts.clear()
+                summary = {
+                    "downloaded": 0, "skipped": 0, "errors": 2,
+                    "screenscraper_problem": problem,
+                }
+                self.win._on_cover_sync_done_ui("task", summary)
+                self.assertEqual(
+                    self.toasts,
+                    [
+                        self.said("toast.sync_done", downloaded=0, skipped=0, errors=2),
+                        self.said(key),
+                    ],
+                )
+
+    def test_no_problem_adds_no_toast(self):
+        summary = {"downloaded": 0, "skipped": 0, "errors": 2, "screenscraper_problem": None}
+        self.win._on_cover_sync_done_ui("task", summary)
+        self.assertEqual(len(self.toasts), 1)
+
+    def test_a_cancelled_sync_keeps_quiet_about_screenscraper(self):
+        summary = {
+            "downloaded": 0, "skipped": 0, "errors": 0, "cancelled": True,
+            "screenscraper_problem": "refused",
+        }
+        self.win._on_cover_sync_done_ui("task", summary)
+        self.assertNotIn(self.said("toast.screenscraper.refused"), self.toasts)
+
+    def test_the_problem_toast_opens_the_screenscraper_settings(self):
+        toast = self.win._toast_screenscraper_problem("refused")
+        self.assertEqual(toast.get_button_label(), self.said("toast.screenscraper.open_prefs"))
+        self.assertEqual(toast.get_timeout(), 8)
+        with mock.patch.object(self.win, "_open_preferences") as open_prefs:
+            toast.emit("button-clicked")
+        open_prefs.assert_called_once_with(page="library")
+
+    def test_an_unknown_problem_shows_nothing(self):
+        self.assertIsNone(self.win._toast_screenscraper_problem("something-else"))
+        self.assertEqual(self.toasts, [])
 
 
 @needs_display
@@ -1853,6 +1945,28 @@ class TheDialogsAndMenusTests(WindowCase):
     def test_the_about_dialog_is_built_with_the_running_version(self):
         with mock.patch.object(Adw.AboutDialog, "present"):
             self.win._show_about()
+
+    def test_the_about_dialog_credits_openemu_and_retroarch(self):
+        with mock.patch.object(Adw.AboutDialog, "present") as present, \
+                mock.patch.object(Adw.AboutDialog, "set_comments") as comments, \
+                mock.patch.object(Adw.AboutDialog, "add_acknowledgement_section") as ack, \
+                mock.patch.object(Adw.AboutDialog, "add_legal_section") as legal:
+            self.win._show_about()
+        present.assert_called_once()
+        comments.assert_called_once_with(self.win.t("about.comments"))
+        self.assertEqual(
+            [call.args for call in ack.call_args_list],
+            [
+                (self.win.t("about.ack.inspired_by"), ["OpenEmu https://openemu.org/"]),
+                (self.win.t("about.ack.emulation"),
+                 ["RetroArch https://www.retroarch.com/", "libretro https://www.libretro.com/"]),
+            ],
+        )
+        legal.assert_called_once()
+        name, notice, license_type, _license = legal.call_args.args
+        self.assertEqual(name, self.win.t("about.legal.console_icons"))
+        self.assertIn("OpenEmu Team", notice)
+        self.assertEqual(license_type, Gtk.License.BSD_3)
 
     def test_the_shortcuts_window_lists_every_group(self):
         with mock.patch.object(Gtk.ShortcutsWindow, "present"):
@@ -2615,7 +2729,7 @@ class TheDeferredAssetDownloadTests(WindowCase):
             self.assertTrue(started)
             self.assertEqual(len(self.win.tasks), 1)
             self.assertTrue(
-                self.pump_until(lambda: not self.win._deferred_assets_running)
+                self.pump_until(lambda: not self.win._core_job_running)
             )
         return fake, refreshed, updates
 
@@ -2651,7 +2765,7 @@ class TheDeferredAssetDownloadTests(WindowCase):
     def test_a_crashed_worker_still_ends_the_task(self):
         with self.assertLogs("openemux.ui.window", "ERROR"):
             self._start(crash=RuntimeError("boom"))
-        self.assertFalse(self.win._deferred_assets_running)
+        self.assertFalse(self.win._core_job_running)
         self.assertEqual(len(self.win.tasks), 0)
 
     def test_nothing_owed_starts_nothing(self):
@@ -2665,14 +2779,268 @@ class TheDeferredAssetDownloadTests(WindowCase):
 
     def test_a_second_start_while_one_runs_is_refused(self):
         self.config.mark_deferred_assets_pending()
-        self.win._deferred_assets_running = True
-        self.addCleanup(setattr, self.win, "_deferred_assets_running", False)
+        self.win._core_job_running = True
+        self.addCleanup(setattr, self.win, "_core_job_running", False)
         self.assertFalse(self.win._start_deferred_asset_download())
 
     def test_a_successful_retry_from_preferences_starts_it(self):
         with mock.patch.object(self.win, "_start_deferred_asset_download") as start:
             self.win.on_bootstrap_finished({"success": True})
         start.assert_called_once_with()
+
+
+@needs_display
+class TheMissingCoreRepairTests(WindowCase):
+    """Cores lost after the first boot come back without it (issue #512)."""
+
+    def _catalog_spy(self):
+        refreshed = []
+        launcher = self.win.runtime_manager.retroarch_launcher
+        for name, catalog in (
+            ("core", self.win.core_catalog),
+            ("launcher core", launcher.core_catalog),
+        ):
+            patcher = mock.patch.object(
+                catalog, "refresh", lambda name=name: refreshed.append(name)
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return refreshed
+
+    def _run(self, summary=None, manual=False, missing=("a_libretro.so",), crash=None):
+        """Run the repair with the bootstrapper faked; return what it showed."""
+        fake = mock.Mock()
+        labels = []
+        updates = []
+        real_update = self.win.tasks.update
+
+        def _repair(on_progress=None, cancel_event=None, manual=False, on_missing=None):
+            fake.cancel_event = cancel_event
+            if missing:
+                on_missing(list(missing))
+                on_progress({"current": 1, "total": len(missing)})
+            if crash:
+                raise crash
+            return summary or {"missing": list(missing), "downloaded": len(missing)}
+
+        def _update(*args):
+            labels.append(self.win.banner.get_title())
+            updates.append(args[1:])
+            return real_update(*args)
+
+        fake.repair_missing_cores.side_effect = _repair
+        refreshed = self._catalog_spy()
+        with mock.patch.object(
+            window_module, "FirstBootBootstrapper", return_value=fake
+        ), mock.patch.object(self.win.tasks, "update", _update), mock.patch.object(
+            self.win, "_start_deferred_asset_download"
+        ) as deferred:
+            self.assertTrue(REAL_CORE_REPAIR(self.win, manual=manual))
+            self.assertTrue(self.pump_until(lambda: not self.win._core_job_running))
+        return {
+            "fake": fake,
+            "labels": labels,
+            "updates": updates,
+            "refreshed": refreshed,
+            "deferred": deferred,
+        }
+
+    def test_missing_cores_come_back_under_the_banner_at_start_up(self):
+        seen = self._run()
+        self.assertEqual(seen["labels"], [self.said("status.cores.restoring")])
+        self.assertEqual(seen["updates"], [(1, 1)])
+        self.assertEqual(len(self.win.tasks), 0)
+        self.assertEqual(sorted(seen["refreshed"]), ["core", "launcher core"])
+        self.assertEqual(self.toasts, [self.said("toast.cores.restored.one")])
+        self.assertIsNotNone(seen["fake"].cancel_event)
+        self.assertFalse(seen["fake"].repair_missing_cores.call_args.kwargs["manual"])
+        # Owed before, or owed again: the deferred sweep follows the repair.
+        seen["deferred"].assert_called_once_with()
+
+    def test_the_repair_reports_back_ahead_of_the_spinner(self):
+        # Every callback of the repair, the done handler above all, outranks
+        # the frame clock that keeps the Verify cores spinner animating; at
+        # the idle priority a manual repair never finished (issue #512, QA).
+        real_idle_add = window_module.GLib.idle_add
+        priorities = []
+
+        ours = {"_begin_task", "_update_task", "_on_core_repair_done_ui"}
+
+        def _idle_add(function, *args, **kwargs):
+            name = getattr(function, "__name__", "")
+            if name in ours:
+                priorities.append((name, kwargs.get("priority")))
+            return real_idle_add(function, *args, **kwargs)
+
+        with mock.patch.object(window_module.GLib, "idle_add", _idle_add):
+            self._run(manual=True)
+        self.assertEqual(
+            priorities,
+            [
+                ("_begin_task", GLib.PRIORITY_DEFAULT),
+                ("_update_task", GLib.PRIORITY_DEFAULT),
+                ("_on_core_repair_done_ui", GLib.PRIORITY_DEFAULT),
+            ],
+        )
+
+    def test_a_cancelled_repair_does_not_start_the_deferred_sweep(self):
+        seen = self._run(summary={"missing": ["a_libretro.so"], "cancelled": True})
+        seen["deferred"].assert_not_called()
+
+    def test_the_manual_check_names_its_own_work(self):
+        seen = self._run(manual=True, missing=("a_libretro.so", "b_libretro.so"))
+        self.assertEqual(seen["labels"], [self.said("status.cores.repairing")])
+        self.assertEqual(self.toasts, [self.said("toast.cores.verify.downloaded", count=2)])
+        self.assertTrue(seen["fake"].repair_missing_cores.call_args.kwargs["manual"])
+
+    def test_a_healthy_install_shows_nothing(self):
+        seen = self._run(summary={"missing": []}, missing=())
+        self.assertEqual(seen["labels"], [])
+        self.assertEqual(self.toasts, [])
+        self.assertEqual(seen["refreshed"], [])
+
+    def test_a_healthy_install_checked_by_hand_says_so(self):
+        self._run(summary={"missing": []}, missing=(), manual=True)
+        self.assertEqual(self.toasts, [self.said("toast.cores.verify.ok")])
+
+    def test_a_crashed_worker_still_ends_the_task(self):
+        with self.assertLogs("openemux.ui.window", "ERROR"):
+            self._run(crash=RuntimeError("boom"), manual=True)
+        self.assertFalse(self.win._core_job_running)
+        self.assertFalse(self.win._core_repair_running)
+        self.assertEqual(len(self.win.tasks), 0)
+        self.assertEqual(
+            self.toasts, [self.said("toast.cores.verify.failed.one", error="boom")]
+        )
+
+    def test_cancel_on_the_banner_reaches_the_repair(self):
+        with mock.patch.object(window_module, "Thread") as thread:
+            REAL_CORE_REPAIR(self.win, manual=True)
+        worker = thread.call_args.kwargs["target"]
+        fake = mock.Mock()
+
+        def _repair(on_missing=None, cancel_event=None, **_kwargs):
+            on_missing(["a_libretro.so"])
+            self.pump()
+            self.win.banner.emit("button-clicked")
+            return {"missing": ["a_libretro.so"], "cancelled": cancel_event.is_set()}
+
+        fake.repair_missing_cores.side_effect = _repair
+        with mock.patch.object(window_module, "FirstBootBootstrapper", return_value=fake):
+            worker()
+        self.assertTrue(
+            fake.repair_missing_cores.call_args.kwargs["cancel_event"].is_set()
+        )
+        self.pump()
+        self.assertEqual(len(self.win.tasks), 0)
+        # A cancelled check has nothing to report.
+        self.assertEqual(self.toasts, [])
+
+    def test_progress_before_the_banner_is_dropped(self):
+        with mock.patch.object(window_module, "Thread") as thread:
+            REAL_CORE_REPAIR(self.win)
+        worker = thread.call_args.kwargs["target"]
+        fake = mock.Mock()
+
+        def _repair(on_progress=None, **_kwargs):
+            on_progress({"current": 1, "total": 1})
+            return {"missing": []}
+
+        fake.repair_missing_cores.side_effect = _repair
+        with mock.patch.object(window_module, "FirstBootBootstrapper", return_value=fake):
+            worker()
+        self.pump()
+        self.assertEqual(len(self.win.tasks), 0)
+
+    def test_a_job_on_the_core_folder_refuses_a_second_one(self):
+        self.win._core_job_running = True
+        self.addCleanup(setattr, self.win, "_core_job_running", False)
+        self.assertFalse(REAL_CORE_REPAIR(self.win))
+        self.assertEqual(self.toasts, [])
+        self.assertFalse(REAL_CORE_REPAIR(self.win, manual=True))
+        self.assertEqual(self.toasts, [self.said("toast.cores.verify.busy")])
+
+    def test_a_running_repair_holds_back_the_deferred_sweep(self):
+        self.config.mark_deferred_assets_pending()
+        with mock.patch.object(window_module, "Thread"):
+            REAL_CORE_REPAIR(self.win)
+        self.addCleanup(setattr, self.win, "_core_job_running", False)
+        self.assertFalse(self.win._start_deferred_asset_download())
+
+    def test_start_up_waits_for_a_completed_first_boot(self):
+        self.config.start_bootstrap_run()
+        with mock.patch.object(window_module, "Thread") as thread:
+            self.assertFalse(REAL_CORE_REPAIR(self.win))
+        thread.assert_not_called()
+
+    def test_start_up_does_nothing_with_the_updater_off(self):
+        self.config.config.setdefault("runtime", {}).setdefault("retroarch", {})[
+            "updater"
+        ] = {"enabled": False}
+        with mock.patch.object(window_module, "Thread") as thread:
+            self.assertFalse(REAL_CORE_REPAIR(self.win))
+        thread.assert_not_called()
+
+    def test_inside_a_flatpak_nothing_starts(self):
+        with mock.patch.object(
+            window_module, "is_running_in_flatpak", return_value=True
+        ), mock.patch.object(window_module, "Thread") as thread:
+            self.assertFalse(REAL_CORE_REPAIR(self.win, manual=True))
+        thread.assert_not_called()
+
+    def test_what_each_outcome_says(self):
+        say = self.win._core_repair_message
+        failure = {"failed": 2, "failures": [{"artifact": "x.zip", "error": "reset"}]}
+        cases = [
+            ({"error": "boom"}, False, None),
+            ({"error": "boom", "missing": ["a", "b"]}, True,
+             (self.said("toast.cores.verify.failed", count=2, error="boom"), 6)),
+            ({"disabled": True}, False, None),
+            ({"disabled": True}, True, (self.said("toast.cores.verify.disabled"), 3)),
+            (failure, False, None),
+            (failure, True,
+             (self.said("toast.cores.verify.failed", count=2, error="x.zip: reset"), 6)),
+            ({"downloaded": 3}, False, (self.said("toast.cores.restored", count=3), 3)),
+            ({"downloaded": 3}, True,
+             (self.said("toast.cores.verify.downloaded", count=3), 3)),
+            ({"downloaded": 1}, True,
+             (self.said("toast.cores.verify.downloaded.one"), 3)),
+            (dict(failure, failed=1), True,
+             (self.said("toast.cores.verify.failed.one", error="x.zip: reset"), 6)),
+            ({}, False, None),
+            ({}, True, (self.said("toast.cores.verify.ok"), 3)),
+            ({"cancelled": True}, True, None),
+        ]
+        for summary, manual, expected in cases:
+            with self.subTest(summary=summary, manual=manual):
+                self.assertEqual(say(manual, summary), expected)
+
+    def test_an_open_preferences_dialog_gets_the_toast_and_the_row_state(self):
+        dialog = mock.Mock()
+        self.win._preferences_dialog = dialog
+        self.addCleanup(setattr, self.win, "_preferences_dialog", None)
+        self.win._core_toast("hello", 6)
+        dialog._toast.assert_called_once_with("hello", 6)
+        self.win._notify_core_repair_running(True)
+        dialog.set_core_job_running.assert_called_once_with(True)
+        self.assertEqual(self.toasts, [])
+
+    def test_an_error_with_markup_characters_still_reads(self):
+        self.win._core_toast("manifest: <urlopen error [Errno 111]> & more", 6)
+        self.assertEqual(
+            self.toasts, ["manifest: &lt;urlopen error [Errno 111]&gt; &amp; more"]
+        )
+
+    def test_a_closed_preferences_dialog_is_left_alone(self):
+        dialog = mock.Mock()
+        dialog.get_parent.return_value = None
+        self.win._preferences_dialog = dialog
+        self.addCleanup(setattr, self.win, "_preferences_dialog", None)
+        self.win._core_toast("hello")
+        self.win._notify_core_repair_running(False)
+        dialog._toast.assert_not_called()
+        dialog.set_core_job_running.assert_not_called()
+        self.assertEqual(self.toasts, ["hello"])
 
 
 if __name__ == "__main__":

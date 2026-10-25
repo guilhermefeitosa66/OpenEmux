@@ -16,7 +16,7 @@ from pathlib import Path
 
 from gi.repository import Gio, GLib
 
-from openemux.core import cartridge_render, save_states
+from openemux.core import artwork_sources, cartridge_render, save_states
 from openemux.core.archives import (
     archive_entries,
     is_archive,
@@ -174,6 +174,7 @@ def rename_rom(roms_dir, rom, new_name, cache_dir=None, states_dir=None):
 
     if display_name != old_name:
         rename_local_art(roms_dir, console, old_name, display_name)
+        artwork_sources.rename(roms_dir, console, old_name, display_name)
         cartridge_render.drop_cached(console, old_name, cache_dir)
 
     logger.info(

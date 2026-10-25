@@ -84,8 +84,9 @@ make run
 
 `make install-sys-deps` targets Debian/Ubuntu (`apt`). On Fedora, install the
 equivalents (`gtk4`, `libadwaita`, `python3-gobject`, `python3-cairo`,
-`python3-pyyaml`, `librsvg2`, `gobject-introspection`) with `dnf`, then run
-`make venv setup`.
+`python3-pyyaml`, `librsvg2`, `gobject-introspection`, and
+`xorg-x11-server-Xvfb` for the tests) with `dnf`, then run `make venv setup`.
+On Arch the test display is `xorg-server-xvfb`.
 
 RetroArch is resolved at launch from
 `vendors/RetroArch-Linux-x86_64/usr/bin/retroarch` (fetched by `make
@@ -191,7 +192,7 @@ Three constraints that are easy to break:
 
 ```bash
 make test
-# or directly:
+# or directly (skips the widget tests on a desktop session, see below):
 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 
 # with a coverage report (needs `make setup-dev` once):
@@ -219,9 +220,21 @@ taking the run down with no failing test to point at, which is how CI ran red
 for weeks (issue #242). So `tests/gtk_display.py` asks
 `Gdk.Display.get_default()` once and exposes `@needs_display`; a class that
 builds widgets carries that decorator and skips itself on a headless box. CI
-runs the suite under `xvfb-run`, where nothing is skipped — run it the same way
-locally (`xvfb-run make test`) if you want the full set without opening a
-window.
+runs the suite under `xvfb-run`, where nothing is skipped.
+
+On a developer's machine the display is their own screen, and a run that used
+it flashed windows and stole focus for its whole length (issue #528). So
+`make test` and `make coverage` go through
+[`scripts/run_tests.py`](../scripts/run_tests.py), which runs the suite under
+`xvfb-run -a` the way CI does — `WAYLAND_DISPLAY` unset, GDK pinned to X11, the
+file-chooser portals off — so every widget test runs and nothing appears.
+`make install-sys-deps` installs Xvfb (`xorg-x11-server-Xvfb` on Fedora,
+`xorg-server-xvfb` on Arch); without it the run says what is missing and skips
+the widget tests rather than drawing on your desktop. A bare
+`python -m unittest` on a desktop session (Wayland, an X11 session, a desktop
+name in the environment) skips them too, with a note saying why. Set
+`OPENEMUX_TESTS_ON_DESKTOP=1` to run them on your screen anyway. Windows has no
+Xvfb, and its runs are unchanged.
 
 Add a `test_<module>.py` alongside any new core module. One file per module is
 the default, not a rule: `config.py` is covered by a `test_config_<concern>.py`
@@ -241,9 +254,10 @@ push to `develop`, refreshes the README's coverage badge by pushing
 `coverage.json` to the CI-owned `badges` branch.
 
 **Run it under a display.** The UI is measured like everything else, and the
-tests that build real widgets skip themselves on a headless box, so
-`make coverage` on its own reports far less than the suite covers. `xvfb-run -a
-make coverage` is the honest number, and the one CI enforces.
+tests that build real widgets skip themselves without a display they may use.
+`make coverage` runs them on a private Xvfb display, so with Xvfb installed it
+is the honest number, and the one CI enforces; a bare `coverage run` reports far
+less than the suite covers.
 
 `make smoke` runs [`scripts/smoke_start.py`](../scripts/smoke_start.py), which
 is the one check the unit suite cannot make: it constructs the real
@@ -318,9 +332,18 @@ carries its own GTK4 and Python, and a clean Windows machine with no MSYS2 is
 the better test target.
 
 GTK 4, libadwaita, Python and the GObject bindings all come from MSYS2's
-**MINGW64** environment, which is the only practical source of that stack on
+**UCRT64** environment, which is the only practical source of that stack on
 Windows -- and the same pacman repository the shipped bundle is assembled from,
-so what runs here and what we ship share one ABI.
+so what runs here and what we ship share one ABI. (Until October 2026 this was
+MINGW64; MSYS2 then dropped GTK 4 and libadwaita from it, and UCRT64 is the
+environment MSYS2 recommends -- same GCC toolchain, linked against the C runtime
+Windows 10+ ships. See issue #527.)
+
+A machine set up before that move still has the old `mingw-w64-x86_64-*`
+packages. Re-running `setup-dev.ps1` installs the UCRT64 set beside them, and
+`dev-shell.cmd` opens a UCRT64 shell from then on; the old set can be removed
+with `pacman -Rns $(pacman -Qq | grep '^mingw-w64-x86_64-')` once nothing needs
+it. Nothing removes it automatically.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\setup-dev.ps1
@@ -340,7 +363,7 @@ scripts\windows\dev-shell.cmd
 
 Inside it, `make run`, `make test` and `make coverage` behave exactly as they do
 on Linux. The system `PATH` is deliberately never modified: putting
-`mingw64\bin` on it would shadow system DLLs for every process on the machine,
+`ucrt64\bin` on it would shadow system DLLs for every process on the machine,
 so MSYS2 sets the environment up for that one shell instead.
 
 What the setup script deliberately does **not** install, and why:
@@ -350,7 +373,7 @@ What the setup script deliberately does **not** install, and why:
 | Docker | Windows artifacts are built in a Linux container, on Linux |
 | Inno Setup | the installer is produced on Linux too |
 | A Windows-native Python | it cannot import MSYS2's PyGObject |
-| A second `make` | MSYS2 supplies it; another on `PATH` is the classic "works in cmd, fails in mingw64" bug |
+| A second `make` | MSYS2 supplies it; another on `PATH` is the classic "works in cmd, fails in ucrt64" bug |
 
 There is **no venv on Windows**: PyGObject cannot be pip-built under MSYS2, so
 pacman owns the whole dependency set and a venv would only hide it. `make venv`
@@ -359,7 +382,9 @@ and `make setup` are therefore no-ops that verify the pacman-provided stack
 
 `make install-sys-deps-windows` is the package list, for a developer who already
 has the shell open. Keep it, the list in `setup-dev.ps1`, and this section in
-sync.
+sync. Both must hold every root in `packaging/windows/msys2_packages.py`, and so
+must the CI job: `tests/test_ci_workflows.py` fails the moment one of the four
+drifts.
 
 ### Gamepads: two backends, one token vocabulary
 
@@ -558,8 +583,8 @@ none of them is Wine:
 - the **mingw-w64 cross compiler** turns `openemux-launcher.c` into
   `OpenEmux.exe`, the small GUI binary that points the runtime at the bundle and
   starts Python;
-- **MSYS2 packages** supply GTK 4, libadwaita and Python already compiled for
-  Windows. They are downloaded and unpacked, never built;
+- **MSYS2 packages** (the UCRT64 environment) supply GTK 4, libadwaita and
+  Python already compiled for Windows. They are downloaded and unpacked, never built;
 - **NSIS** has a native Linux build, so `makensis` compiles the installer as an
   ordinary Linux program. (Issue #118 proposed Inno Setup; its compiler is a
   32-bit Windows binary, which would have dragged Wine and an i386 architecture
@@ -611,7 +636,7 @@ at the end of phase 2; a build that grows either is worth looking at.
 | `vendors/RetroArch-Win64/assets/xmb` | 71 MB | 5.499 | Nine icon themes for a menu driver the bundled build does not run — RetroArch 1.22.2 defaults to `ozone`, and OpenEmux never sets `menu_driver` |
 | `share/terminfo` + `lib/terminfo` | 24 MB | 5.792 | Terminal capability descriptions, shipped twice by ncurses, which arrives as a transitive dependency. A GTK4 app opens no terminal |
 | `share/locale`, all but 8 languages | 57 MB | 1.485 | GTK/GLib strings in 185 languages. What is readable is the subset the app itself is translated into; outside those its own UI is English anyway |
-| `share/zoneinfo` | 4.5 MB | 1.803 | Unreachable on Windows twice over: Python's `TZPATH` is baked to the POSIX string `/mingw64/share/zoneinfo`, and GLib reads time zones from the registry |
+| `share/zoneinfo` | 4.5 MB | 1.803 | Unreachable on Windows twice over: Python's `TZPATH` is baked to the POSIX string `/ucrt64/share/zoneinfo`, and GLib reads time zones from the registry |
 | Headers, static libs, pkg-config, docs | — | — | Build-time files; the bundle only runs the stack |
 | `tkinter`, the Tcl/Tk runtime and the Tcl extension packages | — | 28 | A second, unused GUI toolkit inside Python's standard library, plus the `itcl`/`tdbc`/`thread` packages that outlive it |
 
@@ -639,7 +664,7 @@ out its own directory and sets `OPENEMUX_PROJECT_ROOT`, `PYTHONPATH`,
 loader cache and `PATH` from it.
 
 It also sets `SSL_CERT_FILE`. OpenSSL bakes its default CA path in at build
-time, and MSYS2 builds it as `C:\msys64\mingw64\etc\ssl\cert.pem` -- a path
+time, and MSYS2 builds it as `C:\msys64\ucrt64\etc\ssl\cert.pem` -- a path
 that exists on no user's machine. Without the override every HTTPS request fails
 to verify, which on first boot means no cores and no cover art: the app installs
 cleanly and then cannot fetch anything. The build's phase-5 check greps the

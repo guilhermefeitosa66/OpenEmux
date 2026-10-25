@@ -1,12 +1,14 @@
 import re
 import threading
 import unittest
+import zipfile
+import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import patch
 
-from openemux.core import cover_sync
+from openemux.core import artwork_sources, cover_sync, hasher, screenscraper
 from openemux.core.artwork_index import ArtworkNameIndex
 from openemux.core.cover_sync import (
     _build_cover_url,
@@ -209,7 +211,9 @@ class CoverSyncTests(unittest.TestCase):
                     sync_settings={},
                     replace_existing=True,
                 )
-            self.assertEqual(sorted(p.name for p in covers.iterdir()), ["Castlevania.jpg"])
+            # The provenance record (issue #510) is not art.
+            art = sorted(p.name for p in covers.iterdir() if not p.name.startswith("."))
+            self.assertEqual(art, ["Castlevania.jpg"])
 
     def test_replace_existing_keeps_the_file_it_just_wrote(self):
         # Same extension in and out: the cleanup must not delete the download.
@@ -460,6 +464,7 @@ class CoverSyncTests(unittest.TestCase):
         self.assertEqual(received["crashed"], "boom")
         self.assertEqual(received["total"], 0)
         self.assertFalse(received["cancelled"])
+        self.assertIsNone(received["screenscraper_problem"])
 
     def test_a_crashed_artwork_sync_still_reports_back(self):
         from openemux.core.cover_sync import sync_artwork_async
@@ -757,6 +762,56 @@ class MultiPassArtworkSyncTests(unittest.TestCase):
             [e["art_kind"] for e in events], ["boxart", "boxart", "cartridge_label"]
         )
 
+    @staticmethod
+    def _candidates_noting(outcomes_by_kind):
+        """A ladder stub that reports ScreenScraper outcomes on the run (#506)."""
+
+        def _staged(console, rom_name, sync_settings, rom_path=None, quota=None, **_kw):
+            for status in outcomes_by_kind.get(sync_settings["cover_art_type"], ()):
+                quota.note_outcome(status)
+            return []
+
+        return _staged
+
+    def _run_noting(self, outcomes_by_kind):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch("openemux.core.cover_sync._staged_cover_candidates",
+                      side_effect=self._candidates_noting(outcomes_by_kind)),
+                patch("openemux.core.cover_sync._fts_stage_candidates", return_value=[]),
+            ):
+                return _sync_artwork(passes=self._passes(), covers_dir=tmp_dir)
+
+    def test_a_refused_lookup_is_reported_rather_than_only_counted(self):
+        summary = self._run_noting({"cartridge_label": [screenscraper.STATUS_REFUSED]})
+        self.assertEqual(summary["errors"], 3)
+        self.assertEqual(summary["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+        self.assertEqual(
+            [p["screenscraper_problem"] for p in summary["passes"]],
+            [None, screenscraper.PROBLEM_REFUSED],
+        )
+
+    def test_the_worst_problem_across_passes_wins(self):
+        summary = self._run_noting({
+            "boxart": [screenscraper.STATUS_UNREACHABLE],
+            "cartridge_label": [screenscraper.STATUS_REFUSED],
+        })
+        self.assertEqual(summary["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+
+    def test_plain_misses_report_nothing(self):
+        summary = self._run_noting({
+            "boxart": [screenscraper.STATUS_NOT_FOUND],
+            "cartridge_label": [screenscraper.STATUS_NOT_FOUND, screenscraper.STATUS_OK],
+        })
+        self.assertIsNone(summary["screenscraper_problem"])
+
+    def test_missing_credentials_only_matter_to_the_label_pass(self):
+        """Labels have no other source; box art has libretro and the mirror."""
+        boxart_only = self._run_noting({"boxart": [screenscraper.STATUS_NO_CREDENTIALS]})
+        self.assertIsNone(boxart_only["screenscraper_problem"])
+        labels = self._run_noting({"cartridge_label": [screenscraper.STATUS_NO_CREDENTIALS]})
+        self.assertEqual(labels["screenscraper_problem"], screenscraper.PROBLEM_REFUSED)
+
     def test_empty_passes_are_dropped(self):
         with TemporaryDirectory() as tmp_dir:
             with patch("openemux.core.cover_sync._download_cover", return_value=True):
@@ -1049,7 +1104,7 @@ class StagedCandidateTests(unittest.TestCase):
 
         with (
             patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
-            patch("openemux.core.cover_sync.hasher.compute_crc32") as crc_mock,
+            patch("openemux.core.cover_sync.hasher.rom_identity") as crc_mock,
         ):
             stem = cover_sync._resolve_hash_stem("SFC", "/tmp/ct.sfc", {})
         self.assertIsNone(stem)
@@ -1067,10 +1122,48 @@ class StagedCandidateTests(unittest.TestCase):
 
         with (
             patch("openemux.core.cover_sync._get_name_index", return_value=_Index()),
-            patch("openemux.core.cover_sync.hasher.compute_crc32", return_value="AABBCCDD"),
+            patch(
+                "openemux.core.cover_sync.hasher.rom_identity",
+                return_value=hasher.RomIdentity("rom001.md", 8, "AABBCCDD", None),
+            ),
         ):
             stem = cover_sync._resolve_hash_stem("SFC", "/tmp/rom001.md", {})
         self.assertEqual(stem, "Chrono Trigger (USA)")
+
+    def test_a_zipped_rom_resolves_by_the_crc_of_the_rom_inside(self):
+        """The archive's own CRC matches nothing in the index (#506)."""
+        seen = []
+
+        class _Index:
+            def has_crc_index(self):
+                return True
+
+            def resolve_by_crc(self, system, crc):
+                seen.append(crc)
+                return "Tetris (World)"
+
+        hasher.forget_rom_digests()
+        with TemporaryDirectory() as tmp_dir:
+            archive = Path(tmp_dir) / "Tetris (World).zip"
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("Tetris (World).gb", b"tetris-rom-bytes")
+            with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+                stem = cover_sync._resolve_hash_stem("GB", str(archive), {})
+        hasher.forget_rom_digests()
+        self.assertEqual(stem, "Tetris (World)")
+        self.assertEqual(seen, [format(zlib.crc32(b"tetris-rom-bytes"), "08X")])
+
+    def test_an_unreadable_rom_has_no_crc_to_look_up(self):
+        class _Index:
+            def has_crc_index(self):
+                return True
+
+            def resolve_by_crc(self, system, crc):  # pragma: no cover - must not run
+                raise AssertionError("looked up without a CRC")
+
+        with patch("openemux.core.cover_sync._get_name_index", return_value=_Index()):
+            stem = cover_sync._resolve_hash_stem("GB", "/nowhere/at/all.gb", {})
+        self.assertIsNone(stem)
 
 
 class ParallelSyncTests(unittest.TestCase):
@@ -1816,3 +1909,97 @@ class TheFuzzyCandidateNamesTests(unittest.TestCase):
     def test_a_name_with_no_article_is_offered_as_it_is(self):
         names = cover_sync.fuzzy_candidate_names("Chrono Trigger (USA)")
         self.assertIn("Chrono Trigger", names)
+
+
+class ProvenanceTests(unittest.TestCase):
+    """The sync says which covers it wrote (issue #510)."""
+
+    def _library(self, count):
+        return {"SFC": [{"name": f"Game {i}", "path": f"/roms/SFC/Game {i}.sfc"} for i in range(count)]}
+
+    @staticmethod
+    def _write(url, dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(_PNG_BYTES)
+        return dest
+
+    def _sync(self, tmp_dir, count=1, **kwargs):
+        with patch(
+            "openemux.core.cover_sync._staged_cover_candidates",
+            return_value=[("libretro", "exact", "u1")],
+        ):
+            return _sync_covers(
+                library_by_console=self._library(count),
+                covers_dir=tmp_dir,
+                scope="all",
+                selected_console=None,
+                sync_settings={},
+                **kwargs,
+            )
+
+    def test_a_downloaded_cover_is_recorded_as_synced_with_provider_and_stage(self):
+        with TemporaryDirectory() as tmp_dir:
+            with patch.object(cover_sync, "_download_cover", self._write):
+                self._sync(tmp_dir)
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+            state = artwork_sources.describe(tmp_dir, "SFC", "Game 0", "covers")
+        self.assertEqual(state.source, artwork_sources.SOURCE_SYNCED)
+        self.assertEqual(entries["Game 0"]["provider"], "libretro")
+        self.assertEqual(entries["Game 0"]["stage"], "exact")
+
+    def test_art_already_there_and_skipped_records_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = Path(tmp_dir) / "SFC" / "covers"
+            covers.mkdir(parents=True)
+            (covers / "Game 0.png").write_bytes(_PNG_BYTES)
+            with patch.object(cover_sync, "_download_cover", self._write):
+                summary = self._sync(tmp_dir)
+            self.assertEqual(summary["skipped"], 1)
+            self.assertFalse(artwork_sources.sources_path(tmp_dir, "SFC", "covers").exists())
+
+    def test_a_bulk_run_writes_the_record_once(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(cover_sync, "_download_cover", self._write),
+                patch.object(
+                    artwork_sources, "_store", wraps=artwork_sources._store
+                ) as store,
+            ):
+                self._sync(tmp_dir, count=6)
+            self.assertEqual(store.call_count, 1)
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+        self.assertEqual(len(entries), 6)
+
+    def test_a_cancelled_run_still_records_what_it_downloaded(self):
+        written = []
+
+        def _download(url, dest):
+            written.append(dest)
+            return self._write(url, dest)
+
+        with TemporaryDirectory() as tmp_dir:
+            with patch.object(cover_sync, "_download_cover", _download):
+                summary = self._sync(
+                    tmp_dir, count=30, should_cancel=lambda: len(written) >= 2
+                )
+            entries = artwork_sources._load(
+                artwork_sources.sources_path(tmp_dir, "SFC", "covers")
+            )
+        self.assertTrue(summary["cancelled"])
+        self.assertEqual(len(entries), summary["downloaded"])
+        self.assertGreater(len(entries), 0)
+
+    def test_a_provenance_write_failure_does_not_fail_the_rom(self):
+        with TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(cover_sync, "_download_cover", self._write),
+                patch.object(
+                    artwork_sources, "atomic_write_text", side_effect=OSError("read-only")
+                ),
+            ):
+                summary = self._sync(tmp_dir)
+        self.assertEqual((summary["downloaded"], summary["errors"]), (1, 0))

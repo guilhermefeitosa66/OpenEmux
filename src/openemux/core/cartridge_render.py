@@ -398,6 +398,22 @@ def _is_composite_of(entry: Path, stem: str):
     return bool(_CACHE_SUFFIX_RE.match(name[len(stem):]))
 
 
+def _move_into_place(tmp: Path, target: Path):
+    # On Windows, replacing a file that another thread is replacing at the same
+    # moment fails with "Access is denied" (WinError 5) instead of one of them
+    # winning, as rename(2) does. The two composites are the same bytes, so a
+    # target that exists after the failure is the one to use.
+    try:
+        tmp.replace(target)
+    except OSError:
+        if not target.exists():
+            raise
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 def _drop_stale(directory: Path, stem: str, keep: Path):
     # Compared by name, not by Path equality. Both live in ``directory``, so the
     # name is exact -- and on Windows ``Path.__eq__`` is not a reliable
@@ -476,7 +492,7 @@ def render_cartridge(
         # name is per-thread: a shared one gets renamed away under the others.
         tmp = target.with_name(f"{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         surface.write_to_png(str(tmp))
-        tmp.replace(target)
+        _move_into_place(tmp, target)
     except Exception as exc:
         # Deliberately broad. This runs on the cover-fetch worker thread, and
         # the caller treats None as "no cartridge, fall back to the plain

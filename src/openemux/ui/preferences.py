@@ -18,12 +18,14 @@ from threading import Thread
 from gi.repository import Adw, Gio, Gtk, Gdk, GLib
 
 from openemux.core import (
+    bezels,
     core_options,
     retroachievements,
     rom_importer,
     save_backup,
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
+from openemux.core.paths import is_running_in_flatpak
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
 from openemux.core.gamepad_reader import describe_token
@@ -55,6 +57,15 @@ from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
+
+
+#: What to say when a picked bezel image is refused, per
+#: ``bezels.validate_png`` error key (issue #507).
+_BEZEL_ERROR_TOASTS = {
+    "not_png": "toast.bezels.not_png",
+    "too_small": "toast.bezels.too_small",
+    "unreadable": "toast.bezels.unreadable",
+}
 
 
 class OpenEmuxPreferences(Adw.PreferencesDialog):
@@ -1439,6 +1450,20 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         appearance.add(restore_row)
         page.add(appearance)
 
+        # Windowed or fullscreen, for every game (issue #505). Read at each
+        # launch, like the bar below.
+        launch_mode = Adw.PreferencesGroup(title=self.t("prefs.group.launch_mode"))
+        self._start_fullscreen_row = Adw.SwitchRow(
+            title=self.t("settings.launch_mode.fullscreen.title"),
+            subtitle=self.t("settings.launch_mode.fullscreen.subtitle"),
+        )
+        self._start_fullscreen_row.set_active(
+            self.config.get_ui_settings()["start_games_fullscreen"]
+        )
+        self._start_fullscreen_row.connect("notify::active", self._on_start_fullscreen_changed)
+        launch_mode.add(self._start_fullscreen_row)
+        page.add(launch_mode)
+
         # The in-game bar RetroArch draws (issue #469). Read at each launch, so
         # a change reaches the next game, not the one already running.
         game_bar = Adw.PreferencesGroup(title=self.t("prefs.group.game_bar"))
@@ -1453,11 +1478,128 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         game_bar.add(self._translucent_bar_row)
         page.add(game_bar)
 
+        page.add(self._build_bezels_group())
+
         self._shaders_group = Adw.PreferencesGroup(title=self.t("prefs.group.shaders"))
         page.add(self._shaders_group)
         self._shader_rows = []
         self._rebuild_shader_rows()
         return page
+
+    # ----- bezels (issue #507) ---------------------------------------------
+    def _build_bezels_group(self):
+        """One row per 4:3 console: no bezel, the built-in one, or an image.
+
+        Read at each launch, like the bar above it. Only the consoles whose
+        games are 4:3 are listed (``bezels.BEZEL_CONSOLES``).
+        """
+        group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.bezels"),
+            description=self.t("settings.bezels.description"),
+        )
+        labels = [self.t("bezel.none"), self.t("bezel.simple"), self.t("bezel.custom")]
+        self._bezel_rows = {}
+        for console_id in SYSTEM_IDS:
+            if console_id not in bezels.BEZEL_CONSOLES:
+                continue
+            row = Adw.ComboRow(
+                title=f"{console_id} — {get_system_display_name(console_id)}"
+            )
+            row.add_prefix(console_icon(console_id))
+            row.set_model(Gtk.StringList.new(labels))
+            row.set_subtitle_lines(1)
+            row._bezel_mode = self.config.get_bezel_for_console(console_id)
+            row.set_selected(bezels.BEZEL_MODES.index(row._bezel_mode))
+            button = Gtk.Button(icon_name="folder-open-symbolic")
+            button.set_valign(Gtk.Align.CENTER)
+            button.add_css_class("flat")
+            button.set_tooltip_text(self.t("bezels.change_image"))
+            button.update_property(
+                [Gtk.AccessibleProperty.LABEL], [self.t("bezels.change_image")]
+            )
+            button.connect("clicked", lambda _b, c=console_id: self._choose_custom_bezel(c))
+            row.add_suffix(button)
+            row._bezel_button = button
+            row.connect("notify::selected", self._on_bezel_changed, console_id)
+            self._refresh_bezel_row(row, console_id)
+            group.add(row)
+            self._bezel_rows[console_id] = row
+        footer = Gtk.Label(label=self.t("settings.bezels.footer"), wrap=True, xalign=0)
+        footer.add_css_class("dim-label")
+        footer.add_css_class("caption")
+        footer.set_margin_top(12)
+        group.add(footer)
+        return group
+
+    def _refresh_bezel_row(self, row, console_id):
+        custom = row._bezel_mode == bezels.CUSTOM
+        name = self.config.get_custom_bezel_name(console_id) if custom else None
+        row.set_subtitle(name or "")
+        row._bezel_button.set_visible(custom)
+
+    def _revert_bezel_row(self, row):
+        # Back to what is stored; the notify that follows sees no change.
+        row.set_selected(bezels.BEZEL_MODES.index(row._bezel_mode))
+
+    def _on_bezel_changed(self, row, _param, console_id):
+        idx = row.get_selected()
+        if not 0 <= idx < len(bezels.BEZEL_MODES):
+            return
+        mode = bezels.BEZEL_MODES[idx]
+        if mode == row._bezel_mode:
+            return
+        if mode == bezels.CUSTOM:
+            stored = bezels.custom_path(console_id, self.config.store_path("bezels"))
+            if not stored.is_file():
+                # Nothing to go back to yet: the picker decides.
+                self._choose_custom_bezel(console_id)
+                return
+        self.config.set_bezel_for_console(console_id, mode)
+        row._bezel_mode = mode
+        self._refresh_bezel_row(row, console_id)
+
+    def _dialog_parent(self):
+        """The window a file picker belongs to.
+
+        `Gtk.FileDialog` wants a `Gtk.Window`, and this is an `Adw.Dialog`:
+        passing `self` raises `TypeError` and no picker opens (#507). The
+        window it is shown in is its root; not shown yet, there is none.
+        """
+        root = self.get_root()
+        return root if isinstance(root, Gtk.Window) else None
+
+    def _choose_custom_bezel(self, console_id):
+        png = Gtk.FileFilter()
+        png.set_name(self.t("bezels.dialog.filter"))
+        png.add_pattern("*.png")
+        png.add_mime_type("image/png")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(png)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("bezels.dialog.title"))
+        dialog.set_modal(True)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(png)
+        dialog.open(self._dialog_parent(), None, self._on_bezel_image_chosen, console_id)
+
+    def _on_bezel_image_chosen(self, dialog, result, console_id):
+        row = self._bezel_rows[console_id]
+        try:
+            source = dialog.open_finish(result)
+        except GLib.Error:
+            source = None  # dismissed
+        path = source.get_path() if source is not None else None
+        if not path:
+            self._revert_bezel_row(row)
+            return
+        error = self.config.set_custom_bezel(console_id, path)
+        if error:
+            self._toast(self.t(_BEZEL_ERROR_TOASTS[error]))
+            self._revert_bezel_row(row)
+            return
+        row._bezel_mode = bezels.CUSTOM
+        row.set_selected(bezels.BEZEL_MODES.index(bezels.CUSTOM))
+        self._refresh_bezel_row(row, console_id)
 
     def _shader_options_for_console(self, console_id):
         show_all = bool(self._show_all_switch.get_active())
@@ -1808,8 +1950,41 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         retry_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
         retry_row.connect("activated", lambda _r: self.win._trigger_bootstrap_retry())
         setup_group.add(retry_row)
+
+        # Cores lost after the first boot, e.g. by replacing the Windows app
+        # folder (issue #512). The Flatpak's cores belong to RetroArch's own.
+        self._verify_cores_row = Adw.ActionRow(
+            title=self.t("settings.system.cores.verify.title")
+        )
+        self._verify_cores_row.add_prefix(Gtk.Image.new_from_icon_name("system-software-install-symbolic"))
+        self._verify_cores_chevron = Gtk.Image.new_from_icon_name("go-next-symbolic")
+        self._verify_cores_spinner = Gtk.Spinner()
+        self._verify_cores_row.add_suffix(self._verify_cores_chevron)
+        self._verify_cores_row.add_suffix(self._verify_cores_spinner)
+        self._verify_cores_row.connect(
+            "activated", lambda _r: self.win._start_core_repair(manual=True)
+        )
+        self._verify_cores_row.set_visible(not is_running_in_flatpak())
+        self.set_core_job_running(self.win._core_repair_running)
+        setup_group.add(self._verify_cores_row)
         page.add(setup_group)
         return page
+
+    def set_core_job_running(self, running):
+        """Show the Verify cores row busy, or ready, for the window's repair."""
+        row = self._verify_cores_row
+        row.set_sensitive(not running)
+        row.set_activatable(not running)
+        row.set_subtitle(
+            self.t(
+                "settings.system.cores.verify.running"
+                if running
+                else "settings.system.cores.verify.subtitle"
+            )
+        )
+        self._verify_cores_chevron.set_visible(not running)
+        self._verify_cores_spinner.set_visible(running)
+        self._verify_cores_spinner.set_spinning(running)
 
     # ----- RetroAchievements (issue #300) ---------------------------------
     def _refresh_achievements(self):
@@ -1931,7 +2106,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         filters, default = self._saves_filter()
         dialog.set_filters(filters)
         dialog.set_default_filter(default)
-        dialog.save(self, None, self._on_export_target_chosen)
+        dialog.save(self._dialog_parent(), None, self._on_export_target_chosen)
 
     def _on_export_target_chosen(self, dialog, result):
         try:
@@ -1967,7 +2142,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         filters, default = self._saves_filter()
         dialog.set_filters(filters)
         dialog.set_default_filter(default)
-        dialog.open(self, None, self._on_import_source_chosen)
+        dialog.open(self._dialog_parent(), None, self._on_import_source_chosen)
 
     def _on_import_source_chosen(self, dialog, result):
         try:
@@ -2014,6 +2189,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_translucent_bar_changed(self, row, *_a):
         self.config.set_translucent_game_bar(row.get_active())
+
+    def _on_start_fullscreen_changed(self, row, *_a):
+        self.config.set_start_games_fullscreen(row.get_active())
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())

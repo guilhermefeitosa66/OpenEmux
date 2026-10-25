@@ -11,6 +11,7 @@ caller asking for the application object is asking for. Reach it through
 """
 
 import logging
+import os
 import traceback
 from threading import Thread
 
@@ -44,6 +45,7 @@ from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
+from openemux.core import win32_shell
 
 
 class OpenEmuxApplication(Adw.Application):
@@ -55,6 +57,13 @@ class OpenEmuxApplication(Adw.Application):
         self._bootstrap_window = None
         self._housekeeping_done = False
         self.main_window = None
+        # Window handles the Windows shell was told are OpenEmux, by window
+        # (issue #509). Only the packaged Windows bundle has a launcher to
+        # point a pinned button at; everywhere else this stays empty.
+        self._shell_windows = {}
+        self._launcher = win32_shell.launcher_path()
+        if self._launcher is not None:
+            self.connect("window-added", self._on_window_added)
 
     def do_activate(self):
         # Register the vendored symbolic icons before any window exists, so
@@ -100,6 +109,37 @@ class OpenEmuxApplication(Adw.Application):
         if runtime is not None and runtime.is_running():
             runtime.stop_active(block=True)
         Adw.Application.do_shutdown(self)
+
+    def _on_window_added(self, _application, window):
+        # Every toplevel -- the first-boot screen, the library, any window a
+        # later feature opens -- without each class having to know.
+        window.connect("map", self._on_window_mapped)
+        window.connect("unrealize", self._on_window_unrealized)
+
+    def _on_window_mapped(self, window):
+        # Deferred: the shell lists a window only once it is visible, and the
+        # surface reaches the screen as the map finishes, not as it starts.
+        GLib.idle_add(self._claim_window, window)
+
+    def _claim_window(self, window):
+        if window in self._shell_windows or not window.get_mapped():
+            return False
+        known = set(self._shell_windows.values())
+        fresh = [
+            hwnd for hwnd in win32_shell.find_toplevel_hwnds(os.getpid())
+            if hwnd not in known
+        ]
+        if fresh:
+            self._shell_windows[window] = fresh[0]
+            win32_shell.apply_window_identity(fresh[0], APP_ID, self._launcher)
+        return False
+
+    def _on_window_unrealized(self, window):
+        # Before the handle is destroyed: the shell keeps stale relaunch
+        # entries for a window that goes away still carrying them.
+        hwnd = self._shell_windows.pop(window, None)
+        if hwnd is not None:
+            win32_shell.clear_window_identity(hwnd)
 
     def _present_main_window(self):
         if self.main_window:

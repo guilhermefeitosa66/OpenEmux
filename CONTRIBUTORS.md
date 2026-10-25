@@ -65,6 +65,14 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
+### felipeonline (Reddit)
+
+Reported on Reddit, in the feedback thread for OpenEmux 1.16.0, that upgrading the Windows zip by
+copying the new release over the old folder kept the settings but left RetroArch with no cores,
+and that the only way out was deleting `~/.openemux` and every setting with it. That report became
+[#512](https://github.com/guilhermefeitosa66/OpenEmux/issues/512): OpenEmux now notices missing
+cores at start-up and brings them back on its own, and Preferences gained a "Verify cores" row.
+
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage
@@ -80,6 +88,66 @@ happening a fifth time.
 The same work brought the native **Arch Linux package**, the packaged icons finally being the size
 the folder they sit in claims, and **தமிழ் (Tamil)**, the project's first locale contributed by
 someone other than the maintainer.
+
+### felipeonline (Reddit)
+
+Asked, in the Reddit feedback thread on **v1.16.0** while playing on the
+Windows build, for a way to start games in fullscreen instead of toggling it on
+every launch. That request became
+[#505](https://github.com/guilhermefeitosa66/OpenEmux/issues/505): a "Start
+games in fullscreen" switch in Settings → Video that every launch now follows.
+
+In the same thread, also reported that cartridge labels never synced for Game
+Boy and Game Boy Color even with a ScreenScraper account set. That report became
+[#506](https://github.com/guilhermefeitosa66/OpenEmux/issues/506): a zipped ROM
+is now looked up by the game inside the archive rather than by the archive
+itself, a Game Boy game filed under Game Boy Color is found on one more try, and
+a sync that ScreenScraper refused or never answered says so instead of counting
+every game as a plain miss.
+
+In the same thread, also reported that some covers showed up cropped at the
+top or the bottom of the library grid. That report became
+[#508](https://github.com/guilhermefeitosa66/OpenEmux/issues/508): a card has
+its console's typical box shape, and a cover of another shape (a portrait
+Japanese box on a landscape Super Nintendo card) was filled into it and lost up
+to 60% of its art. Now only a cover close to the card's shape fills it, and any
+other is shown whole on the card's backdrop.
+
+In the same thread, also suggested decorative borders for 4:3 games, so the
+black bars beside them on a wide screen are not just black. That became
+[#507](https://github.com/guilhermefeitosa66/OpenEmux/issues/507): a bezel per
+console, built in or picked from an image, drawn by RetroArch under the
+in-game bar.
+
+Running the Windows zip build, also reported there that the app's taskbar icon
+did not match the one on `OpenEmux.exe`. That report became
+[#509](https://github.com/guilhermefeitosa66/OpenEmux/issues/509): the app's
+windows belonged to `pythonw.exe`, so Windows showed Python's icon, grouped
+OpenEmux with any other Python program and pinned a bare interpreter that could
+not start the app. The process now tells the shell it is OpenEmux, takes its
+icon from the launcher, and a pinned button starts the app through
+`OpenEmux.exe`.
+
+In the same thread, also asked for the cover manager to open on the cover the
+game already has, with ways to adjust it from there. That became
+[#510](https://github.com/guilhermefeitosa66/OpenEmux/issues/510): the artwork
+manager now opens on a "Current" tab that shows the cover and label as they
+are, says whether the sync wrote them, you chose them or they were simply found
+in the folder, and offers picking another match, replacing, adjusting and
+resetting to the synced art right there.
+
+In the same thread, reported that games vanished from the "All" view on a big
+library, little by little as it was scrolled and resized. That report became
+[#511](https://github.com/guilhermefeitosa66/OpenEmux/issues/511): the grouped
+pages ("All", "Favorites", the collections) now keep every game on screen
+however long a console's group is.
+
+### McPoon (Reddit)
+
+Asked *"Any retroachievements?"* on Reddit, in the thread presenting the Android app. That
+question became [#515](https://github.com/guilhermefeitosa66/OpenEmux/issues/515): the Android app
+signs in to RetroAchievements once in Settings, hands the account to every game it launches, and
+keeps hardcore mode off until the player asks for it.
 
 ## How contributions are credited
 

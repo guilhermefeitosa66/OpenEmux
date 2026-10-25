@@ -184,6 +184,32 @@ class ThePixbufLoaderCacheTests(unittest.TestCase):
             main_module._ensure_pixbuf_loaders()
 
 
+class TheWindowsAppIdTests(unittest.TestCase):
+    """Issue #509: the packaged process tells the shell it is OpenEmux."""
+
+    def test_linux_never_reaches_the_shell(self):
+        with mock.patch.object(main_module, "IS_WINDOWS", False), mock.patch(
+            "openemux.core.win32_shell.set_process_app_id"
+        ) as declare:
+            main_module._declare_windows_app_id()
+        declare.assert_not_called()
+
+    def test_the_packaged_bundle_declares_the_app_id(self):
+        with mock.patch.object(main_module, "IS_WINDOWS", True), mock.patch(
+            "openemux.core.win32_shell.launcher_path", return_value=Path("OpenEmux.exe")
+        ), mock.patch("openemux.core.win32_shell.set_process_app_id") as declare:
+            main_module._declare_windows_app_id()
+        declare.assert_called_once_with(main_module.APP_ID)
+
+    def test_a_windows_source_run_has_nothing_to_declare(self):
+        # No launcher means nothing a pinned button could start.
+        with mock.patch.object(main_module, "IS_WINDOWS", True), mock.patch(
+            "openemux.core.win32_shell.launcher_path", return_value=None
+        ), mock.patch("openemux.core.win32_shell.set_process_app_id") as declare:
+            main_module._declare_windows_app_id()
+        declare.assert_not_called()
+
+
 class ThePreparationRunsOnceTests(unittest.TestCase):
     """Issue #244: it used to be five bare calls at module level."""
 
@@ -194,6 +220,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
             "_configure_gtk_renderer",
             "migrate_legacy_config_dir",
             "configure_startup_logging",
+            "_declare_windows_app_id",
             "_ensure_gtk_typelibs",
             "_ensure_pixbuf_loaders",
         ):
@@ -215,6 +242,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
                 "configure_startup_logging",
+                "_declare_windows_app_id",
                 "_ensure_gtk_typelibs",
                 "_ensure_pixbuf_loaders",
             ],
@@ -225,7 +253,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         # swap the root handlers out from under the running app.
         main_module.prepare_process()
         main_module.prepare_process()
-        self.assertEqual(len(self.calls), 6)
+        self.assertEqual(len(self.calls), 7)
 
     def test_the_application_is_built_only_after_the_preparation(self):
         # Importing gi.repository.Gtk runs Gtk.init(), which opens the

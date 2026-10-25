@@ -46,7 +46,14 @@
 
 [RetroArch](https://www.retroarch.com/) is one of the most powerful and versatile emulation platforms ever created — but its interface can be intimidating, especially for users who just want to pick up a controller and play. OpenEmux wraps RetroArch in a clean, intuitive frontend so you can enjoy your retro game library without touching a single config file.
 
-OpenEmux was directly inspired by [OpenEmu](https://openemu.org/), the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. Since OpenEmu is exclusive to macOS, I built OpenEmux to bring that same polished experience to Linux.
+### OpenEmux and OpenEmu
+
+- **The desktop app is inspired by [OpenEmu](https://openemu.org/)**, the beloved macOS emulator that made retro gaming on Mac feel effortless and beautiful. OpenEmu is macOS-only, so OpenEmux brings a similar experience to Linux and Windows.
+- **It is not a fork and uses no OpenEmu code.** OpenEmux is a separate codebase in Python, GTK 4 and libadwaita, with [RetroArch](https://www.retroarch.com/)/[libretro](https://www.libretro.com/) as the emulation backend.
+- **The Android app is an independent design**: there is no OpenEmu for phones, so apart from the console icons nothing in it comes from OpenEmu.
+- **The console icons are OpenEmu's artwork**, redistributed under OpenEmu's BSD license. OpenEmux is not affiliated with or endorsed by the OpenEmu Team.
+
+**Artwork credits:** console icons © OpenEmu Team, see [ATTRIBUTION.md](src/openemux/ui/assets/icons/ATTRIBUTION.md).
 
 > This project would not be possible without the incredible work done by the [RetroArch](https://www.retroarch.com/) and [libretro](https://www.libretro.com/) teams, and the design philosophy of [OpenEmu](https://openemu.org/). Huge thanks to both projects. ❤️
 
@@ -174,6 +181,8 @@ Browse your game collection with cover art, organized by console — just like a
 
 Launch any game directly from OpenEmux. RetroArch runs in the background, fully configured and ready to go.
 
+The games shown are freely licensed homebrew, credited in [docs/assets/CREDITS.md](docs/assets/CREDITS.md).
+
 <p align="center">
   <img src="docs/assets/openemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
   &nbsp;
@@ -208,6 +217,8 @@ are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 Want to help? [CONTRIBUTING.md](CONTRIBUTING.md) covers everything from filing a
 good bug report to opening your first pull request, and you do not need to write
 Python to be useful — testing a release and translating the interface both count.
+What OpenEmux is, and what it deliberately is not, is written down in
+[docs/PRODUCT.md](docs/PRODUCT.md): read it before proposing a change to the experience.
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Found a security problem? Do not open a public issue — [SECURITY.md](SECURITY.md)

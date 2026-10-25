@@ -92,6 +92,28 @@ def archive_rom_name(archive_path, extensions):
     return Path(archive_path).stem
 
 
+def archive_rom_entry(archive_path, extensions):
+    """The ``ZipInfo`` of the ROM inside an archive, or None when it holds none.
+
+    The entry :func:`archive_rom_name` describes: the only match, or the first
+    one in a multi-ROM archive. Lookups that identify a game by its content
+    (CRC, MD5, size) hash this entry, since the archive's own bytes match
+    nothing (issue #506). A corrupt archive yields None, like an empty one.
+    """
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            infos = archive.infolist()
+    except Exception as exc:
+        logger.warning("archives unreadable: path=%s error=%s", archive_path, exc)
+        return None
+    for info in infos:
+        if info.is_dir() or _is_junk(info.filename):
+            continue
+        if Path(info.filename).suffix.lower() in extensions:
+            return info
+    return None
+
+
 def rename_archive_rom_entry(archive_path, new_stem, extensions):
     """Rename the single ROM entry inside an archive, keeping its extension.
 

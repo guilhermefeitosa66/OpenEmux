@@ -13,7 +13,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio, GObject, Pango
 from openemux.core.appimage_env import host_env
 from openemux.core.bios_manager import find_missing_required_for_core, get_console_bios_dir
 from openemux.core.cores import CoreCatalog
-from openemux.core.first_boot import FirstBootBootstrapper
+from openemux.core.first_boot import FirstBootBootstrapper, _first_failure_reason
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     SORT_ORDERS,
@@ -31,8 +31,9 @@ from openemux.core.library_view import (
 )
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.play_history import PlayHistory
-from openemux.core import cartridge_render
+from openemux.core import artwork_sources, cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
+from openemux.core.screenscraper import PROBLEM_QUOTA, PROBLEM_REFUSED, PROBLEM_UNREACHABLE
 from openemux.core.cover_sync import (
     build_artwork_passes,
     sync_artwork_async,
@@ -133,7 +134,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # is one write and not one per row (issue #383).
         self._remember_view_source = None
         self._cover_sync_running = False
-        self._deferred_assets_running = False
+        # Every job that writes to the core folder -- the deferred sweep and
+        # the missing-core repair -- holds this one flag, so they never run
+        # at the same time (issue #512).
+        self._core_job_running = False
+        # The repair alone, which is what the Preferences row shows.
+        self._core_repair_running = False
+        self._core_repair_task = None
         self._scan_running = False
         # A rescan asked for while one was running, to run when it ends (#225).
         self._rescan_pending = None
@@ -246,7 +253,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
         self._maybe_show_bootstrap_warning()
-        self._start_deferred_asset_download()
+        # A repair that starts chains the deferred sweep from its done handler.
+        if not self._start_core_repair():
+            self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
 
@@ -259,11 +268,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Owed until a sweep finishes clean, so a sweep cut short by closing the
         app resumes at the next launch.
         """
-        if self._deferred_assets_running:
+        if self._core_job_running:
             return False
         if is_running_in_flatpak() or not self.config_manager.deferred_assets_pending():
             return False
-        self._deferred_assets_running = True
+        self._core_job_running = True
         cancel_event = Event()
         task_id = self.tasks.begin(
             "cores", self.t("status.cores.downloading"), on_cancel=cancel_event.set
@@ -290,7 +299,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return True
 
     def _on_deferred_assets_done_ui(self, task_id, summary):
-        self._deferred_assets_running = False
+        self._core_job_running = False
         self.tasks.finish(task_id)
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
@@ -306,6 +315,158 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             summary.get("error"),
         )
         return GLib.SOURCE_REMOVE
+
+    def _start_core_repair(self, manual=False):
+        """Bring back the cores some console names that are no longer on disk.
+
+        The first boot is never re-run: replacing the Windows app folder with
+        a new release drops every core it held while the config still says
+        they were downloaded (issue #512). At start-up this runs only after a
+        completed first boot with the updater on, and stays silent unless
+        something is actually missing; ``manual`` is the Preferences row, which
+        always reports. Returns whether a repair started.
+        """
+        if self._core_job_running:
+            if manual:
+                self._core_toast(self.t("toast.cores.verify.busy"))
+            return False
+        if is_running_in_flatpak():
+            return False
+        if not manual:
+            if self.config_manager.get_bootstrap_state().get("status") != "completed":
+                return False
+            if not self.config_manager.get_retroarch_updater_settings()["enabled"]:
+                return False
+        self._core_job_running = True
+        self._core_repair_running = True
+        self._notify_core_repair_running(True)
+        cancel_event = Event()
+        label = self.t("status.cores.repairing" if manual else "status.cores.restoring")
+
+        def _begin_task(_missing):
+            self._core_repair_task = self.tasks.begin(
+                "cores", label, on_cancel=cancel_event.set
+            )
+            return GLib.SOURCE_REMOVE
+
+        def _update_task(current, total):
+            if self._core_repair_task:
+                self.tasks.update(self._core_repair_task, current, total)
+            return GLib.SOURCE_REMOVE
+
+        # An idle callback is starved while the row's spinner animates on a
+        # slow renderer -- the frame clock is always due before it -- so the
+        # repair reports back at the default priority instead.
+        def _on_progress(evt):
+            GLib.idle_add(
+                _update_task,
+                evt.get("current", 0),
+                evt.get("total", 0),
+                priority=GLib.PRIORITY_DEFAULT,
+            )
+
+        def _worker():
+            # The check touches the disk, so it runs here and not on the main
+            # loop; the banner only appears once something is found missing.
+            try:
+                summary = FirstBootBootstrapper(self.config_manager).repair_missing_cores(
+                    on_progress=_on_progress,
+                    cancel_event=cancel_event,
+                    manual=manual,
+                    on_missing=lambda missing: GLib.idle_add(
+                        _begin_task, missing, priority=GLib.PRIORITY_DEFAULT
+                    ),
+                )
+            except Exception as exc:
+                # The done handler is what clears the running flag (#214).
+                logger.exception("core repair crashed")
+                summary = {"error": str(exc)}
+            GLib.idle_add(
+                self._on_core_repair_done_ui, manual, summary, priority=GLib.PRIORITY_DEFAULT
+            )
+
+        Thread(target=_worker, daemon=True).start()
+        return True
+
+    def _on_core_repair_done_ui(self, manual, summary):
+        self._core_job_running = False
+        self._core_repair_running = False
+        if self._core_repair_task:
+            self.tasks.finish(self._core_repair_task)
+            self._core_repair_task = None
+        if summary.get("downloaded"):
+            self.core_catalog.refresh()
+            self.runtime_manager.retroarch_launcher.core_catalog.refresh()
+        message = self._core_repair_message(manual, summary)
+        if message:
+            self._core_toast(*message)
+        self._notify_core_repair_running(False)
+        # Owed before the repair, or owed again because the folder was empty.
+        # Not right after the user cancelled a core download, though: the
+        # debt stays recorded and the next launch picks it up.
+        if not summary.get("cancelled"):
+            self._start_deferred_asset_download()
+        return GLib.SOURCE_REMOVE
+
+    def _core_repair_message(self, manual, summary):
+        """The toast for a finished repair, as (text, timeout), or None.
+
+        The start-up repair speaks only when it brought something back; a
+        failure there is logged and retried at the next launch.
+        """
+        if summary.get("error"):
+            if not manual:
+                return None
+            count = len(summary.get("missing") or []) or 1
+            return self._counted("toast.cores.verify.failed", count, error=summary["error"]), 6
+        if summary.get("disabled"):
+            return (self.t("toast.cores.verify.disabled"), 3) if manual else None
+        if summary.get("failed"):
+            if not manual:
+                return None
+            text = self._counted(
+                "toast.cores.verify.failed",
+                summary["failed"],
+                error=_first_failure_reason(summary),
+            )
+            return text, 6
+        downloaded = summary.get("downloaded", 0)
+        if downloaded:
+            key = "toast.cores.verify.downloaded" if manual else "toast.cores.restored"
+            return self._counted(key, downloaded), 3
+        if manual and not summary.get("cancelled"):
+            return self.t("toast.cores.verify.ok"), 3
+        return None
+
+    def _counted(self, key, count, **kwargs):
+        """The ``.one`` variant of ``key`` for a single item, ``key`` otherwise."""
+        if count == 1:
+            return self.t(f"{key}.one", **kwargs)
+        return self.t(key, count=count, **kwargs)
+
+    def _open_preferences_dialog(self):
+        """The Preferences dialog when it is on screen, else None."""
+        dialog = self._preferences_dialog
+        if dialog is not None and dialog.get_parent() is not None:
+            return dialog
+        return None
+
+    def _core_toast(self, text, timeout=3):
+        # A toast title is markup, and a download error carries text like
+        # "<urlopen error ...>" that would leave the toast blank.
+        text = GLib.markup_escape_text(text)
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog._toast(text, timeout)
+            return
+        toast = Adw.Toast(title=text)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
+
+    def _notify_core_repair_running(self, running):
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog.set_core_job_running(running)
 
     def _start_update_check(self):
         settings = self.config_manager.get_update_settings()
@@ -1428,6 +1589,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         about.set_comments(self.t("about.comments"))
         about.set_website("https://github.com/guilhermefeitosa66/OpenEmux")
         about.set_license_type(Gtk.License.MIT_X11)
+        # Project names stay untranslated; libadwaita turns the URL into a link.
+        about.add_acknowledgement_section(self.t("about.ack.inspired_by"), ["OpenEmu https://openemu.org/"])
+        about.add_acknowledgement_section(
+            self.t("about.ack.emulation"),
+            ["RetroArch https://www.retroarch.com/", "libretro https://www.libretro.com/"],
+        )
+        # The console icons are OpenEmu's artwork (see assets/icons/ATTRIBUTION.md).
+        about.add_legal_section(
+            self.t("about.legal.console_icons"), "© 2009-2023 OpenEmu Team", Gtk.License.BSD_3, None
+        )
         about.present(self)
 
     def _show_shortcuts(self):
@@ -2237,26 +2408,33 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
 
-    def sync_rom_artwork(self, rom, art_kind):
+    def sync_rom_artwork(self, rom, art_kind, on_finished=None):
         """Fetch one ROM's artwork of ``art_kind`` right away, in the background.
 
         The context menu's sync entries are a quick single-ROM action: no
         window, no picking -- the same provider chain the library-wide sync
         uses, aimed at one game. Art already on disk is replaced, because the
         reason to sync one game by hand is usually that what it has is wrong.
+
+        ``on_finished`` runs after the card refresh (the artwork manager's
+        reset re-reads its state there, issue #510). Returns whether a sync
+        started: one already running refuses this one.
         """
         if self._cover_sync_running:
             self._toast(self.t("toast.sync_running"), timeout=3)
-            return
+            return False
         passes = [(art_kind, {rom["console"]: [rom]})]
         logger.info(
             "rom artwork sync: rom=%s console=%s kind=%s", rom["name"], rom["console"], art_kind
         )
-        self._start_artwork_sync(
-            passes,
-            replace_existing=True,
-            on_finished=lambda: self.refresh_rom_artwork(rom),
-        )
+
+        def _finished():
+            self.refresh_rom_artwork(rom)
+            if callable(on_finished):
+                on_finished()
+
+        self._start_artwork_sync(passes, replace_existing=True, on_finished=_finished)
+        return True
 
     def open_artwork_manager(self, rom, art_dir=COVER_ART):
         """The per-ROM artwork manager (issue #77), on the tab for ``art_dir``."""
@@ -2327,7 +2505,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 toast.set_timeout(4)
                 self.toast_overlay.add_toast(toast)
                 return
-            save_local_art(Path(self.roms_path), rom["console"], rom["name"], path, kind)
+            saved = save_local_art(Path(self.roms_path), rom["console"], rom["name"], path, kind)
+            artwork_sources.record(
+                Path(self.roms_path), rom["console"], kind, rom["name"], saved,
+                artwork_sources.SOURCE_MANUAL, origin="menu",
+            )
             updated_key = "toast.label.updated" if kind == LABEL_ART else "toast.cover.updated"
             toast = Adw.Toast(title=self.t(updated_key, name=rom["name"]))
             toast.set_timeout(3)
@@ -2340,6 +2522,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _remove_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
         removed = remove_local_art(Path(self.roms_path), rom["console"], rom["name"], kind)
         if removed:
+            artwork_sources.forget(Path(self.roms_path), rom["console"], kind, rom["name"])
             removed_key = "toast.label.removed" if kind == LABEL_ART else "toast.cover.removed"
             toast = Adw.Toast(title=self.t(removed_key, name=rom["name"]))
             toast.set_timeout(3)
@@ -2923,6 +3106,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
+        if not summary.get("cancelled"):
+            self._toast_screenscraper_problem(summary.get("screenscraper_problem"))
         if self.current_console == ALL_CONSOLES_ID:
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
@@ -2932,6 +3117,30 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if on_finished:
             on_finished()
         return False
+
+    #: ScreenScraper problems a sync reports, to the text that explains each.
+    SCREENSCRAPER_PROBLEM_TOASTS = {
+        PROBLEM_REFUSED: "toast.screenscraper.refused",
+        PROBLEM_QUOTA: "toast.screenscraper.quota",
+        PROBLEM_UNREACHABLE: "toast.screenscraper.unreachable",
+    }
+
+    def _toast_screenscraper_problem(self, problem):
+        """Say that ScreenScraper refused or never answered during a sync.
+
+        Those ROMs are counted as missed like any game without art, which is
+        how a wrong account used to fail with no word at all (issue #506).
+        The button opens the page holding the ScreenScraper account.
+        """
+        key = self.SCREENSCRAPER_PROBLEM_TOASTS.get(problem)
+        if key is None:
+            return None
+        toast = Adw.Toast(title=self.t(key))
+        toast.set_timeout(8)
+        toast.set_button_label(self.t("toast.screenscraper.open_prefs"))
+        toast.connect("button-clicked", lambda _t: self._open_preferences(page="library"))
+        self.toast_overlay.add_toast(toast)
+        return toast
 
     def _on_refresh_clicked(self, _button):
         selected_console = self.sidebar.selected_id() or self.current_console

@@ -81,6 +81,19 @@ class RedirectBytecodeCacheTests(unittest.TestCase):
     def _make_read_only(self):
         os.chmod(self.package, 0o500)
         self.addCleanup(os.chmod, self.package, 0o700)
+        # Windows keeps no write bit on a directory, so the chmod alone leaves
+        # it writable there; the check is what the redirect actually reads.
+        real_access = os.access
+        package = self.package
+
+        def _access(path, mode, *args, **kwargs):
+            if mode == os.W_OK and Path(path) == package:
+                return False
+            return real_access(path, mode, *args, **kwargs)
+
+        patcher = mock.patch.object(main.os, "access", _access)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_a_read_only_install_gets_a_writable_cache(self):
         self._make_read_only()

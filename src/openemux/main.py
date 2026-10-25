@@ -187,8 +187,25 @@ def prepare_process():
     # one may still be on its way to.
     migrate_legacy_config_dir()
     configure_startup_logging()
+    _declare_windows_app_id()
     _ensure_gtk_typelibs()
     _ensure_pixbuf_loaders()
+
+
+def _declare_windows_app_id():
+    """Tell the Windows shell this ``pythonw.exe`` is OpenEmux (issue #509).
+
+    Process-wide, so it has to land before the first window exists -- which is
+    before GTK is imported, which is here. After the start-up log is set up, so
+    a failure reaches it. Only in the packaged bundle: the launcher exports its
+    own path, and with nothing to relaunch there is nothing to declare.
+    """
+    if not IS_WINDOWS:
+        return
+    from openemux.core import win32_shell
+
+    if win32_shell.launcher_path() is not None:
+        win32_shell.set_process_app_id(APP_ID)
 
 
 def build_application():

@@ -80,6 +80,7 @@ def _embedder_over(clients):
     return embedder
 
 
+@unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "python-xlib is not installed")
 class FindGameWindowTests(unittest.TestCase):
     """Which toplevel a launch decides is *its* RetroArch.
 
@@ -207,6 +208,7 @@ class OpeningAndClosingTheDisplayTests(unittest.TestCase):
         with mock.patch.object(x11_windows, "XLIB_AVAILABLE", False):
             self.assertIsNone(embedder._dpy())
 
+    @unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "imports the real Xlib package")
     def test_the_first_call_opens_one_and_the_rest_reuse_it(self):
         opened = []
 
@@ -223,6 +225,7 @@ class OpeningAndClosingTheDisplayTests(unittest.TestCase):
                 self.assertEqual(embedder._dpy(), "the display")
         self.assertEqual(len(opened), 1)
 
+    @unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "imports the real Xlib package")
     def test_a_display_that_will_not_open_is_reported_not_raised(self):
         class _Module:
             @staticmethod
@@ -258,6 +261,7 @@ def _xlib_display(module):
     return mock.patch.object(Xlib, "display", module, create=True)
 
 
+@unittest.skipUnless(x11_windows.XLIB_AVAILABLE, "python-xlib is not installed")
 class ListingTheToplevelsTests(unittest.TestCase):
     def test_no_display_lists_nothing(self):
         self.assertEqual(_embedder_with_no_display()._client_xids(), [])

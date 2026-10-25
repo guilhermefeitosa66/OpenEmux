@@ -1293,6 +1293,7 @@
       </div>
       <p class="cta-note">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·
         Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>
+      <p class="cta-note">macOS-க்கான <a href="https://openemu.org/">OpenEmu</a>-வால் ஈர்க்கப்பட்டது, ஆனால் இது ஒரு fork அல்ல: எமுலேஷனுக்கு RetroArch-ஐப் பயன்படுத்தும் தனிக் குறியீடு. <a href="#thanks">இதைப் பற்றி மேலும்</a>.</p>
       <!-- Promo video: plays muted on its own (browsers refuse sound without a
            click), loops while it is on screen, and stays still for people who
            asked for reduced motion. The native controls are the no-JS fallback. -->
@@ -1481,7 +1482,7 @@
     <div class="wrap center">
       <span class="eyebrow">Android</span>
       <h2>உங்கள் அலமாரி, உங்கள் பையில்</h2>
-      <p class="lede">Android-க்கான OpenEmux அதே நூலகத்தை தொலைபேசிக்குக் கொண்டுவருகிறது: உங்களிடம் உள்ள விளையாட்டுகள் ஒவ்வொரு கன்சோலுக்கும் ஒரு அலமாரியில் கார்ட்ரிட்ஜ்களாக, ஒவ்வொரு கணினிக்கும் வரையப்பட்ட திரைக் கட்டுப்பாடுகளுடனோ கேம்பேடுடனோ விளையாட.</p>
+      <p class="lede">Android-க்கான OpenEmux அதே நூலகத்தை தொலைபேசிக்குக் கொண்டுவருகிறது: உங்களிடம் உள்ள விளையாட்டுகள் ஒவ்வொரு கன்சோலுக்கும் ஒரு அலமாரியில் கார்ட்ரிட்ஜ்களாக, ஒவ்வொரு கணினிக்கும் வரையப்பட்ட திரைக் கட்டுப்பாடுகளுடனோ கேம்பேடுடனோ விளையாட. Android செயலிக்குத் தனி வடிவமைப்பு உண்டு: OpenEmu-க்கு மொபைல் பதிப்பு இல்லை, எனவே இதில் கன்சோல் ஐகான்கள் மட்டுமே OpenEmu-விலிருந்து வருகின்றன.</p>
       <div class="gallery phones">
         <figure><img src="../assets/openemux-mobile-shelf.png" alt="Android-இல் OpenEmux, அலமாரி" />
           <figcaption>அலமாரி</figcaption>
@@ -1534,6 +1535,11 @@
           <div class="ico">🌐</div>
           <h3>எட்டு மொழிகள்</h3>
           <p>கணினி செயலியின் அதே மொழிகள், தொலைபேசியைப் பின்பற்றியோ அமைப்புகளில் தேர்ந்தெடுத்தோ.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🏆</div>
+          <h3>RetroAchievements</h3>
+          <p>அமைப்புகளில் ஒருமுறை உள்நுழையுங்கள்; ஒவ்வொரு விளையாட்டும் உங்கள் RetroAchievements சுயவிவரத்தில் சாதனைகளைத் திறக்கும், விரும்பினால் ஹார்ட்கோர் பயன்முறையுடன்.</p>
         </div>
       </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
@@ -1645,8 +1651,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
   <section id="thanks">
     <div class="wrap center">
       <span class="eyebrow">நன்றி</span>
-      <h2>RetroArch, libretro &amp; OpenEmu-க்கு நன்றி</h2>
-      <p class="lede">OpenEmux, macOS-க்கான எமுலேட்டர் முகப்பான <a href="https://openemu.org/">OpenEmu</a>-இலிருந்து ஊக்கம் பெற்றது. OpenEmu macOS-இல் மட்டுமே இயங்குவதால், OpenEmux அதைப் போன்ற ஒன்றை Linux-இலும், இப்போது Windows-இலும் வழங்க முயல்கிறது. எமுலேஷன் <a href="https://www.retroarch.com/">RetroArch</a> மற்றும் <a href="https://www.libretro.com/">libretro</a> திட்டங்களிலிருந்து வருகிறது; அவர்களின் உழைப்பு இல்லாமல் இவை எதுவும் இருந்திருக்காது. ❤️</p>
+      <h2>OpenEmu-வால் ஈர்க்கப்பட்டது, RetroArch-ஆல் இயங்குகிறது</h2>
+      <p class="lede">OpenEmux, macOS-க்கான எமுலேட்டர் முகப்பான <a href="https://openemu.org/">OpenEmu</a>-வால் ஈர்க்கப்பட்டது. OpenEmu macOS-இல் மட்டுமே இயங்குவதால், OpenEmux அதே போன்ற அனுபவத்தை Linux-இலும், இப்போது Windows-இலும் தர முயல்கிறது. இது OpenEmu-வின் நகல் (fork) அல்ல, அதனுடன் எந்தக் குறியீட்டையும் பகிர்ந்துகொள்வதில்லை: Python, GTK 4, libadwaita-வில் எழுதப்பட்ட தனிக் குறியீடு இது, எமுலேஷன் <a href="https://www.retroarch.com/">RetroArch</a>, <a href="https://www.libretro.com/">libretro</a> திட்டங்களிலிருந்து வருகிறது. கன்சோல் ஐகான்கள் OpenEmu-வின் கலைப்படைப்புகள், <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/src/openemux/ui/assets/icons/ATTRIBUTION.md">OpenEmu-வின் BSD உரிமத்தின் கீழ் நன்றியுடன் குறிப்பிடப்பட்டுள்ளன</a>. Android செயலி தனி வடிவமைப்பு (தொலைபேசிகளுக்கு OpenEmu இல்லை). OpenEmux, OpenEmu Team-உடன் இணைந்ததும் அல்ல, அவர்களால் அங்கீகரிக்கப்பட்டதும் அல்ல. இந்தத் திட்டங்கள் அனைத்தின் உழைப்பு இல்லாமல் இவை எதுவும் இருந்திருக்காது. ❤️</p>
     </div>
   </section>
 
@@ -1847,10 +1853,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       if (!wall) return;
       // Cartridge renders are 400 px wide; ratio = width / height.
       var CONSOLES = {
-        gba: { ratio: 400 / 230, games: ["bust-a-move", "castlevania-aria-of-sorrow", "castlevania-circle-of-the-moon", "castlevania-harmony-of-dissonance", "donkey-kong-country-1", "donkey-kong-country-2", "donkey-kong-country-3", "dragonball-advanced-adventure", "kirby-nightmare-in-dreamland", "kirby-the-amazing-mirror", "mario-kart-super-circuit", "megaman-bass", "megaman-zero-1", "megaman-zero-2", "megaman-zero-3", "megaman-zero-4", "metal-slug-advance", "metroid-fusion", "metroid-zero-mission", "poke-mon-1-1-fire-red-version", "poke-mon-1-2-leaf-green-version", "poke-mon-3-1-ruby-version", "poke-mon-3-2-sapphire-version", "poke-mon-3-3-emerald-version", "sonic-advance", "super-mario-advance", "super-mario-advance-2-super-mario-world", "super-mario-advance-3-yoshi-s-island", "super-mario-advance-4-super-mario-bros", "the-legend-of-zelda-the-minish-cap", "wario-land-4"] },
-        sfc: { ratio: 400 / 255, games: ["asterix", "bust-a-move", "chrono-trigger", "dolucky-no-a-league-soccer", "donkey-kong-1", "donkey-kong-2", "donkey-kong-3", "goof-troop", "mega-man-x", "mega-man-x2", "mega-man-x3", "mighty-morphin-power-rangers", "mighty-morphin-power-rangers-the-movie", "mortal-kombat-1", "mortal-kombat-2", "mortal-kombat-3", "mortal-kombat-3-ultimate", "prince-of-persia", "street-fighter-ii-turbo", "super-bomberman-1", "super-bomberman-2", "super-bomberman-3", "super-bomberman-4", "super-bomberman-5", "super-mario-all-stars", "super-mario-kart", "super-mario-world", "super-mario-world-2-yoshi-s-island", "super-metroid", "the-legend-of-zelda-a-link-to-the-past", "top-gear-1", "top-gear-2", "top-gear-3000"] },
-        n64: { ratio: 400 / 257, games: ["diddy-kong-racing", "donkey-kong-64", "mario-kart-64", "mortal-kombat-4", "mortal-kombat-trilogy", "super-mario-64", "super-smash-bros", "the-legend-of-zelda-majora-s-mask", "the-legend-of-zelda-ocarina-of-time"] },
-        md: { ratio: 400 / 271, games: ["altered-beast", "batman", "golden-axe", "moonwalker", "sonic-the-hedgehog-1", "sonic-the-hedgehog-2", "sonic-the-hedgehog-3", "streets-of-rage-1", "streets-of-rage-2", "streets-of-rage-3", "yu-yu-hakusho-makyou-toitsusen"] }
+        gba: { ratio: 400 / 230, games: ["acorn-arcade", "basalt-bells", "brass-beetles", "cactus-courier", "chalk-comets", "driftwood-diaries", "fennel-fields", "glass-canyon", "gondola-gambit", "hollow-harp", "ivy-ironworks", "kite-kingdom", "lemon-lightning", "lychee-lane", "maple-mosaic", "moss-knight", "nimbus-noodles", "pixel-pantry", "plum-parade", "pocket-planetarium", "pumice-patrol", "raincoat-rangers", "ripple-runners", "saltmarsh-sprint", "sorrel-speedway", "sparrow-signal", "tangerine-tides", "teacup-tempest", "tinker-tram", "velvet-vortex"] },
+        sfc: { ratio: 400 / 255, games: ["biscuit-brigade", "cinder-bay", "clockwork-orchard", "cobalt-caravan", "copper-lighthouse", "ferris-fortress", "granite-garden", "harbor-hopscotch", "hazel-hollow", "juniper-station", "kettle-knights", "lagoon-lullaby", "lantern-keep", "mango-monsoon", "marble-meadow-rally", "meadow-mechanic", "orchard-siege", "paprika-pass", "pebble-patrol", "puddle-pilots", "rooftop-regatta", "saffron-skyway", "spindle-spire", "sundial-saga", "thimble-quest", "tundra-tailors", "turnip-tactics", "velvet-glacier", "walnut-wanderers", "willow-circuit"] },
+        n64: { ratio: 400 / 257, games: ["canyon-carousel", "glacier-grand-prix", "hover-hamlet", "lunar-laundry", "neon-harbor", "orbit-orchard", "polygon-prairie", "prism-pagoda", "skyline-sledders", "thunder-teapot", "velvet-voltage", "zephyr-zoo"] },
+        md: { ratio: 400 / 271, games: ["blast-bayou", "chrome-canyon", "granite-gale", "harbor-havoc", "iron-iguana", "magma-mailman", "nitro-nectar", "rapid-reef", "static-sunset", "tidepool-racers", "turbo-tortoise", "voltage-valley"] }
       };
       // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
       // N64 and Mega Drive sit behind them at the edges. speed is px/s at full

@@ -26,6 +26,7 @@ from openemux.ui.console_icons import console_icon
 from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
 from openemux.ui.grid_group import GridGroup, GridSection
 from openemux.ui.grid_selection import BandLayer
+from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
@@ -406,9 +407,13 @@ class LibraryPages:
         that console's box-art proportions, draw that console's cartridge
         shell (issue #385) and drop the console caption the flat page had to
         print on every card.
+
+        The groups go straight into a ``GroupedScroll``, never a box: a box
+        is wrapped in a viewport no grid can follow, and a big group's cards
+        stopped a few dozen rows down (issue #511).
         """
         win = self.win
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body = GroupedScroll()
         group = GridGroup(on_selection_changed=win._on_selection_changed)
         for console, group_roms in group_roms_by_console(roms, win.visible_consoles):
             grid = self._build_grid(
@@ -419,17 +424,12 @@ class LibraryPages:
                 band_host_is_self=True,
             )
             header, set_count = self._group_header(console, len(group_roms), grid.compact)
-            container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            container.append(header)
-            container.append(grid)
-            box.append(container)
-            group.add_section(
-                GridSection(console, grid, container, header, set_count=set_count)
-            )
+            body.add_section(header, grid)
+            group.add_section(GridSection(console, grid, header, set_count=set_count))
         # Every group follows the scope's own layout, so the first one answers
         # for the page: list view pins the master checkbox above the scroller.
         group.compact = bool(group.sections) and group.sections[0].grid.compact
-        return group, box
+        return group, body
 
     def _group_header(self, console, count, compact):
         """A group's heading: the console's icon, its name and its game count.
