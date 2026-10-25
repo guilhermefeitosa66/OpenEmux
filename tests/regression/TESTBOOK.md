@@ -1388,10 +1388,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the groups the query empties are hidden, headers and all. Step 2 brings them all back. Step 3
   selects **every** game on the page and the selection bar says so — one group full is not the
   page full. Step 4 walks out of the first group and into the next one instead of stopping at its
-  last row; `Up` walks back into the previous group's last card (issue #384).
+  last row; `Up` walks back into the previous group's last card (issue #384). Walking `Down`
+  through a group taller than the window keeps the focused card on screen the whole way: the page
+  scrolls with it, never back up and never past it (issue #511).
 - **Check:** a screenshot per step; the selection bar's count equals the window subtitle's; suite
-  file `tests/test_grid_group.py`.
+  files `tests/test_grid_group.py` and `tests/test_grouped_scroll.py` (`TheAllPageTests`).
 - **Restore:** clear the selection and the search; step 4 leaves nothing behind.
+
+### RT-370 — "All" keeps every game on screen in a big library
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app with a big console: inside the devbox home, 600 empty files
+  `Game 001 (USA).nes` … `Game 600 (USA).nes` in the ROM directory's `FC` folder and 60 more in a
+  second console's folder, then a rescan, so "All" opens with two groups taller than the window.
+- **Steps:**
+  1. Open "All" and scroll slowly to the bottom with the mouse wheel or `Page Down`.
+  2. `make devbox-res RES=700x900`, scroll from the top to the bottom again, then restore the size.
+  3. Press `End` (or drag the scrollbar to the bottom), then drag it to the middle, then to the top.
+- **Expected:** at every position every cell of both groups shows a card with its title — no blank
+  cells, no blank rows; the last game of each group is reachable. With fewer columns (step 2) the
+  same holds, and still after the size comes back. A cover placeholder for a moment is fine; an
+  empty cell with no title is the bug (issue #511).
+- **Check:** screenshots at the top, middle and bottom of steps 1–3 (`make devbox-shot`); suite file
+  `tests/test_grouped_scroll.py` (`TheAllPageTests`, `TheWidgetTests`).
+- **Restore:** delete the 660 placeholder files and rescan.
 
 ### RT-304 — "Platform" is not offered where it would do nothing
 - **Area:** Views
