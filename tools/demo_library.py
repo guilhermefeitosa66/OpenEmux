@@ -313,11 +313,10 @@ COVER_W, COVER_H = 512, 768
 BAND_H = round(COVER_H * 0.14)
 TITLE_SIZE = 46
 LABEL_LONG_SIDE = 512
-#: Average advance of a bold sans glyph, in ems: there is no text measuring in
-#: an SVG string, so wrapping and sizing go by this.
-GLYPH_EM = 0.6
-#: What a title's plate allows per glyph, a little wider than ``GLYPH_EM``:
-#: capitals run wider than the average, and a title must not leave its plate.
+#: What a title's plate allows per glyph of bold sans, in ems: there is no text
+#: measuring in an SVG string, so sizing goes by this. A little wider than the
+#: average advance (about 0.6): capitals run wider, and a title must not leave
+#: its plate.
 PLATE_EM = 0.68
 FONT = 'font-family="sans-serif" font-weight="bold"'
 
@@ -753,7 +752,7 @@ def _rhythm(i):
     for x, y in [(18 + 4 * k, 30), (76 - 4 * k, 22), (66, 46)]:
         shapes += [E(x, y, 3, 2.4, "accent"), R(x + 2.2, y - 10, 1, 10, "accent"),
                    P([(x + 3.2, y - 10), (x + 7, y - 7), (x + 3.2, y - 6)], "accent")]
-    shapes += [E(50, 90, 10, 1.8, "dark")] + _figure(50, 88, 40, pose=1, facing=1 - 2 * (i % 2))
+    shapes += [E(50, 90, 10, 1.8, "dark")] + _figure(50, 88, 40, pose=1)
     return shapes
 
 
@@ -863,16 +862,19 @@ def _viewport(view, box, body):
     )
 
 
-def _gradients(pal, ground_depth):
+def _gradients(pal, ground_depth=None):
+    """The sky and glow gradients, and the ground's when ``ground_depth`` is given."""
+    ground = "" if ground_depth is None else (
+        f'<linearGradient id="ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{pal["ground"]}"/>'
+        f'<stop offset="1" stop-color="{mix(pal["ground"], pal["dark"], ground_depth)}"/></linearGradient>'
+    )
     return (
         '<defs>'
         f'<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{pal["sky"]}"/>'
         f'<stop offset="1" stop-color="{pal["sky2"]}"/></linearGradient>'
         f'<linearGradient id="glow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{pal["sky2"]}" stop-opacity="0"/>'
         f'<stop offset="1" stop-color="{pal["sky2"]}"/></linearGradient>'
-        f'<linearGradient id="ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{pal["ground"]}"/>'
-        f'<stop offset="1" stop-color="{mix(pal["ground"], pal["dark"], ground_depth)}"/></linearGradient>'
-        '</defs>'
+        + ground + '</defs>'
     )
 
 
@@ -981,15 +983,37 @@ def facets(points):
     return out
 
 
+def is_convex(points):
+    """Whether the polygon turns the same way at every corner."""
+    signs = set()
+    count = len(points)
+    for j in range(count):
+        (ax, ay), (bx, by), (cx, cy) = points[j], points[(j + 1) % count], points[(j + 2) % count]
+        cross = (bx - ax) * (cy - by) - (by - ay) * (cx - bx)
+        if cross:
+            signs.add(cross > 0)
+    return len(signs) <= 1
+
+
 def render_lowpoly(shapes, pal, view, box, fog=False):
-    """Flat-shaded facets under a CG sky; ``fog`` lays a band over the horizon."""
-    body = _gradients(pal, 0.5)
+    """Flat-shaded facets under a CG sky; ``fog`` lays a band over the horizon.
+
+    A convex outline is fanned into facets from its centroid. A concave one
+    (an arch, a bare tree) is drawn as one flat facet instead: fanning it would
+    fill its notches.
+    """
+    body = _gradients(pal)
     for shape in shapes:
         fill = _gradient_fill(shape, pal)
         if fill:
             body += _shape_svg(shape, fill)
             continue
-        for triangle, light in facets(polygon_of(shape)):
+        points = polygon_of(shape)
+        if not is_convex(points):
+            colour = pal[shape.role]
+            body += _shape_svg(P(points, shape.role), colour, f' stroke="{colour}" stroke-width="0.2" stroke-linejoin="round"')
+            continue
+        for triangle, light in facets(points):
             colour = shade(pal[shape.role], 0.22 * light)
             body += _shape_svg(P(triangle, shape.role), colour, f' stroke="{colour}" stroke-width="0.2" stroke-linejoin="round"')
     if fog:

@@ -263,6 +263,21 @@ class GeometryTest(unittest.TestCase):
         for _tri, light in demo_library.facets(square):
             self.assertLessEqual(abs(light), 1)
 
+    def test_is_convex(self):
+        self.assertTrue(demo_library.is_convex(demo_library.polygon_of(demo_library.R(0, 0, 4, 4, "sky"))))
+        self.assertTrue(demo_library.is_convex([(0, 0), (1, 0), (2, 0), (1, 1)]))  # a straight corner
+        u = [(0, 0), (3, 0), (3, 5), (7, 5), (7, 0), (10, 0), (10, 10), (0, 10)]
+        self.assertFalse(demo_library.is_convex(u))
+
+    def test_lowpoly_keeps_a_concave_shape_open(self):
+        # Fanned from its centroid, an arch would get its doorway filled in.
+        arch = demo_library.P([(0, 30), (0, 0), (30, 0), (30, 30), (20, 30), (20, 10), (10, 10), (10, 30)], "prop")
+        pal = demo_library.palette_for("N64", 0)
+        svg = demo_library.render_lowpoly([arch], pal, (0, 0, 30, 30), (0, 0, 30, 30))
+        self.assertEqual(svg.count("<polygon"), 1)
+        self.assertIn(f'fill="{pal["prop"]}"', svg)
+        self.assertNotIn('id="ground"', svg)
+
     def test_facets_survive_a_degenerate_polygon(self):
         self.assertEqual([light for _t, light in demo_library.facets([(1, 1), (1, 1)])], [0, 0])
 
