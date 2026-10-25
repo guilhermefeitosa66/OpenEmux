@@ -203,6 +203,44 @@ class CartridgeCacheTests(unittest.TestCase):
             self.assertIsNone(render_cartridge(None, svg, "GB", "Game", cache_dir=base / "cache"))
 
 
+class TwoThreadsReplacingTheSameFileTests(unittest.TestCase):
+    """Windows refuses a replace that races another one onto the same target."""
+
+    def _refused(self, *_args):
+        raise PermissionError(5, "Access is denied")
+
+    def test_a_refused_replace_onto_a_written_target_keeps_that_target(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "a.png"
+            target.write_bytes(b"theirs")
+            mine = base / "a.png.1.2.tmp"
+            mine.write_bytes(b"mine")
+            with unittest.mock.patch.object(Path, "replace", self._refused):
+                cartridge_render._move_into_place(mine, target)
+            self.assertEqual(target.read_bytes(), b"theirs")
+            self.assertFalse(mine.exists())
+
+    def test_a_temporary_file_that_will_not_go_is_left_behind(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "a.png"
+            target.write_bytes(b"theirs")
+            with unittest.mock.patch.object(Path, "replace", self._refused), \
+                    unittest.mock.patch.object(Path, "unlink", self._refused):
+                cartridge_render._move_into_place(base / "a.png.1.2.tmp", target)
+            self.assertEqual(target.read_bytes(), b"theirs")
+
+    def test_a_refused_replace_with_no_target_is_a_failed_render(self):
+        cartridge_render._FRAMES.clear()
+        with TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(Path, "replace", self._refused), \
+                    self.assertLogs("openemux.core.cartridge_render", "WARNING"):
+                result = render_cartridge(None, FRAME, "GB", "Game", 120,
+                                          cache_dir=Path(tmp) / "cache")
+            self.assertIsNone(result)
+
+
 class RsvgUnavailableTests(unittest.TestCase):
     def test_frame_creation_reports_missing_typelib(self):
         original = cartridge_render.Rsvg

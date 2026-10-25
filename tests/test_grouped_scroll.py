@@ -12,6 +12,7 @@ import time
 import unittest
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
+from tests.platform_marks import IS_WINDOWS
 from tests.window_harness import WindowCase
 
 
@@ -303,6 +304,11 @@ class TheAllPageTests(WindowCase):
         middle = self.fc.entries()[280:320]
         self.assertTrue(any(self.fc.card_for(entry) is not None for entry in middle))
 
+    # On the Windows CI runner the window never lays itself out again after a
+    # size change: a smaller default size and a wider sidebar both left
+    # the column count where it was (issue #527). The behaviour is covered on
+    # Linux; what the runner does not show is how GTK on Windows reacts.
+    @unittest.skipIf(IS_WINDOWS, "the Windows runner does not re-allocate a mapped window")
     def test_fewer_columns_still_reach_the_end(self):
         columns = self.fc.get_max_columns()
         self.win.set_default_size(1000, 700)

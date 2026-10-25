@@ -1,8 +1,8 @@
 # OpenEmux Makefile
 
-# Windows (MSYS2 MINGW64) vs Linux. MSYS2's make inherits OS=Windows_NT from
+# Windows (MSYS2 UCRT64) vs Linux. MSYS2's make inherits OS=Windows_NT from
 # Windows itself, which is what makes this detection work from inside the
-# MINGW64 shell. Only the interpreter and the vendored RetroArch differ -- every
+# UCRT64 shell. Only the interpreter and the vendored RetroArch differ -- every
 # recipe below is POSIX sh, and MSYS2 supplies sh, find, xargs and sha256sum.
 #
 # There is no venv on Windows: PyGObject cannot be pip-built under MSYS2, so
@@ -68,21 +68,23 @@ install-sys-deps:
 		xvfb
 	@echo "Install RetroArch/libretro cores from your distro OR run 'make vendor-retroarch'."
 
-# System dependencies for Windows, from inside an MSYS2 MINGW64 shell.
+# System dependencies for Windows, from inside an MSYS2 UCRT64 shell.
 # scripts/windows/setup-dev.ps1 installs MSYS2 itself and then runs this list;
 # this target is for a developer who already has the shell open. Keep it in sync
-# with the package set in that script and with docs/DEVELOPMENT.md.
+# with the package set in that script, with the bundle roots in
+# packaging/windows/msys2_packages.py and with docs/DEVELOPMENT.md
+# (tests/test_ci_workflows.py checks the first two).
 install-sys-deps-windows:
 	pacman -S --needed --noconfirm make git \
-		mingw-w64-x86_64-gtk4 mingw-w64-x86_64-libadwaita \
-		mingw-w64-x86_64-gobject-introspection-runtime mingw-w64-x86_64-librsvg \
-		mingw-w64-x86_64-adwaita-icon-theme mingw-w64-x86_64-hicolor-icon-theme \
-		mingw-w64-x86_64-gsettings-desktop-schemas mingw-w64-x86_64-shared-mime-info \
-		mingw-w64-x86_64-webp-pixbuf-loader \
-		mingw-w64-x86_64-python mingw-w64-x86_64-python-gobject \
-		mingw-w64-x86_64-python-cairo mingw-w64-x86_64-python-yaml \
-		mingw-w64-x86_64-python-coverage mingw-w64-x86_64-ca-certificates \
-		mingw-w64-x86_64-SDL2 mingw-w64-x86_64-7zip
+		mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
+		mingw-w64-ucrt-x86_64-gobject-introspection-runtime mingw-w64-ucrt-x86_64-librsvg \
+		mingw-w64-ucrt-x86_64-adwaita-icon-theme mingw-w64-ucrt-x86_64-hicolor-icon-theme \
+		mingw-w64-ucrt-x86_64-gsettings-desktop-schemas mingw-w64-ucrt-x86_64-shared-mime-info \
+		mingw-w64-ucrt-x86_64-webp-pixbuf-loader \
+		mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject \
+		mingw-w64-ucrt-x86_64-python-cairo mingw-w64-ucrt-x86_64-python-yaml \
+		mingw-w64-ucrt-x86_64-python-coverage mingw-w64-ucrt-x86_64-ca-certificates \
+		mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-7zip
 
 # Environment setup, from the lock files rather than from requirements*.txt.
 # `pip-audit` reads the locks, so installing anything else means CI audits one
@@ -129,7 +131,7 @@ verify-vendors:
 	$(VENDOR_PYTHON) scripts/vendor_retroarch.py --verify
 
 # Development extras (coverage.py) on top of the runtime dependencies.
-# On Windows coverage comes from mingw-w64-x86_64-python-coverage, installed by
+# On Windows coverage comes from mingw-w64-ucrt-x86_64-python-coverage, installed by
 # install-sys-deps-windows, so there is nothing extra to do.
 ifeq ($(OS),Windows_NT)
 setup-dev: setup

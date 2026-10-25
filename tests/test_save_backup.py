@@ -291,11 +291,11 @@ class WhereAnArchiveMemberLandsTests(unittest.TestCase):
 
     def test_a_state_lands_in_the_states_tree(self):
         target = self._target("states/SFC/Game.state")
-        self.assertEqual(target, Path("/states/SFC/Game.state"))
+        self.assertEqual(target, Path("/states/SFC/Game.state").resolve())
 
     def test_a_battery_save_lands_beside_the_rom(self):
         target = self._target("saves/SFC/Game.srm")
-        self.assertEqual(target, Path("/roms/SFC/Game.srm"))
+        self.assertEqual(target, Path("/roms/SFC/Game.srm").resolve())
 
     def test_a_name_too_short_to_place_is_refused(self):
         self.assertIsNone(self._target("states/SFC"))

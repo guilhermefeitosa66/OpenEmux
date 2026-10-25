@@ -32,39 +32,39 @@ def _load_stage():
 stage = _load_stage()
 
 #: A prefix with one file in each place the prune has an opinion about. Written
-#: as the MSYS2 packages leave it -- under ``mingw64/`` -- so ``relocate_prefix``
+#: as the MSYS2 packages leave it -- under ``ucrt64/`` -- so ``relocate_prefix``
 #: runs too and the paths under test are the ones a real build sees.
 FIXTURE = (
     # Dropped: nothing in a GTK4 app reads terminal capabilities, and ncurses
     # ships the tree twice.
-    "mingw64/share/terminfo/x/xterm",
-    "mingw64/lib/terminfo/v/vt100",
+    "ucrt64/share/terminfo/x/xterm",
+    "ucrt64/lib/terminfo/v/vt100",
     # Dropped: unreachable on Windows (Python's TZPATH is a POSIX string baked
     # at build time; GLib reads the registry).
-    "mingw64/share/zoneinfo/America/Sao_Paulo",
-    "mingw64/share/zoneinfo/Europe/Berlin",
+    "ucrt64/share/zoneinfo/America/Sao_Paulo",
+    "ucrt64/share/zoneinfo/Europe/Berlin",
     # Dropped: a Tcl extension, now that tkinter and Tcl itself are gone.
-    "mingw64/lib/itcl4.3.7/pkgIndex.tcl",
-    "mingw64/lib/itcl4.3.7/libitcl4.3.7.dll",
+    "ucrt64/lib/itcl4.3.7/pkgIndex.tcl",
+    "ucrt64/lib/itcl4.3.7/libitcl4.3.7.dll",
     # Kept: not a Tcl package -- no pkgIndex.tcl -- and GTK loads it.
-    "mingw64/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.dll",
-    "mingw64/lib/girepository-1.0/Gtk-4.0.typelib",
+    "ucrt64/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.dll",
+    "ucrt64/lib/girepository-1.0/Gtk-4.0.typelib",
     # Kept: the app's own languages. Dropped: everything else of the 185.
-    "mingw64/share/locale/pt_BR/LC_MESSAGES/gtk40.mo",
-    "mingw64/share/locale/pt/LC_MESSAGES/gtk40.mo",
-    "mingw64/share/locale/zh_CN/LC_MESSAGES/glib20.mo",
-    "mingw64/share/locale/ja/LC_MESSAGES/libadwaita.mo",
-    "mingw64/share/locale/it/LC_MESSAGES/gtk40.mo",
-    "mingw64/share/locale/ru/LC_MESSAGES/gtk40.mo",
-    "mingw64/share/locale/zh_TW/LC_MESSAGES/gtk40.mo",
+    "ucrt64/share/locale/pt_BR/LC_MESSAGES/gtk40.mo",
+    "ucrt64/share/locale/pt/LC_MESSAGES/gtk40.mo",
+    "ucrt64/share/locale/zh_CN/LC_MESSAGES/glib20.mo",
+    "ucrt64/share/locale/ja/LC_MESSAGES/libadwaita.mo",
+    "ucrt64/share/locale/it/LC_MESSAGES/gtk40.mo",
+    "ucrt64/share/locale/ru/LC_MESSAGES/gtk40.mo",
+    "ucrt64/share/locale/zh_TW/LC_MESSAGES/gtk40.mo",
     # Kept: a loose file under share/locale is not a language directory.
-    "mingw64/share/locale/locale.alias",
+    "ucrt64/share/locale/locale.alias",
     # Kept, and pruned before this change already -- the fixture carries them
     # so a regression in the old half shows up here too.
-    "mingw64/share/glib-2.0/schemas/org.gtk.gschema.xml",
-    "mingw64/etc/ssl/certs/ca-bundle.crt",
-    "mingw64/include/glib-2.0/glib.h",
-    "mingw64/share/man/man1/gtk4-demo.1",
+    "ucrt64/share/glib-2.0/schemas/org.gtk.gschema.xml",
+    "ucrt64/etc/ssl/certs/ca-bundle.crt",
+    "ucrt64/include/glib-2.0/glib.h",
+    "ucrt64/share/man/man1/gtk4-demo.1",
 )
 
 
@@ -133,6 +133,25 @@ class PruneDropsWhatNothingReadsTests(unittest.TestCase):
     def test_what_the_app_needs_at_runtime_is_untouched(self):
         self.assertKept("share/glib-2.0/schemas/org.gtk.gschema.xml")
         self.assertKept("etc/ssl/certs/ca-bundle.crt")
+
+
+class RelocatePrefixTests(unittest.TestCase):
+    def test_the_environment_directory_comes_from_the_package_resolver(self):
+        # One name for the directory the packages unpack into: a second copy
+        # of the string here is how the resolver and the staging step drift.
+        self.assertEqual(stage.ENVIRONMENT, "ucrt64")
+
+    def test_a_missing_prefix_names_the_step_that_did_not_run(self):
+        # An extraction that produced some other environment's tree -- a stale
+        # lock, a resolver that never ran -- must stop the build, not stage an
+        # empty bundle.
+        with tempfile.TemporaryDirectory() as tmp:
+            extracted = Path(tmp) / "extracted"
+            (extracted / "mingw64" / "bin").mkdir(parents=True)
+            with self.assertRaises(SystemExit) as raised:
+                stage.relocate_prefix(extracted, Path(tmp) / "OpenEmux")
+        self.assertIn("ucrt64 is missing", str(raised.exception))
+        self.assertIn("msys2_packages.py", str(raised.exception))
 
 
 class LocaleKeepFollowsTheAppTests(unittest.TestCase):

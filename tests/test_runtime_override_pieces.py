@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from openemux.core import retroarch_command, retroarch_launcher
+from openemux.core import retroarch_command, retroarch_launcher, video_driver
 from openemux.core.retroarch_launcher import RetroArchLauncher
 from tests.test_retroarch_launcher import _DummyConfig
 
@@ -136,6 +136,13 @@ class TheSessionPieceTests(unittest.TestCase):
 
 
 class TheAudioPieceTests(unittest.TestCase):
+    def setUp(self):
+        # The same method names the video driver, which on Windows it always
+        # does (issue #366); these are about the audio half alone.
+        patcher = patch.object(video_driver, "IS_WINDOWS", False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_inheriting_writes_nothing(self):
         launcher, _config = _launcher(audio_driver="inherit")
         self.assertEqual(launcher._av_overrides(), {})

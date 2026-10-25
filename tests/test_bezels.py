@@ -15,6 +15,7 @@ from unittest import mock
 
 from openemux.core import bezels, overlay_bar
 from openemux.core.systems import SYSTEM_IDS
+from tests.platform_marks import posix_only
 
 
 def real_png(path, width, height):
@@ -171,6 +172,7 @@ class ImportingACustomImageTests(_TmpCase):
         self.assertEqual(first.read_bytes(), before)
         self.assertEqual([p.name for p in target.iterdir()], ["PS.png"])
 
+    @posix_only("the 0o644 mode bits a new file is given")
     def test_the_stored_image_is_readable_by_others(self):
         # mkstemp opens owner-only; atomic_write gives a new file 0o644.
         stored = bezels.import_custom("PS", real_png(self.tmp / "a.png", 960, 540), self.tmp)
@@ -185,6 +187,7 @@ class ImportingACustomImageTests(_TmpCase):
                                     self.tmp / "bezels")
         self.assertEqual(png_size(wide), (960, 270))
 
+    @posix_only("the 0o644 mode bits a new file is given")
     def test_a_scaled_import_is_readable_by_others_too(self):
         stored = bezels.import_custom("PS", real_png(self.tmp / "p.png", 1920, 1080), self.tmp)
         self.assertEqual(stored.stat().st_mode & 0o777, 0o644)
