@@ -6241,6 +6241,128 @@ at least once and a few games imported recently. Every scenario ends with
 - **Check:** human only (a screenshot of each size).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
 
+## Android — Tablet gameplay
+
+The Android app's in-game screens on a tablet-sized window (#559): the tablet controller skin
+(capped button size, the strip under the picture, the controls in side columns or the lower half),
+the Nintendo DS screens side by side with a layout key, and the pause menu as a side panel. Same
+setup as "Android — Responsive layout" above (`MANUAL`, headless emulator, sizes simulated with
+`wm size` and `wm density 320`, so dp = px / 2). The skin is drawn when the game starts, so set the
+size **before** opening the game. The tablet skin starts at a smallest width of 600dp; anything
+narrower keeps the phone skins. The library needs a Game Boy Advance game and a Nintendo DS game.
+Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
+`user_rotation 0`.
+
+### RT-428 — Tablet landscape draws the picture between two control columns
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
+  (1280×800dp), landscape (`user_rotation 1` if the device is a portrait one).
+- **Steps:**
+  1. Start the Game Boy Advance game.
+  2. Tap the strip's turbo and fast-forward keys, then each of them again.
+- **Expected:** The picture is large and centred, keeping its aspect, between two columns of
+  controls of equal width. Right under the picture, at its width, the strip shows save, load,
+  turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
+  console name at the top of the right column, the D-pad in the middle of the left column, A and B
+  in the right column, Select and Start lower down in each column. No control covers the picture.
+  Turbo and fast forward light up while on and go dark on the second tap.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
+  board of the plan on #559).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-429 — Tablet portrait puts the picture on top and the controls in the lower half
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
+  (800×1280dp), portrait.
+- **Steps:**
+  1. Start the Game Boy Advance game.
+  2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
+- **Expected:** In portrait the picture spans the full width at the top with the strip under it,
+  then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
+  left, A and B lower right, Select and Start between them and the console name at the bottom.
+  Turning switches to the RT-428 layout and back, without restarting the game.
+- **Check:** human only (a screenshot of each orientation, compared with TabJogoRetrato).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-430 — Buttons stop growing on bigger tablets and stay near the edges
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380.
+- **Steps:**
+  1. Set `wm size 1488x2266` and `wm density 320` (744×1133dp, an 8" tablet), start the Game Boy
+     Advance game, take a screenshot in portrait and in landscape, quit it.
+  2. Repeat with `wm size 1600x2560` (800×1280dp, 10").
+  3. Measure the A button and the D-pad in each screenshot (dp = px / 2).
+- **Expected:** A and B are the same size on 8" and on 10", at most 1.4 times their size on a
+  regular phone (≈ 100dp across, never bigger). In landscape the D-pad's centre is within about
+  130dp of the left edge and A/B within about 130dp of the right edge; in portrait within about
+  160dp. On the larger screen the picture grows, the controls do not.
+- **Check:** human only (the screenshots side by side).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-431 — Nintendo DS on a tablet: two screens side by side, touch, layout key
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-428, no NDS screen layout chosen yet for landscape (a fresh install, or
+  `adb shell run-as com.openemux.mobile rm files/nds-layout`).
+- **Steps:**
+  1. Start the Nintendo DS game in landscape.
+  2. Tap something on the right screen (the DS bottom screen).
+  3. Tap the key above the screens three times.
+  4. Quit and start the game again.
+- **Expected:** The two screens sit side by side, the strip spans under both with save, load,
+  turbo and fast forward (no fifth key), and a pill above them shows the screens icon and
+  "SIDE BY SIDE". The tap on the right screen reaches the game. Each tap of the pill moves to the
+  next layout (top screen only, bottom screen only, side by side) and its label follows. On the
+  second start the game opens in the last layout chosen.
+- **Check:** human only (a screenshot per layout).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-432 — The pause menu is a side panel on a tablet
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-428, a game with at least two saved states, a gamepad connected
+  (`adb shell input gamepad keyevent …` works too).
+- **Steps:**
+  1. Open the pause menu with the skin's menu key.
+  2. Look at both halves of the screen; tap "Save state", then "Load" and come back with
+     "Back".
+  3. Move with the gamepad's D-pad over every control of the panel; press B, open the menu again
+     and press START.
+  4. Repeat steps 1 and 2 in portrait (`wm size 1600x2560`) and with the system theme light and
+     dark (`adb shell cmd uimode night yes|no`).
+  5. Tap one of the saved-state pictures on the left.
+- **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
+  left corners: the game's title and play time, "Save state" and "Load", the action tiles,
+  "Save states" and "Restart", and "Quit" at the foot. On the left the game stays visible, dimmed,
+  with a "PAUSED" chip and up to four saved states with "Tap to load". The save states and shader
+  pages open inside the panel. The focus ring shows on every control; B goes back a page or
+  resumes, START resumes. In portrait the panel is narrower and the game still shows on the left.
+  The panel is readable in both themes. Tapping a saved state on the left loads it and resumes.
+- **Check:** human only (screenshots).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`,
+  `adb shell cmd uimode night auto`, `user_rotation 0`.
+
+### RT-433 — Phones keep their skins and the bottom pause sheet
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380 (a phone, or `wm size 1080x2400` at 420 dpi), and the same in
+  landscape (`user_rotation 1`).
+- **Steps:**
+  1. Start the Game Boy Advance game, then the Nintendo DS game, in portrait and in landscape.
+  2. Open the pause menu in each.
+  3. With RetroAchievements hardcore on, repeat step 1 on a tablet size (`wm size 2560x1600`,
+     `wm density 320`) and open the pause menu.
+- **Expected:** On the phone the skins and the pause sheet at the bottom are the same as in the
+  previous release, NDS keeps its screens key as the strip's fifth key. In hardcore on the tablet
+  fast forward is dimmed on the strip and on the panel, and "Load" and the saved states on the
+  left are not offered, as on a phone.
+- **Check:** human only (screenshots compared with the previous release).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
