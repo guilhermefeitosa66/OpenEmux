@@ -248,7 +248,7 @@
   "views-pages.alt1": "按主机分组的“全部”页面，框出了“全部”这一行",
   "views-pages.p1": "<span class=\"ui\">全部</span>、<span class=\"ui\">收藏</span>和自定义列表中混有多台主机的游戏，因此会分组显示：每组都有一个标题，显示主机图标、名称和游戏数量。分组的顺序与你在侧边栏或<a href=\"#settings-library\">设置 → 库</a>中设置的主机顺序一致。",
   "views-search.h31": "搜索",
-  "views-search.alt1": "输入了 lantern 的搜索栏，正在筛选“全部”页面",
+  "views-search.alt1": "输入了 plumber 的搜索栏，正在筛选“全部”页面",
   "views-search.p1": "点击 🔍、按 <kbd>Ctrl</kbd>+<kbd>F</kbd>，或者直接开始输入。搜索只筛选屏幕上的这一页，所以要在整个游戏库中查找，请在 <span class=\"ui\">全部</span> 页中搜索。按 <kbd>Esc</kbd> 关闭搜索。",
   "views-select.h31": "选择多个游戏",
   "views-select.alt1": "框出的选择栏，已选中两个游戏",
