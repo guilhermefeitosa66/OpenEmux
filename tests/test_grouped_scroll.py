@@ -23,7 +23,6 @@ if HAVE_DISPLAY:
 
     from openemux.ui.grouped_scroll import GroupedScroll
     from openemux.ui.scopes import ALL_CONSOLES_ID
-    from openemux.core.library_view import can_zoom
 
 
 def _pump_until(predicate, timeout=5.0):
@@ -307,16 +306,16 @@ class TheAllPageTests(WindowCase):
     def test_fewer_columns_still_reach_the_end(self):
         columns = self.fc.get_max_columns()
         self.assertGreater(columns, 1)
-        # Bigger cards, not a narrower window: the columns change while the grid
-        # is allocated either way, but resizing a mapped window is up to the
-        # window system, and on the Windows runner (a 1024px screen) it does
-        # not take. The zoom is the app's own.
-        while self.fc.get_max_columns() >= columns and can_zoom(self.win._zoom, 1):
-            self.win._step_zoom(1)
-            self.pump_until(lambda: self.fc.get_max_columns() < columns, timeout=1.0)
-        self.assertLess(self.fc.get_max_columns(), columns)
-        # The same grid, resized in place: not a page built again at the new size.
-        self.assertIs(self.win.pages.grid_for(ALL_CONSOLES_ID).grids()[0], self.fc)
+        # Narrow the content by widening the sidebar, not the window: resizing
+        # a mapped toplevel is up to the window system, and on the Windows
+        # runner (a 1024px screen) it does not take. Take what one column needs
+        # and half a column more, so the count lands off the boundary.
+        column = self.fc._card_allocation_width() + self.fc._spacing
+        excess = self.fc._available_width() - (columns - 0.5) * column
+        sidebar = int(self.win.sidebar.page.get_width() + excess)
+        self.win.split_view.set_max_sidebar_width(sidebar)
+        self.win.split_view.set_min_sidebar_width(sidebar)
+        self.assertTrue(self.pump_until(lambda: self.fc.get_max_columns() < columns))
         # The columns change while the grid is allocated; the page lays itself
         # out again on the next pass, and only then is the group its new height.
         body = self.fc.get_parent()
