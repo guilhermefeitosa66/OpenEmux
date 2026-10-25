@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">カートリッジラベルの画像を選択</span>は、パソコン上の画像ファイルをそのまま使います。",
   "artwork-menu.li5": "<span class=\"ui\">カートリッジラベルの画像を削除</span>は、ゲームの現在のアートを削除します。削除できるものがあるときだけ表示されます。",
   "artwork-manager.h31": "アートワークマネージャー",
-  "artwork-manager.p1": "マネージャーは<span class=\"ui\">カバーを管理…</span> / <span class=\"ui\">ラベルを管理…</span>、または空のカードの<span class=\"ui\">アートワークを検索…</span>ボタンから開きます。タブは4つあり、最初に<span class=\"ui\">現在</span>タブが開きます。ゲームの今のアートワークと、その入手元が表示されます。",
+  "artwork-manager.p1": "マネージャーは<span class=\"ui\">カバーを管理…</span> / <span class=\"ui\">ラベルを管理…</span>、または空のカードの<span class=\"ui\">アートワークを検索…</span>ボタンから開きます。タブは4つあり（カートリッジ表示のないゲーム機では「ラベル」タブがないため3つ）、最初に<span class=\"ui\">現在</span>タブが開きます。ゲームの今のアートワークと、その入手元が表示されます。",
   "artwork-manager.h41": "カバーとラベル",
   "artwork-manager.alt1": "「カバー」タブでパッケージアートの検索結果を表示しているアートワークマネージャー",
   "artwork-manager.figcaption1": "「カバー」タブ：パッケージアート。",

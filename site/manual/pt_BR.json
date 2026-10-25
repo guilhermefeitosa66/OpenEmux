@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">Escolher imagem do rótulo do cartucho</span> usa um arquivo de imagem do seu computador do jeito que ele está.",
   "artwork-menu.li5": "<span class=\"ui\">Remover imagem do rótulo</span> apaga a imagem que o jogo tem agora. Só aparece quando há algo para remover.",
   "artwork-manager.h31": "O gerenciador de imagens",
-  "artwork-manager.p1": "O gerenciador abre por <span class=\"ui\">Gerenciar capa…</span> / <span class=\"ui\">Gerenciar rótulo…</span>, ou pelo botão <span class=\"ui\">Buscar capa…</span> num card vazio. Ele tem quatro abas e abre na <span class=\"ui\">Atual</span>, que mostra a arte que o jogo tem agora e de onde ela veio.",
+  "artwork-manager.p1": "O gerenciador abre por <span class=\"ui\">Gerenciar capa…</span> / <span class=\"ui\">Gerenciar rótulo…</span>, ou pelo botão <span class=\"ui\">Buscar capa…</span> num card vazio. Ele tem quatro abas (três nos consoles sem visão de cartucho, que não têm a aba Rótulo) e abre na <span class=\"ui\">Atual</span>, que mostra a arte que o jogo tem agora e de onde ela veio.",
   "artwork-manager.h41": "Capa e Rótulo",
   "artwork-manager.alt1": "O gerenciador de imagens na aba Capa, com resultados de capas",
   "artwork-manager.figcaption1": "Aba Capa: arte da caixa.",

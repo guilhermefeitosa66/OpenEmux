@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">Bild des Modul-Aufklebers wählen</span> nimmt eine Bilddatei von deinem Computer, so wie sie ist.",
   "artwork-menu.li5": "<span class=\"ui\">Bild des Modul-Aufklebers entfernen</span> löscht das aktuelle Bild des Spiels. Erscheint nur, wenn es etwas zu entfernen gibt.",
   "artwork-manager.h31": "Die Cover-Verwaltung",
-  "artwork-manager.p1": "Die Verwaltung öffnest du über <span class=\"ui\">Cover verwalten…</span> / <span class=\"ui\">Aufkleber verwalten…</span> oder über die Schaltfläche <span class=\"ui\">Cover suchen…</span> auf einer leeren Karte. Sie hat vier Tabs und öffnet sich auf <span class=\"ui\">Aktuell</span>: Dort siehst du das Bild, das das Spiel gerade hat, und woher es stammt.",
+  "artwork-manager.p1": "Die Verwaltung öffnest du über <span class=\"ui\">Cover verwalten…</span> / <span class=\"ui\">Aufkleber verwalten…</span> oder über die Schaltfläche <span class=\"ui\">Cover suchen…</span> auf einer leeren Karte. Sie hat vier Tabs (drei bei Konsolen ohne Modulansicht, die keinen Tab Aufkleber haben) und öffnet sich auf <span class=\"ui\">Aktuell</span>: Dort siehst du das Bild, das das Spiel gerade hat, und woher es stammt.",
   "artwork-manager.h41": "Cover und Aufkleber",
   "artwork-manager.alt1": "Die Cover-Verwaltung im Tab Cover, mit Cover-Ergebnissen",
   "artwork-manager.figcaption1": "Tab Cover: die Hüllen.",

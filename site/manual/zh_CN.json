@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">选择卡带贴纸图片</span>会直接使用你电脑上的一个图片文件。",
   "artwork-menu.li5": "<span class=\"ui\">删除卡带贴纸图片</span>会删除游戏当前的图片。只有在有图片可删除时才会出现。",
   "artwork-manager.h31": "封面管理器",
-  "artwork-manager.p1": "通过<span class=\"ui\">管理封面…</span> / <span class=\"ui\">管理贴纸…</span>，或空白卡片上的<span class=\"ui\">搜索封面…</span>按钮打开管理器。它有四个标签页，打开时显示<span class=\"ui\">当前</span>：游戏现在使用的图片及其来源。",
+  "artwork-manager.p1": "通过<span class=\"ui\">管理封面…</span> / <span class=\"ui\">管理贴纸…</span>，或空白卡片上的<span class=\"ui\">搜索封面…</span>按钮打开管理器。它有四个标签页（没有卡带视图的主机没有“贴纸”标签页，因此只有三个），打开时显示<span class=\"ui\">当前</span>：游戏现在使用的图片及其来源。",
   "artwork-manager.h41": "封面和贴纸",
   "artwork-manager.alt1": "位于“封面”标签页的封面管理器，显示包装盒封面搜索结果",
   "artwork-manager.figcaption1": "“封面”标签页：包装盒封面。",

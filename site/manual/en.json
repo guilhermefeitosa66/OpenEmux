@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">Choose cartridge label image</span> uses an image file from your computer as is.",
   "artwork-menu.li5": "<span class=\"ui\">Remove cartridge label image</span> deletes the art the game has now. It only appears\n              when there is something to remove.",
   "artwork-manager.h31": "The artwork manager",
-  "artwork-manager.p1": "The manager opens from <span class=\"ui\">Manage cover…</span> / <span class=\"ui\">Manage label…</span>, or\n            from the <span class=\"ui\">Search artwork…</span> button on an empty card. It has four tabs and opens on <span class=\"ui\">Current</span>, which shows the art the game has now and where it came from.",
+  "artwork-manager.p1": "The manager opens from <span class=\"ui\">Manage cover…</span> / <span class=\"ui\">Manage label…</span>, or\n            from the <span class=\"ui\">Search artwork…</span> button on an empty card. It has four tabs (three on consoles without a cartridge view, which have no Label tab) and opens on <span class=\"ui\">Current</span>, which shows the art the game has now and where it came from.",
   "artwork-manager.h41": "Cover and Label",
   "artwork-manager.alt1": "The artwork manager on the Cover tab, with box art results",
   "artwork-manager.figcaption1": "Cover tab: box art.",
