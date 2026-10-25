@@ -788,6 +788,13 @@
       max-width: 70ch
     }
 
+    .fineprint {
+      margin: 28px auto 0;
+      font-size: .8rem;
+      color: #6f688c;
+      max-width: 70ch
+    }
+
     /* "Shelf" carousel: 3 console shots per slide, dots + wrap-around arrows */
     .carousel {
       position: relative;
@@ -1435,6 +1442,7 @@
         </div>
         <div class="carousel-dots" role="tablist" {{shots.dots}}
       </div>
+      {{shots.notice}}
       <p style="margin-top:44px"><a class="btn btn-ghost" href="manual/">{{shots.manual}}</a></p>
     </div>
   </section>
@@ -1455,6 +1463,7 @@
         <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba-landscape.png" {{android.shot_landscape}}
         <figure><img src="{{root}}assets/openemux-mobile-nds-landscape.png" {{android.shot_nds}}
       </div>
+      {{android.notice}}
       <div class="grid">
         <div class="card">
           <div class="ico">🕹️</div>
@@ -1615,6 +1624,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </div>
       </div>
       {{footer.disclaimer}}
+      {{footer.fictional}}
     </div>
   </footer>
 

@@ -83,6 +83,7 @@
   "footer.license": ">MIT-Lizenz</a>",
   "footer.notices": ">Hinweise zu\n            Drittanbietern</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu OpenEmu,\n        RetroArch, libretro, Nintendo, Sega, Sony, Atari oder einem anderen Unternehmen und wird von diesen weder\n        unterstützt noch empfohlen. Alle Marken sind Eigentum ihrer jeweiligen Inhaber. OpenEmux vertreibt keine\n        Spiele, ROMs oder BIOS-Dateien.</p>",
+  "footer.fictional": "<p class=\"disclaimer\">Die gezeigten Spiele sind fiktiv und dienen nur zur Veranschaulichung. Es sind keine echten Spiele für diese Konsolen, und ihre Grafiken wurden mit KI erstellt.</p>",
   "lightbox.label": "aria-label=\"Screenshot-Ansicht\">",
   "lightbox.close": "aria-label=\"Schließen\">×</button>",
   "js.slide": "'Gehe zu Folie '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Öffne die heruntergeladene Datei und bestätige. Updates werden genauso installiert, über die vorherige Version.</p>",
   "install.android_first_step": "<div class=\"step-n\">Erster Start</div>",
   "install.android_first_title": "<h3>Lass die Cores herunterladen</h3>",
-  "install.android_first_note": "<p>Beim ersten Start lädt die App die Emulator-Cores herunter. Leg dann deine ROMs unter Importieren ab, oder auf dem Handy in Android/data/com.openemux.mobile/files/roms.</p>"
+  "install.android_first_note": "<p>Beim ersten Start lädt die App die Emulator-Cores herunter. Leg dann deine ROMs unter Importieren ab, oder auf dem Handy in Android/data/com.openemux.mobile/files/roms.</p>",
+  "shots.notice": "<p class=\"fineprint\">Die gezeigten Spiele sind fiktiv und dienen nur zur Veranschaulichung. Es sind keine echten Spiele für diese Konsolen, und ihre Grafiken wurden mit KI erstellt.</p>",
+  "android.notice": "<p class=\"fineprint\">Die gezeigten Spiele sind fiktiv und dienen nur zur Veranschaulichung. Es sind keine echten Spiele für diese Konsolen, und ihre Grafiken wurden mit KI erstellt.</p>"
 }
