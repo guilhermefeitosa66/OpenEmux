@@ -5393,14 +5393,15 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 ### RT-384 — Library grids add columns as the window widens and cap the card size
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
-- **Preconditions:** As RT-380, then `adb shell wm size 1200x1800` and `adb shell wm density 320`
-  (600×900dp).
+- **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
+  (800×1280dp).
 - **Steps:**
   1. Open a console with cartridge frames in the cartridge view, then the cover view.
   2. Open "All games" in the cartridge view (the console without frames shows covers in its group).
-- **Expected:** The bottom bar stays. 3 columns of cartridges, 4 of covers; a cartridge is never
-  wider than 220dp and a cover never wider than 170dp, each centred in its cell. On the mixed page
-  each console's group picks its own column count the same way.
+- **Expected:** The tabs are the tablet rail (RT-421). 4 columns of cartridges, 5 of covers; a
+  cartridge is never wider than 220dp and a cover never wider than 170dp, each centred in its cell.
+  On the mixed page each console's group picks its own column count the same way. (Until #557 this
+  ran at 600×900dp with the bottom bar; a window that wide now gets the rail and less room.)
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
 
@@ -5418,6 +5419,128 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
+
+## Android — Tablet layout
+
+The Android app on a tablet-sized window (#557): the tabs in a rail with the logo, the tablet
+shelf, wider library margins, reading width and the setup side by side. Same setup as "Android —
+Responsive layout" above (`MANUAL`, headless emulator, sizes simulated with `wm size` and
+`wm density 320`, so dp = px / 2). The library needs at least three consoles, three games played
+at least once and a few games imported recently. Every scenario ends with
+`adb shell wm size reset` and `adb shell wm density reset`.
+
+### RT-421 — The tabs follow the window: bottom bar, phone rail or tablet rail
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380.
+- **Steps:**
+  1. With "Shelf" open, set in turn 1080×2400 at 420 dpi (phone portrait), 2400×1080 at 420 dpi
+     (phone landscape), 1488×2266 (744×1133dp), 1600×2560 (800×1280dp), 2560×1600 (1280×800dp) and
+     1200×1800 (600×900dp), the last four at 320 dpi.
+  2. On each, look at the left edge and the bottom of the screen.
+- **Expected:** Phone portrait: the bottom bar. Phone landscape: the side rail with the tabs
+  centred and no logo, as RT-381. Every other size: a rail on the left with the OpenEmux logo at
+  the top and the four tabs under it ("Library", "Recent", "Import", "Settings"); the current tab
+  sits in a filled purple pill and its label is in the text colour. The rail is 88dp wide at
+  1280×800 and 80dp at the others.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-422 — Resizing between the bottom bar and the rail keeps the screen
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 2560x1600`, `wm density 320`.
+- **Steps:**
+  1. Open a console's library from "Shelf" and scroll down a little.
+  2. Set 1600×2560, then `wm size reset` and `wm density reset` (phone), then 2560×1600 at 320
+     dpi again.
+- **Expected:** The same console's library stays open at every step; the tabs switch between the
+  rail and the bottom bar. The app does not restart and does not go back to "Shelf".
+- **Check:** human only (a screenshot after each change).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-423 — Tablet shelf, landscape: header row, continue row and three columns
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 2560x1600`, `wm density 320` (1280×800dp); run it once
+  in the dark theme and once in the light theme ("Settings" → "Theme").
+- **Steps:**
+  1. Open "Shelf" and scroll to the end.
+  2. Tap a card under "Continue playing"; quit the game. Tap "See recent", then "Library".
+  3. Tap "Search all consoles", go back; tap "Import ROMs", go back; tap "Import more games".
+- **Expected:** One header row: "Shelf" with "N consoles · M games" under it, then a search field
+  "Search all consoles" and the purple "Import ROMs" button on the right. "Continue playing" shows
+  the three last played games (newest first) with "See recent" on the right; tapping a card resumes
+  that game. "Consoles" has "Long press to reorder" on the right, then the console cards in 3
+  columns, each with its icon, tag, name, count and cartridges; the last cell is a dashed "Import
+  more games" card. "powered by RetroArch" closes the page. Search opens the search page; "Import
+  ROMs" and "Import more games" open "Import"; "See recent" opens "Recent". Nothing is cut off,
+  including the button's label.
+- **Check:** human only (a screenshot of the top and of the end of the page in each theme).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, the theme as it was.
+
+### RT-424 — Tablet shelf, portrait: two columns and "Recently added"
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 1600x2560`, `wm density 320` (800×1280dp).
+- **Steps:**
+  1. Open "Shelf" and scroll to the end.
+  2. Tap a game under "Recently added"; go back; tap "See all".
+  3. Repeat step 1 at 1488×2266 (744×1133dp) and at 1600×1700 (800×850dp).
+- **Expected:** At 800×1280 and 744×1133: a round search button next to "Import ROMs", two games
+  under "Continue playing", console cards in 2 columns with "Import more games" last, then
+  "Recently added" with the four newest imported games and their titles, and "See all" on the right.
+  The game opens its page; "See all" opens "All games". At 800×850 (not tall enough) the
+  "Recently added" row is not shown. With no game played yet, "Continue playing" is not shown.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-425 — Gamepad: Left on the first column focuses the rail, Right comes back
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-423 (1280×800dp), a gamepad or `adb shell input keyevent KEYCODE_DPAD_*`.
+- **Steps:**
+  1. Open "Shelf" and press Down once.
+  2. Walk to a console card in the first column, press Left.
+  3. Press Down and Up on the rail, then Right.
+  4. Walk across all three columns and down to "Import more games"; press L1 and R1.
+- **Expected:** The first press focuses an item of the shelf (the search field), never the rail.
+  Left from a first-column card focuses the current tab ("Library") on the rail; Up/Down move
+  between the tabs; Right returns to the same card. Every card, the continue cards, the search
+  field, "Import ROMs" and "Import more games" show the focus ring whole. L1/R1 switch tabs. In
+  gamepad mode "Long press to reorder" is hidden.
+- **Check:** human only (a screenshot at each step).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-426 — Reading width: About, licenses and empty states stop at 640dp
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-423 (1280×800dp).
+- **Steps:**
+  1. Open "Settings" → "About", then "Licenses" and the GNU GPL text.
+  2. Open "Recent" on a device where no game was played yet (or check the empty "Shelf" of a new
+     install).
+  3. Repeat step 1 on a phone (`wm size reset`, `wm density reset`).
+- **Expected:** On the tablet each page's content is a centred column about half the screen wide
+  (640dp), not stretched across it; the empty state is centred and capped the same way. On the
+  phone the pages look as before.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-427 — First launch on a tablet: explanation beside the progress
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install (or `adb shell pm clear com.openemux.mobile` on a test device
+  whose library can be lost), `wm size 2560x1600`, `wm density 320`.
+- **Steps:**
+  1. Open the app; tap "Start" and watch the progress.
+  2. Set 1600×2560 while it downloads.
+  3. Let it finish.
+- **Expected:** At 1280×800: logo, title and explanation on the left; the steps, progress and
+  button on the right, the pair centred on the screen. At 800×1280: one centred column, not wider
+  than about 640dp. When it ends, "Shelf" opens with the rail.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
 
 ## Developer tooling & docs
 
