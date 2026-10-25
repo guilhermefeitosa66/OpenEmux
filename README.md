@@ -181,6 +181,8 @@ Browse your game collection with cover art, organized by console — just like a
 
 Launch any game directly from OpenEmux. RetroArch runs in the background, fully configured and ready to go.
 
+The games shown are freely licensed homebrew, credited in [docs/assets/CREDITS.md](docs/assets/CREDITS.md).
+
 <p align="center">
   <img src="docs/assets/openemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
   &nbsp;
