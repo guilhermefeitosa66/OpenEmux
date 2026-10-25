@@ -23,6 +23,7 @@ if HAVE_DISPLAY:
 
     from openemux.ui.grouped_scroll import GroupedScroll
     from openemux.ui.scopes import ALL_CONSOLES_ID
+    from openemux.core.library_view import can_zoom
 
 
 def _pump_until(predicate, timeout=5.0):
@@ -305,20 +306,17 @@ class TheAllPageTests(WindowCase):
 
     def test_fewer_columns_still_reach_the_end(self):
         columns = self.fc.get_max_columns()
-        # Shrink by what one column takes, from the width the window got rather
-        # than the one it asked for: a toplevel is clamped to the monitor, and
-        # a CI runner's screen can be narrower than 1400 (the Windows one is
-        # 1024, which leaves room for only two columns). Half a column of
-        # slack each way keeps it off the boundary.
         self.assertGreater(columns, 1)
-        width = self.win.get_width()
-        column = self.fc._card_allocation_width() + self.fc._spacing
-        excess = self.fc._available_width() - (columns - 0.5) * column
-        self.win.set_default_size(int(width - excess), 700)
-        self.assertTrue(
-            self.pump_until(lambda: self.fc.get_max_columns() < columns),
-            f"{columns} columns at {width}px, {self.fc.get_max_columns()} after",
-        )
+        # Bigger cards, not a narrower window: the columns change while the grid
+        # is allocated either way, but resizing a mapped window is up to the
+        # window system, and on the Windows runner (a 1024px screen) it does
+        # not take. The zoom is the app's own.
+        while self.fc.get_max_columns() >= columns and can_zoom(self.win._zoom, 1):
+            self.win._step_zoom(1)
+            self.pump_until(lambda: self.fc.get_max_columns() < columns, timeout=1.0)
+        self.assertLess(self.fc.get_max_columns(), columns)
+        # The same grid, resized in place: not a page built again at the new size.
+        self.assertIs(self.win.pages.grid_for(ALL_CONSOLES_ID).grids()[0], self.fc)
         # The columns change while the grid is allocated; the page lays itself
         # out again on the next pass, and only then is the group its new height.
         body = self.fc.get_parent()
