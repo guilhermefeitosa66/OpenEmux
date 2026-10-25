@@ -305,8 +305,16 @@ class TheAllPageTests(WindowCase):
 
     def test_fewer_columns_still_reach_the_end(self):
         columns = self.fc.get_max_columns()
-        self.win.set_default_size(1000, 700)
-        self.assertTrue(self.pump_until(lambda: self.fc.get_max_columns() < columns))
+        # Shrink from the width the window got, not the one it asked for: a
+        # toplevel is clamped to the monitor, and a CI runner's screen can be
+        # narrower than 1400 (the Windows one is 1024). Stay above the 700sp
+        # breakpoint, past which the layout changes for other reasons.
+        width = self.win.get_width()
+        self.win.set_default_size(max(800, width - 400), 700)
+        self.assertTrue(
+            self.pump_until(lambda: self.fc.get_max_columns() < columns),
+            f"{columns} columns at {width}px, {self.fc.get_max_columns()} after",
+        )
         # The columns change while the grid is allocated; the page lays itself
         # out again on the next pass, and only then is the group its new height.
         body = self.fc.get_parent()
