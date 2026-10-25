@@ -5,11 +5,12 @@ Third-party content shown in the site's images, the README and the promo video.
 Everything else in them comes from the project's own fictional demo library
 (`tools/demo_library.py`): a parody catalogue of invented games. Their covers
 and cartridge labels were authored with AI as SVG code, in the style of each
-console's era, and are rendered offline by `tools/demo_library.py`. No real
-game's name, artwork or logo is shown. The games below are freely licensed homebrew, picked
-because their licence covers the graphics as well as the code. They are shown
-running, unmodified, as published by their authors; no ROM is stored in this
-repository.
+console's era, and are rendered offline by `tools/demo_library.py`. No
+commercial game's name, artwork or logo appears in that catalogue.
+
+The games below are real, freely licensed homebrew, picked because their
+licence covers the graphics as well as the code. They are shown running,
+unmodified, as published by their authors; no ROM is stored in this repository.
 
 | Title | Author | Licence | Source | Used in |
 | --- | --- | --- | --- | --- |
