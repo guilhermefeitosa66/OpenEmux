@@ -5457,9 +5457,11 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   3. Quit, pick the "Gearcoleco" core and repeat step 2.
 - **Expected:** On both cores the left fire and the right fire do two different things, every keypad
   key reaches the game, and the game responds the same way on both cores.
-- **Check:** with Gearcoleco selected, the keypad overlay sends the fires on `b` (L) and `a` (R),
-  `*` on `start`, `#` on `select`, 9 on `l_y_minus` and 0 on `l_x_plus`:
+- **Check:** with Gearcoleco selected, the main overlays send the fires on `b` (L) and `a` (R); the
+  keypad overlays (which hide the fires) send `*` on `start`, `#` on `select`, 9 on `l_y_minus` and 0
+  on `l_x_plus`:
   ```bash
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -A1 -E '^overlay0_desc[0-9]+ = "(a|b),' | head   # the portrait overlay carries both fires
   adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '"(l_y_minus|l_x_plus),' | sort -u   # both present
   adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -cE '"r_x_(minus|plus),'                   # 0
   ```
