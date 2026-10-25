@@ -5573,6 +5573,88 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   ```
 
 
+## Android — Skin quick actions
+
+The quick-action strip of the Android app's on-screen skin
+([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile), `pkg/android/openemux`):
+save, load, turbo and fast forward (plus the screen layout on NDS). Turbo and fast forward show
+whether they are on: an accent pill behind the icon, the icon in white (#554). The runner has no
+Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
+(`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-376 — Turbo on the strip shows whether it is on
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a GBA game in the library; no gamepad connected.
+- **Steps:**
+  1. Launch the GBA game, phone in portrait.
+  2. Tap the bolt (turbo) on the strip under the picture.
+  3. Tap it again.
+  4. Repeat steps 2-3 on a console with a light-bodied skin, on the red and the purple skins, and
+     in landscape (the strip under the picture, between the control sides).
+- **Expected:** After step 2 the bolt sits on a purple pill with a light ring, drawn in white;
+  fast forward keeps its normal look. After step 3 the bolt is back to its normal look, no pill.
+  The pill is readable on every skin, in both orientations, and nothing is clipped or stretched.
+- **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
+
+### RT-377 — Fast forward shows its state, and the strip and the pause sheet agree
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running, both toggles off.
+- **Steps:**
+  1. Tap fast forward (the double arrow) on the strip.
+  2. Open the pause sheet (the menu button between L and R).
+  3. Tap the "Fast forward" tile, then resume.
+  4. Open the pause sheet, tap "Fast forward" again, and resume.
+- **Expected:** After step 1 the double arrow shows the pill and the game runs faster. In step 2
+  the "Fast forward" tile is shown active. After step 3 the strip has no pill and the game runs at
+  normal speed. After step 4 the strip shows the pill again.
+- **Check:** human only.
+
+### RT-378 — The toggles' look survives pause, rotation and the background; a new session starts off
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running.
+- **Steps:**
+  1. Turn turbo and fast forward on from the strip.
+  2. Open and close the pause sheet; turn the phone to landscape and back; press Home and return to
+     the app.
+  3. Quit the game from the pause sheet and launch any game again.
+- **Expected:** Through step 2 both buttons keep the pill every time. After step 3 both buttons
+  have their normal look, the game runs at normal speed and turbo is off.
+- **Check:** human only.
+
+### RT-379 — In RetroAchievements hardcore, fast forward never shows as on
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** Signed in to RetroAchievements with "Hardcore mode" on (RT-351).
+- **Steps:**
+  1. Launch a game and tap fast forward on the strip.
+  2. Tap turbo on the strip.
+  3. Open the pause sheet.
+- **Expected:** Fast forward is dimmed, does nothing and never shows the pill; turbo shows its pill
+  as in RT-376. The pause sheet's "Fast forward" tile is disabled and not active.
+- **Check:** human only.
+
+### RT-462 — Turbo and fast forward light up on the bundled package skins
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a GBA game and a game of a console that keeps the
+  drawn skin (e.g. Atari 2600) in the library; no skin in `files/skins/`; no gamepad connected.
+- **Steps:**
+  1. Launch the GBA game, phone in portrait. Its skin is the bundled package: the quick actions sit
+     in the bezel's chin, right under the picture.
+  2. Tap the bolt (turbo) in the chin, then the double arrow (fast forward).
+  3. Tap both again.
+  4. Turn fast forward on, open the pause sheet, then resume.
+  5. Repeat steps 2-3 in landscape, then on the other console's game.
+- **Expected:** After step 2 each button sits on the purple pill with a light ring, the skin's own
+  glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
+  look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
+  active. Landscape and the drawn skin show the same pill.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
