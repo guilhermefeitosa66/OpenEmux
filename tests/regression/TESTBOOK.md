@@ -5445,7 +5445,7 @@ on a debug build).
   round, not stretched, and the picture is well placed. The game goes on from the same point (no
   restart, no state loaded) and the touch controls respond.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
-  one `OVERLAY_LOAD` and no core restart).
+  one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
 
 ### RT-451 — Folding again brings the phone-shaped skin back
 - **Area:** Android — Window size changes in game
@@ -5503,8 +5503,8 @@ on a debug build).
 - **Steps:**
   1. Start the game and rotate the phone to landscape and back
      (`adb shell settings put system user_rotation 1`, then `0`).
-  2. Run RT-450 to RT-454, then list the launch directory
-     (`adb shell run-as com.openemux.mobile ls files/launch/current`).
+  2. After running RT-450 to RT-454 (on their own AVDs), list the launch directory on each of
+     them (`adb shell run-as com.openemux.mobile ls files/launch/current`).
 - **Expected:** Rotating switches between the portrait and landscape skin as before, and the
   logcat shows no `OVERLAY_LOAD`. After the size changes only one `skin*` directory is left in the
   launch directory.
