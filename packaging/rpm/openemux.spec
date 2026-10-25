@@ -179,6 +179,17 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sun Oct 25 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.17.0-1
+- A setting starts every game in fullscreen
+- Decorative bezels beside 4:3 games
+- The artwork manager opens on the current cover, with its adjustments
+- Every game stays on screen on the grouped pages
+- Missing cores are restored after an in-place upgrade
+- Cartridge labels sync for zipped Game Boy and Game Boy Color ROMs
+- Covers of an unusual shape are shown whole
+- Windows: OpenEmux's own taskbar icon; the bundle is built from MSYS2 UCRT64
+- Android: RetroAchievements sign-in and tracking
+
 * Thu Oct 22 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.16.0-1
 - Every cartridge console draws its own cartridge, in every shell colour
 - OpenEmux for Android: the first release of the app, as an APK

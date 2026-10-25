@@ -87,6 +87,20 @@
   </keywords>
 
   <releases>
+    <release version="1.17.0" date="2026-10-25">
+      <description>
+        <p>Fullscreen and bezels for games, an artwork manager that starts from the cover you have, and fixes for games, covers and cores that went missing.</p>
+        <ul>
+          <li>A setting starts every game in fullscreen</li>
+          <li>Decorative bezels fill the sides of 4:3 games on a wide screen</li>
+          <li>The artwork manager opens on the current cover and says where it came from</li>
+          <li>Every game stays on screen on the All, Favorites and collection pages</li>
+          <li>Cores missing after an upgrade are downloaded again, and can be verified from Settings</li>
+          <li>Cartridge labels sync for zipped Game Boy and Game Boy Color ROMs</li>
+          <li>Covers of an unusual shape are shown whole instead of cropped</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.16.0" date="2026-10-22">
       <description>
         <p>Every cartridge console gets its own cartridge, and OpenEmux arrives on Android.</p>
