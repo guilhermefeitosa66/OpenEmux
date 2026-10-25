@@ -5430,7 +5430,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
 `com.openemux.mobile`; a game's generated files are in `files/launch/current/` and are read with
 `adb shell run-as $PKG cat files/launch/current/<file>`.
 
-### RT-390 — The Atari 7800 skin reads 1 on the left and 2 on the right
+### RT-458 — The Atari 7800 skin reads 1 on the left and 2 on the right
 - **Area:** Android — Controller skins
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with an Atari 7800 game that uses both buttons.
@@ -5447,7 +5447,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   # the "b" line has the smaller x (second field) of the two
   ```
 
-### RT-391 — ColecoVision fires and keypad work on both cores
+### RT-459 — ColecoVision fires and keypad work on both cores
 - **Area:** Android — Controller skins
 - **Mode:** MANUAL
 - **Preconditions:** A ColecoVision game with a keypad menu (a level or skill select) in the library.
@@ -5466,7 +5466,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -cE '"r_x_(minus|plus),'                   # 0
   ```
 
-### RT-392 — Mega Drive X, Y, Z and MODE work on Genesis Plus GX in every game
+### RT-460 — Mega Drive X, Y, Z and MODE work on Genesis Plus GX in every game
 - **Area:** Android — Controller skins
 - **Mode:** MANUAL
 - **Preconditions:** A Mega Drive game whose header does not announce a six-button pad, or the 240p
@@ -5484,7 +5484,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   # step 1: input_libretro_device_p1 = "513"; steps 2 and 3: no line
   ```
 
-### RT-393 — The Atari 5200 runs with its own joystick and two distinct fire buttons
+### RT-461 — The Atari 5200 runs with its own joystick and two distinct fire buttons
 - **Area:** Android — Controller skins
 - **Mode:** MANUAL
 - **Preconditions:** An Atari 5200 game with two fire functions and keypad use.
