@@ -323,7 +323,9 @@ class HoverAndFocusTests(_CardCase):
 
 @needs_display
 class ClickingACardTests(_CardCase):
-    def _gesture(self, button=Gdk.BUTTON_PRIMARY, state=0):
+    def _gesture(self, button=None, state=0):
+        # Not a Gdk default: the class body runs even when it is skipped.
+        button = Gdk.BUTTON_PRIMARY if button is None else button
         gesture = mock.Mock()
         gesture.get_current_button.return_value = button
         gesture.get_current_event_state.return_value = state
@@ -760,6 +762,8 @@ class FindingTheCardBehindAWidgetTests(_CardCase):
         self.assertIsNone(item_for_widget(None))
 
 
+# No widgets, but openemux.ui.rom_card imports GTK.
+@needs_display
 class EntryMatchingTests(unittest.TestCase):
     """The filter the grid applies, which needs no widgets at all."""
 

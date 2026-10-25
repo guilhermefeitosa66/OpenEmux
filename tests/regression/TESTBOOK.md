@@ -5501,6 +5501,140 @@ or into an environment that cannot run the tests.
   EOF
   ```
 
+### RT-370 — `make test` on a desktop runs on a private display
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads the `Makefile` and probes `scripts/run_tests.py`).
+- **Steps:** As a QA person: on a Linux desktop session with Xvfb installed, run `make test` and
+  keep working in another window while it runs.
+- **Expected:** No OpenEmux window appears and nothing steals focus, yet the widget tests run
+  rather than skip. `make test` and `make coverage` go through `scripts/run_tests.py`, which
+  replaces itself with `xvfb-run -a <the suite>` (on a throwaway `dbus-run-session` bus when that
+  is installed) and gives it an environment with
+  `WAYLAND_DISPLAY` unset, `GDK_BACKEND=x11`, the portals off (`GDK_DEBUG=no-portals`,
+  `GTK_USE_PORTAL=0`) and `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (issue #528).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util, re
+  from pathlib import Path
+
+  mk = Path("Makefile").read_text()
+  test = re.search(r"^test:\n((?:\t.*\n)+)", mk, re.M).group(1)
+  cov = re.search(r"^coverage:\n((?:\t.*\n)+)", mk, re.M).group(1)
+  assert "scripts/run_tests.py $(PYTHON) -m unittest discover" in test
+  assert "scripts/run_tests.py $(PYTHON) -m coverage run" in cov
+
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  desk = {"WAYLAND_DISPLAY": "wayland-0", "XDG_SESSION_TYPE": "wayland"}
+  assert rt.decide(desk, "linux", lambda n: "/usr/bin/" + n) == "xvfb"
+  env = rt.headless_env(desk)
+  assert "WAYLAND_DISPLAY" not in env and env["GDK_BACKEND"] == "x11"
+  assert env["OPENEMUX_TESTS_PRIVATE_DISPLAY"] == "1"
+  assert "no-portals" in env["GDK_DEBUG"] and env["GTK_USE_PORTAL"] == "0"
+  calls = []
+  rt.main(["python", "-m", "unittest"], env=desk, platform="linux",
+          which=lambda n: "/usr/bin/" + n, execvpe=lambda *a: calls.append(a) or 0)
+  assert calls[0][1] == ["dbus-run-session", "--", "xvfb-run", "-a", "python", "-m", "unittest"]
+  print("RT-370 OK")
+  EOF
+  ```
+
+### RT-371 — A bare unittest run on a desktop skips the widget tests instead of drawing
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** the GTK stack is installed (`make install-sys-deps`).
+- **Steps:** As a QA person: on a desktop session, run
+  `PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs`.
+- **Expected:** No window opens. The tests that build widgets are reported as skipped with
+  "would draw on your desktop: run `make test` (private Xvfb display) or set
+  OPENEMUX_TESTS_ON_DESKTOP=1", a one-line note on stderr says the same once at the start, and the
+  run exits 0 (issue #528).
+- **Check:**
+  ```bash
+  env -u OPENEMUX_TESTS_PRIVATE_DISPLAY -u OPENEMUX_TESTS_ON_DESKTOP XDG_SESSION_TYPE=x11 \
+    PYTHONPATH=src .venv/bin/python -m unittest -v tests.test_file_dialogs > /tmp/rt371.log 2>&1
+  echo "exit=$?"                                                   # expect exit=0
+  grep -c "would draw on your desktop" /tmp/rt371.log              # expect > 0
+  grep -c "this run is on your desktop session" /tmp/rt371.log     # expect 1
+  ```
+
+### RT-372 — `OPENEMUX_TESTS_ON_DESKTOP=1` brings the old behavior back
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a desktop session, run
+  `OPENEMUX_TESTS_ON_DESKTOP=1 PYTHONPATH=src .venv/bin/python -m unittest tests.test_file_dialogs`.
+- **Expected:** The widget tests run on the screen you are sitting at, as they did before
+  issue #528, and the launcher passes the command through untouched.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util
+  from tests.gtk_display import on_developer_desktop
+
+  desk = {"WAYLAND_DISPLAY": "wayland-0", "XDG_SESSION_TYPE": "wayland"}
+  assert on_developer_desktop(desk, "linux")
+  assert not on_developer_desktop(dict(desk, OPENEMUX_TESTS_ON_DESKTOP="1"), "linux")
+  assert not on_developer_desktop({}, "linux"), "a CI-like environment must not be refused"
+  assert not on_developer_desktop({"WAYLAND_DISPLAY": "w"}, "win32")
+
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  assert rt.decide(dict(desk, OPENEMUX_TESTS_ON_DESKTOP="1"), "linux", lambda n: n) == "direct"
+  print("RT-372 OK")
+  EOF
+  ```
+
+### RT-373 — Without Xvfb the run says what is missing
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: on a desktop with no `xvfb-run` on `PATH`, run `make test`.
+- **Expected:** One message, before the suite starts, says Xvfb was not found, that the widget tests
+  will be skipped so nothing opens on the desktop, and how to install it on Debian/Ubuntu
+  (`make install-sys-deps`), Fedora (`xorg-x11-server-Xvfb`) and Arch (`xorg-server-xvfb`). The
+  suite then runs with the widget tests skipped and its exit code is the suite's. `make
+  install-sys-deps` lists `xvfb` (issue #528).
+- **Check:**
+  ```bash
+  grep -A4 "^install-sys-deps:" Makefile | grep -w xvfb       # expect a match
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import importlib.util, io
+  spec = importlib.util.spec_from_file_location("run_tests", "scripts/run_tests.py")
+  rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+  err = io.StringIO()
+  code = rt.main(["python", "-m", "unittest"], env={"XDG_SESSION_TYPE": "x11"},
+                 platform="linux", which=lambda n: None, call=lambda a, env: 7, stderr=err)
+  text = err.getvalue()
+  assert code == 7 and text.count("Xvfb not found") == 1
+  for hint in ("make install-sys-deps", "xorg-x11-server-Xvfb", "xorg-server-xvfb"):
+      assert hint in text, hint
+  print("RT-373 OK")
+  EOF
+  ```
+
+### RT-374 — The devbox run still executes every widget test
+- **Area:** Developer tooling
+- **Mode:** AUTO-PROBE
+- **Preconditions:** the devbox exists (`make devbox-up`) for the second half of the check.
+- **Steps:** As a QA person: run `make devbox-tests CMD=tests.test_file_dialogs`.
+- **Expected:** The widget tests run on the container's own Xvnc (`:77`) and none is skipped as
+  "would draw on your desktop": the host driver `devbox/devbox.sh` runs `devbox-tests` with
+  `OPENEMUX_TESTS_PRIVATE_DISPLAY=1` (only that command: a bare `exec` keeps the host's
+  `DISPLAY`), and `devbox/bin/devbox-tests` exports it too, because
+  distrobox forwards the host's `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` into the box (issue #528).
+  The driver matters because the tools inside come from the checkout the container was created
+  from, not from the one being tested.
+- **Check:**
+  ```bash
+  grep -n "export OPENEMUX_TESTS_PRIVATE_DISPLAY=1" devbox/bin/devbox-tests   # expect a match
+  grep -n 'inside env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 devbox-tests' devbox/devbox.sh  # expect a match
+  make devbox-tests CMD="-v tests.test_file_dialogs" 2>&1 | grep -c "would draw on your desktop"
+  # expect 0
+  ```
+
 
 ## Retired
 

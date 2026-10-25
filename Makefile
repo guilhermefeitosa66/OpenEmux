@@ -64,7 +64,8 @@ endif
 install-sys-deps:
 	sudo apt update
 	sudo apt install -y libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev \
-		libgtk-4-dev libadwaita-1-dev gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-rsvg-2.0
+		libgtk-4-dev libadwaita-1-dev gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-rsvg-2.0 \
+		xvfb
 	@echo "Install RetroArch/libretro cores from your distro OR run 'make vendor-retroarch'."
 
 # System dependencies for Windows, from inside an MSYS2 MINGW64 shell.
@@ -174,9 +175,11 @@ lock-deps:
 run:
 	set -a; [ -f .env ] && . ./.env; set +a; PYTHONPATH=src $(PYTHON) src/openemux/main.py
 
-# Run the unit test suite
+# Run the unit test suite -- on a private Xvfb display, never on the
+# developer's screen: the widget tests open real windows (issue #528).
+# scripts/run_tests.py says what to install when xvfb-run is missing.
 test:
-	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests
+	PYTHONPATH=src $(PYTHON) scripts/run_tests.py $(PYTHON) -m unittest discover -s tests
 
 # Correctness-only lint: no formatting opinions, no style rules. See the
 # [tool.ruff] block in pyproject.toml for what is selected and why.
@@ -186,7 +189,7 @@ lint:
 # Run the unit test suite under coverage.py and print the report
 # (needs `make setup-dev`; configuration lives in pyproject.toml)
 coverage:
-	PYTHONPATH=src $(PYTHON) -m coverage run -m unittest discover -s tests
+	PYTHONPATH=src $(PYTHON) scripts/run_tests.py $(PYTHON) -m coverage run -m unittest discover -s tests
 	$(PYTHON) -m coverage report
 
 # Start the real app, wait for its window and quit -- the check the unit suite

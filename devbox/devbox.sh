@@ -276,7 +276,13 @@ main() {
 		xdo)     ensure_up; inside devbox-xdo "$@" ;;
 		res)     ensure_up; inside devbox-res "$@" ;;
 		rec)     ensure_up; inside devbox-rec "$@" ;;
-		tests)   ensure_up; inside devbox-tests "$@" ;;
+		# OPENEMUX_TESTS_PRIVATE_DISPLAY tells tests/gtk_display.py the display
+		# is the box's own Xvnc, not somebody's desktop (issue #528). devbox-tests
+		# sets it too, but the tools come from the checkout the container was
+		# created from, and this driver is the one in the checkout being tested.
+		# Only here: devbox-tests points DISPLAY at the Xvnc, while a bare
+		# `exec` keeps the host's DISPLAY, where the marker would be a lie.
+		tests)   ensure_up; inside env OPENEMUX_TESTS_PRIVATE_DISPLAY=1 devbox-tests "$@" ;;
 		verify)  ensure_up; inside devbox-verify ;;
 		x)       ensure_up; inside devbox-x "$@" ;;
 

@@ -22,6 +22,9 @@ make run
 # Run all unit tests -- in the devbox, never on the developer's screen
 make devbox-tests
 
+# On the host: a private Xvfb display, never the developer's screen
+make test
+
 # Run a single test file there
 make devbox-tests CMD=tests.test_scanner
 
@@ -39,11 +42,18 @@ make check-retroarch
 
 The suite opens real windows. `tests/gtk_display.py` exists because GTK
 **segfaults** rather than failing when a widget is built with no display, so
-every test that builds one is skipped without a display and runs with one --
-and on the host that means windows flickering across whatever the developer is
-doing, for the length of the run.
+every test that builds one is skipped without a display and runs with one.
 
-So: **`make devbox-tests`**. The container has an Xvnc of its own on `:77`,
+A host run never uses the developer's screen for that (issue #528). `make test`
+and `make coverage` go through `scripts/run_tests.py`, which runs the suite
+under `xvfb-run -a` with `WAYLAND_DISPLAY` unset and the portals off, so the
+widget tests run and nothing appears. A bare `python -m unittest` on a desktop
+session skips the widget tests instead, with a note saying why;
+`OPENEMUX_TESTS_ON_DESKTOP=1` puts them back on the real screen for someone who
+wants to watch. Without Xvfb installed, the run says what to install
+(`make install-sys-deps` does it on Debian/Ubuntu).
+
+For UI work, still: **`make devbox-tests`**. The container has an Xvnc of its own on `:77`,
 headless unless somebody asks for `make devbox-view`, and it tracks the current
 Ubuntu LTS, so the suite also meets a much newer GTK/libadwaita than a
 developer's desktop typically has.
@@ -64,7 +74,11 @@ Two traps inside the container:
   `make devbox-rm PURGE=1 && make devbox-up`).
 
 Running the suite on the host is still right for a core-only change: those
-tests need no display and take seconds. Anything under `src/openemux/ui/` goes
+tests need no display and take seconds. `devbox/devbox.sh` (for `devbox-tests`)
+and `devbox/bin/devbox-tests` set
+`OPENEMUX_TESTS_PRIVATE_DISPLAY=1` so the guard knows `:77` is nobody's screen;
+without it, the host's `XDG_SESSION_TYPE` that distrobox forwards would skip
+every widget test in there. Anything under `src/openemux/ui/` goes
 through the devbox.
 
 **Stop what you started.** The container stays up after the command that needed
