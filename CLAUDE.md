@@ -8,6 +8,8 @@ OpenEmux is a Linux-native emulator frontend (GTK4/Python) inspired by OpenEmu. 
 
 The project's satellite repositories are checked out one level above this one: `../openemux-artwork` (cover-art mirror) and `../openemux-flatpak` (Flatpak distribution repo).
 
+The Android app lives in its own repository, `guilhermefeitosa66/open-emux-mobile`, checked out at `../open-emux-mobile` (base branch `openemux-mobile`). It is a RetroArch fork with the OpenEmux frontend in Kotlin/Compose under `pkg/android/openemux/`; its APK ships in the OpenEmux release alongside the desktop packages. Its issues are filed **here**, where the board is, with the `repo-mobile` label: the pipeline then works in the mobile repository and opens the PR there with `Part of guilhermefeitosa66/OpenEmux#<N>`.
+
 ## Commands
 
 ```bash
