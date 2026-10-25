@@ -206,7 +206,7 @@
   "artwork-menu.li4": "<span class=\"ui\">Choisir une image d’étiquette de cartouche</span> utilise telle quelle une image de votre ordinateur.",
   "artwork-menu.li5": "<span class=\"ui\">Supprimer l’image d’étiquette</span> supprime l’image actuelle du jeu. Cette entrée n’apparaît que s’il y a quelque chose à supprimer.",
   "artwork-manager.h31": "Le gestionnaire d’images",
-  "artwork-manager.p1": "Le gestionnaire s’ouvre depuis <span class=\"ui\">Gérer la jaquette…</span> / <span class=\"ui\">Gérer l’étiquette…</span>, ou depuis le bouton <span class=\"ui\">Chercher une jaquette…</span> d’une carte vide. Il a trois onglets.",
+  "artwork-manager.p1": "Le gestionnaire s’ouvre depuis <span class=\"ui\">Gérer la jaquette…</span> / <span class=\"ui\">Gérer l’étiquette…</span>, ou depuis le bouton <span class=\"ui\">Chercher une jaquette…</span> d’une carte vide. Il a quatre onglets et s’ouvre sur <span class=\"ui\">Actuelle</span>, qui montre l’illustration que le jeu a maintenant et d’où elle vient.",
   "artwork-manager.h41": "Jaquette et Étiquette",
   "artwork-manager.alt1": "Le gestionnaire d’images sur l’onglet Jaquette, avec des résultats de jaquettes",
   "artwork-manager.figcaption1": "Onglet Jaquette : l’illustration de la boîte.",
