@@ -5335,7 +5335,7 @@ restores it on a fresh install. `MANUAL`, like the other Android sections: a pho
 emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.mobile`,
 `$EXT` is `/sdcard/Android/data/$PKG/files`.
 
-### RT-376 — Settings has a Back up and restore screen
+### RT-408 — Settings has a Back up and restore screen
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, a few games in the library.
@@ -5351,7 +5351,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   your games back with Import ROMs…". Nothing is clipped; in landscape the screen scrolls.
 - **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
 
-### RT-377 — Keep app data on uninstall, reinstall the same APK
+### RT-409 — Keep app data on uninstall, reinstall the same APK
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** Android 10 or newer; the library, a save state and a theme choice in place.
@@ -5364,15 +5364,15 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   they were.
 - **Check:**
   ```bash
-  adb shell dumpsys package $PKG | grep -i HAS_FRAGILE_USER_DATA      # listed in the flags
+  aapt dump xmltree OpenEmuxMobile-debug.apk AndroidManifest.xml | grep hasFragileUserData   # =(0xffffffff)
   adb uninstall -k $PKG && adb install OpenEmuxMobile-debug.apk
   adb shell run-as $PKG ls files/setup.done                          # still there
   ```
 
-### RT-378 — Export writes one archive with exactly what it should
+### RT-410 — Export writes one archive with exactly what it should
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** RT-376's screen; signed in to RetroAchievements (or `shared_prefs/cheevos.xml`
+- **Preconditions:** RT-408's screen; signed in to RetroAchievements (or `shared_prefs/cheevos.xml`
   seeded through `run-as`); a save state, a favorite and a cart colour set.
 - **Steps:**
   1. Leave "Include ROMs" on and tap "Export data · <total>".
@@ -5384,15 +5384,15 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Check:**
   ```bash
   adb pull "/sdcard/Download/OpenEmux backup $(date +%F).zip" backup.zip
-  unzip -l backup.zip | awk 'NR>3 {print $4}' | head -2                    # manifest.json, prefs/openemux.json
-  unzip -l backup.zip | grep -cE ' (cores|launch|setup)|cheevos'           # 0
+  unzip -Z1 backup.zip | head -2                                          # manifest.json, prefs/openemux.json
+  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system)/|internal/(meta\.json|nds-layout|labels/))'   # 0
   unzip -p backup.zip | grep -ac '<ra-username>\|cheevos_token'           # 0
   ```
 
-### RT-379 — Import on a fresh install brings the app back as it was
+### RT-411 — Import on a fresh install brings the app back as it was
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** RT-378's archive in Downloads.
+- **Preconditions:** RT-410's archive in Downloads.
 - **Steps:**
   1. `adb uninstall $PKG` (no keep), install the APK again and finish the first-run setup.
   2. Settings → "Back up and restore" → "Import data", pick the archive.
@@ -5400,7 +5400,9 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Expected:** The sheet "Replace your data?" reads "From OpenEmux <version>, made on <date> ·
   <size>" and lists the games, "Saves and states" and "Settings and artwork" with their sizes. After
   "Replace and restore", a green box "Restored <n> games and <m> saves and states. OpenEmux will
-  restart now.", then the app restarts on its own. The library, favorites, cart colours, theme and
+  restart now.", then the app restarts on its own into the first-run setup again (the restore
+  clears its stamp so the cores and system files are checked; the cores already there are not
+  downloaded again); once it finishes, the library, favorites, cart colours, theme and
   language are back; the save state is in the game's detail; playtime matches; labels show without
   a ScreenScraper fetch; covers come back by themselves; RetroAchievements reads "Not signed in".
 - **Check:** human only, plus:
@@ -5409,18 +5411,22 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   adb shell run-as $PKG ls shared_prefs                   # no cheevos.xml
   ```
 
-### RT-380 — A damaged, foreign or newer archive changes nothing
+### RT-412 — A damaged, foreign or newer archive changes nothing
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
-- **Preconditions:** A library with saves; RT-378's archive.
+- **Preconditions:** A library with saves; RT-410's archive.
 - **Steps:**
   1. Import any `.zip` that is not a backup (e.g. a zipped ROM).
-  2. Import a cut copy of the backup: `head -c 300 backup.zip > cut.zip`, pushed to Downloads.
+  2. Import a copy cut inside the manifest: `head -c 100 backup.zip > cut.zip`, pushed to Downloads.
   3. Import a backup whose `manifest.json` says `"version":2` (unzip, edit, zip again with
      `manifest.json` first).
+  4. Import a copy cut in half (`head -c $(( $(stat -c %s backup.zip) / 2 )) backup.zip > half.zip`),
+     then tap "Replace and restore" on the sheet.
 - **Expected:** 1 and 2: a red box "This file is not an OpenEmux backup, or it is damaged. Nothing
   was changed." 3: "This backup was made by a newer OpenEmux. Update the app first. Nothing was
-  changed." No confirmation sheet; the library and saves are identical before and after.
+  changed." No confirmation sheet for 1 to 3. 4: the manifest is whole, so the "Replace your
+  data?" sheet opens; "Replace and restore" then ends in the same red "not an OpenEmux backup"
+  box. The library and saves are identical before and after all four.
 - **Check:**
   ```bash
   adb shell run-as $PKG ls -R files > before.txt; adb shell ls -lR $EXT >> before.txt
@@ -5429,7 +5435,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   diff before.txt after.txt && echo unchanged
   ```
 
-### RT-381 — Export without ROMs, then Import ROMs reattaches the saves
+### RT-413 — Export without ROMs, then Import ROMs reattaches the saves
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** A game with a save state; its ROM file at hand.
@@ -5437,10 +5443,25 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   1. Switch "Include ROMs" off and export.
   2. Uninstall, reinstall, finish setup, import the archive.
   3. "Import" tab → import the same ROM file.
-- **Expected:** After the restore the library is empty while settings and saves are back; after
-  importing the ROM, its save state and playtime show on that game. Starting an export and tapping
-  "Cancel" returns to the export card with no file left behind and the app's data unchanged.
+- **Expected:** After the restore (and the first-run setup it runs again) the library is empty
+  while settings and saves are back; after importing the ROM, its save state and playtime show on
+  that game.
 - **Check:** human only.
+
+### RT-414 — Cancelling an export leaves no file behind
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** RT-408's screen with "Include ROMs" on and a library large enough for the
+  export to take a few seconds.
+- **Steps:**
+  1. Tap "Export data · <total>" and save in "Downloads".
+  2. While "Exporting…" shows, tap "Cancel".
+- **Expected:** The screen returns to the export card with no notice; no backup file is left in
+  "Downloads" and the app's data is unchanged.
+- **Check:**
+  ```bash
+  adb shell ls /sdcard/Download | grep -c 'OpenEmux backup'    # 0 (or the count from before)
+  ```
 
 
 ## Developer tooling & docs
