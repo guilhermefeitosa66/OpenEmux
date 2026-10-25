@@ -25,6 +25,7 @@ from openemux.core import (
     save_backup,
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
+from openemux.core.paths import is_running_in_flatpak
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
 from openemux.core.gamepad_reader import describe_token
@@ -1949,8 +1950,41 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         retry_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
         retry_row.connect("activated", lambda _r: self.win._trigger_bootstrap_retry())
         setup_group.add(retry_row)
+
+        # Cores lost after the first boot, e.g. by replacing the Windows app
+        # folder (issue #512). The Flatpak's cores belong to RetroArch's own.
+        self._verify_cores_row = Adw.ActionRow(
+            title=self.t("settings.system.cores.verify.title")
+        )
+        self._verify_cores_row.add_prefix(Gtk.Image.new_from_icon_name("system-software-install-symbolic"))
+        self._verify_cores_chevron = Gtk.Image.new_from_icon_name("go-next-symbolic")
+        self._verify_cores_spinner = Gtk.Spinner()
+        self._verify_cores_row.add_suffix(self._verify_cores_chevron)
+        self._verify_cores_row.add_suffix(self._verify_cores_spinner)
+        self._verify_cores_row.connect(
+            "activated", lambda _r: self.win._start_core_repair(manual=True)
+        )
+        self._verify_cores_row.set_visible(not is_running_in_flatpak())
+        self.set_core_job_running(self.win._core_repair_running)
+        setup_group.add(self._verify_cores_row)
         page.add(setup_group)
         return page
+
+    def set_core_job_running(self, running):
+        """Show the Verify cores row busy, or ready, for the window's repair."""
+        row = self._verify_cores_row
+        row.set_sensitive(not running)
+        row.set_activatable(not running)
+        row.set_subtitle(
+            self.t(
+                "settings.system.cores.verify.running"
+                if running
+                else "settings.system.cores.verify.subtitle"
+            )
+        )
+        self._verify_cores_chevron.set_visible(not running)
+        self._verify_cores_spinner.set_visible(running)
+        self._verify_cores_spinner.set_spinning(running)
 
     # ----- RetroAchievements (issue #300) ---------------------------------
     def _refresh_achievements(self):

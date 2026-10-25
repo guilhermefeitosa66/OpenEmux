@@ -65,6 +65,14 @@ window now says what it is doing while it waits, gives up in seconds instead
 of twenty, and hands the game back a normal decorated window instead of
 stranding it.
 
+### felipeonline (Reddit)
+
+Reported on Reddit, in the feedback thread for OpenEmux 1.16.0, that upgrading the Windows zip by
+copying the new release over the old folder kept the settings but left RetroArch with no cores,
+and that the only way out was deleting `~/.openemux` and every setting with it. That report became
+[#512](https://github.com/guilhermefeitosa66/OpenEmux/issues/512): OpenEmux now notices missing
+cores at start-up and brings them back on its own, and Preferences gained a "Verify cores" row.
+
 ### Sheik Adhnan ([@Adhnan23](https://github.com/Adhnan23))
 
 Reported in [#394](https://github.com/guilhermefeitosa66/OpenEmux/issues/394) that the AppImage

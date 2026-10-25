@@ -84,6 +84,7 @@ class _Window:
         self.runtime_manager = _RuntimeManager()
         self.calls = []
         self.capture_active = None
+        self._core_repair_running = False
 
     def t(self, key, **kwargs):
         return key
@@ -1417,6 +1418,43 @@ class TheSystemPageTests(_PreferencesCase):
         self.assertEqual(
             self._bootstrap_subtitle(), "settings.system.bootstrap.failed"
         )
+
+    # -- Verify cores (issue #512) -------------------------------------------
+    def test_the_verify_cores_row_closes_the_setup_group(self):
+        row = self.prefs._verify_cores_row
+        self.assertEqual(row.get_title(), "settings.system.cores.verify.title")
+        self.assertEqual(row.get_subtitle(), "settings.system.cores.verify.subtitle")
+        self.assertTrue(row.get_visible())
+        self.assertTrue(row.get_activatable())
+        self.assertIsNone(row.get_next_sibling())
+
+    def test_activating_it_asks_the_window_for_a_manual_check(self):
+        self.prefs._verify_cores_row.emit("activated")
+        self.assertEqual(
+            self.called("_start_core_repair"), [("_start_core_repair", (), {"manual": True})]
+        )
+
+    def test_it_is_hidden_inside_a_flatpak(self):
+        with mock.patch.object(prefs_module, "is_running_in_flatpak", return_value=True):
+            prefs = OpenEmuxPreferences(self.win)
+        self.assertFalse(prefs._verify_cores_row.get_visible())
+
+    def test_a_running_check_turns_the_row_busy_and_back(self):
+        row = self.prefs._verify_cores_row
+        self.prefs.set_core_job_running(True)
+        self.assertFalse(row.get_sensitive())
+        self.assertEqual(row.get_subtitle(), "settings.system.cores.verify.running")
+        self.assertTrue(self.prefs._verify_cores_spinner.get_visible())
+        self.assertFalse(self.prefs._verify_cores_chevron.get_visible())
+        self.prefs.set_core_job_running(False)
+        self.assertTrue(row.get_sensitive())
+        self.assertEqual(row.get_subtitle(), "settings.system.cores.verify.subtitle")
+        self.assertFalse(self.prefs._verify_cores_spinner.get_visible())
+
+    def test_reopened_mid_check_it_opens_busy(self):
+        self.win._core_repair_running = True
+        prefs = OpenEmuxPreferences(self.win)
+        self.assertFalse(prefs._verify_cores_row.get_sensitive())
 
 
 @needs_display

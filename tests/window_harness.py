@@ -39,6 +39,9 @@ if HAVE_DISPLAY:
 
     #: The real startup scan, captured before `WindowCase` patches it out.
     REAL_STARTUP_SCAN = OpenEmuxWindow._start_startup_scan
+    #: The real missing-core repair, likewise: left in, every window would
+    #: look for the cores on disk and fetch the missing ones (issue #512).
+    REAL_CORE_REPAIR = OpenEmuxWindow._start_core_repair
 
     class _Application(Adw.Application):
         """The one thing the window needs from its application.
@@ -56,6 +59,7 @@ if HAVE_DISPLAY:
 
 else:  # pragma: no cover - the whole harness is skipped without a display
     REAL_STARTUP_SCAN = None
+    REAL_CORE_REPAIR = None
 
 
 _APPLICATION = None
@@ -134,6 +138,11 @@ class WindowCase(unittest.TestCase):
         scan_patch = mock.patch.object(OpenEmuxWindow, "_start_startup_scan")
         scan_patch.start()
         self.addCleanup(scan_patch.stop)
+        repair_patch = mock.patch.object(
+            OpenEmuxWindow, "_start_core_repair", return_value=False
+        )
+        repair_patch.start()
+        self.addCleanup(repair_patch.stop)
 
         # Drained after the window is destroyed and before the throwaway home
         # goes away: a window leaves idle callbacks behind, and one that runs
