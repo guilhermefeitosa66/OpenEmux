@@ -5327,6 +5327,98 @@ real RetroAchievements account say so; without one they are handed to the mainta
   ```
 
 
+## Android — Responsive layout
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) laying out every screen from the size of its window, not from the device or
+which way up it is held (#535). The runner has no Android device, so these are `MANUAL`: a person
+runs them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
+A window size is simulated with `adb shell wm size <w>x<h>` and `adb shell wm density <dpi>`
+(dp = px × 160 / dpi), and rotation with `adb shell settings put system accelerometer_rotation 0`
+followed by `adb shell settings put system user_rotation <0|1>`. Every scenario ends with
+`adb shell wm size reset`, `adb shell wm density reset` and `user_rotation 0`. The library needs at
+least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one without.
+
+### RT-380 — Phone portrait keeps the bottom bar and today's grid columns
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a regular phone (≈ 411×914dp,
+  e.g. 1080×2400 at 420 dpi), portrait.
+- **Steps:**
+  1. Open "Shelf", then a console's library, "Recent", "Import" and "Settings".
+  2. In the library, switch between the cartridge, cover and list views.
+- **Expected:** The tabs sit in the bottom bar on every main tab. The library is a vertical grid:
+  2 columns of cartridges, 3 of covers, 1 row per game in the list. Nothing differs from the
+  previous release.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per view, compared with the same
+  views on the previous release).
+
+### RT-381 — Phone landscape keeps the side rail and the horizontal library
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, with the phone in landscape (`user_rotation 1`).
+- **Steps:**
+  1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
+  2. Start a game and open the pause sheet.
+- **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
+  sideways. The pause sheet shows its main page in two columns.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-382 — A small 5" phone lays out without clipping
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 640x1138` and `adb shell wm density 320`
+  (≈ 320×569dp).
+- **Steps:**
+  1. In portrait, open "Shelf", a library in each view and "Settings".
+  2. Rotate to landscape (≈ 569×320dp) and repeat; start a game and open the pause sheet.
+- **Expected:** Portrait: bottom bar, 2 columns of cartridges and 3 of covers. Landscape: the side
+  rail, the horizontal library, the pause sheet in one column. No text or button is cut off.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-383 — Split screen and a resized window take the layout from the window size
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, portrait, the library open with the 5th game focused.
+- **Steps:**
+  1. Put OpenEmux in the top half of split screen.
+  2. Drag the divider so OpenEmux takes about two thirds of the height.
+- **Expected:** In the half-height window the tabs move to the side rail and the library becomes
+  the sideways row. Taller, the bottom bar and the vertical grid come back without the app
+  restarting, and the same game is still the one in view.
+- **Check:** human only (a screenshot of each window size).
+
+### RT-384 — Library grids add columns as the window widens and cap the card size
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 1200x1800` and `adb shell wm density 320`
+  (600×900dp).
+- **Steps:**
+  1. Open a console with cartridge frames in the cartridge view, then the cover view.
+  2. Open "All games" in the cartridge view (the console without frames shows covers in its group).
+- **Expected:** The bottom bar stays. 3 columns of cartridges, 4 of covers; a cartridge is never
+  wider than 220dp and a cover never wider than 170dp, each centred in its cell. On the mixed page
+  each console's group picks its own column count the same way.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-385 — Gamepad focus moves through every screen after a rotation or resize
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, a gamepad connected (or `adb shell input keyevent` with
+  `KEYCODE_DPAD_*`, `KEYCODE_BUTTON_A`, `KEYCODE_BUTTON_L1`/`R1`, `KEYCODE_BUTTON_START`).
+- **Steps:**
+  1. Focus the 5th game in the library, then rotate portrait → landscape → portrait.
+  2. Repeat at 600×900dp (as RT-384) in each view mode, walking the whole grid with the d-pad.
+  3. Use L1/R1, A, B and Start on "Shelf", the library, "Settings" and in the pause sheet.
+- **Expected:** Focus stays on the same game across the rotations, reaches every card at every
+  size, L1/R1 change console, A opens the detail, B goes back and Start opens "Settings".
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
