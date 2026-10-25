@@ -5273,10 +5273,14 @@ real RetroAchievements account say so; without one they are handed to the mainta
   hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
   notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load",
   the "Save states" row and "Fast forward" are faded and do nothing (also with a gamepad), "Save
-  state" still works; the skin's load and fast-forward buttons are refused by RetroArch. Step 5:
-  "Continue" is back. Same in landscape.
+  state" still works; the skin's load button is refused by RetroArch, and its fast-forward button
+  is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
+  it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
 - **Check:** human only. With hardcore on, `retroarch.cfg` has
-  `cheevos_hardcore_mode_enable = "true"` and `savestate_auto_load = "false"`.
+  `cheevos_hardcore_mode_enable = "true"`, `savestate_auto_load = "false"`,
+  `input_toggle_fast_forward = "nul"` and `input_hold_fast_forward = "nul"`, and
+  `skin/skin.cfg` has no `toggle_fast_forward` descriptor
+  (`grep -c toggle_fast_forward skin/skin.cfg` prints `0`; with hardcore off it does not).
 - **Restore:** hardcore off (step 5).
 
 ### RT-356 — Achievement notifications stay clear of the on-screen controls
