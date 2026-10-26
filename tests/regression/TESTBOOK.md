@@ -6261,7 +6261,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
 - **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
-  (1280×800dp), landscape (`user_rotation 1` if the device is a portrait one).
+  (1280×800dp), which is landscape at `user_rotation 0`.
 - **Steps:**
   1. Start the Virtual Boy game.
   2. Tap the strip's turbo and fast-forward keys, then each of them again.
@@ -6270,7 +6270,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
   console name at the top of the right column, the D-pad in the middle of the left column, A and B
   in the right column, Select and Start lower down in each column, under the lowest button of their
-  column. No control covers the picture or another control: B stays clear of Start.
+  column. The Virtual Boy's second D-pad sits in the right column above A and B. No control covers
+  the picture or another control: B stays clear of Start.
   Turbo and fast forward light up while on and go dark on the second tap.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
   board of the plan on #559: the same placement, in the Virtual Boy's colours).
@@ -6286,7 +6287,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
 - **Expected:** In portrait the picture spans the full width at the top with the strip under it,
   then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
-  left, A and B lower right, Select and Start between them and the console name at the bottom.
+  left, the second D-pad and then A and B lower right, Select and Start between them and the
+  console name at the bottom.
   Turning switches to the RT-428 layout and back, without restarting the game.
 - **Check:** human only (a screenshot of each orientation, compared with TabJogoRetrato).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
@@ -6312,7 +6314,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Mode:** MANUAL
 - **Preconditions:** As RT-428 (1280×800dp, landscape).
 - **Steps:**
-  1. Start the Game Boy Advance game; turn to portrait (`user_rotation 0`) and back.
+  1. Start the Game Boy Advance game; turn to portrait (`user_rotation 1`) and back
+     (`user_rotation 0`).
   2. Quit, start the Nintendo DS game in landscape and tap something on the lower screen.
   3. Open the pause menu in each game.
 - **Expected:** Both games show their package skin's tablet art, not the drawn tablet skin of
@@ -6326,7 +6329,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 ### RT-432 — The pause menu is a side panel on a tablet
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
-- **Preconditions:** As RT-428, a game with at least two saved states, a gamepad connected
+- **Preconditions:** As RT-428, a game with at least five saved states, a gamepad connected
   (`adb shell input gamepad keyevent …` works too).
 - **Steps:**
   1. Open the pause menu with the skin's menu key.
@@ -6334,16 +6337,16 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
      "Back".
   3. Move with the gamepad's D-pad over every control of the panel; press B, open the menu again
      and press START.
-  4. Repeat steps 1 and 2 in portrait (`wm size 1600x2560`) and with the system theme light and
-     dark (`adb shell cmd uimode night yes|no`).
+  4. Quit the game, set portrait (`wm size 1600x2560`), start it again and repeat steps 1 and 2;
+     then repeat them with the system theme light and dark (`adb shell cmd uimode night yes|no`).
   5. Tap one of the saved-state pictures on the left.
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
   left corners: the game's title and play time, "Save state" and "Load", the action tiles,
-  "Save states" and "Restart", and "Quit" at the foot. On the left the game stays visible, dimmed,
-  with a "PAUSED" chip and up to four saved states with "Tap to load". The save states and shader
-  pages open inside the panel. The focus ring shows on every control; B goes back a page or
-  resumes, START resumes. In portrait the panel is narrower and the game still shows on the left.
-  The panel is readable in both themes. Tapping a saved state on the left loads it and resumes.
+  "Save states" and "Restart game", and "Quit game" at the foot. On the left the game stays visible,
+  dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
+  The save states and shader pages open inside the panel. The focus ring shows on every control;
+  B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
+  440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in both themes. Tapping a saved state on the left loads it and resumes.
 - **Check:** human only (screenshots).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`,
   `adb shell cmd uimode night auto`, `user_rotation 0`.
@@ -6352,7 +6355,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
 - **Preconditions:** As RT-380 (a phone, or `wm size 1080x2400` at 420 dpi), and the same in
-  landscape (`user_rotation 1`).
+  landscape (`user_rotation 1`); for step 3, signed in to RetroAchievements with hardcore mode on.
 - **Steps:**
   1. Start the Virtual Boy game, the Game Boy Advance game and the Nintendo DS game, in portrait
      and in landscape.
@@ -6360,12 +6363,11 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   3. With RetroAchievements hardcore on, repeat step 1 on a tablet size (`wm size 2560x1600`,
      `wm density 320`) and open the pause menu.
 - **Expected:** On the phone the skins and the pause sheet at the bottom are the same as in the
-  previous release. In hardcore on the tablet
-  fast forward is dimmed on the strip and on the panel, and "Load" and the saved states on the
-  left are not offered, as on a phone.
+  previous release. In hardcore on the tablet fast forward is dimmed on the strip and on the panel,
+  and "Load" and the saved states on the left are not offered, as on a phone.
 - **Check:** human only (screenshots compared with the previous release).
-- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
-
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`,
+  RetroAchievements hardcore as it was.
 
 ## Developer tooling & docs
 
