@@ -185,8 +185,11 @@ class IncomingTransfer:
                 decision.target, _Hashing(body, digest), READ_CHUNK, on_chunk=on_chunk
             )
         except _Cancelled:
+            # The temp file is gone by now; so can the folders made for it.
+            self._upload_ended(item_id)
             raise self._closed_error() from None
         except OSError as exc:
+            self._upload_ended(item_id)
             if exc.errno == errno.ENOSPC:
                 raise self._abort(ErrorCode.NO_SPACE, "disk full") from exc
             if isinstance(exc, (TimeoutError, ConnectionError)):
@@ -197,6 +200,7 @@ class IncomingTransfer:
             self._uploading.discard(item_id)
             if self.status != STATUS_RECEIVING:
                 staged.discard()
+                self._remove_created_dirs()
                 raise self._closed_error()
             self._staged[item_id] = staged
         if problem is not None:
@@ -220,6 +224,12 @@ class IncomingTransfer:
         if decision.kind in (KIND_COVER, KIND_LABEL) and not is_image_file(staged.tmp_path):
             return "art is not an image"
         return None
+
+    def _upload_ended(self, item_id):
+        with self._lock:
+            self._uploading.discard(item_id)
+            if self.status != STATUS_RECEIVING:
+                self._remove_created_dirs()
 
     def _check_live(self):
         if self.status != STATUS_RECEIVING:
