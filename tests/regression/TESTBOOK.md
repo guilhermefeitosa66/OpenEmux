@@ -5443,8 +5443,8 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   1. Start the GBA game and play for a few seconds, noting where the game is.
   2. Run `adb emu unfold`.
 - **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
-  bundled package skin (not the drawn one), its buttons round, not stretched, and the picture well
-  placed. The game goes on from the same point (no
+  bundled package skin (not the drawn one), now in its tablet art since the inner screen is 600dp
+  or more across, its buttons round, not stretched, and the picture well placed. The game goes on from the same point (no
   restart, no state loaded) and the touch controls respond.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
   one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
@@ -5522,7 +5522,9 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   1. Start the PC Engine game, folded.
   2. Run `adb emu unfold`, then `adb emu fold`.
 - **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
-  skin package; the game runs on from the same point.
+  skin package: on the inner screen, in landscape, its tablet shape (the picture between two side columns of
+  controls, the strip under it), on the outer screen the phone shape again. The game runs on from
+  the same point.
 - **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
   fold or unfold).
 
