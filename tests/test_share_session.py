@@ -347,6 +347,25 @@ class FileTests(SessionTestCase):
         self.clock.now += 301
         self.assertShareError(ErrorCode.NOT_FOUND, client.poll, offer_id)
 
+    def test_an_upload_longer_than_the_retention_keeps_its_offer(self):
+        # A disc image can take longer than the retention to arrive: neither a
+        # request meanwhile nor the next upload may find the offer gone.
+        server = self.serve()
+        client = self.client(server)
+        polled = []
+
+        def slow_upload(offer, item_id, body, length):
+            self.clock.now += 400
+            polled.append(server._poll(offer.offer_id)[1]["status"])
+
+        server.file_handler = slow_upload
+        offer_id = self.accepted(server)
+        self.assertEqual(client.request("PUT", f"/file/{offer_id}/i1", {})[0], 204)
+        self.assertEqual(polled, ["accepted"])
+        server.file_handler = lambda offer, item_id, body, length: None
+        self.clock.now += 250
+        self.assertEqual(client.request("PUT", f"/file/{offer_id}/i1", {})[0], 204)
+
     def test_a_crashing_handler_is_internal(self):
         server = self.serve()
         server.file_handler = mock.Mock(side_effect=RuntimeError("bug"))

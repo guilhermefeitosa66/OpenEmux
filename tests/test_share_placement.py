@@ -190,6 +190,29 @@ class UnitTests(PlacementTestCase):
         plan = self.plan(self.ps())
         self.assertEqual(self.target(plan, "g1c"), "roms/PS/Game (2)/Game (2).cue")
 
+    def test_a_unit_with_one_part_that_cannot_go_is_left_out_whole(self):
+        # The cue fits as it is named; one track's name leaves no room for the
+        # temporary name a stage writes it under.
+        long_bin = "b" * 230 + ".bin"
+        items = cue_items()
+        items[2]["name"] = long_bin
+        plan = self.plan(manifest(game(items + [item("s", "battery_save", "Game.srm")], console="PS")))
+        self.assertEqual(self.answers(plan), {
+            "g1c": "invalid_item", "g1b1": "invalid_item", "g1b2": "invalid_item", "s": "invalid_item",
+        })
+        self.assertEqual((plan.games[0].rom_status, plan.games[0].rom_path), (ROM_ABSENT, None))
+
+    def test_a_replacing_or_kept_unit_with_a_part_that_cannot_go(self):
+        long_bin = "b" * 230 + ".bin"
+        for overrides in ({"g1c": "overwrite"}, {}):
+            self.setUp()
+            self.lib.file("roms/PS/Game/Game.cue", b"other", mtime=10)
+            items = cue_items()
+            items[2]["name"] = long_bin
+            plan = self.plan(manifest(game(items, console="PS")), overrides=overrides)
+            self.assertEqual(set(self.answers(plan).values()), {"invalid_item"}, overrides)
+            self.assertEqual(plan.games[0].rom_status, ROM_ABSENT, overrides)
+
     def test_reserved_folder_names(self):
         plan = self.plan(manifest(game(cue_items(stem="covers"), console="PS")))
         self.assertEqual(self.target(plan, "g1c"), "roms/PS/covers (2)/covers (2).cue")
@@ -341,8 +364,18 @@ class GameLevelTests(PlacementTestCase):
         plan = self.plan(manifest(game([])))
         self.assertEqual(plan.answer_items(), [])
 
+    def test_names_leave_room_for_the_temporary_and_moved_aside_names(self):
+        fits = "a" * (255 - placement.NAME_HEADROOM - 4)
+        plan = self.plan(manifest(game([item("r", "rom", f"{fits}.sfc")])))
+        self.assertEqual(self.answers(plan)["r"], "send")
+        plan = self.plan(manifest(game([item("r", "rom", f"{fits}a.sfc")])))
+        self.assertEqual(self.answers(plan)["r"], "invalid_item")
+        # Not only a ROM: a save whose name leaves no such room is refused alone.
+        plan = self.plan(self.sfc(item("s", "battery_save", "Game." + "s" * 230)))
+        self.assertEqual(self.answers(plan), {"r": "send", "s": "invalid_item"})
+
     def test_names_too_long_after_renaming(self):
-        long_stem = "a" * 248
+        long_stem = "a" * (255 - placement.NAME_HEADROOM - 7)
         self.lib.file(f"roms/SFC/{long_stem}.sfc", b"old")
         plan = self.plan(manifest(game([item("r", "rom", f"{long_stem}.sfc")])))
         self.assertEqual(self.answers(plan)["r"], "invalid_item")

@@ -205,8 +205,7 @@ class CoreCatalog:
         """The first installed core whose ``corename`` is ``core_name``, or ``None``."""
         if not core_name:
             return None
-        for filename in sorted(self.installed()):
-            core = self.installed()[filename]
+        for _, core in sorted(self.installed().items()):
             if core.core_name == core_name:
                 return core
         return None

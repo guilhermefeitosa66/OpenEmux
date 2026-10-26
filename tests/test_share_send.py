@@ -1,3 +1,4 @@
+import os
 import threading
 import unittest
 from pathlib import Path
@@ -59,7 +60,8 @@ class SendTestCase(unittest.TestCase):
         for n in (1, 2, 3, 4):
             path = self.lib.file(f"roms/SFC/f{n}.bin", b"x" * 10)
             sources[f"i{n}"] = path
-            items.append({"id": f"i{n}", "kind": "rom", "name": path.name, "size": 10, "mtime": 1})
+            items.append({"id": f"i{n}", "kind": "rom", "name": path.name, "size": 10,
+                          "mtime": int(path.stat().st_mtime)})
         manifest = {"games": [{"id": "g1", "console": "SFC", "title": "G", "items": items}],
                     "total_size": 40, "file_count": 4}
         self.built = BuiltManifest(manifest, sources)
@@ -170,7 +172,8 @@ class CancelTests(SendTestCase):
 
 class SourceTests(SendTestCase):
     def test_a_source_that_changed_or_vanished(self):
-        for change in (lambda p: p.write_bytes(b"short"), lambda p: p.unlink()):
+        rewritten = lambda p: os.utime(p, (p.stat().st_mtime + 5, p.stat().st_mtime + 5))
+        for change in (lambda p: p.write_bytes(b"short"), lambda p: p.unlink(), rewritten):
             self.setUp()
             change(Path(self.built.sources["i3"]))
             client = FakeClient([ACCEPTED])

@@ -74,6 +74,10 @@ _ART_DIRS = {KIND_COVER: COVER_ART, KIND_LABEL: LABEL_ART}
 #: The order a commit places things in; the receive side relies on it.
 COMMIT_ORDER = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL)
 STATE_KEEP_BOTH_SLOTS = range(1, 10)
+#: What a target name leaves free of the 255 bytes a file name may take: the
+#: stage's temporary name (``.<name>.XXXXXXXX.tmp``) adds 14 bytes to it, and
+#: a replaced file moved aside (``.<name>.share-old-<offer id>``) 34.
+NAME_HEADROOM = 34
 
 ROM_NEW = "new"
 ROM_KEPT_BOTH = "kept_both"
@@ -109,6 +113,8 @@ class GamePlan:
     rom_status: str = ROM_ABSENT
     rom_path: Path = None
     decisions: list = field(default_factory=list)
+    #: Why the rest of the game is skipped when its ROM is ``absent``.
+    absent_reason: str = SkipReason.USER_UNCHECKED
 
 
 def state_compatible(state, catalog):
@@ -117,7 +123,7 @@ def state_compatible(state, catalog):
 
 
 def _fits(name):
-    return len(name.encode("utf-8")) <= MAX_FILE_NAME_BYTES
+    return len(name.encode("utf-8")) + NAME_HEADROOM <= MAX_FILE_NAME_BYTES
 
 
 def free_stem(stem, paths_for, taken, blocked=None):
@@ -269,7 +275,7 @@ class _Planner:
             if item["id"] in self.unchecked:
                 self.skip(plan, item, SkipReason.USER_UNCHECKED)
             elif plan.rom_status == ROM_ABSENT:
-                self.skip(plan, item, SkipReason.USER_UNCHECKED)
+                self.skip(plan, item, plan.absent_reason)
             elif item["kind"] == KIND_BATTERY_SAVE:
                 self.plan_save(plan, console, item, stem, rom_dir, final_stem)
             elif item["kind"] == KIND_STATE:
@@ -323,9 +329,14 @@ class _Planner:
 
         policy = self.policy(main)
         taken_here = any(path in self.taken for path in candidates)
+        def invalid():
+            plan.absent_reason = SkipReason.INVALID_ITEM
+            return finish(ROM_ABSENT, None, None, stem)
+
         if existing is None and not taken_here and not (multi and self._dir_blocked(default_dir, roms)):
-            for item in roms:
-                self.send(plan, item, default_dir / item["name"], console_dir, policy)
+            if not self.send_unit(plan, [(item, default_dir / item["name"]) for item in roms],
+                                  console_dir, policy):
+                return invalid()
             return finish(ROM_NEW, default_dir / name, default_dir, stem)
 
         if existing is not None and policy != ON_COLLISION_KEEP_BOTH:
@@ -333,10 +344,9 @@ class _Planner:
                 for item in roms:
                     self.skip(plan, item, SkipReason.EXISTS_SKIP)
                 return finish(ROM_EXISTING, existing, existing.parent, stem)
-            for item in roms:
-                target = existing.parent / item["name"]
-                self.send(plan, item, target, console_dir, policy,
-                          replaces=target if target.exists() else None)
+            pairs = [(item, existing.parent / item["name"]) for item in roms]
+            if not self.send_unit(plan, pairs, console_dir, policy, replacing=True):
+                return invalid()
             return finish(ROM_REPLACED, existing, existing.parent, stem)
 
         # Keep both: the unit gets a free name; a multi-file unit also a free
@@ -352,12 +362,28 @@ class _Planner:
             final_stem = free_stem(stem, lambda s: [console_dir / f"{s}{suffix}"], self.taken)
             rom_dir = console_dir
         main_target = rom_dir / f"{final_stem}{suffix}"
+        pairs = [(main, main_target)] + [(item, rom_dir / item["name"]) for item in parts]
+        if not self.send_unit(plan, pairs, console_dir, ON_COLLISION_KEEP_BOTH):
+            return invalid()
         if multi:
             self.taken.add(rom_dir)
-        self.send(plan, main, main_target, console_dir, ON_COLLISION_KEEP_BOTH)
-        for item in parts:
-            self.send(plan, item, rom_dir / item["name"], console_dir, ON_COLLISION_KEEP_BOTH)
         return finish(ROM_KEPT_BOTH, main_target, rom_dir, final_stem)
+
+    def send_unit(self, plan, pairs, base, policy, replacing=False):
+        """Send every part of a ROM unit, or none of them.
+
+        A cue placed without one of its tracks is a broken game in the
+        library, so one part that cannot go makes the whole unit
+        ``invalid_item``. Returns whether the unit is sent.
+        """
+        if not all(_fits(target.name) and _inside(target, base) for _, target in pairs):
+            for item, _ in pairs:
+                self.skip(plan, item, SkipReason.INVALID_ITEM)
+            return False
+        for item, target in pairs:
+            replaces = target if replacing and target.exists() else None
+            self.send(plan, item, target, base, policy, replaces=replaces)
+        return True
 
     def _dir_blocked(self, directory, roms):
         """A unit folder that cannot take this unit as it is named."""

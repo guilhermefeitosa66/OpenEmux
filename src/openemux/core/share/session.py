@@ -93,6 +93,8 @@ class _Offer:
         self.finished = None
         self.items = None
         self.code = None
+        #: Uploads in progress: an accepted offer is never dropped under one.
+        self.uploads = 0
 
     def finish(self, status, now):
         self.status = status
@@ -355,7 +357,7 @@ class ShareServer:
             if offer.status in LIVE_STATUSES:
                 if now - offer.created > OFFER_TTL:
                     offer.finish(STATUS_EXPIRED, offer.created + OFFER_TTL)
-            elif now - offer.finished > FINISHED_RETENTION:
+            elif offer.uploads == 0 and now - offer.finished > FINISHED_RETENTION:
                 del self._offers[offer_id]
 
     def _live_offer(self, offer_id):
@@ -436,13 +438,19 @@ class ShareServer:
             }
             if offer.status != STATUS_ACCEPTED or item_id not in sendable:
                 raise ShareError(ErrorCode.BAD_REQUEST, "item is not accepted for upload")
+            length = parse_decimal(request.headers.get("Content-Length"))
+            if length is None:
+                raise ShareError(ErrorCode.BAD_REQUEST, "bad Content-Length")
             # A transfer in progress keeps its offer: retention counts from
-            # the last upload, not from the answer.
-            offer.finished = self.clock()
-        length = parse_decimal(request.headers.get("Content-Length"))
-        if length is None:
-            raise ShareError(ErrorCode.BAD_REQUEST, "bad Content-Length")
-        self.file_handler(offer, item_id, BodyReader(request, length), length)
+            # the end of the last upload, not from the answer, and an upload
+            # longer than the retention (a disc image) never loses it.
+            offer.uploads += 1
+        try:
+            self.file_handler(offer, item_id, BodyReader(request, length), length)
+        finally:
+            with self._lock:
+                offer.uploads -= 1
+                offer.finished = self.clock()
         return 204, None
 
 

@@ -129,11 +129,14 @@ class OutgoingTransfer:
         for item in to_send:
             self._check_cancel()
             source = self.built.sources[item["id"]]
+            # The mtime too: a battery save keeps its size when it is written,
+            # and a changed one would only fail the receiver's sha256 check.
             try:
-                size = source.stat().st_size
+                stat = source.stat()
+                changed = stat.st_size != item["size"] or int(stat.st_mtime) != item["mtime"]
             except OSError:
-                size = None
-            if size != item["size"]:
+                changed = True
+            if changed:
                 raise ShareError(ErrorCode.SOURCE_CHANGED, f"{source} changed since it was offered")
             progress = [0]
 
