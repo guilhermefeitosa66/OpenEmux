@@ -55,6 +55,7 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # depends on nothing extra at all (issues #119, #328).
 DEPENDS="python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6),"
 DEPENDS="$DEPENDS gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib,"
+DEPENDS="$DEPENDS python3-cryptography, python3-zeroconf,"
 DEPENDS="$DEPENDS librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader,"
 DEPENDS="$DEPENDS adwaita-icon-theme"
 case "$DEB_ARCH" in

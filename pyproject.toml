@@ -15,7 +15,10 @@ authors = [{ name = "Guilherme Feitoza" }]
 # (Flatpak) and against distro GObject-introspection.
 # python-xlib retitles RetroArch's X11 window with the game's name (issue
 # #469). Missing it costs the title, not the app.
-dependencies = ["PyYAML", "python-xlib"]
+# cryptography makes the device certificate of Share nearby (issue #587) and
+# zeroconf announces it over mDNS; missing zeroconf leaves the UDP beacon,
+# missing cryptography turns the feature off.
+dependencies = ["PyYAML", "python-xlib", "cryptography", "zeroconf"]
 
 [project.urls]
 Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
