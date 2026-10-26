@@ -6717,8 +6717,9 @@ pixel_fold`, started headless with `-no-window`) with `adb`. The posture is simu
 `adb emu fold` / `adb emu unfold` and the hinge angle with `adb emu sensor set hinge-angle0 <deg>`
 (180 = flat, 90 = half open); the fold turns across with
 `adb shell settings put system accelerometer_rotation 0` and
-`adb shell settings put system user_rotation 1`. A debug build logs the fold it sees:
-`adb logcat -s OpenEmux:D | grep "window fold"`. The library needs at least two consoles, one with
+`adb shell settings put system user_rotation 1`. A debug build logs the fold it sees under the
+tag `OpenEmuxWindow`: `adb logcat -s OpenEmuxWindow` shows `window fold: Fold(...)`, or
+`window fold: null` with no fold. The library needs at least two consoles, one with
 cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every scenario ends with
 `adb emu unfold`, `hinge-angle0 180` and `user_rotation 0`.
 
@@ -6796,9 +6797,11 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
   1. From a game in the grid press down until the focus leaves the top half.
   2. Walk the chips and the tabs; press B.
   3. Use L1/R1; open a game with A and walk its bottom half.
+  4. On "Shelf" and on "Settings", press down until the focus leaves the top half.
 - **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the ring
   is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
-  top. L1/R1 change console as before.
+  top. L1/R1 change console as before. From the shelf, down reaches "Import ROMs" and the tabs;
+  from Settings, down reaches the tabs.
 - **Check:** human only.
 
 
