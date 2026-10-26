@@ -19,6 +19,13 @@ class BuildTests(unittest.TestCase):
 
 
 class ParseTests(unittest.TestCase):
+    def test_non_ascii_digits_are_not_a_port(self):
+        for text in ("pc:\u00b2", "pc:\u0661\u0662"):
+            with self.subTest(text=text):
+                with self.assertRaises(ShareError) as caught:
+                    address.parse(text)
+                self.assertEqual(caught.exception.code, ErrorCode.BAD_REQUEST)
+
     def test_forms(self):
         self.assertEqual(address.parse(" 10.0.0.2 "), ("10.0.0.2", 53319, None))
         self.assertEqual(address.parse("10.0.0.2:8080"), ("10.0.0.2", 8080, None))

@@ -18,6 +18,7 @@ import http.client
 import json
 import logging
 import os
+import re
 import socketserver
 import ssl
 import threading
@@ -38,6 +39,7 @@ from openemux.core.share.protocol import (
     ShareError,
     is_hex,
     negotiate,
+    parse_decimal,
     parse_info,
     parse_offer,
     version_error,
@@ -54,8 +56,13 @@ STATUS_CANCELLED = "cancelled"
 
 #: Statuses an offer can still leave; the others are final.
 LIVE_STATUSES = (STATUS_COMMITTED, STATUS_PENDING)
-#: How long a finished offer is kept for the sender's last poll.
+#: Final statuses a cancel no longer changes: there is nothing left to stop.
+CLOSED_STATUSES = (STATUS_DECLINED, STATUS_EXPIRED, STATUS_CANCELLED)
+#: How long a finished offer is kept for the sender's last poll, counted from
+#: when it finished (or, while accepted, from its last upload).
 FINISHED_RETENTION = 300
+#: What :func:`new_offer_id` produces; the client refuses anything else.
+OFFER_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{22}")
 JOIN_TIMEOUT = 2.0
 #: The most an error answer reads away before closing (see _discard_body).
 DISCARD_MAX_BYTES = 4 * 1024 * 1024
@@ -80,8 +87,13 @@ class _Offer:
         self.nonce_r = nonce_r
         self.created = created
         self.status = STATUS_COMMITTED
+        self.finished = None
         self.items = None
         self.code = None
+
+    def finish(self, status, now):
+        self.status = status
+        self.finished = now
 
 
 def new_offer_id():
@@ -167,10 +179,10 @@ class _Handler(BaseHTTPRequestHandler):
         is left, and that client sees the reset instead.
         """
         self.close_connection = True
-        length = self.headers.get("Content-Length", "0")
-        if not self._body_read and length.isdigit() and int(length) <= DISCARD_MAX_BYTES:
+        length = parse_decimal(self.headers.get("Content-Length", "0"))
+        if not self._body_read and length is not None and length <= DISCARD_MAX_BYTES:
             self._body_read = True
-            remaining = int(length)
+            remaining = length
             while remaining:
                 chunk = self.rfile.read(min(remaining, 65536))
                 if not chunk:
@@ -188,15 +200,16 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def read_json(self):
-        length = self.headers.get("Content-Length", "0")
-        if not length.isdigit():
+        length = parse_decimal(self.headers.get("Content-Length", "0"))
+        if length is None:
             raise ShareError(ErrorCode.BAD_REQUEST, "bad Content-Length")
-        if int(length) > BODY_MAX_BYTES:
+        if length > BODY_MAX_BYTES:
             raise ShareError(ErrorCode.TOO_LARGE, "body over 1 MiB")
         self._body_read = True
         try:
-            return json.loads(self.rfile.read(int(length)).decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as exc:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        # RecursionError: a deeply nested body is malformed, not a crash.
+        except (UnicodeDecodeError, ValueError, RecursionError) as exc:
             raise ShareError(ErrorCode.BAD_REQUEST, "body is not JSON") from exc
 
 
@@ -276,15 +289,16 @@ class ShareServer:
             offer = self._live_offer(offer_id)
             if offer.status != STATUS_PENDING:
                 raise ShareError(ErrorCode.BAD_REQUEST, "offer is not waiting for an answer")
-            offer.status = STATUS_ACCEPTED if accepted else STATUS_DECLINED
+            offer.finish(STATUS_ACCEPTED if accepted else STATUS_DECLINED, self.clock())
             offer.items = list(items or []) if accepted else None
 
     def cancel(self, offer_id):
         """Cancel from this side; the sender learns it on its next request."""
         with self._lock:
+            self._expire(self.clock())
             offer = self._offers.get(offer_id)
-            if offer is not None:
-                offer.status = STATUS_CANCELLED
+            if offer is not None and offer.status not in CLOSED_STATUSES:
+                offer.finish(STATUS_CANCELLED, self.clock())
 
     # -- routing ---------------------------------------------------------
 
@@ -307,16 +321,16 @@ class ShareServer:
 
     @staticmethod
     def _check_version(header):
-        peer = int(header) if header is not None and header.isdigit() else None
+        peer = parse_decimal(header)
         if peer is None or negotiate(peer, peer) is None:
             raise version_error(peer, peer)
 
     def _expire(self, now):
         for offer_id, offer in list(self._offers.items()):
-            age = now - offer.created
-            if offer.status in LIVE_STATUSES and age > OFFER_TTL:
-                offer.status = STATUS_EXPIRED
-            elif offer.status not in LIVE_STATUSES and age > FINISHED_RETENTION:
+            if offer.status in LIVE_STATUSES:
+                if now - offer.created > OFFER_TTL:
+                    offer.finish(STATUS_EXPIRED, offer.created + OFFER_TTL)
+            elif now - offer.finished > FINISHED_RETENTION:
                 del self._offers[offer_id]
 
     def _live_offer(self, offer_id):
@@ -374,10 +388,14 @@ class ShareServer:
 
     def _cancelled_by_sender(self, offer_id):
         with self._lock:
+            self._expire(self.clock())
             offer = self._offers.get(offer_id)
             if offer is None:
                 raise ShareError(ErrorCode.NOT_FOUND, "no such offer")
-            offer.status = STATUS_CANCELLED
+            if offer.status in CLOSED_STATUSES:
+                # Already over: nothing to stop and nothing new to tell the UI.
+                return 204, None
+            offer.finish(STATUS_CANCELLED, self.clock())
         if self.on_cancel is not None:
             self.on_cancel(offer_id)
         return 204, None
@@ -393,6 +411,9 @@ class ShareServer:
             }
             if offer.status != STATUS_ACCEPTED or item_id not in sendable:
                 raise ShareError(ErrorCode.BAD_REQUEST, "item is not accepted for upload")
+            # A transfer in progress keeps its offer: retention counts from
+            # the last upload, not from the answer.
+            offer.finished = self.clock()
         self.file_handler(offer, item_id, request)
         return 204, None
 
@@ -428,7 +449,7 @@ class ShareClient:
         except ShareError:
             conn.close()
             raise
-        except (OSError, ssl.SSLError) as exc:
+        except OSError as exc:  # ssl.SSLError and timeouts included
             conn.close()
             raise ShareError(ErrorCode.UNREACHABLE, str(exc)) from exc
         self.peer_fp = observed
@@ -452,7 +473,7 @@ class ShareClient:
             conn.close()
         try:
             data = json.loads(raw.decode("utf-8")) if raw else None
-        except (UnicodeDecodeError, ValueError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             data = None
         if status >= 400:
             raise ShareError.from_envelope(status, data)
@@ -475,6 +496,7 @@ class ShareClient:
         if (
             not isinstance(created, dict)
             or not isinstance(created.get("offer_id"), str)
+            or OFFER_ID_PATTERN.fullmatch(created["offer_id"]) is None
             or not is_hex(created.get("nonce_r"), 2 * verification.NONCE_BYTES)
         ):
             raise ShareError(ErrorCode.BAD_REQUEST, "malformed offer answer")

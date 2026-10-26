@@ -90,6 +90,11 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.log[2:], ["discovery.stop", "server.stop"])
         self.assertFalse(service.running)
         self.assertEqual((service.peers(), service.transport_status()), ([], {}))
+        with self.assertRaises(ShareError) as caught:
+            service.answer("o", True)
+        self.assertEqual(caught.exception.code, ErrorCode.UNAVAILABLE)
+        service.cancel("o")
+        self.assertEqual(len(self.server.calls), 2)
 
     def test_identity_lives_beside_the_config(self):
         self.config.set_share_device_name("Den")

@@ -253,6 +253,31 @@ class BeaconTransportTests(unittest.TestCase):
         self.assertEqual(transport.status, "stopped")
         transport.stop()
 
+    def test_a_failing_listener_does_not_end_the_beacon(self):
+        transport = self.make()
+        calls = []
+
+        def on_seen(*args):
+            calls.append(args)
+            raise RuntimeError("listener bug")
+
+        transport.start(FakeIdentity(ID_A, FP_A, "A").announcement(4000), on_seen, lambda *a: None)
+        sock = self.sockets[-1]
+        hello = protocol.build_beacon("hello", announcement())
+        with self.assertLogs(discovery.logger, "ERROR"):
+            with sock.lock:
+                sock.inbox += [(hello, ("10.0.0.7", 1)), (hello, ("10.0.0.8", 1))]
+            self.assertTrue(wait_until(lambda: len(calls) == 2))
+        self.assertEqual(transport.status, "running")
+
+    def test_bye_goes_out_after_the_last_hello(self):
+        transport = self.make()
+        sock = self.start(transport)
+        self.assertTrue(wait_until(lambda: sock.kinds()))
+        transport.stop()
+        self.assertEqual(sock.kinds()[-1], "bye")
+        self.assertNotIn("hello", sock.kinds()[sock.kinds().index("bye"):])
+
     def test_receive_error_marks_the_transport_failed(self):
         transport = self.make(recv_error=OSError("network down"))
         self.start(transport)
@@ -428,6 +453,23 @@ class MdnsTransportTests(unittest.TestCase):
         for _ in range(3):
             self.fire(module, "X._openemux._tcp.local.", StateChange.Added)
         self.assertEqual(self.seen, [])
+
+    def test_an_update_to_another_identity_retires_the_old_one(self):
+        first = protocol.build_txt(announcement())
+        second = dict(first, fp="c" * 64)
+        answers = iter([resolved(first), resolved(second), resolved(second), None])
+        module = FakeZeroconfModule(resolve=lambda type_, name: next(answers))
+        self.start(module)
+        name = "B._openemux._tcp.local."
+        self.fire(module, name, StateChange.Added)
+        self.fire(module, name, StateChange.Updated)
+        self.assertEqual(self.gone, [("mdns", ID_B, FP_B)])
+        self.fire(module, name, StateChange.Updated)
+        self.assertEqual(len(self.gone), 1)
+        self.fire(module, name, StateChange.Updated)
+        self.assertEqual(self.gone[-1], ("mdns", ID_B, "c" * 64))
+        self.fire(module, name, StateChange.Removed)
+        self.assertEqual(len(self.gone), 2)
 
     def test_record_without_addresses(self):
         txt = protocol.build_txt(announcement())

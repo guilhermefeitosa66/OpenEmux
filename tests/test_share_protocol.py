@@ -121,6 +121,19 @@ class SanitizeTests(unittest.TestCase):
         self.assertFalse(protocol.is_hex(None, 32))
 
 
+class DecimalTests(unittest.TestCase):
+    def test_ascii_digits_only(self):
+        self.assertEqual(protocol.parse_decimal("042"), 42)
+        for value in ("\u00b2", "\u0661", "", "-1", "1.0", None, 3):
+            with self.subTest(value=value):
+                self.assertIsNone(protocol.parse_decimal(value))
+
+    def test_non_ascii_digits_are_dropped_not_raised(self):
+        self.assertIsNone(protocol.parse_beacon(beacon(port="\u00b2")))
+        parsed = protocol.parse_beacon(beacon(v="\u00b2"))
+        self.assertEqual((parsed["v"], parsed["compatible"]), (0, False))
+
+
 class BeaconTests(unittest.TestCase):
     def test_valid_hello(self):
         parsed = protocol.parse_beacon(beacon())

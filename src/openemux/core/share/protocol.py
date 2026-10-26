@@ -173,6 +173,18 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def parse_decimal(value):
+    """A non-negative integer written in ASCII digits, or ``None``.
+
+    ``str.isdigit()`` alone is not enough: it accepts digits ``int()`` refuses
+    (``"\u00b2"``) and other scripts' digits, so a stranger's ``"\u00b2"``
+    would raise ``ValueError`` out of a parser instead of being refused.
+    """
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None
+
+
 def _versions(raw_v, raw_vmin):
     """``(vmin, v)`` from advertised values; ``(0, 0)`` when unreadable.
 
@@ -191,9 +203,7 @@ def _versions(raw_v, raw_vmin):
 def _to_int(value):
     if _is_int(value):
         return value
-    if isinstance(value, str) and value.isdigit():
-        return int(value)
-    return None
+    return parse_decimal(value)
 
 
 def _port(value):

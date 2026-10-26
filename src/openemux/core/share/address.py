@@ -7,7 +7,7 @@ QR code encodes. Parsing accepts the full URI, ``host``, ``host:port`` and
 
 from collections import namedtuple
 
-from openemux.core.share.protocol import SERVER_PORT, ErrorCode, ShareError, is_hex
+from openemux.core.share.protocol import SERVER_PORT, ErrorCode, ShareError, is_hex, parse_decimal
 
 SCHEME = "openemux-share://"
 
@@ -55,6 +55,7 @@ def _split_host_port(rest, text):
 
 
 def _port(value, text):
-    if not value.isdigit() or not 0 < int(value) < 65536:
+    port = parse_decimal(value)
+    if port is None or not 0 < port < 65536:
         raise _bad(text)
-    return int(value)
+    return port

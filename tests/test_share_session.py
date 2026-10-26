@@ -232,6 +232,17 @@ class OfferTests(SessionTestCase):
         self.clock.now += 400
         self.assertShareError(ErrorCode.NOT_FOUND, client.poll, offer_id)
 
+    def test_a_finished_offer_is_kept_from_when_it_finished(self):
+        server = self.serve()
+        client = self.client(server)
+        offer_id = self.revealed(server)
+        self.clock.now += 59
+        server.answer(offer_id, False)
+        self.clock.now += 290
+        self.assertEqual(client.poll(offer_id), {"status": "declined"})
+        self.clock.now += 20
+        self.assertShareError(ErrorCode.NOT_FOUND, client.poll, offer_id)
+
     def test_accept_and_decline(self):
         server = self.serve()
         client = self.client(server)
@@ -264,6 +275,20 @@ class OfferTests(SessionTestCase):
         server.cancel("nope")
         self.assertEqual(client.poll(offer_id), {"status": "cancelled"})
         self.assertShareError(ErrorCode.CANCELLED, client.request, "PUT", f"/file/{offer_id}/i1", {})
+
+    def test_cancel_leaves_a_closed_offer_alone(self):
+        server = self.serve()
+        client = self.client(server)
+        offer_id = self.revealed(server)
+        server.answer(offer_id, False)
+        client.cancel(offer_id)
+        server.cancel(offer_id)
+        self.assertEqual(self.cancels, [])
+        self.assertEqual(client.poll(offer_id), {"status": "declined"})
+        expired, _, _ = self.committed(server)
+        self.clock.now += 61
+        client.cancel(expired)
+        self.assertEqual((self.cancels, client.poll(expired)), ([], {"status": "expired"}))
 
     def test_cancel_without_a_listener(self):
         server = self.serve()
@@ -311,6 +336,17 @@ class FileTests(SessionTestCase):
         status, body = self.client(server).request("PUT", f"/file/{offer_id}/i1", {})
         self.assertEqual((status, body, calls), (204, None, [(offer_id, "i1")]))
 
+    def test_an_upload_keeps_an_accepted_offer(self):
+        server = self.serve()
+        server.file_handler = lambda offer, item_id, request: None
+        client = self.client(server)
+        offer_id = self.accepted(server)
+        for _ in range(3):
+            self.clock.now += 250
+            self.assertEqual(client.request("PUT", f"/file/{offer_id}/i1", {})[0], 204)
+        self.clock.now += 301
+        self.assertShareError(ErrorCode.NOT_FOUND, client.poll, offer_id)
+
     def test_a_crashing_handler_is_internal(self):
         server = self.serve()
         server.file_handler = mock.Mock(side_effect=RuntimeError("bug"))
@@ -333,6 +369,21 @@ class RequestLimitTests(SessionTestCase):
     def test_bad_content_length(self):
         server = self.serve()
         status, body = self.raw(server, "POST", "/offer", b"", headers={"Content-Length": "abc"})
+        self.assertEqual((status, body["error"]), (400, "bad_request"))
+
+    def test_non_ascii_content_length(self):
+        server = self.serve()
+        status, body = self.raw(server, "POST", "/offer", b"", headers={"Content-Length": "\u00b2"})
+        self.assertEqual((status, body["error"]), (400, "bad_request"))
+
+    def test_non_ascii_version_header(self):
+        server = self.serve()
+        status, body = self.raw(server, "POST", "/offer", b"", version="\u00b2")
+        self.assertEqual((status, body["error"]), (400, "incompatible_version"))
+
+    def test_deeply_nested_body_is_bad_request(self):
+        server = self.serve()
+        status, body = self.raw(server, "POST", "/offer", b"[" * 200000)
         self.assertEqual((status, body["error"]), (400, "bad_request"))
 
     def test_not_json(self):
@@ -368,7 +419,13 @@ class ClientParsingTests(SessionTestCase):
         return client
 
     def test_malformed_offer_answer(self):
-        for answer in (None, {"offer_id": 1}, {"offer_id": "x", "nonce_r": "zz"}):
+        good_nonce = "0" * 64
+        for answer in (
+            None, {"offer_id": 1}, {"offer_id": "x", "nonce_r": "zz"},
+            {"offer_id": "x", "nonce_r": good_nonce},
+            {"offer_id": "a" * 21 + "\n", "nonce_r": good_nonce},
+            {"offer_id": "a" * 20 + "/x", "nonce_r": good_nonce},
+        ):
             with self.subTest(answer=answer):
                 client = self.client_answering((201, answer))
                 self.assertShareError(ErrorCode.BAD_REQUEST, client.offer, self.sender.sender(), manifest())

@@ -73,7 +73,12 @@ class ShareService:
         return self.discovery.transport_status() if self.discovery is not None else {}
 
     def answer(self, offer_id, accepted, items=None):
+        """The user's decision; ``unavailable`` once sharing has stopped."""
+        if self.server is None:
+            raise ShareError(ErrorCode.UNAVAILABLE, "sharing is stopped")
         self.server.answer(offer_id, accepted, items)
 
     def cancel(self, offer_id):
-        self.server.cancel(offer_id)
+        """Cancel an incoming offer; nothing to do once sharing has stopped."""
+        if self.server is not None:
+            self.server.cancel(offer_id)

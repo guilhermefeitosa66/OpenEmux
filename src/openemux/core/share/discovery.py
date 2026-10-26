@@ -271,18 +271,24 @@ class BeaconTransport(Transport):
             beacon = parse_beacon(data)
             if beacon is None:
                 continue
-            if beacon.pop("type") == "bye":
-                on_gone(PATH_BEACON, beacon["id"], beacon["fp"])
-            else:
-                on_seen(PATH_BEACON, beacon, source[0])
+            # One bad datagram or listener must not end the beacon for good:
+            # the thread would die while the status still says "running".
+            try:
+                if beacon.pop("type") == "bye":
+                    on_gone(PATH_BEACON, beacon["id"], beacon["fp"])
+                else:
+                    on_seen(PATH_BEACON, beacon, source[0])
+            except Exception:
+                logger.exception("Beacon listener failed")
 
     def stop(self):
         if self._sock is None:
             return
         self._stop.set()
-        self._send("bye")
         for thread in self._threads:
             thread.join(JOIN_TIMEOUT)
+        # After the send loop is gone, so no "hello" in flight lands after it.
+        self._send("bye")
         self._sock.close()
         self._sock = None
         self._threads = []
@@ -348,10 +354,17 @@ class MdnsTransport(Transport):
             logger.debug("mDNS could not resolve %s: %s", name, exc)
             return
         announcement = parse_txt(info.properties, info.port) if info is not None else None
+        key = None if announcement is None else (announcement["id"], announcement["fp"])
+        with self._lock:
+            previous = self._names.pop(name, None)
+            if key is not None:
+                self._names[name] = key
+        # An update that changed the identity behind a name (or made it
+        # unreadable) retires the old entry: mDNS paths never expire alone.
+        if previous is not None and previous != key:
+            self._on_gone(PATH_MDNS, *previous)
         if announcement is None:
             return
-        with self._lock:
-            self._names[name] = (announcement["id"], announcement["fp"])
         addresses = info.parsed_addresses() or [None]
         for address in addresses:
             self._on_seen(PATH_MDNS, announcement, address)
