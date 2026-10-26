@@ -5365,19 +5365,6 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
-### RT-490 — A console with the drawn skin is redrawn with the drawn skin
-- **Area:** Android — Window size changes in game
-- **Mode:** MANUAL
-- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
-  skin package).
-- **Steps:**
-  1. Start the PC Engine game, folded.
-  2. Run `adb emu unfold`, then `adb emu fold`.
-- **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
-  skin package; the game runs on from the same point.
-- **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
-  fold or unfold).
-
 ### RT-382 — A small 5" phone lays out without clipping
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
@@ -5525,6 +5512,19 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   launch directory.
 - **Check:** human only (the logcat during the rotation, and the directory listing).
 - **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-490 — A console with the drawn skin is redrawn with the drawn skin
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+  skin package).
+- **Steps:**
+  1. Start the PC Engine game, folded.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+- **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
+  skin package; the game runs on from the same point.
+- **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
+  fold or unfold).
 
 
 ## Developer tooling & docs
