@@ -5585,12 +5585,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 ### RT-376 — Turbo on the strip shows whether it is on
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** The Android app installed with a GBA game in the library; no gamepad connected.
+- **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
+  the drawn skin; the package skins are RT-462); no gamepad connected.
 - **Steps:**
-  1. Launch the GBA game, phone in portrait.
+  1. Launch the Atari 2600 game, phone in portrait.
   2. Tap the bolt (turbo) on the strip under the picture.
   3. Tap it again.
-  4. Repeat steps 2-3 on a console with a light-bodied skin, on the red and the purple skins, and
+  4. Repeat steps 2-3 on a console with a light-bodied skin, on the red skin, and
      in landscape (the strip under the picture, between the control sides).
 - **Expected:** After step 2 the bolt sits on a purple pill with a light ring, drawn in white;
   fast forward keeps its normal look. After step 3 the bolt is back to its normal look, no pill.
