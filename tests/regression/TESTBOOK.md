@@ -6167,8 +6167,13 @@ game's movement. `$PKG` is `com.openemux.mobile`.
      game area and onto the face buttons; hold there for two seconds.
   2. Without lifting, slide back over the D-pad and release.
   3. Repeat in landscape.
+  4. On a phone with a camera cutout, in landscape with the cutout on the D-pad's side: press Left
+     and, without lifting, slide the thumb past the edge of the game window into the strip beside
+     the cutout, all the way to the screen's edge; hold there for two seconds, then slide back and
+     release. Meanwhile, keep a second finger on A.
 - **Expected:** Right stays pressed the whole time, with no gap when the thumb leaves the cross. The
-  face buttons the thumb passes over and rests on do not fire.
+  face buttons the thumb passes over and rests on do not fire. In step 4, Left stays pressed and the
+  circle stays on the left arm while the thumb is in the cutout's strip, and A stays held.
 - **Check:** human only.
 
 ### RT-410 — Rolling the thumb goes through all eight directions
