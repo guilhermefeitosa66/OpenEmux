@@ -6346,7 +6346,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
   The save states and shader pages open inside the panel. The focus ring shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
-  440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in both themes. Tapping a saved state on the left loads it and resumes.
+  440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
+  both themes. Tapping a saved state on the left loads it and resumes.
 - **Check:** human only (screenshots).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`,
   `adb shell cmd uimode night auto`, `user_rotation 0`.
