@@ -5725,6 +5725,118 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   the item that had it. The dragged shelf stays drawn above the others while it moves.
 - **Check:** human only.
 
+## Android — Multi-select and bulk remove
+
+The Android library's selection mode (#585): a long press (or START on a gamepad) selects games,
+and a bar over the top removes them in one go. `MANUAL`, like the other Android sections: a phone,
+or a headless emulator driven with `adb shell input` (`swipe x y x y 900` is a long press;
+`keyevent KEYCODE_BUTTON_START/A/X/Y/B` for the gamepad). A library of at least six games over two
+consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
+`/sdcard/Android/data/$PKG/files/roms/<CONSOLE>/` and the metadata in `files/meta.json`
+(`adb shell run-as $PKG cat files/meta.json`).
+
+### RT-462 — A long press enters selection mode
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; the library above, portrait, "Cartridges" view.
+- **Steps:**
+  1. Open a console's shelf and long-press a game.
+  2. Tap two more games, then tap one of them again.
+  3. Tap every game still selected.
+  4. Tap a game.
+- **Expected:** After 1 a bar covers the top of the screen with a close button, "1 selected",
+  "Select all" and a red remove button; the pressed game has a check mark and a ring, the others a
+  hollow circle and are dimmed; the game does not open. After 2 the counter reads 3 then 2 and no
+  detail screen opens. After 3 the bar goes away and the screen is as before. After 4 the game's
+  detail opens as usual.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-463 — "Select all" takes every game the page shows
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library.
+- **Steps:**
+  1. On "All", long-press a game of console A.
+  2. Switch to console B's chip.
+  3. Long-press a game of B and press "Select all".
+  4. Search for a word only some of B's games have.
+- **Expected:** After 2 selection mode ends (the selected game is not on the page any more). After
+  3 every game of B is checked, the counter equals B's game count and "Select all" is dimmed and
+  does nothing. After 4 the counter drops to the games the search still shows; if none, the mode ends.
+- **Check:** human only.
+
+### RT-464 — Removing several games asks once and removes them all
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library; one of the games has a save state in
+  `/sdcard/Android/data/$PKG/files/states/<CONSOLE>/`.
+- **Steps:**
+  1. Select three games, the one with the save state among them, and press the remove button.
+  2. Read the dialog and press "Remove".
+  3. List the ROM folders and print `meta.json`; list the states folder.
+- **Expected:** One dialog, "Remove 3 games?", saying the files are deleted and saves and states are
+  kept. After "Remove" the three games disappear at once, without a restart, the counts update and
+  selection mode ends. Their files are gone from the ROM folder and their keys from `meta.json`; the
+  save state is still on disk. The other games and their favorites are untouched.
+- **Check:** human only (`adb shell ls /sdcard/Android/data/$PKG/files/roms/<CONSOLE>`).
+
+### RT-465 — Cancel and back keep every file
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library.
+- **Steps:**
+  1. Select two games, press remove, then "Cancel".
+  2. Press the system back button.
+  3. Select a game again and press the close button on the bar.
+- **Expected:** After 1 the dialog closes and the two games stay selected. After 2 selection mode
+  ends and the screen stays on the library (back does not leave it). After 3 the mode ends. No file
+  is removed at any point.
+- **Check:** human only (list the ROM folders before and after).
+
+### RT-466 — Selection works in every view, portrait and landscape, light and dark
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library.
+- **Steps:**
+  1. Repeat RT-462 step 1 in the covers view and in the list view.
+  2. Turn the phone to landscape and long-press a game in the row.
+  3. Remove one game from the list view and one from the landscape row.
+  4. Repeat 1 and 2 in the light theme.
+- **Expected:** In the covers view the cover gets the same check mark and ring; in the list view
+  each row has a check circle before the art and the selected rows a tinted background. In
+  landscape the bar is a little shorter and covers the header; the row keeps its layout. Removal
+  works the same everywhere. A favorite's star moves to the other top corner while selecting, never
+  under the check mark. The bar, marks and dialog are readable in both themes.
+- **Check:** human only.
+
+### RT-467 — The whole flow works with a gamepad only
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library; gamepad mode on (a D-pad press) with a game focused.
+- **Steps:**
+  1. Read the hint bar, then press START.
+  2. Press RIGHT and A; then X.
+  3. Press Y, then B in the dialog.
+  4. Press B again.
+- **Expected:** Before 1 the hints include "START Select". After 1 the focused game is selected and
+  the hints read "A Select · X Select all · Y Remove · B Done". A toggles the focused game, X selects
+  every game on the page. Y opens the remove dialog; B closes it with nothing removed. The second B
+  ends selection mode and the usual hints come back. L1/R1 still switch the console chip while
+  selecting.
+- **Check:** human only.
+
+### RT-468 — Removing one game from its detail screen is unchanged
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-462's library.
+- **Steps:**
+  1. Open a game's detail, open its menu and pick "Remove from library"; confirm.
+  2. Switch the app language to Português (Brasil) and enter selection mode; open the remove dialog.
+- **Expected:** After 1 the screen goes back to the library without that game, its file is gone and
+  its saves stay, as before. After 2 the bar, the hints and the dialog are in Portuguese
+  ("1 selecionado", "Selecionar tudo", "Remover 1 jogo?").
+- **Check:** human only.
+
 ## Android — Controller skins
 
 What each button of the Android app's on-screen skin sends
