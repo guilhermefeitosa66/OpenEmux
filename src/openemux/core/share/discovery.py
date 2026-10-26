@@ -329,6 +329,9 @@ class MdnsTransport(Transport):
             properties=build_txt(announcement),
             server=f"openemux-{announcement['id'][:12]}.local.",
         )
+        # Set before the browser exists: it calls back from its own thread as
+        # soon as it is built, before this method returns.
+        self._state_change = zeroconf.ServiceStateChange
         zc = zeroconf.Zeroconf()
         try:
             zc.register_service(self._info)
@@ -338,10 +341,17 @@ class MdnsTransport(Transport):
             self._zc = None
             zc.close()
             raise
-        self._state_change = zeroconf.ServiceStateChange
         self.status = STATUS_RUNNING
 
     def _on_change(self, zeroconf, service_type, name, state_change):
+        # zeroconf does not guard its handler call: an exception escaping here
+        # ends the browser thread, and mDNS stops seeing anything new.
+        try:
+            self._handle_change(zeroconf, service_type, name, state_change)
+        except Exception:
+            logger.exception("mDNS change for %s failed", name)
+
+    def _handle_change(self, zeroconf, service_type, name, state_change):
         if state_change is self._state_change.Removed:
             with self._lock:
                 key = self._names.pop(name, None)

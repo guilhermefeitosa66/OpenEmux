@@ -280,7 +280,8 @@ accepts. It is built so that a man in the middle on the LAN cannot choose its
 values until the two codes collide.
 
 - `nonce_s` (sender) and `nonce_r` (receiver): 32 random bytes each, sent as
-  64 lowercase hex characters.
+  64 lowercase hex characters. They enter both hashes below as their **32 raw
+  bytes** (decoded from hex), never as the hex text.
 - `commit = hex(SHA-256("openemux-share-v1/commit" ‖ nonce_s))`, where the
   label is its ASCII bytes and `‖` is concatenation.
 - `digest = SHA-256("openemux-share-v1/code" ‖ fp_sender ‖ fp_receiver ‖ nonce_s ‖ nonce_r)`,

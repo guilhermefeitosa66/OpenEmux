@@ -346,11 +346,12 @@ class StateChange(Enum):
 
 
 class FakeZeroconfModule(types.ModuleType):
-    def __init__(self, register_error=None, resolve=None):
+    def __init__(self, register_error=None, resolve=None, initial=()):
         super().__init__("zeroconf")
         module = self
         self.register_error = register_error
         self.resolve = resolve
+        self.initial = initial
         self.instances = []
         self.ServiceStateChange = StateChange
 
@@ -387,6 +388,10 @@ class FakeZeroconfModule(types.ModuleType):
                 self.zc, self.type, self.handlers = zc, type_, handlers
                 self.cancelled = False
                 module.browser = self
+                # The real browser calls back from its thread right away, for
+                # the devices that were already advertising.
+                for name in module.initial:
+                    handlers[0](zc, type_, name, module.ServiceStateChange.Added)
 
             def cancel(self):
                 self.cancelled = True
@@ -438,6 +443,23 @@ class MdnsTransportTests(unittest.TestCase):
         self.assertEqual(module.instances[0].registered, [])
         self.assertEqual(transport.status, "stopped")
         transport.stop()
+
+    def test_a_device_found_while_the_browser_is_built_is_listed(self):
+        txt = protocol.build_txt(announcement())
+        module = FakeZeroconfModule(
+            resolve=lambda type_, name: resolved(txt), initial=["B._openemux._tcp.local."]
+        )
+        transport = self.start(module)
+        self.assertEqual([(args[1]["id"], args[2]) for args in self.seen], [(ID_B, "10.0.0.5")])
+        self.assertEqual(transport.status, "running")
+
+    def test_a_failing_listener_does_not_escape_into_zeroconf(self):
+        txt = protocol.build_txt(announcement())
+        module = FakeZeroconfModule(resolve=lambda type_, name: resolved(txt))
+        self.start(module)
+        self.seen = None  # on_seen now raises AttributeError
+        with self.assertLogs(discovery.logger, "ERROR"):
+            self.fire(module, "B._openemux._tcp.local.", StateChange.Added)
 
     def test_unresolvable_or_foreign_records_are_skipped(self):
         answers = iter([None, resolved({b"id": b"x"}), RuntimeError("timeout")])
