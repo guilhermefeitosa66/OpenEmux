@@ -6620,6 +6620,92 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
 - **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
   fold or unfold).
 
+## Android — Library start-up
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) opening on the shelf it had, instead of an empty library, while its first
+scan runs (#574). The app keeps the last scan's ROM list in `files/library.index` and reads it when
+the process starts. The runner has no Android device, so these are `MANUAL`: a person runs them on a
+phone or a headless emulator with `adb`. The package is `com.openemux.mobile`; ROMs go in
+`/sdcard/Android/data/com.openemux.mobile/files/roms/<console>/` (e.g. `GBA`, `SFC`, `FC`). A
+frame-by-frame look at a start is `adb shell screenrecord /sdcard/start.mp4` running while the app
+opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
+
+### RT-477 — A cold start with a library opens straight on the shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, 3 Game Boy Advance and 2 Super
+  Nintendo ROMs imported, the app opened once with the shelf loaded.
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`.
+  2. Start recording the screen and open the app from the launcher.
+  3. On a tablet-sized window (`adb shell wm size 1600x2560` and `adb shell wm density 320`), repeat
+     steps 1 and 2, then `adb shell wm size reset` and `adb shell wm density reset`.
+- **Expected:** Every frame after the app's first paints the console shelf. "Your shelf is empty"
+  and "Import ROMs" never appear in the middle of the shelf, not even for a frame. The header reads
+  "2 consoles · 5 games" from its first frame, never "0 consoles · 0 games"; on the tablet window
+  the same count sits under the "Shelf" title of the tablet header, next to its search and import
+  buttons.
+- **Check:** human only (step through each recording frame by frame).
+
+### RT-478 — The shelf survives a process kill and a reboot
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Open the app, press Home, then `adb shell am kill com.openemux.mobile`.
+  2. Reopen the app from the recent apps.
+  3. `adb reboot`, wait for the device to finish booting, open the app.
+- **Expected:** After steps 2 and 3 the app opens on the console shelf with the real counts, as in
+  RT-477; the empty state never appears.
+- **Check:** human only (a recording of each start).
+
+### RT-479 — A fresh install still shows the empty shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** The Android app not installed.
+- **Steps:**
+  1. Install the APK, open it and finish the first-run setup.
+- **Expected:** "Your shelf is empty" with the "Import ROMs" button appears after the setup screen
+  and stays.
+- **Check:** human only (a screenshot).
+
+### RT-480 — Removing every game shows the empty shelf on the next start
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Remove every game from inside the app: on each game's detail page, "Remove from library".
+  2. `adb shell am force-stop com.openemux.mobile`, then open the app.
+- **Expected:** The app opens on "Your shelf is empty" with "Import ROMs". The header shows
+  "0 consoles · 0 games" only together with that empty state.
+- **Check:** human only (a screenshot).
+
+### RT-481 — Games added or removed while the app was closed update the shelf without flicker
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`.
+  2. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/` and
+     `adb shell rm` one of the Game Boy Advance ROMs in `files/roms/GBA/`.
+  3. Start recording the screen and open the app.
+- **Expected:** The previous shelf appears at once. Within a moment a Nintendo shelf appears and the
+  Game Boy Advance shelf counts one game less. No frame shows the empty state or a blank list in
+  between.
+- **Check:** human only (step through the recording).
+
+### RT-482 — "Recent" and a console's library do not flash their empty states
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477, with one game played.
+- **Steps:**
+  1. Leave the app on "Recent", press Home, `adb shell am kill com.openemux.mobile`, reopen it from
+     the recent apps while recording.
+  2. Repeat with the app left on a console's library.
+- **Expected:** "Recent" opens with the played game and never shows its "Nothing played yet" empty
+  state; the console library opens with its games and never shows "No games here yet.".
+- **Check:** human only (step through each recording).
 
 ## Developer tooling & docs
 
