@@ -6146,14 +6146,17 @@ game's movement. `$PKG` is `com.openemux.mobile`.
 - **Check:** human only (a screenshot at rest and one mid-drag per orientation:
   `adb exec-out screencap -p > shot.png`), plus the generated config:
   ```bash
-  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_[xy]|desc[0-9]+_overlay'
-  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a *-knob<N>.png per D-pad
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_|desc[0-9]+_overlay'
+  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a circle image per D-pad
   ```
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
   `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
-  `_overlay = "<overlay>-knob<N>.png"` and `_movable = true`. The NES uses the shipped skin package,
-  so `_reach_x` and `_reach_y` are its D-pad's touch area over the circle's travel, a little over
-  1.5; on a console with a drawn skin (e.g. the Virtual Boy) they are both `1.4182`.
+  `_overlay` naming the circle image (`knob<N>.png` on a shipped skin package, `<overlay>-knob<N>.png`
+  on a drawn skin) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
+  D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
+  `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
+  one side than the other. On a console with a drawn skin (e.g. the Virtual Boy) `_reach_x` and
+  `_reach_y` are both `1.4182`.
 
 ### RT-409 — Sliding off the D-pad keeps steering
 - **Area:** Android — On-screen D-pad
