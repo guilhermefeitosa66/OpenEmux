@@ -5343,7 +5343,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   1. Open the "Settings" tab and, under "General", tap "Back up and restore".
   2. Switch the theme to "Light" and turn the phone to landscape; come back to the screen.
 - **Expected:** The row reads "Back up and restore" with "Keep your saves and settings when you
-  reinstall" under it, between "Controls" and "About". The screen shows the "Export" section
+  reinstall" under it, between "Controls" and "Check for updates". The screen shows the "Export" section
   ("Saves and states", "Settings and artwork", each with a size, and "Include ROMs" switched on
   with "<n> games · <size>"), "Export data · <total>", the note about cores, covers and
   RetroAchievements, the "Import" section with "Import data", and the "Uninstalling to update?"
