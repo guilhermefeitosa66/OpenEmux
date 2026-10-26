@@ -6123,7 +6123,9 @@ The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-e
 eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
 it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
 the thumb inside the D-pad. It applies to every skin with a D-pad, the Virtual Boy's second pad and
-the NDS layouts included. The runner has no Android device, so these are `MANUAL`: a person runs
+the NDS layouts included, both to the skins the app draws and to the skin packages it ships for the
+twelve best-known consoles (FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS, PSP), whose circle is an
+image in the package. The runner has no Android device, so these are `MANUAL`: a person runs
 them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`, in
 portrait and in landscape. A held drag is driven with `adb shell input motionevent DOWN <x> <y>`,
 `MOVE <x> <y>` and `UP <x> <y>`; the pressed directions are read from RetroArch's input display or a
@@ -6148,8 +6150,10 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a *-knob<N>.png per D-pad
   ```
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
-  `_reach_x = _reach_y = 1.4182`, `_range_mod = 20.0`, `_range_mod_exclusive = true`,
-  `_dead_zone = 0.25`, `_overlay = "<overlay>-knob<N>.png"` and `_movable = true`.
+  `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
+  `_overlay = "<overlay>-knob<N>.png"` and `_movable = true`. The NES uses the shipped skin package,
+  so `_reach_x` and `_reach_y` are its D-pad's touch area over the circle's travel, a little over
+  1.5; on a console with a drawn skin (e.g. the Virtual Boy) they are both `1.4182`.
 
 ### RT-409 — Sliding off the D-pad keeps steering
 - **Area:** Android — On-screen D-pad
@@ -6206,7 +6210,9 @@ game's movement. `$PKG` is `com.openemux.mobile`.
 - **Area:** Android — On-screen D-pad
 - **Mode:** MANUAL
 - **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
-  Nintendo 64, Virtual Boy, Nintendo DS and a console with a keypad (e.g. ColecoVision).
+  Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
+  The first six of those and the NDS use the shipped skin packages; the Virtual Boy, the PC Engine
+  and the keypad console use the drawn skins.
 - **Steps:**
   1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
   2. On the Virtual Boy, repeat them on the right-hand pad.
@@ -6223,6 +6229,25 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   ```
   The right pad's desc carries `_up = "l2"`, `_down = "l3"`, `_left = "r2"`, `_right = "r3"`; the
   left pad's carries none.
+
+### RT-476 — A skin of the user's own steers the D-pad the same way, with no circle
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, a Game Boy Advance game in the library and a third-party GBA
+  `.deltaskin` (one made for Delta, not the app's own) on the computer.
+- **Steps:**
+  1. Copy the skin into the app's skin folder for the console:
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/GBA/`.
+  2. Open the GBA game and repeat RT-408 step 2 and RT-409 step 1, in portrait and in landscape.
+  3. Remove the skin from the folder.
+- **Expected:** The skin's own art, with whatever it paints on the D-pad, and no circle over it.
+  Sliding off the D-pad keeps steering, all eight directions work and the buttons the thumb passes
+  over do not fire, as on the app's own skins.
+- **Check:** human only, plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_movable'
+  ```
+  One `dpad_area` desc per overlay with `_dead_zone = 0.25` and no `_movable` line.
 
 
 ## Developer tooling & docs
