@@ -64,6 +64,11 @@ class UnitTests(ManifestTestCase):
         self.assertEqual([(p.name, role) for p, role in unit.parts],
                          [("Game.cue", "cue"), ("Track 1.bin", "bin"), ("Track 2.bin", "bin")])
 
+    def test_cue_lines_that_name_no_file(self):
+        self.lib.file("roms/PS/Track 1.bin")
+        cue = self.lib.file("roms/PS/Game.cue", 'REM a comment\nFILE "   " BINARY\nFILE "Track 1.bin" BINARY\n')
+        self.assertEqual([p.name for p, _ in collect_unit({"path": str(cue)}).parts], ["Game.cue", "Track 1.bin"])
+
     def test_a_bin_referenced_twice_is_listed_once(self):
         rom = self.lib.cue_game("PS", "Game", bins=("Track 1.bin", "Track 1.bin"))
         self.assertEqual(len(collect_unit(rom).parts), 2)

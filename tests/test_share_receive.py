@@ -332,6 +332,8 @@ class AbortTests(ReceiveTestCase):
     def test_the_watchdog(self):
         transfer = self.transfer(self.full_game())
         transfer.start_watchdog(interval=0.01)
+        time.sleep(0.1)  # a few quiet checks first
+        self.assertEqual(self.done, [])
         self.clock.now += 60
         deadline = time.monotonic() + 5
         while not self.done and time.monotonic() < deadline:

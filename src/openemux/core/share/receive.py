@@ -100,7 +100,8 @@ class IncomingTransfer:
         self._sends = {d.item_id: d for d in plan.to_send()}
         self._staged = {}
         self._uploading = set()
-        self._created_dirs = []
+        #: Folders made for this transfer, in creation order (a dict for its order).
+        self._created_dirs = {}
         self._done_bytes = 0
         self._total_bytes = sum(d.size for d in self._sends.values())
         self._last_activity = clock()
@@ -247,8 +248,7 @@ class IncomingTransfer:
             missing.append(directory)
             directory = directory.parent
         for path in reversed(missing):
-            if path not in self._created_dirs:
-                self._created_dirs.append(path)
+            self._created_dirs.setdefault(path)
 
     def _progress(self, decision, done, final):
         if self.on_progress is None:
