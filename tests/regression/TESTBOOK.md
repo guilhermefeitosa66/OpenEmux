@@ -5337,7 +5337,7 @@ density reset` afterwards). The library needs at least five consoles, one of the
 no cartridge frame (e.g. PlayStation or PC Engine), two favourite games, and each console with
 three or more games played in a known order.
 
-### RT-386 — Portrait shows one card per row with the console icon
+### RT-470 — Portrait shows one card per row with the console icon
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
 - **Preconditions:** The library above; phone in portrait, dark theme.
@@ -5350,10 +5350,10 @@ three or more games played in a known order.
   looks as before.
 - **Check:** human only (`adb exec-out screencap -p > shelf-portrait.png`).
 
-### RT-387 — Landscape shows two cards per row with no empty middle
+### RT-471 — Landscape shows two cards per row with no empty middle
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-386's shelf.
+- **Preconditions:** RT-470's shelf.
 - **Steps:**
   1. Rotate the phone to landscape.
   2. Scroll to the end and back.
@@ -5363,7 +5363,7 @@ three or more games played in a known order.
   position and the order are kept across the rotation.
 - **Check:** human only (a screenshot in each orientation).
 
-### RT-388 — The fan shows the three most recently played games
+### RT-472 — The fan shows the three most recently played games
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
 - **Preconditions:** A console with at least four games.
@@ -5373,10 +5373,10 @@ three or more games played in a known order.
   previous three leaves the fan.
 - **Check:** human only.
 
-### RT-389 — The gamepad moves across both columns and focus comes back
+### RT-473 — The gamepad moves across both columns and focus comes back
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-387's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
   1. Press DPAD_DOWN until "Favorites" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
   2. Keep pressing DPAD_DOWN to the last row.
@@ -5387,10 +5387,10 @@ three or more games played in a known order.
   After going back, the focus ring is on the card that was opened.
 - **Check:** human only.
 
-### RT-390 — Reorder by drag and by the menu across columns
+### RT-474 — Reorder by drag and by the menu across columns
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-387's landscape shelf.
+- **Preconditions:** RT-471's landscape shelf.
 - **Steps:**
   1. Long press a console card in the left column and drag it onto a card in the right column of
      the next row; let go.
@@ -5403,12 +5403,12 @@ three or more games played in a known order.
   right, then down). "Restore default order" brings back the default order.
 - **Check:** human only.
 
-### RT-391 — Light theme, box-art consoles and a small phone
+### RT-475 — Light theme, box-art consoles and a small phone
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-386's library.
+- **Preconditions:** RT-470's library.
 - **Steps:**
-  1. Switch to the light theme and repeat RT-386 and RT-387.
+  1. Switch to the light theme and repeat RT-470 and RT-471.
   2. Look at the card of the console with box art or no cartridge frame.
   3. `adb shell wm size 720x1280 && adb shell wm density 360` (a ~320dp-wide phone); open the shelf
      in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
