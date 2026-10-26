@@ -41,6 +41,9 @@ ON_COLLISION_SKIP = "skip"
 ON_COLLISION_NEWEST = "newest"
 ON_COLLISION_OVERWRITE = "overwrite"
 COLLISION_POLICIES = (ON_COLLISION_SKIP, ON_COLLISION_NEWEST, ON_COLLISION_OVERWRITE)
+#: Share nearby (issue #588) also keeps both copies; an import never does.
+ON_COLLISION_KEEP_BOTH = "keep_both"
+SHARE_COLLISION_POLICIES = COLLISION_POLICIES + (ON_COLLISION_KEEP_BOTH,)
 
 _ART_SUFFIXES = {f".{ext.lower().lstrip('.')}" for ext in SUPPORTED_COVER_EXTS}
 
@@ -267,14 +270,22 @@ def _target_for(member_name, states_dir, roms_dir):
 
 
 def _should_replace(target, info, on_collision):
+    return should_replace(target, datetime(*info.date_time).timestamp(), on_collision)
+
+
+def should_replace(target, incoming_mtime, on_collision):
+    """Whether a file arriving with ``incoming_mtime`` replaces ``target``.
+
+    "newest" replaces only a strictly older file: a tie keeps the one already
+    there, so an older save can never win. A target that cannot be read is
+    replaced -- there is nothing to keep. "keep_both" never replaces.
+    """
     if on_collision == ON_COLLISION_OVERWRITE:
         return True
-    if on_collision == ON_COLLISION_SKIP:
+    if on_collision != ON_COLLISION_NEWEST:
         return False
-    # "newest": the archive wins only when it holds the later file.
-    archived = datetime(*info.date_time).timestamp()
     try:
-        return archived > target.stat().st_mtime
+        return incoming_mtime > target.stat().st_mtime
     except OSError:
         return True
 

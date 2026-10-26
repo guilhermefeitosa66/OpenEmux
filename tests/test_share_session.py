@@ -331,14 +331,14 @@ class FileTests(SessionTestCase):
     def test_handler_hook(self):
         server = self.serve()
         calls = []
-        server.file_handler = lambda offer, item_id, request: calls.append((offer.offer_id, item_id))
+        server.file_handler = lambda offer, item_id, body, length: calls.append((offer.offer_id, item_id))
         offer_id = self.accepted(server)
         status, body = self.client(server).request("PUT", f"/file/{offer_id}/i1", {})
         self.assertEqual((status, body, calls), (204, None, [(offer_id, "i1")]))
 
     def test_an_upload_keeps_an_accepted_offer(self):
         server = self.serve()
-        server.file_handler = lambda offer, item_id, request: None
+        server.file_handler = lambda offer, item_id, body, length: None
         client = self.client(server)
         offer_id = self.accepted(server)
         for _ in range(3):

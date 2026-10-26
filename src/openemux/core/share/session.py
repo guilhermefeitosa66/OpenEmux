@@ -7,8 +7,9 @@ handshake and before a byte of HTTP. With no fingerprint to expect (a typed
 address) the first one seen is used, and the verification code -- built from
 both fingerprints and both nonces -- is what protects that first contact.
 
-Only the offer handshake lives here; the file bodies (``PUT /file``) are
-#588's, behind :attr:`ShareServer.file_handler`.
+The offer handshake and the file uploads' transport live here. What happens
+to an uploaded body -- staging, checking, placing it -- is #588's
+``receive.IncomingTransfer``, installed as :attr:`ShareServer.file_handler`.
 """
 
 import base64
@@ -66,6 +67,8 @@ OFFER_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{22}")
 JOIN_TIMEOUT = 2.0
 #: The most an error answer reads away before closing (see _discard_body).
 DISCARD_MAX_BYTES = 4 * 1024 * 1024
+#: The chunk a file upload is written in, on both sides.
+FILE_CHUNK_BYTES = 256 * 1024
 
 
 @dataclass(frozen=True)
@@ -101,8 +104,30 @@ def new_offer_id():
     return base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
 
 
-def _not_implemented(offer, item_id, request):
+def _not_implemented(offer, item_id, body, length):
     raise ShareError(ErrorCode.NOT_IMPLEMENTED, "file transfer is not implemented")
+
+
+class BodyReader:
+    """An upload's body, never read past its ``Content-Length``.
+
+    Reading marks the body as consumed, so an error answer after a partial
+    read closes the connection instead of draining what is left of it.
+    """
+
+    def __init__(self, request, length):
+        self._request = request
+        self.remaining = length
+
+    def read(self, size=-1):
+        if self.remaining <= 0:
+            return b""
+        self._request._body_read = True
+        if size is None or size < 0 or size > self.remaining:
+            size = self.remaining
+        chunk = self._request.rfile.read(size)
+        self.remaining -= len(chunk)
+        return chunk
 
 
 def tls_server_context(cert_path, key_path):
@@ -414,7 +439,10 @@ class ShareServer:
             # A transfer in progress keeps its offer: retention counts from
             # the last upload, not from the answer.
             offer.finished = self.clock()
-        self.file_handler(offer, item_id, request)
+        length = parse_decimal(request.headers.get("Content-Length"))
+        if length is None:
+            raise ShareError(ErrorCode.BAD_REQUEST, "bad Content-Length")
+        self.file_handler(offer, item_id, BodyReader(request, length), length)
         return 204, None
 
 
@@ -513,4 +541,46 @@ class ShareClient:
 
     def cancel(self, offer_id):
         self.request("POST", f"/cancel/{offer_id}")
+
+    def put_file(self, offer_id, item_id, path, size, on_chunk=None):
+        """Upload ``size`` bytes of ``path`` as ``item_id``, in chunks.
+
+        ``on_chunk(n)`` runs after each chunk is sent; raising from it (a
+        cancel) closes the connection. A file shorter than ``size`` by now is
+        ``source_changed``. An error answer raises :class:`ShareError`.
+        """
+        try:
+            handle = open(path, "rb")
+        except OSError as exc:
+            raise ShareError(ErrorCode.SOURCE_CHANGED, str(exc)) from exc
+        with handle:
+            conn = self._connect()
+            try:
+                conn.putrequest("PUT", f"/file/{offer_id}/{item_id}", skip_accept_encoding=True)
+                conn.putheader(VERSION_HEADER, str(PROTOCOL_VERSION))
+                conn.putheader("Content-Type", "application/octet-stream")
+                conn.putheader("Content-Length", str(size))
+                conn.endheaders()
+                remaining = size
+                while remaining:
+                    chunk = handle.read(min(FILE_CHUNK_BYTES, remaining))
+                    if not chunk:
+                        raise ShareError(ErrorCode.SOURCE_CHANGED, f"{path} is shorter than offered")
+                    conn.send(chunk)
+                    remaining -= len(chunk)
+                    if on_chunk is not None:
+                        on_chunk(len(chunk))
+                response = conn.getresponse()
+                raw = response.read(BODY_MAX_BYTES + 1)
+                status = response.status
+            except (OSError, http.client.HTTPException) as exc:
+                raise ShareError(ErrorCode.UNREACHABLE, str(exc)) from exc
+            finally:
+                conn.close()
+        if status >= 400:
+            try:
+                data = json.loads(raw.decode("utf-8")) if raw else None
+            except (UnicodeDecodeError, ValueError, RecursionError):
+                data = None
+            raise ShareError.from_envelope(status, data)
 

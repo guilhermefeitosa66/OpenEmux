@@ -98,17 +98,21 @@ def parse_core_info(path):
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip('"')
-        if key in ("corename", "display_name", "systemname", "database"):
+        if key in ("corename", "display_name", "systemname", "database", "display_version"):
             fields[key] = value
     return fields
 
 
 class CoreInfo:
-    def __init__(self, filename, path, display_name, database=""):
+    def __init__(self, filename, path, display_name, database="", core_name="", version=""):
         self.filename = filename
         self.path = path
         self.display_name = display_name
         self.database = database
+        # The .info ``corename`` and ``display_version``: what a save state is
+        # tied to when it travels to another device (issue #588).
+        self.core_name = core_name
+        self.version = version
 
     def matches_system(self, system_name):
         if not system_name or not self.database:
@@ -145,6 +149,8 @@ class CoreCatalog:
                 path=str(so_path),
                 display_name=display,
                 database=info.get("database", ""),
+                core_name=info.get("corename", ""),
+                version=info.get("display_version", ""),
             )
         return cores
 
@@ -174,6 +180,36 @@ class CoreCatalog:
         if core:
             return core.display_name
         return humanize_core_filename(core_filename) if core_filename else ""
+
+    def identity_for(self, core_filename):
+        """``(core_name, version)`` of an installed core; empty strings when unknown."""
+        core = self.installed().get(core_filename) if core_filename else None
+        if core is None:
+            return "", ""
+        return core.core_name, core.version
+
+    def find_by_identity(self, core_name, version):
+        """The installed core with exactly this name and version, or ``None``.
+
+        Both must be non-empty: a core whose version is unknown never matches,
+        since nothing says its save states would load.
+        """
+        if not core_name or not version:
+            return None
+        for core in self.installed().values():
+            if core.core_name == core_name and core.version == version:
+                return core
+        return None
+
+    def find_by_name(self, core_name):
+        """The first installed core whose ``corename`` is ``core_name``, or ``None``."""
+        if not core_name:
+            return None
+        for filename in sorted(self.installed()):
+            core = self.installed()[filename]
+            if core.core_name == core_name:
+                return core
+        return None
 
     def cores_for_console(self, console):
         """Installed cores that can run ``console``, preferred order first.
