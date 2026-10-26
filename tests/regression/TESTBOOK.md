@@ -5861,6 +5861,126 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 
+## Android — On-screen analog stick
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
+that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
+is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
+(both sticks), Nintendo 64 and GameCube (main and C stick), where the knob is the item's
+`thumbstick` image, the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
+`.manicskin` whose stick has a `thumbstick` image. The runner has no Android
+device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
+(`emulator -avd <avd> -no-window -read-only`) with `adb`, in portrait and in landscape. Touches are
+driven with `adb shell input swipe <x1> <y1> <x2> <y2> <ms>` (a long one holds the stick) and the
+values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.openemux.mobile`.
+
+### RT-394 — The knob follows the thumb and recentres on release
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a game for PSP, PlayStation,
+  Nintendo 64 and GameCube in the library.
+- **Steps:**
+  1. Open the PSP game in portrait and look at the stick before touching it.
+  2. Drag from the well's centre up and to the right, past the rim, hold for two seconds, release.
+  3. Turn the phone to landscape and repeat step 2.
+  4. Repeat steps 1–3 on PlayStation (both sticks), Nintendo 64 and GameCube (main and "C" stick).
+- **Expected:** At rest one knob sits centred in the well (no second, painted knob under it). While
+  dragging, the knob moves with the thumb and stops at the end of its travel, inside the well; on
+  release it snaps back to the centre. The GameCube C stick's "C" is on its yellow knob and moves
+  with it.
+- **Check:** human only (a screenshot at rest and one mid-drag, per console and orientation:
+  `adb exec-out screencap -p > shot.png`).
+
+### RT-395 — A touch just outside the drawn circle grabs the stick
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open.
+- **Steps:**
+  1. Touch a point about a fifth of the well's radius outside the drawn circle, on the side away
+     from the D-pad and the buttons (left, or below in portrait), and drag towards the centre.
+  2. Repeat in landscape.
+- **Expected:** The stick responds from the first touch (the character moves, the input display
+  shows the axis) and the knob follows the thumb.
+- **Check:** human only, plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
+  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in open-emux-mobile: *_knob<N>.png next to each representation's art
+  ```
+  Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
+  `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
+  four `_reach_*` values between 1.0 and 2.0.
+
+### RT-396 — Sliding past the rim keeps full deflection
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open.
+- **Steps:**
+  1. Push the stick fully left and, without lifting, keep sliding the thumb further out and then
+     up onto the D-pad's area.
+  2. Lift the thumb, then press the D-pad.
+  3. Repeat in landscape.
+- **Expected:** While the thumb stays down, the stick keeps full deflection in the direction of the
+  thumb and the D-pad does not fire. After lifting, the D-pad works as before.
+- **Check:** human only.
+
+### RT-397 — A small push still gives a small analog value
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, a PSP or Nintendo 64 game where the character walks or runs by how
+  far the stick is pushed.
+- **Steps:**
+  1. Push the stick about a third of the way to the rim and hold.
+  2. Push it all the way and hold.
+- **Expected:** A third of the way walks (a small value on the input display); all the way runs (the
+  full value), the same response as before #546.
+- **Check:** human only.
+
+### RT-398 — The PSP stick is larger and clear of the other controls
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open; a screenshot of the PSP skin from a build before
+  #546 for comparison.
+- **Steps:**
+  1. Take a screenshot in portrait and one in landscape.
+- **Expected:** The PSP stick is visibly larger than before (the size of PlayStation's, in the bundled
+  skin as in the drawn one) and does not
+  overlap the D-pad, the face buttons, the shoulders or SELECT/START in either orientation.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`, side by side with the old one).
+
+### RT-399 — The D-pad and buttons around the stick behave as before
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394.
+- **Steps:**
+  1. On PSP, PlayStation, Nintendo 64 and GameCube, press every D-pad direction and diagonal, each
+     face button, the shoulders, SELECT/START and the strip's icons, the ones closest to a stick
+     included.
+  2. Open the keypad on a console that has one and close it, then turn the phone mid-game.
+- **Expected:** Each control fires exactly as before and none of them moves a stick. Opening the
+  keypad or turning the phone leaves exactly one knob per stick, still following the thumb.
+- **Check:** human only.
+
+### RT-469 — A user's skin package without a knob image keeps its stick
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, plus a `.deltaskin` or `.manicskin` for Nintendo 64 (or another
+  console with a stick) whose stick item has **no** `thumbstick` entry in `info.json`, copied to
+  `/sdcard/Android/data/$PKG/files/skins/N64/`.
+- **Steps:**
+  1. Open the Nintendo 64 game and push the stick in each direction, a little and all the way.
+  2. Remove the skin from `files/skins/N64/` and open the game again.
+- **Expected:** With the user's skin, the stick steers over the item's frame as before #546 (the
+  knob is whatever the skin's art paints, it does not move) and nothing else changes. Without it,
+  the bundled skin is back, with its moving knob.
+- **Check:** human only, plus the generated config with the user's skin: the stick's desc has
+  `_saturate_pct = 0.65` and none of `_overlay`, `_movable`, `_reach_*` or `_range_mod`:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
+  ```
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
