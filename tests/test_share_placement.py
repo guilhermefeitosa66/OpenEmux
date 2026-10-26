@@ -16,7 +16,6 @@ from openemux.core.share.placement import (
     plan_receive,
     state_compatible,
 )
-from openemux.core.share.protocol import SkipReason
 from tests.share_fixtures import PNG_BYTES, make_catalog, temp_library
 
 SNES9X = {"core": "Snes9x", "core_version": "1.62.3"}
