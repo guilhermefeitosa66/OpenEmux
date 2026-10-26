@@ -5326,6 +5326,98 @@ real RetroAchievements account say so; without one they are handed to the mainta
   aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/backup_rules.xml | grep -cE '"(cheevos\.xml|launch)"'            # 2
   ```
 
+## Android — Shelf
+
+The Android app's shelf (open-emux-mobile, `pkg/android/openemux`, `ShelfScreen`/`ShelfCard` in
+`ui/LibraryScreens.kt`) laid out as a grid whose column count follows the shelf's own width, with
+the console icon on each card (#539). The runner has no Android device, so these are `MANUAL`: a
+person runs them on a phone or a headless emulator with `adb`. A headless emulator that ignores
+rotation can stand in for landscape with `adb shell wm density 260` (a wider screen in dp; `wm
+density reset` afterwards). The library needs at least five consoles, one of them with box art or
+no cartridge frame (e.g. PlayStation or PC Engine), two favourite games, and each console with
+three or more games played in a known order.
+
+### RT-470 — Portrait shows one card per row with the console icon
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** The library above; phone in portrait, dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf).
+- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon on a
+  soft square tile (a star for "Favorites"), the short tag ("NES", "SNES"), the console name (two
+  lines at most, then "…"), "N games", and up to three cartridges fanned at the right end. No text
+  runs under the cartridges. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
+  looks as before.
+- **Check:** human only (`adb exec-out screencap -p > shelf-portrait.png`).
+
+### RT-471 — Landscape shows two cards per row with no empty middle
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's shelf.
+- **Steps:**
+  1. Rotate the phone to landscape.
+  2. Scroll to the end and back.
+- **Expected:** Two cards per row, "Favorites" first (top left), the order unchanged (left to
+  right, then down). Inside a card the fan sits right after the text, without a large empty gap.
+  With an odd number of shelves the last card is on the left, as wide as the others. The scroll
+  position and the order are kept across the rotation.
+- **Check:** human only (a screenshot in each orientation).
+
+### RT-472 — The fan shows the three most recently played games
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** A console with at least four games.
+- **Steps:**
+  1. Play a game of that console that is not in its fan, then go back to the shelf.
+- **Expected:** That game is the front-most cartridge of the console's fan; the oldest of the
+  previous three leaves the fan.
+- **Check:** human only.
+
+### RT-473 — The gamepad moves across both columns and focus comes back
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. Press DPAD_DOWN until "Favorites" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  2. Keep pressing DPAD_DOWN to the last row.
+  3. Press L1 and R1.
+  4. Focus a card in the right column, press A, then go back.
+- **Expected:** Focus moves to the card on the right, the one below, then the one on the left; the
+  list scrolls to keep the focused card on screen and the ring is never lost. L1/R1 switch tabs.
+  After going back, the focus ring is on the card that was opened.
+- **Check:** human only.
+
+### RT-474 — Reorder by drag and by the menu across columns
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-471's landscape shelf.
+- **Steps:**
+  1. Long press a console card in the left column and drag it onto a card in the right column of
+     the next row; let go.
+  2. Leave the tab, come back; then `adb shell am force-stop com.openemux.mobile` and reopen.
+  3. Focus a console in the right column with the gamepad, press Y, choose "Move up".
+  4. Press Y again and choose "Restore default order".
+- **Expected:** While dragging the other cards make room and the dragged card stays under the
+  finger; the new order is kept after leaving the tab and after the restart. "Favorites" cannot be
+  dragged and stays first. "Move up" moves the console one place back in reading order (left to
+  right, then down). "Restore default order" brings back the default order.
+- **Check:** human only.
+
+### RT-475 — Light theme, box-art consoles and a small phone
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's library.
+- **Steps:**
+  1. Switch to the light theme and repeat RT-470 and RT-471.
+  2. Look at the card of the console with box art or no cartridge frame.
+  3. `adb shell wm size 720x1280 && adb shell wm density 360` (a ~320dp-wide phone); open the shelf
+     in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
+- **Expected:** Pastel cards with dark text, the icon tile visible on every colour. Box art shows
+  the covers in the fan, inside the card. On the small phone the cards are compact (a small icon
+  beside the tag, the name below); in landscape a card is never narrower than 250dp, so the shelf
+  keeps one card per row when two would not fit beside the side rail. Nothing is clipped.
+- **Check:** human only.
+
 
 ## Android — Responsive layout
 
