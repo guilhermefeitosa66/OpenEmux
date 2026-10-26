@@ -5365,6 +5365,19 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
+### RT-490 — A console with the drawn skin is redrawn with the drawn skin
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+  skin package).
+- **Steps:**
+  1. Start the PC Engine game, folded.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+- **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
+  skin package; the game runs on from the same point.
+- **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
+  fold or unfold).
+
 ### RT-382 — A small 5" phone lays out without clipping
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
@@ -5431,7 +5444,8 @@ with `adb`: a **Pixel Fold** AVD (`adb emu fold` / `adb emu unfold`) and a **Res
 `adb shell am start --windowingMode 5 ...`). The reload is logged by the engine:
 `adb logcat -s RetroArch:* OpenEmuxSkin:*`. The skins live under the app's
 `files/launch/current/` directory (`adb shell run-as com.openemux.mobile ls files/launch/current`
-on a debug build).
+on a debug build). The twelve consoles with a bundled skin package (Game Boy Advance and Nintendo
+DS among them) are redrawn from that package; the other consoles from the drawn skin.
 
 ### RT-450 — Unfolding a Fold during a game redraws the skin for the inner screen
 - **Area:** Android — Window size changes in game
@@ -5441,8 +5455,9 @@ on a debug build).
 - **Steps:**
   1. Start the GBA game and play for a few seconds, noting where the game is.
   2. Run `adb emu unfold`.
-- **Expected:** Within about a second the skin is redrawn for the inner screen: the buttons are
-  round, not stretched, and the picture is well placed. The game goes on from the same point (no
+- **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
+  bundled package skin (not the drawn one), its buttons round, not stretched, and the picture well
+  placed. The game goes on from the same point (no
   restart, no state loaded) and the touch controls respond.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
   one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
@@ -5453,21 +5468,21 @@ on a debug build).
 - **Preconditions:** As RT-450, after its steps (game running, unfolded).
 - **Steps:**
   1. Run `adb emu fold`.
-- **Expected:** The phone-shaped skin comes back with correct proportions and the game continues
-  where it was.
+- **Expected:** The phone-shaped bundled skin comes back with correct proportions and the game
+  continues where it was.
 - **Check:** human only (a screenshot after the fold).
 
-### RT-452 — The NDS screen layout and the touch screen survive a redraw
+### RT-452 — The NDS screens and the touch screen survive a redraw
 - **Area:** Android — Window size changes in game
 - **Mode:** MANUAL
-- **Preconditions:** As RT-450, with a Nintendo DS game on the DeSmuME core.
+- **Preconditions:** As RT-450, with a Nintendo DS game on the DeSmuME core (its bundled package
+  skin, which draws the two screens one over the other).
 - **Steps:**
-  1. Start the NDS game and press the skin's layout key until a layout other than the default one
-     is shown.
+  1. Start the NDS game.
   2. Run `adb emu unfold`, then `adb emu fold`.
   3. Tap the lower screen.
-- **Expected:** After each redraw the same layout is shown, the game's screens match the skin, and
-  tapping the lower screen reaches the game's touch screen.
+- **Expected:** After each redraw the bundled skin is still shown, the two screens stay one over the
+  other inside its screen cut-outs, and tapping the lower screen reaches the game's touch screen.
 - **Check:** human only (a screenshot after each step).
 
 ### RT-453 — Split screen gets a skin in proportion, without flicker while dragging
