@@ -218,7 +218,7 @@ class ShareServer:
     """The receiving side: ``/info``, the offer handshake, and its state."""
 
     def __init__(self, identity, clock=time.monotonic, on_offer=None, on_cancel=None,
-                 host="0.0.0.0", port=SERVER_PORT):
+                 host="0.0.0.0", port=SERVER_PORT):  # nosec B104 - a LAN server, reachable only while sharing
         self.identity = identity
         self.clock = clock
         self.on_offer = on_offer

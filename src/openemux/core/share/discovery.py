@@ -203,7 +203,7 @@ class BeaconTransport(Transport):
     def start(self, announcement, on_seen, on_gone):
         self._announcement = announcement
         interfaces = list(self.interfaces) if self.interfaces is not None else local_ipv4_addresses()
-        self._interfaces = interfaces or ["0.0.0.0"]
+        self._interfaces = interfaces or ["0.0.0.0"]  # nosec B104 - the default interface, for a LAN beacon
         self._sock = self._open_socket()
         self._stop.clear()
         self._threads = [
