@@ -355,6 +355,90 @@ class FileTests(SessionTestCase):
             self.assertShareError(ErrorCode.INTERNAL, self.client(server).request, "PUT", f"/file/{offer_id}/i1", {})
 
 
+class FileUploadTests(SessionTestCase):
+    """``ShareClient.put_file`` against the real server (issue #588)."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name) / "Game.nes"
+        self.data = bytes(range(256)) * 2048  # two chunks of 256 KiB
+        self.path.write_bytes(self.data)
+
+    def accepted(self, server):
+        offer_id = self.revealed(server)
+        server.answer(offer_id, True, [{"id": "i1", "action": "send"}])
+        return offer_id
+
+    def receiving(self, server, read_size=65536):
+        received = []
+
+        def handler(offer, item_id, body, length):
+            chunks = []
+            while True:
+                chunk = body.read(read_size)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            received.append((item_id, length, b"".join(chunks), body.read()))
+
+        server.file_handler = handler
+        return received
+
+    def test_the_file_arrives_whole_in_chunks(self):
+        server = self.serve()
+        received = self.receiving(server)
+        offer_id = self.accepted(server)
+        chunks = []
+        self.client(server).put_file(offer_id, "i1", self.path, len(self.data), chunks.append)
+        self.assertEqual(received, [("i1", len(self.data), self.data, b"")])
+        self.assertEqual(chunks, [session.FILE_CHUNK_BYTES] * 2)
+
+    def test_a_reader_never_reads_past_the_length(self):
+        server = self.serve()
+        received = self.receiving(server, read_size=-1)
+        offer_id = self.accepted(server)
+        self.client(server).put_file(offer_id, "i1", self.path, 10)
+        self.assertEqual(received[0][2], self.data[:10])
+
+    def test_an_error_answer(self):
+        server = self.serve()
+        offer_id = self.accepted(server)
+        err = self.assertShareError(ErrorCode.NOT_IMPLEMENTED, self.client(server).put_file,
+                                    offer_id, "i1", self.path, 4)
+        self.assertEqual(err.message, "file transfer is not implemented")
+
+    def test_an_error_answer_without_a_body(self):
+        server = self.serve()
+        offer_id = self.accepted(server)
+        with mock.patch.object(session.json, "loads", side_effect=ValueError("bad")):
+            self.assertShareError(ErrorCode.INTERNAL, self.client(server).put_file, offer_id, "i1", self.path, 4)
+
+    def test_a_file_shorter_or_missing_is_source_changed(self):
+        server = self.serve()
+        offer_id = self.accepted(server)
+        client = self.client(server)
+        self.assertShareError(ErrorCode.SOURCE_CHANGED, client.put_file, offer_id, "i1", self.path,
+                              len(self.data) + 1)
+        self.assertShareError(ErrorCode.SOURCE_CHANGED, client.put_file, offer_id, "i1",
+                              self.path.with_name("gone"), 4)
+
+    def test_a_cut_connection_is_unreachable(self):
+        server = self.serve()
+        offer_id = self.accepted(server)
+        with mock.patch.object(http.client.HTTPSConnection, "send", side_effect=BrokenPipeError("cut")):
+            self.assertShareError(ErrorCode.UNREACHABLE, self.client(server).put_file, offer_id, "i1",
+                                  self.path, 4)
+
+    def test_a_missing_content_length(self):
+        server = self.serve()
+        server.file_handler = mock.Mock()
+        offer_id = self.accepted(server)
+        status, body = self.raw(server, "PUT", f"/file/{offer_id}/i1", headers={"Content-Length": "x"})
+        self.assertEqual((status, body["error"]), (400, ErrorCode.BAD_REQUEST))
+        server.file_handler.assert_not_called()
+
+
 class RequestLimitTests(SessionTestCase):
     def test_oversized_body(self):
         server = self.serve()
