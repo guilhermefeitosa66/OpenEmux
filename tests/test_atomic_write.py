@@ -1,3 +1,4 @@
+import io
 import os
 import stat
 import threading
@@ -13,6 +14,7 @@ from openemux.core.atomic_write import (
     _fsync_directory,
     atomic_write_lines,
     atomic_write_text,
+    stage_stream,
 )
 from openemux.core.config import ConfigManager
 from openemux.core.playlist_manager import PlaylistManager
@@ -257,6 +259,72 @@ class ADirectoryThatCannotBeSyncedTests(unittest.TestCase):
                 "openemux.core.atomic_write.os.open", side_effect=OSError("no")
             ):
                 self.assertIsNone(_fsync_directory(Path(tmp_dir)))
+
+
+
+class StagedWriteTests(unittest.TestCase):
+    """The two-phase write a Share nearby transfer commits at the end (issue #588)."""
+
+    def setUp(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        self.target = self.dir / "sub" / "Game.sfc"
+
+    def stage(self, data=b"rom bytes", **kwargs):
+        return stage_stream(self.target, io.BytesIO(data), chunk_size=4, **kwargs)
+
+    def test_nothing_appears_until_the_commit(self):
+        chunks = []
+        staged = self.stage(on_chunk=chunks.append)
+        self.assertFalse(self.target.exists())
+        self.assertEqual((staged.size, sum(chunks)), (9, 9))
+        self.assertTrue(staged.tmp_path.name.startswith(".Game.sfc."))
+        self.assertEqual(staged.commit(replace=False), self.target)
+        self.assertEqual(self.target.read_bytes(), b"rom bytes")
+        self.assertEqual(_leftovers(self.target.parent), [])
+
+    def test_commit_with_replace_overwrites(self):
+        self.target.parent.mkdir()
+        self.target.write_bytes(b"old")
+        self.stage().commit(replace=True)
+        self.assertEqual(self.target.read_bytes(), b"rom bytes")
+
+    def test_commit_without_replace_refuses_an_existing_target(self):
+        staged = self.stage()
+        self.target.write_bytes(b"arrived meanwhile")
+        with self.assertRaises(FileExistsError):
+            staged.commit(replace=False)
+        self.assertEqual(self.target.read_bytes(), b"arrived meanwhile")
+        self.assertEqual(_leftovers(self.target.parent), [])
+
+    def test_discard_is_idempotent(self):
+        staged = self.stage()
+        staged.discard()
+        staged.discard()
+        self.assertEqual(_leftovers(self.target.parent), [])
+        committed = self.stage()
+        committed.commit()
+        committed.discard()
+        self.assertTrue(self.target.exists())
+
+    def test_a_raising_callback_leaves_no_temp_file(self):
+        def stop(_):
+            raise RuntimeError("cancelled")
+
+        with self.assertRaises(RuntimeError):
+            self.stage(on_chunk=stop)
+        self.assertEqual(_leftovers(self.target.parent), [])
+
+    def test_link_fallback_without_hard_links(self):
+        with patch("openemux.core.atomic_write.os.link", side_effect=PermissionError("no links")):
+            self.stage().commit(replace=False)
+            self.assertEqual(self.target.read_bytes(), b"rom bytes")
+            staged = self.stage(b"other")
+            with self.assertRaises(FileExistsError):
+                staged.commit(replace=False)
+        self.assertEqual(self.target.read_bytes(), b"rom bytes")
+        self.assertEqual(_leftovers(self.target.parent), [])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ because RetroArch's savefile_directory is left at its default. Both have to
 come along, and an archive is untrusted input on the way back in.
 """
 
+import os
 import unittest
 import zipfile
 from datetime import datetime
@@ -471,3 +472,35 @@ class TheDefaultBackupNameTests(unittest.TestCase):
 
     def test_it_defaults_to_right_now(self):
         self.assertTrue(save_backup.default_backup_name().endswith(".zip"))
+
+
+class ShouldReplaceTests(unittest.TestCase):
+    """The timestamp form of the collision rule Share nearby reuses (issue #588)."""
+
+    def setUp(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.target = Path(tmp.name) / "Game.srm"
+        self.target.write_bytes(b"local")
+        os.utime(self.target, (1000, 1000))
+
+    def test_newest_needs_a_strictly_later_file(self):
+        self.assertTrue(save_backup.should_replace(self.target, 1001, save_backup.ON_COLLISION_NEWEST))
+        self.assertFalse(save_backup.should_replace(self.target, 1000, save_backup.ON_COLLISION_NEWEST))
+        self.assertFalse(save_backup.should_replace(self.target, 999, save_backup.ON_COLLISION_NEWEST))
+
+    def test_a_missing_target_is_replaced(self):
+        self.target.unlink()
+        self.assertTrue(save_backup.should_replace(self.target, 0, save_backup.ON_COLLISION_NEWEST))
+
+    def test_the_other_policies(self):
+        self.assertTrue(save_backup.should_replace(self.target, 0, save_backup.ON_COLLISION_OVERWRITE))
+        self.assertFalse(save_backup.should_replace(self.target, 9999, save_backup.ON_COLLISION_SKIP))
+        self.assertFalse(save_backup.should_replace(self.target, 9999, save_backup.ON_COLLISION_KEEP_BOTH))
+
+    def test_the_import_policies_are_unchanged(self):
+        self.assertNotIn(save_backup.ON_COLLISION_KEEP_BOTH, save_backup.COLLISION_POLICIES)
+        self.assertEqual(
+            save_backup.SHARE_COLLISION_POLICIES,
+            save_backup.COLLISION_POLICIES + (save_backup.ON_COLLISION_KEEP_BOTH,),
+        )

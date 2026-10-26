@@ -37,5 +37,87 @@
       "commit": "8f404d2baa1389a52e1f7ddec7da235ba6a19572ca7531e735b5c9fd02040d74",
       "code": "163722"
     }
-  ]
+  ],
+  "manifest_sample": {
+    "games": [
+      {
+        "id": "g1",
+        "console": "PS",
+        "title": "Example Quest",
+        "metadata": {
+          "favorite": true,
+          "core": "Beetle PSX"
+        },
+        "items": [
+          {
+            "id": "g1i1",
+            "kind": "rom",
+            "name": "Example Quest.cue",
+            "size": 120,
+            "mtime": 1700000000,
+            "sha256": "4d1f3d4b2a5f0d27f1e0cf4c8b2a8ab0fb3cb0ff5a9e7a3a5d61f3a0c1e7a6b2",
+            "part": {
+              "unit": "g1",
+              "role": "cue"
+            }
+          },
+          {
+            "id": "g1i2",
+            "kind": "rom",
+            "name": "Example Quest (Track 1).bin",
+            "size": 524288000,
+            "mtime": 1700000000,
+            "part": {
+              "unit": "g1",
+              "role": "bin"
+            }
+          },
+          {
+            "id": "g1i3",
+            "kind": "rom",
+            "name": "Example Quest (Track 2).bin",
+            "size": 1048576,
+            "mtime": 1700000000,
+            "sha256": "9b6a4f1d2c3e5a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d",
+            "part": {
+              "unit": "g1",
+              "role": "bin"
+            }
+          },
+          {
+            "id": "g1i4",
+            "kind": "battery_save",
+            "name": "Example Quest.srm",
+            "size": 131072,
+            "mtime": 1700000500,
+            "sha256": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
+          },
+          {
+            "id": "g1i5",
+            "kind": "state",
+            "name": "Example Quest.state1",
+            "size": 4194304,
+            "mtime": 1700000600,
+            "sha256": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+            "state": {
+              "core": "Beetle PSX",
+              "core_version": "0.9.44.1",
+              "slot": 1
+            }
+          },
+          {
+            "id": "g1i6",
+            "kind": "cover",
+            "name": "Example Quest.png",
+            "size": 204800,
+            "mtime": 1700000700,
+            "sha256": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a"
+          }
+        ]
+      }
+    ],
+    "total_size": 529866872,
+    "file_count": 6
+  },
+  "manifest_sample_description": "A manifest both apps' tests parse (docs/share-protocol.md, section 10): one multi-file game (a cue and two bins, the big bin without a sha256), a battery save, a save state and a cover. Hashes are placeholders; nothing here is transferred."
 }
