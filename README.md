@@ -162,6 +162,8 @@ A line ending in `: OK` — `OpenEmux-<version>-x86_64.AppImage: OK` — means t
 
 ## Screenshots
 
+*The games in these screenshots are fictional and for illustration only; their artwork was created with AI.*
+
 ### ROM Library
 
 Browse your game collection with cover art, organized by console — just like a real game shelf.

@@ -83,6 +83,7 @@
   "footer.license": ">MIT 许可证</a>",
   "footer.notices": ">第三方\n            声明</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux 是一个独立的开源项目，与 OpenEmu、RetroArch、libretro、Nintendo、Sega、Sony、Atari\n        或任何其他公司均无关联，也未获得其认可或背书。所有商标\n        均归其各自所有者所有。OpenEmux 不分发任何游戏、ROM 或 BIOS 文件。</p>",
+  "footer.fictional": "<p class=\"disclaimer\">展示的游戏均为虚构，仅作示意。它们并不是这些主机上的真实游戏，其美术图像由 AI 生成。</p>",
   "lightbox.label": "aria-label=\"截图查看器\">",
   "lightbox.close": "aria-label=\"关闭\">×</button>",
   "js.slide": "'转到幻灯片 '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">打开下载的文件并确认。更新也用同样的方式，覆盖安装在旧版本之上。</p>",
   "install.android_first_step": "<div class=\"step-n\">首次运行</div>",
   "install.android_first_title": "<h3>等待下载核心</h3>",
-  "install.android_first_note": "<p>首次打开时，应用会下载模拟器核心。然后通过“导入”添加 ROM，或把它们放到手机的 Android/data/com.openemux.mobile/files/roms。</p>"
+  "install.android_first_note": "<p>首次打开时，应用会下载模拟器核心。然后通过“导入”添加 ROM，或把它们放到手机的 Android/data/com.openemux.mobile/files/roms。</p>",
+  "shots.notice": "<p class=\"fineprint\">展示的游戏均为虚构，仅作示意。它们并不是这些主机上的真实游戏，其美术图像由 AI 生成。</p>",
+  "android.notice": "<p class=\"fineprint\">展示的游戏均为虚构，仅作示意。它们并不是这些主机上的真实游戏，其美术图像由 AI 生成。</p>"
 }

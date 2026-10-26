@@ -83,6 +83,7 @@
   "footer.license": ">Licence MIT</a>",
   "footer.notices": ">Mentions des\n            tiers</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux est un projet open source indépendant, sans aucune affiliation, approbation ni\n        lien avec OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari ou toute autre entreprise. Toutes les marques\n        appartiennent à leurs propriétaires respectifs. OpenEmux ne distribue aucun jeu, aucune ROM ni aucun fichier BIOS.</p>",
+  "footer.fictional": "<p class=\"disclaimer\">Les jeux présentés sont fictifs et uniquement illustratifs. Ce ne sont pas de vrais jeux pour ces consoles, et leurs visuels ont été créés avec l’IA.</p>",
   "lightbox.label": "aria-label=\"Visionneuse de captures d’écran\">",
   "lightbox.close": "aria-label=\"Fermer\">×</button>",
   "js.slide": "'Aller à la diapositive '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Ouvrez le fichier téléchargé et confirmez. Les mises à jour s’installent de la même façon, par-dessus la version précédente.</p>",
   "install.android_first_step": "<div class=\"step-n\">Premier lancement</div>",
   "install.android_first_title": "<h3>Laissez-le télécharger les cœurs</h3>",
-  "install.android_first_note": "<p>À la première ouverture, l’app télécharge les cœurs des émulateurs. Mettez ensuite vos ROM dans Importer, ou dans Android/data/com.openemux.mobile/files/roms sur le téléphone.</p>"
+  "install.android_first_note": "<p>À la première ouverture, l’app télécharge les cœurs des émulateurs. Mettez ensuite vos ROM dans Importer, ou dans Android/data/com.openemux.mobile/files/roms sur le téléphone.</p>",
+  "shots.notice": "<p class=\"fineprint\">Les jeux présentés sont fictifs et uniquement illustratifs. Ce ne sont pas de vrais jeux pour ces consoles, et leurs visuels ont été créés avec l’IA.</p>",
+  "android.notice": "<p class=\"fineprint\">Les jeux présentés sont fictifs et uniquement illustratifs. Ce ne sont pas de vrais jeux pour ces consoles, et leurs visuels ont été créés avec l’IA.</p>"
 }

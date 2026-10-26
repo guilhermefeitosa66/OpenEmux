@@ -248,7 +248,7 @@
   "views-pages.alt1": "La page Tous, groupée par console, avec la ligne Tous encadrée",
   "views-pages.p1": "<span class=\"ui\">Tous</span>, <span class=\"ui\">Favoris</span> et les playlists mélangent les consoles, donc ils sont groupés : chaque groupe a un en-tête avec l’icône de la console, son nom et son nombre de jeux. Les groupes suivent l’ordre des consoles que vous avez défini dans la barre latérale ou dans <a href=\"#settings-library\">Paramètres → Bibliothèque</a>.",
   "views-search.h31": "Recherche",
-  "views-search.alt1": "La barre de recherche avec lantern saisi, qui filtre la page Tous",
+  "views-search.alt1": "La barre de recherche avec plumber saisi, qui filtre la page Tous",
   "views-search.p1": "Cliquez sur 🔍, appuyez sur <kbd>Ctrl</kbd>+<kbd>F</kbd>, ou commencez simplement à taper. La recherche filtre la page affichée : cherchez depuis <span class=\"ui\">Tous</span> pour parcourir toute la bibliothèque. <kbd>Esc</kbd> la ferme.",
   "views-select.h31": "Sélectionner plusieurs jeux",
   "views-select.alt1": "La barre de sélection, encadrée, avec deux jeux sélectionnés",

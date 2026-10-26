@@ -248,7 +248,7 @@
   "views-pages.alt1": "Die Seite Alle, nach Konsole gruppiert, mit eingerahmter Zeile Alle",
   "views-pages.p1": "<span class=\"ui\">Alle</span>, <span class=\"ui\">Favoriten</span> und Playlists mischen Konsolen, deshalb sind sie gruppiert: Jede Gruppe hat eine Überschrift mit Symbol, Name und Anzahl der Spiele der Konsole. Die Gruppen folgen der Reihenfolge der Konsolen, die du in der Seitenleiste oder in <a href=\"#settings-library\">Einstellungen → Bibliothek</a> festlegst.",
   "views-search.h31": "Suche",
-  "views-search.alt1": "Die Suchleiste mit dem Text lantern, die die Seite Alle filtert",
+  "views-search.alt1": "Die Suchleiste mit dem Text plumber, die die Seite Alle filtert",
   "views-search.p1": "Klicke auf 🔍, drücke <kbd>Ctrl</kbd>+<kbd>F</kbd> oder fang einfach an zu tippen. Die Suche filtert die angezeigte Seite, such also von <span class=\"ui\">Alle</span> aus, um die ganze Bibliothek zu durchsuchen. <kbd>Esc</kbd> schließt sie.",
   "views-select.h31": "Mehrere Spiele auswählen",
   "views-select.alt1": "Die Auswahlleiste, eingerahmt, mit zwei ausgewählten Spielen",

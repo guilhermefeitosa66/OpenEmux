@@ -83,6 +83,7 @@
   "footer.license": ">MIT ライセンス</a>",
   "footer.notices": ">サードパーティー\n            のライセンス表記</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux は独立したオープンソースプロジェクトであり、OpenEmu、RetroArch、libretro、Nintendo、Sega、Sony、Atari、\n        その他いかなる企業とも提携・承認・関係はありません。すべての商標はそれぞれの所有者に帰属します。\n        OpenEmux はゲーム、ROM、BIOS ファイルを一切配布していません。</p>",
+  "footer.fictional": "<p class=\"disclaimer\">掲載しているゲームは架空のもので、説明のためのイメージです。これらのゲーム機の実在するゲームではなく、アートワークは AI で作成しました。</p>",
   "lightbox.label": "aria-label=\"スクリーンショットビューアー\">",
   "lightbox.close": "aria-label=\"閉じる\">×</button>",
   "js.slide": "'スライドへ移動: '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">ダウンロードしたファイルを開いて確認します。アップデートも同じ方法で、前のバージョンの上にインストールします。</p>",
   "install.android_first_step": "<div class=\"step-n\">初回起動</div>",
   "install.android_first_title": "<h3>コアのダウンロードを待つ</h3>",
-  "install.android_first_note": "<p>初回起動時に、アプリがエミュレーターのコアをダウンロードします。その後、ROM を「インポート」から追加するか、スマートフォンの Android/data/com.openemux.mobile/files/roms に置いてください。</p>"
+  "install.android_first_note": "<p>初回起動時に、アプリがエミュレーターのコアをダウンロードします。その後、ROM を「インポート」から追加するか、スマートフォンの Android/data/com.openemux.mobile/files/roms に置いてください。</p>",
+  "shots.notice": "<p class=\"fineprint\">掲載しているゲームは架空のもので、説明のためのイメージです。これらのゲーム機の実在するゲームではなく、アートワークは AI で作成しました。</p>",
+  "android.notice": "<p class=\"fineprint\">掲載しているゲームは架空のもので、説明のためのイメージです。これらのゲーム機の実在するゲームではなく、アートワークは AI で作成しました。</p>"
 }

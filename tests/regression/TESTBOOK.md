@@ -5988,6 +5988,45 @@ or into an environment that cannot run the tests.
   EOF
   ```
 
+### RT-386 — The site says the demo games are fictional in every language
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the small text
+  under the console carousel, under the Android screenshots and in the footer, after the
+  disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+- **Expected:** In all three places, in every language, one small muted line says the games shown
+  are fictional and for illustration only, are not real games for these consoles, and that their
+  artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
+  same meaning in one line under "Screenshots" (issue #552).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  en = json.loads(Path("site/strings/en.json").read_text(encoding="utf-8"))
+  assert "fictional" in en["shots.notice"] and "created with AI" in en["shots.notice"]
+  for f in sorted(Path("site/strings").glob("*.json")):
+      d = json.loads(f.read_text(encoding="utf-8"))
+      for key in ("shots.notice", "android.notice", "footer.fictional"):
+          assert d.get(key), (f, key)
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      shots = re.search(r'<section id="screenshots">(.*?)</section>', html, re.S).group(1)
+      android = re.search(r'<section id="android">(.*?)</section>', html, re.S).group(1)
+      footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
+      assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
+      assert footer.count('class="disclaimer"') == 2, page
+  readme = Path("README.md").read_text(encoding="utf-8")
+  head = readme.split("## Screenshots", 1)[1].split("### ROM Library", 1)[0]
+  assert "fictional" in head and "AI" in head, "README notice missing"
+  print("RT-386 OK")
+  EOF
+  ```
+
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE

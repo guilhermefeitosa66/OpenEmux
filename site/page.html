@@ -781,11 +781,16 @@
       color: var(--text)
     }
 
-    .disclaimer {
+    .disclaimer,
+    .fineprint {
       margin-top: 26px;
       font-size: .8rem;
       color: #6f688c;
       max-width: 70ch
+    }
+
+    .fineprint {
+      margin: 28px auto 0
     }
 
     /* "Shelf" carousel: 3 console shots per slide, dots + wrap-around arrows */
@@ -1435,6 +1440,7 @@
         </div>
         <div class="carousel-dots" role="tablist" {{shots.dots}}
       </div>
+      {{shots.notice}}
       <p style="margin-top:44px"><a class="btn btn-ghost" href="manual/">{{shots.manual}}</a></p>
     </div>
   </section>
@@ -1455,6 +1461,7 @@
         <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba-landscape.png" {{android.shot_landscape}}
         <figure><img src="{{root}}assets/openemux-mobile-nds-landscape.png" {{android.shot_nds}}
       </div>
+      {{android.notice}}
       <div class="grid">
         <div class="card">
           <div class="ico">🕹️</div>
@@ -1615,6 +1622,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </div>
       </div>
       {{footer.disclaimer}}
+      {{footer.fictional}}
     </div>
   </footer>
 
@@ -1780,10 +1788,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       if (!wall) return;
       // Cartridge renders are 400 px wide; ratio = width / height.
       var CONSOLES = {
-        gba: { ratio: 400 / 230, games: ["acorn-arcade", "basalt-bells", "brass-beetles", "cactus-courier", "chalk-comets", "driftwood-diaries", "fennel-fields", "glass-canyon", "gondola-gambit", "hollow-harp", "ivy-ironworks", "kite-kingdom", "lemon-lightning", "lychee-lane", "maple-mosaic", "moss-knight", "nimbus-noodles", "pixel-pantry", "plum-parade", "pocket-planetarium", "pumice-patrol", "raincoat-rangers", "ripple-runners", "saltmarsh-sprint", "sorrel-speedway", "sparrow-signal", "tangerine-tides", "teacup-tempest", "tinker-tram", "velvet-vortex"] },
-        sfc: { ratio: 400 / 255, games: ["biscuit-brigade", "cinder-bay", "clockwork-orchard", "cobalt-caravan", "copper-lighthouse", "ferris-fortress", "granite-garden", "harbor-hopscotch", "hazel-hollow", "juniper-station", "kettle-knights", "lagoon-lullaby", "lantern-keep", "mango-monsoon", "marble-meadow-rally", "meadow-mechanic", "orchard-siege", "paprika-pass", "pebble-patrol", "puddle-pilots", "rooftop-regatta", "saffron-skyway", "spindle-spire", "sundial-saga", "thimble-quest", "tundra-tailors", "turnip-tactics", "velvet-glacier", "walnut-wanderers", "willow-circuit"] },
-        n64: { ratio: 400 / 257, games: ["canyon-carousel", "glacier-grand-prix", "hover-hamlet", "lunar-laundry", "neon-harbor", "orbit-orchard", "polygon-prairie", "prism-pagoda", "skyline-sledders", "thunder-teapot", "velvet-voltage", "zephyr-zoo"] },
-        md: { ratio: 400 / 271, games: ["blast-bayou", "chrome-canyon", "granite-gale", "harbor-havoc", "iron-iguana", "magma-mailman", "nitro-nectar", "rapid-reef", "static-sunset", "tidepool-racers", "turbo-tortoise", "voltage-valley"] }
+        gba: { ratio: 400 / 230, games: ["alien-ninja-squad", "anime-card-duel", "baseball-bash-kids", "bounce-ball-hero", "bubble-town-pop", "castle-siege-tactics", "cosmic-fox-pilot", "crystal-sword-saga", "desert-raider-kid", "disco-robot-dance", "dragon-egg-ranger", "fire-fist-fury", "gem-mine-mania", "go-kart-galaxy", "hamster-ball-run", "hip-hop-step", "jet-ski-splash", "knight-of-hearts", "laser-ship-omega", "mud-truck-mayhem", "ninja-shadow-path", "pocket-karate-champ", "robot-arena-clash", "ski-slope-slalom", "space-cadet-zero", "street-kick-brawl", "super-kart-turbo", "swamp-witch-house", "tiny-wizard-trail", "zombie-night-out"] },
+        sfc: { ratio: 400 / 255, games: ["alien-planet-quest", "ancient-sword-legend", "beach-volley-stars", "blade-of-the-crystal", "boxing-ring-champ", "brawl-city-streets", "bubble-pop-parade", "desert-tank-strike", "dragon-sky-rider", "dungeon-party-quest", "forest-spirit-path", "galaxy-star-patrol", "gem-drop-frenzy", "golf-course-pro", "haunted-manor-night", "jungle-vine-swing", "kart-cup-grand-prix", "magic-boot-hopper", "mecha-pilot-zero", "ninja-twin-strike", "rhythm-drum-party", "robot-man-x", "sky-fortress-siege", "super-kart-buddies", "the-car-racing-game", "the-fighter-game", "time-knight-saga", "turbo-highway-run", "wizard-tower-tales", "zero-grav-speedster"] },
+        n64: { ratio: 400 / 257, games: ["bear-bird-buddies", "cloud-glider-pilot", "comet-squadron-zero", "gold-agent-mission", "jungle-island-rescue", "kart-kingdom-cup", "mountain-snow-board", "ocean-wave-racer", "party-board-bash", "super-plumber-man-3d", "the-wrestling-match", "turbo-pod-racer"] },
+        md: { ratio: 400 / 271, games: ["barbarian-axe-quest", "coast-road-cruiser", "cyber-ninja-revenge", "funky-alien-groove", "gridiron-smash", "hyper-space-fighter", "jungle-heli-strike", "mutant-tomato-panic", "rage-city-brawl", "sword-force-tactics", "the-fighter-game-ii", "turbo-cheetah-dash"] }
       };
       // Top to bottom. SNES and GBA are the front rows (big, bright, fast);
       // N64 and Mega Drive sit behind them at the edges. speed is px/s at full
