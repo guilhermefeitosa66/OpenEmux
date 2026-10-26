@@ -5735,7 +5735,7 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
 `/sdcard/Android/data/$PKG/files/roms/<CONSOLE>/` and the metadata in `files/meta.json`
 (`adb shell run-as $PKG cat files/meta.json`).
 
-### RT-462 — A long press enters selection mode
+### RT-491 — A long press enters selection mode
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
 - **Preconditions:** First-run setup done; the library above, portrait, "Cartridges" view.
@@ -5751,10 +5751,10 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   detail opens as usual.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
-### RT-463 — "Select all" takes every game the page shows
+### RT-492 — "Select all" takes every game the page shows
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library.
+- **Preconditions:** RT-491's library.
 - **Steps:**
   1. On "All", long-press a game of console A.
   2. Switch to console B's chip.
@@ -5765,10 +5765,10 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   does nothing. After 4 the counter drops to the games the search still shows; if none, the mode ends.
 - **Check:** human only.
 
-### RT-464 — Removing several games asks once and removes them all
+### RT-493 — Removing several games asks once and removes them all
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library; one of the games has a save state in
+- **Preconditions:** RT-491's library; one of the games has a save state in
   `/sdcard/Android/data/$PKG/files/states/<CONSOLE>/`.
 - **Steps:**
   1. Select three games, the one with the save state among them, and press the remove button.
@@ -5780,10 +5780,10 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   save state is still on disk. The other games and their favorites are untouched.
 - **Check:** human only (`adb shell ls /sdcard/Android/data/$PKG/files/roms/<CONSOLE>`).
 
-### RT-465 — Cancel and back keep every file
+### RT-494 — Cancel and back keep every file
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library.
+- **Preconditions:** RT-491's library.
 - **Steps:**
   1. Select two games, press remove, then "Cancel".
   2. Press the system back button.
@@ -5793,12 +5793,12 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   is removed at any point.
 - **Check:** human only (list the ROM folders before and after).
 
-### RT-466 — Selection works in every view, portrait and landscape, light and dark
+### RT-495 — Selection works in every view, portrait and landscape, light and dark
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library.
+- **Preconditions:** RT-491's library.
 - **Steps:**
-  1. Repeat RT-462 step 1 in the covers view and in the list view.
+  1. Repeat RT-491 step 1 in the covers view and in the list view.
   2. Turn the phone to landscape and long-press a game in the row.
   3. Remove one game from the list view and one from the landscape row.
   4. Repeat 1 and 2 in the light theme.
@@ -5809,10 +5809,10 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   under the check mark. The bar, marks and dialog are readable in both themes.
 - **Check:** human only.
 
-### RT-467 — The whole flow works with a gamepad only
+### RT-496 — The whole flow works with a gamepad only
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library; gamepad mode on (a D-pad press) with a game focused.
+- **Preconditions:** RT-491's library; gamepad mode on (a D-pad press) with a game focused.
 - **Steps:**
   1. Read the hint bar, then press START.
   2. Press RIGHT and A; then X.
@@ -5825,10 +5825,10 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
   selecting.
 - **Check:** human only.
 
-### RT-468 — Removing one game from its detail screen is unchanged
+### RT-497 — Removing one game from its detail screen is unchanged
 - **Area:** Android — Multi-select and bulk remove
 - **Mode:** MANUAL
-- **Preconditions:** RT-462's library.
+- **Preconditions:** RT-491's library.
 - **Steps:**
   1. Open a game's detail, open its menu and pick "Remove from library"; confirm.
   2. Switch the app language to Português (Brasil) and enter selection mode; open the remove dialog.
