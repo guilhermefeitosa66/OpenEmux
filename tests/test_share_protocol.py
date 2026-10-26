@@ -103,7 +103,7 @@ class ErrorEnvelopeTests(unittest.TestCase):
 
 class SanitizeTests(unittest.TestCase):
     def test_control_characters_are_stripped_and_length_capped(self):
-        self.assertEqual(protocol.sanitize_name("  Den\x00 PC​\n "), "Den PC")
+        self.assertEqual(protocol.sanitize_name("  Den\x00 PC\u200b\n "), "Den PC")
         self.assertEqual(len(protocol.sanitize_name("x" * 100)), 64)
         self.assertEqual(protocol.sanitize_name(None), "")
 
