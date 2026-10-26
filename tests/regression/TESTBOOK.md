@@ -6244,12 +6244,16 @@ at least once and a few games imported recently. Every scenario ends with
 ## Android — Tablet gameplay
 
 The Android app's in-game screens on a tablet-sized window (#559): the tablet controller skin
-(capped button size, the strip under the picture, the controls in side columns or the lower half),
-the Nintendo DS screens side by side with a layout key, and the pause menu as a side panel. Same
-setup as "Android — Responsive layout" above (`MANUAL`, headless emulator, sizes simulated with
-`wm size` and `wm density 320`, so dp = px / 2). The skin is drawn when the game starts, so set the
-size **before** opening the game. The tablet skin starts at a smallest width of 600dp; anything
-narrower keeps the phone skins. The library needs a Game Boy Advance game and a Nintendo DS game.
+(capped button size, the strip under the picture, the controls in side columns or the lower half)
+and the pause menu as a side panel. Same setup as "Android — Responsive layout" above (`MANUAL`,
+headless emulator, sizes simulated with `wm size` and `wm density 320`, so dp = px / 2). The skin is
+drawn when the game starts, so set the size **before** opening the game. The tablet skin starts at
+a smallest width of 600dp; anything narrower keeps the phone skins.
+
+Two kinds of skin meet a tablet. The twelve consoles that ship a skin package (FC, SFC, N64, GC,
+GB, GBC, GBA, NDS, MD, SMS, PS, PSP) keep the package and use its tablet (`ipad`) art. Every other
+console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a
+Virtual Boy game (a drawn skin with L and R), a Game Boy Advance game and a Nintendo DS game.
 Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
 `user_rotation 0`.
 
@@ -6259,7 +6263,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
   (1280×800dp), landscape (`user_rotation 1` if the device is a portrait one).
 - **Steps:**
-  1. Start the Game Boy Advance game.
+  1. Start the Virtual Boy game.
   2. Tap the strip's turbo and fast-forward keys, then each of them again.
 - **Expected:** The picture is large and centred, keeping its aspect, between two columns of
   controls of equal width. Right under the picture, at its width, the strip shows save, load,
@@ -6268,7 +6272,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   in the right column, Select and Start lower down in each column. No control covers the picture.
   Turbo and fast forward light up while on and go dark on the second tap.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
-  board of the plan on #559).
+  board of the plan on #559: the same placement, in the Virtual Boy's colours).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-429 — Tablet portrait puts the picture on top and the controls in the lower half
@@ -6277,7 +6281,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
   (800×1280dp), portrait.
 - **Steps:**
-  1. Start the Game Boy Advance game.
+  1. Start the Virtual Boy game.
   2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
 - **Expected:** In portrait the picture spans the full width at the top with the strip under it,
   then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
@@ -6291,8 +6295,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Mode:** MANUAL
 - **Preconditions:** As RT-380.
 - **Steps:**
-  1. Set `wm size 1488x2266` and `wm density 320` (744×1133dp, an 8" tablet), start the Game Boy
-     Advance game, take a screenshot in portrait and in landscape, quit it.
+  1. Set `wm size 1488x2266` and `wm density 320` (744×1133dp, an 8" tablet), start the Virtual
+     Boy game, take a screenshot in portrait and in landscape, quit it.
   2. Repeat with `wm size 1600x2560` (800×1280dp, 10").
   3. Measure the A button and the D-pad in each screenshot (dp = px / 2).
 - **Expected:** A and B are the same size on 8" and on 10", at most 1.4 times their size on a
@@ -6302,22 +6306,20 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Check:** human only (the screenshots side by side).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-431 — Nintendo DS on a tablet: two screens side by side, touch, layout key
+### RT-431 — Consoles with a skin package use its tablet art on a tablet
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
-- **Preconditions:** As RT-428, no NDS screen layout chosen yet for landscape (a fresh install, or
-  `adb shell run-as com.openemux.mobile rm files/nds-layout`).
+- **Preconditions:** As RT-428 (1280×800dp, landscape).
 - **Steps:**
-  1. Start the Nintendo DS game in landscape.
-  2. Tap something on the right screen (the DS bottom screen).
-  3. Tap the key above the screens three times.
-  4. Quit and start the game again.
-- **Expected:** The two screens sit side by side, the strip spans under both with save, load,
-  turbo and fast forward (no fifth key), and a pill above them shows the screens icon and
-  "SIDE BY SIDE". The tap on the right screen reaches the game. Each tap of the pill moves to the
-  next layout (top screen only, bottom screen only, side by side) and its label follows. On the
-  second start the game opens in the last layout chosen.
-- **Check:** human only (a screenshot per layout).
+  1. Start the Game Boy Advance game; turn to portrait (`user_rotation 0`) and back.
+  2. Quit, start the Nintendo DS game in landscape and tap something on the lower screen.
+  3. Open the pause menu in each game.
+- **Expected:** Both games show their package skin's tablet art, not the drawn tablet skin of
+  RT-428 and not the phone art stretched: the picture large, the controls sized for a tablet, in
+  both orientations. The Nintendo DS package draws its two screens one over the other, as the
+  package does, and the tap on the lower screen reaches the game. The pause menu is the side panel
+  of RT-432 over either skin.
+- **Check:** human only (a screenshot per game and orientation).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-432 — The pause menu is a side panel on a tablet
@@ -6351,12 +6353,13 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380 (a phone, or `wm size 1080x2400` at 420 dpi), and the same in
   landscape (`user_rotation 1`).
 - **Steps:**
-  1. Start the Game Boy Advance game, then the Nintendo DS game, in portrait and in landscape.
+  1. Start the Virtual Boy game, the Game Boy Advance game and the Nintendo DS game, in portrait
+     and in landscape.
   2. Open the pause menu in each.
   3. With RetroAchievements hardcore on, repeat step 1 on a tablet size (`wm size 2560x1600`,
      `wm density 320`) and open the pause menu.
 - **Expected:** On the phone the skins and the pause sheet at the bottom are the same as in the
-  previous release, NDS keeps its screens key as the strip's fifth key. In hardcore on the tablet
+  previous release. In hardcore on the tablet
   fast forward is dimmed on the strip and on the panel, and "Load" and the saved states on the
   left are not offered, as on a phone.
 - **Check:** human only (screenshots compared with the previous release).
