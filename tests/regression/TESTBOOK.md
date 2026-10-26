@@ -5480,7 +5480,8 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   1. Start the game, then put it in split screen with another app from the recents screen.
   2. Drag the divider slowly to a new position and let go.
 - **Expected:** Once the drag settles the skin is redrawn for the half-screen window with correct
-  proportions. It does not flicker or reload repeatedly during the drag.
+  proportions. It does not flicker or reload repeatedly during the drag. If the other app has the
+  focus, the redraw waits until the game window is tapped (an unfocused game takes no commands).
 - **Check:** human only (a screenshot after each step; the logcat shows one `OVERLAY_LOAD` per
   settled size, not one per frame of the drag).
 
