@@ -6117,6 +6117,146 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
   ```
+## Android — On-screen D-pad
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) steering with the on-screen D-pad like a touch stick (#555): the D-pad is one
+eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
+it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
+the thumb inside the D-pad. It applies to every skin with a D-pad, the Virtual Boy's second pad and
+the NDS layouts included, both to the skins the app draws and to the skin packages it ships for the
+twelve best-known consoles (FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS, PSP), whose circle is an
+image in the package. The runner has no Android device, so these are `MANUAL`: a person runs
+them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`, in
+portrait and in landscape. A held drag is driven with `adb shell input motionevent DOWN <x> <y>`,
+`MOVE <x> <y>` and `UP <x> <y>`; the pressed directions are read from RetroArch's input display or a
+game's movement. `$PKG` is `com.openemux.mobile`.
+
+### RT-408 — The circle rests on the centre, follows the thumb and recentres
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, an NES game in the library.
+- **Steps:**
+  1. Open the NES game in portrait and look at the D-pad before touching it.
+  2. Touch the D-pad's centre, drag up and to the right to the tips of the arms and past them, hold
+     for two seconds, release.
+  3. Turn the phone to landscape and repeat steps 1–2.
+- **Expected:** The cross and its arrows are drawn as before, with one circle on the centre and no
+  darker hub under it. While dragging, the circle moves with the thumb and stops at the D-pad's edge,
+  never outside it; Up and Right are pressed. On release the circle returns to the centre.
+- **Check:** human only (a screenshot at rest and one mid-drag per orientation:
+  `adb exec-out screencap -p > shot.png`), plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_|desc[0-9]+_overlay'
+  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a circle image per D-pad
+  ```
+  Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
+  `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
+  `_overlay` naming the circle image (`<overlay>-knob<N>.png`, on a shipped skin package and on a
+  drawn skin alike) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
+  D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
+  `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
+  one side than the other. On a console with a drawn skin (e.g. the Virtual Boy) `_reach_x` and
+  `_reach_y` are both `1.4182`.
+
+### RT-409 — Sliding off the D-pad keeps steering
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, the NES game open, a character that walks.
+- **Steps:**
+  1. Press Right and, without lifting, slide the thumb well past the D-pad's right edge, over the
+     game area and onto the face buttons; hold there for two seconds.
+  2. Without lifting, slide back over the D-pad and release.
+  3. Repeat in landscape.
+  4. On a phone with a camera cutout, in landscape with the cutout on the D-pad's side: press Left
+     and, without lifting, slide the thumb past the edge of the game window into the strip beside
+     the cutout, all the way to the screen's edge; hold there for two seconds, then slide back and
+     release. Meanwhile, keep a second finger on A.
+- **Expected:** Right stays pressed the whole time, with no gap when the thumb leaves the cross. The
+  face buttons the thumb passes over and rests on do not fire. In step 4, Left stays pressed and the
+  circle stays on the left arm while the thumb is in the cutout's strip, and A stays held.
+- **Check:** human only.
+
+### RT-410 — Rolling the thumb goes through all eight directions
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408.
+- **Steps:**
+  1. Touch the D-pad and, without lifting, roll the thumb around its centre once, first on the cross
+     and then in a wider circle outside it.
+- **Expected:** Up, Up+Right, Right, Down+Right, Down, Down+Left, Left, Up+Left are pressed in turn,
+  the diagonals as two directions at once, both on and outside the cross. The diagonal sectors are a
+  little narrower than the straight ones.
+- **Check:** human only.
+
+### RT-411 — The centre presses nothing and lifting releases at once
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408.
+- **Steps:**
+  1. Touch the exact centre of the D-pad and hold.
+  2. Move the thumb a little towards Up, about the size of the circle, and hold.
+  3. Lift the finger.
+- **Expected:** At the centre no direction is pressed. A short move out of the middle presses Up.
+  Lifting releases every direction immediately and the circle returns to the centre.
+- **Check:** human only.
+
+### RT-412 — A second finger still works the buttons while the D-pad is held
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, on a phone (the emulator's `adb input` drives one pointer only), a
+  SNES game in the library.
+- **Steps:**
+  1. Open the SNES game, hold the D-pad and slide that thumb outside the D-pad towards the middle of
+     the screen, steering Right.
+  2. With another finger tap A, B, L and R in turn, then lift that finger.
+  3. Keep steering with the first thumb and move it to Up.
+- **Expected:** Each button fires on its tap. The D-pad keeps pressing Right before, during and
+  after the second finger, then Up; it never drops when the other finger lifts.
+- **Check:** human only.
+
+### RT-413 — Every skin and orientation, the Virtual Boy and the NDS included
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
+  Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
+  The first six of those and the NDS use the shipped skin packages; the Virtual Boy, the PC Engine
+  and the keypad console use the drawn skins.
+- **Steps:**
+  1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
+  2. On the Virtual Boy, repeat them on the right-hand pad.
+  3. On the NDS, in each screen layout, slide the D-pad thumb onto the touch screen and hold; then tap
+     the touch screen with a second finger.
+  4. On the keypad console, open the keypad, rotate the phone mid-game and repeat RT-408 step 2.
+- **Expected:** The same circle and the same drag everywhere, one circle per D-pad, none missing or
+  doubled. On PlayStation and Nintendo 64 the stick keeps its own behaviour. The Virtual Boy's right
+  pad presses the right D-pad (L2/L3/R2/R3 binds). On the NDS the D-pad thumb never taps the touch
+  screen; the second finger does.
+- **Check:** human only, plus for the Virtual Boy:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E '_(up|down|left|right) = '
+  ```
+  The right pad's desc carries `_up = "l2"`, `_down = "l3"`, `_left = "r2"`, `_right = "r3"`; the
+  left pad's carries none.
+
+### RT-476 — A skin of the user's own steers the D-pad the same way, with no circle
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, a Game Boy Advance game in the library and a third-party GBA
+  `.deltaskin` (one made for Delta, not the app's own) on the computer.
+- **Steps:**
+  1. Copy the skin into the app's skin folder for the console:
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/GBA/`.
+  2. Open the GBA game and repeat RT-408 step 2 and RT-409 step 1, in portrait and in landscape.
+  3. Remove the skin from the folder.
+- **Expected:** The skin's own art, with whatever it paints on the D-pad, and no circle over it.
+  Sliding off the D-pad keeps steering, all eight directions work and the buttons the thumb passes
+  over do not fire, as on the app's own skins.
+- **Check:** human only, plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_movable'
+  ```
+  One `dpad_area` desc per overlay with `_dead_zone = 0.25` and no `_movable` line.
 
 
 ## Android — Tablet layout
