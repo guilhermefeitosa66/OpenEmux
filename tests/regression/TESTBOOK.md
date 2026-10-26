@@ -5495,6 +5495,84 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   the item that had it. The dragged shelf stays drawn above the others while it moves.
 - **Check:** human only.
 
+## Android — Controller skins
+
+What each button of the Android app's on-screen skin sends
+([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile), `pkg/android/openemux`,
+`data/Skin.kt`). The drawing belongs to the console; the RetroPad input a button sends depends on the
+core being launched, and some cores need their controller device pinned before the drawn buttons
+work (#540). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone
+or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is
+`com.openemux.mobile`; a game's generated files are in `files/launch/current/` and are read with
+`adb shell run-as $PKG cat files/launch/current/<file>`.
+
+### RT-458 — The Atari 7800 skin reads 1 on the left and 2 on the right
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with an Atari 7800 game that uses both buttons.
+- **Steps:**
+  1. Launch the game, phone in portrait, and look at the two face buttons.
+  2. Press the left button, then the right one.
+  3. Turn the phone to landscape and repeat steps 1-2.
+- **Expected:** The lower-left button reads "1" and the upper-right one "2", in both orientations.
+  Each button does its own action in the game, and "1" is the one 2600-style games react to.
+- **Check:** in `skin/skin.cfg`, the desc drawn on the left of the face cluster is `b` and the one on
+  its right is `a`:
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -E '^overlay0_desc[0-9]+ = "(a|b),'
+  # the "b" line has the smaller x (second field) of the two
+  ```
+
+### RT-459 — ColecoVision fires and keypad work on both cores
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A ColecoVision game with a keypad menu (a level or skill select) in the library.
+- **Steps:**
+  1. In the game's details, pick the "blueMSX" core and launch it.
+  2. Press the left fire and the right fire; open the keypad and press 1 to 9, 0, "*" and "#".
+  3. Quit, pick the "Gearcoleco" core and repeat step 2.
+- **Expected:** On both cores the left fire and the right fire do two different things, every keypad
+  key reaches the game, and the game responds the same way on both cores.
+- **Check:** with Gearcoleco selected, the main overlays send the fires on `b` (L) and `a` (R); the
+  keypad overlays (which hide the fires) send `*` on `start`, `#` on `select`, 9 on `l_y_minus` and 0
+  on `l_x_plus`:
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '^overlay0_desc[0-9]+ = "(a|b),' | grep -oE '"(a|b)' | sort -u   # "a and "b (portrait overlay)
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '"(l_y_minus|l_x_plus),' | sort -u   # both present
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -cE '"r_x_(minus|plus),'                   # 0
+  ```
+
+### RT-460 — Mega Drive X, Y, Z and MODE work on Genesis Plus GX in every game
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A Mega Drive game whose header does not announce a six-button pad, or the 240p
+  Test Suite's controller test.
+- **Steps:**
+  1. With the "Genesis Plus GX" core, launch the game and press A, B, C, X, Y, Z, MODE and START.
+  2. Quit, pick the "PicoDrive" core and launch it again.
+  3. Launch a Master System game.
+- **Expected:** In step 1 each button registers as itself. The generated config pins the six-button
+  pad only for Genesis Plus GX on Mega Drive and Mega-CD: not for PicoDrive and not for the Master
+  System, Game Gear or SG-1000.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1
+  # step 1: input_libretro_device_p1 = "513"; steps 2 and 3: no line
+  ```
+
+### RT-461 — The Atari 5200 runs with its own joystick and two distinct fire buttons
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** An Atari 5200 game with two fire functions and keypad use.
+- **Steps:**
+  1. Launch the game and press the upper fire ("1"), the lower fire ("2") and a few keypad keys.
+- **Expected:** The two fire buttons do different things and the keypad keys work.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1   # "769"
+  ```
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
