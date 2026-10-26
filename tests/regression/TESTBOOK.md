@@ -5338,7 +5338,10 @@ so these are `MANUAL`: a person runs them on a Pixel Fold emulator (`avdmanager 
 `adb shell settings put system accelerometer_rotation 0` and `adb shell settings put system
 user_rotation 1`, and set the hinge with `adb emu sensor set hinge-angle0 <deg>` (180 = flat,
 90 = half open). The game logs the fold it sees: `adb logcat -s OpenEmuxGame:D`. The library needs
-a Game Boy Advance game and a Nintendo DS game. Every scenario ends with `hinge-angle0 180` and
+a Game Boy Advance game and a Nintendo DS game (both open flat on their packaged skin, the drawn
+art from `assets/skins`) and a Game Gear game (a console that keeps the skin the app draws). The
+packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
+opening flat brings each one's own skin back. Every scenario ends with `hinge-angle0 180` and
 `user_rotation 0`.
 
 ### RT-446 — Tabletop game: picture on top, controls on the bottom, nothing on the crease
@@ -5351,12 +5354,14 @@ a Game Boy Advance game and a Nintendo DS game. Every scenario ends with `hinge-
   2. Tap just above and just below the fold.
   3. Tap "Turbo" and "2x" on the strip, then tap each again.
   4. Tap "Save" on the strip, play a little, then "Load".
+  5. Quit, and repeat steps 1 to 3 with the Game Gear game.
 - **Expected:** The picture fills the top half, centred. Under the fold, L, the strip (save, load,
   turbo, 2x, in that order) and R share one row, the menu key sits under the strip, the d-pad and
   B/A below, SELECT and START near the bottom and the console's name at the foot. The band around
   the fold is a plain darker strip of the skin: nothing drawn in it and taps there do nothing.
   Turbo and 2x light up while on and go out on the second tap. Load restores the saved moment. The
   log shows `tabletop true`. With RetroAchievements hardcore on, 2x is greyed out and does nothing.
+  The Game Gear game gets the same tabletop shape in its own colours.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the DobFoldJogo
   board, and the log line).
 
@@ -5369,8 +5374,9 @@ a Game Boy Advance game and a Nintendo DS game. Every scenario ends with `hinge-
   2. `adb emu sensor set hinge-angle0 90` (half open) again; wait two seconds.
   3. Repeat steps 1 and 2.
   4. Half open, `adb shell settings put system user_rotation 0` (the fold now runs down the middle).
-- **Expected:** Flat shows the normal portrait skin; half open shows the tabletop skin again, each
-  time. The game never goes black or restarts: the timer or score carries on across every swap
+  5. Repeat steps 1 and 2 with the Game Gear game.
+- **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
+  drawn Game Gear skin); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
   and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
   middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
 - **Check:** human only (a screenshot per posture and the log).
@@ -5389,7 +5395,8 @@ a Game Boy Advance game and a Nintendo DS game. Every scenario ends with `hinge-
   the d-pad and the face buttons with the strip under it; L and the menu key are at the top left,
   R and "NINTENDO DS" at the top right. The tap registers in the game. The layout key goes "One
   per half" → "Top screen only" → "Bottom screen only" → "One per half". Going flat brings back the
-  portrait layout used before; half open again opens on "Top screen only".
+  packaged Nintendo DS skin with its two screens one over the other and no gap between them; half
+  open again opens on "Top screen only".
 - **Check:** human only (a screenshot per layout, compared with the DobFoldNDS board).
 
 ### RT-449 — Pause in tabletop: the menu on the bottom half, the game visible above
