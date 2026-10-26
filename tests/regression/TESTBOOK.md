@@ -5424,8 +5424,10 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
 that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
-is held (#546). It applies to every skin with a stick: PSP, PlayStation (both sticks), Nintendo 64,
-GameCube (main and C stick) and the `standard(..., stick = true)` skins. The runner has no Android
+is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
+(both sticks), Nintendo 64 and GameCube (main and C stick), where the knob is the item's
+`thumbstick` image, the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
+`.manicskin` whose stick has a `thumbstick` image. The runner has no Android
 device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
 (`emulator -avd <avd> -no-window -read-only`) with `adb`, in portrait and in landscape. Touches are
 driven with `adb shell input swipe <x1> <y1> <x2> <y2> <ms>` (a long one holds the stick) and the
@@ -5462,6 +5464,7 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
   adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in open-emux-mobile: *_knob<N>.png next to each representation's art
   ```
   Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
   `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
@@ -5499,7 +5502,8 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   #546 for comparison.
 - **Steps:**
   1. Take a screenshot in portrait and one in landscape.
-- **Expected:** The PSP stick is visibly larger than before (the size of PlayStation's) and does not
+- **Expected:** The PSP stick is visibly larger than before (the size of PlayStation's, in the bundled
+  skin as in the drawn one) and does not
   overlap the D-pad, the face buttons, the shoulders or SELECT/START in either orientation.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, side by side with the old one).
 
@@ -5515,6 +5519,24 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
 - **Expected:** Each control fires exactly as before and none of them moves a stick. Opening the
   keypad or turning the phone leaves exactly one knob per stick, still following the thumb.
 - **Check:** human only.
+
+### RT-469 — A user's skin package without a knob image keeps its stick
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, plus a `.deltaskin` or `.manicskin` for Nintendo 64 (or another
+  console with a stick) whose stick item has **no** `thumbstick` entry in `info.json`, copied to
+  `/sdcard/Android/data/$PKG/files/skins/N64/`.
+- **Steps:**
+  1. Open the Nintendo 64 game and push the stick in each direction, a little and all the way.
+  2. Remove the skin from `files/skins/N64/` and open the game again.
+- **Expected:** With the user's skin, the stick steers over the item's frame as before #546 (the
+  knob is whatever the skin's art paints, it does not move) and nothing else changes. Without it,
+  the bundled skin is back, with its moving knob.
+- **Check:** human only, plus the generated config with the user's skin: the stick's desc has
+  `_saturate_pct = 0.65` and none of `_overlay`, `_movable`, `_reach_*` or `_range_mod`:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
+  ```
 
 
 ## Developer tooling & docs
