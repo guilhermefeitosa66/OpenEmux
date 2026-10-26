@@ -5572,6 +5572,119 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1   # "769"
   ```
 
+## Android — Update check
+
+The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) asking GitHub once per cold start whether a newer OpenEmux release exists
+and showing a banner on the shelf (#541). `MANUAL`, like the RetroAchievements section: a person
+runs them on a phone or a headless emulator with `adb`. "Old" and "future" builds come from
+`./gradlew assembleDebug -PopenemuxVersion=1.0.0 --no-daemon` and `-PopenemuxVersion=99.0.0`
+(install them with `adb install -r -d -t`). `$PKG` is `com.openemux.mobile`. The version logic
+(numeric comparison, payload parsing, once per process, the switch) is covered by
+`./gradlew testDebugUnitTest --no-daemon` (`UpdatesTest.kt`).
+
+### RT-400 — An older installed version shows the update banner on the shelf
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed, first-run setup done, network on, "Check for updates"
+  on (the default).
+- **Steps:**
+  1. `adb shell am force-stop $PKG`, then open the app.
+  2. Wait up to 10 seconds on the "Shelf".
+  3. Repeat in the light theme and with the phone in landscape.
+- **Expected:** Under the "Shelf" title a banner reads "Version <latest> available" with
+  "You have 1.0.0" under it, a download icon, a "Not now" text button and a filled "Download" button.
+  It never covers the shelf cards; nothing is clipped in either theme or orientation.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`);
+  `adb logcat -d -s OpenEmuxUpdate` shows `update: checking for a newer release` once.
+
+### RT-401 — The latest version shows no banner and About says "Up to date"
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 99.0.0 build installed, network on.
+- **Steps:**
+  1. Cold-start the app and wait 10 seconds on the "Shelf".
+  2. Open "Settings" › "About".
+- **Expected:** No banner on the shelf. About shows "Version 99.0.0" and a green "Up to date" tag
+  under it.
+- **Check:** human only.
+
+### RT-402 — Offline, the app opens normally and shows nothing
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed.
+- **Steps:**
+  1. `adb shell cmd connectivity airplane-mode enable`, then cold-start the app.
+  2. Open "Settings" › "About".
+- **Expected:** The shelf opens as usual with no banner and no error; About shows the version and no
+  status tag.
+- **Check:** human only.
+- **Restore:** `adb shell cmd connectivity airplane-mode disable`.
+
+### RT-403 — "Not now" hides the banner until the next cold start
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Tap "Not now".
+  2. Switch to "Recent" and "Settings" and back to "Library".
+  3. Open "Settings" › "About".
+  4. `adb shell am force-stop $PKG`, then open the app.
+- **Expected:** The banner collapses at step 1 and stays gone through step 2. About still shows the
+  "Version <latest> available" tag (dismissing hides only the banner). After step 4 the banner is
+  back.
+- **Check:** human only.
+
+### RT-404 — "Download" opens the OpenEmux release page in the browser
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Tap "Download".
+  2. Back in the app, open "Settings" › "About" and tap the "Version <latest> available" tag.
+- **Expected:** Both open the browser on the OpenEmux GitHub release page of that version
+  (`github.com/guilhermefeitosa66/OpenEmux/releases/tag/v<latest>`); nothing is downloaded or
+  installed by the app.
+- **Check:** human only (`adb shell dumpsys activity activities | grep -i github` while the browser
+  is open).
+
+### RT-405 — The banner works with a gamepad and never steals focus
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen; a gamepad, or `adb shell input gamepad keyevent`.
+- **Steps:**
+  1. Cold-start the app and press D-pad Down until the first shelf card is focused.
+  2. Press D-pad Up once.
+  3. Press D-pad Left, then "A".
+- **Expected:** At step 2 the focus ring is on "Download"; at step 3 it moves to "Not now", and "A"
+  hides the banner and puts the focus on the first shelf card. At no point does the banner take the
+  focus by itself.
+- **Check:** human only (a screenshot after each step).
+
+### RT-406 — With "Check for updates" off the app never asks GitHub
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed, network on.
+- **Steps:**
+  1. "Settings" › "General": turn "Check for updates" off.
+  2. `adb logcat -c`, `adb shell am force-stop $PKG`, then open the app and wait 10 seconds.
+  3. Open "Settings" › "About".
+- **Expected:** The switch reads "Check for updates" / "Ask GitHub for a newer version when the app
+  opens" and stays off after the restart. No banner, no status tag in About, and no request.
+- **Check:** `adb logcat -d -s OpenEmuxUpdate | grep -c checking` prints `0`.
+- **Restore:** turn "Check for updates" back on.
+
+### RT-407 — The update strings are translated
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Switch the app language to "Português (Brasil)", then to one more language, at 360 dp width.
+  2. Look at the banner, the "Check for updates" switch and the About tag.
+- **Expected:** All of them are in the chosen language (e.g. "Versão <latest> disponível", "Agora
+  não", "Baixar", "Verificar atualizações", "Atualizado"); nothing is clipped.
+- **Check:** human only.
+
 
 ## Developer tooling & docs
 
