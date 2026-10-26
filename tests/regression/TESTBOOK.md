@@ -5396,11 +5396,11 @@ three or more games played in a known order.
      the next row; let go.
   2. Leave the tab, come back; then `adb shell am force-stop com.openemux.mobile` and reopen.
   3. Focus a console in the right column with the gamepad, press Y, choose "Move up".
-  4. Press Y again and choose "Reset order".
+  4. Press Y again and choose "Restore default order".
 - **Expected:** While dragging the other cards make room and the dragged card stays under the
   finger; the new order is kept after leaving the tab and after the restart. "Favorites" cannot be
   dragged and stays first. "Move up" moves the console one place back in reading order (left to
-  right, then down). "Reset order" restores the default order.
+  right, then down). "Restore default order" brings back the default order.
 - **Check:** human only.
 
 ### RT-391 — Light theme, box-art consoles and a small phone
