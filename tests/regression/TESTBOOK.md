@@ -6756,7 +6756,8 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
   3. Visit "Recent", "Import" and "Settings".
 - **Expected:** A hairline marks the fold; no text, button or image sits within 12dp of it. The
   tabs are one row at the bottom (icon and label side by side, the active one in a tinted pill),
-  never a rail or the phone bar. The shelf's "Import ROMs" button is on the bottom half; in the
+  never a rail or the phone bar. The shelf's "Import ROMs" button is on the bottom half, under
+  "Continue playing" on a shelf wide enough to show that row (the open Fold); in the
   library the grid fills the top half and the search, sort, view toggle and console chips are on
   the bottom half. A game shows its cartridge beside the title on top and "Continue"/"Restart"
   (or "Play"), the saved states, the setting tiles (Core, Shader, Controller skin, Cheats) and the
