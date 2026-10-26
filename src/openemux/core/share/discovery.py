@@ -212,9 +212,9 @@ class BeaconTransport(Transport):
                 target=self._recv_loop, args=(on_seen, on_gone), name="share-beacon-recv", daemon=True
             ),
         ]
+        self.status = STATUS_RUNNING
         for thread in self._threads:
             thread.start()
-        self.status = STATUS_RUNNING
 
     def _open_socket(self):
         sock = self.socket_factory(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -419,6 +419,9 @@ class Discovery:
     def add_manual(self, announcement, address):
         """A device the user typed in (its ``/info`` already fetched)."""
         self.peer_list.seen(PATH_MANUAL, announcement, address)
+
+    def remove_manual(self, device_id):
+        self.peer_list.gone(PATH_MANUAL, device_id)
 
     def transport_status(self):
         return {transport.name: transport.status for transport in self.transports}
