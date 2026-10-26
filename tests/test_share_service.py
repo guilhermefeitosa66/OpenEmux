@@ -12,6 +12,8 @@ from openemux.core.share.discovery import BeaconTransport, Discovery
 from openemux.core.share.protocol import BEACON_GROUP, ErrorCode, ShareError
 from openemux.core.share.service import ShareService
 from openemux.core.share.session import ShareClient, ShareServer
+from tests.platform_marks import posix_only
+from tests.test_share_session import assert_nothing_listens
 
 
 class FakeServer:
@@ -94,14 +96,21 @@ class ServiceTests(unittest.TestCase):
         service = self.make()
         service.start()
         self.addCleanup(service.stop)
-        share_dir = Path(self.tmp.name) / "share"
         self.assertEqual(service.identity.name, "Den")
-        self.assertEqual(stat.S_IMODE(share_dir.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE((share_dir / "key.pem").stat().st_mode), 0o600)
+        self.assertTrue((Path(self.tmp.name) / "share" / "key.pem").is_file())
         first = (service.identity.id, service.identity.fingerprint)
         service.stop()
         service.start()
         self.assertEqual((service.identity.id, service.identity.fingerprint), first)
+
+    @posix_only("owner-only modes on the key and its directory; NTFS has no such bits")
+    def test_identity_files_are_owner_only(self):
+        service = self.make()
+        service.start()
+        self.addCleanup(service.stop)
+        share_dir = Path(self.tmp.name) / "share"
+        self.assertEqual(stat.S_IMODE(share_dir.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE((share_dir / "key.pem").stat().st_mode), 0o600)
 
     def test_server_failure_leaves_nothing_running(self):
         service = self.make(server_error=OSError("no port"))
@@ -210,8 +219,7 @@ class LoopbackIntegrationTests(unittest.TestCase):
         self.assertEqual([(o.offer_id, o.code) for o in bob.offers], [(offer_id, code)])
         port = bob.server.port
         bob.stop()
-        with self.assertRaises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port), timeout=2).close()
+        assert_nothing_listens(self, port)
         deadline = time.monotonic() + 3
         while alice.peers() and time.monotonic() < deadline:
             time.sleep(0.05)

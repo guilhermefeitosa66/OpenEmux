@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import serialization
 
 from openemux.core.config import ConfigManager
 from openemux.core.share import identity
+from tests.platform_marks import posix_only
 
 
 def mode(path):
@@ -27,14 +28,18 @@ class IdentityTests(unittest.TestCase):
         device = identity.load_or_create(self.dir, "Living room")
         self.assertRegex(device.id, r"^[0-9a-f]{32}$")
         self.assertEqual((device.name, device.platform), ("Living room", "desktop"))
-        self.assertEqual(mode(self.dir), 0o700)
-        self.assertEqual(mode(self.dir / "key.pem"), 0o600)
-        self.assertEqual(mode(self.dir / "cert.pem"), 0o644)
         cert = x509.load_pem_x509_certificate((self.dir / "cert.pem").read_bytes())
         der = cert.public_bytes(serialization.Encoding.DER)
         self.assertEqual(device.fingerprint, hashlib.sha256(der).hexdigest())
         self.assertEqual(device.cert_path, self.dir / "cert.pem")
         self.assertEqual(device.key_path, self.dir / "key.pem")
+
+    @posix_only("owner-only modes on the key and its directory; NTFS has no such bits")
+    def test_modes(self):
+        identity.load_or_create(self.dir, "Living room")
+        self.assertEqual(mode(self.dir), 0o700)
+        self.assertEqual(mode(self.dir / "key.pem"), 0o600)
+        self.assertEqual(mode(self.dir / "cert.pem"), 0o644)
 
     def test_reload_keeps_id_and_fingerprint(self):
         first = identity.load_or_create(self.dir, "A")

@@ -24,6 +24,12 @@ def manifest():
     }
 
 
+def assert_nothing_listens(case, port):
+    """Connecting to ``port`` fails: refused on Linux, timed out on Windows."""
+    with case.assertRaises(OSError):
+        socket.create_connection(("127.0.0.1", port), timeout=2).close()
+
+
 class Clock:
     def __init__(self):
         self.now = 1000.0
@@ -410,8 +416,7 @@ class LifecycleTests(SessionTestCase):
         server.stop()
         server.stop()
         self.assertFalse(server.listening)
-        with self.assertRaises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port), timeout=2).close()
+        assert_nothing_listens(self, port)
 
     def test_busy_preferred_port_falls_back(self):
         blocker = socket.socket()
