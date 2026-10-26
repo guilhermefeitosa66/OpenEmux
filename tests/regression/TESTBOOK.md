@@ -6269,7 +6269,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   controls of equal width. Right under the picture, at its width, the strip shows save, load,
   turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
   console name at the top of the right column, the D-pad in the middle of the left column, A and B
-  in the right column, Select and Start lower down in each column. No control covers the picture.
+  in the right column, Select and Start lower down in each column, under the lowest button of their
+  column. No control covers the picture or another control: B stays clear of Start.
   Turbo and fast forward light up while on and go dark on the second tap.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
   board of the plan on #559: the same placement, in the Virtual Boy's colours).
