@@ -19,7 +19,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Gtk
+    from gi.repository import GLib, Gtk
 
     from openemux.ui import context_menu
     from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
@@ -289,6 +289,60 @@ class DroppingAClosedMenuTests(unittest.TestCase):
         with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
             context_menu.unparent_when_idle(popover)
         self.assertFalse(idle_add.call_args[0][0]())
+
+
+@needs_display
+class GuardingTheWindowWhileAMenuIsUpTests(unittest.TestCase):
+    """The outside-click guard sits on the menu's window (issue #601)."""
+
+    def setUp(self):
+        context_menu._open_popover = None
+        context_menu._outside_guard = None
+        context_menu._guard_closing = False
+        self.addCleanup(context_menu.dismiss_context_popover)
+        self.window = Gtk.Window()
+        self.addCleanup(self.window.destroy)
+        self.box = Gtk.Box()
+        self.window.set_child(self.box)
+        self.window.present()
+
+    def menu_on(self, anchor):
+        popover = build_context_popover([("Rename", lambda: None, None)])
+        popover.set_parent(anchor)
+        self.addCleanup(popover.unparent)
+        return popover
+
+    def test_presenting_guards_the_window_on_every_button_before_its_children(self):
+        context_menu.present_context_popover(self.menu_on(self.box))
+        window, controller = context_menu._outside_guard
+        self.assertIs(window, self.window)
+        self.assertIs(controller.get_widget(), self.window)
+        self.assertEqual(controller.get_button(), 0)
+        self.assertEqual(
+            controller.get_propagation_phase(), Gtk.PropagationPhase.CAPTURE
+        )
+
+    def test_a_second_menu_leaves_exactly_one_guard(self):
+        first_anchor, second_anchor = Gtk.Button(), Gtk.Button()
+        self.box.append(first_anchor)
+        self.box.append(second_anchor)
+        context_menu.present_context_popover(self.menu_on(first_anchor))
+        first_controller = context_menu._outside_guard[1]
+        context_menu.present_context_popover(self.menu_on(second_anchor))
+        self.assertIsNone(first_controller.get_widget())
+        second_controller = context_menu._outside_guard[1]
+        self.assertIs(second_controller.get_widget(), self.window)
+
+    def test_closing_the_menu_takes_the_guard_off_the_window(self):
+        popover = self.menu_on(self.box)
+        context_menu.present_context_popover(popover)
+        controller = context_menu._outside_guard[1]
+        popover.popdown()
+        context = GLib.MainContext.default()
+        while context.pending():
+            context.iteration(False)
+        self.assertIsNone(context_menu._outside_guard)
+        self.assertIsNone(controller.get_widget())
 
 
 if __name__ == "__main__":

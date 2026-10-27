@@ -31,6 +31,7 @@ if HAVE_DISPLAY:
     )
     from openemux.core.library_view import VIEW_MODE_LIST
     from openemux.core.scraper import COVER_ART, LABEL_ART
+    from openemux.ui import context_menu
     from openemux.ui import rom_card as rom_card_module
     from openemux.ui.rom_card import RomEntry, RomItem, entry_matches, item_for_widget
 
@@ -78,6 +79,31 @@ class WhatACardShowsTests(_CardCase):
         self.assertIsNotNone(self.card._context_popover)
         self.card.unbind()
         self.assertIsNone(self.card._context_popover)
+
+    def test_a_click_outside_its_menu_closes_it_and_launches_nothing(self):
+        # Issue #601: the click used to fall through to the card under the
+        # pointer and launch that game.
+        launch = mock.Mock()
+        self.card.on_launch_callback = launch
+        self.card._show_context_menu()
+        window, controller = context_menu._outside_guard
+        self.assertIs(window, self.card.get_root())
+        gesture = mock.Mock()
+        gesture.get_current_event.return_value.get_surface.return_value = (
+            window.get_surface()
+        )
+        context_menu._on_outside_press(
+            gesture, 1, 0, 0, window
+        )
+        gesture.set_state.assert_called_once_with(Gtk.EventSequenceState.CLAIMED)
+        self.assertIsNone(context_menu._open_popover)
+        # Kept through the press it claimed, taken off right after.
+        self.assertIs(controller.get_widget(), window)
+        context = rom_card_module.GLib.MainContext.default()
+        while context.pending():
+            context.iteration(False)
+        self.assertIsNone(controller.get_widget())
+        launch.assert_not_called()
 
     def test_rebinding_to_another_game_replaces_every_piece_of_state(self):
         other = RomEntry(self.win.playlist_manager.load_playlist("FC")[0])
