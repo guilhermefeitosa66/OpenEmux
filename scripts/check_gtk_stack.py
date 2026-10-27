@@ -97,6 +97,22 @@ def _yaml():
     return yaml.__version__
 
 
+# Optional: Share nearby (issue #587) degrades without them rather than the app
+# failing to start, so a missing one warns instead of failing the check.
+@_check("cryptography", required=False)
+def _cryptography():
+    import cryptography
+
+    return cryptography.__version__
+
+
+@_check("zeroconf", required=False)
+def _zeroconf():
+    import zeroconf
+
+    return zeroconf.__version__
+
+
 def main():
     failures = []
     for label, required, probe in CHECKS:

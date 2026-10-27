@@ -48,6 +48,8 @@ artifacts. For user-facing install instructions, see the main
 ```
 src/openemux/
   core/     non-UI logic (config, scanner, launcher, cover sync, update check, …)
+            core/share/ is Share nearby; its wire format is specified in
+            docs/share-protocol.md, which the Android app is written against
   ui/       GTK4/Adwaita widgets (window, grid, preferences, …)
   i18n/     translations (tr(locale, key) + one Python module per locale)
 tests/      unittest suite — the core modules plus the UI logic that imports

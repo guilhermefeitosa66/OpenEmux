@@ -30,6 +30,9 @@ depends=(
   'python-yaml'
   # Retitles RetroArch's X11 window with the game's name (issue #469).
   'python-xlib'
+  # Share nearby (issue #587): the device certificate and the mDNS announce.
+  'python-cryptography'
+  'python-zeroconf'
   'librsvg'
   # Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
   # decoder for it. Declared rather than inherited from someone else's

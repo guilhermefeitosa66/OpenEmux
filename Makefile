@@ -83,6 +83,7 @@ install-sys-deps-windows:
 		mingw-w64-ucrt-x86_64-webp-pixbuf-loader \
 		mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject \
 		mingw-w64-ucrt-x86_64-python-cairo mingw-w64-ucrt-x86_64-python-yaml \
+		mingw-w64-ucrt-x86_64-python-cryptography mingw-w64-ucrt-x86_64-python-zeroconf \
 		mingw-w64-ucrt-x86_64-python-coverage mingw-w64-ucrt-x86_64-ca-certificates \
 		mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-7zip
 

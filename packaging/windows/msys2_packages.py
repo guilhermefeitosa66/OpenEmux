@@ -72,6 +72,9 @@ ROOT_PACKAGES = [PACKAGE_PREFIX + name for name in (
     "python-gobject",
     "python-cairo",
     "python-yaml",
+    # Share nearby (issue #587): the device certificate and the mDNS announce.
+    "python-cryptography",
+    "python-zeroconf",
     "ca-certificates",
     "SDL2",
 )]

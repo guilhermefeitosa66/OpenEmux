@@ -1,3 +1,5 @@
 PyGObject
 PyYAML
 python-xlib
+cryptography
+zeroconf

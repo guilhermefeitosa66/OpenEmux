@@ -1,0 +1,41 @@
+{
+  "description": "OpenEmux Share Protocol v1 verification-code test vectors (docs/share-protocol.md, section 9). Hex strings; nonces are 32 raw bytes, fingerprints are SHA-256 digests.",
+  "vectors": [
+    {
+      "name": "simple",
+      "fp_sender": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fp_receiver": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "nonce_s": "1111111111111111111111111111111111111111111111111111111111111111",
+      "nonce_r": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commit": "e231904286b3293a3c8609b59297c24518d292c9a285fcb9f5f3ad892da475b6",
+      "code": "435613"
+    },
+    {
+      "name": "hashed",
+      "fp_sender": "fa4651aaaa97d42e7025a83d02c8972daa23594476058bd9a945a6114e4f424c",
+      "fp_receiver": "3a8053a4b308d46f987514cd0a8b815564a332613ae233096eb8bc45bde816ff",
+      "nonce_s": "69cf40308468a862a39603c13b4b3986f5668e839c2573c00fabe22bd7e4e850",
+      "nonce_r": "8d32b8eec0d5fa7c5eccd23fcccf2256f096769e923870286c9cfe0e671eaf14",
+      "commit": "8f404d2baa1389a52e1f7ddec7da235ba6a19572ca7531e735b5c9fd02040d74",
+      "code": "286433"
+    },
+    {
+      "name": "leading zero",
+      "fp_sender": "8f93c21eca41932d9ffe5191c1cbc0d32a15b93446a86accc920d0446738ae38",
+      "fp_receiver": "5462cfef71bd770f77ef151f4edd1dd73fbbf074633f720dcb5532afcdd743c9",
+      "nonce_s": "9e3a6d4c2fe2f4d7dbe7d7b37232c7f9bcec8e0ef967821f891099bd10836526",
+      "nonce_r": "f0c448e5c8ed8eafa374da45dca7d9ca79edecfda3da5bc52fc3b6f5ed18ce72",
+      "commit": "9b15af4d1db35ee472889885fafc6d412fd3eb15c7b961760344c2cf54d44950",
+      "code": "093444"
+    },
+    {
+      "name": "fingerprints swapped",
+      "fp_sender": "3a8053a4b308d46f987514cd0a8b815564a332613ae233096eb8bc45bde816ff",
+      "fp_receiver": "fa4651aaaa97d42e7025a83d02c8972daa23594476058bd9a945a6114e4f424c",
+      "nonce_s": "69cf40308468a862a39603c13b4b3986f5668e839c2573c00fabe22bd7e4e850",
+      "nonce_r": "8d32b8eec0d5fa7c5eccd23fcccf2256f096769e923870286c9cfe0e671eaf14",
+      "commit": "8f404d2baa1389a52e1f7ddec7da235ba6a19572ca7531e735b5c9fd02040d74",
+      "code": "163722"
+    }
+  ]
+}

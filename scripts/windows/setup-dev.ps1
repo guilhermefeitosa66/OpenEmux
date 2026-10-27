@@ -100,6 +100,8 @@ $MingwPackages = @(
     'python-gobject',                  # cannot be pip-installed here
     'python-cairo',                    # the gi-cairo bridge cartridge_render needs
     'python-yaml',                     # matches requirements.lock
+    'python-cryptography',             # Share nearby device certificate (#587)
+    'python-zeroconf',                 # Share nearby mDNS announce (#587)
     'python-coverage',                 # make coverage
     'ca-certificates',                 # OpenSSL CA bundle, for urllib over HTTPS
 

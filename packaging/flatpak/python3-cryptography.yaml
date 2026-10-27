@@ -1,0 +1,35 @@
+# cryptography (with cffi and pycparser): Share nearby makes this device's
+# certificate with it (issue #587). Without it the feature turns itself off.
+#
+# The runtime carries none of the three, and the sandbox builds with
+# --no-index. cryptography is Rust and cffi is C, so their sdists would need a
+# Rust toolchain and an SDK extension to build; the manylinux wheels are
+# vendored instead, pinned by sha256 like every other source here. The cffi
+# wheel is for the runtime's interpreter (org.gnome.Platform 50 ships CPython
+# 3.13); cryptography's is abi3. Versions follow requirements.lock.
+name: python3-cryptography
+buildsystem: simple
+build-commands:
+  - pip3 install --verbose --exists-action=i --no-index
+    --find-links="file://${PWD}" --prefix=${FLATPAK_DEST}
+    --no-build-isolation cryptography
+sources:
+  - type: file
+    url: https://files.pythonhosted.org/packages/90/11/0e6f11117525ff0eec40ebac3d313376f102df93ca44ad9e893ee85e4f89/pycparser-3.11-py3-none-any.whl
+    sha256: 51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+  - type: file
+    only-arches: [x86_64]
+    url: https://files.pythonhosted.org/packages/95/95/86342356ff5953b3fb06f7ef7c5bee212d45e770abc7218d451b9148313c/cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+    sha256: a931079504ecc49efed7744c476a5c343a92fabf66dec2db95edb1b2fdc770e2
+  - type: file
+    only-arches: [aarch64]
+    url: https://files.pythonhosted.org/packages/37/6f/3b5ce4c3b2192d250f04908f2bfd91ef34552ec8f7716a5d4abdb8d67bb2/cffi-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+    sha256: f16c709686a78c727bbbf059f92b0bf41c6fc60deec706d2dc19f529175a6125
+  - type: file
+    only-arches: [x86_64]
+    url: https://files.pythonhosted.org/packages/d3/69/2c833a049475e0a3444e94c7d0aca0aa51d166374a449b09e92ac98138de/cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl
+    sha256: 9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079
+  - type: file
+    only-arches: [aarch64]
+    url: https://files.pythonhosted.org/packages/71/37/6202e488cc1eb625ea110c292c6bda92823176e023f427d8d5660ce8d632/cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl
+    sha256: 87e9ce85beb6b328ba370cc6e6aea483c92617b4c95b1d33a49297eb662bfb04

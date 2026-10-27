@@ -63,6 +63,10 @@ Requires:       libadwaita >= 1.5
 Requires:       python3-pyyaml
 # Retitles RetroArch's X11 window with the game's name (issue #469).
 Requires:       python3-xlib
+# Share nearby (issue #587): cryptography makes the device certificate,
+# zeroconf announces it over mDNS.
+Requires:       python3-cryptography
+Requires:       python3-zeroconf
 Requires:       librsvg2
 # Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
 # decoder for it. On Fedora the loader reaches a machine only as a *weak*

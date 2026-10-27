@@ -7,9 +7,10 @@
 #   bash /openemux/devkit/provision.sh
 #
 # Everything comes from apt. There is deliberately no venv in here: the app's
-# three runtime dependencies (PyGObject, PyYAML, python-xlib) all ship as
-# distro packages, and a venv built inside a container that mounts the host's
-# home is one more way for the host's interpreter to end up in the loop.
+# runtime dependencies (PyGObject, PyYAML, python-xlib, cryptography,
+# zeroconf) all ship as distro packages, and a venv built inside a container
+# that mounts the host's home is one more way for the host's interpreter to
+# end up in the loop.
 set -euo pipefail
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -44,7 +45,7 @@ pkgs=(
 	gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-rsvg-2.0
 
 	# The app's own runtime imports (requirements.txt).
-	python3-yaml python3-xlib
+	python3-yaml python3-xlib python3-cryptography python3-zeroconf
 	# coverage.py, so `make devbox-tests` can measure as well as run: the UI
 	# tests skip themselves without a display, so a host run under-reports.
 	python3-coverage

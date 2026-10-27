@@ -22,6 +22,8 @@
     "mingw-w64-ucrt-x86_64-python-gobject",
     "mingw-w64-ucrt-x86_64-python-cairo",
     "mingw-w64-ucrt-x86_64-python-yaml",
+    "mingw-w64-ucrt-x86_64-python-cryptography",
+    "mingw-w64-ucrt-x86_64-python-zeroconf",
     "mingw-w64-ucrt-x86_64-ca-certificates",
     "mingw-w64-ucrt-x86_64-SDL2"
   ],
@@ -507,10 +509,28 @@
       "sha256": "8eac0882871a74912fd4963ce31a8677d49af374a77ea1d39d64609c288eb139"
     },
     {
+      "name": "mingw-w64-ucrt-x86_64-python-cffi",
+      "version": "2.1.1-1",
+      "filename": "mingw-w64-ucrt-x86_64-python-cffi-2.1.1-1-any.pkg.tar.zst",
+      "sha256": "051bd2f9c9eb7e547b5543665f2d133f0b623ac1a77aa1a81840505f8bb26d6a"
+    },
+    {
+      "name": "mingw-w64-ucrt-x86_64-python-cryptography",
+      "version": "50.0.2-1",
+      "filename": "mingw-w64-ucrt-x86_64-python-cryptography-50.0.2-1-any.pkg.tar.zst",
+      "sha256": "00d258cf71739232942d0c4751e927c8b9ce84065ffbeca5bdf81bf141a62072"
+    },
+    {
       "name": "mingw-w64-ucrt-x86_64-python-gobject",
       "version": "3.58.1-1",
       "filename": "mingw-w64-ucrt-x86_64-python-gobject-3.58.1-1-any.pkg.tar.zst",
       "sha256": "d638df173cb0dbcd69a229dc883813aa62cf4ab7ad9cbe1640040bc9c7891d3e"
+    },
+    {
+      "name": "mingw-w64-ucrt-x86_64-python-ifaddr",
+      "version": "0.2.0-6",
+      "filename": "mingw-w64-ucrt-x86_64-python-ifaddr-0.2.0-6-any.pkg.tar.zst",
+      "sha256": "25f542ac42df4a63b0aa4287e81766c82153bad756fa3ca1d31933b7e01f2b43"
     },
     {
       "name": "mingw-w64-ucrt-x86_64-python-packaging",
@@ -519,10 +539,22 @@
       "sha256": "b90d1451cfbf015a5334409bd9edf9c61bc0f7b78cac19400b0f92c9279fbaa7"
     },
     {
+      "name": "mingw-w64-ucrt-x86_64-python-pycparser",
+      "version": "3.12-1",
+      "filename": "mingw-w64-ucrt-x86_64-python-pycparser-3.12-1-any.pkg.tar.zst",
+      "sha256": "d60c07d8f6e5cb677c736dbfb6fe9eeae6ec0715bfa0a05e751e7741bab9ae89"
+    },
+    {
       "name": "mingw-w64-ucrt-x86_64-python-yaml",
       "version": "6.0.3-3",
       "filename": "mingw-w64-ucrt-x86_64-python-yaml-6.0.3-3-any.pkg.tar.zst",
       "sha256": "7b4a75e2605c707a999594c863f8eb95c6093c45a947690bccf37e55391456fe"
+    },
+    {
+      "name": "mingw-w64-ucrt-x86_64-python-zeroconf",
+      "version": "0.151.5-1",
+      "filename": "mingw-w64-ucrt-x86_64-python-zeroconf-0.151.5-1-any.pkg.tar.zst",
+      "sha256": "8dfb0048b146098c96b9c983e94557755306e0b118018163b84b734256e5330a"
     },
     {
       "name": "mingw-w64-ucrt-x86_64-shared-mime-info",
