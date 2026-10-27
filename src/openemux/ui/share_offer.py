@@ -26,7 +26,7 @@ from openemux.core.share.display import (
 from openemux.core.share.placement import ACTION_SEND, DEFAULT_POLICIES, ROM_EXISTING, ROM_PLACED
 from openemux.core.share.protocol import KIND_STATE, OFFER_TTL, ErrorCode, ShareError, SkipReason
 from openemux.core.systems import get_system_display_name
-from openemux.ui.share_pages import confirm_cancel, ProgressPage, code_label, label, page, result_page
+from openemux.ui.share_pages import confirm_cancel, ProgressPage, code_label, label, page, result_page, show_page
 
 #: Skip reasons the conflicts page lists under "Skipped": the ones that are
 #: not the user's choice and not a file already there.
@@ -325,7 +325,7 @@ class IncomingOfferDialog(Adw.Dialog):
         self.progress = ProgressPage(
             self.t, self.t("share.progress.receiving", device=self.device), self._cancel,
         )
-        self.nav.replace([self.progress.page])
+        show_page(self, self.progress.page)
 
     def _cancel(self):
         if self.transfer is not None:
@@ -362,7 +362,12 @@ class IncomingOfferDialog(Adw.Dialog):
             summary=self.coordinator.result_counts(result),
             on_close=self.close, on_show=self._show_in_library if games else None,
         )
-        self.nav.replace([self.result])
+        show_page(self, self.result)
+
+    @property
+    def finished(self):
+        """On the result page: nothing left to answer or to wait for."""
+        return self.result is not None and self.transfer is None
 
     def _show_in_library(self):
         self.win.sidebar.select(self._received_games()[0].console)

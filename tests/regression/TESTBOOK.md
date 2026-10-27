@@ -7652,6 +7652,45 @@ stands in for the other device; multicast may not cross the container.
 - **Check:** `make devbox-shot WIN=1` after step 2.
 - **Restore:** Clear "Device Name" and press Enter again.
 
+### RT-521 — A device already found is listed when "Share Nearby" opens again
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Open "Receive Games…" on B.
+  2. On A, open "Share Nearby…" on a game and wait for B to be listed; close the dialog.
+  3. Within 30 s, open "Share Nearby…" on a game on A again.
+- **Expected:** B is listed under "Devices on This Network" as soon as the dialog opens in step 3,
+  without going through "No Devices Found".
+- **Check:** human only. Suite: `tests/test_share_dialog.py`
+  (`test_devices_known_before_it_opened_are_listed`).
+
+### RT-522 — Escape closes the dialog on the result page and keys never reach the library
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The waiting, progress and result pages of both dialogs take the focus on their own
+  button, so Escape closes the dialog on "1 Game Received", "Transfer Cancelled" and the other
+  results. The "Another Device" entry stays focused (read-only) while it connects, so keys typed
+  after Enter never select or filter games behind the dialog.
+- **Check:** `tests/test_share_dialog.py` (`test_waiting_then_code_then_progress_then_sent`,
+  `test_the_entry_keeps_the_focus_while_connecting`) and `tests/test_share_offer.py`
+  (`test_accept_progress_and_received`).
+
+### RT-523 — An offer arriving over a finished one replaces it instead of being declined
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Send a game from A to B and accept on B; leave B on "1 Game Received".
+  2. Send another game from A to B.
+- **Expected:** On B the result page gives way to a new "Incoming Games" dialog with the new code;
+  A waits for the answer instead of reading "Offer Declined".
+- **Check:** human only. Suite: `tests/test_share_coordinator.py`
+  (`test_an_offer_over_a_finished_one_replaces_it`).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and

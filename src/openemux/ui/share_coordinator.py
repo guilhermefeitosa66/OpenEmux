@@ -342,6 +342,11 @@ class ShareCoordinator:
     # -- receiving -------------------------------------------------------
 
     def _on_offer(self, offer):
+        if self.offer_dialog is not None and self.offer_dialog.finished and not self.busy:
+            # A result page left open is not an offer in progress: the new
+            # one replaces it rather than being declined unseen.
+            finished, self.offer_dialog = self.offer_dialog, None
+            finished.force_close()
         if self.busy or self.offer_dialog is not None:
             # One transfer at a time; the core already refuses a second
             # pending offer, this covers one arriving while sending.

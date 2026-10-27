@@ -181,6 +181,8 @@ class AcceptTests(_OfferCase):
         self.dialog.accept_button.emit("clicked")
         self.assertEqual(tag(self.dialog), "progress")
         self.assertFalse(self.dialog.get_can_close())
+        self.assertIs(self.dialog.get_focus(), self.dialog.progress.cancel_button)
+        self.assertFalse(self.dialog.finished)
         self.assertFalse(self.timers.has(1))
         kwargs = self.service.accepted[3]
         kwargs["on_progress"]({"name": "New Game.sfc", "done_bytes": 1, "total_bytes": 3,
@@ -190,6 +192,9 @@ class AcceptTests(_OfferCase):
             kwargs["on_done"]({"status": "done", "placed": ["x"], "replaced": ["y"], "skipped": []})
         page = status(self.dialog)
         self.assertEqual(page.get_title(), "1 Game Received")
+        # Focus on the page's button: Escape closes the dialog again.
+        self.assertIs(self.dialog.get_focus(), self.dialog.result.close_button)
+        self.assertTrue(self.dialog.finished)
         self.assertIn("From Phone. They're in your library now.\n1 file replaced", page.get_description())
         with mock.patch.object(self.win.sidebar, "select") as select, \
                 mock.patch.object(IncomingOfferDialog, "close") as close:

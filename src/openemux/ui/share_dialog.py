@@ -40,7 +40,16 @@ from openemux.core.share.selection import (
 )
 from openemux.core.systems import get_system_display_name
 from openemux.ui.share_coordinator import STATE_FAILED
-from openemux.ui.share_pages import confirm_cancel, ProgressPage, WaitingPage, label, page, pill, result_page
+from openemux.ui.share_pages import (
+    confirm_cancel,
+    ProgressPage,
+    WaitingPage,
+    label,
+    page,
+    pill,
+    result_page,
+    show_page,
+)
 
 #: Seconds without a compatible device before the dialog explains why.
 NOTHING_FOUND_SECONDS = 15
@@ -106,6 +115,10 @@ class ShareDialog(Adw.Dialog):
         if self.mode == "send" and self._available():
             coordinator.inventory(self.roms, self._on_inventory)
         self.on_share_state()
+        # The service may be running already (another share screen, or the
+        # grace period of one that closed): the devices it knows by now will
+        # not be announced as a change again.
+        self.on_peers_changed()
 
     # -- root ------------------------------------------------------------
 
@@ -504,14 +517,18 @@ class ShareDialog(Adw.Dialog):
         self.toasts.add_toast(Adw.Toast(title=self.t("share.address.copied")))
 
     def _connect_address(self):
+        if not self.address_entry.get_editable():
+            return
         self.address_error.set_visible(False)
-        self.address_entry.set_sensitive(False)
+        # Read-only, not insensitive: an insensitive entry drops the focus,
+        # and the keys typed next would reach the library behind the dialog.
+        self.address_entry.set_editable(False)
         self.coordinator.connect_address(self.address_entry.get_text(), self._on_address_connected)
 
     def _on_address_connected(self, error, host):
         if self.address_page is None:
             return
-        self.address_entry.set_sensitive(True)
+        self.address_entry.set_editable(True)
         if error is None:
             self.address_entry.set_text("")
             self.nav.pop_to_tag("root")
@@ -532,7 +549,7 @@ class ShareDialog(Adw.Dialog):
         self.peer = peer
         self.games_sent = summarize(self._selection())["games"]
         self.waiting = WaitingPage(self.t, peer.name, self._cancel)
-        self.nav.replace([self.waiting.page])
+        show_page(self, self.waiting.page)
         self.set_can_close(False)
         roms = kept_roms(self.built, self.roms, self.unchecked)
         self.transfer = self.coordinator.send(peer, roms, set(self.unchecked), self)
@@ -550,7 +567,7 @@ class ShareDialog(Adw.Dialog):
             self.progress = ProgressPage(
                 self.t, self.t("share.progress.sending", device=self.peer.name), self._cancel,
             )
-            self.nav.replace([self.progress.page])
+            show_page(self, self.progress.page)
         self.progress.update(progress)
 
     def on_send_done(self, result):
@@ -560,7 +577,7 @@ class ShareDialog(Adw.Dialog):
             self.t, result, self.peer.name, receiving=False, games=self.games_sent,
             on_close=self.close,
         )
-        self.nav.replace([self.result])
+        show_page(self, self.result)
 
     # -- closing ---------------------------------------------------------
 

@@ -93,6 +93,16 @@ class TheRootTests(_DialogCase):
         self.assertEqual(dialog.stack.get_visible_child_name(), "main")
         self.assertFalse(dialog.nothing_found)
 
+    def test_devices_known_before_it_opened_are_listed(self):
+        # The service kept running from an earlier screen: those devices
+        # will not be announced as a change again.
+        self.share.open_send([self.rom()]).emit("closed")
+        self.service.peer_list = [peer("Phone")]
+        dialog = self.open()
+        self.assertEqual(self.service.calls.count("start"), 1)
+        self.assertEqual([row.get_title() for row in dialog._peer_rows], ["Phone"])
+        self.assertEqual(dialog.stack.get_visible_child_name(), "main")
+
     def test_a_device_before_the_timeout_stops_it(self):
         self.open()
         self.peers(peer())
@@ -262,6 +272,19 @@ class ConnectByAddressTests(_DialogCase):
         self.assertIn("can't talk to this one", self.connect("10.0.0.6"))
         self.assertEqual(self.connect("10.0.0.5"), self.dialog.t("share.error.generic"))
         self.assertTrue(self.dialog.address_entry.get_sensitive())
+        self.assertTrue(self.dialog.address_entry.get_editable())
+
+    def test_the_entry_keeps_the_focus_while_connecting(self):
+        # Insensitive, it would drop the focus and the next keys would reach
+        # the library behind the dialog.
+        self.dialog._push_address()
+        seen = []
+        with mock.patch.object(self.share, "connect_address", lambda text, on_done: seen.append((
+                self.dialog.address_entry.get_sensitive(), self.dialog.address_entry.get_editable()))):
+            self.dialog.address_entry.emit("apply")
+            # A second Enter while the first is still out does nothing.
+            self.dialog.address_entry.emit("apply")
+        self.assertEqual(seen, [(True, False)])
 
     def test_success_adds_the_device_and_goes_back(self):
         self.dialog._push_address()
@@ -298,6 +321,7 @@ class SendingTests(_DialogCase):
         callbacks = self.start()
         self.assertEqual(tag(self.dialog), "waiting")
         self.assertFalse(self.dialog.get_can_close())
+        self.assertIs(self.dialog.get_focus(), self.dialog.waiting.cancel_button)
         self.assertEqual(self.dialog.waiting.title.get_label(), "Preparing the games…")
         callbacks["on_code"]("482913")
         self.assertEqual(self.dialog.waiting.title.get_label(), "Waiting for Phone to accept…")
@@ -306,6 +330,7 @@ class SendingTests(_DialogCase):
                                   "files_done": 0, "file_count": 2})
         self.assertEqual(tag(self.dialog), "progress")
         progress = self.dialog.progress
+        self.assertIs(self.dialog.get_focus(), progress.cancel_button)
         self.assertAlmostEqual(progress.bar.get_fraction(), 0.5)
         self.assertEqual(progress.bytes.get_label(), "500 kB of 1.0 MB")
         self.assertEqual(progress.files.get_label(), "File 1 of 2")
@@ -315,6 +340,7 @@ class SendingTests(_DialogCase):
         callbacks["on_done"]({"status": "done", "sent": ["g1i1"], "skipped": []})
         self.assertEqual(tag(self.dialog), "result")
         self.assertTrue(self.dialog.get_can_close())
+        self.assertIs(self.dialog.get_focus(), self.dialog.result.close_button)
         self.assertEqual(_status(self.dialog).get_title(), "1 Game Sent")
         self.assertEqual(_status(self.dialog).get_description(), "Phone has them now.")
 

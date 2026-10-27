@@ -51,7 +51,19 @@ def page(title, child, tag, subtitle="", bottom=None, can_pop=True):
     nav_page = Adw.NavigationPage(title=title, tag=tag, child=toolbar)
     nav_page.set_can_pop(can_pop)
     nav_page.window_title = window_title
+    nav_page.focus_widget = None
     return nav_page
+
+
+def show_page(dialog, nav_page):
+    """Replace what ``dialog`` shows with ``nav_page`` and focus its button.
+
+    The widget that had the focus goes away with the old page; without a new
+    one the dialog stops getting keys -- Escape no longer closes it, and what
+    is typed reaches the window behind.
+    """
+    dialog.nav.replace([nav_page])
+    dialog.set_focus(nav_page.focus_widget)
 
 
 def code_label(code):
@@ -103,6 +115,7 @@ class WaitingPage:
         self.cancel_button.connect("clicked", lambda _b: on_cancel())
         content = _column(self.spinner, self.title, self.code, self.hint, self.cancel_button)
         self.page = page(t("share.title"), content, "waiting", can_pop=False)
+        self.page.focus_widget = self.cancel_button
 
     def show_code(self, code):
         self.title.set_label(self.t("share.wait.title", device=self.device))
@@ -125,6 +138,7 @@ class ProgressPage:
         self.cancel_button.connect("clicked", lambda _b: on_cancel())
         content = _column(self.current, self.bar, self.bytes, self.files, self.cancel_button)
         self.page = page(header, content, "progress", can_pop=False)
+        self.page.focus_widget = self.cancel_button
 
     def update(self, progress):
         t = self.t
@@ -185,4 +199,5 @@ def result_page(t, result, device, receiving, games=0, summary="", on_close=None
     page_box.set_child(buttons)
     result_nav = page(t("share.offer.title" if receiving else "share.title"), page_box, "result", can_pop=False)
     result_nav.close_button = close
+    result_nav.focus_widget = close
     return result_nav

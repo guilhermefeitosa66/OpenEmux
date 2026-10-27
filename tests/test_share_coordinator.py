@@ -410,6 +410,24 @@ class ReceiveTests(WindowCase):
         self.assertIsNone(self.share.offer_dialog)
         self.assertIn(("answer", self.offer.offer_id, False), self.service.calls)
 
+    def test_an_offer_over_a_finished_one_replaces_it(self):
+        self.service.on_offer(self.offer)
+        first = self.share.offer_dialog
+        first.result = object()
+        with mock.patch.object(first, "force_close") as force_close:
+            self.service.on_offer(self.offer)
+        force_close.assert_called_once_with()
+        self.assertIsNot(self.share.offer_dialog, first)
+        self.assertIs(self.presented[-1], self.share.offer_dialog)
+        self.assertNotIn(("answer", self.offer.offer_id, False), self.service.calls)
+
+    def test_an_offer_over_one_still_open_is_declined(self):
+        self.service.on_offer(self.offer)
+        first = self.share.offer_dialog
+        self.service.on_offer(self.offer)
+        self.assertIs(self.share.offer_dialog, first)
+        self.assertIn(("answer", self.offer.offer_id, False), self.service.calls)
+
     def test_a_decline_after_expiry_is_quiet(self):
         self.service.answer_error = ShareError(ErrorCode.NOT_FOUND, "gone")
         self.share.decline("x")
