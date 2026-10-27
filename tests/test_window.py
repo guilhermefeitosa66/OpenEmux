@@ -1973,14 +1973,26 @@ class TheDialogsAndMenusTests(WindowCase):
             self.win._show_shortcuts()
 
     def app_section(self):
-        # Two sections since Share nearby (issue #589): "Receive Games…" on
-        # its own first, then the five entries about the app.
+        # One section again since "Receive Games…" moved to the Import
+        # button's menu (issue #611): the five entries about the app.
         model = self.win.primary_menu_button.get_menu_model()
-        self.assertEqual(model.get_n_items(), 2)
-        return model.get_item_link(1, "section")
+        self.assertEqual(model.get_n_items(), 1)
+        return model.get_item_link(0, "section")
 
     def test_the_primary_menu_offers_the_five_entries(self):
         self.assertEqual(self.app_section().get_n_items(), 5)
+
+    def test_the_import_button_is_a_split_button(self):
+        # One click still opens the file picker; the arrow holds the rest
+        # (issue #611).
+        button = self.win.import_btn
+        self.assertIsInstance(button, Adw.SplitButton)
+        self.assertEqual(button.get_tooltip_text(), "Import ROMs")
+        self.assertEqual(button.get_dropdown_tooltip(), "More Import Options")
+        with mock.patch.object(self.win.imports, "open_picker") as open_picker:
+            button.emit("clicked")
+            self.win.activate_action("win.import", None)
+        self.assertEqual(open_picker.call_count, 2)
 
     def test_report_a_bug_sits_before_about(self):
         # Where GNOME apps keep it, and reachable without opening Settings
@@ -2215,6 +2227,19 @@ class TheLanguageChangeTests(WindowCase):
         self.assertEqual(self.win.locale, "pt_BR")
         self.assertEqual(self.config.get_locale(), "pt_BR")
         self.assertTrue(refresh.call_args.kwargs["force"])
+
+    def test_the_import_menu_and_the_share_button_follow_the_new_locale(self):
+        # Built once with the old language, they would keep it (issue #611).
+        with mock.patch.object(self.win, "refresh_library"):
+            self.win._apply_language_change("pt_BR")
+        model = self.win.import_btn.get_menu_model()
+        self.assertEqual(
+            [model.get_item_attribute_value(i, "label").get_string() for i in range(2)],
+            ["Importar ROMs…", "Receber jogos…"],
+        )
+        button = self.win.selection_share_button
+        self.assertEqual(button.get_child().get_label(), "Compartilhar")
+        self.assertEqual(button.get_tooltip_text(), "Compartilhar por perto")
 
     def test_the_translated_strings_follow_the_new_locale(self):
         english = self.win.t("app.title")

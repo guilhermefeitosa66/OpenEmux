@@ -18,6 +18,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+#: Share nearby's glyph: the three connected nodes the Android app draws. A
+#: name of our own rather than a themed "send to" or "share" name, which icon
+#: themes draw as anything from an arrow to a paper plane (issue #611).
+SHARE_ICON = "openemux-share-symbolic"
+
 SYMBOLIC_ICON_DIR = Path(__file__).resolve().parent / "assets" / "icons" / "symbolic"
 
 _registered = False

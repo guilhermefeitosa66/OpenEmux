@@ -62,6 +62,10 @@ See [`symbolic/LICENSE`](symbolic/LICENSE): LGPL-3 or CC-BY-SA-3.0 US, at your
 option. Bundled so the UI renders its symbolic icons on hosts whose icon theme
 does not provide these names.
 
+The one exception is `symbolic/openemux-share-symbolic.svg`, Share nearby's
+three-node glyph (issue #611): it is OpenEmux's own drawing, the same one the
+Android app uses, and falls under the MIT terms of the section below.
+
 ## Everything else under `ui/assets/`
 
 OpenEmux's own work, under the project's MIT license (`LICENSE` at the

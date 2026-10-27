@@ -1,7 +1,7 @@
 """The Share Nearby dialog: pick what to send and to whom (#589).
 
 Opened for a game, a selection or a whole console ("send"), or from the
-primary menu to only be visible ("receive"). While it is open this device is
+Import button's menu to only be visible ("receive"). While it is open this device is
 discoverable -- the coordinator keeps the service up -- and it lists the other
 devices as discovery finds them. Choosing one sends; the waiting, progress
 and result pages then replace the list, so Back cannot leave a transfer.
@@ -39,6 +39,7 @@ from openemux.core.share.selection import (
     summarize,
 )
 from openemux.core.systems import get_system_display_name
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.share_coordinator import STATE_FAILED
 from openemux.ui.share_pages import (
     confirm_cancel,
@@ -147,7 +148,7 @@ class ShareDialog(Adw.Dialog):
         else:
             ready_group = Adw.PreferencesGroup()
             self.ready = Adw.StatusPage(
-                icon_name="network-wireless-symbolic", title=t("share.receive.title"),
+                icon_name=SHARE_ICON, title=t("share.receive.title"),
             )
             self.ready.add_css_class("compact")
             ready_group.add(self.ready)

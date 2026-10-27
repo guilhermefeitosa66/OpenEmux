@@ -16,6 +16,7 @@ from openemux.core import cartridge_colors, cartridge_render
 from openemux.core.library_view import renders_cartridge
 from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.ui.context_menu import SEPARATOR, Submenu
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.scopes import is_collection_scope
 
 
@@ -135,7 +136,7 @@ class RomContextMenuServices:
             text = self.win.t("share.menu.many", count=len(targets))
         else:
             text = self.win.t("share.menu.single")
-        return (text, (lambda r=targets: self.win.share_roms(r)), "network-wireless-symbolic")
+        return (text, (lambda r=targets: self.win.share_roms(r)), SHARE_ICON)
 
     def _add_to_collection_submenu(self, rom):
         cm = self.win.collection_manager

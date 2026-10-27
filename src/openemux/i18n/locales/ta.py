@@ -621,6 +621,7 @@ TRANSLATIONS = {
 
     # ROM import
     "header.import": "ROM-களை இறக்குமதி செய்",
+    "header.import_more": "மேலும் இறக்குமதி விருப்பங்கள்",
     "header.sync_covers": "அட்டைகளை ஒத்திசை",
     "header.view_mode": "காட்சி முறை",
     "header.zoom.in": "பெரிய சிறுபடங்கள்",
@@ -637,6 +638,7 @@ TRANSLATIONS = {
     "view_mode.list": "சுருக்கமான பட்டியல்",
     "import.dialog.title": "ROM-களை இறக்குமதி செய்",
     "import.dialog.filter": "ROM-களும் காப்பகங்களும்",
+    "import.menu.import": "ROM-களை இறக்குமதி செய்…",
     "import.running": "ஒரு இறக்குமதி ஏற்கனவே இயங்குகிறது",
     "import.unknown_console": "எந்தக் கன்சோல்?",
     "import.choose_console.body": "“{extension}” நீட்டிப்புள்ள கோப்புகளை ஒன்றுக்கு மேற்பட்ட கன்சோல்கள் பயன்படுத்துகின்றன. இந்தத் தொகுப்புக்கான இலக்கு கன்சோலைத் தேர்ந்தெடுக்கவும்.",
@@ -721,6 +723,7 @@ TRANSLATIONS = {
     "share.menu.many": "{count} விளையாட்டுகளை அருகில் பகிர்…",
     "share.menu.console": "எல்லா விளையாட்டுகளையும் அருகில் பகிர்…",
     "share.menu.receive": "விளையாட்டுகளைப் பெறு…",
+    "share.selection.label": "பகிர்",
     "share.selection.tooltip": "அருகில் பகிர்",
     "share.title": "அருகில் பகிர்",
     "share.title.receive": "விளையாட்டுகளைப் பெறு",

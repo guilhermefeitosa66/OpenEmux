@@ -1,5 +1,6 @@
 """Where Share nearby is reached from (#589): the game menu, the selection bar,
-the console menu, the primary menu -- and the device name in Preferences."""
+the console menu, the Import button's menu (#611) -- and the device name in
+Preferences."""
 
 from unittest import mock
 
@@ -10,6 +11,7 @@ if HAVE_DISPLAY:
     from gi.repository import Gtk
 
     from openemux.ui import console_sidebar as sidebar_module
+    from openemux.ui.icons import SHARE_ICON
     from openemux.ui.context_menu import SEPARATOR, Submenu
     from openemux.ui.preferences import OpenEmuxPreferences
     from openemux.ui.rom_context import RomContextMenuServices
@@ -34,7 +36,7 @@ class EntryPointTests(WindowCase):
     def test_the_game_menu_shares_one_game_or_the_selection(self):
         rom, other = self.rom("SFC", 0), self.rom("SFC", 1)
         label, callback, icon = self.share_entry(rom)
-        self.assertEqual((label, icon), ("Share Nearby…", "network-wireless-symbolic"))
+        self.assertEqual((label, icon), ("Share Nearby…", SHARE_ICON))
         with mock.patch.object(self.win, "share_roms") as share:
             callback()
         share.assert_called_once_with([rom])
@@ -48,8 +50,12 @@ class EntryPointTests(WindowCase):
     def test_the_selection_bar_button(self):
         rom = self.rom()
         self.win._on_selection_changed([rom])
-        button = next(b for b in _buttons(self.win.selection_bar) if b.get_icon_name() == "network-wireless-symbolic")
+        button = self.win.selection_share_button
+        self.assertIn(button, _buttons(self.win.selection_bar))
+        content = button.get_child()
+        self.assertEqual((content.get_icon_name(), content.get_label()), (SHARE_ICON, "Share"))
         self.assertEqual(button.get_tooltip_text(), "Share Nearby")
+        self.assertTrue(button.has_css_class("raised"))
         with mock.patch.object(self.win, "share_roms") as share:
             button.emit("clicked")
         share.assert_called_once_with([rom])
@@ -62,11 +68,27 @@ class EntryPointTests(WindowCase):
         self.win.share_roms(iter([self.rom()]))
         coordinator.open_send.assert_called_once_with([self.rom()])
 
-    def test_receive_games_is_first_in_the_primary_menu(self):
+    def menu_actions(self, model):
+        actions = []
+        for i in range(model.get_n_items()):
+            section = model.get_item_link(i, "section")
+            if section is not None:
+                actions += self.menu_actions(section)
+            else:
+                actions.append(model.get_item_attribute_value(i, "action").get_string())
+        return actions
+
+    def test_receive_games_left_the_primary_menu(self):
         model = self.win.primary_menu_button.get_menu_model()
-        first = model.get_item_link(0, "section")
-        self.assertEqual(first.get_item_attribute_value(0, "label").get_string(), "Receive Games…")
-        self.assertEqual(first.get_item_attribute_value(0, "action").get_string(), "win.receive-games")
+        self.assertNotIn("win.receive-games", self.menu_actions(model))
+
+    def test_the_import_button_offers_import_and_receive(self):
+        model = self.win.import_btn.get_menu_model()
+        self.assertEqual(self.menu_actions(model), ["win.import", "win.receive-games"])
+        self.assertEqual(
+            [model.get_item_attribute_value(i, "label").get_string() for i in range(2)],
+            ["Import ROMs…", "Receive Games…"],
+        )
         coordinator = mock.Mock()
         self.win._share_coordinator = coordinator
         self.win.activate_action("win.receive-games", None)
@@ -84,8 +106,8 @@ class EntryPointTests(WindowCase):
         ]
 
     def test_the_console_menu_shares_the_whole_console(self):
-        entries = {label: action for label, action, _icon in self.sidebar_entries("SFC")}
-        self.assertEqual(entries["Share All Games Nearby…"], "sidebar.share")
+        entries = {label: (action, icon) for label, action, icon in self.sidebar_entries("SFC")}
+        self.assertEqual(entries["Share All Games Nearby…"], ("sidebar.share", SHARE_ICON))
         with mock.patch.object(self.win, "share_roms") as share:
             self.win.sidebar._act_share(None, None)
         self.assertEqual([r["name"] for r in share.call_args.args[0]], ["Chrono Trigger", "Super Metroid"])
