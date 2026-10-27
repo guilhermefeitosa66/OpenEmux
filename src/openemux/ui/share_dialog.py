@@ -35,6 +35,7 @@ from openemux.core.share.selection import (
     STATES,
     apply_selection,
     inventory,
+    kept_roms,
     summarize,
 )
 from openemux.core.systems import get_system_display_name
@@ -76,6 +77,7 @@ class ShareDialog(Adw.Dialog):
         self.mode = "send" if self.roms else "receive"
         self.built = None
         self.unchecked = set()
+        self._selection_cache = None
         self.transfer = None
         self.peer = None
         self.games_sent = 0
@@ -281,7 +283,12 @@ class ShareDialog(Adw.Dialog):
         self._update_summary()
 
     def _selection(self):
-        return apply_selection(self.built, self.unchecked)
+        # Every toggle and every peer change asks; the copy is of the whole
+        # manifest, so it is made once per choice the user makes.
+        key = (id(self.built), frozenset(self.unchecked))
+        if self._selection_cache is None or self._selection_cache[0] != key:
+            self._selection_cache = (key, apply_selection(self.built, self.unchecked))
+        return self._selection_cache[1]
 
     def _update_summary(self):
         t = self.t
@@ -525,7 +532,8 @@ class ShareDialog(Adw.Dialog):
         self.waiting = WaitingPage(self.t, peer.name, self._cancel)
         self.nav.replace([self.waiting.page])
         self.set_can_close(False)
-        self.transfer = self.coordinator.send(peer, self.roms, set(self.unchecked), self)
+        roms = kept_roms(self.built, self.roms, self.unchecked)
+        self.transfer = self.coordinator.send(peer, roms, set(self.unchecked), self)
 
     def _cancel(self):
         if self.transfer is not None:

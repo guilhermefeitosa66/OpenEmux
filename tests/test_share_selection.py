@@ -72,6 +72,14 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual([g["title"] for g in picked.manifest["games"]], ["Bare"])
         self.assertEqual(selection.summarize(selection.apply_selection(built, set()))["games"], 2)
 
+    def test_kept_roms_drops_the_unchecked_games_and_the_excluded(self):
+        roms = [self.odd, self.full, self.bare]
+        built = self.build(roms)
+        self.assertEqual(selection.kept_roms(built, roms, set()), [self.full, self.bare])
+        self.assertEqual(selection.kept_roms(built, roms, {(self.full["path"], "game")}), [self.bare])
+        # A group unchecked keeps its game: apply_selection drops the group.
+        self.assertEqual(selection.kept_roms(built, roms, {(self.bare["path"], "states")}), [self.full, self.bare])
+
 
 if __name__ == "__main__":
     unittest.main()

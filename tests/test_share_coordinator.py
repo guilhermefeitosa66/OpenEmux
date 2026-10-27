@@ -108,6 +108,24 @@ class VisibilityTests(WindowCase):
         stop(*stop_args)
         self.assertEqual(self.service.calls, ["start", "stop"])
 
+    def test_a_stop_queued_by_the_grace_skips_a_service_reopened_meanwhile(self):
+        queued = []
+        share = install(self, run_async=lambda func, *args: queued.append((func, args)))
+        screen = _Screen()
+        share.open_screen(screen)
+        func, args = queued.pop(0)
+        func(*args)
+        share.close_screen(screen)
+        self.timers.fire(GRACE_SECONDS)
+        stop, stop_args = queued.pop(0)
+        # Reopened before the stop thread ran: the stop must leave it running.
+        share.open_screen(screen)
+        stop(*stop_args)
+        self.assertEqual(self.service.calls, ["start"])
+        start, start_args = queued.pop(0)
+        start(*start_args)
+        self.assertEqual(share.state, STATE_RUNNING)
+
     def test_a_failed_start_is_reported(self):
         self.service.start_error = ShareError(ErrorCode.INTERNAL, "port")
         screen = _Screen()
@@ -302,6 +320,19 @@ class SendTests(WindowCase):
         self.assertIsNone(self.service.sent)
         self.assertEqual(self.listener.done[0]["status"], ErrorCode.CANCELLED)
 
+    def test_a_cancel_while_the_send_starts_reaches_the_core_transfer(self):
+        real_send = self.service.send
+        holder = {}
+
+        def send(peer, built, **callbacks):
+            holder["transfer"].cancel()
+            return real_send(peer, built, **callbacks)
+
+        with mock.patch.object(self.service, "send", send):
+            holder["transfer"] = transfer = coordinator_module._Outgoing(self.share, peer(), self.listener)
+            self.share._send_worker(transfer, [self.rom()], set())
+        self.assertEqual(self.service.outgoing.cancelled, 1)
+
     def test_a_failed_send_ends_with_its_code(self):
         self.service.send_error = ShareError(ErrorCode.UNAVAILABLE, "stopped")
         self.share.send(peer(), [self.rom()], set(), self.listener)
@@ -359,6 +390,19 @@ class ReceiveTests(WindowCase):
                 mock.patch.object(self.win, "get_application", return_value=None):
             self.service.on_offer(self.offer)
             self.share.offer_closed(self.share.offer_dialog)
+
+    def test_an_open_offer_holds_the_service_through_the_grace(self):
+        for screen in list(self.share._screens):
+            self.share.close_screen(screen)
+        self.assertTrue(self.timers.has(GRACE_SECONDS))
+        self.service.on_offer(self.offer)
+        self.assertFalse(self.timers.has(GRACE_SECONDS))
+        self.share._maybe_start_grace()
+        self.assertFalse(self.timers.has(GRACE_SECONDS))
+        self.share._grace_over()
+        self.assertNotIn("stop", self.service.calls)
+        self.share.offer_closed(self.share.offer_dialog)
+        self.assertTrue(self.timers.has(GRACE_SECONDS))
 
     def test_an_offer_while_busy_is_declined(self):
         self.share.transfer = object()

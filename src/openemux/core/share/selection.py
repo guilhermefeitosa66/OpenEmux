@@ -112,6 +112,23 @@ def apply_selection(built, unchecked):
     return BuiltManifest(manifest, sources, list(built.excluded))
 
 
+def kept_roms(built, roms, unchecked):
+    """The ``roms`` whose game ``unchecked`` leaves in, for the real send.
+
+    ``built`` is the inventory made from ``roms``: its games follow ``roms``
+    in order, less the excluded ones. Building the real manifest from these
+    alone hashes nothing the user left out, and a game the inventory
+    excluded stays out.
+    """
+    left_out = {id(entry["rom"]) for entry in built.excluded}
+    included = [rom for rom in roms if id(rom) not in left_out]
+    unchecked = set(unchecked)
+    return [
+        rom for rom, game in zip(included, built.manifest["games"])
+        if (game_key(built, game), GAME) not in unchecked
+    ]
+
+
 def summarize(built):
     """``{titles, games, files, size}`` of what ``built`` would send."""
     manifest = built.manifest

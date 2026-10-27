@@ -69,6 +69,9 @@ class ShareCoordinator:
         self.source_remove = source_remove
         self.clock = clock
         self._run_async = run_async
+        #: Serializes ``service.start``/``stop``: a stop queued by the grace
+        #: period must not land after a start a reopened screen asked for.
+        self._lifecycle = threading.Lock()
         self._client_factory = client_factory
         self._addresses = addresses
         self.state = STATE_STOPPED
@@ -125,7 +128,8 @@ class ShareCoordinator:
 
     def _start_worker(self):
         try:
-            self.service.start()
+            with self._lifecycle:
+                self.service.start()
         except Exception as exc:
             logger.warning("share: could not start: %s", exc)
             code = exc.code if isinstance(exc, ShareError) else ErrorCode.INTERNAL
@@ -146,7 +150,7 @@ class ShareCoordinator:
         self._notify("on_peers_changed")
 
     def _maybe_start_grace(self):
-        if self._screens or self.busy or self._grace is not None:
+        if self._screens or self.busy or self.offer_dialog is not None or self._grace is not None:
             return
         if self.state in (STATE_STOPPED, STATE_FAILED):
             return
@@ -167,10 +171,16 @@ class ShareCoordinator:
         return False
 
     def _grace_over(self):
-        if self._screens or self.busy:
+        if self._screens or self.busy or self.offer_dialog is not None:
             return
         self.state = STATE_STOPPED
-        self._run_async(self.service.stop)
+        self._run_async(self._stop_worker)
+
+    def _stop_worker(self):
+        with self._lifecycle:
+            # A screen that opened since asked for a start: leave it running.
+            if self.state == STATE_STOPPED:
+                self.service.stop()
 
     def shutdown(self):
         """The app is quitting: stop listening now, and end any transfer."""
@@ -297,6 +307,10 @@ class ShareCoordinator:
                 on_progress=lambda progress: self._dispatch(transfer.progress, progress),
                 on_done=lambda result: self._dispatch(self._send_done, transfer, result),
             )
+            if transfer.cancelled.is_set():
+                # Cancelled while the send was starting, when there was no
+                # core transfer yet for cancel() to reach.
+                transfer.core.cancel()
         except ShareError as exc:
             status = exc.code if exc.code == ErrorCode.CANCELLED else "failed"
             result = {"status": status, "sent": [], "skipped": [], "error": exc.code}
@@ -334,6 +348,8 @@ class ShareCoordinator:
             self.decline(offer.offer_id)
             return
         from openemux.ui.share_offer import IncomingOfferDialog
+        # The grace period must not stop the service under an open offer.
+        self._cancel_grace()
         self.offer_dialog = IncomingOfferDialog(self, offer)
         self.offer_dialog.present(self.win)
         if not self.win.is_active():
