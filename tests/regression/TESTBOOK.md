@@ -5417,12 +5417,11 @@ real RetroAchievements account say so; without one they are handed to the mainta
 
 The Android app's shelf (open-emux-mobile, `pkg/android/openemux`, `ShelfScreen`/`ShelfCard` in
 `ui/LibraryScreens.kt`) laid out as a grid whose column count follows the shelf's own width, with
-the console icon on each card (#539). The runner has no Android device, so these are `MANUAL`: a
+the console icon on each card (#539), made the card's hero in issue 609. The runner has no Android device, so these are `MANUAL`: a
 person runs them on a phone or a headless emulator with `adb`. A headless emulator that ignores
 rotation can stand in for landscape with `adb shell wm density 260` (a wider screen in dp; `wm
 density reset` afterwards). The library needs at least five consoles, one of them with box art or
-no cartridge frame (e.g. PlayStation or PC Engine), two favourite games, and each console with
-three or more games played in a known order.
+no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 
 ### RT-470 — Portrait shows one card per row with the console icon
 - **Area:** Android — Shelf
@@ -5430,10 +5429,11 @@ three or more games played in a known order.
 - **Preconditions:** The library above; phone in portrait, dark theme.
 - **Steps:**
   1. Open the "Library" tab (the shelf).
-- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon on a
-  soft square tile (a star for "Favorites"), the short tag ("NES", "SNES"), the console name (two
-  lines at most, then "…"), "N games", and up to three cartridges fanned at the right end. No text
-  runs under the cartridges. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
+- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon (a
+  star for "Favorites"), large (about two thirds of the card's height) and sitting straight on the
+  card's own colour: no lighter or darker square behind it, no border, no shadow. Beside it the
+  short tag ("NES", "SNES"), the console name (two lines at most, then "…") and "N games". No
+  cartridges on any card. Nothing overlaps. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
   looks as before.
 - **Check:** human only (`adb exec-out screencap -p > shelf-portrait.png`).
 
@@ -5445,20 +5445,10 @@ three or more games played in a known order.
   1. Rotate the phone to landscape.
   2. Scroll to the end and back.
 - **Expected:** Two cards per row, "Favorites" first (top left), the order unchanged (left to
-  right, then down). Inside a card the fan sits right after the text, without a large empty gap.
-  With an odd number of shelves the last card is on the left, as wide as the others. The scroll
+  right, then down). The icon is the same size as in portrait, still on the card's own colour, and
+  the name fits or ends in "…" on its second line. With an odd number of shelves the last card is on the left, as wide as the others. The scroll
   position and the order are kept across the rotation.
 - **Check:** human only (a screenshot in each orientation).
-
-### RT-472 — The fan shows the three most recently played games
-- **Area:** Android — Shelf
-- **Mode:** MANUAL
-- **Preconditions:** A console with at least four games.
-- **Steps:**
-  1. Play a game of that console that is not in its fan, then go back to the shelf.
-- **Expected:** That game is the front-most cartridge of the console's fan; the oldest of the
-  previous three leaves the fan.
-- **Check:** human only.
 
 ### RT-473 — The gamepad moves across both columns and focus comes back
 - **Area:** Android — Shelf
@@ -5499,9 +5489,11 @@ three or more games played in a known order.
   2. Look at the card of the console with box art or no cartridge frame.
   3. `adb shell wm size 720x1280 && adb shell wm density 360` (a ~320dp-wide phone); open the shelf
      in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
-- **Expected:** Pastel cards with dark text, the icon tile visible on every colour. Box art shows
-  the covers in the fan, inside the card. On the small phone the cards are compact (a small icon
-  beside the tag, the name below); in landscape a card is never narrower than 250dp, so the shelf
+- **Expected:** Pastel cards with dark text; every icon is readable straight on its card's colour,
+  with no tile colour behind it. The box-art console's card looks like the others (icon, tag, name,
+  count; no covers). On the small phone the icon keeps its portrait size and the long names
+  ("Nintendo (NES) / Famicom", "Sega Genesis / Mega Drive") end in "…" on their second line at
+  worst; in landscape a card is never narrower than 250dp, so the shelf
   keeps one card per row when two would not fit beside the side rail. Nothing is clipped.
 - **Check:** human only.
 
@@ -6608,7 +6600,8 @@ at least once and a few games imported recently. Every scenario ends with
   "Search all consoles" and the purple "Import ROMs" button on the right. "Continue playing" shows
   the three last played games (newest first) with "See recent" on the right; tapping a card resumes
   that game. "Consoles" has "Long press to reorder" on the right, then the console cards in 3
-  columns, each with its icon, tag, name, count and cartridges; the last cell is a dashed "Import
+  columns, each with a large console icon (larger than on a phone) straight on the card's colour,
+  then tag, name and count, and no cartridges; the last cell is a dashed "Import
   more games" card. "powered by RetroArch" closes the page. Search opens the search page; "Import
   ROMs" and "Import more games" open "Import"; "See recent" opens "Recent". Nothing is cut off,
   including the button's label.
@@ -6624,7 +6617,8 @@ at least once and a few games imported recently. Every scenario ends with
   2. Tap a game under "Recently added"; go back; tap "See all".
   3. Repeat step 1 at 1488×2266 (744×1133dp) and at 1600×1700 (800×850dp).
 - **Expected:** At 800×1280 and 744×1133: a round search button next to "Import ROMs", two games
-  under "Continue playing", console cards in 2 columns with "Import more games" last, then
+  under "Continue playing", console cards in 2 columns (the same large icon on the card's colour as
+  in RT-423, no cartridges) with "Import more games" last, then
   "Recently added" with the four newest imported games and their titles, and "See all" on the right.
   The game opens its page; "See all" opens "All games". At 800×850 (not tall enough) the
   "Recently added" row is not shown. With no game played yet, "Continue playing" is not shown.
@@ -8494,3 +8488,8 @@ the date.
 - **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
   draws itself. The game window, and its Windows-specific "unavailable" reason, are gone. The bar
   is drawn by RetroArch on every platform.
+
+### RT-472 — The fan shows the three most recently played games
+- **Retired:** 2026-10-27 (issue 609).
+- **Reason:** The Android shelf card no longer shows a fan of cartridges: the console icon is the
+  card's hero instead. The recently played games are still one tap away, in the console's game list.
