@@ -6510,6 +6510,117 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`,
   RetroAchievements hardcore as it was.
 
+## Android — Window size changes in game
+
+The game skin redrawn when the game's window changes size during play (#562): a Fold unfolded or
+folded, split screen, a free-form window resized. The app draws the skin for the new window and
+swaps it in with the engine's `OVERLAY_LOAD` command; the core keeps running. The runner has no
+Android device, so these are `MANUAL`, on headless emulators (`emulator -avd <avd> -no-window`)
+with `adb`: a **Pixel Fold** AVD (`adb emu fold` / `adb emu unfold`) and a **Resizable** AVD
+(split screen from the recents screen, free form with
+`adb shell settings put global enable_freeform_support 1` and
+`adb shell am start --windowingMode 5 ...`). The reload is logged by the engine:
+`adb logcat -s RetroArch:* OpenEmuxSkin:*`. The skins live under the app's
+`files/launch/current/` directory (`adb shell run-as com.openemux.mobile ls files/launch/current`
+on a debug build). The twelve consoles with a bundled skin package (Game Boy Advance and Nintendo
+DS among them) are redrawn from that package; the other consoles from the drawn skin.
+
+### RT-450 — Unfolding a Fold during a game redraws the skin for the inner screen
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a Pixel Fold AVD, folded (`adb emu fold`), first-run
+  setup done, a Game Boy Advance game in the library.
+- **Steps:**
+  1. Start the GBA game and play for a few seconds, noting where the game is.
+  2. Run `adb emu unfold`.
+- **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
+  bundled package skin (not the drawn one), now in its tablet art since the inner screen is 600dp
+  or more across, its buttons round, not stretched, and the picture well placed. The game goes on
+  from the same point (no restart, no state loaded) and the touch controls respond.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
+  one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
+
+### RT-451 — Folding again brings the phone-shaped skin back
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, after its steps (game running, unfolded).
+- **Steps:**
+  1. Run `adb emu fold`.
+- **Expected:** The phone-shaped bundled skin comes back with correct proportions and the game
+  continues where it was.
+- **Check:** human only (a screenshot after the fold).
+
+### RT-452 — The NDS screens and the touch screen survive a redraw
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a Nintendo DS game on the DeSmuME core (its bundled package
+  skin, which draws the two screens one over the other).
+- **Steps:**
+  1. Start the NDS game.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+  3. Tap the lower screen.
+- **Expected:** After each redraw the bundled skin is still shown, the two screens stay one over the
+  other inside its screen cut-outs, and tapping the lower screen reaches the game's touch screen.
+- **Check:** human only (a screenshot after each step).
+
+### RT-453 — Split screen gets a skin in proportion, without flicker while dragging
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a Resizable AVD, a GBA game in the library.
+- **Steps:**
+  1. Start the game, then put it in split screen with another app from the recents screen.
+  2. Drag the divider slowly to a new position and let go.
+- **Expected:** Once the drag settles the skin is redrawn for the half-screen window with correct
+  proportions. It does not flicker or reload repeatedly during the drag. If the other app has the
+  focus, the redraw waits until the game window is tapped (an unfocused game takes no commands).
+- **Check:** human only (a screenshot after each step; the logcat shows one `OVERLAY_LOAD` per
+  settled size, not one per frame of the drag).
+
+### RT-454 — A free-form window gets its own skin, from the start and after a resize
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-453, with free form on
+  (`adb shell settings put global enable_freeform_support 1`, then a reboot of the AVD).
+- **Steps:**
+  1. Open the app in a free-form window
+     (`adb shell am start --windowingMode 5 -n com.openemux.mobile/.MainActivity`) and start the
+     game from there.
+  2. Resize the window from its corner, twice.
+- **Expected:** Within about a second of starting, the game in the small window shows a correctly
+  proportioned skin. After each resize the skin is redrawn to fit, the game running on.
+- **Check:** human only (a screenshot after each step).
+
+### RT-455 — Rotation alone does not reload the skin, and old skins are removed
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a phone-size AVD, a GBA game in the library.
+- **Steps:**
+  1. Start the game and rotate the phone to landscape and back
+     (`adb shell settings put system user_rotation 1`, then `0`).
+  2. After running RT-450 to RT-454 (on their own AVDs), list the launch directory on each of
+     them (`adb shell run-as com.openemux.mobile ls files/launch/current`).
+- **Expected:** Rotating switches between the portrait and landscape skin as before, and the
+  logcat shows no `OVERLAY_LOAD`. After the size changes only one `skin*` directory is left in the
+  launch directory.
+- **Check:** human only (the logcat during the rotation, and the directory listing).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-490 — A console with the drawn skin is redrawn with the drawn skin
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+  skin package).
+- **Steps:**
+  1. Start the PC Engine game, folded.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+- **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
+  skin package: on the inner screen, in landscape, its tablet shape (the picture between two side
+  columns of controls, the strip under it), on the outer screen the phone shape again. The game
+  runs on from the same point.
+- **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
+  fold or unfold).
+
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
