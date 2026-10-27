@@ -6631,7 +6631,7 @@ phone or a headless emulator with `adb`. The package is `com.openemux.mobile`; R
 frame-by-frame look at a start is `adb shell screenrecord /sdcard/start.mp4` running while the app
 opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 
-### RT-477 — A cold start with a library opens straight on the shelf
+### RT-498 — A cold start with a library opens straight on the shelf
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, 3 Game Boy Advance and 2 Super
@@ -6648,19 +6648,19 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   buttons.
 - **Check:** human only (step through each recording frame by frame).
 
-### RT-478 — The shelf survives a process kill and a reboot
+### RT-499 — The shelf survives a process kill and a reboot
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
-- **Preconditions:** As RT-477.
+- **Preconditions:** As RT-498.
 - **Steps:**
   1. Open the app, press Home, then `adb shell am kill com.openemux.mobile`.
   2. Reopen the app from the recent apps.
   3. `adb reboot`, wait for the device to finish booting, open the app.
 - **Expected:** After steps 2 and 3 the app opens on the console shelf with the real counts, as in
-  RT-477; the empty state never appears.
+  RT-498; the empty state never appears.
 - **Check:** human only (a recording of each start).
 
-### RT-479 — A fresh install still shows the empty shelf
+### RT-500 — A fresh install still shows the empty shelf
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
 - **Preconditions:** The Android app not installed.
@@ -6670,35 +6670,37 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   and stays.
 - **Check:** human only (a screenshot).
 
-### RT-480 — Removing every game shows the empty shelf on the next start
+### RT-501 — Removing every game shows the empty shelf on the next start
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
-- **Preconditions:** As RT-477.
+- **Preconditions:** As RT-498.
 - **Steps:**
-  1. Remove every game from inside the app: on each game's detail page, "Remove from library".
+  1. Remove every game from inside the app: on each game's detail page, "Remove from library", then
+     "Remove" in the "Remove <title>?" dialog.
   2. `adb shell am force-stop com.openemux.mobile`, then open the app.
 - **Expected:** The app opens on "Your shelf is empty" with "Import ROMs". The header shows
   "0 consoles · 0 games" only together with that empty state.
 - **Check:** human only (a screenshot).
 
-### RT-481 — Games added or removed while the app was closed update the shelf without flicker
+### RT-502 — Games added or removed while the app was closed update the shelf without flicker
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
-- **Preconditions:** As RT-477.
+- **Preconditions:** As RT-498.
 - **Steps:**
   1. `adb shell am force-stop com.openemux.mobile`.
   2. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/` and
-     `adb shell rm` one of the Game Boy Advance ROMs in `files/roms/GBA/`.
+     `adb shell rm "/sdcard/Android/data/com.openemux.mobile/files/roms/GBA/<one of the .gba ROMs>"`.
   3. Start recording the screen and open the app.
-- **Expected:** The previous shelf appears at once. Within a moment a Nintendo shelf appears and the
-  Game Boy Advance shelf counts one game less. No frame shows the empty state or a blank list in
+- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES) / Famicom" shelf
+  appears, the "Game Boy Advance" shelf counts one game less and the header reads
+  "3 consoles · 5 games". No frame shows the empty state or a blank list in
   between.
 - **Check:** human only (step through the recording).
 
-### RT-482 — "Recent" and a console's library do not flash their empty states
+### RT-503 — "Recent" and a console's library do not flash their empty states
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
-- **Preconditions:** As RT-477, with one game played.
+- **Preconditions:** As RT-498, with one game played.
 - **Steps:**
   1. Leave the app on "Recent", press Home, `adb shell am kill com.openemux.mobile`, reopen it from
      the recent apps while recording.
@@ -6706,6 +6708,38 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 - **Expected:** "Recent" opens with the played game and never shows its "Nothing played yet" empty
   state; the console library opens with its games and never shows "No games here yet.".
 - **Check:** human only (step through each recording).
+
+### RT-504 — A restore over a library opens on the restored games, not the old ones
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498, and an archive of that library exported as in RT-416 ("Include ROMs"
+  on).
+- **Steps:**
+  1. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/`, open the app
+     and wait for the "Nintendo (NES) / Famicom" shelf.
+  2. Settings → "Back up and restore" → "Import data", pick the archive, tap "Replace and restore".
+  3. Start recording the screen; let the app restart and finish the first-run setup.
+- **Expected:** After the setup the shelf shows "Game Boy Advance" and "Super Nintendo" with
+  "2 consoles · 5 games". The "Nintendo (NES) / Famicom" shelf and "3 consoles · 6 games", the
+  library from before the restore, never appear, not even for a frame.
+- **Check:** human only (step through the recording), plus
+  `adb shell run-as com.openemux.mobile cat files/library.index` lists the 5 restored ROMs and no
+  `FC/` line.
+
+### RT-505 — With no saved index the shelf waits for the scan instead of showing it empty
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498, with the debug APK (`run-as` needs it).
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`, then
+     `adb shell run-as com.openemux.mobile rm files/library.index` (the state of the first start
+     after updating from a build without the index).
+  2. Start recording the screen and open the app.
+- **Expected:** Until the scan ends the "Shelf" title shows no count under it and neither "Your
+  shelf is empty" nor "Import ROMs" appears; then the shelf shows with "2 consoles · 5 games". No
+  frame reads "0 consoles · 0 games". Afterwards `files/library.index` exists again.
+- **Check:** human only (step through the recording), plus
+  `adb shell run-as com.openemux.mobile ls files/library.index` succeeds.
 
 ## Developer tooling & docs
 
