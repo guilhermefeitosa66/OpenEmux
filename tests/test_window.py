@@ -1972,14 +1972,20 @@ class TheDialogsAndMenusTests(WindowCase):
         with mock.patch.object(Gtk.ShortcutsWindow, "present"):
             self.win._show_shortcuts()
 
-    def test_the_primary_menu_offers_the_five_entries(self):
+    def app_section(self):
+        # Two sections since Share nearby (issue #589): "Receive Games…" on
+        # its own first, then the five entries about the app.
         model = self.win.primary_menu_button.get_menu_model()
-        self.assertEqual(model.get_n_items(), 5)
+        self.assertEqual(model.get_n_items(), 2)
+        return model.get_item_link(1, "section")
+
+    def test_the_primary_menu_offers_the_five_entries(self):
+        self.assertEqual(self.app_section().get_n_items(), 5)
 
     def test_report_a_bug_sits_before_about(self):
         # Where GNOME apps keep it, and reachable without opening Settings
         # (issue #461).
-        model = self.win.primary_menu_button.get_menu_model()
+        model = self.app_section()
         actions = [
             model.get_item_attribute_value(i, "action", None).get_string()
             for i in range(model.get_n_items())
