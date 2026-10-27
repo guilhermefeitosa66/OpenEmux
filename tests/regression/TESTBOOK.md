@@ -7005,6 +7005,171 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 - **Check:** human only (step through the recording), plus
   `adb shell run-as com.openemux.mobile ls files/library.index` succeeds.
 
+## Android — Tablet list + detail
+
+On a tablet the Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+`pkg/android/openemux`) shows Settings and the library as a list with the picked item's detail
+beside it, and a game's detail in two columns (#558). `MANUAL`, with the setup of "Android —
+Responsive layout": a headless emulator and `adb shell wm size` / `wm density` (dp = px × 160 / dpi).
+The windows used: 10" landscape `2560x1600` at 320 dpi (1280×800dp), 10" portrait `1600x2560` at 320
+(800×1280dp), 8" portrait `1488x2266` at 320 (744×1133dp), 7" portrait `1200x1800` at 320
+(600×900dp), a wide window beside the pane `1760x1200` at 320 (880×600dp), a phone `1080x2400` at 420
+(411×914dp). Every scenario ends with `adb shell wm size reset` and `adb shell wm density reset`. The library needs
+at least two consoles, one with cartridge frames (e.g. Game Boy Advance), and a game with saved states.
+
+### RT-477 — Settings shows its list beside the picked item on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, the "Settings" tab open.
+- **Steps:**
+  1. Look at the screen before picking anything.
+  2. Tap "Game Boy Advance" in "Consoles".
+  3. Tap "BIOS" (the banner), then "Achievements", then "Back up and restore", then "About and licenses".
+  4. Repeat at 10" portrait and 8" portrait.
+  5. At 7" portrait, tap "Game Boy Advance", press Back, then tap "Theme".
+- **Expected:** The settings list (400dp landscape, 320dp portrait) sits on the left; the right side
+  says "Choose a setting on the left" until something is picked. Each pick shows its page on the
+  right ("CONSOLE DEFAULTS" with the console's cores and shaders, the BIOS list, the RetroAchievements
+  sign-in, "Back up and restore" with its export and import buttons and no back link, About) and highlights its row on the left; nothing opens a screen of its own. Nothing is
+  clipped at any of the three sizes. At 7" portrait there is no split, since the detail would get
+  only about 260dp: Settings is one list, "Game Boy Advance" opens its own readable page, Back returns
+  to the list and "Theme" opens as a sheet, as on a phone.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per step).
+
+### RT-478 — Theme and Language open in the pane on a tablet and as a sheet on a phone
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Tap "Theme": three cards (System, Light, Dark) appear on the right. Tap "Light", then "Dark".
+  2. Tap "Language".
+  3. At the phone size, tap "Theme" and "Language".
+- **Expected:** On the tablet, Theme and Language show in the pane; the theme applies at once, with
+  no restart. On the phone they open as today's bottom sheets.
+- **Check:** human only.
+
+### RT-479 — About and licenses: a license text opens in the pane and steps back to About
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477, "About and licenses" picked.
+- **Steps:**
+  1. Scroll the pane down to "Licenses": the licenses are cards in two columns.
+  2. Tap "OpenEmux Mobile".
+  3. Tap the back link "About and licenses"; open the license again and press Back.
+- **Expected:** The license text replaces About in the pane; both its back link and Back return to
+  About in the pane, not out of Settings.
+- **Check:** human only.
+
+### RT-480 — Back clears the pick first, then leaves
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477, "Game Boy Advance" picked.
+- **Steps:**
+  1. Press Back (`adb shell input keyevent KEYCODE_BACK`).
+  2. Press Back again.
+- **Expected:** The first Back clears the pick (the pane says "Choose a setting on the left"); the
+  second one leaves Settings as on a phone. The same holds in the library pane (RT-482).
+- **Check:** human only.
+
+### RT-481 — A resize keeps the picked item, as a pane or as its own screen
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Pick "Game Boy Advance", then resize to the phone size.
+  2. Press Back, open "Game Boy Advance" again, and resize back to 10" landscape.
+  3. Pick "Theme" and resize to the phone size.
+  4. With the Theme sheet still open, resize back to 10" landscape. Repeat 3 and 4 with
+     "Language".
+  5. In the library at 10" landscape, tap a game, then resize to 8" portrait; open a game there
+     and resize back to 10" landscape.
+- **Expected:** 1: the Game Boy Advance console screen is open on its own; Back returns to the
+  Settings list. 2: Settings comes back split with Game Boy Advance picked. 3: the Theme sheet is
+  open. 4: the sheet closes and Settings comes back split with Theme (then Language) picked in the
+  pane; no sheet is left over the split. 5: the game's own detail screen opens, and back on
+  landscape the library shows it in its pane. No screen bounces back and forth.
+- **Check:** human only.
+
+### RT-482 — The library shows the picked game beside it on a wide tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, a console's library open, in each of the three view modes.
+- **Steps:**
+  1. Look at the right side, then tap a game.
+  2. Tap the same game again; press Back.
+  3. Tap another game, then its "Open full screen" button.
+  4. In the pane, tap "Continue" (or "Play").
+- **Expected:** A 440dp pane on the right says "Select a game to see it here" until a game is
+  tapped; then it shows the cartridge, title, "Continue"/"Restart", the three newest saved states
+  and the per-game rows. The picked game has an accent ring in the grid or list. A second tap and
+  "Open full screen" open the game's two-column detail; Back returns to the library with the same
+  game picked. "Continue" launches the game. At 8" portrait there is no pane: a tap opens the detail.
+- **Check:** human only.
+
+### RT-483 — The list view is a table of time played and last played on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 8" portrait and 10" portrait, the library in the list view, one game never
+  played.
+- **Steps:**
+  1. Look at the list.
+  2. With TalkBack on, focus a row.
+  3. Repeat at the phone size.
+  4. At 880×600dp, tap a game so the pane opens beside the list; then at 10" landscape.
+- **Expected:** A header "GAME · TIME · LAST PLAYED" above rows of art, title and file name, time
+  played, how long ago it was last played and the favourite star; the never-played game reads "never
+  played" with no date. TalkBack reads one sentence per row (title, time played, last played) and
+  skips the header. The phone keeps today's rows. At 880×600dp, the list beside the 440dp pane is too
+  narrow for the table: it shows today's rows, each with the game's title and console, and no header.
+  At 10" landscape the table is back beside the pane, with the titles readable.
+- **Check:** human only.
+
+### RT-484 — The game's detail is two columns on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape and 8" portrait, the detail of a Game Boy Advance game with
+  saved states.
+- **Steps:**
+  1. Look at both columns.
+  2. Tap a cartridge colour; tap "Core" and "Shader".
+- **Expected:** Left: the console name as back link, the cartridge and the "Cartridge color" card.
+  Right: "GBA · <core>", the title, time played and last played, favourite and more buttons,
+  "Continue"/"Restart", up to four saved states in a row, "Settings for this game" with Core,
+  Shader, Controller skin and Cheats, and the file's name, size and folder at the foot. The colour
+  changes the cartridge; Core and Shader open their sheets. The phone keeps today's single column.
+- **Check:** human only.
+
+### RT-485 — The gamepad moves between the list and its detail
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, a gamepad (or `adb shell input keyevent` with `KEYCODE_DPAD_*`,
+  `KEYCODE_BUTTON_A/B/X/Y/L1/R1`).
+- **Steps:**
+  1. Library: move to a game, press A; press A again on another game, then D-pad Right until focus
+     enters the pane; press X and Y; press D-pad Down a few times inside the pane; press B.
+  2. Press Left from the pane's first column instead of B.
+  3. Press L1 and R1.
+  4. Settings: walk down the list to a console far from the top ("Game Boy Color"), pick it with
+     A, D-pad Right into the pane, then B, B, B.
+- **Expected:** A picks the game and focus stays in the list; a second A on the picked game opens it
+  full screen. In the pane the hint bar reads "Play · Favorite · Menu · List"; X favourites and Y
+  opens the menu of the picked game. B or Left returns focus to the same list item (never to the
+  "Shelf" link at the top). L1/R1 still switch the console chips. In Settings: B from the pane
+  focuses the same "Game Boy Color" row, still in view (not "Language" at the top), the next B
+  clears the pick, the last one leaves Settings.
+- **Check:** human only.
+
+### RT-486 — The saved states sheet fits its states
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** A game with one saved state, and one with six or more.
+- **Steps:**
+  1. On the phone size, open each game's detail and tap "See all".
+  2. Repeat at 10" landscape.
+- **Expected:** The sheet is as tall as its states, with no empty gap under one state, and scrolls
+  when they do not fit; the cells widen to fill the row (two on a phone, more on a tablet).
+- **Check:** human only.
+
 ## Developer tooling & docs
 
 The machinery a contributor uses rather than the app itself: the development box the `AUTO-UI`
