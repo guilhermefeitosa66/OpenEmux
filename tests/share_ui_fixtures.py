@@ -194,8 +194,8 @@ def install(case, **kwargs):
 
 
 def texts(widget):
-    """Every label, row title and row subtitle under ``widget``, in order."""
-    from gi.repository import Adw, Gtk
+    """Every label under ``widget`` (row titles and subtitles included), in order."""
+    from gi.repository import Gtk
 
     found = []
 
