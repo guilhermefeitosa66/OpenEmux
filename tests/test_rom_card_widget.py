@@ -97,6 +97,11 @@ class WhatACardShowsTests(_CardCase):
         )
         gesture.set_state.assert_called_once_with(Gtk.EventSequenceState.CLAIMED)
         self.assertIsNone(context_menu._open_popover)
+        # Kept through the press it claimed, taken off right after.
+        self.assertIs(controller.get_widget(), window)
+        context = rom_card_module.GLib.MainContext.default()
+        while context.pending():
+            context.iteration(False)
         self.assertIsNone(controller.get_widget())
         launch.assert_not_called()
 

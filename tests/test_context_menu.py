@@ -216,13 +216,21 @@ class OutsideClickTests(unittest.TestCase):
         # game it shows is not launched.
         menu, controller = self.open_menu()
         with self.assertLogs("openemux.ui.context_menu", "INFO") as logs:
-            gesture = self.press(self.window.surface)
+            with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
+                gesture = self.press(self.window.surface)
         self.assertEqual(gesture.state, context_menu.Gtk.EventSequenceState.CLAIMED)
         self.assertFalse(menu.shown)
         self.assertIsNone(context_menu._open_popover)
+        self.assertIn("context menu dismissed by a click outside", logs.output[0])
+        # Still on while the press is handled: removing a gesture resets it,
+        # and a reset gesture lets go of the sequence it has just claimed.
+        self.assertIn(controller, self.window.controllers)
+        idle_add.assert_called_once()
+        self.assertEqual(idle_add.call_args.kwargs["priority"], GLib.PRIORITY_HIGH)
+        callback, guard = idle_add.call_args.args
+        self.assertFalse(callback(guard))
         self.assertIsNone(context_menu._outside_guard)
         self.assertNotIn(controller, self.window.controllers)
-        self.assertIn("context menu dismissed by a click outside", logs.output[0])
 
     def test_a_press_inside_the_menu_is_left_alone(self):
         # A row of the menu or of a submenu: a surface of its own, whose events
@@ -264,10 +272,14 @@ class OutsideClickTests(unittest.TestCase):
     def test_the_press_that_closed_the_menu_is_still_claimed(self):
         # GTK popped the menu down on this very press, before propagating it.
         menu, controller = self.open_menu()
-        with mock.patch.object(context_menu.GLib, "idle_add"):
+        with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
             menu.popdown()
-        gesture = self.press(self.window.surface)
+            gesture = self.press(self.window.surface)
         self.assertEqual(gesture.state, context_menu.Gtk.EventSequenceState.CLAIMED)
+        # One removal, already queued by "closed"; the press adds no other.
+        idle_add.assert_called_once()
+        callback, guard = idle_add.call_args.args
+        callback(guard)
         self.assertIsNone(context_menu._outside_guard)
         self.assertNotIn(controller, self.window.controllers)
 
