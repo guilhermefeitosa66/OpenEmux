@@ -108,6 +108,10 @@ class OpenEmuxApplication(Adw.Application):
         runtime = getattr(self.main_window, "runtime_manager", None)
         if runtime is not None and runtime.is_running():
             runtime.stop_active(block=True)
+        # Share nearby stops listening with the app, not 30 s later (#589).
+        share = getattr(self.main_window, "_share_coordinator", None)
+        if share is not None:
+            share.shutdown()
         Adw.Application.do_shutdown(self)
 
     def _on_window_added(self, _application, window):

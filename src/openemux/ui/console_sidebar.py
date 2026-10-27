@@ -21,6 +21,7 @@ from gi.repository import Adw, Gdk, Gio, GObject, Gtk
 
 from openemux.core.library_view import VIEW_MODES, normalize_view_mode
 from openemux.core.shaders import normalize_shader_id
+from openemux.core.share.selection import roms_for_console
 from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
 from openemux.ui.context_menu import (
@@ -462,9 +463,10 @@ class ConsoleSidebar:
             (t("context.rescan.console"), "sidebar.refresh", "view-refresh-symbolic"),
             (t("header.import"), "sidebar.import", "document-open-symbolic"),
             (t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
-            SEPARATOR,
-            self._layout_submenu(console_id),
         ]
+        if roms_for_console(self.win.playlist_manager, console_id):
+            entries.append((t("share.menu.console"), "sidebar.share", "network-wireless-symbolic"))
+        entries += [SEPARATOR, self._layout_submenu(console_id)]
         # Appended one at a time: SEPARATOR *is* None, so a submenu that has
         # nothing to offer would otherwise draw itself as a divider.
         for submenu in (
@@ -694,6 +696,7 @@ class ConsoleSidebar:
             ("refresh", self._act_refresh),
             ("import", self._act_import),
             ("sync-covers", self._act_sync_covers),
+            ("share", self._act_share),
             ("controller", self._act_controller),
             ("open-folder", self._act_open_folder),
             ("move-up", self._act_move_up),
@@ -724,6 +727,11 @@ class ConsoleSidebar:
             self.win._start_cover_sync(scope="all", selected_console=None)
         else:
             self.win._start_cover_sync(scope="console", selected_console=console)
+
+    def _act_share(self, _action, _param):
+        console = self._menu_console
+        logger.info("sidebar context action: share console=%s", console)
+        self.win.share_roms(roms_for_console(self.win.playlist_manager, console))
 
     def _act_controller(self, _action, _param):
         console = self._menu_console
