@@ -7099,6 +7099,105 @@ or into an environment that cannot run the tests.
   ```
 
 
+## Android — Foldables
+
+The Android app on a foldable: the outer screen, the open inner screen and the half-open
+postures (#560). Layouts follow the window size and the fold the window reports, never the device
+model. The runner has no Android device, so these are `MANUAL`: a person runs them on a Pixel Fold
+emulator (`avdmanager create avd -n fold -k "system-images;android-35;google_apis;x86_64" -d
+pixel_fold`, started headless with `-no-window`) with `adb`. The posture is simulated with
+`adb emu fold` / `adb emu unfold` and the hinge angle with `adb emu sensor set hinge-angle0 <deg>`
+(180 = flat, 90 = half open); the fold turns across with
+`adb shell settings put system accelerometer_rotation 0` and
+`adb shell settings put system user_rotation 1`. A debug build logs the fold it sees under the
+tag `OpenEmuxWindow`: `adb logcat -s OpenEmuxWindow` shows `window fold: Fold(...)`, or
+`window fold: null` with no fold. The library needs at least two consoles, one with
+cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every scenario ends with
+`adb emu unfold`, `hinge-angle0 180` and `user_rotation 0`.
+
+### RT-440 — The outer screen of a Fold keeps the phone layout
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed on a Pixel Fold emulator, first-run setup done.
+- **Steps:**
+  1. `adb emu fold`.
+  2. Open "Shelf", a console's library and a game's detail.
+- **Expected:** The same layout as a phone: tabs in the bottom bar, the vertical grid, the detail
+  as one column. Nothing is split and no band is left empty.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per screen, compared with RT-380).
+
+### RT-441 — The open Fold lays out like a tablet with nothing split on the fold
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-440, unfolded flat (`adb emu unfold`, `hinge-angle0 180`).
+- **Steps:**
+  1. Open "Shelf", a console's library and "Settings".
+  2. Read the fold in the log.
+- **Expected:** The log shows a vertical fold that is not half opened. The screens keep the
+  tablet layout of the release: the app does not split a screen that has no list | detail split.
+  Where a list | detail split exists (once #558 lands), its divider lies on the fold.
+- **Check:** human only (a screenshot of each, and the log line).
+
+### RT-442 — Tabletop puts the content on top and the actions and tabs on the bottom half
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-441, then `user_rotation 1` (the fold across) and `hinge-angle0 90`.
+- **Steps:**
+  1. Open "Shelf", then a console's library, then a game.
+  2. On the game, open "Core" from its tile and close the sheet.
+  3. Visit "Recent", "Import" and "Settings".
+- **Expected:** A hairline marks the fold; no text, button or image sits within 12dp of it. The
+  tabs are one row at the bottom (icon and label side by side, the active one in a tinted pill),
+  never a rail or the phone bar. The shelf's "Import ROMs" button is on the bottom half, under
+  "Continue playing" on a shelf wide enough to show that row (the open Fold); in the
+  library the grid fills the top half and the search, sort, view toggle and console chips are on
+  the bottom half. A game shows its cartridge beside the title on top and "Continue"/"Restart"
+  (or "Play"), the saved states, the setting tiles (Core, Shader, Controller skin, Cheats) and the
+  cartridge colours below the fold; a tile opens the same sheet as on a phone. "Recent", "Import"
+  and "Settings" keep their content on top only.
+- **Check:** human only (a screenshot of each, in the dark and in the light theme).
+
+### RT-443 — Leaving a screen in tabletop takes its bottom half with it
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-442, in tabletop, a console's library open.
+- **Steps:**
+  1. Open a game, go back, go back to "Shelf", open "Settings".
+- **Expected:** The bottom half always shows the controls of the screen on top: the game's
+  actions on the game, the chips back on the library, "Import ROMs" on the shelf, nothing but the
+  tabs on "Settings".
+- **Check:** human only.
+
+### RT-444 — Changing posture keeps the screen, the scroll and the focus
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-441, a gamepad connected (or `adb shell input keyevent KEYCODE_DPAD_*`),
+  a console's library open, scrolled down, the 5th game focused.
+- **Steps:**
+  1. Go to tabletop (`user_rotation 1`, `hinge-angle0 90`), then flat (`hinge-angle0 180`), then
+     `adb emu fold`, then `adb emu unfold`.
+  2. Repeat on a game's detail.
+- **Expected:** After every change the same screen is open, the grid is still scrolled to the
+  same games and the focus ring is on the same game (or on "Continue" on the detail). An open
+  sheet stays open.
+- **Check:** human only.
+
+### RT-445 — The gamepad reaches both halves in tabletop
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-442, a gamepad connected, a console's library open.
+- **Steps:**
+  1. From a game in the grid press down until the focus leaves the top half.
+  2. Walk the chips and the tabs; press B.
+  3. Use L1/R1; open a game with A and walk its bottom half.
+  4. On "Shelf" and on "Settings", press down until the focus leaves the top half.
+- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the ring
+  is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
+  top. L1/R1 change console as before. From the shelf, down reaches "Import ROMs" and the tabs;
+  from Settings, down reaches the tabs.
+- **Check:** human only.
+
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
