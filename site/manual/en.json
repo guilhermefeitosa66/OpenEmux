@@ -248,7 +248,7 @@
   "views-pages.alt1": "The All page, grouped by console, with the All row framed",
   "views-pages.p1": "<span class=\"ui\">All</span>, <span class=\"ui\">Favorites</span> and playlists mix consoles, so they are\n            grouped: each group has a header with the console's icon, name and number of games. Groups follow the\n            console order you set in the sidebar or in <a href=\"#settings-library\">Settings → Library</a>.",
   "views-search.h31": "Search",
-  "views-search.alt1": "The search bar with lantern typed, filtering the All page",
+  "views-search.alt1": "The search bar with plumber typed, filtering the All page",
   "views-search.p1": "Click 🔍, press <kbd>Ctrl</kbd>+<kbd>F</kbd>, or just start typing. The search filters the page on screen,\n            so search from <span class=\"ui\">All</span> to look through the whole library. <kbd>Esc</kbd> closes it.",
   "views-select.h31": "Selecting several games",
   "views-select.alt1": "The selection bar, framed, with two games selected",

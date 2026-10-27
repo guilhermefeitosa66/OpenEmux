@@ -83,6 +83,7 @@
   "footer.license": ">Licencia MIT</a>",
   "footer.notices": ">Avisos de\n            terceros</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux es un proyecto independiente de código abierto y no está afiliado, respaldado ni\n        asociado con OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari ni ninguna otra empresa. Todas las marcas comerciales\n        pertenecen a sus respectivos propietarios. OpenEmux no distribuye juegos, ROMs ni archivos BIOS.</p>",
+  "footer.fictional": "<p class=\"disclaimer\">Los juegos que se muestran son ficticios y solo tienen fines ilustrativos. No son juegos reales de estas consolas, y sus ilustraciones se crearon con IA.</p>",
   "lightbox.label": "aria-label=\"Visor de capturas\">",
   "lightbox.close": "aria-label=\"Cerrar\">×</button>",
   "js.slide": "'Ir a la diapositiva '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Abre el archivo descargado y confirma. Las actualizaciones se instalan igual, sobre la versión anterior.</p>",
   "install.android_first_step": "<div class=\"step-n\">Primera vez</div>",
   "install.android_first_title": "<h3>Deja que descargue los núcleos</h3>",
-  "install.android_first_note": "<p>La primera vez que se abre, la app descarga los núcleos de los emuladores. Después pon tus ROMs en Importar, o en Android/data/com.openemux.mobile/files/roms en el teléfono.</p>"
+  "install.android_first_note": "<p>La primera vez que se abre, la app descarga los núcleos de los emuladores. Después pon tus ROMs en Importar, o en Android/data/com.openemux.mobile/files/roms en el teléfono.</p>",
+  "shots.notice": "<p class=\"fineprint\">Los juegos que se muestran son ficticios y solo tienen fines ilustrativos. No son juegos reales de estas consolas, y sus ilustraciones se crearon con IA.</p>",
+  "android.notice": "<p class=\"fineprint\">Los juegos que se muestran son ficticios y solo tienen fines ilustrativos. No son juegos reales de estas consolas, y sus ilustraciones se crearon con IA.</p>"
 }
