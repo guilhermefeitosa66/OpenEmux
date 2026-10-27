@@ -2,8 +2,8 @@
 
 The share dialog (sending) and the incoming-offer dialog (receiving) end the
 same way, so the pages are built here once. Each builder returns an
-``Adw.NavigationPage`` with no back button: these pages *replace* what was on
-screen, so Back can never leave a transfer that is still running.
+``Adw.NavigationPage`` that *replaces* what was on screen, so there is nothing
+behind it for Back to return to while a transfer is running.
 """
 
 from gi.repository import Adw, Gtk, Pango
@@ -38,7 +38,7 @@ def label(text="", css=(), wrap=True, xalign=0.5, markup=False):
     return widget
 
 
-def page(title, child, tag, subtitle="", bottom=None, can_pop=True):
+def page(title, child, tag, subtitle="", bottom=None):
     """A navigation page: header bar with ``title``, ``child`` as content."""
     header = Adw.HeaderBar()
     window_title = Adw.WindowTitle(title=title, subtitle=subtitle)
@@ -48,8 +48,9 @@ def page(title, child, tag, subtitle="", bottom=None, can_pop=True):
     toolbar.set_content(child)
     if bottom is not None:
         toolbar.add_bottom_bar(bottom)
+    # Never ``can-pop=False``: the navigation view would then swallow Escape,
+    # and the dialog would neither close nor ask before cancelling.
     nav_page = Adw.NavigationPage(title=title, tag=tag, child=toolbar)
-    nav_page.set_can_pop(can_pop)
     nav_page.window_title = window_title
     nav_page.focus_widget = None
     return nav_page
@@ -114,7 +115,7 @@ class WaitingPage:
         self.cancel_button = pill(t("share.cancel"), css=None)
         self.cancel_button.connect("clicked", lambda _b: on_cancel())
         content = _column(self.spinner, self.title, self.code, self.hint, self.cancel_button)
-        self.page = page(t("share.title"), content, "waiting", can_pop=False)
+        self.page = page(t("share.title"), content, "waiting")
         self.page.focus_widget = self.cancel_button
 
     def show_code(self, code):
@@ -137,7 +138,7 @@ class ProgressPage:
         self.cancel_button = pill(t("share.progress.cancel"), css="destructive-action")
         self.cancel_button.connect("clicked", lambda _b: on_cancel())
         content = _column(self.current, self.bar, self.bytes, self.files, self.cancel_button)
-        self.page = page(header, content, "progress", can_pop=False)
+        self.page = page(header, content, "progress")
         self.page.focus_widget = self.cancel_button
 
     def update(self, progress):
@@ -197,7 +198,7 @@ def result_page(t, result, device, receiving, games=0, summary="", on_close=None
     close.connect("clicked", lambda _b: on_close())
     buttons.append(close)
     page_box.set_child(buttons)
-    result_nav = page(t("share.offer.title" if receiving else "share.title"), page_box, "result", can_pop=False)
+    result_nav = page(t("share.offer.title" if receiving else "share.title"), page_box, "result")
     result_nav.close_button = close
     result_nav.focus_widget = close
     return result_nav

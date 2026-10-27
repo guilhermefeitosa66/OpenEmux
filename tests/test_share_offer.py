@@ -192,8 +192,11 @@ class AcceptTests(_OfferCase):
             kwargs["on_done"]({"status": "done", "placed": ["x"], "replaced": ["y"], "skipped": []})
         page = status(self.dialog)
         self.assertEqual(page.get_title(), "1 Game Received")
-        # Focus on the page's button: Escape closes the dialog again.
+        # Focus on the page's button, and a page that can pop (one that
+        # cannot makes the navigation view eat Escape): Escape closes it.
         self.assertIs(self.dialog.get_focus(), self.dialog.result.close_button)
+        self.assertTrue(self.dialog.result.get_can_pop())
+        self.assertEqual(self.dialog.nav.get_navigation_stack().get_n_items(), 1)
         self.assertTrue(self.dialog.finished)
         self.assertIn("From Phone. They're in your library now.\n1 file replaced", page.get_description())
         with mock.patch.object(self.win.sidebar, "select") as select, \

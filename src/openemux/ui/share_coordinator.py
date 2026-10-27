@@ -7,7 +7,7 @@ running then ends. Nothing listens before the first screen opens, and quitting
 stops it at once.
 
 Every callback the core makes arrives on one of its threads; each goes
-through ``dispatch`` (``GLib.idle_add``) before it touches anything else, so no
+through ``dispatch`` (:func:`main_loop`) before it touches anything else, so no
 widget is ever reached from a worker thread. Slow work -- starting the service
 the first time (a certificate is made), hashing the games to send, asking an
 address for its ``/info`` -- runs on ``run_async`` threads. Tests pass
@@ -46,12 +46,23 @@ STATE_RUNNING = "running"
 STATE_FAILED = "failed"
 
 
+def main_loop(func):
+    """Run ``func`` on the main loop, at the default priority.
+
+    Not ``GLib.idle_add``'s own idle priority: a spinner on screen keeps a
+    redraw pending at a higher one on a slow display, and the share screens
+    always show one while they wait -- so the devices found, the code and the
+    answer never arrived (#589).
+    """
+    return GLib.idle_add(func, priority=GLib.PRIORITY_DEFAULT)
+
+
 def _thread(target, *args):
     threading.Thread(target=target, args=args, name="share-ui", daemon=True).start()
 
 
 class ShareCoordinator:
-    def __init__(self, window, service_factory=ShareService, dispatch=GLib.idle_add,
+    def __init__(self, window, service_factory=ShareService, dispatch=main_loop,
                  timeout_add=GLib.timeout_add_seconds, source_remove=GLib.source_remove,
                  run_async=_thread, client_factory=ShareClient, addresses=local_ipv4_addresses,
                  clock=time.monotonic):

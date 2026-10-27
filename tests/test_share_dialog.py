@@ -322,6 +322,8 @@ class SendingTests(_DialogCase):
         self.assertEqual(tag(self.dialog), "waiting")
         self.assertFalse(self.dialog.get_can_close())
         self.assertIs(self.dialog.get_focus(), self.dialog.waiting.cancel_button)
+        # A page that cannot pop makes the navigation view eat Escape.
+        self.assertTrue(self.dialog.waiting.page.get_can_pop())
         self.assertEqual(self.dialog.waiting.title.get_label(), "Preparing the games…")
         callbacks["on_code"]("482913")
         self.assertEqual(self.dialog.waiting.title.get_label(), "Waiting for Phone to accept…")
@@ -331,6 +333,7 @@ class SendingTests(_DialogCase):
         self.assertEqual(tag(self.dialog), "progress")
         progress = self.dialog.progress
         self.assertIs(self.dialog.get_focus(), progress.cancel_button)
+        self.assertTrue(progress.page.get_can_pop())
         self.assertAlmostEqual(progress.bar.get_fraction(), 0.5)
         self.assertEqual(progress.bytes.get_label(), "500 kB of 1.0 MB")
         self.assertEqual(progress.files.get_label(), "File 1 of 2")
@@ -341,6 +344,8 @@ class SendingTests(_DialogCase):
         self.assertEqual(tag(self.dialog), "result")
         self.assertTrue(self.dialog.get_can_close())
         self.assertIs(self.dialog.get_focus(), self.dialog.result.close_button)
+        self.assertTrue(self.dialog.result.get_can_pop())
+        self.assertEqual(self.dialog.nav.get_navigation_stack().get_n_items(), 1)
         self.assertEqual(_status(self.dialog).get_title(), "1 Game Sent")
         self.assertEqual(_status(self.dialog).get_description(), "Phone has them now.")
 

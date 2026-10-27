@@ -7672,9 +7672,11 @@ stands in for the other device; multicast may not cross the container.
 - **Steps:**
   1. Run the suite.
 - **Expected:** The waiting, progress and result pages of both dialogs take the focus on their own
-  button, so Escape closes the dialog on "1 Game Received", "Transfer Cancelled" and the other
-  results. The "Another Device" entry stays focused (read-only) while it connects, so keys typed
-  after Enter never select or filter games behind the dialog.
+  button and can be popped (a page that cannot makes the navigation view swallow Escape), so
+  Escape closes the dialog on "1 Game Received", "Transfer Cancelled" and the other results, and
+  asks before cancelling on the waiting and progress pages. The "Another Device" entry stays
+  focused (read-only) while it connects, so keys typed after Enter never select or filter games
+  behind the dialog.
 - **Check:** `tests/test_share_dialog.py` (`test_waiting_then_code_then_progress_then_sent`,
   `test_the_entry_keeps_the_focus_while_connecting`) and `tests/test_share_offer.py`
   (`test_accept_progress_and_received`).
@@ -7690,6 +7692,21 @@ stands in for the other device; multicast may not cross the container.
   A waits for the answer instead of reading "Offer Declined".
 - **Check:** human only. Suite: `tests/test_share_coordinator.py`
   (`test_an_offer_over_a_finished_one_replaces_it`).
+
+### RT-539 — The first share after starting the app lists the devices and shows the code
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other. B has "Receive Games…" open; OpenEmux
+  on A has just been started and no share screen has been opened on it yet.
+- **Steps:**
+  1. On A, right-click a game › "Share Nearby…" and wait for B under "Devices on This Network".
+  2. Click B.
+  3. On B, press "Decline".
+- **Expected:** B is listed within a few seconds, without "No Devices Found". After step 2 A goes
+  from "Preparing the games…" to "Waiting for B to accept…" with the same code B shows, and after
+  step 3 to "Offer Declined". The spinners on these screens never hold the answer back.
+- **Check:** human only. Suite: `tests/test_share_coordinator.py`
+  (`test_core_callbacks_run_at_the_default_priority`).
 
 ## Retired
 

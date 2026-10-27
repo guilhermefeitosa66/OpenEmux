@@ -171,6 +171,16 @@ class VisibilityTests(WindowCase):
         self.assertIsInstance(first, ShareCoordinator)
         self.assertIs(self.win.share, first)
         self.assertFalse(first.service.running)
+        self.assertIs(first._idle_add, coordinator_module.main_loop)
+
+    def test_core_callbacks_run_at_the_default_priority(self):
+        # At the idle priority a spinner's redraws starved them: the devices,
+        # the code and the answer never reached the dialog (#589, QA round 2).
+        from gi.repository import GLib
+        func = mock.Mock()
+        with mock.patch.object(coordinator_module.GLib, "idle_add", return_value=7) as idle_add:
+            self.assertEqual(coordinator_module.main_loop(func), 7)
+        idle_add.assert_called_once_with(func, priority=GLib.PRIORITY_DEFAULT)
 
 
 @needs_display
