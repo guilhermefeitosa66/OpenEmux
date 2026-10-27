@@ -3,7 +3,7 @@
 # OpenEmux is a GNOME-native front-end; it plays games through the *separately
 # installed* RetroArch Flatpak (org.libretro.RetroArch), launched on the host via
 # flatpak-spawn. RetroArch is therefore NOT bundled here — the manifest only
-# packages the Python app, PyYAML, python-xlib, cryptography and zeroconf.
+# packages the Python app, PyYAML, python-xlib, cryptography, zeroconf and segno.
 #
 # Local test build:
 #   flatpak install -y flathub org.gnome.Platform//48 org.gnome.Sdk//48 org.flatpak.Builder
@@ -91,6 +91,7 @@ modules:
   - python3-xlib.yaml
   - python3-cryptography.yaml
   - python3-zeroconf.yaml
+  - python3-segno.yaml
 
   - name: openemux
     buildsystem: simple

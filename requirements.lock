@@ -6,6 +6,7 @@ pycparser==3.11
 PyGObject==3.54.5
 python-xlib==0.33
 PyYAML==6.0.3
+segno==1.6.6
 six==1.17.0
 typing_extensions==4.16.0
 zeroconf==0.151.5

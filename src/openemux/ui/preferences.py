@@ -51,6 +51,7 @@ from openemux.core.input_profiles import (
 from openemux.core.input_capture import InputCaptureSession
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
+from openemux.core.share.identity import default_device_name
 from openemux.core.theme import THEMES
 from openemux.ui import theming
 from openemux.ui.console_icons import console_icon
@@ -382,6 +383,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         self._mutate_providers(_mutate)
         self._update_screenscraper_rows_visibility()
+
+    def _build_share_group(self):
+        """The name Share nearby announces this device by (issue #589)."""
+        group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.share"),
+            description=self.t("prefs.share.description", hostname=default_device_name()),
+        )
+        self._share_name_row = Adw.EntryRow(title=self.t("prefs.share.device_name"))
+        self._share_name_row.set_text(self.config.get_share_device_name())
+        self._share_name_row.set_show_apply_button(True)
+        self._share_name_row.connect(
+            "apply", lambda row: self.config.set_share_device_name(row.get_text())
+        )
+        group.add(self._share_name_row)
+        return group
 
     def _build_screenscraper_group(self):
         """ScreenScraper account rows, shown while that provider is enabled."""
@@ -1912,6 +1928,8 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         import_row.connect("activated", self._on_import_saves)
         saves_group.add(import_row)
         page.add(saves_group)
+
+        page.add(self._build_share_group())
 
         self._achievements_group = Adw.PreferencesGroup(
             title=self.t("prefs.group.achievements"),

@@ -3,3 +3,4 @@ PyYAML
 python-xlib
 cryptography
 zeroconf
+segno

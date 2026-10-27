@@ -110,6 +110,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.config_manager = application.config_manager
         self.locale = self.config_manager.get_locale()
+        self._share_coordinator = None
         self.set_title("OpenEmux")
         self._setup_window_icon()
         self.set_default_size(*self._default_window_size())
@@ -1120,6 +1121,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         sync_button = Gtk.Button(label=self.t("selection.sync_covers"))
         sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
 
+        share_button = Gtk.Button.new_from_icon_name("network-wireless-symbolic")
+        share_button.set_tooltip_text(self.t("share.selection.tooltip"))
+        share_button.connect("clicked", lambda _b: self.share_roms(self._selected_roms))
+
         delete_button = Gtk.Button(label=self.t("selection.delete"))
         delete_button.add_css_class("destructive-action")
         delete_button.connect("clicked", lambda _b: self._confirm_delete_roms(self._selected_roms))
@@ -1135,7 +1140,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         box.set_margin_bottom(6)
         box.set_margin_start(12)
         box.set_margin_end(12)
-        for child in (self.selection_label, select_all_button, sync_button, delete_button, clear_button):
+        for child in (self.selection_label, select_all_button, sync_button, share_button, delete_button, clear_button):
             box.append(child)
 
         self.selection_bar = Gtk.Revealer()
@@ -1368,12 +1373,19 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return False
 
     def _build_primary_menu(self):
+        # Receiving is the one thing here that is not about the app itself,
+        # so it gets a section of its own at the top.
+        share_section = Gio.Menu()
+        share_section.append(self.t("share.menu.receive"), "win.receive-games")
+        app_section = Gio.Menu()
+        app_section.append(self.t("menu.preferences"), "win.preferences")
+        app_section.append(self.t("menu.shortcuts"), "win.shortcuts")
+        app_section.append(self.t("menu.welcome"), "win.welcome")
+        app_section.append(self.t("menu.report_bug"), "win.report-bug")
+        app_section.append(self.t("menu.about"), "win.about")
         menu = Gio.Menu()
-        menu.append(self.t("menu.preferences"), "win.preferences")
-        menu.append(self.t("menu.shortcuts"), "win.shortcuts")
-        menu.append(self.t("menu.welcome"), "win.welcome")
-        menu.append(self.t("menu.report_bug"), "win.report-bug")
-        menu.append(self.t("menu.about"), "win.about")
+        menu.append_section(None, share_section)
+        menu.append_section(None, app_section)
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
         button.set_menu_model(menu)
@@ -1393,6 +1405,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
             ("report-bug", lambda *_: self.show_bug_report(), None),
+            ("receive-games", lambda *_: self.receive_games(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
             ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
             ("import", lambda *_: self.imports.open_picker(), ["<Ctrl>o"]),
@@ -1905,6 +1918,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", _on_response)
         dialog.present(self)
+
+    # -- Share nearby (issue #589) ---------------------------------------
+
+    @property
+    def share(self):
+        """The Share nearby coordinator, made on first use: nothing listens before."""
+        if self._share_coordinator is None:
+            # Imported here: the session pulls in http.client and ssl, which
+            # start-up must not pay for (tests/test_startup_bytecode.py).
+            from openemux.ui.share_coordinator import ShareCoordinator
+            self._share_coordinator = ShareCoordinator(self)
+        return self._share_coordinator
+
+    def share_roms(self, roms):
+        roms = list(roms)
+        if roms:
+            self.share.open_send(roms)
+
+    def receive_games(self):
+        self.share.open_receive()
 
     def _target_roms_for(self, rom):
         """The roms an action applies to: the selection if it holds ``rom``."""
