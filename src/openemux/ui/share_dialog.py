@@ -285,10 +285,12 @@ class ShareDialog(Adw.Dialog):
     def _selection(self):
         # Every toggle and every peer change asks; the copy is of the whole
         # manifest, so it is made once per choice the user makes.
-        key = (id(self.built), frozenset(self.unchecked))
-        if self._selection_cache is None or self._selection_cache[0] != key:
-            self._selection_cache = (key, apply_selection(self.built, self.unchecked))
-        return self._selection_cache[1]
+        unchecked = frozenset(self.unchecked)
+        cache = self._selection_cache
+        if cache is None or cache[0] is not self.built or cache[1] != unchecked:
+            cache = (self.built, unchecked, apply_selection(self.built, self.unchecked))
+            self._selection_cache = cache
+        return cache[2]
 
     def _update_summary(self):
         t = self.t
