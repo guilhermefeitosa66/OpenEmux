@@ -8451,20 +8451,19 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
-## Android — Full screen
+## Android — System bars
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
-`pkg/android/openemux`) running full screen from the first frame of its own window, instead of
-opening with the status and navigation bars over its header and sliding into full screen a moment
-later (issue 607). `MANUAL`, like the other Android sections: a phone or a headless emulator with a
-camera cutout (e.g. a Pixel 7 image) and `adb`. The package is `com.openemux.mobile`. A frame-by-frame
-look at a start is `adb shell screenrecord /sdcard/start.mp4` running while the app opens, then
-`ffmpeg -i start.mp4 -vf fps=10 f%03d.png`. On Android 12 and later the system's own splash (the app
-icon on the dark background) is drawn by the system before the app runs and may still show the bars;
-these scenarios judge the frames from the app's first screen on.
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) keeping the status and navigation bars on screen everywhere outside a game,
+with its content padded away from them, instead of opening with the bars over its header and then
+hiding them a moment later (issue 607). Only a running game is full screen. `MANUAL`, like the
+other Android sections: a phone or a headless emulator with a camera cutout (e.g. a Pixel 7 image)
+and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a start is
+`adb shell screenrecord /sdcard/start.mp4` running while the app opens, then
+`ffmpeg -i start.mp4 -vf fps=10 f%03d.png`.
 
-### RT-541 — A cold start opens full screen from the first frame
-- **Area:** Android — Full screen
+### RT-541 — A cold start keeps the bars from the splash to the shelf, nothing under them
+- **Area:** Android — System bars
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, a few ROMs imported.
 - **Steps:**
@@ -8472,40 +8471,42 @@ these scenarios judge the frames from the app's first screen on.
   2. Start recording the screen and open the app from the launcher.
   3. Switch the device to 3-button navigation (Settings > System > Gestures > System navigation) and
      repeat steps 1 and 2.
-- **Expected:** From the first frame of the app's shelf on, the clock, Wi-Fi and battery icons and
-  the navigation bar (buttons or gesture handle) are gone, at most for one frame of the hand-over
-  from the system splash. The "OpenEmux" header is never drawn under the system icons and the shelf
-  never jumps into place.
+- **Expected:** The clock, Wi-Fi and battery icons and the navigation bar (buttons or gesture
+  handle) are visible in every frame, from the system splash (the app icon on the dark background)
+  to the settled shelf; they never disappear or fade. The "OpenEmux" header sits below the status
+  icons and the bottom tabs ("Library", "Recent", "Import", "Settings") sit above the navigation
+  bar, never under them, and the shelf does not jump or move when it takes over from the splash.
 - **Check:** human only (step through each recording frame by frame).
 
-### RT-542 — A warm start and the way back from a game stay full screen
-- **Area:** Android — Full screen
+### RT-542 — A warm start and the way back from a game keep the bars, and the game is full screen
+- **Area:** Android — System bars
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541.
 - **Steps:**
   1. With the app on the shelf, press Home, start recording and reopen the app from the launcher.
-  2. Open a game, then leave it from the pause menu (or with Back) while recording.
-- **Expected:** Each return lands on a full-screen app: no status or navigation bar flashes over it
-  and the header never sits under the system icons.
-- **Check:** human only (the recordings).
+  2. Open a game and take a screenshot while it runs.
+  3. Leave the game from the pause menu (or with Back) while recording.
+- **Expected:** Step 1: the bars are visible throughout and the shelf does not move. Step 2: the game
+  fills the screen with no status or navigation bar. Step 3: back on the library the bars are
+  visible again, the header and the bottom tabs are clear of them, and the layout does not jump.
+- **Check:** human only (the recordings and the screenshot).
 
-### RT-543 — Bars swiped in overlay the app without moving it, and leave on their own
-- **Area:** Android — Full screen
+### RT-543 — Sheets and dialogs leave the bars alone
+- **Area:** Android — System bars
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541, the app on the shelf.
 - **Steps:**
   1. `adb exec-out screencap -p > before.png`.
-  2. `adb shell input swipe 540 2 540 500 200` (down from the top edge), then at once
-     `adb exec-out screencap -p > during.png`.
-  3. Wait five seconds, `adb exec-out screencap -p > after.png`.
-  4. Repeat steps 2 and 3 swiping up from the bottom edge.
-- **Expected:** In `during.png` the status bar shows over the app and the header, the shelf and the
-  bottom tabs are exactly where they are in `before.png`. In `after.png` the bars are gone again and
+  2. Long-press a console card to open its sheet, `adb exec-out screencap -p > sheet.png`, close it.
+  3. In "Settings", tap "Theme", take a screenshot, close it.
+  4. `adb exec-out screencap -p > after.png`.
+- **Expected:** The status and navigation bars stay visible while each sheet is open and after it
+  closes; the sheet's last row is above the navigation bar. `after.png` matches `before.png`:
   nothing moved.
-- **Check:** human only (compare the three screenshots).
+- **Check:** human only (compare the screenshots).
 
-### RT-544 — Portrait and landscape fill the screen around the camera cutout
-- **Area:** Android — Full screen
+### RT-544 — Portrait and landscape keep the content clear of the cutout and the bars
+- **Area:** Android — System bars
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541, on a device or emulator with a camera cutout.
 - **Steps:**
@@ -8515,19 +8516,21 @@ these scenarios judge the frames from the app's first screen on.
   3. `adb shell settings put system user_rotation 0`, then a screenshot; restore with
      `adb shell settings put system accelerometer_rotation 1`.
 - **Expected:** In both orientations the app's background reaches every edge, with no black band by
-  the camera; no button, title or cover sits under the cutout; no system bar shows, as in RT-541.
+  the camera; no button, title or cover sits under the cutout, the status bar or the navigation bar;
+  the bars stay visible, as in RT-541.
 - **Check:** human only (the screenshots and the recording).
 
-### RT-545 — In split screen the content sits below the bars, never under them
-- **Area:** Android — Full screen
+### RT-545 — Split screen and the keyboard still lay out around the bars
+- **Area:** Android — System bars
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541.
 - **Steps:**
   1. Open the app, then from the recent apps put it in split screen with Settings.
   2. Take a screenshot; open search and type a few letters, close the keyboard; take another.
-- **Expected:** Where the system keeps the status or navigation bar shown, the OpenEmux header and
-  bottom tabs are laid out below and above them, never covered by them. The search field stays above
-  the keyboard. Leaving split screen the app is full screen again.
+  3. Leave split screen and repeat the search step full size.
+- **Expected:** The OpenEmux header and bottom tabs are laid out below and above the visible bars,
+  never covered by them. The search field stays above the keyboard; once it closes, the layout is
+  back where it was.
 - **Check:** human only (the screenshots).
 
 ## Retired
