@@ -19,7 +19,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Gtk
+    from gi.repository import GLib, Gtk
 
     from openemux.ui import context_menu
     from openemux.ui.context_menu import SEPARATOR, Submenu, build_context_popover
@@ -298,6 +298,7 @@ class GuardingTheWindowWhileAMenuIsUpTests(unittest.TestCase):
     def setUp(self):
         context_menu._open_popover = None
         context_menu._outside_guard = None
+        context_menu._guard_closing = False
         self.addCleanup(context_menu.dismiss_context_popover)
         self.window = Gtk.Window()
         self.addCleanup(self.window.destroy)
@@ -337,6 +338,9 @@ class GuardingTheWindowWhileAMenuIsUpTests(unittest.TestCase):
         context_menu.present_context_popover(popover)
         controller = context_menu._outside_guard[1]
         popover.popdown()
+        context = GLib.MainContext.default()
+        while context.pending():
+            context.iteration(False)
         self.assertIsNone(context_menu._outside_guard)
         self.assertIsNone(controller.get_widget())
 

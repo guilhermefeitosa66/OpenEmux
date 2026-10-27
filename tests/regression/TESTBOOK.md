@@ -1194,10 +1194,43 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   3. Click on empty grid space.
   4. Right-click a card again, and while the menu is open switch console in the sidebar.
 - **Expected:** Step 2 replaces the first menu instead of stacking a second one. After step 3 no
-  menu is left on screen and no `(...)` button stays stuck visible. Step 4 closes the menu with
-  the page switch.
+  menu is left on screen and no `(...)` button stays stuck visible (what else that click does, or
+  rather does not do, is RT-540). Step 4 closes the menu with the page switch.
 - **Check:** `tests/test_context_menu.py` (the ownership rule and the guarded unparent); the UI
   half is the human's, and the launch log must gain no `Gtk-CRITICAL`.
+
+### RT-540 — A click outside a context menu closes it and does nothing else
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, on a console page with at least three
+  games (a card is focused at start-up). Read the card and sidebar coordinates from
+  `make devbox-shot` / `devbox-xdo win` before clicking.
+- **Steps:**
+  1. Right-click the second game card. Click the empty area to the right of the last card column.
+  2. Right-click the second card again, then left-click the third card.
+  3. Right-click the second card, then right-click the third card. Right-click the third card once
+     more.
+  4. Press `Escape`. Right-click the second card, then click another console row in the sidebar.
+     Repeat, clicking an empty spot of the header bar instead.
+  5. Move focus to a card with the arrow keys, press `Menu` (and, separately, `Shift+F10`), then
+     click the empty grid area.
+  6. Right-click a card and press `Escape`; right-click it again and choose "Add to favorites",
+     then do the same again to undo it.
+  7. After all of the above, left-click a card once.
+- **Expected:** Every outside click closes the menu and nothing more (issue #601): in step 2 the
+  third game is not launched and not selected; in step 3 the first right-click on the third card
+  only closes the menu and the second one opens that card's menu; in step 4 the console does not
+  switch on that click and no header action runs. The keyboard-opened menus in step 5 close the
+  same way. Escape and a menu entry still close the menu, and the entry's action runs exactly once.
+  In step 7 the click acts normally (the game launches): no click is left being swallowed once a
+  menu has closed.
+- **Check:** A `make devbox-shot` after each outside click shows no popover (on the devbox's Xvnc an
+  open popover renders as a solid black rectangle). In the app log
+  (`~/.local/share/openemux-devbox/home/.devbox/app.log`), none of the dismissing clicks of steps
+  1–5 adds a `rom card click: button=1` or a `launch` line; step 7 adds exactly one
+  `rom card click: button=1`. No `Gtk-CRITICAL` and no traceback. `tests/test_context_menu.py`
+  (`OutsideClickTests`) covers the guard that enforces this where GTK's autohide does not.
+- **Restore:** Step 6 toggles the favorite twice, leaving it as it was.
 
 ### RT-299 — The library opens where it was left
 - **Area:** Navigation

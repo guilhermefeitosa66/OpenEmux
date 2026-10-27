@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import gi
 
@@ -59,6 +60,7 @@ class ContextMenuOwnerTests(unittest.TestCase):
     def setUp(self):
         context_menu._open_popover = None
         context_menu._outside_guard = None
+        context_menu._guard_closing = False
 
     tearDown = setUp
 
@@ -179,6 +181,7 @@ class OutsideClickTests(unittest.TestCase):
     def setUp(self):
         context_menu._open_popover = None
         context_menu._outside_guard = None
+        context_menu._guard_closing = False
         self.window = FakeWindow()
 
     tearDown = setUp
@@ -245,12 +248,45 @@ class OutsideClickTests(unittest.TestCase):
         self.assertIsNone(context_menu._outside_guard)
         self.assertNotIn(controller, self.window.controllers)
 
-    def test_closing_by_itself_removes_the_guard(self):
-        # Escape, a row activated, or the compositor's own autohide.
+    def test_closing_by_itself_removes_the_guard_once_the_event_is_over(self):
+        # Escape, a row activated, or GTK's own autohide.
         menu, controller = self.open_menu()
-        menu.popdown()
+        with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
+            menu.popdown()
+        self.assertTrue(context_menu._guard_closing)
+        self.assertEqual(idle_add.call_args.kwargs["priority"], GLib.PRIORITY_HIGH)
+        callback, guard = idle_add.call_args.args
+        self.assertFalse(callback(guard))
+        self.assertIsNone(context_menu._outside_guard)
+        self.assertFalse(context_menu._guard_closing)
+        self.assertNotIn(controller, self.window.controllers)
+
+    def test_the_press_that_closed_the_menu_is_still_claimed(self):
+        # GTK popped the menu down on this very press, before propagating it.
+        menu, controller = self.open_menu()
+        with mock.patch.object(context_menu.GLib, "idle_add"):
+            menu.popdown()
+        gesture = self.press(self.window.surface)
+        self.assertEqual(gesture.state, context_menu.Gtk.EventSequenceState.CLAIMED)
         self.assertIsNone(context_menu._outside_guard)
         self.assertNotIn(controller, self.window.controllers)
+
+    def test_the_closed_menus_idle_leaves_a_newer_guard_alone(self):
+        menu, _controller = self.open_menu()
+        with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
+            menu.popdown()
+        callback, old_guard = idle_add.call_args.args
+        self.open_menu()
+        newer = context_menu._outside_guard
+        callback(old_guard)
+        self.assertIs(context_menu._outside_guard, newer)
+
+    def test_a_menu_closed_without_a_guard_schedules_nothing(self):
+        menu = FakePopover()
+        context_menu.present_context_popover(menu)
+        with mock.patch.object(context_menu.GLib, "idle_add") as idle_add:
+            menu.popdown()
+        idle_add.assert_not_called()
 
     def test_dismissing_removes_the_guard(self):
         _menu, controller = self.open_menu()

@@ -67,14 +67,21 @@ def build_context_popover(entries):
 #: the other stays until a row is activated, which is issue #275.
 _open_popover = None
 
-#: The outside-click guard of the open menu, as ``(window, controller)``. Autohide
-#: alone does not dismiss a menu on X11 when the click lands on the app's own
-#: toplevel: a click on the empty grid leaves the menu up, and a click on another
-#: card closes it *and* falls through to the card, which launches that game
-#: (issue #601). So the window gets a capture-phase click gesture for as long as
-#: a menu is open, which closes the menu and claims the press so nothing under
-#: it acts on it -- GNOME's behaviour for autohide popovers.
+#: The outside-click guard of the open menu, as ``(window, controller)``.
+#: Autohide cannot be relied on when the click lands on the app's own toplevel:
+#: a click on the empty grid was seen leaving the menu up, and a click on
+#: another card closing it *and* falling through to the card, which launched
+#: that game (issue #601). So the window gets a capture-phase click gesture for
+#: as long as a menu is open, which closes the menu and claims the press so
+#: nothing under it acts on it -- GNOME's behaviour for autohide popovers.
 _outside_guard = None
+#: Set between a menu closing by itself and its guard coming off. The guard is
+#: removed from a high-priority idle rather than from "closed": if GTK pops the
+#: menu down on the outside press before propagating that press, the guard is
+#: still there to claim it, and the idle still runs before the next event --
+#: an ordinary idle can wait behind the redraws for a second and eat the next
+#: click.
+_guard_closing = False
 
 
 def present_context_popover(popover):
@@ -111,10 +118,21 @@ def dismiss_context_popover():
 
 
 def _forget_context_popover(popover):
-    global _open_popover
+    global _open_popover, _guard_closing
     if _open_popover is popover:
         _open_popover = None
+        if _outside_guard is not None:
+            _guard_closing = True
+            GLib.idle_add(
+                _remove_closed_guard, _outside_guard, priority=GLib.PRIORITY_HIGH
+            )
+
+
+def _remove_closed_guard(guard):
+    # A menu presented since then has installed a guard of its own.
+    if _outside_guard is guard:
         _remove_outside_guard()
+    return False
 
 
 def _install_outside_guard(popover):
@@ -135,9 +153,10 @@ def _install_outside_guard(popover):
 
 
 def _remove_outside_guard():
-    global _outside_guard
+    global _outside_guard, _guard_closing
     guard = _outside_guard
     _outside_guard = None
+    _guard_closing = False
     if guard is None:
         return
     window, controller = guard
@@ -147,18 +166,21 @@ def _remove_outside_guard():
 
 
 def _on_outside_press(gesture, _n_press, _x, _y, window):
-    if _open_popover is None:
-        # Stale: the menu went away without telling us. Never eat a click then.
-        _remove_outside_guard()
-        return
     # The menu and its submenus are surfaces of their own, yet their events
     # still propagate through the card's ancestry up to this window. Only a
     # press on the window's own surface is outside the menu.
     event = gesture.get_current_event()
     if event is None or event.get_surface() is not window.get_surface():
         return
+    if _open_popover is None and not _guard_closing:
+        # Stale: the menu went away without telling us. Never eat a click then.
+        _remove_outside_guard()
+        return
+    # Either the menu is still up, or GTK has just popped it down on this very
+    # press: claimed both ways, so the card under the pointer never sees it.
     gesture.set_state(Gtk.EventSequenceState.CLAIMED)
     logger.info("context menu dismissed by a click outside")
+    _remove_outside_guard()
     dismiss_context_popover()
 
 
