@@ -7940,6 +7940,249 @@ stands in for the other device; multicast may not cross the container.
 - **Check:** human only. Suite: `tests/test_share_coordinator.py`
   (`test_core_callbacks_run_at_the_default_priority`).
 
+## Android — Share nearby
+
+The Android app's screens for Share nearby (#591, epic #586): the entry points, the "Share
+Nearby" and "Receive Games" screens, "What to Send", "Connect by Address", the "Incoming Games"
+sheet over any screen and the transfer in a foreground service. `MANUAL`, like the other Android
+sections: a person runs them on a phone or a headless emulator with `adb` (`$PKG` is
+`com.openemux.mobile`). The other side is a second device, a desktop OpenEmux with Share nearby, or
+a loopback peer on the host: an emulator reaches the host at `10.0.2.2` and the host reaches the
+emulator's server through `adb forward tcp:53319 tcp:53319`. Discovery does not cross the emulator's
+NAT, so on an emulator the peer is added with "Connect by Address"; multicast discovery and the
+two-device scenarios run on real hardware. The share log is `adb logcat -s OpenEmuxShare`. The
+formatting, the checklist, the offer model, the discoverability and nothing-found rules, the
+coordinator, the notification content, the QR code and the string parity across locales are covered
+by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionTest`,
+`OfferModelTest`, `DiscoverabilityTest`, `ShareCoordinatorTest`, `TransferNoticeTest`, `QrTest`,
+`StringsShareTest`).
+
+### RT-524 — Every entry point opens Share Nearby with the right games
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app with at least two consoles and three games, first-run setup done.
+- **Steps:**
+  1. Open a game's detail, press "⋯" (or Y on a gamepad) and pick "Share Nearby".
+  2. Back in a console's library, long-press a game, select three, and press the share button in the
+     selection bar; repeat with Select on a gamepad.
+  3. On the "Shelf", long-press a console and pick "Share All Games Nearby".
+  4. Open "Settings" › "Share Nearby" › "Receive Games".
+- **Expected:** 1 opens "Share Nearby" with "1 game · <size>"; 2 with "3 games · <size>" and the
+  selection closed; 3 with that console's game count, the row showing "<n> games" (it is not in the
+  sheet of a console with no games); 4 opens "Receive Games" with "Ready to receive…" and no
+  "What to Send" row. Each shows "DEVICES ON THIS NETWORK" with a spinner and "THIS DEVICE" with
+  "Visible as “<name>”".
+- **Check:** human only (a screenshot per entry point).
+
+### RT-525 — Devices show their platform and how they were found; an old one is listed but disabled
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone and another OpenEmux device with Share nearby on the same Wi-Fi; for the
+  second part, a peer that speaks another protocol version.
+- **Steps:**
+  1. Open "Share Nearby" on both.
+  2. Read the other device's row; then add the old-version peer by address.
+- **Expected:** The row has a platform tile and "<Desktop|Phone|Tablet> · found by mDNS and beacon"
+  (or the one path that found it). The old-version peer is greyed out, cannot be tapped and reads
+  "<platform> · update OpenEmux on this device" with "Version <n>, this one speaks 1".
+- **Check:** human only (screenshot); `adb logcat -d -s OpenEmuxShare` lists the peer.
+
+### RT-526 — With nobody around, the screen explains why after 15 seconds
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** No other OpenEmux device on the network.
+- **Steps:**
+  1. Open "Receive Games" and wait 16 seconds.
+  2. Turn Wi-Fi off (and mobile hotspot off) and open the screen again.
+- **Expected:** 1: "No Devices Found", the same-Wi-Fi hint, the "Guest and public Wi-Fi" note with the
+  hotspot suggestion, the "On a computer," note naming TCP 53319 and UDP 53318, a "Connect by Address"
+  button and "Still searching…" with a spinner; a device appearing swaps the list back in.
+  2: "Share Nearby Isn’t Available" with "Connect to Wi-Fi to share games."
+- **Check:** human only (screenshots).
+
+### RT-527 — Connect by Address shows this device and checks what is typed
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A loopback peer listening on the host (emulator) or another device's address.
+- **Steps:**
+  1. From "Share Nearby", open "Connect by Address" and press "Copy Address".
+  2. Type `abc` and press "Connect"; then `10.0.2.2:1`; then the peer's address.
+- **Expected:** "THIS DEVICE" shows a QR code, `host:port` in monospace and the fingerprint in two
+  lines; "Copy Address" shows "Address copied". `abc` reads "That doesn’t look like an address.";
+  `10.0.2.2:1` reads "Couldn’t reach 10.0.2.2:1. Check that it is on the same network." after the
+  connect timeout; the peer's address goes back to "Share Nearby" with the peer listed as
+  "… · found by address".
+- **Check:** human only (screenshots); `adb shell cmd clipboard get-primary-clip` (Android 13+)
+  starts with `openemux-share://`.
+
+### RT-528 — An openemux-share link only fills the address
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app running on the "Shelf".
+- **Steps:**
+  1. `adb shell am start -a android.intent.action.VIEW -d "openemux-share://10.0.2.2:53319" $PKG`.
+  2. Wait 10 seconds without touching anything.
+- **Expected:** "Connect by Address" opens in the same window with
+  `openemux-share://10.0.2.2:53319` in the "Address" field; nothing connects or is sent until
+  "Connect" is pressed. Back returns to the "Shelf".
+- **Check:** human only (screenshot); `adb shell dumpsys activity activities | grep -c "MainActivity"`
+  shows one instance.
+
+### RT-529 — What to Send unchecks parts and games, and nothing checked blocks sending
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A game with a battery save, states, cover and label, shared from its detail.
+- **Steps:**
+  1. Open "What to Send" and expand the game.
+  2. Uncheck "Cover"; then press the game's own box twice.
+  3. Uncheck the whole game, go back to "Share Nearby".
+- **Expected:** Only the parts the game has are listed, each with its size ("Save States (n)" with
+  "Only the ones the other device’s core can load"). Unchecking "Cover" turns the game's box to a
+  dash, lowers the size and "<g> games · <f> files" in the bottom bar. With nothing checked,
+  "Choose at least one item to send." shows and the device rows cannot be tapped.
+- **Check:** human only (screenshots).
+
+### RT-530 — An incoming offer shows over any screen, with the same code, and only Accept takes it
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone on the "Shelf" (not on a share screen) inside the 30-second grace after
+  leaving one, or with "Receive Games" open; a sender that offers it a game.
+- **Steps:**
+  1. Send an offer from the other side.
+  2. Drag the sheet down, tap above it, then press Back.
+  3. Send another offer and look at the focus with a gamepad, then press B.
+- **Expected:** "Incoming Games" opens over the screen with "<device> wants to send you 1 game
+  (<size>).", the 6-digit code the sender also shows, the game with its parts, "Expires in 0:5x"
+  counting down, "Decline" and "Accept". Dragging and tapping outside do nothing; Back and B decline
+  (the sender reports "Offer Declined") and nothing is written. With a gamepad the focus starts on
+  "Decline".
+- **Check:** human only (screenshots); the sender's log shows `declined`; `adb shell ls` of
+  `roms/<console>` is unchanged.
+
+### RT-531 — An unanswered offer expires, and one in the background arrives as a notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-530; notifications allowed.
+- **Steps:**
+  1. Send an offer and wait 60 seconds without answering.
+  2. Open "Receive Games", press Home, and send an offer within 30 seconds.
+  3. Tap the notification.
+- **Expected:** 1: the sheet closes on its own and a toast reads "<device>’s offer expired."; the
+  sender shows "Offer Expired". 2: a notification "Incoming games from <device>" / "Tap to review.
+  Code <code>." 3: the app comes forward with the sheet open (a game running in it keeps running).
+- **Check:** human only; `adb shell dumpsys notification | grep share_offers` while it is posted.
+
+### RT-532 — Conflicts never replace a newer save on their own, and a full disk blocks Accept
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The receiving phone has the offered game with a battery save newer than the
+  sender's; for part 3, a sender game larger than the phone's free space (fill the data partition
+  with `adb shell fallocate -l <size> /sdcard/fill.bin` and delete it afterwards).
+- **Steps:**
+  1. Send the game; on the sheet press "Review 1 Conflict".
+  2. Leave "Keep Newest", go back and press "Accept"; compare the save's mtime before and after
+     (`adb shell stat -c %Y <saves>/<console>/<game>.srm`).
+  3. Send the large game.
+- **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
+  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace"),
+  and the items skipped for other reasons under "SKIPPED". After the transfer the save's mtime is
+  unchanged and the result says "1 save kept (yours was newer)"; when nothing at all was received
+  it reads "Nothing new was added: your library already had all of it." instead of "They’re in
+  your library". 3: "Not enough space." with the
+  needed, free and missing sizes; "Accept" is disabled.
+- **Check:** human only (screenshots and the two `stat` lines).
+
+### RT-533 — A transfer runs in a foreground service and can be cancelled from the notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A sender offering a game large enough to take a minute (a dummy ROM of 1 GB).
+- **Steps:**
+  1. Accept; while it runs, read the services and the notification.
+  2. Press "Cancel" in the notification.
+  3. Repeat and cancel from the screen ("Cancel Transfer", then confirm).
+  4. Swap the roles: send the large game from the phone and cancel there mid-transfer ("Cancel
+     Transfer", then confirm).
+- **Expected:** The sheet shows "Receiving from <device>", a bar, "<done> of <total>", "File i of n"
+  and "You can turn off the screen or leave the app…". The notification "Receiving from <device>"
+  has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
+  file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
+  notification is gone when the service stops. When the phone is the sender, the receiving device
+  also ends with "Transfer Cancelled" (not a failure card) and keeps nothing. No cancel closes the
+  app or shows "OpenEmux keeps stopping".
+- **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground|types=0x"`
+  shows the service in the foreground with the `dataSync` type while it runs;
+  `adb shell run-as $PKG find files -name ".*tmp"` and the `roms/` listing show nothing new after.
+
+### RT-534 — The screen going off does not stop a long transfer
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533.
+- **Steps:**
+  1. Accept, then `adb shell input keyevent KEYCODE_SLEEP`.
+  2. Wait 60 seconds, `adb shell input keyevent KEYCODE_WAKEUP`.
+- **Expected:** The transfer finished or is still progressing; it never failed. On a phone, also with
+  the power button and the phone on battery.
+- **Check:** human only; `adb logcat -d -s OpenEmuxShare` shows no failure between the two key events.
+
+### RT-535 — The phone stops being discoverable 30 seconds after its share screens close
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Another device listing this phone.
+- **Steps:**
+  1. Open "Receive Games", then go back to "Settings".
+  2. Watch the other device's list for a minute.
+  3. Open "Receive Games" again, go back to the Library and, about 15 seconds later, send a game
+     to the phone from the other device; do not answer.
+- **Expected:** The phone stays listed for about 30 seconds after leaving the screen, then disappears
+  (a transfer running at that moment holds it until 30 seconds after it ends). 3: the "Incoming
+  Games" sheet stays for its whole 60 seconds, past the end of the grace, and closes with the
+  expiry toast; the sender ends expired, not unreachable. The phone stops being listed about 30
+  seconds after that.
+- **Check:** human only; the phone's log shows the server stopping (`share server stopped`).
+
+### RT-536 — The device name from Settings is the one other devices see
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Another device that lists this phone.
+- **Steps:**
+  1. "Settings" › "Device Name": type `QA Phone`, "Save".
+  2. Open "Receive Games" (after leaving it for more than 30 seconds, so the layer restarts).
+  3. Clear the name and save.
+- **Expected:** The row shows "QA Phone"; "Receive Games" reads "Visible as “QA Phone”" and the
+  other device lists "QA Phone". With the field empty the hint names the default and the default
+  comes back. The field takes at most 64 characters.
+- **Check:** human only (screenshots of both devices).
+
+### RT-537 — A game goes from a phone to a tablet with its save, cover and label, ready to play
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone and a tablet with the app, on the same Wi-Fi; on the phone, a game with a
+  battery save, a cover and a cartridge label; the tablet does not have it.
+- **Steps:**
+  1. On the tablet open "Receive Games"; on the phone share the game and tap the tablet.
+  2. Check that both show the same code; accept on the tablet.
+  3. On the tablet press "Show in Library" and start the game.
+- **Expected:** The phone shows "1 Game Sent" / "<tablet> has them now."; the tablet "1 Game
+  Received" / "From <phone>. They’re in your library, ready to play.". The game is in the tablet's
+  library with its cover and label without restarting the app, and it starts with the phone's save.
+- **Check:** human only.
+
+### RT-538 — The share screens work with a gamepad and lay out in two columns on a wide window
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad (or the emulator keyboard mapped as one); for the second part a tablet
+  in landscape or `adb shell wm size 1280x800` with rotation on (restore with `adb shell wm size reset`).
+- **Steps:**
+  1. Open "Share Nearby" from a game and move through it with the D-pad; open "What to Send" and use
+     A and X; open "Connect by Address".
+  2. On the wide window open "Share Nearby" again.
+  3. Repeat in the light theme and in Português (Brasil).
+- **Expected:** Focus starts on the first device, the first game and the "Address" field; A toggles
+  the focused row, X the whole game, B goes back; the hint bar shows them. On the wide window the
+  devices are on the left and "What to Send" inline on the right. Every text is translated and
+  readable in both themes.
+- **Check:** human only (screenshots).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
