@@ -385,14 +385,19 @@ class ShareCoordinator:
         transfer = _Incoming(self, offer, plan, listener)
         hooks = ManagerLibraryHooks(self.win.playlist_manager, self.config)
         shader_ids = [shader_id for shader_id, _label in self.win.shader_catalog.get_options(show_all=True)]
-        transfer.core = self.service.accept(
-            offer.offer_id, plan, hooks,
-            shader_ids=shader_ids,
-            on_progress=lambda progress: self._dispatch(listener.on_receive_progress, progress),
-            on_done=lambda result: self._dispatch(self._receive_done, transfer, result),
-        )
+        # Registered first: a transfer with nothing to upload ends inside accept().
         self.transfer = transfer
         self._cancel_grace()
+        try:
+            transfer.core = self.service.accept(
+                offer.offer_id, plan, hooks,
+                shader_ids=shader_ids,
+                on_progress=lambda progress: self._dispatch(listener.on_receive_progress, progress),
+                on_done=lambda result: self._dispatch(self._receive_done, transfer, result),
+            )
+        except ShareError:
+            self.transfer = None
+            raise
         return transfer
 
     def _receive_done(self, transfer, result):

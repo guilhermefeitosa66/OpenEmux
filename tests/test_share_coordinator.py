@@ -397,6 +397,12 @@ class ReceiveTests(WindowCase):
         self.assertFalse(self.share.busy)
         self.assertEqual(self.listener.done[0]["status"], "done")
 
+    def test_a_refused_accept_leaves_nothing_running(self):
+        self.service.accept_error = ShareError(ErrorCode.TOO_LARGE, "full")
+        with self.assertRaises(ShareError):
+            self.share.accept(self.offer, self.share.plan(self.offer), self.listener)
+        self.assertFalse(self.share.busy)
+
     def test_a_receive_over_several_consoles_rescans_the_library(self):
         two = offer([
             game([item("a", "rom", "A.sfc", b"a")], title="A"),
