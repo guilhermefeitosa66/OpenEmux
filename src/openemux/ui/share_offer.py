@@ -9,9 +9,8 @@ dealt with here, before anything is accepted.
 """
 
 import html
-import time
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from openemux.core.share.display import (
     POLICY_KEYS,
@@ -40,8 +39,7 @@ _LISTED_SKIPS = (
 
 
 class IncomingOfferDialog(Adw.Dialog):
-    def __init__(self, coordinator, offer, timeout_add=GLib.timeout_add_seconds,
-                 source_remove=GLib.source_remove, clock=time.monotonic):
+    def __init__(self, coordinator, offer):
         super().__init__()
         self.coordinator = coordinator
         self.win = coordinator.win
@@ -53,9 +51,7 @@ class IncomingOfferDialog(Adw.Dialog):
         self.transfer = None
         self.progress = None
         self.result = None
-        self._clock = clock
-        self._source_remove = source_remove
-        self.deadline = clock() + OFFER_TTL
+        self.deadline = coordinator.clock() + OFFER_TTL
         self.items = manifest_items(offer.manifest)
         self.plan = coordinator.plan(offer)
         self.conflicts = conflict_rows(coordinator.probe(offer), offer.manifest)
@@ -68,7 +64,7 @@ class IncomingOfferDialog(Adw.Dialog):
         self.root_page = self._build_root()
         self.nav.add(self.root_page)
         self._update_plan()
-        self._tick_id = timeout_add(1, self._tick)
+        self._tick_id = coordinator.timeout_add(1, self._tick)
         self.connect("close-attempt", self._on_close_attempt)
         self.connect("closed", self._on_closed)
         self.set_focus(self.decline_button)
@@ -278,7 +274,7 @@ class IncomingOfferDialog(Adw.Dialog):
     # -- the countdown ---------------------------------------------------
 
     def _remaining(self):
-        return self.deadline - self._clock()
+        return self.deadline - self.coordinator.clock()
 
     def _show_countdown(self):
         self.expires.set_label(self.t("share.offer.expires", time=countdown(self._remaining())))
@@ -299,7 +295,7 @@ class IncomingOfferDialog(Adw.Dialog):
 
     def _stop_tick(self):
         if self._tick_id is not None:
-            self._source_remove(self._tick_id)
+            self.coordinator.source_remove(self._tick_id)
             self._tick_id = None
 
     # -- answers ---------------------------------------------------------

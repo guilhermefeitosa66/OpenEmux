@@ -67,16 +67,13 @@ _ADDRESS_ERRORS = {
 
 
 class ShareDialog(Adw.Dialog):
-    def __init__(self, coordinator, roms=None, timeout_add=GLib.timeout_add_seconds,
-                 source_remove=GLib.source_remove):
+    def __init__(self, coordinator, roms=None):
         super().__init__()
         self.coordinator = coordinator
         self.win = coordinator.win
         self.t = self.win.t
         self.roms = list(roms) if roms else None
         self.mode = "send" if self.roms else "receive"
-        self._timeout_add = timeout_add
-        self._source_remove = source_remove
         self.built = None
         self.unchecked = set()
         self.transfer = None
@@ -86,6 +83,7 @@ class ShareDialog(Adw.Dialog):
         self._empty_timer = None
         self._peer_rows = []
         self._syncing = False
+        self.is_unavailable = False
         self.what_page = None
         self.address_page = None
         self.waiting = None
@@ -190,19 +188,24 @@ class ShareDialog(Adw.Dialog):
         availability = self.coordinator.availability()["share"]
         if availability != "ok":
             name = availability.partition(":")[2]
-            self.unavailable.set_description(self.t("share.unavailable.body", name=name))
-            self.stack.set_visible_child_name("unavailable")
+            self._show_unavailable(self.t("share.unavailable.body", name=name))
             return
         if self.coordinator.state == STATE_FAILED:
-            self.unavailable.set_description(self.t("share.unavailable.failed"))
-            self.stack.set_visible_child_name("unavailable")
+            self._show_unavailable(self.t("share.unavailable.failed"))
             return
+        self.is_unavailable = False
         name = self.coordinator.device_name()
         self.visible_row.set_title(self.t("share.visible_as", name=name))
         if self.mode == "receive":
             self.ready.set_description(self.t("share.receive.body", name=name))
+            self.stack.set_visible_child_name("main")
         self._refresh_address()
         self._update_root()
+
+    def _show_unavailable(self, description):
+        self.is_unavailable = True
+        self.unavailable.set_description(description)
+        self.stack.set_visible_child_name("unavailable")
 
     # -- devices ---------------------------------------------------------
 
@@ -244,7 +247,7 @@ class ShareDialog(Adw.Dialog):
         return self.built is not None and summarize(self._selection())["files"] > 0
 
     def _update_root(self):
-        if self.mode != "send" or self.stack.get_visible_child_name() == "unavailable":
+        if self.mode != "send" or self.is_unavailable:
             return
         selected = self._something_selected()
         for row in self._compatible_peers():
@@ -254,7 +257,7 @@ class ShareDialog(Adw.Dialog):
             self._stop_empty_timer()
             self.nothing_found = False
         elif self._empty_timer is None and not self.nothing_found:
-            self._empty_timer = self._timeout_add(NOTHING_FOUND_SECONDS, self._on_nothing_found)
+            self._empty_timer = self.coordinator.timeout_add(NOTHING_FOUND_SECONDS, self._on_nothing_found)
         self.stack.set_visible_child_name("empty" if self.nothing_found else "main")
 
     def _on_nothing_found(self):
@@ -265,7 +268,7 @@ class ShareDialog(Adw.Dialog):
 
     def _stop_empty_timer(self):
         if self._empty_timer is not None:
-            self._source_remove(self._empty_timer)
+            self.coordinator.source_remove(self._empty_timer)
             self._empty_timer = None
 
     # -- what to send ----------------------------------------------------

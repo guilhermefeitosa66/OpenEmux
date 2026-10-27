@@ -18,6 +18,7 @@ Only this module talks to the service API, so a change there stays here.
 
 import logging
 import threading
+import time
 
 from gi.repository import Gio, GLib
 
@@ -52,7 +53,8 @@ def _thread(target, *args):
 class ShareCoordinator:
     def __init__(self, window, service_factory=ShareService, dispatch=GLib.idle_add,
                  timeout_add=GLib.timeout_add_seconds, source_remove=GLib.source_remove,
-                 run_async=_thread, client_factory=ShareClient, addresses=local_ipv4_addresses):
+                 run_async=_thread, client_factory=ShareClient, addresses=local_ipv4_addresses,
+                 clock=time.monotonic):
         self.win = window
         self.config = window.config_manager
         self.service = service_factory(
@@ -62,8 +64,10 @@ class ShareCoordinator:
             on_peers_changed=lambda: self._dispatch(self._on_peers_changed),
         )
         self._idle_add = dispatch
-        self._timeout_add = timeout_add
-        self._source_remove = source_remove
+        #: The timers and the clock, for the dialogs too.
+        self.timeout_add = timeout_add
+        self.source_remove = source_remove
+        self.clock = clock
         self._run_async = run_async
         self._client_factory = client_factory
         self._addresses = addresses
@@ -146,11 +150,11 @@ class ShareCoordinator:
             return
         if self.state in (STATE_STOPPED, STATE_FAILED):
             return
-        self._grace = self._timeout_add(GRACE_SECONDS, self._on_grace)
+        self._grace = self.timeout_add(GRACE_SECONDS, self._on_grace)
 
     def _cancel_grace(self):
         if self._grace is not None:
-            self._source_remove(self._grace)
+            self.source_remove(self._grace)
             self._grace = None
 
     def _on_grace(self):
