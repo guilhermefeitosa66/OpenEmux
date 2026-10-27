@@ -44,16 +44,28 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None, errors=None):
     )
 
 
-def _copy_stream(source, handle, chunk_size):
+def _copy_stream(source, handle, chunk_size, on_chunk=None):
+    copied = 0
     while True:
         chunk = source.read(chunk_size)
         if not chunk:
             break
         handle.write(chunk)
+        copied += len(chunk)
+        if on_chunk is not None:
+            on_chunk(len(chunk))
+    return copied
 
 
 def _replace_atomically(path, write_body, open_mode, encoding, mode, errors=None):
     """Write through a temporary file and rename it over ``path``."""
+    staged = _stage(path, write_body, open_mode, encoding, mode, errors)
+    staged.commit(replace=True)
+    return staged.path
+
+
+def _stage(path, write_body, open_mode, encoding, mode, errors=None):
+    """Write the content into a temporary file beside ``path``, on the disk."""
     path = Path(path)
     directory = path.parent
     directory.mkdir(parents=True, exist_ok=True)
@@ -69,20 +81,86 @@ def _replace_atomically(path, write_body, open_mode, encoding, mode, errors=None
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(handle_fd, open_mode, encoding=encoding, errors=errors) as handle:
-            write_body(handle)
+            written = write_body(handle)
             # flush() only reaches the OS; fsync() is what reaches the disk.
             # Without it the rename can land before the content does, and a
             # power loss leaves an intact name over an empty file.
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(tmp_path, mode)
-        os.replace(tmp_path, path)
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
+    return StagedFile(path, tmp_path, written if isinstance(written, int) else None)
 
-    _fsync_directory(directory)
-    return path
+
+class StagedFile:
+    """A file written in full beside its target, not yet renamed into place.
+
+    The two-phase half of the module, for a caller that must have every file
+    of a set on the disk before any of them appears (a game arriving over
+    Share nearby, issue #588). ``size`` is the byte count a streamed stage
+    copied. Until :meth:`commit`, the content lives under a dotfile name no
+    scanner picks up; :meth:`discard` removes it.
+    """
+
+    def __init__(self, path, tmp_path, size=None):
+        self.path = Path(path)
+        self.tmp_path = Path(tmp_path)
+        self.size = size
+        self.done = False
+
+    def commit(self, replace=True):
+        """Rename the content into place.
+
+        ``replace=False`` refuses a target that exists by now, with
+        :class:`FileExistsError`: a hard link fails on an existing name, which
+        makes the check and the rename one step. A filesystem without hard
+        links (FAT, some network mounts) falls back to a check then a rename.
+        Either failure removes the temporary file.
+        """
+        try:
+            if replace:
+                os.replace(self.tmp_path, self.path)
+            else:
+                self._commit_new()
+        except BaseException:
+            self.discard()
+            raise
+        self.done = True
+        _fsync_directory(self.path.parent)
+        return self.path
+
+    def _commit_new(self):
+        try:
+            os.link(self.tmp_path, self.path)
+        except FileExistsError:
+            raise
+        except OSError:
+            if os.path.lexists(self.path):
+                raise FileExistsError(str(self.path)) from None
+            os.replace(self.tmp_path, self.path)
+            return
+        self.tmp_path.unlink()
+
+    def discard(self):
+        """Remove the temporary file; harmless once committed or discarded."""
+        if not self.done:
+            self.tmp_path.unlink(missing_ok=True)
+            self.done = True
+
+
+def stage_stream(path, source, chunk_size=1024 * 1024, mode=None, on_chunk=None):
+    """Copy a binary stream beside ``path`` without renaming it into place.
+
+    ``on_chunk(n)`` is called after each chunk is written, with its size --
+    for progress, a running hash or a cancel check. It may raise: the
+    temporary file is removed and the exception propagates. Returns a
+    :class:`StagedFile` whose ``size`` is the number of bytes copied.
+    """
+    return _stage(
+        path, lambda handle: _copy_stream(source, handle, chunk_size, on_chunk), "wb", None, mode
+    )
 
 
 def atomic_write_bytes(path, data, mode=None):

@@ -52,8 +52,8 @@ class ErrorCode:
     """Error codes, on the wire and in the core's own failures.
 
     The UI translates these (#589); the core never shows a sentence to a user.
-    The last three never cross the network: they are what the client or the
-    service report locally.
+    The ones after ``internal`` never cross the network: they are what the
+    client or the service report locally.
     """
 
     BAD_REQUEST = "bad_request"
@@ -67,9 +67,39 @@ class ErrorCode:
     TOO_LARGE = "too_large"
     NOT_IMPLEMENTED = "not_implemented"
     INTERNAL = "internal"
+    NO_SPACE = "no_space"
     FINGERPRINT_MISMATCH = "fingerprint_mismatch"
     UNREACHABLE = "unreachable"
     UNAVAILABLE = "unavailable"
+    #: A file changed on the sender's disk after the manifest was built.
+    SOURCE_CHANGED = "source_changed"
+    #: An accepted transfer went quiet for longer than :data:`IDLE_TIMEOUT`.
+    IDLE_TIMEOUT = "idle_timeout"
+
+
+class SkipReason:
+    """Why an offered item is answered ``skip`` (and why a game is left out
+    of a manifest, for the last two)."""
+
+    INCOMPATIBLE_STATE = "incompatible_state"
+    EXISTS_SKIP = "exists_skip"
+    UNSUPPORTED_CONSOLE = "unsupported_console"
+    USER_UNCHECKED = "user_unchecked"
+    INVALID_ITEM = "invalid_item"
+    UNIT_INCOMPLETE = "unit_incomplete"
+    TOO_MANY_ITEMS = "too_many_items"
+
+
+#: Item kinds and multi-file roles (spec section 10).
+KIND_ROM = "rom"
+KIND_BATTERY_SAVE = "battery_save"
+KIND_STATE = "state"
+KIND_COVER = "cover"
+KIND_LABEL = "label"
+ITEM_KINDS = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL)
+PART_ROLES = ("cue", "bin", "m3u", "disc", "main")
+#: The roles that carry the unit's name; the others are referenced by it.
+MAIN_ROLES = ("cue", "m3u", "main")
 
 
 #: The HTTP status each wire error is answered with.
@@ -85,6 +115,7 @@ HTTP_STATUS = {
     ErrorCode.TOO_LARGE: 413,
     ErrorCode.NOT_IMPLEMENTED: 501,
     ErrorCode.INTERNAL: 500,
+    ErrorCode.NO_SPACE: 507,
 }
 
 

@@ -358,6 +358,13 @@ class RetroArchLauncher:
             return None
         return self._resolve_core_name(hint)
 
+    def resolve_core_path(self, console, rom_path=None):
+        """The core a launch of ``rom_path`` would run, or ``None``.
+
+        Share nearby (issue #588) tags a save state with the core that made it.
+        """
+        return self._find_core_path(console, rom_path)
+
     def _find_core_path(self, console, rom_path=None):
         system_id = resolve_system_id(console)
 

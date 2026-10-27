@@ -248,8 +248,11 @@ The sender polls this every second until the status is final.
   `cancelled`. Only `pending` is not final.
 - `items` is present only when `accepted`: one entry per manifest item the
   receiver answered, with `action` `send` or `skip` and, for `skip`, a
-  `reason`: `incompatible_state`, `exists_skip`, `unsupported_console` or
-  `user_unchecked`. An item missing from the list is not to be sent.
+  `reason`: `incompatible_state`, `exists_skip`, `unsupported_console`,
+  `user_unchecked` or `invalid_item` (an item the receiver will not write: an
+  unknown kind, a name it refuses, a suffix the console does not load). An
+  item missing from the list is not to be sent. Senders MUST accept reasons
+  they do not know and treat them as a skip.
 - A finished offer is kept for at least 5 minutes so the last poll can read
   it; afterwards `404 not_found`.
 
@@ -263,6 +266,16 @@ The sender polls this every second until the status is final.
   state. A receiver that cancels while an upload is in progress also closes
   that connection.
 - Success: `204`, no body.
+- When the item carries a `sha256` and the body does not match it, or the body
+  is shorter than `Content-Length`, the receiver answers `400 bad_request`
+  and **aborts the whole offer**: everything received so far is discarded and
+  the offer becomes `cancelled`.
+- A receiver whose disk fills up while writing answers `507 no_space` and
+  aborts the offer the same way.
+- A receiver MAY stage the files it receives (write each one under a
+  temporary name) and make them all appear only when the last one has
+  arrived, so a cancelled or broken transfer leaves nothing behind. The
+  desktop app does; the sender cannot tell the difference.
 - Writing, verifying and placing the files is specified with the manifest
   (§10); a build that cannot receive files yet answers `501 not_implemented`.
 
@@ -379,8 +392,15 @@ builds on these rules.
 - `name` is **never a path**. The receiver MUST reject (`400 bad_request`) a
   name that is empty, `.` or `..`, or contains `/`, `\`, `..` or NUL, and MUST
   compute every destination path itself; the name is used for display and as a
-  suffix only.
+  suffix only. Beyond that, a receiver answers `skip` / `invalid_item` for an
+  item it will not write -- the desktop app does so for a name starting with
+  `.`, a `rom` whose suffix the console does not load (a unit's `bin` and
+  `disc` parts excepted), a `battery_save` whose name does not start with the
+  unit's main stem and a dot, and a `cover` or `label` that is not a PNG, JPEG
+  or WebP.
 - Unknown fields MUST be ignored.
+- `tests/data/share_vectors.json` holds a `manifest_sample` (one multi-file
+  game, a battery save, a state and a cover) that both apps' tests parse.
 
 **Console ids:**
 
@@ -425,6 +445,7 @@ Every error answer has this body (extra fields per error, as in §2):
 | `cancelled` | 410 | The offer was cancelled. |
 | `declined` | 410 | The offer was declined. |
 | `too_large` | 413 | Request body over 1 MiB. |
+| `no_space` | 507 | The receiver's disk filled up during `PUT /file`; the offer is aborted. |
 | `not_implemented` | 501 | The endpoint is not available in this build. |
 | `internal` | 500 | Anything else. |
 
