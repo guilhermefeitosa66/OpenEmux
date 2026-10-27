@@ -660,7 +660,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.import_btn.set_icon_name("folder-download-symbolic")
         self._translatable(lambda: self.import_btn.set_tooltip_text(self.t("header.import")))
         self._translatable(lambda: self.import_btn.set_dropdown_tooltip(self.t("header.import_more")))
-        self.import_btn.set_menu_model(self._build_import_menu())
+        # Rebuilt on a language change: a Gio.Menu's labels are fixed once set.
+        self._translatable(lambda: self.import_btn.set_menu_model(self._build_import_menu()))
         self.import_btn.connect("clicked", lambda _b: self.imports.open_picker())
         header.pack_start(self.import_btn)
 
@@ -1129,13 +1130,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
 
         self.selection_share_button = Gtk.Button()
-        self.selection_share_button.set_child(
-            Adw.ButtonContent(icon_name=SHARE_ICON, label=self.t("share.selection.label"))
-        )
+        share_content = Adw.ButtonContent(icon_name=SHARE_ICON)
+        self._translatable(lambda: share_content.set_label(self.t("share.selection.label")))
+        self.selection_share_button.set_child(share_content)
         # "raised": a toolbar draws icon buttons flat, and this one sits among
         # text buttons that keep their background.
         self.selection_share_button.add_css_class("raised")
-        self.selection_share_button.set_tooltip_text(self.t("share.selection.tooltip"))
+        self._translatable(
+            lambda: self.selection_share_button.set_tooltip_text(self.t("share.selection.tooltip"))
+        )
         self.selection_share_button.connect("clicked", lambda _b: self.share_roms(self._selected_roms))
 
         delete_button = Gtk.Button(label=self.t("selection.delete"))

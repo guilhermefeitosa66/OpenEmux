@@ -2228,6 +2228,19 @@ class TheLanguageChangeTests(WindowCase):
         self.assertEqual(self.config.get_locale(), "pt_BR")
         self.assertTrue(refresh.call_args.kwargs["force"])
 
+    def test_the_import_menu_and_the_share_button_follow_the_new_locale(self):
+        # Built once with the old language, they would keep it (issue #611).
+        with mock.patch.object(self.win, "refresh_library"):
+            self.win._apply_language_change("pt_BR")
+        model = self.win.import_btn.get_menu_model()
+        self.assertEqual(
+            [model.get_item_attribute_value(i, "label").get_string() for i in range(2)],
+            ["Importar ROMs…", "Receber jogos…"],
+        )
+        button = self.win.selection_share_button
+        self.assertEqual(button.get_child().get_label(), "Compartilhar")
+        self.assertEqual(button.get_tooltip_text(), "Compartilhar por perto")
+
     def test_the_translated_strings_follow_the_new_locale(self):
         english = self.win.t("app.title")
         with mock.patch.object(self.win, "refresh_library"):

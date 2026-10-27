@@ -7941,7 +7941,7 @@ stands in for the other device; multicast may not cross the container.
 - **Expected:** Step 1 opens a dialog titled "Share Nearby" with the subtitle "1 game · <size>"
   and a spinner beside "Devices on This Network". Step 2's menu reads "Share 3 Games Nearby…", and
   the selection bar has a "Share" button (text label beside the share glyph, three connected dots)
-  with the tooltip "Share Nearby", between "Sync Covers" and "Delete". Step 3's menu has "Share All
+  with the tooltip "Share Nearby", between "Sync covers" and "Delete". Step 3's menu has "Share All
   Games Nearby…" right after "Sync covers". Every Share entry shows the three-dot share glyph,
   never a Wi-Fi icon, in the light and the dark theme.
 - **Check:** One `make devbox-shot WIN=1` per step showing the dialog title and subtitle, the
@@ -7958,7 +7958,8 @@ stands in for the other device; multicast may not cross the container.
   2. Choose "Connect by Address".
   3. Close the dialog and open the "Main Menu".
 - **Expected:** A "Receive Games" dialog with "Ready to Receive" under the share glyph and
-  "Visible as “<name>”", and no device list. Step 3's "Main Menu" has no "Receive Games…" entry. The "Connect by Address" page shows the address as `host:port`, the fingerprint
+  "Visible as “<name>”", and no device list. Step 3's "Main Menu" has no "Receive Games…" entry.
+  The "Connect by Address" page shows the address as `host:port`, the fingerprint
   in groups of four and a "Copy Address" button; the QR code shows when `python3-segno` is
   installed and is simply absent otherwise.
 - **Check:** `make devbox-shot WIN=1` of both pages and of the "Main Menu". Suite:

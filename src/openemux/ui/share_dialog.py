@@ -1,7 +1,7 @@
 """The Share Nearby dialog: pick what to send and to whom (#589).
 
 Opened for a game, a selection or a whole console ("send"), or from the
-primary menu to only be visible ("receive"). While it is open this device is
+Import button's menu to only be visible ("receive"). While it is open this device is
 discoverable -- the coordinator keeps the service up -- and it lists the other
 devices as discovery finds them. Choosing one sends; the waiting, progress
 and result pages then replace the list, so Back cannot leave a transfer.
