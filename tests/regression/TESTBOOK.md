@@ -6922,7 +6922,8 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
 The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
 `pkg/android/openemux`) opening on the shelf it had, instead of an empty library, while its first
 scan runs (#574). The app keeps the last scan's ROM list in `files/library.index` and reads it when
-the process starts. The runner has no Android device, so these are `MANUAL`: a person runs them on a
+the process starts; a scan that runs while the shared storage is not mounted yet (right after a
+boot) is skipped, so it can neither empty the shelf nor the index (#608). The runner has no Android device, so these are `MANUAL`: a person runs them on a
 phone or a headless emulator with `adb`. The package is `com.openemux.mobile`; ROMs go in
 `/sdcard/Android/data/com.openemux.mobile/files/roms/<console>/` (e.g. `GBA`, `SFC`, `FC`). A
 frame-by-frame look at a start is `adb shell screenrecord /sdcard/start.mp4` running while the app
@@ -6938,11 +6939,20 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   2. Start recording the screen and open the app from the launcher.
   3. On a tablet-sized window (`adb shell wm size 1600x2560` and `adb shell wm density 320`), repeat
      steps 1 and 2, then `adb shell wm size reset` and `adb shell wm density reset`.
+  4. A library big enough for the scan to take visible time: add 204 empty placeholder ROMs over six
+     more consoles with
+     `adb shell 'R=/sdcard/Android/data/com.openemux.mobile/files/roms; for c in FC:nes GB:gb MD:md N64:z64 SMS:sms PCE:pce; do d=${c%%:*}; mkdir -p $R/$d; for i in $(seq 1 34); do touch "$R/$d/Placeholder $i.${c##*:}"; done; done'`,
+     open the app once and wait for the new shelves, then repeat steps 1 and 2.
+  5. Remove the placeholders:
+     `adb shell 'rm -f /sdcard/Android/data/com.openemux.mobile/files/roms/*/Placeholder*'`, open the
+     app once and wait for "2 consoles · 5 games".
 - **Expected:** Every frame after the app's first paints the console shelf. "Your shelf is empty"
   and "Import ROMs" never appear in the middle of the shelf, not even for a frame. The header reads
   "2 consoles · 5 games" from its first frame, never "0 consoles · 0 games"; on the tablet window
   the same count sits under the "Shelf" title of the tablet header, next to its search and import
-  buttons.
+  buttons. In step 4 the header reads "8 consoles · 209 games" from the first frame. In every
+  recording the console cards are fully drawn on the app's first frame: no card fades in or pops in
+  after the others.
 - **Check:** human only (step through each recording frame by frame).
 
 ### RT-499 — The shelf survives a process kill and a reboot
@@ -6952,10 +6962,16 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 - **Steps:**
   1. Open the app, press Home, then `adb shell am kill com.openemux.mobile`.
   2. Reopen the app from the recent apps.
-  3. `adb reboot`, wait for the device to finish booting, open the app.
-- **Expected:** After steps 2 and 3 the app opens on the console shelf with the real counts, as in
-  RT-498; the empty state never appears.
-- **Check:** human only (a recording of each start).
+  3. `adb reboot`, then open the app the moment the boot completes:
+     `adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'`
+     followed at once by `adb shell am start -n com.openemux.mobile/.MainActivity` (record to
+     `/data/local/tmp/start.mp4`: `/sdcard` may not be mounted yet).
+  4. `adb shell am force-stop com.openemux.mobile`, then open the app again.
+- **Expected:** After steps 2, 3 and 4 the app opens on the console shelf with the real counts, as
+  in RT-498; the empty state never appears. Step 4 matters most: a scan that ran before the storage
+  was mounted must not have emptied the index the next start opens on.
+- **Check:** human only (a recording of each start), plus
+  `adb shell run-as com.openemux.mobile cat files/library.index` after step 4 still lists the 5 ROMs.
 
 ### RT-500 — A fresh install still shows the empty shelf
 - **Area:** Android — Library start-up
@@ -7037,6 +7053,22 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   frame reads "0 consoles · 0 games". Afterwards `files/library.index` exists again.
 - **Check:** human only (step through the recording), plus
   `adb shell run-as com.openemux.mobile ls files/library.index` succeeds.
+
+### RT-546 — Updating from a build without the index never shows the empty shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK of the app from before the index (open-emux-mobile at `1100bfdb75`
+  or earlier) and the current debug APK.
+- **Steps:**
+  1. `adb uninstall com.openemux.mobile`, install the older APK, finish the first-run setup and
+     import the ROMs of RT-498.
+  2. `adb install -r <the current APK>`, start recording the screen and open the app.
+  3. `adb shell am force-stop com.openemux.mobile`, start recording again and open the app.
+- **Expected:** In step 2 the "Shelf" title may show no count until the scan ends (RT-505), then the
+  shelf shows with "2 consoles · 5 games". In step 3 the shelf and its count are there from the
+  first frame (RT-498). "Your shelf is empty" and "Import ROMs" never appear in either.
+- **Check:** human only (step through both recordings), plus
+  `adb shell run-as com.openemux.mobile ls files/library.index` succeeds after step 2.
 
 ## Android — Tablet list + detail
 
