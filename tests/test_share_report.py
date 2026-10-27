@@ -54,7 +54,8 @@ class SendReportTests(unittest.TestCase):
         )
         self.assertEqual((got.delivered, got.total), (2, 3))
         self.assertFalse(got.complete)
-        self.assertEqual(got.missing, [{"title": "C", "console": "FC", "reason": SkipReason.USER_UNCHECKED}])
+        self.assertEqual(got.missing, [{"title": "C", "console": "FC", "reason": SkipReason.USER_UNCHECKED,
+                                       "excluded": False}])
 
     def test_a_rom_already_there_with_nothing_else_is_not_sent(self):
         got = report.send_report(
@@ -94,7 +95,7 @@ class SendReportTests(unittest.TestCase):
             built(game("A", item("a"))),
             {"sent": [], "skipped": [skip("a", None), "junk"]},
         )
-        self.assertEqual(got.missing, [{"title": "A", "console": "SFC", "reason": None}])
+        self.assertEqual(got.missing, [{"title": "A", "console": "SFC", "reason": None, "excluded": False}])
 
     def test_a_game_with_nothing_sent_and_no_rom_has_no_reason(self):
         got = report.send_report(built(game("Art", item("c", KIND_COVER))), {"sent": None, "skipped": None})
@@ -108,8 +109,8 @@ class SendReportTests(unittest.TestCase):
         got = report.send_report(built(game("A", item("a")), excluded=excluded), {"sent": ["a"]})
         self.assertEqual((got.delivered, got.total), (1, 3))
         self.assertEqual(got.missing, [
-            {"title": "Gone", "console": "GBA", "reason": SkipReason.UNIT_INCOMPLETE},
-            {"title": "Nameless", "console": "", "reason": SkipReason.INVALID_ITEM},
+            {"title": "Gone", "console": "GBA", "reason": SkipReason.UNIT_INCOMPLETE, "excluded": True},
+            {"title": "Nameless", "console": "", "reason": SkipReason.INVALID_ITEM, "excluded": True},
         ])
 
     def test_an_empty_manifest(self):
@@ -142,7 +143,8 @@ class ReceiveReportTests(unittest.TestCase):
             plan_game("dup", ROM_EXISTING, decision("a", ACTION_SKIP, reason=SkipReason.EXISTS_SKIP), title="Dup"),
         ])
         got = report.receive_report(plan)
-        self.assertEqual(got.missing, [{"title": "Dup", "console": "SFC", "reason": SkipReason.EXISTS_SKIP}])
+        self.assertEqual(got.missing, [{"title": "Dup", "console": "SFC", "reason": SkipReason.EXISTS_SKIP,
+                                       "excluded": False}])
 
     def test_an_absent_game_gives_its_rom_reason(self):
         plan = ReceivePlan([

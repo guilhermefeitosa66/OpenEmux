@@ -448,6 +448,9 @@ class NotSentTests(_DialogCase):
         self.assertEqual(_status(self.dialog).get_title(), "No Games Sent")
         rows = _action_rows(self.dialog.result.missing_group)
         self.assertEqual(rows[0].get_title(), rom["name"])
+        # Dropped here, before the offer: the reason is this device's, not Phone's.
+        self.assertNotIn("Phone", rows[0].get_subtitle())
+        self.assertTrue(rows[0].get_subtitle().endswith(" · Can't be sent: a track file is outside the game's folder or missing"))
 
 
 def _action_rows(widget):

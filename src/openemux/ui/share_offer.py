@@ -360,11 +360,11 @@ class IncomingOfferDialog(Adw.Dialog):
         ]
 
     def _show_result(self, result):
-        games = self._received_games()
+        report = receive_report(self.plan)
         self.result = result_page(
-            self.t, result, self.device, receiving=True, report=receive_report(self.plan),
+            self.t, result, self.device, receiving=True, report=report,
             summary=self.coordinator.result_counts(result),
-            on_close=self.close, on_show=self._show_in_library if games else None,
+            on_close=self.close, on_show=self._show_in_library if report.delivered else None,
         )
         show_page(self, self.result)
 

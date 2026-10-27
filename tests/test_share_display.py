@@ -68,6 +68,12 @@ class WordsTests(unittest.TestCase):
         self.assertEqual(display.sender_reason_key(None), "share.reason.sent.not_accepted")
         self.assertEqual(display.sender_reason_key(SkipReason.INVALID_ITEM), "share.reason.sent.cant_place")
 
+    def test_a_game_the_sender_left_out_is_never_blamed_on_the_receiver(self):
+        self.assertEqual(display.excluded_reason_key(SkipReason.UNSUPPORTED_CONSOLE),
+                         "share.excluded.unsupported_console")
+        self.assertEqual(display.excluded_reason_key(SkipReason.INVALID_ITEM), "share.excluded.invalid_item")
+        self.assertEqual(display.excluded_reason_key(None), "share.excluded.invalid_item")
+
     def test_item_kinds(self):
         self.assertEqual(display.item_kind_label("rom", t), "Game")
         self.assertEqual(display.item_kind_label("battery_save", t), "Battery Save")

@@ -8,7 +8,9 @@ behind it for Back to return to while a transfer is running.
 
 from gi.repository import Adw, Gtk, Pango
 
-from openemux.core.share.display import error_key, format_size, plural, reason_key, sender_reason_key, spaced_digits
+from openemux.core.share.display import (
+    error_key, excluded_reason_key, format_size, plural, reason_key, sender_reason_key, spaced_digits,
+)
 from openemux.core.share.protocol import ErrorCode
 from openemux.core.share.report import DeliveryReport
 from openemux.core.share.verification import format_code
@@ -195,7 +197,13 @@ def _missing_group(t, report, device, receiving):
     """The games that did not arrive, one row each: title, console and why."""
     group = Adw.PreferencesGroup(title=t("share.result.not_received" if receiving else "share.result.not_sent"))
     for entry in report.missing:
-        reason = t(reason_key(entry["reason"])) if receiving else t(sender_reason_key(entry["reason"]), device=device)
+        if receiving:
+            reason = t(reason_key(entry["reason"]))
+        elif entry.get("excluded"):
+            # Left out here, before the offer: the receiver never saw it.
+            reason = t(excluded_reason_key(entry["reason"]))
+        else:
+            reason = t(sender_reason_key(entry["reason"]), device=device)
         # Titles come from the other device: never markup.
         # Markup off before the title is set, or it is parsed once anyway.
         row = Adw.ActionRow()

@@ -21,7 +21,8 @@ from openemux.core.share.protocol import KIND_ROM, SkipReason
 class DeliveryReport:
     delivered: int = 0
     total: int = 0
-    #: ``{title, console, reason}`` for every game that did not arrive.
+    #: ``{title, console, reason, excluded}`` for every game that did not
+    #: arrive; ``excluded`` when the sender's own build left it out.
     missing: list = field(default_factory=list)
 
     @property
@@ -66,11 +67,13 @@ def send_report(built, result):
             continue
         # The main ROM's reason first; a ROM already there only when it is all.
         reason = reasons.get((missing or unsent)[0]["id"]) if unsent else None
-        report.missing.append({"title": game["title"], "console": game["console"], "reason": reason})
+        report.missing.append({"title": game["title"], "console": game["console"], "reason": reason,
+                               "excluded": False})
     for entry in built.excluded:
         rom = entry["rom"]
         title = rom.get("name") or Path(str(rom.get("path", ""))).stem
-        report.missing.append({"title": title, "console": rom.get("console", ""), "reason": entry["reason"]})
+        report.missing.append({"title": title, "console": rom.get("console", ""), "reason": entry["reason"],
+                               "excluded": True})
     report.total = len(built.manifest["games"]) + len(built.excluded)
     return report
 
@@ -90,7 +93,8 @@ def receive_report(plan, unchecked=()):
         if game_delivered(game.rom_status, {decision.action for decision in game.decisions}):
             report.delivered += 1
             continue
-        report.missing.append({"title": game.title, "console": game.console, "reason": _receive_reason(game)})
+        report.missing.append({"title": game.title, "console": game.console, "reason": _receive_reason(game),
+                               "excluded": False})
     return report
 
 

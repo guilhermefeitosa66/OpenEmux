@@ -8073,7 +8073,7 @@ stands in for the other device; multicast may not cross the container.
   the receiver "1 of 2 Games Received".
 - **Check:** `tests/test_share_ui_loopback.py`; on two real machines the same flow is `MANUAL`.
 
-### RT-548 — A game the receiver leaves out is listed on the sender's result
+### RT-549 — A game the receiver leaves out is listed on the sender's result
 - **Area:** Share nearby (desktop)
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.
@@ -8083,12 +8083,13 @@ stands in for the other device; multicast may not cross the container.
   warning icon, never "N Games Sent"; under "Not Sent" the skipped game is a row with its title
   and "<Console> · <reason>" ("Not accepted on <device>", "Already on <device>", …). A game that
   was selected but dropped while the games were prepared for the send (its file gone) is listed
-  there too and counted in N. When nothing arrived the title is "No Games Sent".
+  there too and counted in N, with this device's reason ("Can't be sent: …"), never one that
+  names the receiver. When nothing arrived the title is "No Games Sent".
 - **Check:** `tests/test_share_report.py`, `tests/test_share_dialog.py` (`NotSentTests`),
   `tests/test_share_ui_loopback.py`. On two machines: send two games to a device that already has
   one of them and read the sender's result (`MANUAL`).
 
-### RT-549 — The desktop receiver lists the games it did not add, by title and reason
+### RT-550 — The desktop receiver lists the games it did not add, by title and reason
 - **Area:** Share nearby (desktop)
 - **Mode:** AUTO-SUITE
 - **Preconditions:** None.

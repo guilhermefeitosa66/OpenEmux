@@ -327,7 +327,8 @@ class SendTests(WindowCase):
         callbacks["on_done"]({"status": "done", "sent": [item_id], "skipped": []})
         report = self.listener.reports[0]
         self.assertEqual((report.delivered, report.total), (1, 2))
-        self.assertEqual(report.missing, [{"title": "Alien", "console": "XX", "reason": "unsupported_console"}])
+        self.assertEqual(report.missing, [{"title": "Alien", "console": "XX", "reason": "unsupported_console",
+                                          "excluded": True}])
 
     def test_a_cancel_while_hashing_never_offers(self):
         rom = self.rom()

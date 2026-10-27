@@ -10,6 +10,7 @@ and result pages then replace the list, so Back cannot leave a transfer.
 from gi.repository import Adw, Gdk, GLib, Gtk
 
 from openemux.core.share.display import (
+    excluded_reason_key,
     format_date,
     format_size,
     paths_label,
@@ -23,7 +24,6 @@ from openemux.core.share.protocol import (
     PROTOCOL_VERSION,
     SERVER_PORT,
     ErrorCode,
-    SkipReason,
     format_fingerprint,
 )
 from openemux.core.share.selection import (
@@ -64,11 +64,6 @@ _GROUP_TITLES = {
     COVER: "share.items.cover",
     LABEL: "share.items.label",
     DETAILS: "share.items.details",
-}
-_EXCLUDED = {
-    SkipReason.UNIT_INCOMPLETE: "share.excluded.unit_incomplete",
-    SkipReason.UNSUPPORTED_CONSOLE: "share.excluded.unsupported_console",
-    SkipReason.TOO_MANY_ITEMS: "share.excluded.too_many_items",
 }
 _ADDRESS_ERRORS = {
     ErrorCode.BAD_REQUEST: "share.address.invalid",
@@ -332,7 +327,7 @@ class ShareDialog(Adw.Dialog):
         for entry in excluded:
             row = Adw.ActionRow(title=entry["title"])
             row.set_use_markup(False)
-            row.set_subtitle(t(_EXCLUDED.get(entry["reason"], "share.excluded.invalid_item")))
+            row.set_subtitle(t(excluded_reason_key(entry["reason"])))
             check = Gtk.CheckButton(active=False)
             row.add_prefix(check)
             row.set_sensitive(False)
