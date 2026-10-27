@@ -5375,10 +5375,16 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   3. Repeat steps 1 and 2.
   4. Half open, `adb shell settings put system user_rotation 0` (the fold now runs down the middle).
   5. Repeat steps 1 and 2 with the Game Gear game.
+  6. With the Game Boy Advance game, `adb emu fold` (the outer screen); wait two seconds.
+  7. `adb emu unfold`, `adb shell settings put system user_rotation 1` and
+     `adb emu sensor set hinge-angle0 90`; wait two seconds.
 - **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
   drawn Game Gear skin); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
   and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
   middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
+  Folded, the outer screen shows the phone skin, and nothing sits where the fold was; unfolded
+  and half open again, the skin redrawn for the inner screen (`OVERLAY_LOAD` in
+  `adb logcat -s OpenEmuxSkin`) shows the tabletop shape, around the fold as in RT-446.
 - **Check:** human only (a screenshot per posture and the log).
 
 ### RT-448 — NDS in tabletop: one screen per half, touch on the bottom screen
