@@ -83,6 +83,7 @@
   "footer.license": ">MIT License</a>",
   "footer.notices": ">Third-party\n            notices</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">OpenEmux is an independent open-source project and is not affiliated with, endorsed by, or\n        associated with OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari, or any other company. All trademarks\n        are the property of their respective owners. OpenEmux distributes no games, ROMs, or BIOS files.</p>",
+  "footer.fictional": "<p class=\"disclaimer\">Games shown are fictional and for illustration only. They are not real games for these consoles, and their artwork was created with AI.</p>",
   "lightbox.label": "aria-label=\"Screenshot viewer\">",
   "lightbox.close": "aria-label=\"Close\">×</button>",
   "js.slide": "'Go to slide '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Open the downloaded file and confirm. Updates are installed the same way, over the previous version.</p>",
   "install.android_first_step": "<div class=\"step-n\">First run</div>",
   "install.android_first_title": "<h3>Let it download the cores</h3>",
-  "install.android_first_note": "<p>The first time it opens, the app downloads the emulator cores. Then put your ROMs in Import, or in Android/data/com.openemux.mobile/files/roms on the phone.</p>"
+  "install.android_first_note": "<p>The first time it opens, the app downloads the emulator cores. Then put your ROMs in Import, or in Android/data/com.openemux.mobile/files/roms on the phone.</p>",
+  "shots.notice": "<p class=\"fineprint\">Games shown are fictional and for illustration only. They are not real games for these consoles, and their artwork was created with AI.</p>",
+  "android.notice": "<p class=\"fineprint\">Games shown are fictional and for illustration only. They are not real games for these consoles, and their artwork was created with AI.</p>"
 }

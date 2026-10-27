@@ -83,6 +83,7 @@
   "footer.license": ">Licença MIT</a>",
   "footer.notices": ">Avisos de\n            terceiros</a>",
   "footer.disclaimer": "<p class=\"disclaimer\">O OpenEmux é um projeto independente de código aberto e não é afiliado, endossado ou\n        associado ao OpenEmu, RetroArch, libretro, Nintendo, Sega, Sony, Atari ou qualquer outra empresa. Todas as marcas\n        registradas pertencem aos seus respectivos donos. O OpenEmux não distribui jogos, ROMs nem arquivos de BIOS.</p>",
+  "footer.fictional": "<p class=\"disclaimer\">Os jogos mostrados são fictícios e meramente ilustrativos. Não são jogos reais desses consoles, e suas artes foram criadas com IA.</p>",
   "lightbox.label": "aria-label=\"Visualizador de capturas de tela\">",
   "lightbox.close": "aria-label=\"Fechar\">×</button>",
   "js.slide": "'Ir para o slide '",
@@ -118,5 +119,7 @@
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Abra o arquivo baixado e confirme. As atualizações se instalam do mesmo jeito, por cima da versão anterior.</p>",
   "install.android_first_step": "<div class=\"step-n\">Primeira vez</div>",
   "install.android_first_title": "<h3>Deixe baixar os cores</h3>",
-  "install.android_first_note": "<p>Na primeira vez que abre, o app baixa os cores dos emuladores. Depois coloque suas ROMs em Importar, ou em Android/data/com.openemux.mobile/files/roms no celular.</p>"
+  "install.android_first_note": "<p>Na primeira vez que abre, o app baixa os cores dos emuladores. Depois coloque suas ROMs em Importar, ou em Android/data/com.openemux.mobile/files/roms no celular.</p>",
+  "shots.notice": "<p class=\"fineprint\">Os jogos mostrados são fictícios e meramente ilustrativos. Não são jogos reais desses consoles, e suas artes foram criadas com IA.</p>",
+  "android.notice": "<p class=\"fineprint\">Os jogos mostrados são fictícios e meramente ilustrativos. Não são jogos reais desses consoles, e suas artes foram criadas com IA.</p>"
 }
