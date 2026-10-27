@@ -67,6 +67,15 @@ def build_context_popover(entries):
 #: the other stays until a row is activated, which is issue #275.
 _open_popover = None
 
+#: The outside-click guard of the open menu, as ``(window, controller)``. Autohide
+#: alone does not dismiss a menu on X11 when the click lands on the app's own
+#: toplevel: a click on the empty grid leaves the menu up, and a click on another
+#: card closes it *and* falls through to the card, which launches that game
+#: (issue #601). So the window gets a capture-phase click gesture for as long as
+#: a menu is open, which closes the menu and claims the press so nothing under
+#: it acts on it -- GNOME's behaviour for autohide popovers.
+_outside_guard = None
+
 
 def present_context_popover(popover):
     """Pop ``popover`` up as *the* context menu, closing whatever was open."""
@@ -80,6 +89,7 @@ def present_context_popover(popover):
         current.popdown()
     _open_popover = popover
     popover.connect("closed", _forget_context_popover)
+    _install_outside_guard(popover)
     popover.popup()
 
 
@@ -93,6 +103,7 @@ def dismiss_context_popover():
     global _open_popover
     current = _open_popover
     _open_popover = None
+    _remove_outside_guard()
     if current is None:
         return False
     current.popdown()
@@ -103,6 +114,52 @@ def _forget_context_popover(popover):
     global _open_popover
     if _open_popover is popover:
         _open_popover = None
+        _remove_outside_guard()
+
+
+def _install_outside_guard(popover):
+    """Watch the menu's window for a press outside the menu (issue #601)."""
+    global _outside_guard
+    _remove_outside_guard()
+    anchor = popover.get_parent()
+    window = anchor.get_root() if anchor is not None else None
+    if not isinstance(window, Gtk.Window):
+        logger.debug("context menu has no window to guard: anchor=%s", anchor)
+        return
+    controller = Gtk.GestureClick()
+    controller.set_button(0)
+    controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    controller.connect("pressed", _on_outside_press, window)
+    window.add_controller(controller)
+    _outside_guard = (window, controller)
+
+
+def _remove_outside_guard():
+    global _outside_guard
+    guard = _outside_guard
+    _outside_guard = None
+    if guard is None:
+        return
+    window, controller = guard
+    # The window may already have dropped it (destroyed with the controllers).
+    if controller.get_widget() is window:
+        window.remove_controller(controller)
+
+
+def _on_outside_press(gesture, _n_press, _x, _y, window):
+    if _open_popover is None:
+        # Stale: the menu went away without telling us. Never eat a click then.
+        _remove_outside_guard()
+        return
+    # The menu and its submenus are surfaces of their own, yet their events
+    # still propagate through the card's ancestry up to this window. Only a
+    # press on the window's own surface is outside the menu.
+    event = gesture.get_current_event()
+    if event is None or event.get_surface() is not window.get_surface():
+        return
+    gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+    logger.info("context menu dismissed by a click outside")
+    dismiss_context_popover()
 
 
 def unparent_when_idle(popover):
