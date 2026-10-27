@@ -10,6 +10,7 @@ and result pages then replace the list, so Back cannot leave a transfer.
 from gi.repository import Adw, Gdk, GLib, Gtk
 
 from openemux.core.share.display import (
+    excluded_reason_key,
     format_date,
     format_size,
     paths_label,
@@ -23,7 +24,6 @@ from openemux.core.share.protocol import (
     PROTOCOL_VERSION,
     SERVER_PORT,
     ErrorCode,
-    SkipReason,
     format_fingerprint,
 )
 from openemux.core.share.selection import (
@@ -65,11 +65,6 @@ _GROUP_TITLES = {
     LABEL: "share.items.label",
     DETAILS: "share.items.details",
 }
-_EXCLUDED = {
-    SkipReason.UNIT_INCOMPLETE: "share.excluded.unit_incomplete",
-    SkipReason.UNSUPPORTED_CONSOLE: "share.excluded.unsupported_console",
-    SkipReason.TOO_MANY_ITEMS: "share.excluded.too_many_items",
-}
 _ADDRESS_ERRORS = {
     ErrorCode.BAD_REQUEST: "share.address.invalid",
     ErrorCode.UNREACHABLE: "share.address.unreachable",
@@ -90,7 +85,6 @@ class ShareDialog(Adw.Dialog):
         self._selection_cache = None
         self.transfer = None
         self.peer = None
-        self.games_sent = 0
         self.nothing_found = False
         self._empty_timer = None
         self._peer_rows = []
@@ -333,7 +327,7 @@ class ShareDialog(Adw.Dialog):
         for entry in excluded:
             row = Adw.ActionRow(title=entry["title"])
             row.set_use_markup(False)
-            row.set_subtitle(t(_EXCLUDED.get(entry["reason"], "share.excluded.invalid_item")))
+            row.set_subtitle(t(excluded_reason_key(entry["reason"])))
             check = Gtk.CheckButton(active=False)
             row.add_prefix(check)
             row.set_sensitive(False)
@@ -548,7 +542,6 @@ class ShareDialog(Adw.Dialog):
         if self.coordinator.busy or not self._something_selected():
             return
         self.peer = peer
-        self.games_sent = summarize(self._selection())["games"]
         self.waiting = WaitingPage(self.t, peer.name, self._cancel)
         show_page(self, self.waiting.page)
         self.set_can_close(False)
@@ -571,11 +564,11 @@ class ShareDialog(Adw.Dialog):
             show_page(self, self.progress.page)
         self.progress.update(progress)
 
-    def on_send_done(self, result):
+    def on_send_done(self, result, report=None):
         self.transfer = None
         self.set_can_close(True)
         self.result = result_page(
-            self.t, result, self.peer.name, receiving=False, games=self.games_sent,
+            self.t, result, self.peer.name, receiving=False, report=report,
             on_close=self.close,
         )
         show_page(self, self.result)

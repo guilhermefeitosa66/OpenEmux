@@ -44,7 +44,7 @@ DYNAMIC_PREFIXES = (
     "welcome.",
 )
 
-#: Keys retired in issues #232 and #469. Listed by name rather than merely deleted:
+#: Keys retired in issues #232, #469 and #614. Listed by name rather than merely deleted:
 #: the unreachable-key test below would pass with them present *and* absent if
 #: the scan were ever weakened, and a name here is a claim that stays checked.
 RETIRED = frozenset(
@@ -72,6 +72,9 @@ RETIRED = frozenset(
     game_window.volume.settling game_window.mute game_window.controller_settings
     game_window.starting
     """.split()
+) | frozenset(
+    # A file count with no title, replaced by the list of games not received (issue 614).
+    "share.result.skipped.one share.result.skipped.many".split()
 )
 
 

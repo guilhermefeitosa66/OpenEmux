@@ -8,9 +8,13 @@ behind it for Back to return to while a transfer is running.
 
 from gi.repository import Adw, Gtk, Pango
 
-from openemux.core.share.display import error_key, format_size, plural, spaced_digits
+from openemux.core.share.display import (
+    error_key, excluded_reason_key, format_size, plural, reason_key, sender_reason_key, spaced_digits,
+)
 from openemux.core.share.protocol import ErrorCode
+from openemux.core.share.report import DeliveryReport
 from openemux.core.share.verification import format_code
+from openemux.core.systems import get_system_display_name
 
 STATUS_DONE = "done"
 
@@ -165,21 +169,72 @@ def confirm_cancel(parent, t, on_confirm):
     return alert
 
 
-def result_page(t, result, device, receiving, games=0, summary="", on_close=None, on_show=None):
-    """The status page a transfer ends on; ``result`` is the core's."""
+def _done_text(t, report, device, receiving):
+    """``(icon, title, description)`` of a finished transfer, from ``report``."""
+    count = report.delivered
+    if receiving:
+        if report.complete:
+            title = plural(t, count, "share.result.received.one", "share.result.received.many")
+        elif count:
+            title = t("share.result.received_partial", received=count, total=report.total)
+        else:
+            return "dialog-warning-symbolic", t("share.result.received_none"), \
+                t("share.result.received_none_body", device=device)
+        description = t("share.result.received_body", device=device)
+    elif report.complete:
+        title = plural(t, count, "share.result.sent.one", "share.result.sent.many")
+        description = t("share.result.sent_body", device=device)
+    elif count:
+        title = t("share.result.sent_partial", sent=count, total=report.total)
+        description = t("share.result.sent_partial_body", device=device, sent=count)
+    else:
+        title = t("share.result.sent_none")
+        description = t("share.result.sent_none_body", device=device)
+    return ("emblem-ok-symbolic" if report.complete else "dialog-warning-symbolic"), title, description
+
+
+def _missing_group(t, report, device, receiving):
+    """The games that did not arrive, one row each: title, console and why."""
+    group = Adw.PreferencesGroup(title=t("share.result.not_received" if receiving else "share.result.not_sent"))
+    for entry in report.missing:
+        if receiving:
+            reason = t(reason_key(entry["reason"]))
+        elif entry.get("excluded"):
+            # Left out here, before the offer: the receiver never saw it.
+            reason = t(excluded_reason_key(entry["reason"]))
+        else:
+            reason = t(sender_reason_key(entry["reason"]), device=device)
+        # Titles come from the other device: never markup.
+        # Markup off before the title is set, or it is parsed once anyway.
+        row = Adw.ActionRow()
+        row.set_use_markup(False)
+        row.set_title(str(entry["title"]))
+        row.set_subtitle(f"{get_system_display_name(str(entry['console']))} · {reason}")
+        group.add(row)
+    return group
+
+
+def result_page(t, result, device, receiving, report=None, summary="", on_close=None, on_show=None):
+    """The status page a transfer ends on; ``result`` is the core's.
+
+    ``report`` (a ``DeliveryReport``) says which games arrived; a finished
+    transfer that left some out lists them under the title.
+    """
     status = result.get("status")
     error = result.get("error")
     page_box = Adw.StatusPage()
+    content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+    missing = None
     if status == STATUS_DONE:
-        page_box.set_icon_name("emblem-ok-symbolic")
-        if receiving:
-            page_box.set_title(plural(t, games, "share.result.received.one", "share.result.received.many"))
-            description = t("share.result.received_body", device=device)
-        else:
-            page_box.set_title(plural(t, games, "share.result.sent.one", "share.result.sent.many"))
-            description = t("share.result.sent_body", device=device)
+        report = report or DeliveryReport()
+        icon, title, description = _done_text(t, report, device, receiving)
+        page_box.set_icon_name(icon)
+        page_box.set_title(title)
         if summary:
             description = f"{description}\n{summary}"
+        if not report.complete:
+            missing = _missing_group(t, report, device, receiving)
+            content.append(missing)
     else:
         page_box.set_icon_name("dialog-error-symbolic")
         code = status if status in _TITLES else (error or status)
@@ -197,8 +252,10 @@ def result_page(t, result, device, receiving, games=0, summary="", on_close=None
     close = pill(t("share.result.close"), css=None if on_show is not None and status == STATUS_DONE else "suggested-action")
     close.connect("clicked", lambda _b: on_close())
     buttons.append(close)
-    page_box.set_child(buttons)
+    content.append(buttons)
+    page_box.set_child(content)
     result_nav = page(t("share.offer.title" if receiving else "share.title"), page_box, "result")
     result_nav.close_button = close
     result_nav.focus_widget = close
+    result_nav.missing_group = missing
     return result_nav

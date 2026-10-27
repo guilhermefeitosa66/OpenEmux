@@ -77,6 +77,24 @@ _REASONS = {
     SkipReason.TOO_MANY_ITEMS: "share.reason.too_many_items",
 }
 
+#: The same reasons, told from the sender's side: ``device`` did it.
+_SENDER_REASONS = {
+    SkipReason.EXISTS_SKIP: "share.reason.sent.exists_skip",
+    SkipReason.USER_UNCHECKED: "share.reason.sent.not_accepted",
+    SkipReason.INCOMPATIBLE_STATE: "share.reason.sent.cant_place",
+    SkipReason.INVALID_ITEM: "share.reason.sent.cant_place",
+    SkipReason.UNSUPPORTED_CONSOLE: "share.reason.sent.unsupported_console",
+    SkipReason.UNIT_INCOMPLETE: "share.reason.unit_incomplete",
+    SkipReason.TOO_MANY_ITEMS: "share.reason.too_many_items",
+}
+
+#: Why the sender's own build left a game out of the offer.
+_EXCLUDED = {
+    SkipReason.UNIT_INCOMPLETE: "share.excluded.unit_incomplete",
+    SkipReason.UNSUPPORTED_CONSOLE: "share.excluded.unsupported_console",
+    SkipReason.TOO_MANY_ITEMS: "share.excluded.too_many_items",
+}
+
 _KINDS = {
     KIND_ROM: "share.kind.rom",
     KIND_BATTERY_SAVE: "share.kind.battery_save",
@@ -137,6 +155,16 @@ def error_key(code):
 
 def reason_key(reason):
     return _REASONS.get(reason, "share.reason.invalid_item")
+
+
+def sender_reason_key(reason):
+    """A skip reason as the sender reads it; no answer at all is "not accepted"."""
+    return _SENDER_REASONS.get(reason, "share.reason.sent.not_accepted")
+
+
+def excluded_reason_key(reason):
+    """Why this device could not offer a game at all: never the receiver's doing."""
+    return _EXCLUDED.get(reason, "share.excluded.invalid_item")
 
 
 def item_kind_label(kind, t, slot=None):

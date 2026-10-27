@@ -399,6 +399,71 @@ class SendingTests(_DialogCase):
         close.assert_called_once_with()
 
 
+@needs_display
+class NotSentTests(_DialogCase):
+    """The sender counts what arrived and lists the rest (#614)."""
+
+    def send(self, roms):
+        self.dialog = self.open(roms)
+        self.peers(peer("Phone"))
+        self.dialog._peer_rows[0].emit("activated")
+        _peer, built, callbacks = self.service.sent
+        return [game["items"][0]["id"] for game in built.manifest["games"]], callbacks
+
+    def test_a_game_the_receiver_skipped_is_listed(self):
+        ids, callbacks = self.send([self.rom("SFC", 0), self.rom("SFC", 1)])
+        callbacks["on_done"]({"status": "done", "sent": [ids[0]],
+                              "skipped": [{"item_id": ids[1], "reason": "user_unchecked"}]})
+        page = _status(self.dialog)
+        self.assertEqual(page.get_title(), "1 of 2 Games Sent")
+        self.assertEqual(page.get_icon_name(), "dialog-warning-symbolic")
+        self.assertEqual(page.get_description(), "Phone has 1 of them. These didn't go:")
+        group = self.dialog.result.missing_group
+        self.assertEqual(group.get_title(), "Not Sent")
+        rows = _action_rows(group)
+        self.assertEqual(rows[0].get_title(), self.rom("SFC", 1)["name"])
+        self.assertFalse(rows[0].get_use_markup())
+        self.assertTrue(rows[0].get_subtitle().endswith(" · Not accepted on Phone"))
+        self.assertIs(self.dialog.get_focus(), self.dialog.result.close_button)
+
+    def test_nothing_sent(self):
+        ids, callbacks = self.send([self.rom()])
+        callbacks["on_done"]({"status": "done", "sent": [],
+                              "skipped": [{"item_id": ids[0], "reason": "exists_skip"}]})
+        page = _status(self.dialog)
+        self.assertEqual(page.get_title(), "No Games Sent")
+        self.assertEqual(page.get_description(), "Phone didn't take any of them:")
+        rows = _action_rows(self.dialog.result.missing_group)
+        self.assertTrue(rows[0].get_subtitle().endswith(" · Already on Phone"))
+
+    def test_a_game_gone_since_it_was_picked_is_listed(self):
+        rom = self.rom()
+        self.dialog = self.open([rom])
+        self.peers(peer("Phone"))
+        Path(rom["path"]).unlink()
+        self.dialog._peer_rows[0].emit("activated")
+        _peer, built, callbacks = self.service.sent
+        self.assertEqual(built.manifest["games"], [])
+        callbacks["on_done"]({"status": "done", "sent": [], "skipped": []})
+        self.assertEqual(_status(self.dialog).get_title(), "No Games Sent")
+        rows = _action_rows(self.dialog.result.missing_group)
+        self.assertEqual(rows[0].get_title(), rom["name"])
+        # Dropped here, before the offer: the reason is this device's, not Phone's.
+        self.assertNotIn("Phone", rows[0].get_subtitle())
+        self.assertTrue(rows[0].get_subtitle().endswith(" · Can't be sent: a track file is outside the game's folder or missing"))
+
+
+def _action_rows(widget):
+    found = []
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Adw.ActionRow):
+            found.append(child)
+        else:
+            found.extend(_action_rows(child))
+        child = child.get_next_sibling()
+    return found
+
 def _status(dialog):
     toolbar = dialog.nav.get_visible_page().get_child()
     return toolbar.get_content()

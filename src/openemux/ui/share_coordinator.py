@@ -31,6 +31,7 @@ from openemux.core.share.library_hooks import ManagerLibraryHooks
 from openemux.core.share.manifest import build_manifest
 from openemux.core.share.placement import ACTION_SEND
 from openemux.core.share.protocol import ErrorCode, ShareError
+from openemux.core.share.report import send_report
 from openemux.core.share.selection import apply_selection
 from openemux.core.share.service import ShareService
 from openemux.core.share.session import ShareClient
@@ -298,7 +299,8 @@ class ShareCoordinator:
         """Offer ``roms`` (less ``unchecked``) to ``peer``.
 
         ``listener`` gets ``on_send_code(code)``, ``on_send_progress(p)`` and
-        ``on_send_done(result)``, on the main loop. Returns the transfer, which
+        ``on_send_done(result, report)``, on the main loop -- ``report`` the
+        games delivered, ``None`` when nothing was offered. Returns the transfer, which
         ``cancel()`` stops at any point -- while hashing too.
         """
         transfer = _Outgoing(self, peer, listener)
@@ -316,7 +318,10 @@ class ShareCoordinator:
                 transfer.peer, built,
                 on_code=lambda code: self._dispatch(transfer.code, code),
                 on_progress=lambda progress: self._dispatch(transfer.progress, progress),
-                on_done=lambda result: self._dispatch(self._send_done, transfer, result),
+                # Counted here, on the worker: the real build is the one
+                # that says which games were offered, and which were dropped.
+                on_done=lambda result: self._dispatch(
+                    self._send_done, transfer, result, send_report(built, result)),
             )
             if transfer.cancelled.is_set():
                 # Cancelled while the send was starting, when there was no
@@ -325,16 +330,16 @@ class ShareCoordinator:
         except ShareError as exc:
             status = exc.code if exc.code == ErrorCode.CANCELLED else "failed"
             result = {"status": status, "sent": [], "skipped": [], "error": exc.code}
-            self._dispatch(self._send_done, transfer, result)
+            self._dispatch(self._send_done, transfer, result, None)
         except Exception:
             logger.exception("share: preparing the send failed")
             result = {"status": "failed", "sent": [], "skipped": [], "error": ErrorCode.INTERNAL}
-            self._dispatch(self._send_done, transfer, result)
+            self._dispatch(self._send_done, transfer, result, None)
 
-    def _send_done(self, transfer, result):
+    def _send_done(self, transfer, result, report):
         if self.transfer is transfer:
             self.transfer = None
-        transfer.done(result)
+        transfer.done(result, report)
         self._maybe_start_grace()
 
     def open_send(self, roms):
@@ -456,16 +461,15 @@ class ShareCoordinator:
         self.service.cancel(offer_id)
 
     def result_counts(self, result):
-        """``(replaced, skipped)`` text for a finished receive, or ``""``."""
-        t = self.win.t
-        parts = []
-        if result.get("replaced"):
-            count = len(result["replaced"])
-            parts.append(plural(t, count, "share.result.replaced.one", "share.result.replaced.many"))
-        if result.get("skipped"):
-            count = len(result["skipped"])
-            parts.append(plural(t, count, "share.result.skipped.one", "share.result.skipped.many"))
-        return " · ".join(parts)
+        """The files a finished receive replaced, as text, or ``""``.
+
+        What was skipped is no file count: the result page lists the games
+        that did not arrive, by title.
+        """
+        count = len(result.get("replaced") or ())
+        if not count:
+            return ""
+        return plural(self.win.t, count, "share.result.replaced.one", "share.result.replaced.many")
 
 
 class _Outgoing:
@@ -489,8 +493,8 @@ class _Outgoing:
     def progress(self, progress):
         self.listener.on_send_progress(progress)
 
-    def done(self, result):
-        self.listener.on_send_done(result)
+    def done(self, result, report):
+        self.listener.on_send_done(result, report)
 
 
 class _Incoming:
