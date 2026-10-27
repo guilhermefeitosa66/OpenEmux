@@ -113,7 +113,7 @@
   "android.languages": "<h3>8 つの言語</h3>\n          <p>デスクトップ版と同じ言語に対応し、スマートフォンに合わせるか設定で選べます。</p>",
   "android.achievements": "<h3>RetroAchievements</h3>\n          <p>設定で一度ログインすれば、すべてのゲームで RetroAchievements のプロフィールに実績が解除されます。ハードコアモードにも対応。</p>",
   "android.download": "⬇ APK をダウンロード</a></p>",
-  "android.source": "<p class=\"cta-note\">Android 8 以降、64 ビット（arm64）。Android アプリは RetroArch のフォークなので GPLv3 ライセンスです。ソースコードは <a href=\"https://github.com/guilhermefeitosa66/open-emux-mobile\">open-emux-mobile</a> にあります。</p>",
+  "android.source": "<p class=\"cta-note\">Android 8 以降、64 ビット（arm64）。Android アプリは RetroArch のフォークなので GPLv3 ライセンスです。ソースコードは <a href=\"https://github.com/guilhermefeitosa66/openemux-android\">openemux-android</a> にあります。</p>",
   "install.android_lede": "<p class=\"lede\">APK はまだ Play ストアにありません。Releases からダウンロードし、Android に聞かれたらブラウザーやファイルマネージャーにアプリのインストールを許可してください。Android 8 以降、64 ビット。</p>",
   "install.android_title": "<h3>APK をインストール</h3>",
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">ダウンロードしたファイルを開いて確認します。アップデートも同じ方法で、前のバージョンの上にインストールします。</p>",

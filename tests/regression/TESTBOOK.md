@@ -5209,7 +5209,7 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 
 ## Android — Closing the device mid-game
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) writing the automatic save state when the game stops being visible (a Flip
 closed, the screen turned off, Home) and coming back paused under the pause sheet (#563). The
 runner has no Android device, so these are `MANUAL`: a person runs them on a phone, a Flip, or a
@@ -5263,7 +5263,7 @@ must be off, since it turns auto save off.
 
 ## Android — RetroAchievements
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) signing in to RetroAchievements and handing the account to the engine
 (#515). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone or a
 headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. Scenarios that need a
@@ -5415,7 +5415,7 @@ real RetroAchievements account say so; without one they are handed to the mainta
 
 ## Android — Shelf
 
-The Android app's shelf (open-emux-mobile, `pkg/android/openemux`, `ShelfScreen`/`ShelfCard` in
+The Android app's shelf (openemux-android, `pkg/android/openemux`, `ShelfScreen`/`ShelfCard` in
 `ui/LibraryScreens.kt`) laid out as a grid whose column count follows the shelf's own width, with
 the console icon on each card (#539), made the card's hero in issue 609. The runner has no Android device, so these are `MANUAL`: a
 person runs them on a phone or a headless emulator with `adb`. A headless emulator that ignores
@@ -5735,7 +5735,7 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
 
 ## Android — Responsive layout
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) laying out every screen from the size of its window, not from the device or
 which way up it is held (#535). The runner has no Android device, so these are `MANUAL`: a person
 runs them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
@@ -6017,7 +6017,7 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
 ## Android — Controller skins
 
 What each button of the Android app's on-screen skin sends
-([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile), `pkg/android/openemux`,
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`,
 `data/Skin.kt`). The drawing belongs to the console; the RetroPad input a button sends depends on the
 core being launched, and some cores need their controller device pinned before the drawn buttons
 work (#540). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone
@@ -6093,7 +6093,7 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
 
 ## Android — Update check
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) asking GitHub once per cold start whether a newer OpenEmux release exists
 and showing a banner on the shelf (#541). `MANUAL`, like the RetroAchievements section: a person
 runs them on a phone or a headless emulator with `adb`. "Old" and "future" builds come from
@@ -6208,7 +6208,7 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
 ## Android — Skin quick actions
 
 The quick-action strip of the Android app's on-screen skin
-([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile), `pkg/android/openemux`):
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
 save, load, turbo and fast forward (plus the screen layout on NDS). Turbo and fast forward show
 whether they are on: an accent pill behind the icon, the icon in white (#554). The runner has no
 Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
@@ -6290,7 +6290,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 
 ## Android — On-screen analog stick
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
 that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
 is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
@@ -6333,7 +6333,7 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
   adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
-  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in open-emux-mobile: *_knob<N>.png next to each representation's art
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in openemux-android: *_knob<N>.png next to each representation's art
   ```
   Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
   `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
@@ -6408,7 +6408,7 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   ```
 ## Android — On-screen D-pad
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) steering with the on-screen D-pad like a touch stick (#555): the D-pad is one
 eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
 it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
@@ -6913,7 +6913,7 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
 
 ## Android — Library start-up
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) opening on the shelf it had, instead of an empty library, while its first
 scan runs (#574). The app keeps the last scan's ROM list in `files/library.index` and reads it when
 the process starts; a scan that runs while the shared storage is not mounted yet (right after a
@@ -7051,7 +7051,7 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 ### RT-546 — Updating from a build without the index never shows the empty shelf
 - **Area:** Android — Library start-up
 - **Mode:** MANUAL
-- **Preconditions:** A debug APK of the app from before the index (open-emux-mobile at `1100bfdb75`
+- **Preconditions:** A debug APK of the app from before the index (openemux-android at `1100bfdb75`
   or earlier) and the current debug APK.
 - **Steps:**
   1. `adb uninstall com.openemux.mobile`, install the older APK, finish the first-run setup and
@@ -7066,7 +7066,7 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
 
 ## Android — Tablet list + detail
 
-On a tablet the Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+On a tablet the Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) shows Settings and the library as a list with the picked item's detail
 beside it, and a game's detail in two columns (#558). `MANUAL`, with the setup of "Android —
 Responsive layout": a headless emulator and `adb shell wm size` / `wm density` (dp = px × 160 / dpi).

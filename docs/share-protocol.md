@@ -4,7 +4,7 @@ The wire protocol of **Share nearby**: how two OpenEmux devices on the same
 local network find each other, open a secure session, agree on a verification
 code and offer games to each other. It is the single reference for every
 implementation; the desktop one lives in `src/openemux/core/share/`, the
-Android one in the `open-emux-mobile` repository. Nothing here requires reading
+Android one in the `openemux-android` repository. Nothing here requires reading
 either.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be read as in
