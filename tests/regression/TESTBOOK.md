@@ -8086,7 +8086,9 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
 - **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
   "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace"),
   and the items skipped for other reasons under "SKIPPED". After the transfer the save's mtime is
-  unchanged and the result says "1 save kept (yours was newer)". 3: "Not enough space." with the
+  unchanged and the result says "1 save kept (yours was newer)"; when nothing at all was received
+  it reads "Nothing new was added: your library already had all of it." instead of "They’re in
+  your library". 3: "Not enough space." with the
   needed, free and missing sizes; "Accept" is disabled.
 - **Check:** human only (screenshots and the two `stat` lines).
 
@@ -8105,7 +8107,8 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
   file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
   notification is gone when the service stops. When the phone is the sender, the receiving device
-  also ends with "Transfer Cancelled" (not a failure card) and keeps nothing.
+  also ends with "Transfer Cancelled" (not a failure card) and keeps nothing. No cancel closes the
+  app or shows "OpenEmux keeps stopping".
 - **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground|types=0x"`
   shows the service in the foreground with the `dataSync` type while it runs;
   `adb shell run-as $PKG find files -name ".*tmp"` and the `roms/` listing show nothing new after.
@@ -8128,8 +8131,13 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
 - **Steps:**
   1. Open "Receive Games", then go back to "Settings".
   2. Watch the other device's list for a minute.
+  3. Open "Receive Games" again, go back to the Library and, about 15 seconds later, send a game
+     to the phone from the other device; do not answer.
 - **Expected:** The phone stays listed for about 30 seconds after leaving the screen, then disappears
-  (a transfer running at that moment holds it until 30 seconds after it ends).
+  (a transfer running at that moment holds it until 30 seconds after it ends). 3: the "Incoming
+  Games" sheet stays for its whole 60 seconds, past the end of the grace, and closes with the
+  expiry toast; the sender ends expired, not unreachable. The phone stops being listed about 30
+  seconds after that.
 - **Check:** human only; the phone's log shows the server stopping (`share server stopped`).
 
 ### RT-536 — The device name from Settings is the one other devices see
