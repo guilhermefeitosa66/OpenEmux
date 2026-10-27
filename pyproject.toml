@@ -20,6 +20,11 @@ authors = [{ name = "Guilherme Feitoza" }]
 # missing cryptography turns the feature off.
 dependencies = ["PyYAML", "python-xlib", "cryptography", "zeroconf"]
 
+[project.optional-dependencies]
+# Draws this device's address as a QR code in Share nearby (issue #589).
+# Without it the Connect by Address page shows the address as text only.
+share-qr = ["segno>=1.6"]
+
 [project.urls]
 Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
 Issues = "https://github.com/guilhermefeitosa66/OpenEmux/issues"

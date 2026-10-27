@@ -91,7 +91,6 @@ from openemux.ui.scopes import (  # noqa: F401
     sidebar_row_ids,
 )
 from openemux.ui.rom_context import RomContextMenuServices
-from openemux.ui.share_coordinator import ShareCoordinator
 from openemux.ui.task_banner import TaskBanner
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
@@ -1926,6 +1925,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def share(self):
         """The Share nearby coordinator, made on first use: nothing listens before."""
         if self._share_coordinator is None:
+            # Imported here: the session pulls in http.client and ssl, which
+            # start-up must not pay for (tests/test_startup_bytecode.py).
+            from openemux.ui.share_coordinator import ShareCoordinator
             self._share_coordinator = ShareCoordinator(self)
         return self._share_coordinator
 

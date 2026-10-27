@@ -8,6 +8,7 @@ PyGObject==3.54.5
 python-xlib==0.33
 PyYAML==6.0.3
 ruff==0.16.4
+segno==1.6.6
 six==1.17.0
 tomli==2.4.1
 typing_extensions==4.16.0

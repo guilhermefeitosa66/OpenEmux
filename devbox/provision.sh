@@ -46,6 +46,8 @@ pkgs=(
 
 	# The app's own runtime imports (requirements.txt).
 	python3-yaml python3-xlib python3-cryptography python3-zeroconf
+	# Optional: the QR code in Share nearby (issue #589).
+	python3-segno
 	# coverage.py, so `make devbox-tests` can measure as well as run: the UI
 	# tests skip themselves without a display, so a host run under-reports.
 	python3-coverage

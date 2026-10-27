@@ -7461,6 +7461,197 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
 - **Check:** human only.
 
 
+## Share nearby (desktop)
+
+Two OpenEmux devices on one network send each other games (issue 589). The cross-device runs need
+two machines (`MANUAL`) or the loopback test (`AUTO-SUITE`, two services on 127.0.0.1 in one
+process). In the devbox, a second instance with its own `HOME` reached by address on 127.0.0.1
+stands in for the other device; multicast may not cross the container.
+
+### RT-506 — The game menu, the selection and the console menu open "Share Nearby"
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`).
+- **Steps:**
+  1. Right-click a game and choose "Share Nearby…".
+  2. Close the dialog. Select three games, right-click one of them and look at the menu.
+  3. Close the menu. Right-click a console in the sidebar.
+- **Expected:** Step 1 opens a dialog titled "Share Nearby" with the subtitle "1 game · <size>"
+  and a spinner beside "Devices on This Network". Step 2's menu reads "Share 3 Games Nearby…", and
+  the selection bar has a button with the tooltip "Share Nearby". Step 3's menu has "Share All
+  Games Nearby…" right after "Sync covers".
+- **Check:** One `make devbox-shot WIN=1` per step showing the dialog title and subtitle, the
+  "Share 3 Games Nearby…" entry and the console menu entry. Suite:
+  `tests/test_share_entry_points.py`.
+
+### RT-507 — "Receive Games…" makes this device visible without sending
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Open the "Main Menu" and choose "Receive Games…", the first entry.
+  2. Choose "Connect by Address".
+- **Expected:** A "Receive Games" dialog with "Ready to Receive" and "Visible as “<name>”", and
+  no device list. The "Connect by Address" page shows the address as `host:port`, the fingerprint
+  in groups of four and a "Copy Address" button; the QR code shows when `python3-segno` is
+  installed and is simply absent otherwise.
+- **Check:** `make devbox-shot WIN=1` of both pages. Suite: `tests/test_share_dialog.py`
+  (`TheRootTests`, `ConnectByAddressTests`).
+
+### RT-508 — Two devices on one network see each other by name and platform
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Two machines with OpenEmux on the same Wi-Fi network.
+- **Steps:**
+  1. Open "Share Nearby…" on a game on machine A.
+  2. Open "Receive Games…" on machine B.
+- **Expected:** Within a few seconds machine B appears under "Devices on This Network" on A, with
+  a computer icon, its name and "Computer · found by mDNS and beacon" (or one of the two).
+- **Check:** human only.
+
+### RT-509 — A device on an incompatible version is listed but cannot be chosen
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A peer that speaks no common protocol version is listed insensitive, with "Update
+  OpenEmux on this device · version X, this one speaks Y" and a warning icon.
+- **Check:** `tests/test_share_dialog.py` (`test_devices_compatible_and_not`).
+
+### RT-510 — Nobody found: the dialog explains why after about 15 s
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running, no other OpenEmux reachable.
+- **Steps:**
+  1. Right-click a game, "Share Nearby…".
+  2. Wait 20 seconds.
+  3. Press "Connect by Address…".
+- **Expected:** After about 15 s the device list gives way to "No Devices Found", with the
+  same-Wi-Fi hint, the guest/public network and phone hotspot hint, the firewall line naming
+  "TCP 53319 and UDP 53318" and "Still searching" with a spinner. Step 3 opens the "Connect by
+  Address" page.
+- **Check:** `make devbox-shot WIN=1` after step 2 and after step 3. Suite:
+  `tests/test_share_dialog.py` (`test_nothing_found_after_the_timeout_and_back_when_a_device_appears`).
+
+### RT-511 — "What to Send" unchecks parts of a game and the total follows
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Right-click a game, "Share Nearby…", then "What to Send".
+  2. Expand the game and uncheck one of its rows other than "Game".
+  3. Uncheck the game's own check box.
+- **Expected:** Step 2 turns the game's check box to the mixed state and the "Total" at the bottom
+  shrinks. Step 3 unchecks the whole game; back on the first page, device rows are insensitive
+  with the tooltip "Choose something to send".
+- **Check:** `make devbox-shot WIN=1` after steps 2 and 3. Suite: `tests/test_share_dialog.py`
+  (`WhatToSendTests`).
+
+### RT-512 — Connect by Address reports a bad or unreachable address
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. "Share Nearby…" on a game, then "Connect by Address".
+  2. Type `abc def` in "Address" and press Enter.
+  3. Type `127.0.0.1:1` and press Enter.
+- **Expected:** Step 2 shows "That doesn't look like an address." under the entry. Step 3 shows
+  "Couldn't reach 127.0.0.1. Check the address and that Share Nearby is open there."
+- **Check:** `make devbox-shot WIN=1` after steps 2 and 3. Suite: `tests/test_share_dialog.py`
+  (`test_errors_show_under_the_entry`).
+
+### RT-513 — The offer shows the same code on both sides, and Decline sends nothing
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Two machines, A and B, that see each other (RT-508).
+- **Steps:**
+  1. On A, "Share Nearby…" on a game and choose B.
+  2. On B, read the "Incoming Games" dialog, then press "Decline".
+- **Expected:** A shows "Waiting for B to accept…" with a six-digit code; B's dialog shows A's name,
+  "1 game" with its size, the **same** code and "Expires in" counting down, with focus on
+  "Decline". After Decline, A shows "Offer Declined" and nothing new is in B's library.
+- **Check:** human only.
+
+### RT-514 — An unanswered offer expires after 60 s
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The countdown reaches zero, the dialog closes with the toast "The offer from
+  <device> expired", and nothing is accepted.
+- **Check:** `tests/test_share_offer.py` (`test_the_countdown_and_the_expiry`).
+
+### RT-515 — A game goes across and appears in the receiver's library
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Two services on 127.0.0.1: the sender connects by address, sends, both screens
+  show the same code, the receiver accepts, both end on their result pages, the ROM is in the
+  receiver's ROM folder and the receiver's library is rescanned for that console only.
+- **Check:** `tests/test_share_ui_loopback.py`; on two real machines the same flow is `MANUAL`.
+
+### RT-516 — Conflicts: "Keep Newest" never replaces a newer local save
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B both have the same game; B's battery save is newer than A's.
+- **Steps:**
+  1. On A, send the game to B.
+  2. On B, press "Review 1 Conflict" in "Incoming Games".
+  3. Leave "Keep Newest" and accept.
+- **Expected:** The "Already in Your Library" page lists the save with both dates ("Yours: … ·
+  Incoming: …"). After the transfer, B's save is unchanged (same date and content).
+- **Check:** human only. The choices and the plan they produce are in `tests/test_share_offer.py`
+  (`ConflictsAndSpaceTests`).
+
+### RT-517 — Not enough disk space blocks "Accept"
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** When the games do not fit, "Incoming Games" shows "Not enough space. These games
+  need … in …, and … is free. Free up …" and "Accept" is insensitive.
+- **Check:** `tests/test_share_offer.py` (`test_not_enough_space_blocks_accept_on_both_pages`).
+
+### RT-518 — Cancelling mid-transfer leaves nothing behind
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B; a large ROM (a few hundred MB) on A.
+- **Steps:**
+  1. Send the large game from A to B and accept on B.
+  2. During the progress, press "Cancel Transfer" on A. Repeat, cancelling on B instead.
+- **Expected:** Both sides end on "Transfer Cancelled"; B's ROM folder has neither the game nor a
+  hidden `.tmp` file.
+- **Check:** human only (`ls -la` of B's console folder after each run).
+
+### RT-519 — Closing the dialog hides this device about 30 s later
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Open "Receive Games…" on B, check that A lists it, then close it on B.
+  2. Watch A's device list for a minute.
+- **Expected:** B stays visible on A for about 30 s after closing and then disappears; reopening
+  the dialog on B within those 30 s keeps it visible without a gap.
+- **Check:** human only. The grace logic itself is in `tests/test_share_coordinator.py`
+  (`VisibilityTests`).
+
+### RT-520 — The device name set in Preferences is the one the other device lists
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Open "Settings", page "System", group "Share Nearby", type `QA Box` in "Device Name" and press
+     Enter.
+  2. Close Settings and open "Receive Games…".
+- **Expected:** The receive dialog reads "Visible as “QA Box”".
+- **Check:** `make devbox-shot WIN=1` after step 2.
+- **Restore:** Clear "Device Name" and press Enter again.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and

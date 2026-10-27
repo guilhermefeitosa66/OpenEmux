@@ -103,6 +103,9 @@ Requires:       adwaita-icon-theme
 %ifnarch x86_64
 Recommends:     retroarch
 %endif
+# Share nearby draws this device's address as a QR code with it (issue #589);
+# without it the address is shown as text only.
+Recommends:     python3-segno
 
 %description
 OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches

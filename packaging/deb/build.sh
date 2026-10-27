@@ -80,6 +80,7 @@ Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
 Depends: ${DEPENDS}
+Recommends: python3-segno
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. ${EMULATOR_SENTENCE}
