@@ -421,6 +421,18 @@ class ReceiveTests(WindowCase):
         self.assertIs(self.presented[-1], self.share.offer_dialog)
         self.assertNotIn(("answer", self.offer.offer_id, False), self.service.calls)
 
+    def test_a_replaced_dialog_closing_late_keeps_the_new_notification(self):
+        self.service.on_offer(self.offer)
+        first = self.share.offer_dialog
+        first.result = object()
+        app = mock.Mock()
+        with mock.patch.object(first, "force_close"), \
+                mock.patch.object(self.win, "get_application", return_value=app):
+            self.service.on_offer(self.offer)
+            self.share.offer_closed(first)
+        app.withdraw_notification.assert_not_called()
+        self.assertIsNotNone(self.share.offer_dialog)
+
     def test_an_offer_over_one_still_open_is_declined(self):
         self.service.on_offer(self.offer)
         first = self.share.offer_dialog

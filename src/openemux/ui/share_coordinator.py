@@ -372,7 +372,9 @@ class ShareCoordinator:
         if self.offer_dialog is dialog:
             self.offer_dialog = None
         app = self.win.get_application()
-        if app is not None:
+        # A finished dialog replaced by a new offer closes after it: the
+        # notification is the new offer's by then.
+        if app is not None and self.offer_dialog is None:
             app.withdraw_notification("share-offer")
         self._maybe_start_grace()
 
