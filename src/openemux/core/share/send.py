@@ -9,8 +9,10 @@ thread: the upload in progress is cut and the receiver is told.
 
 import logging
 import threading
+import time
 
 from openemux.core.share.protocol import ErrorCode, ShareError
+from openemux.core.share.receive import PROGRESS_RATE
 from openemux.core.share.session import (
     STATUS_ACCEPTED,
     STATUS_CANCELLED,
@@ -36,13 +38,14 @@ class OutgoingTransfer:
 
     ``on_code(code)`` gets the verification code once the offer is revealed;
     ``on_progress({item_id, name, bytes, size, done_bytes, total_bytes,
-    files_done, file_count})`` follows each chunk; ``on_done({status, sent,
+    files_done, file_count})`` follows the chunks, at most ``PROGRESS_RATE``
+    times a second besides the last one of each file; ``on_done({status, sent,
     skipped, error?})`` ends it, ``status`` being ``done``, ``declined``,
     ``expired``, ``cancelled`` or ``failed``.
     """
 
     def __init__(self, client, sender, built, *, on_code=None, on_progress=None, on_done=None,
-                 poll_interval=POLL_INTERVAL):
+                 poll_interval=POLL_INTERVAL, clock=time.monotonic):
         self.client = client
         self.sender = sender
         self.built = built
@@ -50,6 +53,8 @@ class OutgoingTransfer:
         self.on_progress = on_progress
         self.on_done = on_done
         self.poll_interval = poll_interval
+        self.clock = clock
+        self._last_progress = None
         self.offer_id = None
         self.result = None
         self._cancel = threading.Event()
@@ -144,18 +149,25 @@ class OutgoingTransfer:
                 self._check_cancel()
                 progress[0] += n
                 done[0] += n
-                self._report(item, progress[0], done[0], total, len(sent), len(to_send))
+                self._report(item, progress[0], done[0], total, len(sent), len(to_send), final=False)
 
             self.client.put_file(self.offer_id, item["id"], source, item["size"], on_chunk)
             sent.append(item["id"])
             self._report(item, item["size"], done[0], total, len(sent), len(to_send))
 
-    def _report(self, item, current, done, total, files_done, file_count):
-        if self.on_progress is not None:
-            self.on_progress({
-                "item_id": item["id"], "name": item["name"], "bytes": current, "size": item["size"],
-                "done_bytes": done, "total_bytes": total, "files_done": files_done, "file_count": file_count,
-            })
+    def _report(self, item, current, done, total, files_done, file_count, final=True):
+        # Throttled like the receiver's: one callback per 256 KiB chunk floods
+        # the main loop on a fast network, above the redraws.
+        if self.on_progress is None:
+            return
+        now = self.clock()
+        if not final and self._last_progress is not None and now - self._last_progress < 1 / PROGRESS_RATE:
+            return
+        self._last_progress = now
+        self.on_progress({
+            "item_id": item["id"], "name": item["name"], "bytes": current, "size": item["size"],
+            "done_bytes": done, "total_bytes": total, "files_done": files_done, "file_count": file_count,
+        })
 
     def _receiver_cancelled(self):
         """After a cut connection: did the receiver cancel? Asked once."""

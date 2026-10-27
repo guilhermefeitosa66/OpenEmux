@@ -89,6 +89,17 @@ class FlowTests(SendTestCase):
             "total_bytes": 20, "files_done": 2, "file_count": 2,
         })
 
+    def test_progress_is_throttled_but_the_last_of_each_file_always_arrives(self):
+        # One callback per chunk flooded the main loop on a fast network.
+        transfer = OutgoingTransfer(
+            FakeClient([ACCEPTED]), {"id": "s"}, self.built, on_progress=self.progress.append,
+            poll_interval=0, clock=lambda: 100.0,
+        )
+        transfer.run()
+        # i1: first chunk, then its last; i3: only its last (same instant).
+        self.assertEqual([(p["item_id"], p["bytes"]) for p in self.progress],
+                         [("i1", 5), ("i1", 10), ("i3", 10)])
+
     def test_final_answers_other_than_accepted(self):
         for status in ("declined", "expired", "cancelled"):
             self.assertEqual(self.transfer(FakeClient([{"status": status}])).run()["status"], status)
