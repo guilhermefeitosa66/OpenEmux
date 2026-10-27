@@ -262,7 +262,7 @@ class ConnectByAddressTests(WindowCase):
 
 class _Listener:
     def __init__(self):
-        self.codes, self.progress, self.done = [], [], []
+        self.codes, self.progress, self.done, self.reports = [], [], [], []
 
     def on_send_code(self, code):
         self.codes.append(code)
@@ -270,8 +270,9 @@ class _Listener:
     def on_send_progress(self, progress):
         self.progress.append(progress)
 
-    def on_send_done(self, result):
+    def on_send_done(self, result, report):
         self.done.append(result)
+        self.reports.append(report)
 
     def on_receive_progress(self, progress):
         self.progress.append(progress)
@@ -317,6 +318,17 @@ class SendTests(WindowCase):
         self.assertEqual(self.listener.done, [{"status": "cancelled"}])
         self.assertFalse(self.share.busy)
 
+    def test_the_report_counts_the_real_build(self):
+        # A game the rebuild for the send excludes is listed with its reason.
+        alien = {"name": "Alien", "path": str(self.tmp / "Alien.bin"), "console": "XX"}
+        self.share.send(peer(), [self.rom(), alien], set(), self.listener)
+        _target, built, callbacks = self.service.sent
+        item_id = built.manifest["games"][0]["items"][0]["id"]
+        callbacks["on_done"]({"status": "done", "sent": [item_id], "skipped": []})
+        report = self.listener.reports[0]
+        self.assertEqual((report.delivered, report.total), (1, 2))
+        self.assertEqual(report.missing, [{"title": "Alien", "console": "XX", "reason": "unsupported_console"}])
+
     def test_a_cancel_while_hashing_never_offers(self):
         rom = self.rom()
 
@@ -348,11 +360,13 @@ class SendTests(WindowCase):
         self.share.send(peer(), [self.rom()], set(), self.listener)
         self.assertEqual(self.listener.done[0], {"status": "failed", "sent": [], "skipped": [],
                                                  "error": ErrorCode.UNAVAILABLE})
+        self.assertEqual(self.listener.reports, [None])
 
     def test_a_crash_while_preparing_is_internal(self):
         with mock.patch.object(coordinator_module, "build_manifest", side_effect=RuntimeError):
             self.share.send(peer(), [self.rom()], set(), self.listener)
         self.assertEqual(self.listener.done[0]["error"], ErrorCode.INTERNAL)
+        self.assertEqual(self.listener.reports, [None])
 
     def test_a_late_result_of_an_old_send_leaves_the_current_one(self):
         first = self.share.send(peer(), [self.rom()], set(), self.listener)
@@ -511,5 +525,5 @@ class ReceiveTests(WindowCase):
         self.assertEqual(self.share.result_counts({}), "")
         self.assertEqual(
             self.share.result_counts({"replaced": ["a"], "skipped": [{}, {}]}),
-            "1 file replaced · 2 files skipped",
+            "1 file replaced",
         )

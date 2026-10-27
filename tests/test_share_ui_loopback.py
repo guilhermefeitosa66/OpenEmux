@@ -88,3 +88,37 @@ class LoopbackTests(WindowCase):
         self.assertIsNone(self.sender.transfer)
         receiving.emit("closed")
         sending.emit("closed")
+
+    def test_both_ends_count_the_games_that_arrived(self):
+        # The receiver already has one of the two, byte for byte (#614).
+        first, second = self.rom("SFC", 0), self.rom("SFC", 1)
+        same = self.receiver_roms / "SFC" / Path(second["path"]).name
+        same.parent.mkdir(parents=True, exist_ok=True)
+        same.write_bytes(Path(second["path"]).read_bytes())
+        receiving = self.receiver.open_receive()
+        self.assertTrue(self.pump_until(lambda: self.receiver.address() is not None, timeout=20))
+        uri = self.receiver.address()[3]
+
+        sending = self.sender.open_send([first, second])
+        self.assertTrue(self.pump_until(lambda: sending.built is not None and self.sender.address(), timeout=20))
+        sending._push_address()
+        sending.address_entry.set_text(uri)
+        sending.address_entry.emit("apply")
+        self.assertTrue(self.pump_until(lambda: sending._peer_rows, timeout=20))
+        sending._peer_rows[0].emit("activated")
+        self.assertTrue(self.pump_until(lambda: self.receiver.offer_dialog is not None, timeout=30))
+        offer = self.receiver.offer_dialog
+        with mock.patch.object(self.win, "_rescan_single_console"):
+            offer.accept()
+            self.assertTrue(self.pump_until(lambda: offer.result is not None, timeout=60))
+            self.assertTrue(self.pump_until(lambda: getattr(sending, "result", None) is not None, timeout=30))
+
+        def page(dialog):
+            return dialog.nav.get_visible_page().get_child().get_content()
+
+        self.assertEqual(page(sending).get_title(), "1 of 2 Games Sent")
+        self.assertEqual(page(offer).get_title(), "1 of 2 Games Received")
+        self.assertEqual(sending.result.missing_group.get_title(), "Not Sent")
+        self.assertEqual(offer.result.missing_group.get_title(), "Not Received")
+        receiving.emit("closed")
+        sending.emit("closed")

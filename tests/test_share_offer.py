@@ -241,7 +241,69 @@ class AcceptTests(_OfferCase):
         self.dialog.on_receive_progress({})
 
 
+@needs_display
+class NotReceivedTests(_OfferCase):
+    """The games a receive did not add, by title and reason (#614)."""
+
+    def finish(self, games):
+        dialog = self.receive(games)
+        dialog.accept()
+        with mock.patch.object(self.win, "_rescan_single_console"):
+            self.service.accepted[3]["on_done"]({"status": "done", "placed": [], "replaced": [], "skipped": []})
+        return dialog
+
+    def test_some_received_lists_the_others(self):
+        self.home.add_rom("SFC", "Same.sfc", b"same")
+        dialog = self.finish([
+            game([item("n", "rom", "New Game.sfc", b"new")], game_id="g1", title="New Game"),
+            game([item("s", "rom", "Same.sfc", b"same")], game_id="g2", title="Same"),
+            game([item("x", "rom", "Alien.bin", b"x")], game_id="g3", console="XX", title="<b>Alien</b> &"),
+        ])
+        page = status(dialog)
+        self.assertEqual(page.get_title(), "1 of 3 Games Received")
+        self.assertEqual(page.get_icon_name(), "dialog-warning-symbolic")
+        self.assertEqual(page.get_description(), "From Phone. They're in your library now.")
+        group = dialog.result.missing_group
+        self.assertEqual(group.get_title(), "Not Received")
+        rows = action_rows(group)
+        self.assertEqual([row.get_title() for row in rows], ["Same", "<b>Alien</b> &"])
+        self.assertFalse(rows[1].get_use_markup())
+        self.assertTrue(rows[0].get_subtitle().endswith(" · Already in your library"))
+        self.assertTrue(rows[1].get_subtitle().endswith(" · This console isn't supported on this device"))
+        # Something arrived: "Show in Library" is there, the focus on Close.
+        self.assertEqual(_first_button(page).get_label(), "Show in Library")
+        self.assertIs(dialog.get_focus(), dialog.result.close_button)
+
+    def test_none_received(self):
+        self.home.add_rom("SFC", "Same.sfc", b"same")
+        dialog = self.finish([game([item("s", "rom", "Same.sfc", b"same")], title="Same")])
+        page = status(dialog)
+        self.assertEqual(page.get_title(), "No Games Received")
+        self.assertEqual(page.get_description(), "Nothing from Phone was added to your library.")
+        self.assertEqual(dialog.result.missing_group.get_title(), "Not Received")
+        self.assertIs(_first_button(page), dialog.result.close_button)
+
+    def test_everything_received_lists_nothing(self):
+        dialog = self.finish([game([item("n", "rom", "New Game.sfc", b"new")], title="New Game")])
+        self.assertEqual(status(dialog).get_icon_name(), "emblem-ok-symbolic")
+        self.assertIsNone(dialog.result.missing_group)
+
+
+def action_rows(widget):
+    """Every ``Adw.ActionRow`` under ``widget``, in order."""
+    found = []
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Adw.ActionRow):
+            found.append(child)
+        else:
+            found.extend(action_rows(child))
+        child = child.get_next_sibling()
+    return found
+
+
 def _first_button(status_page):
-    return status_page.get_child().get_first_child()
+    # The buttons come last, under the list of games not received.
+    return status_page.get_child().get_last_child().get_first_child()
 
 

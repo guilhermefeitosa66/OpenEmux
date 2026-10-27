@@ -90,7 +90,6 @@ class ShareDialog(Adw.Dialog):
         self._selection_cache = None
         self.transfer = None
         self.peer = None
-        self.games_sent = 0
         self.nothing_found = False
         self._empty_timer = None
         self._peer_rows = []
@@ -548,7 +547,6 @@ class ShareDialog(Adw.Dialog):
         if self.coordinator.busy or not self._something_selected():
             return
         self.peer = peer
-        self.games_sent = summarize(self._selection())["games"]
         self.waiting = WaitingPage(self.t, peer.name, self._cancel)
         show_page(self, self.waiting.page)
         self.set_can_close(False)
@@ -571,11 +569,11 @@ class ShareDialog(Adw.Dialog):
             show_page(self, self.progress.page)
         self.progress.update(progress)
 
-    def on_send_done(self, result):
+    def on_send_done(self, result, report=None):
         self.transfer = None
         self.set_can_close(True)
         self.result = result_page(
-            self.t, result, self.peer.name, receiving=False, games=self.games_sent,
+            self.t, result, self.peer.name, receiving=False, report=report,
             on_close=self.close,
         )
         show_page(self, self.result)

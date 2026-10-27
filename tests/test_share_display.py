@@ -59,6 +59,15 @@ class WordsTests(unittest.TestCase):
                 self.assertIn(display.reason_key(reason), LOCALE_TRANSLATIONS["en"])
         self.assertEqual(display.reason_key("weird"), "share.reason.invalid_item")
 
+    def test_every_skip_reason_has_text_for_the_sender(self):
+        reasons = [v for k, v in vars(SkipReason).items() if not k.startswith("_")]
+        for reason in reasons + [None, "weird"]:
+            with self.subTest(reason=reason):
+                self.assertIn(display.sender_reason_key(reason), LOCALE_TRANSLATIONS["en"])
+        self.assertEqual(display.sender_reason_key(SkipReason.EXISTS_SKIP), "share.reason.sent.exists_skip")
+        self.assertEqual(display.sender_reason_key(None), "share.reason.sent.not_accepted")
+        self.assertEqual(display.sender_reason_key(SkipReason.INVALID_ITEM), "share.reason.sent.cant_place")
+
     def test_item_kinds(self):
         self.assertEqual(display.item_kind_label("rom", t), "Game")
         self.assertEqual(display.item_kind_label("battery_save", t), "Battery Save")

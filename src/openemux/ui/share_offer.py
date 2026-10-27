@@ -23,8 +23,9 @@ from openemux.core.share.display import (
     plural,
     reason_key,
 )
-from openemux.core.share.placement import ACTION_SEND, DEFAULT_POLICIES, ROM_EXISTING, ROM_PLACED
+from openemux.core.share.placement import DEFAULT_POLICIES
 from openemux.core.share.protocol import KIND_STATE, OFFER_TTL, ErrorCode, ShareError, SkipReason
+from openemux.core.share.report import game_delivered, receive_report
 from openemux.core.systems import get_system_display_name
 from openemux.ui.share_pages import confirm_cancel, ProgressPage, code_label, label, page, result_page, show_page
 
@@ -351,14 +352,13 @@ class IncomingOfferDialog(Adw.Dialog):
     def _received_games(self):
         return [
             game for game in self.plan.games
-            if game.rom_status in ROM_PLACED + (ROM_EXISTING,)
-            and any(d.action == ACTION_SEND for d in game.decisions)
+            if game_delivered(game.rom_status, {d.action for d in game.decisions})
         ]
 
     def _show_result(self, result):
         games = self._received_games()
         self.result = result_page(
-            self.t, result, self.device, receiving=True, games=len(games),
+            self.t, result, self.device, receiving=True, report=receive_report(self.plan),
             summary=self.coordinator.result_counts(result),
             on_close=self.close, on_show=self._show_in_library if games else None,
         )
