@@ -113,7 +113,7 @@
   "android.languages": "<h3>Eight languages</h3>\n          <p>The same languages as the desktop app, following the phone or chosen in Settings.</p>",
   "android.achievements": "<h3>RetroAchievements</h3>\n          <p>Sign in once in Settings and every game unlocks achievements on your RetroAchievements profile, with hardcore mode when you want it.</p>",
   "android.download": "⬇ Download the APK</a></p>",
-  "android.source": "<p class=\"cta-note\">Android 8 or newer, 64-bit (arm64). The Android app is a fork of RetroArch, so it is licensed under the GPLv3; its source is at <a href=\"https://github.com/guilhermefeitosa66/open-emux-mobile\">open-emux-mobile</a>.</p>",
+  "android.source": "<p class=\"cta-note\">Android 8 or newer, 64-bit (arm64). The Android app is a fork of RetroArch, so it is licensed under the GPLv3; its source is at <a href=\"https://github.com/guilhermefeitosa66/openemux-android\">openemux-android</a>.</p>",
   "install.android_lede": "<p class=\"lede\">The APK is not on the Play Store yet: download it from Releases and allow your browser or file manager to install apps when Android asks. Android 8 or newer, 64-bit.</p>",
   "install.android_title": "<h3>Install the APK</h3>",
   "install.android_note": "<p style=\"margin-top:12px;font-size:.85rem\">Open the downloaded file and confirm. Updates are installed the same way, over the previous version.</p>",

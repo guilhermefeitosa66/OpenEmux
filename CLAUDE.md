@@ -13,16 +13,18 @@ OpenEmux spans several repositories, all checked out next to this one (under `~/
 | Repository | Checkout | Base | What it is |
 |---|---|---|---|
 | `guilhermefeitosa66/OpenEmux` | `.` | `develop` | The desktop app, the GitHub Pages site (`docs/`, served from `main`), the packaging and the release. |
-| `guilhermefeitosa66/open-emux-mobile` | `../open-emux-mobile` | `openemux-mobile` | The Android app (see below). |
+| `guilhermefeitosa66/openemux-android` | `../openemux-android` | `openemux-mobile` | The Android app (see below). |
 | `guilhermefeitosa66/openemux-artwork` | `../openemux-artwork` | `main` | Self-hosted cover-art mirror: reduced-size WebP synced from libretro-thumbnails, which cover sync downloads from. |
 | `guilhermefeitosa66/openemux-flatpak` | `../openemux-flatpak` | `main` | Flatpak distribution repo (ostree on `gh-pages`); its `publish.yml` is dispatched after each release (step 8 below). |
-| `guilhermefeitosa66/open-emux-evidence` | `../open-emux-evidence` | `main` | Images embedded in issue comments: `qa/issue-<N>/<run>/` (QA screenshots) and `design/issue-<N>/` (design specs). Nothing is built or shipped from it. |
-| `guilhermefeitosa66/open-emux-ops` (private) | `../open-emux-ops` | `main` | Maintainer notes; `pipeline/PIPELINE.md` documents the autonomous issue pipeline. |
-| local only, no remote | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`docs/assets/openemux-promo.mp4` and its poster). |
+| `guilhermefeitosa66/openemux-evidence` | `../openemux-evidence` | `main` | Images embedded in issue comments: `qa/issue-<N>/<run>/` (QA screenshots) and `design/issue-<N>/` (design specs). Nothing is built or shipped from it. |
+| `guilhermefeitosa66/openemux-ops` (private) | `../openemux-ops` | `main` | Maintainer notes; `pipeline/PIPELINE.md` documents the autonomous issue pipeline. |
+| `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`docs/assets/openemux-promo.mp4` and its poster). |
 
-Pipeline worktrees go in `../OpenEmux-wt/`, `../open-emux-mobile-wt/` and `../openemux-video-wt/`, never inside a checkout. Every one of these repositories uses the personal git identity and key (`~/.ssh/id_ed25519` with `IdentitiesOnly=yes`).
+Satellite repositories are named `openemux-<name>`; only this one keeps `OpenEmux`. Pipeline worktrees go in `../OpenEmux-wt/`, `../openemux-android-wt/` and `../openemux-video-wt/`, never inside a checkout. Every one of these repositories uses the personal git identity and key (`~/.ssh/id_ed25519` with `IdentitiesOnly=yes`).
 
 `guilhermefeitosa66/esteira` (`../esteira`) is a separate public project: a generic version of this pipeline. It is not part of OpenEmux, and changes made here do not go there unless asked.
+
+The Android repository was called `open-emux-mobile` until 2026-10-27; GitHub redirects the old name, and older issues, PRs and release notes still use it. "mobile" stays where renaming would break something: the base branch `openemux-mobile`, the `repo-mobile` label and the app package `com.openemux.mobile` (a new package would be a different app to Android, and installs would lose their library).
 
 The Android app is a RetroArch fork with the OpenEmux frontend in Kotlin/Compose under `pkg/android/openemux/`; its APK ships in the OpenEmux release alongside the desktop packages. Its issues are filed **here**, where the board is, with the `repo-mobile` label: the pipeline then works in the mobile repository and opens the PR there with `Part of guilhermefeitosa66/OpenEmux#<N>`.
 
