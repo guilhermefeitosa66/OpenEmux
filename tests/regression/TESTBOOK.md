@@ -8199,7 +8199,8 @@ formatting, the checklist, the offer model, the discoverability and nothing-foun
 coordinator, the notification content, the QR code and the string parity across locales are covered
 by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionTest`,
 `OfferModelTest`, `DiscoverabilityTest`, `ShareCoordinatorTest`, `TransferNoticeTest`, `QrTest`,
-`StringsShareTest`).
+`StringsShareTest`); what a transfer delivered and why the rest did not, on both ends, by
+`DeliveryReportTest` and `PlacementTest`.
 
 ### RT-524 — Every entry point opens Share Nearby with the right games
 - **Area:** Android — Share nearby
@@ -8328,12 +8329,12 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
      (`adb shell stat -c %Y <saves>/<console>/<game>.srm`).
   3. Send the large game.
 - **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
-  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace"),
-  and the items skipped for other reasons under "SKIPPED". After the transfer the save's mtime is
-  unchanged and the result says "1 save kept (yours was newer)"; when nothing at all was received
-  it reads "Nothing new was added: your library already had all of it." instead of "They’re in
-  your library". 3: "Not enough space." with the
-  needed, free and missing sizes; "Accept" is disabled.
+  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace";
+  a disc game of several files: only "Replace · Skip", see RT-551), and the items skipped for other
+  reasons under "SKIPPED". After the transfer the save's mtime is unchanged and the result says
+  "1 save kept (yours was newer)", with no "items skipped" count: a game that did not arrive is
+  listed by name instead (RT-551). 3: "Not enough space." with the needed, free and missing sizes;
+  "Accept" is disabled.
 - **Check:** human only (screenshots and the two `stat` lines).
 
 ### RT-533 — A transfer runs in a foreground service and can be cancelled from the notification
@@ -8407,8 +8408,10 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   2. Check that both show the same code; accept on the tablet.
   3. On the tablet press "Show in Library" and start the game.
 - **Expected:** The phone shows "1 Game Sent" / "<tablet> has them now."; the tablet "1 Game
-  Received" / "From <phone>. They’re in your library, ready to play.". The game is in the tablet's
-  library with its cover and label without restarting the app, and it starts with the phone's save.
+  Received" / "From <phone>. They’re in your library, ready to play.". The number received on the
+  tablet is the number of games selected on the phone, and both ends show the same number. The game
+  is in the tablet's library with its cover and label without restarting the app, and it starts with
+  the phone's save.
 - **Check:** human only.
 
 ### RT-538 — The share screens work with a gamepad and lay out in two columns on a wide window
@@ -8450,6 +8453,53 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   6: "SHARE NEARBY" holds only "Device name", with no "Receive Games" row and no stray divider;
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
+
+### RT-551 — A disc game that is already on the phone is never dropped silently
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** On the phone, a PS game made of a `.cue` and its `.bin` (for example
+  `<roms>/PS/Disc.cue`) whose content differs from the sender's game of the same name; the sender (a
+  desktop OpenEmux or a second device) has that game plus two games the phone does not have.
+- **Steps:**
+  1. Send the three games to the phone; on the sheet press "Review 1 Conflict".
+  2. Leave the choice as it is, go back and press "Accept"; put the app in the background before the
+     transfer ends (or check the notification afterwards).
+  3. Compare the local sheet before and after: `adb shell stat -c '%s %Y' <roms>/PS/Disc.cue`.
+  4. Send the same three games again; this time choose "Replace" on the disc game and accept.
+  5. Send two games the phone already has, identical, and accept.
+- **Expected:** 1: one card for the disc game (not one per file), with only "Replace · Skip",
+  "Skip" selected, and the line "A game with several files can’t be kept twice. Replace yours or
+  skip it."; its files are not repeated under "SKIPPED". 2: the result shows a warning badge,
+  "2 of 3 Games Received", "From <sender>. These weren’t added:", and under "NOT RECEIVED" the disc
+  game as "<title>" / "PS · Already there"; the notification reads "2 games received, 1 skipped".
+  3: the local `.cue` is unchanged. 4: "3 Games Received" with the check badge, and the `.cue` and
+  `.bin` on the phone are the sender's. 5: "No Games Received", "From <sender>. Nothing new was
+  added to your library:" and both games listed; no "Show in Library".
+- **Check:** human only (screenshots and the `stat` lines); the plan and the count are covered by
+  `PlacementTest`, `OfferModelTest` and `DeliveryReportTest`.
+
+### RT-552 — Android lists the games the receiver did not take, on the result and the notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone and a desktop OpenEmux (or a second device) that can see each other;
+  on the phone three games of one console, one of which the receiver already has, identical.
+- **Steps:**
+  1. Share the three games from the phone; on the receiver uncheck one of the other two and accept.
+     Put the phone's app in the background before the transfer ends.
+  2. From the console's entry point, share the whole console to the same receiver and accept
+     everything there.
+  3. Share a single game the receiver has, identical.
+  4. Repeat 1 in the light theme, on a wide window (`adb shell wm size 1280x800`, restore with
+     `adb shell wm size reset`) and in Português (Brasil).
+- **Expected:** 1: the phone shows a warning badge, "1 of 3 Games Sent", "<receiver> has 1 of them.
+  These didn’t go:", and under "NOT SENT" the unchecked game ("Not accepted on <receiver>") and the
+  game it already had ("Already on <receiver>"), each with the console's short name; the
+  notification reads "1 game sent, 2 skipped". The receiver's own result counts the same game.
+  2: "<N-1> of <N> Games Sent", with the game the receiver already had listed. 3: "No Games Sent",
+  "<receiver> didn’t take any of them:" and the game listed. 4: the list scrolls with the sheet,
+  "Close" keeps the gamepad focus, and every text is translated and readable in both themes.
+- **Check:** human only (screenshots); the count is covered by `DeliveryReportTest` and
+  `ShareCoordinatorTest`.
 
 ## Retired
 
