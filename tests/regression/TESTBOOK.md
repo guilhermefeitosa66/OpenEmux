@@ -8067,8 +8067,39 @@ stands in for the other device; multicast may not cross the container.
   1. Run the suite.
 - **Expected:** Two services on 127.0.0.1: the sender connects by address, sends, both screens
   show the same code, the receiver accepts, both end on their result pages, the ROM is in the
-  receiver's ROM folder and the receiver's library is rescanned for that console only.
+  receiver's ROM folder and the receiver's library is rescanned for that console only. The
+  sender's result counts the games that arrived, the same number as the receiver's: when the
+  receiver already has one of two games byte for byte, the sender reads "1 of 2 Games Sent" and
+  the receiver "1 of 2 Games Received".
 - **Check:** `tests/test_share_ui_loopback.py`; on two real machines the same flow is `MANUAL`.
+
+### RT-548 — A game the receiver leaves out is listed on the sender's result
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Sending games where the receiver skips one ends on "N-1 of N Games Sent" with a
+  warning icon, never "N Games Sent"; under "Not Sent" the skipped game is a row with its title
+  and "<Console> · <reason>" ("Not accepted on <device>", "Already on <device>", …). A game that
+  was selected but dropped while the games were prepared for the send (its file gone) is listed
+  there too and counted in N. When nothing arrived the title is "No Games Sent".
+- **Check:** `tests/test_share_report.py`, `tests/test_share_dialog.py` (`NotSentTests`),
+  `tests/test_share_ui_loopback.py`. On two machines: send two games to a device that already has
+  one of them and read the sender's result (`MANUAL`).
+
+### RT-549 — The desktop receiver lists the games it did not add, by title and reason
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A receive that did not add every game ends on "N of M Games Received" (or "No
+  Games Received") with a warning icon and a "Not Received" list: one row per game, its title and
+  "<Console> · <reason>" ("Already in your library", "This console isn't supported on this
+  device", …). Titles with `<b>` or `&` show literally. "N files skipped" is no longer shown.
+- **Check:** `tests/test_share_offer.py` (`NotReceivedTests`); on two real machines the same flow
+  is `MANUAL`.
 
 ### RT-516 — Conflicts: "Keep Newest" never replaces a newer local save
 - **Area:** Share nearby (desktop)
