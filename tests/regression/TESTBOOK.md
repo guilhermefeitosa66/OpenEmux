@@ -8098,11 +8098,14 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   1. Accept; while it runs, read the services and the notification.
   2. Press "Cancel" in the notification.
   3. Repeat and cancel from the screen ("Cancel Transfer", then confirm).
+  4. Swap the roles: send the large game from the phone and cancel there mid-transfer ("Cancel
+     Transfer", then confirm).
 - **Expected:** The sheet shows "Receiving from <device>", a bar, "<done> of <total>", "File i of n"
   and "You can turn off the screen or leave the app…". The notification "Receiving from <device>"
   has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
   file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
-  notification is gone when the service stops.
+  notification is gone when the service stops. When the phone is the sender, the receiving device
+  also ends with "Transfer Cancelled" (not a failure card) and keeps nothing.
 - **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground|types=0x"`
   shows the service in the foreground with the `dataSync` type while it runs;
   `adb shell run-as $PKG find files -name ".*tmp"` and the `roms/` listing show nothing new after.
