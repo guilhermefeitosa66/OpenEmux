@@ -55,6 +55,7 @@ class EntryPointTests(WindowCase):
         content = button.get_child()
         self.assertEqual((content.get_icon_name(), content.get_label()), (SHARE_ICON, "Share"))
         self.assertEqual(button.get_tooltip_text(), "Share Nearby")
+        self.assertTrue(button.has_css_class("raised"))
         with mock.patch.object(self.win, "share_roms") as share:
             button.emit("clicked")
         share.assert_called_once_with([rom])

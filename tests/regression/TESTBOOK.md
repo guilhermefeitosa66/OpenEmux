@@ -7940,10 +7940,12 @@ stands in for the other device; multicast may not cross the container.
   3. Close the menu. Right-click a console in the sidebar.
 - **Expected:** Step 1 opens a dialog titled "Share Nearby" with the subtitle "1 game · <size>"
   and a spinner beside "Devices on This Network". Step 2's menu reads "Share 3 Games Nearby…", and
-  the selection bar has a button with the tooltip "Share Nearby". Step 3's menu has "Share All
-  Games Nearby…" right after "Sync covers".
+  the selection bar has a "Share" button (text label beside the share glyph, three connected dots)
+  with the tooltip "Share Nearby", between "Sync Covers" and "Delete". Step 3's menu has "Share All
+  Games Nearby…" right after "Sync covers". Every Share entry shows the three-dot share glyph,
+  never a Wi-Fi icon, in the light and the dark theme.
 - **Check:** One `make devbox-shot WIN=1` per step showing the dialog title and subtitle, the
-  "Share 3 Games Nearby…" entry and the console menu entry. Suite:
+  "Share 3 Games Nearby…" entry, the labelled "Share" button and the console menu entry. Suite:
   `tests/test_share_entry_points.py`.
 
 ### RT-507 — "Receive Games…" makes this device visible without sending
@@ -7951,14 +7953,31 @@ stands in for the other device; multicast may not cross the container.
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app running.
 - **Steps:**
-  1. Open the "Main Menu" and choose "Receive Games…", the first entry.
+  1. Click the arrow beside the Import button in the header ("More Import Options") and choose
+     "Receive Games…".
   2. Choose "Connect by Address".
-- **Expected:** A "Receive Games" dialog with "Ready to Receive" and "Visible as “<name>”", and
-  no device list. The "Connect by Address" page shows the address as `host:port`, the fingerprint
+  3. Close the dialog and open the "Main Menu".
+- **Expected:** A "Receive Games" dialog with "Ready to Receive" under the share glyph and
+  "Visible as “<name>”", and no device list. Step 3's "Main Menu" has no "Receive Games…" entry. The "Connect by Address" page shows the address as `host:port`, the fingerprint
   in groups of four and a "Copy Address" button; the QR code shows when `python3-segno` is
   installed and is simply absent otherwise.
-- **Check:** `make devbox-shot WIN=1` of both pages. Suite: `tests/test_share_dialog.py`
-  (`TheRootTests`, `ConnectByAddressTests`).
+- **Check:** `make devbox-shot WIN=1` of both pages and of the "Main Menu". Suite:
+  `tests/test_share_dialog.py` (`TheRootTests`, `ConnectByAddressTests`),
+  `tests/test_share_entry_points.py`.
+
+### RT-547 — Import still opens the file picker in one click, and Ctrl+O still works
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Click the main part of the Import button in the header (tooltip "Import ROMs").
+  2. Cancel the file picker. Press Ctrl+O.
+  3. Cancel again. Click the arrow beside the Import button and choose "Import ROMs…".
+- **Expected:** Each step opens the "Import ROMs" file picker directly. The arrow's menu lists
+  "Import ROMs…" (with Ctrl+O beside it) and then "Receive Games…".
+- **Check:** `make devbox-xdo CMD='key ctrl+o'` then `make devbox-shot WIN=1` showing the picker;
+  `make devbox-shot WIN=1` of the open arrow menu. Suite: `tests/test_window.py`
+  (`test_the_import_button_is_a_split_button`), `tests/test_share_entry_points.py`.
 
 ### RT-508 — Two devices on one network see each other by name and platform
 - **Area:** Share nearby (desktop)

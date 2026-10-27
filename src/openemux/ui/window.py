@@ -1132,6 +1132,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.selection_share_button.set_child(
             Adw.ButtonContent(icon_name=SHARE_ICON, label=self.t("share.selection.label"))
         )
+        # "raised": a toolbar draws icon buttons flat, and this one sits among
+        # text buttons that keep their background.
+        self.selection_share_button.add_css_class("raised")
         self.selection_share_button.set_tooltip_text(self.t("share.selection.tooltip"))
         self.selection_share_button.connect("clicked", lambda _b: self.share_roms(self._selected_roms))
 
