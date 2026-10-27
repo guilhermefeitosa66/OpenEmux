@@ -160,8 +160,10 @@ class IncomingOfferDialog(Adw.Dialog):
                 parts.append(text)
         if states:
             parts.append(plural(t, states, "share.offer.states.one", "share.offer.states.many"))
-        row = Adw.ActionRow(title=str(game.get("title", "")))
+        # Markup off before the title is set: it comes from the other device.
+        row = Adw.ActionRow()
         row.set_use_markup(False)
+        row.set_title(str(game.get("title", "")))
         row.set_subtitle(f"{get_system_display_name(str(game.get('console', '')))} · {', '.join(parts)}")
         size = sum(item.get("size", 0) for item in game.get("items", []))
         row.add_suffix(label(format_size(size, t), css=("dim-label", "numeric"), wrap=False))
@@ -267,8 +269,10 @@ class IncomingOfferDialog(Adw.Dialog):
                              version=state.get("core_version", ""))
             else:
                 subtitle = t(reason_key(decision.reason))
-            action = Adw.ActionRow(title=title, subtitle=subtitle)
+            action = Adw.ActionRow()
             action.set_use_markup(False)
+            action.set_title(title)
+            action.set_subtitle(subtitle)
             rows.append(action)
         return rows
 

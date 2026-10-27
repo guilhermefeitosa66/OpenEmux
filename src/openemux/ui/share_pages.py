@@ -197,8 +197,10 @@ def _missing_group(t, report, device, receiving):
     for entry in report.missing:
         reason = t(reason_key(entry["reason"])) if receiving else t(sender_reason_key(entry["reason"]), device=device)
         # Titles come from the other device: never markup.
-        row = Adw.ActionRow(title=str(entry["title"]))
+        # Markup off before the title is set, or it is parsed once anyway.
+        row = Adw.ActionRow()
         row.set_use_markup(False)
+        row.set_title(str(entry["title"]))
         row.set_subtitle(f"{get_system_display_name(str(entry['console']))} · {reason}")
         group.add(row)
     return group
