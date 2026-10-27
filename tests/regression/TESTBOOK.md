@@ -8190,7 +8190,7 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   2. Back in a console's library, long-press a game, select three, and press the share button in the
      selection bar; repeat with Select on a gamepad.
   3. On the "Shelf", long-press a console and pick "Share All Games Nearby".
-  4. Open "Settings" › "Share Nearby" › "Receive Games".
+  4. Open the "Import" tab and press "Receive games".
 - **Expected:** 1 opens "Share Nearby" with "1 game · <size>"; 2 with "3 games · <size>" and the
   selection closed; 3 with that console's game count, the row showing "<n> games" (it is not in the
   sheet of a console with no games); 4 opens "Receive Games" with "Ready to receive…" and no
@@ -8353,7 +8353,7 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
 - **Mode:** MANUAL
 - **Preconditions:** Another device listing this phone.
 - **Steps:**
-  1. Open "Receive Games", then go back to "Settings".
+  1. Open "Receive Games", then go back to "Import".
   2. Watch the other device's list for a minute.
   3. Open "Receive Games" again, go back to the Library and, about 15 seconds later, send a game
      to the phone from the other device; do not answer.
@@ -8405,6 +8405,30 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   the focused row, X the whole game, B goes back; the hint bar shows them. On the wide window the
   devices are on the left and "What to Send" inline on the right. Every text is translated and
   readable in both themes.
+- **Check:** human only (screenshots).
+
+### RT-548 — "Receive games" lives in the Import tab, not in Settings
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app with first-run setup done; a gamepad (or the emulator keyboard mapped as
+  one); for the wide part a tablet or `adb shell wm size 1280x800` (restore with
+  `adb shell wm size reset`).
+- **Steps:**
+  1. Open the "Import" tab in portrait.
+  2. Press "Receive games", then go back.
+  3. With the gamepad, reach the "Import" tab with L1/R1, move down to "Receive games" with the
+     D-pad and press A; press B.
+  4. Repeat 1 and 2 in landscape and on the wide window.
+  5. Start importing a folder with several ROMs and watch the buttons while "Copying…" shows.
+  6. Open "Settings" and scroll to "Share Nearby".
+  7. Switch to the light theme and to Português (Brasil) and open the "Import" tab.
+- **Expected:** 1: "Receive games", with the share icon, is the third button, under "Choose files"
+  and "Choose a whole folder". 2: it opens "Receive Games" with "Ready to receive…" and "Visible as
+  “<name>”"; the back link reads "Import" and returns to the Import tab. 3: the button gets the
+  focus ring, A opens the receive screen, B returns to Import. 4: the button is shown and works in
+  every layout. 5: none of the three buttons is shown while copying; they come back afterwards.
+  6: "SHARE NEARBY" holds only "Device name", with no "Receive Games" row and no stray divider;
+  renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
 ## Retired
