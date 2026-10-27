@@ -1973,14 +1973,26 @@ class TheDialogsAndMenusTests(WindowCase):
             self.win._show_shortcuts()
 
     def app_section(self):
-        # Two sections since Share nearby (issue #589): "Receive Games…" on
-        # its own first, then the five entries about the app.
+        # One section again since "Receive Games…" moved to the Import
+        # button's menu (issue #611): the five entries about the app.
         model = self.win.primary_menu_button.get_menu_model()
-        self.assertEqual(model.get_n_items(), 2)
-        return model.get_item_link(1, "section")
+        self.assertEqual(model.get_n_items(), 1)
+        return model.get_item_link(0, "section")
 
     def test_the_primary_menu_offers_the_five_entries(self):
         self.assertEqual(self.app_section().get_n_items(), 5)
+
+    def test_the_import_button_is_a_split_button(self):
+        # One click still opens the file picker; the arrow holds the rest
+        # (issue #611).
+        button = self.win.import_btn
+        self.assertIsInstance(button, Adw.SplitButton)
+        self.assertEqual(button.get_tooltip_text(), "Import ROMs")
+        self.assertEqual(button.get_dropdown_tooltip(), "More Import Options")
+        with mock.patch.object(self.win.imports, "open_picker") as open_picker:
+            button.emit("clicked")
+            self.win.activate_action("win.import", None)
+        self.assertEqual(open_picker.call_count, 2)
 
     def test_report_a_bug_sits_before_about(self):
         # Where GNOME apps keep it, and reachable without opening Settings

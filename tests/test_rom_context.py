@@ -187,7 +187,7 @@ class WhichSubmenusAppearTests(unittest.TestCase):
         other = {**ROM, "path": "/roms/SFC/Other.sfc"}
         window = _Window(selected=[ROM, other])
         label, callback, icon = RomContextMenuServices(window).build_submenus(ROM)[-1]
-        self.assertEqual((label, icon), ("share.menu.many(count)", "network-wireless-symbolic"))
+        self.assertEqual((label, icon), ("share.menu.many(count)", "openemux-share-symbolic"))
         callback()
         self.assertEqual(window.calls[-1], ("share_roms", ([ROM, other],), {}))
         label, callback, _icon = RomContextMenuServices(_Window(selected=[other])).build_submenus(ROM)[-1]

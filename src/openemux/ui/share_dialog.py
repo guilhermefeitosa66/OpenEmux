@@ -39,6 +39,7 @@ from openemux.core.share.selection import (
     summarize,
 )
 from openemux.core.systems import get_system_display_name
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.share_coordinator import STATE_FAILED
 from openemux.ui.share_pages import (
     confirm_cancel,
@@ -147,7 +148,7 @@ class ShareDialog(Adw.Dialog):
         else:
             ready_group = Adw.PreferencesGroup()
             self.ready = Adw.StatusPage(
-                icon_name="network-wireless-symbolic", title=t("share.receive.title"),
+                icon_name=SHARE_ICON, title=t("share.receive.title"),
             )
             self.ready.add_css_class("compact")
             ready_group.add(self.ready)

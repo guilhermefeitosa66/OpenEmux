@@ -24,6 +24,7 @@ from openemux.core.shaders import normalize_shader_id
 from openemux.core.share.selection import roms_for_console
 from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.context_menu import (
     SEPARATOR,
     Submenu,
@@ -465,7 +466,7 @@ class ConsoleSidebar:
             (t("header.sync_covers"), "sidebar.sync-covers", "image-x-generic-symbolic"),
         ]
         if roms_for_console(self.win.playlist_manager, console_id):
-            entries.append((t("share.menu.console"), "sidebar.share", "network-wireless-symbolic"))
+            entries.append((t("share.menu.console"), "sidebar.share", SHARE_ICON))
         entries += [SEPARATOR, self._layout_submenu(console_id)]
         # Appended one at a time: SEPARATOR *is* None, so a submenu that has
         # nothing to offer would otherwise draw itself as a divider.

@@ -128,6 +128,7 @@ class TheRootTests(_DialogCase):
         self.assertEqual(dialog.get_title(), "Receive Games")
         self.assertEqual(dialog.mode, "receive")
         self.assertIn("“QA Box”", dialog.ready.get_description())
+        self.assertEqual(dialog.ready.get_icon_name(), "openemux-share-symbolic")
         dialog.on_peers_changed()
         self.assertFalse(self.timers.has(NOTHING_FOUND_SECONDS))
 

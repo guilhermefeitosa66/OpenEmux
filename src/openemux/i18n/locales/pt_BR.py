@@ -621,6 +621,7 @@ TRANSLATIONS = {
 
     # ROM import
     "header.import": "Importar ROMs",
+    "header.import_more": "Mais opções de importação",
     "header.sync_covers": "Sincronizar capas",
     "header.view_mode": "Modo de exibição",
     "header.zoom.in": "Miniaturas maiores",
@@ -637,6 +638,7 @@ TRANSLATIONS = {
     "view_mode.list": "Lista compacta",
     "import.dialog.title": "Importar ROMs",
     "import.dialog.filter": "ROMs e arquivos compactados",
+    "import.menu.import": "Importar ROMs…",
     "import.running": "Já existe uma importação em andamento",
     "import.unknown_console": "Qual console?",
     "import.choose_console.body": "Arquivos com a extensão “{extension}” são usados por mais de um console. Escolha o console de destino para este lote.",
@@ -721,6 +723,7 @@ TRANSLATIONS = {
     "share.menu.many": "Compartilhar {count} jogos por perto…",
     "share.menu.console": "Compartilhar todos os jogos por perto…",
     "share.menu.receive": "Receber jogos…",
+    "share.selection.label": "Compartilhar",
     "share.selection.tooltip": "Compartilhar por perto",
     "share.title": "Compartilhar por perto",
     "share.title.receive": "Receber jogos",
