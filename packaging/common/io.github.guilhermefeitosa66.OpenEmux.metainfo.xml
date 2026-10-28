@@ -47,19 +47,19 @@
   <screenshots>
     <screenshot type="default">
       <caption>The cover-art library for a console</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/b354df69175e2af1ffbbd325ccf330de890e3536/docs/assets/openemux-roms-nes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/c002c7727febd816bbb6e85eaff010800bc1a9d7/docs/assets/openemux-roms-nes.png</image>
     </screenshot>
     <screenshot>
       <caption>Browsing another console's games</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/b354df69175e2af1ffbbd325ccf330de890e3536/docs/assets/openemux-roms-snes.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/c002c7727febd816bbb6e85eaff010800bc1a9d7/docs/assets/openemux-roms-snes.png</image>
     </screenshot>
     <screenshot>
       <caption>Playing a game through RetroArch</caption>
-      <image type="source" width="1300" height="860">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/b354df69175e2af1ffbbd325ccf330de890e3536/docs/assets/openemux-gameplay-gba.png</image>
+      <image type="source" width="1300" height="860">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/3b7c9760d5b4571e9bfd1e08985e63b5ba6f209f/docs/assets/openemux-gameplay-gba.png</image>
     </screenshot>
     <screenshot>
       <caption>Preferences</caption>
-      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/b354df69175e2af1ffbbd325ccf330de890e3536/docs/assets/openemux-settings.png</image>
+      <image type="source" width="1320" height="878">https://raw.githubusercontent.com/guilhermefeitosa66/OpenEmux/c002c7727febd816bbb6e85eaff010800bc1a9d7/docs/assets/openemux-settings.png</image>
     </screenshot>
   </screenshots>
 
@@ -87,6 +87,19 @@
   </keywords>
 
   <releases>
+    <release version="1.18.0" date="2026-10-27">
+      <description>
+        <p>Share nearby: send games between your devices over the local network, with their saves, states and covers.</p>
+        <ul>
+          <li>Share one or more games with another OpenEmux device on the same network, desktop or Android</li>
+          <li>Battery saves, compatible save states, covers and cartridge labels travel with each game</li>
+          <li>Encrypted sessions with a verification code shown on both screens</li>
+          <li>Receive games from the Import button</li>
+          <li>Bundled icons follow the theme color, so they are visible in the dark theme</li>
+          <li>A game's context menu closes on a click outside</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.17.0" date="2026-10-25">
       <description>
         <p>Fullscreen and bezels for games, an artwork manager that starts from the cover you have, and fixes for games, covers and cores that went missing.</p>

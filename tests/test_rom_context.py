@@ -108,10 +108,14 @@ class _Window:
         self.collection_manager = kwargs.get("collections", _CollectionManager())
         self.current_console = kwargs.get("current_console", "SFC")
         self.current_view_mode = kwargs.get("view_mode", "cover")
+        self.selected = kwargs.get("selected", [])
         self.calls = []
 
     def t(self, key, **params):
         return key if not params else f"{key}({','.join(sorted(params))})"
+
+    def _target_roms_for(self, rom):
+        return list(self.selected) if rom in self.selected and len(self.selected) > 1 else [rom]
 
     def __getattr__(self, name):
         # Every win.<action>(...) the menu wires up: recorded, never executed
@@ -175,7 +179,19 @@ class WhichSubmenusAppearTests(unittest.TestCase):
         )
         entries = services.build_submenus(ROM)
         self.assertEqual(entries[0].label, "context.load_state")
-        self.assertEqual(entries[-1].label, "context.add_to_collection")
+        self.assertEqual(entries[-2].label, "context.add_to_collection")
+        # Share nearby (issue #589) closes the list, right after the collections.
+        self.assertEqual(entries[-1][0], "share.menu.single")
+
+    def test_share_offers_the_game_or_the_selection_it_belongs_to(self):
+        other = {**ROM, "path": "/roms/SFC/Other.sfc"}
+        window = _Window(selected=[ROM, other])
+        label, callback, icon = RomContextMenuServices(window).build_submenus(ROM)[-1]
+        self.assertEqual((label, icon), ("share.menu.many(count)", "openemux-share-symbolic"))
+        callback()
+        self.assertEqual(window.calls[-1], ("share_roms", ([ROM, other],), {}))
+        label, callback, _icon = RomContextMenuServices(_Window(selected=[other])).build_submenus(ROM)[-1]
+        self.assertEqual(label, "share.menu.single")
 
     def test_a_rom_with_no_console_or_path_gets_no_per_rom_submenu(self):
         # Both are keys into config overrides; without them there is nothing

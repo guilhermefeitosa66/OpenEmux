@@ -16,6 +16,7 @@ from openemux.core import cartridge_colors, cartridge_render
 from openemux.core.library_view import renders_cartridge
 from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.ui.context_menu import SEPARATOR, Submenu
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.scopes import is_collection_scope
 
 
@@ -125,7 +126,17 @@ class RomContextMenuServices:
         remove = self._remove_from_collection_entry(rom)
         if remove is not None:
             entries.append(remove)
+        entries.append(self._share_entry(rom))
         return entries
+
+    def _share_entry(self, rom):
+        # Always offered: when sharing cannot work here, the dialog says why.
+        targets = self.win._target_roms_for(rom)
+        if len(targets) > 1:
+            text = self.win.t("share.menu.many", count=len(targets))
+        else:
+            text = self.win.t("share.menu.single")
+        return (text, (lambda r=targets: self.win.share_roms(r)), SHARE_ICON)
 
     def _add_to_collection_submenu(self, rom):
         cm = self.win.collection_manager

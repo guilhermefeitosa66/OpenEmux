@@ -1194,10 +1194,43 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   3. Click on empty grid space.
   4. Right-click a card again, and while the menu is open switch console in the sidebar.
 - **Expected:** Step 2 replaces the first menu instead of stacking a second one. After step 3 no
-  menu is left on screen and no `(...)` button stays stuck visible. Step 4 closes the menu with
-  the page switch.
+  menu is left on screen and no `(...)` button stays stuck visible (what else that click does, or
+  rather does not do, is RT-540). Step 4 closes the menu with the page switch.
 - **Check:** `tests/test_context_menu.py` (the ownership rule and the guarded unparent); the UI
   half is the human's, and the launch log must gain no `Gtk-CRITICAL`.
+
+### RT-540 — A click outside a context menu closes it and does nothing else
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on its seeded library, on a console page with at least three
+  games (a card is focused at start-up). Read the card and sidebar coordinates from
+  `make devbox-shot` / `devbox-xdo win` before clicking.
+- **Steps:**
+  1. Right-click the second game card. Click the empty area to the right of the last card column.
+  2. Right-click the second card again, then left-click the third card.
+  3. Right-click the second card, then right-click the third card. Right-click the third card once
+     more.
+  4. Press `Escape`. Right-click the second card, then click another console row in the sidebar.
+     Repeat, clicking an empty spot of the header bar instead.
+  5. Move focus to a card with the arrow keys, press `Menu` (and, separately, `Shift+F10`), then
+     click the empty grid area.
+  6. Right-click a card and press `Escape`; right-click it again and choose "Add to favorites",
+     then do the same again to undo it.
+  7. After all of the above, left-click a card once.
+- **Expected:** Every outside click closes the menu and nothing more (issue #601): in step 2 the
+  third game is not launched and not selected; in step 3 the first right-click on the third card
+  only closes the menu and the second one opens that card's menu; in step 4 the console does not
+  switch on that click and no header action runs. The keyboard-opened menus in step 5 close the
+  same way. Escape and a menu entry still close the menu, and the entry's action runs exactly once.
+  In step 7 the click acts normally (the game launches): no click is left being swallowed once a
+  menu has closed.
+- **Check:** A `make devbox-shot` after each outside click shows no popover (on the devbox's Xvnc an
+  open popover renders as a solid black rectangle). In the app log
+  (`~/.local/share/openemux-devbox/home/.devbox/app.log`), none of the dismissing clicks of steps
+  1–5 adds a `rom card click: button=1` or a `launch` line; step 7 adds exactly one
+  `rom card click: button=1`. No `Gtk-CRITICAL` and no traceback. `tests/test_context_menu.py`
+  (`OutsideClickTests`) covers the guard that enforces this where GTK's autohide does not.
+- **Restore:** Step 6 toggles the favorite twice, leaving it as it was.
 
 ### RT-299 — The library opens where it was left
 - **Area:** Navigation
@@ -5174,9 +5207,63 @@ desk. Anything needing a real ARM machine is `MANUAL`.
 - **Check:** human only.
 
 
+## Android — Closing the device mid-game
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) writing the automatic save state when the game stops being visible (a Flip
+closed, the screen turned off, Home) and coming back paused under the pause sheet (#563). The
+runner has no Android device, so these are `MANUAL`: a person runs them on a phone, a Flip, or a
+headless emulator with `adb`. On an emulator, `adb shell input keyevent KEYCODE_SLEEP` stands in for
+closing the device (a `pixel_fold` AVD can also be closed with `adb emu fold`), and
+`KEYCODE_WAKEUP` followed by `adb shell wm dismiss-keyguard` for opening it. The state is
+`<rom>.state.auto` under the app's save-state folder
+(`/sdcard/Android/data/com.openemux.mobile/files/states/<system>/`), shown in the pause sheet's
+"Load" list as "Auto"; each write moves the file's modification time, which
+`adb shell stat -c %y '<path>'` prints (the engine's log line for it is below logcat's default
+level). The pause sheet is closed with its × button ("Back to game"). RetroAchievements hardcore
+must be off, since it turns auto save off.
+
+### RT-456 — Closing the device saves the game and reopening shows it paused
+- **Area:** Android — Closing the device mid-game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a Game Boy Advance or Super
+  Nintendo game in the library, RetroAchievements hardcore off.
+- **Steps:**
+  1. Start the game and play for about 20 seconds, then close the device (or turn the screen off).
+  2. Open the device again and unlock it.
+  3. Close the pause sheet with its × button.
+  4. Open the pause sheet, then "Load", and pick "Auto".
+- **Expected:** After step 1 the `.state.auto` file is newer than the start of the game. After
+  step 2 the game shows the frame it was closed on, frozen, with "Paused" in the corner, no sound
+  and the pause sheet open. After step 3 the game continues from that moment. Step 4 returns to the
+  moment the device was closed. Home instead of closing, then reopening from Recents, behaves the
+  same, and so does every later close or Home in the same game: each one rewrites the file and
+  comes back paused with the sheet.
+- **Check:** human only (`adb shell stat -c %y '<path>'` before and after step 1, a screenshot
+  after step 2).
+
+### RT-457 — A paused game stays paused when the device is closed, and killed games resume
+- **Area:** Android — Closing the device mid-game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-456.
+- **Steps:**
+  1. During a game, open the pause sheet, then close the device and open it again.
+  2. Close the sheet with its × button, play a few seconds, press Home, then
+     `adb shell am force-stop com.openemux.mobile` to stand in for Android reclaiming the process.
+  3. Open the app and continue the same game.
+  4. During a game, pull down the notification shade, wait a few seconds, and put it away.
+- **Expected:** After step 1 the sheet is still open and the game behind it is not running (the
+  frame does not move, no sound), also when Home and Recents are used instead of closing. After
+  step 3 the game starts where it was when Home was pressed. In step 4 the game keeps running,
+  nothing is saved (the file's modification time does not move) and no sheet opens. With
+  RetroAchievements hardcore on, or a core without save states, closing writes nothing but the
+  game still comes back paused with the sheet.
+- **Check:** human only (a screenshot after step 1, `adb shell stat -c %y '<path>'` around steps 2
+  and 4).
+
 ## Android — RetroAchievements
 
-The Android app ([open-emux-mobile](https://github.com/guilhermefeitosa66/open-emux-mobile),
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) signing in to RetroAchievements and handing the account to the engine
 (#515). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone or a
 headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. Scenarios that need a
@@ -5326,6 +5413,1821 @@ real RetroAchievements account say so; without one they are handed to the mainta
   aapt dump xmltree OpenEmuxMobile-debug.apk res/xml/backup_rules.xml | grep -cE '"(cheevos\.xml|launch)"'            # 2
   ```
 
+## Android — Shelf
+
+The Android app's shelf (openemux-android, `pkg/android/openemux`, `ShelfScreen`/`ShelfCard` in
+`ui/LibraryScreens.kt`) laid out as a grid whose column count follows the shelf's own width, with
+the console icon on each card (#539), made the card's hero in issue 609. The runner has no Android device, so these are `MANUAL`: a
+person runs them on a phone or a headless emulator with `adb`. A headless emulator that ignores
+rotation can stand in for landscape with `adb shell wm density 260` (a wider screen in dp; `wm
+density reset` afterwards). The library needs at least five consoles, one of them with box art or
+no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
+
+### RT-470 — Portrait shows one card per row with the console icon
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** The library above; phone in portrait, dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf).
+- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon (a
+  star for "Favorites"), large (about two thirds of the card's height) and sitting straight on the
+  card's own colour: no lighter or darker square behind it, no border, no shadow. Beside it the
+  short tag ("NES", "SNES"), the console name (two lines at most, then "…") and "N games". No
+  cartridges on any card. Nothing overlaps. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
+  looks as before.
+- **Check:** human only (`adb exec-out screencap -p > shelf-portrait.png`).
+
+### RT-471 — Landscape shows two cards per row with no empty middle
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's shelf.
+- **Steps:**
+  1. Rotate the phone to landscape.
+  2. Scroll to the end and back.
+- **Expected:** Two cards per row, "Favorites" first (top left), the order unchanged (left to
+  right, then down). The icon is the same size as in portrait, still on the card's own colour, and
+  the name fits or ends in "…" on its second line. With an odd number of shelves the last card is on the left, as wide as the others. The scroll
+  position and the order are kept across the rotation.
+- **Check:** human only (a screenshot in each orientation).
+
+### RT-473 — The gamepad moves across both columns and focus comes back
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. Press DPAD_DOWN until "Favorites" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  2. Keep pressing DPAD_DOWN to the last row.
+  3. Press L1 and R1.
+  4. Focus a card in the right column, press A, then go back.
+- **Expected:** Focus moves to the card on the right, the one below, then the one on the left; the
+  list scrolls to keep the focused card on screen and the ring is never lost. L1/R1 switch tabs.
+  After going back, the focus ring is on the card that was opened.
+- **Check:** human only.
+
+### RT-474 — Reorder by drag and by the menu across columns
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-471's landscape shelf.
+- **Steps:**
+  1. Long press a console card in the left column and drag it onto a card in the right column of
+     the next row; let go.
+  2. Leave the tab, come back; then `adb shell am force-stop com.openemux.mobile` and reopen.
+  3. Focus a console in the right column with the gamepad, press Y, choose "Move up".
+  4. Press Y again and choose "Restore default order".
+- **Expected:** While dragging the other cards make room and the dragged card stays under the
+  finger; the new order is kept after leaving the tab and after the restart. "Favorites" cannot be
+  dragged and stays first. "Move up" moves the console one place back in reading order (left to
+  right, then down). "Restore default order" brings back the default order.
+- **Check:** human only.
+
+### RT-475 — Light theme, box-art consoles and a small phone
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's library.
+- **Steps:**
+  1. Switch to the light theme and repeat RT-470 and RT-471.
+  2. Look at the card of the console with box art or no cartridge frame.
+  3. `adb shell wm size 720x1280 && adb shell wm density 360` (a ~320dp-wide phone); open the shelf
+     in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
+- **Expected:** Pastel cards with dark text; every icon is readable straight on its card's colour,
+  with no tile colour behind it. The box-art console's card looks like the others (icon, tag, name,
+  count; no covers). On the small phone the icon keeps its portrait size and the long names
+  ("Nintendo (NES) / Famicom", "Sega Genesis / Mega Drive") end in "…" on their second line at
+  worst; in landscape a card is never narrower than 250dp, so the shelf
+  keeps one card per row when two would not fit beside the side rail. Nothing is clipped.
+- **Check:** human only.
+
+
+## Android — Backup and restore
+
+The Android app keeping its data across an uninstall and reinstall (#545): the system's "Keep app
+data" checkbox, and Settings → "Back up and restore", which writes one `.zip` the user owns and
+restores it on a fresh install. `MANUAL`, like the other Android sections: a phone or a headless
+emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.mobile`,
+`$EXT` is `/sdcard/Android/data/$PKG/files`.
+
+### RT-414 — Settings has a Back up and restore screen
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a few games in the library.
+- **Steps:**
+  1. Open the "Settings" tab and, under "General", tap "Back up and restore".
+  2. Switch the theme to "Light" and turn the phone to landscape; come back to the screen.
+- **Expected:** The row reads "Back up and restore" with "Keep your saves and settings when you
+  reinstall" under it, between "Controls" and "Check for updates". The screen shows the "Export"
+  section ("Saves and states", "Settings and artwork", each with a size, and "Include ROMs" switched on
+  with "<n> games · <size>"), "Export data · <total>", the note about cores, covers and
+  RetroAchievements, the "Import" section with "Import data", and the "Uninstalling to update?"
+  note. Turning "Include ROMs" off lowers the total and changes the note to "Without ROMs, copy
+  your games back with Import ROMs…". Nothing is clipped; in landscape the screen scrolls.
+- **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
+
+### RT-415 — Keep app data on uninstall, reinstall the same APK
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** Android 10 or newer; the library, a save state and a theme choice in place.
+- **Steps:**
+  1. Uninstall from the system (long press the icon → "Uninstall", or Settings → Apps).
+  2. Tick "Keep app data" and confirm (or `adb uninstall -k $PKG`).
+  3. Install the same APK again and open the app.
+- **Expected:** The system dialog offers "Keep app data". After the reinstall there is no
+  first-run download: the library, favorites, save states, playtime, labels and the theme are as
+  they were.
+- **Check:**
+  ```bash
+  aapt dump xmltree OpenEmuxMobile-debug.apk AndroidManifest.xml | grep hasFragileUserData   # =(0xffffffff)
+  adb uninstall -k $PKG && adb install OpenEmuxMobile-debug.apk
+  adb shell run-as $PKG ls files/setup.done                          # still there
+  ```
+
+### RT-416 — Export writes one archive with exactly what it should
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** RT-414's screen; signed in to RetroAchievements (or `shared_prefs/cheevos.xml`
+  seeded through `run-as`); a save state, a favorite and a cart colour set.
+- **Steps:**
+  1. Leave "Include ROMs" on and tap "Export data · <total>".
+  2. Save in "Downloads" under the suggested name ("OpenEmux backup <yyyy-mm-dd>.zip").
+- **Expected:** "Exporting…" with the current folder and "<done> of <total>", then a green box
+  "Exported to OpenEmux backup <date>.zip · <size>". The archive lists `manifest.json` first, then
+  `prefs/openemux.json` and entries under `external/` and `internal/` only; no core, no `launch/`,
+  no RetroAchievements username or token anywhere.
+- **Check:**
+  ```bash
+  adb pull "/sdcard/Download/OpenEmux backup $(date +%F).zip" backup.zip
+  unzip -Z1 backup.zip | head -2                                          # manifest.json, prefs/openemux.json
+  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system)/|internal/(meta\.json|nds-layout|labels/))'   # 0
+  unzip -p backup.zip | grep -ac '<ra-username>\|cheevos_token'           # 0
+  ```
+
+### RT-417 — Import on a fresh install brings the app back as it was
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** RT-416's archive in Downloads.
+- **Steps:**
+  1. `adb uninstall $PKG` (no keep), install the APK again and finish the first-run setup.
+  2. Settings → "Back up and restore" → "Import data", pick the archive.
+  3. Read the sheet, then tap "Replace and restore".
+- **Expected:** The sheet "Replace your data?" reads "From OpenEmux <version>, made on <date> ·
+  <size>" and lists the games, "Saves and states" and "Settings and artwork" with their sizes. After
+  "Replace and restore", a green box "Restored <n> games and <m> saves and states. OpenEmux will
+  restart now.", then the app restarts on its own into the first-run setup again (the restore
+  clears its stamp so the cores and system files are checked; the cores already there are not
+  downloaded again); once it finishes, the library, favorites, cart colours, theme and
+  language are back; the save state is in the game's detail; playtime matches; labels show without
+  a ScreenScraper fetch; covers come back by themselves; RetroAchievements reads "Not signed in".
+- **Check:** human only, plus:
+  ```bash
+  adb shell ls -R $EXT/states $EXT/saves $EXT/playtime    # the files from before
+  adb shell run-as $PKG ls shared_prefs                   # no cheevos.xml
+  ```
+
+### RT-418 — A damaged, foreign or newer archive changes nothing
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A library with saves; RT-416's archive.
+- **Steps:**
+  1. Import any `.zip` that is not a backup (e.g. a zipped ROM).
+  2. Import a copy cut inside the manifest: `head -c 100 backup.zip > cut.zip`, pushed to Downloads.
+  3. Import a backup whose `manifest.json` says `"version":2` (unzip, edit, zip again with
+     `manifest.json` first).
+  4. Import a copy cut in half (`head -c $(( $(stat -c %s backup.zip) / 2 )) backup.zip > half.zip`),
+     then tap "Replace and restore" on the sheet.
+- **Expected:** 1 and 2: a red box "This file is not an OpenEmux backup, or it is damaged. Nothing
+  was changed." 3: "This backup was made by a newer OpenEmux. Update the app first. Nothing was
+  changed." No confirmation sheet for 1 to 3. 4: the manifest is whole, so the "Replace your
+  data?" sheet opens; "Replace and restore" then ends in the same red "not an OpenEmux backup"
+  box. The library and saves are identical before and after all four.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG ls -R files > before.txt; adb shell ls -lR $EXT >> before.txt
+  # ... the three imports ...
+  adb shell run-as $PKG ls -R files > after.txt; adb shell ls -lR $EXT >> after.txt
+  diff before.txt after.txt && echo unchanged
+  ```
+
+### RT-419 — Export without ROMs, then Import ROMs reattaches the saves
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A game with a save state; its ROM file at hand.
+- **Steps:**
+  1. Switch "Include ROMs" off and export.
+  2. Uninstall, reinstall, finish setup, import the archive.
+  3. "Import" tab → import the same ROM file.
+- **Expected:** After the restore (and the first-run setup it runs again) the library is empty
+  while settings and saves are back; after importing the ROM, its save state and playtime show on
+  that game.
+- **Check:** human only.
+
+### RT-420 — Cancelling an export leaves no file behind
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** RT-414's screen with "Include ROMs" on and a library large enough for the
+  export to take a few seconds.
+- **Steps:**
+  1. Tap "Export data · <total>" and save in "Downloads".
+  2. While "Exporting…" shows, tap "Cancel".
+- **Expected:** The screen returns to the export card with no notice; no backup file is left in
+  "Downloads" and the app's data is unchanged.
+- **Check:**
+  ```bash
+  adb shell ls /sdcard/Download | grep -c 'OpenEmux backup'    # 0 (or the count from before)
+  ```
+
+
+## Android — Foldable gameplay
+
+The game on a foldable held half open with the fold across, in the tabletop posture (#561): the
+picture on the top half, the controls on the bottom one, the pause menu on the bottom half, and the
+skin switched live by overlay name without restarting the core. The runner has no Android device,
+so these are `MANUAL`: a person runs them on a Pixel Fold emulator (`avdmanager create avd -n fold
+-k "system-images;android-35;google_apis;x86_64" -d pixel_fold`, started headless with
+`-no-window`) with `adb`. Unfold with `adb emu unfold`, turn the fold across with
+`adb shell settings put system accelerometer_rotation 0` and `adb shell settings put system
+user_rotation 1`, and set the hinge with `adb emu sensor set hinge-angle0 <deg>` (180 = flat,
+90 = half open). The game logs the fold it sees: `adb logcat -s OpenEmuxGame:D`. The library needs
+a Game Boy Advance game and a Nintendo DS game (both open flat on their packaged skin, the drawn
+art from `assets/skins`) and a Game Gear game (a console that keeps the skin the app draws). The
+packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
+opening flat brings each one's own skin back. Every scenario ends with `hinge-angle0 180` and
+`user_rotation 0`.
+
+### RT-446 — Tabletop game: picture on top, controls on the bottom, nothing on the crease
+- **Area:** Android — Foldable gameplay
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a Pixel Fold emulator, unfolded, the fold across, half open
+  (`hinge-angle0 90`) before the game is launched.
+- **Steps:**
+  1. Launch the Game Boy Advance game.
+  2. Tap just above and just below the fold.
+  3. Tap "Turbo" and "2x" on the strip, then tap each again.
+  4. Tap "Save" on the strip, play a little, then "Load".
+  5. Quit, and repeat steps 1 to 3 with the Game Gear game.
+- **Expected:** The picture fills the top half, centred. Under the fold, L, the strip (save, load,
+  turbo, 2x, in that order) and R share one row, the menu key sits under the strip, the d-pad and
+  B/A below, SELECT and START near the bottom and the console's name at the foot. The band around
+  the fold is a plain darker strip of the skin: nothing drawn in it and taps there do nothing.
+  Turbo and 2x light up while on and go out on the second tap. Load restores the saved moment. The
+  log shows `tabletop true`. With RetroAchievements hardcore on, 2x is greyed out and does nothing.
+  The Game Gear game gets the same tabletop shape in its own colours.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the DobFoldJogo
+  board, and the log line).
+
+### RT-447 — Changing posture during a game swaps the skin and keeps playing
+- **Area:** Android — Foldable gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-446, the game running in tabletop with an in-game timer or score moving.
+- **Steps:**
+  1. `adb emu sensor set hinge-angle0 180` (flat); wait two seconds.
+  2. `adb emu sensor set hinge-angle0 90` (half open) again; wait two seconds.
+  3. Repeat steps 1 and 2.
+  4. Half open, `adb shell settings put system user_rotation 0` (the fold now runs down the middle).
+  5. Repeat steps 1 and 2 with the Game Gear game.
+  6. With the Game Boy Advance game, `adb emu fold` (the outer screen); wait two seconds.
+  7. `adb emu unfold`, `adb shell settings put system user_rotation 1` and
+     `adb emu sensor set hinge-angle0 90`; wait two seconds.
+- **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
+  drawn Game Gear skin); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
+  and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
+  middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
+  Folded, the outer screen shows the phone skin, and nothing sits where the fold was; unfolded
+  and half open again, the skin redrawn for the inner screen (`OVERLAY_LOAD` in
+  `adb logcat -s OpenEmuxSkin`) shows the tabletop shape, around the fold as in RT-446.
+- **Check:** human only (a screenshot per posture and the log).
+
+### RT-448 — NDS in tabletop: one screen per half, touch on the bottom screen
+- **Area:** Android — Foldable gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-446, with the Nintendo DS game.
+- **Steps:**
+  1. Launch the Nintendo DS game half open.
+  2. Tap something on the bottom screen.
+  3. Tap the layout key (the strip's fifth slot) three times.
+  4. Choose "Top screen only", go flat, then half open again.
+- **Expected:** The top screen ends just above the fold and the bottom screen starts just below
+  it, both the same size; the fold falls in the gap between them. The bottom screen sits between
+  the d-pad and the face buttons with the strip under it; L and the menu key are at the top left,
+  R and "NINTENDO DS" at the top right. The tap registers in the game. The layout key goes "One
+  per half" → "Top screen only" → "Bottom screen only" → "One per half". Going flat brings back the
+  packaged Nintendo DS skin with its two screens one over the other and no gap between them; half
+  open again opens on "Top screen only".
+- **Check:** human only (a screenshot per layout, compared with the DobFoldNDS board).
+
+### RT-449 — Pause in tabletop: the menu on the bottom half, the game visible above
+- **Area:** Android — Foldable gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-446, the Game Boy Advance game running in tabletop; a gamepad, or D-pad
+  key events (`adb shell input keyevent KEYCODE_DPAD_DOWN`).
+- **Steps:**
+  1. Tap the menu key.
+  2. Move the focus through every control with the D-pad; press A on "Saved states", then B.
+  3. Tap the band, then the game's card on the top half.
+  4. Open the menu again and press START.
+  5. Switch the app to the light theme and open the menu again.
+- **Expected:** The top half shows the dimmed, paused game with a "PAUSED" chip and a card (cart,
+  title, time played). The bottom half starts under the fold: "Save state" (focused first),
+  "Load state" and "Back to game"; the action tiles; "Save states · <count>", "Restart game" and
+  "Quit game"; the hint bar. The focus never leaves the bottom half. "Saved states" opens inside
+  the bottom half and B comes back. Tapping the band does nothing; tapping the card resumes the
+  game. START closes the menu. The light theme has the same layout.
+- **Check:** human only (screenshots in both themes, compared with the DobFoldPausa board).
+
+
+## Android — Responsive layout
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) laying out every screen from the size of its window, not from the device or
+which way up it is held (#535). The runner has no Android device, so these are `MANUAL`: a person
+runs them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
+A window size is simulated with `adb shell wm size <w>x<h>` and `adb shell wm density <dpi>`
+(dp = px × 160 / dpi), and rotation with `adb shell settings put system accelerometer_rotation 0`
+followed by `adb shell settings put system user_rotation <0|1>`. Every scenario ends with
+`adb shell wm size reset`, `adb shell wm density reset` and `user_rotation 0`. The library needs at
+least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one without.
+
+### RT-380 — Phone portrait keeps the bottom bar and today's grid columns
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a regular phone (≈ 411×914dp,
+  e.g. 1080×2400 at 420 dpi), portrait.
+- **Steps:**
+  1. Open "Shelf", then a console's library, "Recent", "Import" and "Settings".
+  2. In the library, switch between the cartridge, cover and list views.
+- **Expected:** The tabs sit in the bottom bar on every main tab. The library is a vertical grid:
+  2 columns of cartridges, 3 of covers, 1 row per game in the list. Nothing differs from the
+  previous release.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per view, compared with the same
+  views on the previous release).
+
+### RT-381 — Phone landscape keeps the side rail and the horizontal library
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, with the phone in landscape (`user_rotation 1`).
+- **Steps:**
+  1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
+  2. Start a game and open the pause sheet.
+- **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
+  sideways. The pause sheet shows its main page in two columns.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-382 — A small 5" phone lays out without clipping
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 640x1138` and `adb shell wm density 320`
+  (≈ 320×569dp).
+- **Steps:**
+  1. In portrait, open "Shelf", a library in each view and "Settings".
+  2. Rotate to landscape (≈ 569×320dp) and repeat; start a game and open the pause sheet.
+- **Expected:** Portrait: bottom bar, 2 columns of cartridges and 3 of covers. Landscape: the side
+  rail, the horizontal library, the pause sheet in one column. No text or button is cut off.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-383 — Split screen and a resized window take the layout from the window size
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, portrait, the library open with the 5th game focused.
+- **Steps:**
+  1. Put OpenEmux in the top half of split screen.
+  2. Drag the divider so OpenEmux takes about two thirds of the height.
+- **Expected:** In the half-height window the tabs move to the side rail and the library becomes
+  the sideways row. Taller, the bottom bar and the vertical grid come back without the app
+  restarting, and the same game is still the one in view.
+- **Check:** human only (a screenshot of each window size).
+
+### RT-384 — Library grids add columns as the window widens and cap the card size
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
+  (800×1280dp).
+- **Steps:**
+  1. Open a console with cartridge frames in the cartridge view, then the cover view.
+  2. Open "All games" in the cartridge view (the console without frames shows covers in its group).
+- **Expected:** The tabs are the tablet rail (RT-421). 4 columns of cartridges, 5 of covers; a
+  cartridge is never wider than 220dp and a cover never wider than 170dp, each centred in its cell.
+  On the mixed page each console's group picks its own column count the same way. (Until #557 this
+  ran at 600×900dp with the bottom bar; a window that wide now gets the rail and less room.)
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-385 — Gamepad focus moves through every screen after a rotation or resize
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, a gamepad connected (or `adb shell input keyevent` with
+  `KEYCODE_DPAD_*`, `KEYCODE_BUTTON_A`, `KEYCODE_BUTTON_L1`/`R1`, `KEYCODE_BUTTON_START`).
+- **Steps:**
+  1. Focus the 5th game in the library, then rotate portrait → landscape → portrait.
+  2. Repeat at 600×900dp (as RT-384) in each view mode, walking the whole grid with the d-pad.
+  3. Use L1/R1, A, B and Start on "Shelf", the library, "Settings" and in the pause sheet.
+- **Expected:** Focus stays on the same game across the rotations, reaches every card at every
+  size, L1/R1 change console, A opens the detail, B goes back and Start opens "Settings".
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+## Android — Gamepad navigation
+
+The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
+never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
+gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
+`adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
+`KEYCODE_BUTTON_START`). The first D-pad press only enters gamepad mode. A library of a few games
+over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
+
+### RT-434 — The landscape row keeps the focused game in the middle
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a console with 10 or more games; the phone in landscape.
+- **Steps:**
+  1. Open that console's shelf in the "Cartridges" view and press DOWN until a game is focused.
+  2. Press RIGHT one game at a time to the last one, then LEFT back to the first.
+  3. With the last game focused, press RIGHT once more.
+  4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
+  5. Press UP into the header (back link, search, sort, view toggle).
+- **Expected:** The first games take focus without the row scrolling, and the first one rests at the
+  row's left padding with nothing empty before it. From there on the focused game stays in the
+  middle of the screen and the row scrolls under it; near the end focus moves on to the right and
+  the last game rests at the right padding. The focused game's title is bold and the others are
+  dimmed. Headers never take focus. RIGHT past the last game leaves focus on it, it never jumps up
+  to the header. In the header the ring and its halo are whole, not cut by the top of the screen.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-435 — No focus ring is cut or covered, on any screen
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a library as in the section's header.
+- **Steps:**
+  1. In portrait, walk every edge of a console's grid in the "Cartridges", covers and list views
+     (first and last column, first and last row).
+  2. Press UP into the console chips; walk LEFT to "All" and RIGHT to the last chip.
+  3. Open a game's detail; walk the cartridge colour swatches to both ends and open "See all" on the
+     save states, then walk its grid.
+  4. Press START for "Settings" and walk every page, BIOS included, with the swatches of a console's
+     page; then the in-game pause sheet (START during a game) and its "Load state" grid.
+  5. Repeat 1 to 4 in landscape, and in the light theme.
+- **Expected:** The ring and its halo are whole around every focused item: not cut by the screen's
+  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items.
+  The view toggle's buttons keep their whole ring. Rows inside a card show the inside highlight,
+  never scaled and never past the card.
+- **Check:** human only (a screenshot per screen).
+
+### RT-436 — Vertical lists keep the focused item clear of the edges and the hint bar
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; enough consoles for the shelf to scroll (or a small
+  window), and a console with 10 or more games.
+- **Steps:**
+  1. On the shelf, press DOWN through every shelf to the last one, then UP back to the top.
+  2. In a console's grid, press DOWN to the last row.
+  3. In "Settings" and in a game's detail, press DOWN to the last item.
+  4. On the last item of the shelf, the grid and "Settings", press DOWN twice more, then UP.
+- **Expected:** The list scrolls only when the focused item would come closer than a margin to the
+  top or to the hint bar; the focused item is never under the hint bar or the tab bar, and the
+  last item can be focused in full above them. Every hint bar is the same height, with "A" filled
+  first and multi-letter badges ("SELECT", "L1 R1") as pills. DOWN past the last item leaves focus
+  on it (it never moves into the tab bar), and UP walks back up the list.
+- **Check:** human only.
+
+### RT-437 — Touch still works as before next to the gamepad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; gamepad mode on with a game focused.
+- **Steps:**
+  1. Tap the screen, then scroll and fling the grid with a finger.
+  2. Open the search and type a few letters.
+  3. Press a D-pad key.
+  4. Long-press a shelf and drag it to another place.
+- **Expected:** The tap hides the highlight and the hint bar; scrolling and flinging feel as they did.
+  The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
+  the item that had it. The dragged shelf stays drawn above the others while it moves.
+- **Check:** human only.
+
+## Android — Multi-select and bulk remove
+
+The Android library's selection mode (#585): a long press (or START on a gamepad) selects games,
+and a bar over the top removes them in one go. `MANUAL`, like the other Android sections: a phone,
+or a headless emulator driven with `adb shell input` (`swipe x y x y 900` is a long press;
+`keyevent KEYCODE_BUTTON_START/A/X/Y/B` for the gamepad). A library of at least six games over two
+consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
+`/sdcard/Android/data/$PKG/files/roms/<CONSOLE>/` and the metadata in `files/meta.json`
+(`adb shell run-as $PKG cat files/meta.json`).
+
+### RT-491 — A long press enters selection mode
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; the library above, portrait, "Cartridges" view.
+- **Steps:**
+  1. Open a console's shelf and long-press a game.
+  2. Tap two more games, then tap one of them again.
+  3. Tap every game still selected.
+  4. Tap a game.
+- **Expected:** After 1 a bar covers the top of the screen with a close button, "1 selected",
+  "Select all" and a red remove button; the pressed game has a check mark and a ring, the others a
+  hollow circle and are dimmed; the game does not open. After 2 the counter reads 3 then 2 and no
+  detail screen opens. After 3 the bar goes away and the screen is as before. After 4 the game's
+  detail opens as usual.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-492 — "Select all" takes every game the page shows
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library.
+- **Steps:**
+  1. On "All", long-press a game of console A.
+  2. Switch to console B's chip.
+  3. Long-press a game of B and press "Select all".
+  4. Search for a word only some of B's games have.
+- **Expected:** After 2 selection mode ends (the selected game is not on the page any more). After
+  3 every game of B is checked, the counter equals B's game count and "Select all" is dimmed and
+  does nothing. After 4 the counter drops to the games the search still shows; if none, the mode ends.
+- **Check:** human only.
+
+### RT-493 — Removing several games asks once and removes them all
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library; one of the games has a save state in
+  `/sdcard/Android/data/$PKG/files/states/<CONSOLE>/`.
+- **Steps:**
+  1. Select three games, the one with the save state among them, and press the remove button.
+  2. Read the dialog and press "Remove".
+  3. List the ROM folders and print `meta.json`; list the states folder.
+- **Expected:** One dialog, "Remove 3 games?", saying the files are deleted and saves and states are
+  kept. After "Remove" the three games disappear at once, without a restart, the counts update and
+  selection mode ends. Their files are gone from the ROM folder and their keys from `meta.json`; the
+  save state is still on disk. The other games and their favorites are untouched.
+- **Check:** human only (`adb shell ls /sdcard/Android/data/$PKG/files/roms/<CONSOLE>`).
+
+### RT-494 — Cancel and back keep every file
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library.
+- **Steps:**
+  1. Select two games, press remove, then "Cancel".
+  2. Press the system back button.
+  3. Select a game again and press the close button on the bar.
+- **Expected:** After 1 the dialog closes and the two games stay selected. After 2 selection mode
+  ends and the screen stays on the library (back does not leave it). After 3 the mode ends. No file
+  is removed at any point.
+- **Check:** human only (list the ROM folders before and after).
+
+### RT-495 — Selection works in every view, portrait and landscape, light and dark
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library.
+- **Steps:**
+  1. Repeat RT-491 step 1 in the covers view and in the list view.
+  2. Turn the phone to landscape and long-press a game in the row.
+  3. Remove one game from the list view and one from the landscape row.
+  4. Repeat 1 and 2 in the light theme.
+- **Expected:** In the covers view the cover gets the same check mark and ring; in the list view
+  each row has a check circle before the art and the selected rows a tinted background. In
+  landscape the bar is a little shorter and covers the header; the row keeps its layout. Removal
+  works the same everywhere. A favorite's star moves to the other top corner while selecting, never
+  under the check mark. The bar, marks and dialog are readable in both themes.
+- **Check:** human only.
+
+### RT-496 — The whole flow works with a gamepad only
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library; gamepad mode on (a D-pad press) with a game focused.
+- **Steps:**
+  1. Read the hint bar, then press START.
+  2. Press RIGHT and A; then X.
+  3. Press Y, then B in the dialog.
+  4. Press B again.
+- **Expected:** Before 1 the hints include "START Select". After 1 the focused game is selected and
+  the hints read "A Select · X Select all · Y Remove · B Done". A toggles the focused game, X selects
+  every game on the page. Y opens the remove dialog; B closes it with nothing removed. The second B
+  ends selection mode and the usual hints come back. L1/R1 still switch the console chip while
+  selecting.
+- **Check:** human only.
+
+### RT-497 — Removing one game from its detail screen is unchanged
+- **Area:** Android — Multi-select and bulk remove
+- **Mode:** MANUAL
+- **Preconditions:** RT-491's library.
+- **Steps:**
+  1. Open a game's detail, open its menu and pick "Remove from library"; confirm.
+  2. Switch the app language to Português (Brasil) and enter selection mode; open the remove dialog.
+- **Expected:** After 1 the screen goes back to the library without that game, its file is gone and
+  its saves stay, as before. After 2 the bar, the hints and the dialog are in Portuguese
+  ("1 selecionado", "Selecionar tudo", "Remover 1 jogo?").
+- **Check:** human only.
+
+## Android — Controller skins
+
+What each button of the Android app's on-screen skin sends
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`,
+`data/Skin.kt`). The drawing belongs to the console; the RetroPad input a button sends depends on the
+core being launched, and some cores need their controller device pinned before the drawn buttons
+work (#540). The runner has no Android device, so these are `MANUAL`: a person runs them on a phone
+or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is
+`com.openemux.mobile`; a game's generated files are in `files/launch/current/` and are read with
+`adb shell run-as $PKG cat files/launch/current/<file>`.
+
+### RT-458 — The Atari 7800 skin reads 1 on the left and 2 on the right
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with an Atari 7800 game that uses both buttons.
+- **Steps:**
+  1. Launch the game, phone in portrait, and look at the two face buttons.
+  2. Press the left button, then the right one.
+  3. Turn the phone to landscape and repeat steps 1-2.
+- **Expected:** The lower-left button reads "1" and the upper-right one "2", in both orientations.
+  Each button does its own action in the game, and "1" is the one 2600-style games react to.
+- **Check:** in `skin/skin.cfg`, the desc drawn on the left of the face cluster is `b` and the one on
+  its right is `a`:
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -E '^overlay0_desc[0-9]+ = "(a|b),'
+  # the "b" line has the smaller x (second field) of the two
+  ```
+
+### RT-459 — ColecoVision fires and keypad work on both cores
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A ColecoVision game with a keypad menu (a level or skill select) in the library.
+- **Steps:**
+  1. In the game's details, pick the "blueMSX" core and launch it.
+  2. Press the left fire and the right fire; open the keypad and press 1 to 9, 0, "*" and "#".
+  3. Quit, pick the "Gearcoleco" core and repeat step 2.
+- **Expected:** On both cores the left fire and the right fire do two different things, every keypad
+  key reaches the game, and the game responds the same way on both cores.
+- **Check:** with Gearcoleco selected, the main overlays send the fires on `b` (L) and `a` (R); the
+  keypad overlays (which hide the fires) send `*` on `start`, `#` on `select`, 9 on `l_y_minus` and 0
+  on `l_x_plus`:
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '^overlay0_desc[0-9]+ = "(a|b),' | grep -oE '"(a|b)' | sort -u   # "a and "b (portrait overlay)
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -oE '"(l_y_minus|l_x_plus),' | sort -u   # both present
+  adb shell run-as $PKG cat files/launch/current/skin/skin.cfg | grep -cE '"r_x_(minus|plus),'                   # 0
+  ```
+
+### RT-460 — Mega Drive X, Y, Z and MODE work on Genesis Plus GX in every game
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A Mega Drive game whose header does not announce a six-button pad, or the 240p
+  Test Suite's controller test.
+- **Steps:**
+  1. With the "Genesis Plus GX" core, launch the game and press A, B, C, X, Y, Z, MODE and START.
+  2. Quit, pick the "PicoDrive" core and launch it again.
+  3. Launch a Master System game.
+- **Expected:** In step 1 each button registers as itself. The generated config pins the six-button
+  pad only for Genesis Plus GX on Mega Drive and Mega-CD: not for PicoDrive and not for the Master
+  System, Game Gear or SG-1000.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1
+  # step 1: input_libretro_device_p1 = "513"; steps 2 and 3: no line
+  ```
+
+### RT-461 — The Atari 5200 runs with its own joystick and two distinct fire buttons
+- **Area:** Android — Controller skins
+- **Mode:** MANUAL
+- **Preconditions:** An Atari 5200 game with two fire functions and keypad use.
+- **Steps:**
+  1. Launch the game and press the upper fire ("1"), the lower fire ("2") and a few keypad keys.
+- **Expected:** The two fire buttons do different things and the keypad keys work.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1   # "769"
+  ```
+
+## Android — Update check
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) asking GitHub once per cold start whether a newer OpenEmux release exists
+and showing a banner on the shelf (#541). `MANUAL`, like the RetroAchievements section: a person
+runs them on a phone or a headless emulator with `adb`. "Old" and "future" builds come from
+`./gradlew assembleDebug -PopenemuxVersion=1.0.0 --no-daemon` and `-PopenemuxVersion=99.0.0`
+(install them with `adb install -r -d -t`). `$PKG` is `com.openemux.mobile`. The version logic
+(numeric comparison, payload parsing, once per process, the switch) is covered by
+`./gradlew testDebugUnitTest --no-daemon` (`UpdatesTest.kt`).
+
+### RT-400 — An older installed version shows the update banner on the shelf
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed, first-run setup done, network on, "Check for updates"
+  on (the default).
+- **Steps:**
+  1. `adb shell am force-stop $PKG`, then open the app.
+  2. Wait up to 10 seconds on the "Shelf".
+  3. Repeat in the light theme and with the phone in landscape.
+- **Expected:** Under the "Shelf" title a banner reads "Version <latest> available" with
+  "You have 1.0.0" under it, a download icon, a "Not now" text button and a filled "Download" button.
+  It never covers the shelf cards; nothing is clipped in either theme or orientation.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`);
+  `adb logcat -d -s OpenEmuxUpdate` shows `update: checking for a newer release` once.
+
+### RT-401 — The latest version shows no banner and About says "Up to date"
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 99.0.0 build installed, network on.
+- **Steps:**
+  1. Cold-start the app and wait 10 seconds on the "Shelf".
+  2. Open "Settings" › "About".
+- **Expected:** No banner on the shelf. About shows "Version 99.0.0" and a green "Up to date" tag
+  under it.
+- **Check:** human only.
+
+### RT-402 — Offline, the app opens normally and shows nothing
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed.
+- **Steps:**
+  1. `adb shell cmd connectivity airplane-mode enable`, then cold-start the app.
+  2. Open "Settings" › "About".
+- **Expected:** The shelf opens as usual with no banner and no error; About shows the version and no
+  status tag.
+- **Check:** human only.
+- **Restore:** `adb shell cmd connectivity airplane-mode disable`.
+
+### RT-403 — "Not now" hides the banner until the next cold start
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Tap "Not now".
+  2. Switch to "Recent" and "Settings" and back to "Library".
+  3. Open "Settings" › "About".
+  4. `adb shell am force-stop $PKG`, then open the app.
+- **Expected:** The banner collapses at step 1 and stays gone through step 2. About still shows the
+  "Version <latest> available" tag (dismissing hides only the banner). After step 4 the banner is
+  back.
+- **Check:** human only.
+
+### RT-404 — "Download" opens the OpenEmux release page in the browser
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Tap "Download".
+  2. Back in the app, open "Settings" › "About" and tap the "Version <latest> available" tag.
+- **Expected:** Both open the browser on the OpenEmux GitHub release page of that version
+  (`github.com/guilhermefeitosa66/OpenEmux/releases/tag/v<latest>`); nothing is downloaded or
+  installed by the app.
+- **Check:** human only (`adb shell dumpsys activity activities | grep -i github` while the browser
+  is open).
+
+### RT-405 — The banner works with a gamepad and never steals focus
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen; a gamepad, or `adb shell input gamepad keyevent`.
+- **Steps:**
+  1. Cold-start the app and press D-pad Down until the first shelf card is focused.
+  2. Press D-pad Up once.
+  3. Press D-pad Left, then "A".
+- **Expected:** At step 2 the focus ring is on "Download"; at step 3 it moves to "Not now", and "A"
+  hides the banner and puts the focus on the first shelf card. At no point does the banner take the
+  focus by itself.
+- **Check:** human only (a screenshot after each step).
+
+### RT-406 — With "Check for updates" off the app never asks GitHub
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** The 1.0.0 build installed, network on.
+- **Steps:**
+  1. "Settings" › "General": turn "Check for updates" off.
+  2. `adb logcat -c`, `adb shell am force-stop $PKG`, then open the app and wait 10 seconds.
+  3. Open "Settings" › "About".
+- **Expected:** The switch reads "Check for updates" / "Ask GitHub for a newer version when the app
+  opens" and stays off after the restart. No banner, no status tag in About, and no request.
+- **Check:** `adb logcat -d -s OpenEmuxUpdate | grep -c checking` prints `0`.
+- **Restore:** turn "Check for updates" back on.
+
+### RT-407 — The update strings are translated
+- **Area:** Android — Update check
+- **Mode:** MANUAL
+- **Preconditions:** RT-400's banner on screen.
+- **Steps:**
+  1. Switch the app language to "Português (Brasil)", then to one more language, at 360 dp width.
+  2. Look at the banner, the "Check for updates" switch and the About tag.
+- **Expected:** All of them are in the chosen language (e.g. "Versão <latest> disponível", "Agora
+  não", "Baixar", "Verificar atualizações", "Atualizado"); nothing is clipped.
+- **Check:** human only.
+
+
+## Android — Skin quick actions
+
+The quick-action strip of the Android app's on-screen skin
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
+save, load, turbo and fast forward (plus the screen layout on NDS). Turbo and fast forward show
+whether they are on: an accent pill behind the icon, the icon in white (#554). The runner has no
+Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
+(`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-376 — Turbo on the strip shows whether it is on
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
+  the drawn skin; the package skins are RT-462); no gamepad connected.
+- **Steps:**
+  1. Launch the Atari 2600 game, phone in portrait.
+  2. Tap the bolt (turbo) on the strip under the picture.
+  3. Tap it again.
+  4. Repeat steps 2-3 on a console with a light-bodied skin, on the red skin, and
+     in landscape (the strip under the picture, between the control sides).
+- **Expected:** After step 2 the bolt sits on a purple pill with a light ring, drawn in white;
+  fast forward keeps its normal look. After step 3 the bolt is back to its normal look, no pill.
+  The pill is readable on every skin, in both orientations, and nothing is clipped or stretched.
+- **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
+
+### RT-377 — Fast forward shows its state, and the strip and the pause sheet agree
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running, both toggles off.
+- **Steps:**
+  1. Tap fast forward (the double arrow) on the strip.
+  2. Open the pause sheet (the menu button between L and R).
+  3. Tap the "Fast forward" tile, then resume.
+  4. Open the pause sheet, tap "Fast forward" again, and resume.
+- **Expected:** After step 1 the double arrow shows the pill and the game runs faster. In step 2
+  the "Fast forward" tile is shown active. After step 3 the strip has no pill and the game runs at
+  normal speed. After step 4 the strip shows the pill again.
+- **Check:** human only.
+
+### RT-378 — The toggles' look survives pause, rotation and the background; a new session starts off
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running.
+- **Steps:**
+  1. Turn turbo and fast forward on from the strip.
+  2. Open and close the pause sheet; turn the phone to landscape and back; press Home and return to
+     the app.
+  3. Quit the game from the pause sheet and launch any game again.
+- **Expected:** Through step 2 both buttons keep the pill every time. After step 3 both buttons
+  have their normal look, the game runs at normal speed and turbo is off.
+- **Check:** human only.
+
+### RT-379 — In RetroAchievements hardcore, fast forward never shows as on
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** Signed in to RetroAchievements with "Hardcore mode" on (RT-351).
+- **Steps:**
+  1. Launch a game and tap fast forward on the strip.
+  2. Tap turbo on the strip.
+  3. Open the pause sheet.
+- **Expected:** Fast forward is dimmed, does nothing and never shows the pill; turbo shows its pill
+  as in RT-376. The pause sheet's "Fast forward" tile is disabled and not active.
+- **Check:** human only.
+
+### RT-462 — Turbo and fast forward light up on the bundled package skins
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a GBA game and a game of a console that keeps the
+  drawn skin (e.g. Atari 2600) in the library; no skin in `files/skins/`; no gamepad connected.
+- **Steps:**
+  1. Launch the GBA game, phone in portrait. Its skin is the bundled package: the quick actions sit
+     in the bezel's chin, right under the picture.
+  2. Tap the bolt (turbo) in the chin, then the double arrow (fast forward).
+  3. Tap both again.
+  4. Turn fast forward on, open the pause sheet, then resume.
+  5. Repeat steps 2-3 in landscape, then on the other console's game.
+- **Expected:** After step 2 each button sits on the purple pill with a light ring, the skin's own
+  glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
+  look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
+  active. Landscape and the drawn skin show the same pill.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+
+## Android — On-screen analog stick
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
+that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
+is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
+(both sticks), Nintendo 64 and GameCube (main and C stick), where the knob is the item's
+`thumbstick` image, the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
+`.manicskin` whose stick has a `thumbstick` image. The runner has no Android
+device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
+(`emulator -avd <avd> -no-window -read-only`) with `adb`, in portrait and in landscape. Touches are
+driven with `adb shell input swipe <x1> <y1> <x2> <y2> <ms>` (a long one holds the stick) and the
+values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.openemux.mobile`.
+
+### RT-394 — The knob follows the thumb and recentres on release
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a game for PSP, PlayStation,
+  Nintendo 64 and GameCube in the library.
+- **Steps:**
+  1. Open the PSP game in portrait and look at the stick before touching it.
+  2. Drag from the well's centre up and to the right, past the rim, hold for two seconds, release.
+  3. Turn the phone to landscape and repeat step 2.
+  4. Repeat steps 1–3 on PlayStation (both sticks), Nintendo 64 and GameCube (main and "C" stick).
+- **Expected:** At rest one knob sits centred in the well (no second, painted knob under it). While
+  dragging, the knob moves with the thumb and stops at the end of its travel, inside the well; on
+  release it snaps back to the centre. The GameCube C stick's "C" is on its yellow knob and moves
+  with it.
+- **Check:** human only (a screenshot at rest and one mid-drag, per console and orientation:
+  `adb exec-out screencap -p > shot.png`).
+
+### RT-395 — A touch just outside the drawn circle grabs the stick
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open.
+- **Steps:**
+  1. Touch a point about a fifth of the well's radius outside the drawn circle, on the side away
+     from the D-pad and the buttons (left, or below in portrait), and drag towards the centre.
+  2. Repeat in landscape.
+- **Expected:** The stick responds from the first touch (the character moves, the input display
+  shows the axis) and the knob follows the thumb.
+- **Check:** human only, plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
+  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in openemux-android: *_knob<N>.png next to each representation's art
+  ```
+  Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
+  `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
+  four `_reach_*` values between 1.0 and 2.0.
+
+### RT-396 — Sliding past the rim keeps full deflection
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open.
+- **Steps:**
+  1. Push the stick fully left and, without lifting, keep sliding the thumb further out and then
+     up onto the D-pad's area.
+  2. Lift the thumb, then press the D-pad.
+  3. Repeat in landscape.
+- **Expected:** While the thumb stays down, the stick keeps full deflection in the direction of the
+  thumb and the D-pad does not fire. After lifting, the D-pad works as before.
+- **Check:** human only.
+
+### RT-397 — A small push still gives a small analog value
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, a PSP or Nintendo 64 game where the character walks or runs by how
+  far the stick is pushed.
+- **Steps:**
+  1. Push the stick about a third of the way to the rim and hold.
+  2. Push it all the way and hold.
+- **Expected:** A third of the way walks (a small value on the input display); all the way runs (the
+  full value), the same response as before #546.
+- **Check:** human only.
+
+### RT-398 — The PSP stick is larger and clear of the other controls
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, the PSP game open; a screenshot of the PSP skin from a build before
+  #546 for comparison.
+- **Steps:**
+  1. Take a screenshot in portrait and one in landscape.
+- **Expected:** The PSP stick is visibly larger than before (the size of PlayStation's, in the bundled
+  skin as in the drawn one) and does not
+  overlap the D-pad, the face buttons, the shoulders or SELECT/START in either orientation.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`, side by side with the old one).
+
+### RT-399 — The D-pad and buttons around the stick behave as before
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394.
+- **Steps:**
+  1. On PSP, PlayStation, Nintendo 64 and GameCube, press every D-pad direction and diagonal, each
+     face button, the shoulders, SELECT/START and the strip's icons, the ones closest to a stick
+     included.
+  2. Open the keypad on a console that has one and close it, then turn the phone mid-game.
+- **Expected:** Each control fires exactly as before and none of them moves a stick. Opening the
+  keypad or turning the phone leaves exactly one knob per stick, still following the thumb.
+- **Check:** human only.
+
+### RT-469 — A user's skin package without a knob image keeps its stick
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394, plus a `.deltaskin` or `.manicskin` for Nintendo 64 (or another
+  console with a stick) whose stick item has **no** `thumbstick` entry in `info.json`, copied to
+  `/sdcard/Android/data/$PKG/files/skins/N64/`.
+- **Steps:**
+  1. Open the Nintendo 64 game and push the stick in each direction, a little and all the way.
+  2. Remove the skin from `files/skins/N64/` and open the game again.
+- **Expected:** With the user's skin, the stick steers over the item's frame as before #546 (the
+  knob is whatever the skin's art paints, it does not move) and nothing else changes. Without it,
+  the bundled skin is back, with its moving knob.
+- **Check:** human only, plus the generated config with the user's skin: the stick's desc has
+  `_saturate_pct = 0.65` and none of `_overlay`, `_movable`, `_reach_*` or `_range_mod`:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
+  ```
+## Android — On-screen D-pad
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) steering with the on-screen D-pad like a touch stick (#555): the D-pad is one
+eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
+it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
+the thumb inside the D-pad. It applies to every skin with a D-pad, the Virtual Boy's second pad and
+the NDS layouts included, both to the skins the app draws and to the skin packages it ships for the
+twelve best-known consoles (FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS, PSP), whose circle is an
+image in the package. The runner has no Android device, so these are `MANUAL`: a person runs
+them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`, in
+portrait and in landscape. A held drag is driven with `adb shell input motionevent DOWN <x> <y>`,
+`MOVE <x> <y>` and `UP <x> <y>`; the pressed directions are read from RetroArch's input display or a
+game's movement. `$PKG` is `com.openemux.mobile`.
+
+### RT-408 — The circle rests on the centre, follows the thumb and recentres
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, an NES game in the library.
+- **Steps:**
+  1. Open the NES game in portrait and look at the D-pad before touching it.
+  2. Touch the D-pad's centre, drag up and to the right to the tips of the arms and past them, hold
+     for two seconds, release.
+  3. Turn the phone to landscape and repeat steps 1–2.
+- **Expected:** The cross and its arrows are drawn as before, with one circle on the centre and no
+  darker hub under it. While dragging, the circle moves with the thumb and stops at the D-pad's edge,
+  never outside it; Up and Right are pressed. On release the circle returns to the centre.
+- **Check:** human only (a screenshot at rest and one mid-drag per orientation:
+  `adb exec-out screencap -p > shot.png`), plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_|desc[0-9]+_overlay'
+  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a circle image per D-pad
+  ```
+  Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
+  `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
+  `_overlay` naming the circle image (`<overlay>-knob<N>.png`, on a shipped skin package and on a
+  drawn skin alike) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
+  D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
+  `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
+  one side than the other. On a console with a drawn skin (e.g. the Virtual Boy) `_reach_x` and
+  `_reach_y` are both `1.4182`.
+
+### RT-409 — Sliding off the D-pad keeps steering
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, the NES game open, a character that walks.
+- **Steps:**
+  1. Press Right and, without lifting, slide the thumb well past the D-pad's right edge, over the
+     game area and onto the face buttons; hold there for two seconds.
+  2. Without lifting, slide back over the D-pad and release.
+  3. Repeat in landscape.
+  4. On a phone with a camera cutout, in landscape with the cutout on the D-pad's side: press Left
+     and, without lifting, slide the thumb past the edge of the game window into the strip beside
+     the cutout, all the way to the screen's edge; hold there for two seconds, then slide back and
+     release. Meanwhile, keep a second finger on A.
+- **Expected:** Right stays pressed the whole time, with no gap when the thumb leaves the cross. The
+  face buttons the thumb passes over and rests on do not fire. In step 4, Left stays pressed and the
+  circle stays on the left arm while the thumb is in the cutout's strip, and A stays held.
+- **Check:** human only.
+
+### RT-410 — Rolling the thumb goes through all eight directions
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408.
+- **Steps:**
+  1. Touch the D-pad and, without lifting, roll the thumb around its centre once, first on the cross
+     and then in a wider circle outside it.
+- **Expected:** Up, Up+Right, Right, Down+Right, Down, Down+Left, Left, Up+Left are pressed in turn,
+  the diagonals as two directions at once, both on and outside the cross. The diagonal sectors are a
+  little narrower than the straight ones.
+- **Check:** human only.
+
+### RT-411 — The centre presses nothing and lifting releases at once
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408.
+- **Steps:**
+  1. Touch the exact centre of the D-pad and hold.
+  2. Move the thumb a little towards Up, about the size of the circle, and hold.
+  3. Lift the finger.
+- **Expected:** At the centre no direction is pressed. A short move out of the middle presses Up.
+  Lifting releases every direction immediately and the circle returns to the centre.
+- **Check:** human only.
+
+### RT-412 — A second finger still works the buttons while the D-pad is held
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, on a phone (the emulator's `adb input` drives one pointer only), a
+  SNES game in the library.
+- **Steps:**
+  1. Open the SNES game, hold the D-pad and slide that thumb outside the D-pad towards the middle of
+     the screen, steering Right.
+  2. With another finger tap A, B, L and R in turn, then lift that finger.
+  3. Keep steering with the first thumb and move it to Up.
+- **Expected:** Each button fires on its tap. The D-pad keeps pressing Right before, during and
+  after the second finger, then Up; it never drops when the other finger lifts.
+- **Check:** human only.
+
+### RT-413 — Every skin and orientation, the Virtual Boy and the NDS included
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
+  Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
+  The first six of those and the NDS use the shipped skin packages; the Virtual Boy, the PC Engine
+  and the keypad console use the drawn skins.
+- **Steps:**
+  1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
+  2. On the Virtual Boy, repeat them on the right-hand pad.
+  3. On the NDS, in each screen layout, slide the D-pad thumb onto the touch screen and hold; then tap
+     the touch screen with a second finger.
+  4. On the keypad console, open the keypad, rotate the phone mid-game and repeat RT-408 step 2.
+- **Expected:** The same circle and the same drag everywhere, one circle per D-pad, none missing or
+  doubled. On PlayStation and Nintendo 64 the stick keeps its own behaviour. The Virtual Boy's right
+  pad presses the right D-pad (L2/L3/R2/R3 binds). On the NDS the D-pad thumb never taps the touch
+  screen; the second finger does.
+- **Check:** human only, plus for the Virtual Boy:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E '_(up|down|left|right) = '
+  ```
+  The right pad's desc carries `_up = "l2"`, `_down = "l3"`, `_left = "r2"`, `_right = "r3"`; the
+  left pad's carries none.
+
+### RT-476 — A skin of the user's own steers the D-pad the same way, with no circle
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, a Game Boy Advance game in the library and a third-party GBA
+  `.deltaskin` (one made for Delta, not the app's own) on the computer.
+- **Steps:**
+  1. Copy the skin into the app's skin folder for the console:
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/GBA/`.
+  2. Open the GBA game and repeat RT-408 step 2 and RT-409 step 1, in portrait and in landscape.
+  3. Remove the skin from the folder.
+- **Expected:** The skin's own art, with whatever it paints on the D-pad, and no circle over it.
+  Sliding off the D-pad keeps steering, all eight directions work and the buttons the thumb passes
+  over do not fire, as on the app's own skins.
+- **Check:** human only, plus the generated config:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_movable'
+  ```
+  One `dpad_area` desc per overlay with `_dead_zone = 0.25` and no `_movable` line.
+
+
+## Android — Tablet layout
+
+The Android app on a tablet-sized window (#557): the tabs in a rail with the logo, the tablet
+shelf, wider library margins, reading width and the setup side by side. Same setup as "Android —
+Responsive layout" above (`MANUAL`, headless emulator, sizes simulated with `wm size` and
+`wm density 320`, so dp = px / 2). The library needs at least three consoles, three games played
+at least once and a few games imported recently. Every scenario ends with
+`adb shell wm size reset` and `adb shell wm density reset`.
+
+### RT-421 — The tabs follow the window: bottom bar, phone rail or tablet rail
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380.
+- **Steps:**
+  1. With "Shelf" open, set in turn 1080×2400 at 420 dpi (phone portrait), 2400×1080 at 420 dpi
+     (phone landscape), 1488×2266 (744×1133dp), 1600×2560 (800×1280dp), 2560×1600 (1280×800dp) and
+     1200×1800 (600×900dp), the last four at 320 dpi.
+  2. On each, look at the left edge and the bottom of the screen.
+- **Expected:** Phone portrait: the bottom bar. Phone landscape: the side rail with the tabs
+  centred and no logo, as RT-381. Every other size: a rail on the left with the OpenEmux logo at
+  the top and the four tabs under it ("Library", "Recent", "Import", "Settings"); the current tab
+  sits in a filled purple pill and its label is in the text colour. The rail is 88dp wide at
+  1280×800 and 80dp at the others.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-422 — Resizing between the bottom bar and the rail keeps the screen
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 2560x1600`, `wm density 320`.
+- **Steps:**
+  1. Open a console's library from "Shelf" and scroll down a little.
+  2. Set 1600×2560, then `wm size reset` and `wm density reset` (phone), then 2560×1600 at 320
+     dpi again.
+- **Expected:** The same console's library stays open at every step; the tabs switch between the
+  rail and the bottom bar. The app does not restart and does not go back to "Shelf".
+- **Check:** human only (a screenshot after each change).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-423 — Tablet shelf, landscape: header row, continue row and three columns
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 2560x1600`, `wm density 320` (1280×800dp); run it once
+  in the dark theme and once in the light theme ("Settings" → "Theme").
+- **Steps:**
+  1. Open "Shelf" and scroll to the end.
+  2. Tap a card under "Continue playing"; quit the game. Tap "See recent", then "Library".
+  3. Tap "Search all consoles", go back; tap "Import ROMs", go back; tap "Import more games".
+- **Expected:** One header row: "Shelf" with "N consoles · M games" under it, then a search field
+  "Search all consoles" and the purple "Import ROMs" button on the right. "Continue playing" shows
+  the three last played games (newest first) with "See recent" on the right; tapping a card resumes
+  that game. "Consoles" has "Long press to reorder" on the right, then the console cards in 3
+  columns, each with a large console icon (larger than on a phone) straight on the card's colour,
+  then tag, name and count, and no cartridges; the last cell is a dashed "Import
+  more games" card. "powered by RetroArch" closes the page. Search opens the search page; "Import
+  ROMs" and "Import more games" open "Import"; "See recent" opens "Recent". Nothing is cut off,
+  including the button's label.
+- **Check:** human only (a screenshot of the top and of the end of the page in each theme).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, the theme as it was.
+
+### RT-424 — Tablet shelf, portrait: two columns and "Recently added"
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, `wm size 1600x2560`, `wm density 320` (800×1280dp).
+- **Steps:**
+  1. Open "Shelf" and scroll to the end.
+  2. Tap a game under "Recently added"; go back; tap "See all".
+  3. Repeat step 1 at 1488×2266 (744×1133dp) and at 1600×1700 (800×850dp).
+- **Expected:** At 800×1280 and 744×1133: a round search button next to "Import ROMs", two games
+  under "Continue playing", console cards in 2 columns (the same large icon on the card's colour as
+  in RT-423, no cartridges) with "Import more games" last, then
+  "Recently added" with the four newest imported games and their titles, and "See all" on the right.
+  The game opens its page; "See all" opens "All games". At 800×850 (not tall enough) the
+  "Recently added" row is not shown. With no game played yet, "Continue playing" is not shown.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-425 — Gamepad: Left on the first column focuses the rail, Right comes back
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-423 (1280×800dp), a gamepad or `adb shell input keyevent KEYCODE_DPAD_*`.
+- **Steps:**
+  1. Open "Shelf" and press Down once.
+  2. Walk to a console card in the first column, press Left.
+  3. Press Down and Up on the rail, then Right.
+  4. Walk across all three columns and down to "Import more games"; press L1 and R1.
+- **Expected:** The first press focuses an item of the shelf (the search field), never the rail.
+  Left from a first-column card focuses the current tab ("Library") on the rail; Up/Down move
+  between the tabs; Right returns to the same card. Every card, the continue cards, the search
+  field, "Import ROMs" and "Import more games" show the focus ring whole. L1/R1 switch tabs. In
+  gamepad mode "Long press to reorder" is hidden.
+- **Check:** human only (a screenshot at each step).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-426 — Reading width: About, licenses and empty states stop at 640dp
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-423 (1280×800dp).
+- **Steps:**
+  1. Open "Settings" → "About", then "Licenses" and the GNU GPL text.
+  2. Open "Recent" on a device where no game was played yet (or check the empty "Shelf" of a new
+     install).
+  3. Repeat step 1 on a phone (`wm size reset`, `wm density reset`).
+- **Expected:** On the tablet each page's content is a centred column about half the screen wide
+  (640dp), not stretched across it; the empty state is centred and capped the same way. On the
+  phone the pages look as before.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-427 — First launch on a tablet: explanation beside the progress
+- **Area:** Android — Tablet layout
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install (or `adb shell pm clear com.openemux.mobile` on a test device
+  whose library can be lost), `wm size 2560x1600`, `wm density 320`.
+- **Steps:**
+  1. Open the app; tap "Start" and watch the progress.
+  2. Set 1600×2560 while it downloads.
+  3. Let it finish.
+- **Expected:** At 1280×800: logo, title and explanation on the left; the steps, progress and
+  button on the right, the pair centred on the screen. At 800×1280: one centred column, not wider
+  than about 640dp. When it ends, "Shelf" opens with the rail.
+- **Check:** human only (a screenshot of each size).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+## Android — Tablet gameplay
+
+The Android app's in-game screens on a tablet-sized window (#559): the tablet controller skin
+(capped button size, the strip under the picture, the controls in side columns or the lower half)
+and the pause menu as a side panel. Same setup as "Android — Responsive layout" above (`MANUAL`,
+headless emulator, sizes simulated with `wm size` and `wm density 320`, so dp = px / 2). The skin is
+drawn when the game starts, so set the size **before** opening the game. The tablet skin starts at
+a smallest width of 600dp; anything narrower keeps the phone skins.
+
+Two kinds of skin meet a tablet. The twelve consoles that ship a skin package (FC, SFC, N64, GC,
+GB, GBC, GBA, NDS, MD, SMS, PS, PSP) keep the package and use its tablet (`ipad`) art. Every other
+console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a
+Virtual Boy game (a drawn skin with L and R), a Game Boy Advance game and a Nintendo DS game.
+Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
+`user_rotation 0`.
+
+### RT-428 — Tablet landscape draws the picture between two control columns
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
+  (1280×800dp), which is landscape at `user_rotation 0`.
+- **Steps:**
+  1. Start the Virtual Boy game.
+  2. Tap the strip's turbo and fast-forward keys, then each of them again.
+- **Expected:** The picture is large and centred, keeping its aspect, between two columns of
+  controls of equal width. Right under the picture, at its width, the strip shows save, load,
+  turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
+  console name at the top of the right column, the D-pad in the middle of the left column, A and B
+  in the right column, Select and Start lower down in each column, under the lowest button of their
+  column. The Virtual Boy's second D-pad sits in the right column above A and B. No control covers
+  the picture or another control: B stays clear of Start.
+  Turbo and fast forward light up while on and go dark on the second tap.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
+  board of the plan on #559: the same placement, in the Virtual Boy's colours).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-429 — Tablet portrait puts the picture on top and the controls in the lower half
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
+  (800×1280dp), portrait.
+- **Steps:**
+  1. Start the Virtual Boy game.
+  2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
+- **Expected:** In portrait the picture spans the full width at the top with the strip under it,
+  then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
+  left, the second D-pad and then A and B lower right, Select and Start between them and the
+  console name at the bottom.
+  Turning switches to the RT-428 layout and back, without restarting the game.
+- **Check:** human only (a screenshot of each orientation, compared with TabJogoRetrato).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-430 — Buttons stop growing on bigger tablets and stay near the edges
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380.
+- **Steps:**
+  1. Set `wm size 1488x2266` and `wm density 320` (744×1133dp, an 8" tablet), start the Virtual
+     Boy game, take a screenshot in portrait and in landscape, quit it.
+  2. Repeat with `wm size 1600x2560` (800×1280dp, 10").
+  3. Measure the A button and the D-pad in each screenshot (dp = px / 2).
+- **Expected:** A and B are the same size on 8" and on 10", at most 1.4 times their size on a
+  regular phone (≈ 100dp across, never bigger). In landscape the D-pad's centre is within about
+  130dp of the left edge and A/B within about 130dp of the right edge; in portrait within about
+  160dp. On the larger screen the picture grows, the controls do not.
+- **Check:** human only (the screenshots side by side).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-431 — Consoles with a skin package use its tablet art on a tablet
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-428 (1280×800dp, landscape).
+- **Steps:**
+  1. Start the Game Boy Advance game; turn to portrait (`user_rotation 1`) and back
+     (`user_rotation 0`).
+  2. Quit, start the Nintendo DS game in landscape and tap something on the lower screen.
+  3. Open the pause menu in each game.
+- **Expected:** Both games show their package skin's tablet art, not the drawn tablet skin of
+  RT-428 and not the phone art stretched: the picture large, the controls sized for a tablet, in
+  both orientations. The Nintendo DS package draws its two screens one over the other, as the
+  package does, and the tap on the lower screen reaches the game. The pause menu is the side panel
+  of RT-432 over either skin.
+- **Check:** human only (a screenshot per game and orientation).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-432 — The pause menu is a side panel on a tablet
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-428, a game with at least five saved states, a gamepad connected
+  (`adb shell input gamepad keyevent …` works too).
+- **Steps:**
+  1. Open the pause menu with the skin's menu key.
+  2. Look at both halves of the screen; tap "Save state", then "Load" and come back with
+     "Back".
+  3. Move with the gamepad's D-pad over every control of the panel; press B, open the menu again
+     and press START.
+  4. Quit the game, set portrait (`wm size 1600x2560`), start it again and repeat steps 1 and 2;
+     then repeat them with the system theme light and dark (`adb shell cmd uimode night yes|no`).
+  5. Tap one of the saved-state pictures on the left.
+- **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
+  left corners: the game's title and play time, "Save state" and "Load", the action tiles,
+  "Save states" and "Restart game", and "Quit game" at the foot. On the left the game stays visible,
+  dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
+  The save states and shader pages open inside the panel. The focus ring shows on every control;
+  B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
+  440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
+  both themes. Tapping a saved state on the left loads it and resumes.
+- **Check:** human only (screenshots).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`,
+  `adb shell cmd uimode night auto`, `user_rotation 0`.
+
+### RT-433 — Phones keep their skins and the bottom pause sheet
+- **Area:** Android — Tablet gameplay
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380 (a phone, or `wm size 1080x2400` at 420 dpi), and the same in
+  landscape (`user_rotation 1`); for step 3, signed in to RetroAchievements with hardcore mode on.
+- **Steps:**
+  1. Start the Virtual Boy game, the Game Boy Advance game and the Nintendo DS game, in portrait
+     and in landscape.
+  2. Open the pause menu in each.
+  3. With RetroAchievements hardcore on, repeat step 1 on a tablet size (`wm size 2560x1600`,
+     `wm density 320`) and open the pause menu.
+- **Expected:** On the phone the skins and the pause sheet at the bottom are the same as in the
+  previous release. In hardcore on the tablet fast forward is dimmed on the strip and on the panel,
+  and "Load" and the saved states on the left are not offered, as on a phone.
+- **Check:** human only (screenshots compared with the previous release).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`,
+  RetroAchievements hardcore as it was.
+
+## Android — Window size changes in game
+
+The game skin redrawn when the game's window changes size during play (#562): a Fold unfolded or
+folded, split screen, a free-form window resized. The app draws the skin for the new window and
+swaps it in with the engine's `OVERLAY_LOAD` command; the core keeps running. The runner has no
+Android device, so these are `MANUAL`, on headless emulators (`emulator -avd <avd> -no-window`)
+with `adb`: a **Pixel Fold** AVD (`adb emu fold` / `adb emu unfold`) and a **Resizable** AVD
+(split screen from the recents screen, free form with
+`adb shell settings put global enable_freeform_support 1` and
+`adb shell am start --windowingMode 5 ...`). The reload is logged by the engine:
+`adb logcat -s RetroArch:* OpenEmuxSkin:*`. The skins live under the app's
+`files/launch/current/` directory (`adb shell run-as com.openemux.mobile ls files/launch/current`
+on a debug build). The twelve consoles with a bundled skin package (Game Boy Advance and Nintendo
+DS among them) are redrawn from that package; the other consoles from the drawn skin.
+
+### RT-450 — Unfolding a Fold during a game redraws the skin for the inner screen
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a Pixel Fold AVD, folded (`adb emu fold`), first-run
+  setup done, a Game Boy Advance game in the library.
+- **Steps:**
+  1. Start the GBA game and play for a few seconds, noting where the game is.
+  2. Run `adb emu unfold`.
+- **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
+  bundled package skin (not the drawn one), now in its tablet art since the inner screen is 600dp
+  or more across, its buttons round, not stretched, and the picture well placed. The game goes on
+  from the same point (no restart, no state loaded) and the touch controls respond.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
+  one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
+
+### RT-451 — Folding again brings the phone-shaped skin back
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, after its steps (game running, unfolded).
+- **Steps:**
+  1. Run `adb emu fold`.
+- **Expected:** The phone-shaped bundled skin comes back with correct proportions and the game
+  continues where it was.
+- **Check:** human only (a screenshot after the fold).
+
+### RT-452 — The NDS screens and the touch screen survive a redraw
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a Nintendo DS game on the DeSmuME core (its bundled package
+  skin, which draws the two screens one over the other).
+- **Steps:**
+  1. Start the NDS game.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+  3. Tap the lower screen.
+- **Expected:** After each redraw the bundled skin is still shown, the two screens stay one over the
+  other inside its screen cut-outs, and tapping the lower screen reaches the game's touch screen.
+- **Check:** human only (a screenshot after each step).
+
+### RT-453 — Split screen gets a skin in proportion, without flicker while dragging
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a Resizable AVD, a GBA game in the library.
+- **Steps:**
+  1. Start the game, then put it in split screen with another app from the recents screen.
+  2. Drag the divider slowly to a new position and let go.
+- **Expected:** Once the drag settles the skin is redrawn for the half-screen window with correct
+  proportions. It does not flicker or reload repeatedly during the drag. If the other app has the
+  focus, the redraw waits until the game window is tapped (an unfocused game takes no commands).
+- **Check:** human only (a screenshot after each step; the logcat shows one `OVERLAY_LOAD` per
+  settled size, not one per frame of the drag).
+
+### RT-454 — A free-form window gets its own skin, from the start and after a resize
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-453, with free form on
+  (`adb shell settings put global enable_freeform_support 1`, then a reboot of the AVD).
+- **Steps:**
+  1. Open the app in a free-form window
+     (`adb shell am start --windowingMode 5 -n com.openemux.mobile/.MainActivity`) and start the
+     game from there.
+  2. Resize the window from its corner, twice.
+- **Expected:** Within about a second of starting, the game in the small window shows a correctly
+  proportioned skin. After each resize the skin is redrawn to fit, the game running on.
+- **Check:** human only (a screenshot after each step).
+
+### RT-455 — Rotation alone does not reload the skin, and old skins are removed
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app on a phone-size AVD, a GBA game in the library.
+- **Steps:**
+  1. Start the game and rotate the phone to landscape and back
+     (`adb shell settings put system user_rotation 1`, then `0`).
+  2. After running RT-450 to RT-454 (on their own AVDs), list the launch directory on each of
+     them (`adb shell run-as com.openemux.mobile ls files/launch/current`).
+- **Expected:** Rotating switches between the portrait and landscape skin as before, and the
+  logcat shows no `OVERLAY_LOAD`. After the size changes only one `skin*` directory is left in the
+  launch directory.
+- **Check:** human only (the logcat during the rotation, and the directory listing).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-490 — A console with the drawn skin is redrawn with the drawn skin
+- **Area:** Android — Window size changes in game
+- **Mode:** MANUAL
+- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+  skin package).
+- **Steps:**
+  1. Start the PC Engine game, folded.
+  2. Run `adb emu unfold`, then `adb emu fold`.
+- **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
+  skin package: on the inner screen, in landscape, its tablet shape (the picture between two side
+  columns of controls, the strip under it), on the outer screen the phone shape again. The game
+  runs on from the same point.
+- **Check:** human only (a screenshot after each step; one `OpenEmuxSkin` `OVERLAY_LOAD` line per
+  fold or unfold).
+
+## Android — Library start-up
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) opening on the shelf it had, instead of an empty library, while its first
+scan runs (#574). The app keeps the last scan's ROM list in `files/library.index` and reads it when
+the process starts; a scan that runs while the shared storage is not mounted yet (right after a
+boot) is skipped, so it can neither empty the shelf nor the index (#608). The runner has no Android device, so these are `MANUAL`: a person runs them on a
+phone or a headless emulator with `adb`. The package is `com.openemux.mobile`; ROMs go in
+`/sdcard/Android/data/com.openemux.mobile/files/roms/<console>/` (e.g. `GBA`, `SFC`, `FC`). A
+frame-by-frame look at a start is `adb shell screenrecord /sdcard/start.mp4` running while the app
+opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
+
+### RT-498 — A cold start with a library opens straight on the shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, 3 Game Boy Advance and 2 Super
+  Nintendo ROMs imported, the app opened once with the shelf loaded.
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`.
+  2. Start recording the screen and open the app from the launcher.
+  3. On a tablet-sized window (`adb shell wm size 1600x2560` and `adb shell wm density 320`), repeat
+     steps 1 and 2, then `adb shell wm size reset` and `adb shell wm density reset`.
+  4. A library big enough for the scan to take visible time: add 204 empty placeholder ROMs over six
+     more consoles with
+     `adb shell 'R=/sdcard/Android/data/com.openemux.mobile/files/roms; for c in FC:nes GB:gb MD:md N64:z64 SMS:sms PCE:pce; do d=${c%%:*}; mkdir -p $R/$d; for i in $(seq 1 34); do touch "$R/$d/Placeholder $i.${c##*:}"; done; done'`,
+     open the app once and wait for the new shelves, then repeat steps 1 and 2.
+  5. Remove the placeholders:
+     `adb shell 'rm -f /sdcard/Android/data/com.openemux.mobile/files/roms/*/Placeholder*'`, open the
+     app once and wait for "2 consoles · 5 games".
+- **Expected:** Every frame after the app's first paints the console shelf. "Your shelf is empty"
+  and "Import ROMs" never appear in the middle of the shelf, not even for a frame. The header reads
+  "2 consoles · 5 games" from its first frame, never "0 consoles · 0 games"; on the tablet window
+  the same count sits under the "Shelf" title of the tablet header, next to its search and import
+  buttons. In step 4 the header reads "8 consoles · 209 games" from the first frame. In every
+  recording the console cards are fully drawn on the app's first frame: no card fades in or pops in
+  after the others.
+- **Check:** human only (step through each recording frame by frame).
+
+### RT-499 — The shelf survives a process kill and a reboot
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498.
+- **Steps:**
+  1. Open the app, press Home, then `adb shell am kill com.openemux.mobile`.
+  2. Reopen the app from the recent apps.
+  3. `adb reboot`, then open the app the moment the boot completes:
+     `adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'`
+     followed at once by `adb shell am start -n com.openemux.mobile/.MainActivity` (record to
+     `/data/local/tmp/start.mp4`: `/sdcard` may not be mounted yet).
+  4. `adb shell am force-stop com.openemux.mobile`, then open the app again.
+- **Expected:** After steps 2, 3 and 4 the app opens on the console shelf with the real counts, as
+  in RT-498; the empty state never appears. Step 4 matters most: a scan that ran before the storage
+  was mounted must not have emptied the index the next start opens on.
+- **Check:** human only (a recording of each start), plus
+  `adb shell run-as com.openemux.mobile cat files/library.index` after step 4 still lists the 5 ROMs.
+
+### RT-500 — A fresh install still shows the empty shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** The Android app not installed.
+- **Steps:**
+  1. Install the APK, open it and finish the first-run setup.
+- **Expected:** "Your shelf is empty" with the "Import ROMs" button appears after the setup screen
+  and stays.
+- **Check:** human only (a screenshot).
+
+### RT-501 — Removing every game shows the empty shelf on the next start
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498.
+- **Steps:**
+  1. Remove every game from inside the app: on each game's detail page, "Remove from library", then
+     "Remove" in the "Remove <title>?" dialog.
+  2. `adb shell am force-stop com.openemux.mobile`, then open the app.
+- **Expected:** The app opens on "Your shelf is empty" with "Import ROMs". The header shows
+  "0 consoles · 0 games" only together with that empty state.
+- **Check:** human only (a screenshot).
+
+### RT-502 — Games added or removed while the app was closed update the shelf without flicker
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498.
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`.
+  2. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/` and
+     `adb shell rm "/sdcard/Android/data/com.openemux.mobile/files/roms/GBA/<one of the .gba ROMs>"`.
+  3. Start recording the screen and open the app.
+- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES) / Famicom" shelf
+  appears, the "Game Boy Advance" shelf counts one game less and the header reads
+  "3 consoles · 5 games". No frame shows the empty state or a blank list in
+  between.
+- **Check:** human only (step through the recording).
+
+### RT-503 — "Recent" and a console's library do not flash their empty states
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498, with one game played.
+- **Steps:**
+  1. Leave the app on "Recent", press Home, `adb shell am kill com.openemux.mobile`, reopen it from
+     the recent apps while recording.
+  2. Repeat with the app left on a console's library.
+- **Expected:** "Recent" opens with the played game and never shows its "Nothing played yet" empty
+  state; the console library opens with its games and never shows "No games here yet.".
+- **Check:** human only (step through each recording).
+
+### RT-504 — A restore over a library opens on the restored games, not the old ones
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498, and an archive of that library exported as in RT-416 ("Include ROMs"
+  on).
+- **Steps:**
+  1. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/`, open the app
+     and wait for the "Nintendo (NES) / Famicom" shelf.
+  2. Settings → "Back up and restore" → "Import data", pick the archive, tap "Replace and restore".
+  3. Start recording the screen; let the app restart and finish the first-run setup.
+- **Expected:** After the setup the shelf shows "Game Boy Advance" and "Super Nintendo" with
+  "2 consoles · 5 games". The "Nintendo (NES) / Famicom" shelf and "3 consoles · 6 games", the
+  library from before the restore, never appear, not even for a frame.
+- **Check:** human only (step through the recording), plus
+  `adb shell run-as com.openemux.mobile cat files/library.index` lists the 5 restored ROMs and no
+  `FC/` line.
+
+### RT-505 — With no saved index the shelf waits for the scan instead of showing it empty
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** As RT-498, with the debug APK (`run-as` needs it).
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`, then
+     `adb shell run-as com.openemux.mobile rm files/library.index` (the state of the first start
+     after updating from a build without the index).
+  2. Start recording the screen and open the app.
+- **Expected:** Until the scan ends the "Shelf" title shows no count under it and neither "Your
+  shelf is empty" nor "Import ROMs" appears; then the shelf shows with "2 consoles · 5 games". No
+  frame reads "0 consoles · 0 games". Afterwards `files/library.index` exists again.
+- **Check:** human only (step through the recording), plus
+  `adb shell run-as com.openemux.mobile ls files/library.index` succeeds.
+
+### RT-546 — Updating from a build without the index never shows the empty shelf
+- **Area:** Android — Library start-up
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK of the app from before the index (openemux-android at `1100bfdb75`
+  or earlier) and the current debug APK.
+- **Steps:**
+  1. `adb uninstall com.openemux.mobile`, install the older APK, finish the first-run setup and
+     import the ROMs of RT-498.
+  2. `adb install -r <the current APK>`, start recording the screen and open the app.
+  3. `adb shell am force-stop com.openemux.mobile`, start recording again and open the app.
+- **Expected:** In step 2 the "Shelf" title may show no count until the scan ends (RT-505), then the
+  shelf shows with "2 consoles · 5 games". In step 3 the shelf and its count are there from the
+  first frame (RT-498). "Your shelf is empty" and "Import ROMs" never appear in either.
+- **Check:** human only (step through both recordings), plus
+  `adb shell run-as com.openemux.mobile ls files/library.index` succeeds after step 2.
+
+## Android — Tablet list + detail
+
+On a tablet the Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) shows Settings and the library as a list with the picked item's detail
+beside it, and a game's detail in two columns (#558). `MANUAL`, with the setup of "Android —
+Responsive layout": a headless emulator and `adb shell wm size` / `wm density` (dp = px × 160 / dpi).
+The windows used: 10" landscape `2560x1600` at 320 dpi (1280×800dp), 10" portrait `1600x2560` at 320
+(800×1280dp), 8" portrait `1488x2266` at 320 (744×1133dp), 7" portrait `1200x1800` at 320
+(600×900dp), a wide window beside the pane `1760x1200` at 320 (880×600dp), a phone `1080x2400` at 420
+(411×914dp). Every scenario ends with `adb shell wm size reset` and `adb shell wm density reset`. The library needs
+at least two consoles, one with cartridge frames (e.g. Game Boy Advance), and a game with saved states.
+
+### RT-477 — Settings shows its list beside the picked item on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, the "Settings" tab open.
+- **Steps:**
+  1. Look at the screen before picking anything.
+  2. Tap "Game Boy Advance" in "Consoles".
+  3. Tap "BIOS" (the banner), then "Achievements", then "Back up and restore", then "About and licenses".
+  4. Repeat at 10" portrait and 8" portrait.
+  5. At 7" portrait, tap "Game Boy Advance", press Back, then tap "Theme".
+- **Expected:** The settings list (400dp landscape, 320dp portrait) sits on the left; the right side
+  says "Choose a setting on the left" until something is picked. Each pick shows its page on the
+  right ("CONSOLE DEFAULTS" with the console's cores and shaders, the BIOS list, the RetroAchievements
+  sign-in, "Back up and restore" with its export and import buttons and no back link, About) and highlights its row on the left; nothing opens a screen of its own. Nothing is
+  clipped at any of the three sizes. At 7" portrait there is no split, since the detail would get
+  only about 260dp: Settings is one list, "Game Boy Advance" opens its own readable page, Back returns
+  to the list and "Theme" opens as a sheet, as on a phone.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per step).
+
+### RT-478 — Theme and Language open in the pane on a tablet and as a sheet on a phone
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Tap "Theme": three cards (System, Light, Dark) appear on the right. Tap "Light", then "Dark".
+  2. Tap "Language".
+  3. At the phone size, tap "Theme" and "Language".
+- **Expected:** On the tablet, Theme and Language show in the pane; the theme applies at once, with
+  no restart. On the phone they open as today's bottom sheets.
+- **Check:** human only.
+
+### RT-479 — About and licenses: a license text opens in the pane and steps back to About
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477, "About and licenses" picked.
+- **Steps:**
+  1. Scroll the pane down to "Licenses": the licenses are cards in two columns.
+  2. Tap "OpenEmux Mobile".
+  3. Tap the back link "About and licenses"; open the license again and press Back.
+- **Expected:** The license text replaces About in the pane; both its back link and Back return to
+  About in the pane, not out of Settings.
+- **Check:** human only.
+
+### RT-480 — Back clears the pick first, then leaves
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477, "Game Boy Advance" picked.
+- **Steps:**
+  1. Press Back (`adb shell input keyevent KEYCODE_BACK`).
+  2. Press Back again.
+- **Expected:** The first Back clears the pick (the pane says "Choose a setting on the left"); the
+  second one leaves Settings as on a phone. The same holds in the library pane (RT-482).
+- **Check:** human only.
+
+### RT-481 — A resize keeps the picked item, as a pane or as its own screen
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** As RT-477.
+- **Steps:**
+  1. Pick "Game Boy Advance", then resize to the phone size.
+  2. Press Back, open "Game Boy Advance" again, and resize back to 10" landscape.
+  3. Pick "Theme" and resize to the phone size.
+  4. With the Theme sheet still open, resize back to 10" landscape. Repeat 3 and 4 with
+     "Language".
+  5. In the library at 10" landscape, tap a game, then resize to 8" portrait; open a game there
+     and resize back to 10" landscape.
+- **Expected:** 1: the Game Boy Advance console screen is open on its own; Back returns to the
+  Settings list. 2: Settings comes back split with Game Boy Advance picked. 3: the Theme sheet is
+  open. 4: the sheet closes and Settings comes back split with Theme (then Language) picked in the
+  pane; no sheet is left over the split. 5: the game's own detail screen opens, and back on
+  landscape the library shows it in its pane. No screen bounces back and forth.
+- **Check:** human only.
+
+### RT-482 — The library shows the picked game beside it on a wide tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, a console's library open, in each of the three view modes.
+- **Steps:**
+  1. Look at the right side, then tap a game.
+  2. Tap the same game again; press Back.
+  3. Tap another game, then its "Open full screen" button.
+  4. In the pane, tap "Continue" (or "Play").
+- **Expected:** A 440dp pane on the right says "Select a game to see it here" until a game is
+  tapped; then it shows the cartridge, title, "Continue"/"Restart", the three newest saved states
+  and the per-game rows. The picked game has an accent ring in the grid or list. A second tap and
+  "Open full screen" open the game's two-column detail; Back returns to the library with the same
+  game picked. "Continue" launches the game. At 8" portrait there is no pane: a tap opens the detail.
+- **Check:** human only.
+
+### RT-483 — The list view is a table of time played and last played on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 8" portrait and 10" portrait, the library in the list view, one game never
+  played.
+- **Steps:**
+  1. Look at the list.
+  2. With TalkBack on, focus a row.
+  3. Repeat at the phone size.
+  4. At 880×600dp, tap a game so the pane opens beside the list; then at 10" landscape.
+- **Expected:** A header "GAME · TIME · LAST PLAYED" above rows of art, title and file name, time
+  played, how long ago it was last played and the favourite star; the never-played game reads "never
+  played" with no date. TalkBack reads one sentence per row (title, time played, last played) and
+  skips the header. The phone keeps today's rows. At 880×600dp, the list beside the 440dp pane is too
+  narrow for the table: it shows today's rows, each with the game's title and console, and no header.
+  At 10" landscape the table is back beside the pane, with the titles readable.
+- **Check:** human only.
+
+### RT-484 — The game's detail is two columns on a tablet
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape and 8" portrait, the detail of a Game Boy Advance game with
+  saved states.
+- **Steps:**
+  1. Look at both columns.
+  2. Tap a cartridge colour; tap "Core" and "Shader".
+- **Expected:** Left: the console name as back link, the cartridge and the "Cartridge color" card.
+  Right: "GBA · <core>", the title, time played and last played, favourite and more buttons,
+  "Continue"/"Restart", up to four saved states in a row, "Settings for this game" with Core,
+  Shader, Controller skin and Cheats, and the file's name, size and folder at the foot. The colour
+  changes the cartridge; Core and Shader open their sheets. The phone keeps today's single column.
+- **Check:** human only.
+
+### RT-485 — The gamepad moves between the list and its detail
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** 10" landscape, a gamepad (or `adb shell input keyevent` with `KEYCODE_DPAD_*`,
+  `KEYCODE_BUTTON_A/B/X/Y/L1/R1`).
+- **Steps:**
+  1. Library: move to a game, press A; press A again on another game, then D-pad Right until focus
+     enters the pane; press X and Y; press D-pad Down a few times inside the pane; press B.
+  2. Press Left from the pane's first column instead of B.
+  3. Press L1 and R1.
+  4. Settings: walk down the list to a console far from the top ("Game Boy Color"), pick it with
+     A, D-pad Right into the pane, then B, B, B.
+- **Expected:** A picks the game and focus stays in the list; a second A on the picked game opens it
+  full screen. In the pane the hint bar reads "Play · Favorite · Menu · List"; X favourites and Y
+  opens the menu of the picked game. B or Left returns focus to the same list item (never to the
+  "Shelf" link at the top). L1/R1 still switch the console chips. In Settings: B from the pane
+  focuses the same "Game Boy Color" row, still in view (not "Language" at the top), the next B
+  clears the pick, the last one leaves Settings.
+- **Check:** human only.
+
+### RT-486 — The saved states sheet fits its states
+- **Area:** Android — Tablet list + detail
+- **Mode:** MANUAL
+- **Preconditions:** A game with one saved state, and one with six or more.
+- **Steps:**
+  1. On the phone size, open each game's detail and tap "See all".
+  2. Repeat at 10" landscape.
+- **Expected:** The sheet is as tall as its states, with no empty gap under one state, and scrolls
+  when they do not fit; the cells widen to fill the row (two on a phone, more on a tablet).
+- **Check:** human only.
 
 ## Developer tooling & docs
 
@@ -5742,6 +7644,45 @@ or into an environment that cannot run the tests.
   EOF
   ```
 
+### RT-386 — The site says the demo games are fictional in every language
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the small text
+  under the console carousel, under the Android screenshots and in the footer, after the
+  disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+- **Expected:** In all three places, in every language, one small muted line says the games shown
+  are fictional and for illustration only, are not real games for these consoles, and that their
+  artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
+  same meaning in one line under "Screenshots" (issue #552).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  en = json.loads(Path("site/strings/en.json").read_text(encoding="utf-8"))
+  assert "fictional" in en["shots.notice"] and "created with AI" in en["shots.notice"]
+  for f in sorted(Path("site/strings").glob("*.json")):
+      d = json.loads(f.read_text(encoding="utf-8"))
+      for key in ("shots.notice", "android.notice", "footer.fictional"):
+          assert d.get(key), (f, key)
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      shots = re.search(r'<section id="screenshots">(.*?)</section>', html, re.S).group(1)
+      android = re.search(r'<section id="android">(.*?)</section>', html, re.S).group(1)
+      footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
+      assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
+      assert footer.count('class="disclaimer"') == 2, page
+  readme = Path("README.md").read_text(encoding="utf-8")
+  head = readme.split("## Screenshots", 1)[1].split("### ROM Library", 1)[0]
+  assert "fictional" in head and "AI" in head, "README notice missing"
+  print("RT-386 OK")
+  EOF
+  ```
+
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
@@ -5877,6 +7818,762 @@ or into an environment that cannot run the tests.
   ```
 
 
+## Android — Foldables
+
+The Android app on a foldable: the outer screen, the open inner screen and the half-open
+postures (#560). Layouts follow the window size and the fold the window reports, never the device
+model. The runner has no Android device, so these are `MANUAL`: a person runs them on a Pixel Fold
+emulator (`avdmanager create avd -n fold -k "system-images;android-35;google_apis;x86_64" -d
+pixel_fold`, started headless with `-no-window`) with `adb`. The posture is simulated with
+`adb emu fold` / `adb emu unfold` and the hinge angle with `adb emu sensor set hinge-angle0 <deg>`
+(180 = flat, 90 = half open); the fold turns across with
+`adb shell settings put system accelerometer_rotation 0` and
+`adb shell settings put system user_rotation 1`. A debug build logs the fold it sees under the
+tag `OpenEmuxWindow`: `adb logcat -s OpenEmuxWindow` shows `window fold: Fold(...)`, or
+`window fold: null` with no fold. The library needs at least two consoles, one with
+cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every scenario ends with
+`adb emu unfold`, `hinge-angle0 180` and `user_rotation 0`.
+
+### RT-440 — The outer screen of a Fold keeps the phone layout
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed on a Pixel Fold emulator, first-run setup done.
+- **Steps:**
+  1. `adb emu fold`.
+  2. Open "Shelf", a console's library and a game's detail.
+- **Expected:** The same layout as a phone: tabs in the bottom bar, the vertical grid, the detail
+  as one column. Nothing is split and no band is left empty.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per screen, compared with RT-380).
+
+### RT-441 — The open Fold lays out like a tablet with nothing split on the fold
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-440, unfolded flat (`adb emu unfold`, `hinge-angle0 180`).
+- **Steps:**
+  1. Open "Shelf", a console's library and "Settings".
+  2. Read the fold in the log.
+- **Expected:** The log shows a vertical fold that is not half opened. The screens keep the
+  tablet layout of the release: the app does not split a screen that has no list | detail split.
+  Where a list | detail split exists (once #558 lands), its divider lies on the fold.
+- **Check:** human only (a screenshot of each, and the log line).
+
+### RT-442 — Tabletop puts the content on top and the actions and tabs on the bottom half
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-441, then `user_rotation 1` (the fold across) and `hinge-angle0 90`.
+- **Steps:**
+  1. Open "Shelf", then a console's library, then a game.
+  2. On the game, open "Core" from its tile and close the sheet.
+  3. Visit "Recent", "Import" and "Settings".
+- **Expected:** A hairline marks the fold; no text, button or image sits within 12dp of it. The
+  tabs are one row at the bottom (icon and label side by side, the active one in a tinted pill),
+  never a rail or the phone bar. The shelf's "Import ROMs" button is on the bottom half, under
+  "Continue playing" on a shelf wide enough to show that row (the open Fold); in the
+  library the grid fills the top half and the search, sort, view toggle and console chips are on
+  the bottom half. A game shows its cartridge beside the title on top and "Continue"/"Restart"
+  (or "Play"), the saved states, the setting tiles (Core, Shader, Controller skin, Cheats) and the
+  cartridge colours below the fold; a tile opens the same sheet as on a phone. "Recent", "Import"
+  and "Settings" keep their content on top only.
+- **Check:** human only (a screenshot of each, in the dark and in the light theme).
+
+### RT-443 — Leaving a screen in tabletop takes its bottom half with it
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-442, in tabletop, a console's library open.
+- **Steps:**
+  1. Open a game, go back, go back to "Shelf", open "Settings".
+- **Expected:** The bottom half always shows the controls of the screen on top: the game's
+  actions on the game, the chips back on the library, "Import ROMs" on the shelf, nothing but the
+  tabs on "Settings".
+- **Check:** human only.
+
+### RT-444 — Changing posture keeps the screen, the scroll and the focus
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-441, a gamepad connected (or `adb shell input keyevent KEYCODE_DPAD_*`),
+  a console's library open, scrolled down, the 5th game focused.
+- **Steps:**
+  1. Go to tabletop (`user_rotation 1`, `hinge-angle0 90`), then flat (`hinge-angle0 180`), then
+     `adb emu fold`, then `adb emu unfold`.
+  2. Repeat on a game's detail.
+- **Expected:** After every change the same screen is open, the grid is still scrolled to the
+  same games and the focus ring is on the same game (or on "Continue" on the detail). An open
+  sheet stays open.
+- **Check:** human only.
+
+### RT-445 — The gamepad reaches both halves in tabletop
+- **Area:** Android — Foldables
+- **Mode:** MANUAL
+- **Preconditions:** As RT-442, a gamepad connected, a console's library open.
+- **Steps:**
+  1. From a game in the grid press down until the focus leaves the top half.
+  2. Walk the chips and the tabs; press B.
+  3. Use L1/R1; open a game with A and walk its bottom half.
+  4. On "Shelf" and on "Settings", press down until the focus leaves the top half.
+- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the ring
+  is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
+  top. L1/R1 change console as before. From the shelf, down reaches "Import ROMs" and the tabs;
+  from Settings, down reaches the tabs.
+- **Check:** human only.
+
+
+## Share nearby (desktop)
+
+Two OpenEmux devices on one network send each other games (issue 589). The cross-device runs need
+two machines (`MANUAL`) or the loopback test (`AUTO-SUITE`, two services on 127.0.0.1 in one
+process). In the devbox, a second instance with its own `HOME` reached by address on 127.0.0.1
+stands in for the other device; multicast may not cross the container.
+
+### RT-506 — The game menu, the selection and the console menu open "Share Nearby"
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running on its synthetic library (`make devbox-app`).
+- **Steps:**
+  1. Right-click a game and choose "Share Nearby…".
+  2. Close the dialog. Select three games, right-click one of them and look at the menu.
+  3. Close the menu. Right-click a console in the sidebar.
+  4. Switch to the dark theme with the header toggle and repeat steps 2 and 3.
+- **Expected:** Step 1 opens a dialog titled "Share Nearby" with the subtitle "1 game · <size>"
+  and a spinner beside "Devices on This Network". Step 2's menu reads "Share 3 Games Nearby…", and
+  the selection bar has a "Share" button (text label beside the share glyph, three connected dots)
+  with the tooltip "Share Nearby", between "Sync covers" and "Delete". Step 3's menu has "Share All
+  Games Nearby…" right after "Sync covers". Every Share entry shows the three-dot share glyph,
+  never a Wi-Fi icon, in the light and the dark theme. In step 4 the glyph is light on the dark
+  background, the same colour as the "Share" label and the icons around it, never a dark glyph
+  on a dark button (issue 626).
+- **Check:** One `make devbox-shot WIN=1` per step showing the dialog title and subtitle, the
+  "Share 3 Games Nearby…" entry, the labelled "Share" button and the console menu entry, and the
+  same button and menus in the dark theme. The devbox's GTK recolors loose icons on its own, so
+  the dark-glyph bug only showed on GTK 4.14 (Ubuntu 24.04): there the suite is the check,
+  `tests/test_icons.py` (`test_the_share_glyph_is_recolored_with_the_theme`, with a display).
+  Suite: `tests/test_share_entry_points.py`, `tests/test_icons.py`.
+
+### RT-507 — "Receive Games…" makes this device visible without sending
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Click the arrow beside the Import button in the header ("More Import Options") and choose
+     "Receive Games…".
+  2. Choose "Connect by Address".
+  3. Close the dialog and open the "Main Menu".
+  4. Switch to the dark theme and repeat step 1.
+- **Expected:** A "Receive Games" dialog with "Ready to Receive" under the share glyph and
+  "Visible as “<name>”", and no device list. In step 4 the share glyph is light on the dark
+  dialog, like its title (issue 626). Step 3's "Main Menu" has no "Receive Games…" entry.
+  The "Connect by Address" page shows the address as `host:port`, the fingerprint
+  in groups of four and a "Copy Address" button; the QR code shows when `python3-segno` is
+  installed and is simply absent otherwise.
+- **Check:** `make devbox-shot WIN=1` of both pages, of the "Main Menu" and of the dark-theme
+  dialog. Suite:
+  `tests/test_share_dialog.py` (`TheRootTests`, `ConnectByAddressTests`),
+  `tests/test_share_entry_points.py`.
+
+### RT-547 — Import still opens the file picker in one click, and Ctrl+O still works
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Click the main part of the Import button in the header (tooltip "Import ROMs").
+  2. Cancel the file picker. Press Ctrl+O.
+  3. Cancel again. Click the arrow beside the Import button and choose "Import ROMs…".
+- **Expected:** Each step opens the "Import ROMs" file picker directly. The arrow's menu lists
+  "Import ROMs…" (with Ctrl+O beside it) and then "Receive Games…".
+- **Check:** `make devbox-xdo CMD='key ctrl+o'` then `make devbox-shot WIN=1` showing the picker;
+  `make devbox-shot WIN=1` of the open arrow menu. Suite: `tests/test_window.py`
+  (`test_the_import_button_is_a_split_button`), `tests/test_share_entry_points.py`.
+
+### RT-508 — Two devices on one network see each other by name and platform
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Two machines with OpenEmux on the same Wi-Fi network.
+- **Steps:**
+  1. Open "Share Nearby…" on a game on machine A.
+  2. Open "Receive Games…" on machine B.
+- **Expected:** Within a few seconds machine B appears under "Devices on This Network" on A, with
+  a computer icon, its name and "Computer · found by mDNS and beacon" (or one of the two).
+- **Check:** human only.
+
+### RT-509 — A device on an incompatible version is listed but cannot be chosen
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A peer that speaks no common protocol version is listed insensitive, with "Update
+  OpenEmux on this device · version X, this one speaks Y" and a warning icon.
+- **Check:** `tests/test_share_dialog.py` (`test_devices_compatible_and_not`).
+
+### RT-510 — Nobody found: the dialog explains why after about 15 s
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running, no other OpenEmux reachable.
+- **Steps:**
+  1. Right-click a game, "Share Nearby…".
+  2. Wait 20 seconds.
+  3. Press "Connect by Address…".
+- **Expected:** After about 15 s the device list gives way to "No Devices Found", with the
+  same-Wi-Fi hint, the guest/public network and phone hotspot hint, the firewall line naming
+  "TCP 53319 and UDP 53318" and "Still searching" with a spinner. Step 3 opens the "Connect by
+  Address" page.
+- **Check:** `make devbox-shot WIN=1` after step 2 and after step 3. Suite:
+  `tests/test_share_dialog.py` (`test_nothing_found_after_the_timeout_and_back_when_a_device_appears`).
+
+### RT-511 — "What to Send" unchecks parts of a game and the total follows
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Right-click a game, "Share Nearby…", then "What to Send".
+  2. Expand the game and uncheck one of its rows other than "Game".
+  3. Uncheck the game's own check box.
+- **Expected:** Step 2 turns the game's check box to the mixed state and the "Total" at the bottom
+  shrinks. Step 3 unchecks the whole game; back on the first page, device rows are insensitive
+  with the tooltip "Choose something to send".
+- **Check:** `make devbox-shot WIN=1` after steps 2 and 3. Suite: `tests/test_share_dialog.py`
+  (`WhatToSendTests`).
+
+### RT-512 — Connect by Address reports a bad or unreachable address
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. "Share Nearby…" on a game, then "Connect by Address".
+  2. Type `abc def` in "Address" and press Enter.
+  3. Type `127.0.0.1:1` and press Enter.
+- **Expected:** Step 2 shows "That doesn't look like an address." under the entry. Step 3 shows
+  "Couldn't reach 127.0.0.1. Check the address and that Share Nearby is open there."
+- **Check:** `make devbox-shot WIN=1` after steps 2 and 3. Suite: `tests/test_share_dialog.py`
+  (`test_errors_show_under_the_entry`).
+
+### RT-513 — The offer shows the same code on both sides, and Decline sends nothing
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Two machines, A and B, that see each other (RT-508).
+- **Steps:**
+  1. On A, "Share Nearby…" on a game and choose B.
+  2. On B, read the "Incoming Games" dialog, then press "Decline".
+- **Expected:** A shows "Waiting for B to accept…" with a six-digit code; B's dialog shows A's name,
+  "1 game" with its size, the **same** code and "Expires in" counting down, with focus on
+  "Decline". After Decline, A shows "Offer Declined" and nothing new is in B's library.
+- **Check:** human only.
+
+### RT-514 — An unanswered offer expires after 60 s
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The countdown reaches zero, the dialog closes with the toast "The offer from
+  <device> expired", and nothing is accepted.
+- **Check:** `tests/test_share_offer.py` (`test_the_countdown_and_the_expiry`).
+
+### RT-515 — A game goes across and appears in the receiver's library
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Two services on 127.0.0.1: the sender connects by address, sends, both screens
+  show the same code, the receiver accepts, both end on their result pages, the ROM is in the
+  receiver's ROM folder and the receiver's library is rescanned for that console only. The
+  sender's result counts the games that arrived, the same number as the receiver's: when the
+  receiver already has one of two games byte for byte, the sender reads "1 of 2 Games Sent" and
+  the receiver "1 of 2 Games Received".
+- **Check:** `tests/test_share_ui_loopback.py`; on two real machines the same flow is `MANUAL`.
+
+### RT-549 — A game the receiver leaves out is listed on the sender's result
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** Sending games where the receiver skips one ends on "N-1 of N Games Sent" with a
+  warning icon, never "N Games Sent"; under "Not Sent" the skipped game is a row with its title
+  and "<Console> · <reason>" ("Not accepted on <device>", "Already on <device>", …). A game that
+  was selected but dropped while the games were prepared for the send (its file gone) is listed
+  there too and counted in N, with this device's reason ("Can't be sent: …"), never one that
+  names the receiver. When nothing arrived the title is "No Games Sent".
+- **Check:** `tests/test_share_report.py`, `tests/test_share_dialog.py` (`NotSentTests`),
+  `tests/test_share_ui_loopback.py`. On two machines: send two games to a device that already has
+  one of them and read the sender's result (`MANUAL`).
+
+### RT-550 — The desktop receiver lists the games it did not add, by title and reason
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** A receive that did not add every game ends on "N of M Games Received" (or "No
+  Games Received") with a warning icon and a "Not Received" list: one row per game, its title and
+  "<Console> · <reason>" ("Already in your library", "This console isn't supported on this
+  device", …). Titles with `<b>` or `&` show literally. "N files skipped" is no longer shown.
+- **Check:** `tests/test_share_offer.py` (`NotReceivedTests`); on two real machines the same flow
+  is `MANUAL`.
+
+### RT-516 — Conflicts: "Keep Newest" never replaces a newer local save
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B both have the same game; B's battery save is newer than A's.
+- **Steps:**
+  1. On A, send the game to B.
+  2. On B, press "Review 1 Conflict" in "Incoming Games".
+  3. Leave "Keep Newest" and accept.
+- **Expected:** The "Already in Your Library" page lists the save with both dates ("Yours: … ·
+  Incoming: …"). After the transfer, B's save is unchanged (same date and content).
+- **Check:** human only. The choices and the plan they produce are in `tests/test_share_offer.py`
+  (`ConflictsAndSpaceTests`).
+
+### RT-517 — Not enough disk space blocks "Accept"
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** When the games do not fit, "Incoming Games" shows "Not enough space. These games
+  need … in …, and … is free. Free up …" and "Accept" is insensitive.
+- **Check:** `tests/test_share_offer.py` (`test_not_enough_space_blocks_accept_on_both_pages`).
+
+### RT-518 — Cancelling mid-transfer leaves nothing behind
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B; a large ROM (a few hundred MB) on A.
+- **Steps:**
+  1. Send the large game from A to B and accept on B.
+  2. During the progress, press "Cancel Transfer" on A. Repeat, cancelling on B instead.
+- **Expected:** Both sides end on "Transfer Cancelled"; B's ROM folder has neither the game nor a
+  hidden `.tmp` file.
+- **Check:** human only (`ls -la` of B's console folder after each run).
+
+### RT-519 — Closing the dialog hides this device about 30 s later
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Open "Receive Games…" on B, check that A lists it, then close it on B.
+  2. Watch A's device list for a minute.
+- **Expected:** B stays visible on A for about 30 s after closing and then disappears; reopening
+  the dialog on B within those 30 s keeps it visible without a gap.
+- **Check:** human only. The grace logic itself is in `tests/test_share_coordinator.py`
+  (`VisibilityTests`).
+
+### RT-520 — The device name set in Preferences is the one the other device lists
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running.
+- **Steps:**
+  1. Open "Settings", page "System", group "Share Nearby", type `QA Box` in "Device Name" and press
+     Enter.
+  2. Close Settings and open "Receive Games…".
+- **Expected:** The receive dialog reads "Visible as “QA Box”".
+- **Check:** `make devbox-shot WIN=1` after step 2.
+- **Restore:** Clear "Device Name" and press Enter again.
+
+### RT-521 — A device already found is listed when "Share Nearby" opens again
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Open "Receive Games…" on B.
+  2. On A, open "Share Nearby…" on a game and wait for B to be listed; close the dialog.
+  3. Within 30 s, open "Share Nearby…" on a game on A again.
+- **Expected:** B is listed under "Devices on This Network" as soon as the dialog opens in step 3,
+  without going through "No Devices Found".
+- **Check:** human only. Suite: `tests/test_share_dialog.py`
+  (`test_devices_known_before_it_opened_are_listed`).
+
+### RT-522 — Escape closes the dialog on the result page and keys never reach the library
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The waiting, progress and result pages of both dialogs take the focus on their own
+  button and can be popped (a page that cannot makes the navigation view swallow Escape), so
+  Escape closes the dialog on "1 Game Received", "Transfer Cancelled" and the other results, and
+  asks before cancelling on the waiting and progress pages. The "Another Device" entry stays
+  focused (read-only) while it connects, so keys typed after Enter never select or filter games
+  behind the dialog.
+- **Check:** `tests/test_share_dialog.py` (`test_waiting_then_code_then_progress_then_sent`,
+  `test_the_entry_keeps_the_focus_while_connecting`) and `tests/test_share_offer.py`
+  (`test_accept_progress_and_received`).
+
+### RT-523 — An offer arriving over a finished one replaces it instead of being declined
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other.
+- **Steps:**
+  1. Send a game from A to B and accept on B; leave B on "1 Game Received".
+  2. Send another game from A to B.
+- **Expected:** On B the result page gives way to a new "Incoming Games" dialog with the new code;
+  A waits for the answer instead of reading "Offer Declined".
+- **Check:** human only. Suite: `tests/test_share_coordinator.py`
+  (`test_an_offer_over_a_finished_one_replaces_it`).
+
+### RT-539 — The first share after starting the app lists the devices and shows the code
+- **Area:** Share nearby (desktop)
+- **Mode:** MANUAL
+- **Preconditions:** Machines A and B that see each other. B has "Receive Games…" open; OpenEmux
+  on A has just been started and no share screen has been opened on it yet.
+- **Steps:**
+  1. On A, right-click a game › "Share Nearby…" and wait for B under "Devices on This Network".
+  2. Click B.
+  3. On B, press "Decline".
+- **Expected:** B is listed within a few seconds, without "No Devices Found". After step 2 A goes
+  from "Preparing the games…" to "Waiting for B to accept…" with the same code B shows, and after
+  step 3 to "Offer Declined". The spinners on these screens never hold the answer back.
+- **Check:** human only. Suite: `tests/test_share_coordinator.py`
+  (`test_core_callbacks_run_at_the_default_priority`).
+
+## Android — Share nearby
+
+The Android app's screens for Share nearby (#591, epic #586): the entry points, the "Share
+Nearby" and "Receive Games" screens, "What to Send", "Connect by Address", the "Incoming Games"
+sheet over any screen and the transfer in a foreground service. `MANUAL`, like the other Android
+sections: a person runs them on a phone or a headless emulator with `adb` (`$PKG` is
+`com.openemux.mobile`). The other side is a second device, a desktop OpenEmux with Share nearby, or
+a loopback peer on the host: an emulator reaches the host at `10.0.2.2` and the host reaches the
+emulator's server through `adb forward tcp:53319 tcp:53319`. Discovery does not cross the emulator's
+NAT, so on an emulator the peer is added with "Connect by Address"; multicast discovery and the
+two-device scenarios run on real hardware. The share log is `adb logcat -s OpenEmuxShare`. The
+formatting, the checklist, the offer model, the discoverability and nothing-found rules, the
+coordinator, the notification content, the QR code and the string parity across locales are covered
+by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionTest`,
+`OfferModelTest`, `DiscoverabilityTest`, `ShareCoordinatorTest`, `TransferNoticeTest`, `QrTest`,
+`StringsShareTest`).
+
+### RT-524 — Every entry point opens Share Nearby with the right games
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app with at least two consoles and three games, first-run setup done.
+- **Steps:**
+  1. Open a game's detail, press "⋯" (or Y on a gamepad) and pick "Share Nearby".
+  2. Back in a console's library, long-press a game, select three, and press the share button in the
+     selection bar; repeat with Select on a gamepad.
+  3. On the "Shelf", long-press a console and pick "Share All Games Nearby".
+  4. Open the "Import" tab and press "Receive games".
+- **Expected:** 1 opens "Share Nearby" with "1 game · <size>"; 2 with "3 games · <size>" and the
+  selection closed; 3 with that console's game count, the row showing "<n> games" (it is not in the
+  sheet of a console with no games); 4 opens "Receive Games" with "Ready to receive…" and no
+  "What to Send" row. Each shows "DEVICES ON THIS NETWORK" with a spinner and "THIS DEVICE" with
+  "Visible as “<name>”".
+- **Check:** human only (a screenshot per entry point).
+
+### RT-525 — Devices show their platform and how they were found; an old one is listed but disabled
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone and another OpenEmux device with Share nearby on the same Wi-Fi; for the
+  second part, a peer that speaks another protocol version.
+- **Steps:**
+  1. Open "Share Nearby" on both.
+  2. Read the other device's row; then add the old-version peer by address.
+- **Expected:** The row has a platform tile and "<Desktop|Phone|Tablet> · found by mDNS and beacon"
+  (or the one path that found it). The old-version peer is greyed out, cannot be tapped and reads
+  "<platform> · update OpenEmux on this device" with "Version <n>, this one speaks 1".
+- **Check:** human only (screenshot); `adb logcat -d -s OpenEmuxShare` lists the peer.
+
+### RT-526 — With nobody around, the screen explains why after 15 seconds
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** No other OpenEmux device on the network.
+- **Steps:**
+  1. Open "Receive Games" and wait 16 seconds.
+  2. Turn Wi-Fi off (and mobile hotspot off) and open the screen again.
+- **Expected:** 1: "No Devices Found", the same-Wi-Fi hint, the "Guest and public Wi-Fi" note with the
+  hotspot suggestion, the "On a computer," note naming TCP 53319 and UDP 53318, a "Connect by Address"
+  button and "Still searching…" with a spinner; a device appearing swaps the list back in.
+  2: "Share Nearby Isn’t Available" with "Connect to Wi-Fi to share games."
+- **Check:** human only (screenshots).
+
+### RT-527 — Connect by Address shows this device and checks what is typed
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A loopback peer listening on the host (emulator) or another device's address.
+- **Steps:**
+  1. From "Share Nearby", open "Connect by Address" and press "Copy Address".
+  2. Type `abc` and press "Connect"; then `10.0.2.2:1`; then the peer's address.
+- **Expected:** "THIS DEVICE" shows a QR code, `host:port` in monospace and the fingerprint in two
+  lines; "Copy Address" shows "Address copied". `abc` reads "That doesn’t look like an address.";
+  `10.0.2.2:1` reads "Couldn’t reach 10.0.2.2:1. Check that it is on the same network." after the
+  connect timeout; the peer's address goes back to "Share Nearby" with the peer listed as
+  "… · found by address".
+- **Check:** human only (screenshots); `adb shell cmd clipboard get-primary-clip` (Android 13+)
+  starts with `openemux-share://`.
+
+### RT-528 — An openemux-share link only fills the address
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app running on the "Shelf".
+- **Steps:**
+  1. `adb shell am start -a android.intent.action.VIEW -d "openemux-share://10.0.2.2:53319" $PKG`.
+  2. Wait 10 seconds without touching anything.
+- **Expected:** "Connect by Address" opens in the same window with
+  `openemux-share://10.0.2.2:53319` in the "Address" field; nothing connects or is sent until
+  "Connect" is pressed. Back returns to the "Shelf".
+- **Check:** human only (screenshot); `adb shell dumpsys activity activities | grep -c "MainActivity"`
+  shows one instance.
+
+### RT-529 — What to Send unchecks parts and games, and nothing checked blocks sending
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A game with a battery save, states, cover and label, shared from its detail.
+- **Steps:**
+  1. Open "What to Send" and expand the game.
+  2. Uncheck "Cover"; then press the game's own box twice.
+  3. Uncheck the whole game, go back to "Share Nearby".
+- **Expected:** Only the parts the game has are listed, each with its size ("Save States (n)" with
+  "Only the ones the other device’s core can load"). Unchecking "Cover" turns the game's box to a
+  dash, lowers the size and "<g> games · <f> files" in the bottom bar. With nothing checked,
+  "Choose at least one item to send." shows and the device rows cannot be tapped.
+- **Check:** human only (screenshots).
+
+### RT-530 — An incoming offer shows over any screen, with the same code, and only Accept takes it
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone on the "Shelf" (not on a share screen) inside the 30-second grace after
+  leaving one, or with "Receive Games" open; a sender that offers it a game.
+- **Steps:**
+  1. Send an offer from the other side.
+  2. Drag the sheet down, tap above it, then press Back.
+  3. Send another offer and look at the focus with a gamepad, then press B.
+- **Expected:** "Incoming Games" opens over the screen with "<device> wants to send you 1 game
+  (<size>).", the 6-digit code the sender also shows, the game with its parts, "Expires in 0:5x"
+  counting down, "Decline" and "Accept". Dragging and tapping outside do nothing; Back and B decline
+  (the sender reports "Offer Declined") and nothing is written. With a gamepad the focus starts on
+  "Decline".
+- **Check:** human only (screenshots); the sender's log shows `declined`; `adb shell ls` of
+  `roms/<console>` is unchanged.
+
+### RT-531 — An unanswered offer expires, and one in the background arrives as a notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-530; notifications allowed.
+- **Steps:**
+  1. Send an offer and wait 60 seconds without answering.
+  2. Open "Receive Games", press Home, and send an offer within 30 seconds.
+  3. Tap the notification.
+- **Expected:** 1: the sheet closes on its own and a toast reads "<device>’s offer expired."; the
+  sender shows "Offer Expired". 2: a notification "Incoming games from <device>" / "Tap to review.
+  Code <code>." 3: the app comes forward with the sheet open (a game running in it keeps running).
+- **Check:** human only; `adb shell dumpsys notification | grep share_offers` while it is posted.
+
+### RT-532 — Conflicts never replace a newer save on their own, and a full disk blocks Accept
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The receiving phone has the offered game with a battery save newer than the
+  sender's; for part 3, a sender game larger than the phone's free space (fill the data partition
+  with `adb shell fallocate -l <size> /sdcard/fill.bin` and delete it afterwards).
+- **Steps:**
+  1. Send the game; on the sheet press "Review 1 Conflict".
+  2. Leave "Keep Newest", go back and press "Accept"; compare the save's mtime before and after
+     (`adb shell stat -c %Y <saves>/<console>/<game>.srm`).
+  3. Send the large game.
+- **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
+  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace"),
+  and the items skipped for other reasons under "SKIPPED". After the transfer the save's mtime is
+  unchanged and the result says "1 save kept (yours was newer)"; when nothing at all was received
+  it reads "Nothing new was added: your library already had all of it." instead of "They’re in
+  your library". 3: "Not enough space." with the
+  needed, free and missing sizes; "Accept" is disabled.
+- **Check:** human only (screenshots and the two `stat` lines).
+
+### RT-533 — A transfer runs in a foreground service and can be cancelled from the notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A sender offering a game large enough to take a minute (a dummy ROM of 1 GB).
+- **Steps:**
+  1. Accept; while it runs, read the services and the notification.
+  2. Press "Cancel" in the notification.
+  3. Repeat and cancel from the screen ("Cancel Transfer", then confirm).
+  4. Swap the roles: send the large game from the phone and cancel there mid-transfer ("Cancel
+     Transfer", then confirm).
+- **Expected:** The sheet shows "Receiving from <device>", a bar, "<done> of <total>", "File i of n"
+  and "You can turn off the screen or leave the app…". The notification "Receiving from <device>"
+  has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
+  file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
+  notification is gone when the service stops. When the phone is the sender, the receiving device
+  also ends with "Transfer Cancelled" (not a failure card) and keeps nothing. No cancel closes the
+  app or shows "OpenEmux keeps stopping".
+- **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground|types=0x"`
+  shows the service in the foreground with the `dataSync` type while it runs;
+  `adb shell run-as $PKG find files -name ".*tmp"` and the `roms/` listing show nothing new after.
+
+### RT-534 — The screen going off does not stop a long transfer
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533.
+- **Steps:**
+  1. Accept, then `adb shell input keyevent KEYCODE_SLEEP`.
+  2. Wait 60 seconds, `adb shell input keyevent KEYCODE_WAKEUP`.
+- **Expected:** The transfer finished or is still progressing; it never failed. On a phone, also with
+  the power button and the phone on battery.
+- **Check:** human only; `adb logcat -d -s OpenEmuxShare` shows no failure between the two key events.
+
+### RT-535 — The phone stops being discoverable 30 seconds after its share screens close
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Another device listing this phone.
+- **Steps:**
+  1. Open "Receive Games", then go back to "Import".
+  2. Watch the other device's list for a minute.
+  3. Open "Receive Games" again, go back to the Library and, about 15 seconds later, send a game
+     to the phone from the other device; do not answer.
+- **Expected:** The phone stays listed for about 30 seconds after leaving the screen, then disappears
+  (a transfer running at that moment holds it until 30 seconds after it ends). 3: the "Incoming
+  Games" sheet stays for its whole 60 seconds, past the end of the grace, and closes with the
+  expiry toast; the sender ends expired, not unreachable. The phone stops being listed about 30
+  seconds after that.
+- **Check:** human only; the phone's log shows the server stopping (`share server stopped`).
+
+### RT-536 — The device name from Settings is the one other devices see
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Another device that lists this phone.
+- **Steps:**
+  1. "Settings" › "Device Name": type `QA Phone`, "Save".
+  2. Open "Receive Games" (after leaving it for more than 30 seconds, so the layer restarts).
+  3. Clear the name and save.
+- **Expected:** The row shows "QA Phone"; "Receive Games" reads "Visible as “QA Phone”" and the
+  other device lists "QA Phone". With the field empty the hint names the default and the default
+  comes back. The field takes at most 64 characters.
+- **Check:** human only (screenshots of both devices).
+
+### RT-537 — A game goes from a phone to a tablet with its save, cover and label, ready to play
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone and a tablet with the app, on the same Wi-Fi; on the phone, a game with a
+  battery save, a cover and a cartridge label; the tablet does not have it.
+- **Steps:**
+  1. On the tablet open "Receive Games"; on the phone share the game and tap the tablet.
+  2. Check that both show the same code; accept on the tablet.
+  3. On the tablet press "Show in Library" and start the game.
+- **Expected:** The phone shows "1 Game Sent" / "<tablet> has them now."; the tablet "1 Game
+  Received" / "From <phone>. They’re in your library, ready to play.". The game is in the tablet's
+  library with its cover and label without restarting the app, and it starts with the phone's save.
+- **Check:** human only.
+
+### RT-538 — The share screens work with a gamepad and lay out in two columns on a wide window
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad (or the emulator keyboard mapped as one); for the second part a tablet
+  in landscape or `adb shell wm size 1280x800` with rotation on (restore with `adb shell wm size reset`).
+- **Steps:**
+  1. Open "Share Nearby" from a game and move through it with the D-pad; open "What to Send" and use
+     A and X; open "Connect by Address".
+  2. On the wide window open "Share Nearby" again.
+  3. Repeat in the light theme and in Português (Brasil).
+- **Expected:** Focus starts on the first device, the first game and the "Address" field; A toggles
+  the focused row, X the whole game, B goes back; the hint bar shows them. On the wide window the
+  devices are on the left and "What to Send" inline on the right. Every text is translated and
+  readable in both themes.
+- **Check:** human only (screenshots).
+
+### RT-548 — "Receive games" lives in the Import tab, not in Settings
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The app with first-run setup done; a gamepad (or the emulator keyboard mapped as
+  one); for the wide part a tablet or `adb shell wm size 1280x800` (restore with
+  `adb shell wm size reset`).
+- **Steps:**
+  1. Open the "Import" tab in portrait.
+  2. Press "Receive games", then go back.
+  3. With the gamepad, reach the "Import" tab with L1/R1, move down to "Receive games" with the
+     D-pad and press A; press B.
+  4. Repeat 1 and 2 in landscape and on the wide window.
+  5. Start importing a folder with several ROMs and watch the buttons while "Copying…" shows.
+  6. Open "Settings" and scroll to "Share Nearby".
+  7. Switch to the light theme and to Português (Brasil) and open the "Import" tab.
+- **Expected:** 1: "Receive games", with the share icon, is the third button, under "Choose files"
+  and "Choose a whole folder". 2: it opens "Receive Games" with "Ready to receive…" and "Visible as
+  “<name>”"; the back link reads "Import" and returns to the Import tab. 3: the button gets the
+  focus ring, A opens the receive screen, B returns to Import. 4: the button is shown and works in
+  every layout. 5: none of the three buttons is shown while copying; they come back afterwards.
+  6: "SHARE NEARBY" holds only "Device name", with no "Receive Games" row and no stray divider;
+  renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
+- **Check:** human only (screenshots).
+
+## Android — System bars
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) keeping the status and navigation bars on screen everywhere outside a game,
+with its content padded away from them, instead of opening with the bars over its header and then
+hiding them a moment later (issue 607). Only a running game is full screen. `MANUAL`, like the
+other Android sections: a phone or a headless emulator with a camera cutout (e.g. a Pixel 7 image)
+and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a start is
+`adb shell screenrecord /sdcard/start.mp4` running while the app opens, then
+`ffmpeg -i start.mp4 -vf fps=10 f%03d.png`.
+
+### RT-541 — A cold start keeps the bars from the splash to the shelf, nothing under them
+- **Area:** Android — System bars
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a few ROMs imported.
+- **Steps:**
+  1. `adb shell am force-stop com.openemux.mobile`.
+  2. Start recording the screen and open the app from the launcher.
+  3. Switch the device to 3-button navigation (Settings > System > Gestures > System navigation) and
+     repeat steps 1 and 2.
+- **Expected:** The clock, Wi-Fi and battery icons and the navigation bar (buttons or gesture
+  handle) are visible in every frame, from the system splash (the app icon on the dark background)
+  to the settled shelf; they never disappear or fade. The "OpenEmux" header sits below the status
+  icons and the bottom tabs ("Library", "Recent", "Import", "Settings") sit above the navigation
+  bar, never under them, and the shelf does not jump or move when it takes over from the splash.
+- **Check:** human only (step through each recording frame by frame).
+
+### RT-542 — A warm start and the way back from a game keep the bars, and the game is full screen
+- **Area:** Android — System bars
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541.
+- **Steps:**
+  1. With the app on the shelf, press Home, start recording and reopen the app from the launcher.
+  2. Open a game and take a screenshot while it runs.
+  3. Leave the game from the pause menu (or with Back) while recording.
+- **Expected:** Step 1: the bars are visible throughout and the shelf does not move. Step 2: the game
+  fills the screen with no status or navigation bar. Step 3: back on the library the bars are
+  visible again, the header and the bottom tabs are clear of them, and the layout does not jump.
+- **Check:** human only (the recordings and the screenshot).
+
+### RT-543 — Sheets and dialogs leave the bars alone
+- **Area:** Android — System bars
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541, the app on the shelf.
+- **Steps:**
+  1. `adb exec-out screencap -p > before.png`.
+  2. Long-press a console card to open its sheet, `adb exec-out screencap -p > sheet.png`, close it.
+  3. In "Settings", tap "Theme", take a screenshot, close it.
+  4. `adb exec-out screencap -p > after.png`.
+- **Expected:** The status and navigation bars stay visible while each sheet is open and after it
+  closes; the sheet's last row is above the navigation bar. `after.png` matches `before.png`:
+  nothing moved.
+- **Check:** human only (compare the screenshots).
+
+### RT-544 — Portrait and landscape keep the content clear of the cutout and the bars
+- **Area:** Android — System bars
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541, on a device or emulator with a camera cutout.
+- **Steps:**
+  1. With the shelf open, `adb shell settings put system accelerometer_rotation 0` and
+     `adb shell settings put system user_rotation 1` (landscape), then a screenshot.
+  2. `adb shell am force-stop com.openemux.mobile`, record and open the app in landscape.
+  3. `adb shell settings put system user_rotation 0`, then a screenshot; restore with
+     `adb shell settings put system accelerometer_rotation 1`.
+- **Expected:** In both orientations the app's background reaches every edge, with no black band by
+  the camera; no button, title or cover sits under the cutout, the status bar or the navigation bar;
+  the bars stay visible, as in RT-541.
+- **Check:** human only (the screenshots and the recording).
+
+### RT-545 — Split screen and the keyboard still lay out around the bars
+- **Area:** Android — System bars
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541.
+- **Steps:**
+  1. Open the app, then from the recent apps put it in split screen with Settings.
+  2. Take a screenshot; open search and type a few letters, close the keyboard; take another.
+  3. Leave split screen and repeat the search step full size.
+- **Expected:** The OpenEmux header and bottom tabs are laid out below and above the visible bars,
+  never covered by them. The search field stays above the keyboard; once it closes, the layout is
+  back where it was.
+- **Check:** human only (the screenshots).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
@@ -5958,3 +8655,8 @@ the date.
 - **Reason:** The game window that captured RetroArch's window is gone; the game's controls are a bar RetroArch
   draws itself. The game window, and its Windows-specific "unavailable" reason, are gone. The bar
   is drawn by RetroArch on every platform.
+
+### RT-472 — The fan shows the three most recently played games
+- **Retired:** 2026-10-27 (issue 609).
+- **Reason:** The Android shelf card no longer shows a fan of cartridges: the console icon is the
+  card's hero instead. The recently played games are still one tap away, in the console's game list.

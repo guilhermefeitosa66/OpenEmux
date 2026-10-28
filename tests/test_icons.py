@@ -10,6 +10,7 @@ checks the registration.
 """
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from openemux.ui import icons
@@ -53,7 +54,7 @@ class RegistrationTests(unittest.TestCase):
     def test_the_bundled_directory_is_added_to_the_icon_theme(self):
         theme = _FakeIconTheme()
         _register_with(display=object(), theme=theme)
-        self.assertEqual(theme.paths, [str(icons.SYMBOLIC_ICON_DIR)])
+        self.assertEqual(theme.paths, [str(icons.ICON_SEARCH_DIR)])
 
     def test_a_second_call_does_nothing(self):
         # It is called from do_activate(), which runs again on every
@@ -71,11 +72,9 @@ class RegistrationTests(unittest.TestCase):
         self.assertFalse(icons._registered)
 
         _register_with(display=object(), theme=theme)
-        self.assertEqual(theme.paths, [str(icons.SYMBOLIC_ICON_DIR)])
+        self.assertEqual(theme.paths, [str(icons.ICON_SEARCH_DIR)])
 
     def test_a_missing_icon_directory_is_reported_not_registered(self):
-        from pathlib import Path
-
         theme = _FakeIconTheme()
         with self.assertLogs(icons.logger, level="WARNING") as captured:
             _register_with(
@@ -90,6 +89,31 @@ class TheVendoredDirectoryTests(unittest.TestCase):
     def test_the_directory_ships_and_holds_svgs(self):
         self.assertTrue(icons.SYMBOLIC_ICON_DIR.is_dir())
         self.assertTrue(list(icons.SYMBOLIC_ICON_DIR.glob("*.svg")))
+
+    def test_no_icon_sits_loose_in_the_search_path(self):
+        # GTK 4.14 draws a loose ("unthemed") SVG in its literal fill rather
+        # than recoloring it, which left the Share glyph dark on dark (issue
+        # #626). Only the hicolor theme layout gets a symbolic recolor there.
+        self.assertEqual(sorted(icons.ICON_SEARCH_DIR.glob("*.svg")), [])
+        self.assertEqual(icons.SYMBOLIC_ICON_DIR.parent.parent.parent, icons.ICON_SEARCH_DIR)
+        self.assertEqual(icons.SYMBOLIC_ICON_DIR.parent.parent.name, "hicolor")
+
+    def test_the_bundled_index_declares_the_icons_directory(self):
+        # Read only on a host with no hicolor theme of its own; the directory
+        # the SVGs live in has to be one it lists, or nothing is found there.
+        import configparser
+
+        index = configparser.ConfigParser()
+        index.optionxform = str
+        index.read(icons.ICON_SEARCH_DIR / "hicolor" / "index.theme", encoding="utf-8")
+        subdir = icons.SYMBOLIC_ICON_DIR.relative_to(
+            icons.ICON_SEARCH_DIR / "hicolor"
+        ).as_posix()
+        self.assertIn(subdir, index["Icon Theme"]["Directories"].split(","))
+        self.assertEqual(index[subdir]["Type"], "Scalable")
+        # A 16 px request has to fall inside the scalable range.
+        self.assertLessEqual(int(index[subdir]["MinSize"]), 16)
+        self.assertGreaterEqual(int(index[subdir]["MaxSize"]), 16)
 
     def test_every_bundled_icon_is_named_symbolic(self):
         # GTK resolves "<name>-symbolic"; a file named otherwise is never
@@ -116,7 +140,38 @@ class AgainstRealGtkTests(unittest.TestCase):
         icons.register_bundled_icons()
 
         theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-        self.assertIn(str(icons.SYMBOLIC_ICON_DIR), list(theme.get_search_path() or []))
+        self.assertIn(str(icons.ICON_SEARCH_DIR), list(theme.get_search_path() or []))
+        self.assertTrue(theme.has_icon(icons.SHARE_ICON))
+
+    def test_the_share_glyph_is_recolored_with_the_theme(self):
+        # Issue #626: on GTK 4.14 the glyph resolved, but as a regular icon,
+        # so it kept its dark fill on the dark theme's dark header bar.
+        import gi
+
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk
+
+        for search_path in (
+            # As registered: after the host's own icon directories.
+            None,
+            # A host with no hicolor theme: the bundled index.theme is read.
+            [str(icons.ICON_SEARCH_DIR)],
+        ):
+            with self.subTest(search_path=search_path):
+                theme = Gtk.IconTheme.new()
+                if search_path is None:
+                    theme.add_search_path(str(icons.ICON_SEARCH_DIR))
+                else:
+                    theme.set_search_path(search_path)
+                paintable = theme.lookup_icon(
+                    icons.SHARE_ICON, None, 16, 1, Gtk.TextDirection.LTR, 0
+                )
+                # Path(): GTK hands back backslashes on Windows.
+                self.assertEqual(
+                    Path(paintable.get_file().get_path()),
+                    icons.SYMBOLIC_ICON_DIR / f"{icons.SHARE_ICON}.svg",
+                )
+                self.assertTrue(paintable.is_symbolic())
 
 
 if __name__ == "__main__":

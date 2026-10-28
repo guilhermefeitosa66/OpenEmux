@@ -160,55 +160,6 @@ A line ending in `: OK` — `OpenEmux-<version>-x86_64.AppImage: OK` — means t
 
 ---
 
-## Screenshots
-
-*The games in these screenshots are fictional and for illustration only; their artwork was created with AI.*
-
-### ROM Library
-
-Browse your game collection with cover art, organized by console — just like a real game shelf.
-
-<p align="center">
-  <img src="docs/assets/openemux-roms-nes.png" alt="NES Library" width="48%"/>
-  &nbsp;
-  <img src="docs/assets/openemux-library-snes.png" alt="SNES Library" width="48%"/>
-</p>
-<p align="center">
-  <img src="docs/assets/openemux-roms-gba.png" alt="GBA Library" width="48%"/>
-  &nbsp;
-  <img src="docs/assets/openemux-roms-n64.png" alt="N64 Library" width="48%"/>
-</p>
-
-### Gameplay
-
-Launch any game directly from OpenEmux. RetroArch runs in the background, fully configured and ready to go.
-
-The games shown are freely licensed homebrew, credited in [docs/assets/CREDITS.md](docs/assets/CREDITS.md).
-
-<p align="center">
-  <img src="docs/assets/openemux-gameplay-nes.png" alt="NES Gameplay" width="48%"/>
-  &nbsp;
-  <img src="docs/assets/openemux-gameplay-gba.png" alt="GBA Gameplay" width="48%"/>
-</p>
-
-### Settings
-
-A clean, sidebar-based settings panel lets you configure ROM paths, BIOS files, input mappings, and shaders — all without leaving the app.
-
-<p align="center">
-  <img src="docs/assets/openemux-settings.png" alt="General Settings" width="32%"/>
-  &nbsp;
-  <img src="docs/assets/openemux-settings-bios.png" alt="BIOS Settings" width="32%"/>
-  &nbsp;
-  <img src="docs/assets/openemux-settings-input.png" alt="Input Settings" width="32%"/>
-</p>
-
-- **General / ROMs** — set your ROM directory, scan for new games, and sync cover art from the libretro thumbnail repository.
-- **BIOS** — check which required BIOS files are present for each console (e.g. PS1, Saturn).
-- **Input** — configure keyboard and gamepad mappings per console. Changes are applied at launch time via RetroArch's `--appendconfig`.
-
----
-
 ## Community
 
 Join the OpenEmux community on Reddit at [r/OpenEmux](https://www.reddit.com/r/OpenEmux/) — share your setup, ask for help, report issues, and follow what's coming next.

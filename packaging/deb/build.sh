@@ -55,6 +55,7 @@ DESTDIR="$STAGE" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
 # depends on nothing extra at all (issues #119, #328).
 DEPENDS="python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.6),"
 DEPENDS="$DEPENDS gir1.2-adw-1 (>= 1.5), python3-yaml, python3-xlib,"
+DEPENDS="$DEPENDS python3-cryptography, python3-zeroconf,"
 DEPENDS="$DEPENDS librsvg2-common, gir1.2-rsvg-2.0, webp-pixbuf-loader,"
 DEPENDS="$DEPENDS adwaita-icon-theme"
 case "$DEB_ARCH" in
@@ -79,6 +80,7 @@ Section: games
 Priority: optional
 Homepage: https://github.com/guilhermefeitosa66/OpenEmux
 Depends: ${DEPENDS}
+Recommends: python3-segno
 Description: Linux-native emulator frontend for RetroArch
  OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
  games through RetroArch, inspired by OpenEmu. ${EMULATOR_SENTENCE}
@@ -218,6 +220,7 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
   exit 1
 fi
 test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/LICENSE
+test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/hicolor/index.theme
 echo "all $PKG_ICONS symbolic icons present"
 
 echo "==> debsums must be able to verify every installed file"

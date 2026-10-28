@@ -36,7 +36,7 @@ after it and it ships unverifiable, which is why `windows` comes before
 | `arch/PKGBUILD` | Arch recipe; unpacks the same source tarball and installs via `common/stage_tree.sh` |
 | `deb/changelog_from_spec.py` | Renders the Debian changelog from the spec's `%changelog` |
 | `flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml` | The Flatpak manifest, with the `finish-args` rationale in its own comments |
-| `flatpak/python3-*.yaml` | The Python modules the runtime does not carry (PyYAML, python-xlib) |
+| `flatpak/python3-*.yaml` | The Python modules the runtime does not carry (PyYAML, python-xlib, cryptography, zeroconf) |
 | `windows/stage.py` | Assembles the portable bundle from the MSYS2 packages in `packages.lock` |
 | `windows/openemux.nsi` | The NSIS script that turns the staged bundle into the installer `.exe` |
 | `testenv/` | The distrobox matrix the built artifacts get install-tested in |

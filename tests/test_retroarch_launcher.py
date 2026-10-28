@@ -164,6 +164,8 @@ class RetroArchLauncherTests(unittest.TestCase):
             cfg.rom_core = f"does_not_exist_libretro{CORE_SUFFIX}"
             resolved = launcher._find_core_path("SFC", rom_path="/g/x.sfc")
             self.assertTrue(resolved.endswith(f"snes9x_libretro{CORE_SUFFIX}"))
+            # The public name Share nearby uses resolves the same way (#588).
+            self.assertEqual(launcher.resolve_core_path("SFC", "/g/x.sfc"), resolved)
 
     def test_launch_blocks_when_required_bios_missing(self):
         with TemporaryDirectory() as tmp_dir:

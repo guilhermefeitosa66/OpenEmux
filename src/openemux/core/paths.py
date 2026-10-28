@@ -61,6 +61,8 @@ STORE_FILENAMES = {
     "cartridge_cache": "cache/cartridges",
     # Custom bezel images, one per console (issue #507).
     "bezels": "bezels",
+    # Share nearby's device identity: id, key and certificate (issue #587).
+    "share": "share",
 }
 
 

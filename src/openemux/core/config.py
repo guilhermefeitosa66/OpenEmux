@@ -1056,6 +1056,24 @@ class ConfigManager:
         ui["show_welcome_on_startup"] = bool(enabled)
         self.save_config()
 
+    def get_share_device_name(self):
+        """The name Share nearby shows to other devices (issue #587).
+
+        Empty means "use the hostname" -- the default is resolved by
+        ``core.share.identity``, not frozen in here, so a renamed machine
+        follows.
+        """
+        share = self.config.get("share")
+        name = share.get("device_name", "") if isinstance(share, dict) else ""
+        return name if isinstance(name, str) else ""
+
+    def set_share_device_name(self, name):
+        share = self.config.get("share")
+        if not isinstance(share, dict):
+            share = self.config["share"] = {}
+        share["device_name"] = (name or "").strip()
+        self.save_config()
+
     def get_runtime_mode(self):
         return self.config.get("runtime", {}).get("mode", "retroarch_wrapper")
 

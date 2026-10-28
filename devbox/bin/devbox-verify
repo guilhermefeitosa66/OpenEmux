@@ -52,12 +52,13 @@ step "the GTK stack"
 have "${DEVBOX_PYTHON}" && ok "$("${DEVBOX_PYTHON}" --version)" || bad "${DEVBOX_PYTHON} missing"
 # Spelled out rather than `python3`: the host's pyenv shim comes through on
 # PATH, and the point of the check is the interpreter the app will actually use.
-"${DEVBOX_PYTHON}" - <<-'PY' && ok "gi + Gtk 4 + Adw 1 + yaml + Xlib import" || bad "the GTK stack does not import -- rerun provisioning"
+"${DEVBOX_PYTHON}" - <<-'PY' && ok "gi + Gtk 4 + Adw 1 + yaml + Xlib + cryptography + zeroconf import" || bad "the GTK stack does not import -- rerun provisioning"
 	import gi
 	gi.require_version("Gtk", "4.0")
 	gi.require_version("Adw", "1")
 	from gi.repository import Adw, Gtk  # noqa: F401
 	import yaml, Xlib  # noqa: F401
+	import cryptography, zeroconf  # noqa: F401
 PY
 shadow=$(command -v python3 || true)
 [ "${shadow}" = "${DEVBOX_PYTHON}" ] \

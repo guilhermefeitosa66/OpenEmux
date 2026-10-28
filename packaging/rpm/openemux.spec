@@ -63,6 +63,10 @@ Requires:       libadwaita >= 1.5
 Requires:       python3-pyyaml
 # Retitles RetroArch's X11 window with the game's name (issue #469).
 Requires:       python3-xlib
+# Share nearby (issue #587): cryptography makes the device certificate,
+# zeroconf announces it over mDNS.
+Requires:       python3-cryptography
+Requires:       python3-zeroconf
 Requires:       librsvg2
 # Cover art synced from libretro is WebP, and gdk-pixbuf has no built-in
 # decoder for it. On Fedora the loader reaches a machine only as a *weak*
@@ -99,6 +103,9 @@ Requires:       adwaita-icon-theme
 %ifnarch x86_64
 Recommends:     retroarch
 %endif
+# Share nearby draws this device's address as a QR code with it (issue #589);
+# without it the address is shown as text only.
+Recommends:     python3-segno
 
 %description
 OpenEmux is a GTK4/Adwaita frontend that manages a ROM library and launches
@@ -179,6 +186,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Tue Oct 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.0-1
+- Share nearby: send games with their saves, states and covers between devices on the local network
+- Bundled symbolic icons follow the theme color on GTK 4.14 (visible in the dark theme)
+- A game's context menu closes on a click outside while a card has focus
+
 * Sun Oct 25 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.17.0-1
 - A setting starts every game in fullscreen
 - Decorative bezels beside 4:3 games

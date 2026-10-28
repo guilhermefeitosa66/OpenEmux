@@ -37,6 +37,7 @@ SOURCES = (
     "openemux/main.py",
     "openemux/ui/style.css",
     "openemux/ui/assets/icons/symbolic/LICENSE",
+    "openemux/ui/assets/icons/symbolic/hicolor/index.theme",
     "openemux/data/games.db.zip",
 )
 

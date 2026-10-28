@@ -15,7 +15,15 @@ authors = [{ name = "Guilherme Feitoza" }]
 # (Flatpak) and against distro GObject-introspection.
 # python-xlib retitles RetroArch's X11 window with the game's name (issue
 # #469). Missing it costs the title, not the app.
-dependencies = ["PyYAML", "python-xlib"]
+# cryptography makes the device certificate of Share nearby (issue #587) and
+# zeroconf announces it over mDNS; missing zeroconf leaves the UDP beacon,
+# missing cryptography turns the feature off.
+dependencies = ["PyYAML", "python-xlib", "cryptography", "zeroconf"]
+
+[project.optional-dependencies]
+# Draws this device's address as a QR code in Share nearby (issue #589).
+# Without it the Connect by Address page shows the address as text only.
+share-qr = ["segno>=1.6"]
 
 [project.urls]
 Homepage = "https://github.com/guilhermefeitosa66/OpenEmux"
@@ -92,6 +100,9 @@ openemux = [
     # a binary distribution, and the Flatpak is the one build that installs
     # from this list rather than copying src/ wholesale (issue #233).
     "ui/assets/icons/symbolic/LICENSE",
+    # The bundled symbolic icons are laid out as a hicolor theme (issue #626);
+    # this is the index GTK falls back to on a host with no hicolor of its own.
+    "ui/assets/icons/symbolic/hicolor/index.theme",
     "ui/assets/icons/ATTRIBUTION.md",
     # The game-name database (issue #184), consumed by the staged cover
     # lookup and the cover-picker suggestions.

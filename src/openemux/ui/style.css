@@ -372,3 +372,17 @@ flowboxchild:focus-visible {
     outline: 2px solid @accent_bg_color;
     outline-offset: -2px;
 }
+
+/* Share nearby (issue #589): the verification code both screens compare, and
+   the QR code, which needs its white quiet zone in the dark theme too. */
+.share-code {
+  font-family: monospace;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.1em;
+}
+
+.share-qr {
+  background-color: #ffffff;
+  padding: 8px;
+  border-radius: 6px;
+}

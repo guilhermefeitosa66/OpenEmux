@@ -212,5 +212,51 @@ class ACatalogThatOutlivesItsScanTests(unittest.TestCase):
             self.assertEqual(catalog.display_name_for(_core_name("snes9x")), "Snes9x")
 
 
+
+class CoreIdentityTests(unittest.TestCase):
+    """The corename + display_version a save state is tied to (issue #588)."""
+
+    def catalog(self, tmp_dir):
+        base = Path(tmp_dir)
+        _write_core(base, _core_name("snes9x"), {"corename": "Snes9x", "display_version": "1.62.3"})
+        _write_core(base, _core_name("snes9x2010"), {"corename": "Snes9x", "display_version": "1.52.4"})
+        _write_core(base, _core_name("noversion"), {"corename": "NoVersion"})
+        _write_core(base, _core_name("bare"))
+        return CoreCatalog(core_dirs=[base])
+
+    def test_display_version_is_parsed(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "x.info"
+            path.write_text('display_version = "v1.2"\n', encoding="utf-8")
+            self.assertEqual(parse_core_info(path)["display_version"], "v1.2")
+
+    def test_identity_for(self):
+        with TemporaryDirectory() as tmp_dir:
+            catalog = self.catalog(tmp_dir)
+            self.assertEqual(catalog.identity_for(_core_name("snes9x")), ("Snes9x", "1.62.3"))
+            self.assertEqual(catalog.identity_for(_core_name("noversion")), ("NoVersion", ""))
+            self.assertEqual(catalog.identity_for(_core_name("bare")), ("", ""))
+            self.assertEqual(catalog.identity_for(_core_name("missing")), ("", ""))
+            self.assertEqual(catalog.identity_for(None), ("", ""))
+
+    def test_find_by_identity_is_exact(self):
+        with TemporaryDirectory() as tmp_dir:
+            catalog = self.catalog(tmp_dir)
+            self.assertEqual(catalog.find_by_identity("Snes9x", "1.52.4").filename, _core_name("snes9x2010"))
+            self.assertIsNone(catalog.find_by_identity("snes9x", "1.62.3"))
+            self.assertIsNone(catalog.find_by_identity("Snes9x", "1.62"))
+            self.assertIsNone(catalog.find_by_identity("NoVersion", ""))
+            self.assertIsNone(catalog.find_by_identity("", ""))
+
+    def test_find_by_name(self):
+        with TemporaryDirectory() as tmp_dir:
+            catalog = self.catalog(tmp_dir)
+            # Two cores share the name: the first filename wins, every time.
+            self.assertEqual(catalog.find_by_name("Snes9x").filename, _core_name("snes9x2010"))
+            self.assertEqual(catalog.find_by_name("NoVersion").filename, _core_name("noversion"))
+            self.assertIsNone(catalog.find_by_name("Genesis Plus GX"))
+            self.assertIsNone(catalog.find_by_name(""))
+
+
 if __name__ == "__main__":
     unittest.main()

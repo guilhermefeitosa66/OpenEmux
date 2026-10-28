@@ -39,7 +39,7 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(msys2.DB_NAME, "ucrt64.db")
 
     def test_every_root_carries_the_environment_prefix(self):
-        self.assertEqual(len(msys2.ROOT_PACKAGES), 15)
+        self.assertEqual(len(msys2.ROOT_PACKAGES), 17)
         for package in msys2.ROOT_PACKAGES:
             with self.subTest(package=package):
                 self.assertTrue(package.startswith(msys2.PACKAGE_PREFIX))

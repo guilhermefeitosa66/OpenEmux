@@ -27,6 +27,8 @@ RUN pacman -Syu --noconfirm \
       libadwaita \
       python-yaml \
       python-xlib \
+      python-cryptography \
+      python-zeroconf \
       librsvg \
       webp-pixbuf-loader \
       adwaita-icon-theme \

@@ -74,6 +74,7 @@ from openemux.ui.log_panel import BugReportDialog, LogPanel
 from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
+from openemux.ui.icons import SHARE_ICON
 from openemux.ui.console_sidebar import ConsoleSidebar
 from openemux.ui.file_dialogs import image_filters
 # Re-exported: `from openemux.ui.window import FAVORITES_ID` is what the tests
@@ -110,6 +111,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         self.config_manager = application.config_manager
         self.locale = self.config_manager.get_locale()
+        self._share_coordinator = None
         self.set_title("OpenEmux")
         self._setup_window_icon()
         self.set_default_size(*self._default_window_size())
@@ -652,10 +654,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header.pack_start(refresh_btn)
 
-        self.import_btn = Gtk.Button()
+        # A split button: the main part still opens the file picker in one
+        # click, the arrow offers the other way games come in (issue #611).
+        self.import_btn = Adw.SplitButton()
         self.import_btn.set_icon_name("folder-download-symbolic")
         self._translatable(lambda: self.import_btn.set_tooltip_text(self.t("header.import")))
-        self.import_btn.connect("clicked", self.imports.open_picker)
+        self._translatable(lambda: self.import_btn.set_dropdown_tooltip(self.t("header.import_more")))
+        # Rebuilt on a language change: a Gio.Menu's labels are fixed once set.
+        self._translatable(lambda: self.import_btn.set_menu_model(self._build_import_menu()))
+        self.import_btn.connect("clicked", lambda _b: self.imports.open_picker())
         header.pack_start(self.import_btn)
 
         self.covers_btn = Gtk.Button()
@@ -1113,12 +1120,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.selection_label.add_css_class("heading")
         self.selection_label.set_hexpand(True)
         self.selection_label.set_xalign(0)
+        # Narrow windows give up the count before the buttons' labels.
+        self.selection_label.set_ellipsize(Pango.EllipsizeMode.END)
 
         select_all_button = Gtk.Button(label=self.t("selection.select_all"))
         select_all_button.connect("clicked", lambda _b: self._select_all_visible())
 
         sync_button = Gtk.Button(label=self.t("selection.sync_covers"))
         sync_button.connect("clicked", lambda _b: self._sync_covers_for_selection())
+
+        self.selection_share_button = Gtk.Button()
+        share_content = Adw.ButtonContent(icon_name=SHARE_ICON)
+        self._translatable(lambda: share_content.set_label(self.t("share.selection.label")))
+        self.selection_share_button.set_child(share_content)
+        # "raised": a toolbar draws icon buttons flat, and this one sits among
+        # text buttons that keep their background.
+        self.selection_share_button.add_css_class("raised")
+        self._translatable(
+            lambda: self.selection_share_button.set_tooltip_text(self.t("share.selection.tooltip"))
+        )
+        self.selection_share_button.connect("clicked", lambda _b: self.share_roms(self._selected_roms))
 
         delete_button = Gtk.Button(label=self.t("selection.delete"))
         delete_button.add_css_class("destructive-action")
@@ -1135,7 +1156,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         box.set_margin_bottom(6)
         box.set_margin_start(12)
         box.set_margin_end(12)
-        for child in (self.selection_label, select_all_button, sync_button, delete_button, clear_button):
+        for child in (
+            self.selection_label, select_all_button, sync_button, self.selection_share_button,
+            delete_button, clear_button,
+        ):
             box.append(child)
 
         self.selection_bar = Gtk.Revealer()
@@ -1367,13 +1391,25 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._stop_tip_rotation()
         return False
 
-    def _build_primary_menu(self):
+    def _build_import_menu(self):
+        # Receiving from a device is a way of bringing games in, so it lives
+        # next to Import rather than in the primary menu (issue #611).
         menu = Gio.Menu()
-        menu.append(self.t("menu.preferences"), "win.preferences")
-        menu.append(self.t("menu.shortcuts"), "win.shortcuts")
-        menu.append(self.t("menu.welcome"), "win.welcome")
-        menu.append(self.t("menu.report_bug"), "win.report-bug")
-        menu.append(self.t("menu.about"), "win.about")
+        menu.append(self.t("import.menu.import"), "win.import")
+        menu.append(self.t("share.menu.receive"), "win.receive-games")
+        return menu
+
+    def _build_primary_menu(self):
+        # Only entries about the app itself; receiving games sits in the
+        # Import button's menu.
+        app_section = Gio.Menu()
+        app_section.append(self.t("menu.preferences"), "win.preferences")
+        app_section.append(self.t("menu.shortcuts"), "win.shortcuts")
+        app_section.append(self.t("menu.welcome"), "win.welcome")
+        app_section.append(self.t("menu.report_bug"), "win.report-bug")
+        app_section.append(self.t("menu.about"), "win.about")
+        menu = Gio.Menu()
+        menu.append_section(None, app_section)
         button = Gtk.MenuButton()
         button.set_icon_name("open-menu-symbolic")
         button.set_menu_model(menu)
@@ -1393,6 +1429,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("shortcuts", lambda *_: self._show_shortcuts(), ["<Ctrl>question"]),
             ("about", lambda *_: self._show_about(), None),
             ("report-bug", lambda *_: self.show_bug_report(), None),
+            ("receive-games", lambda *_: self.receive_games(), None),
             ("search", lambda *_: self._toggle_search(), ["<Ctrl>f"]),
             ("rescan", lambda *_: self._on_refresh_clicked(None), ["F5", "<Ctrl>r"]),
             ("import", lambda *_: self.imports.open_picker(), ["<Ctrl>o"]),
@@ -1905,6 +1942,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", _on_response)
         dialog.present(self)
+
+    # -- Share nearby (issue #589) ---------------------------------------
+
+    @property
+    def share(self):
+        """The Share nearby coordinator, made on first use: nothing listens before."""
+        if self._share_coordinator is None:
+            # Imported here: the session pulls in http.client and ssl, which
+            # start-up must not pay for (tests/test_startup_bytecode.py).
+            from openemux.ui.share_coordinator import ShareCoordinator
+            self._share_coordinator = ShareCoordinator(self)
+        return self._share_coordinator
+
+    def share_roms(self, roms):
+        roms = list(roms)
+        if roms:
+            self.share.open_send(roms)
+
+    def receive_games(self):
+        self.share.open_receive()
 
     def _target_roms_for(self, rom):
         """The roms an action applies to: the selection if it holds ``rom``."""
