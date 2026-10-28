@@ -186,6 +186,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Tue Oct 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.0-1
+- Share nearby: send games with their saves, states and covers between devices on the local network
+- Bundled symbolic icons follow the theme color on GTK 4.14 (visible in the dark theme)
+- A game's context menu closes on a click outside while a card has focus
+
 * Sun Oct 25 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.17.0-1
 - A setting starts every game in fullscreen
 - Decorative bezels beside 4:3 games
