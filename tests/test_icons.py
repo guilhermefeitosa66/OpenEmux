@@ -10,6 +10,7 @@ checks the registration.
 """
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from openemux.ui import icons
@@ -74,8 +75,6 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(theme.paths, [str(icons.ICON_SEARCH_DIR)])
 
     def test_a_missing_icon_directory_is_reported_not_registered(self):
-        from pathlib import Path
-
         theme = _FakeIconTheme()
         with self.assertLogs(icons.logger, level="WARNING") as captured:
             _register_with(
@@ -167,9 +166,10 @@ class AgainstRealGtkTests(unittest.TestCase):
                 paintable = theme.lookup_icon(
                     icons.SHARE_ICON, None, 16, 1, Gtk.TextDirection.LTR, 0
                 )
+                # Path(): GTK hands back backslashes on Windows.
                 self.assertEqual(
-                    paintable.get_file().get_path(),
-                    str(icons.SYMBOLIC_ICON_DIR / f"{icons.SHARE_ICON}.svg"),
+                    Path(paintable.get_file().get_path()),
+                    icons.SYMBOLIC_ICON_DIR / f"{icons.SHARE_ICON}.svg",
                 )
                 self.assertTrue(paintable.is_symbolic())
 
