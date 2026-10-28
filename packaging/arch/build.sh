@@ -153,6 +153,7 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
   exit 1
 fi
 test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/LICENSE
+test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/hicolor/index.theme
 echo "all $PKG_ICONS symbolic icons present"
 
 echo "==> import smoke test against installed deps"

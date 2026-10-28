@@ -93,7 +93,7 @@ def bundled_symbolic_icons():
     svgs = list(SYMBOLIC_ICON_DIR.glob("*.svg"))
     if not svgs:
         raise RuntimeError(f"no vendored symbolic icons in {SYMBOLIC_ICON_DIR}")
-    return f"{len(svgs)} icons in {SYMBOLIC_ICON_DIR.name}/"
+    return f"{len(svgs)} icons in {SYMBOLIC_ICON_DIR.relative_to(SYMBOLIC_ICON_DIR.parents[3]).as_posix()}/"
 
 
 def shipped_bytecode():

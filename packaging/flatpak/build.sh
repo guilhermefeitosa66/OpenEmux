@@ -111,6 +111,7 @@ if [ "$SRC_ICONS" -eq 0 ] || [ "$SRC_ICONS" -ne "$PKG_ICONS" ]; then
   exit 1
 fi
 test -f "$ICONS_DIR/LICENSE"
+test -f "$ICONS_DIR/hicolor/index.theme"
 echo "all $PKG_ICONS symbolic icons present"
 
 echo "==> verify the exported desktop entry is not hidden by TryExec"
