@@ -87,6 +87,19 @@
   </keywords>
 
   <releases>
+    <release version="1.18.0" date="2026-10-27">
+      <description>
+        <p>Share nearby: send games between your devices over the local network, with their saves, states and covers.</p>
+        <ul>
+          <li>Share one or more games with another OpenEmux device on the same network, desktop or Android</li>
+          <li>Battery saves, compatible save states, covers and cartridge labels travel with each game</li>
+          <li>Encrypted sessions with a verification code shown on both screens</li>
+          <li>Receive games from the Import button</li>
+          <li>Bundled icons follow the theme color, so they are visible in the dark theme</li>
+          <li>A game's context menu closes on a click outside</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.17.0" date="2026-10-25">
       <description>
         <p>Fullscreen and bezels for games, an artwork manager that starts from the cover you have, and fixes for games, covers and cores that went missing.</p>
