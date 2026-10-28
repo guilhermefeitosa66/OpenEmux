@@ -726,6 +726,18 @@
               <li><a href="#cores-menus">Todos os menus de contexto</a></li>
             </ul>
           </details></li>
+        <li><details open><summary><a href="#share">Compartilhar por perto</a></summary>
+            <ul>
+              <li><a href="#share-send">Enviando jogos</a></li>
+              <li><a href="#share-receive">Recebendo jogos</a></li>
+              <li><a href="#share-what">O que vai junto com um jogo</a></li>
+              <li><a href="#share-code">O código de verificação</a></li>
+              <li><a href="#share-conflicts">Jogos que você já tem</a></li>
+              <li><a href="#share-address">Conectar por endereço</a></li>
+              <li><a href="#share-trouble">Quando os dispositivos não se enxergam</a></li>
+              <li><a href="#share-name">O nome do dispositivo</a></li>
+            </ul>
+          </details></li>
         <li><details open><summary><a href="#settings">Configurações</a></summary>
             <ul>
               <li><a href="#settings-library">Biblioteca</a></li>
@@ -1251,6 +1263,149 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               </tr>
             </table>
           </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="share">
+          <span class="eyebrow">Biblioteca</span>
+          <h2>Compartilhar por perto</h2>
+          <p>O Compartilhar por perto manda jogos de um OpenEmux para outro na mesma rede Wi-Fi: do computador para o
+            celular, do celular para o computador, do celular para o tablet ou entre dois computadores. Não tem conta,
+            nem nuvem, nem cabo. Os jogos vão direto de um dispositivo para o outro, criptografados.</p>
+          <p>Os dois dispositivos precisam do OpenEmux 1.18 ou mais novo, no computador ou no Android. Nada chega sem
+            que alguém aceite: o dispositivo que recebe mostra o que está vindo e espera um sim.</p>
+
+          <h3 id="share-send">Enviando jogos</h3>
+          <p>No computador, comece por qualquer um destes caminhos:</p>
+          <ul>
+            <li>Clique com o botão direito num jogo e escolha <span class="ui">Compartilhar por perto…</span>.</li>
+            <li>Selecione vários jogos (veja <a href="#views-select">Selecionando vários jogos</a>) e clique em
+              <span class="ui">Compartilhar</span> na barra de seleção, ou clique com o botão direito num deles: o menu
+              mostra <span class="ui">Compartilhar 3 jogos por perto…</span>, com a quantidade que você selecionou.</li>
+            <li>Clique com o botão direito num console na barra lateral e escolha
+              <span class="ui">Compartilhar todos os jogos por perto…</span>.</li>
+          </ul>
+          <p>No Android, as mesmas três entradas ficam no menu ⋯ da tela de detalhes de um jogo, na barra de seleção
+            quando há vários jogos selecionados e no menu de um console na estante (toque e segure nele).</p>
+          <p>A janela de compartilhamento lista os outros dispositivos em <span class="ui">Dispositivos nesta rede</span>:
+            o nome de cada um, se é computador, celular ou tablet, e como ele foi encontrado. Antes de escolher um,
+            <span class="ui">O que enviar</span> deixa você tirar um jogo inteiro ou parte dele (os save states, a
+            capa…), e o <span class="ui">Total</span> acompanha. Escolha um dispositivo para enviar a oferta. A janela
+            então espera o outro lado aceitar e mostra o código de verificação.</p>
+
+          <h3 id="share-receive">Recebendo jogos</h3>
+          <p>Um dispositivo só pode ser encontrado enquanto uma das telas de compartilhamento dele está aberta, e por
+            30 segundos depois que a última fecha. No resto do tempo ele não envia nada e não escuta nada. Para esperar
+            jogos sem enviar nenhum, clique na seta ao lado do botão de importar no cabeçalho e escolha
+            <span class="ui">Receber jogos…</span>. No Android, abra a aba Importar e toque em
+            <span class="ui">Receber jogos</span>.</p>
+          <p>Quando alguém manda jogos para você, <span class="ui">Jogos chegando</span> abre por cima do que estiver na
+            tela. Ele mostra qual dispositivo está enviando, quantos jogos são e o tamanho, o código de verificação e
+            uma contagem regressiva: uma oferta que ninguém responde expira em 60 segundos. Confira o código e aperte
+            <span class="ui">Aceitar</span> ou <span class="ui">Recusar</span>. Fechar o diálogo também recusa. Se os
+            jogos não couberem no disco, ele diz quanto espaço falta e <span class="ui">Aceitar</span> fica
+            desativado.</p>
+          <p>Quando a transferência termina, os jogos já estão na biblioteca, sem precisar escanear de novo, e
+            <span class="ui">Mostrar na biblioteca</span> leva você até eles. Qualquer um dos lados pode interromper
+            com <span class="ui">Cancelar transferência</span>; nada de uma transferência cancelada fica guardado. No
+            Android, uma oferta que chega com o app em segundo plano aparece como notificação, e a transferência
+            continua com a tela desligada.</p>
+
+          <h3 id="share-what">O que vai junto com um jogo</h3>
+          <p>Um jogo viaja com tudo o que faz dele o seu:</p>
+          <ul>
+            <li><strong>O jogo em si</strong>: a ROM, ou todos os arquivos de um jogo feito de vários (um <code>.cue</code>
+              com as faixas <code>.bin</code>, um <code>.m3u</code> com os discos).</li>
+            <li><strong>O save de bateria</strong>, o save dentro do jogo, no cartucho.</li>
+            <li><strong>Os save states</strong> que o outro dispositivo consegue carregar (veja abaixo).</li>
+            <li><strong>A capa e o rótulo do cartucho.</strong></li>
+            <li><strong>Os detalhes da biblioteca</strong>: favorito, cor do cartucho e o núcleo e o shader escolhidos
+              para o jogo.</li>
+          </ul>
+          <p>Um save state é uma foto da memória do emulador, e só o mesmo núcleo, na mesma versão, consegue lê-lo de
+            volta. Por isso um state só é enviado quando o dispositivo que recebe tem o núcleo e a versão que o criaram.
+            Os outros são pulados, e <span class="ui">Jogos chegando</span> diz quantos antes de você aceitar. Saves de
+            bateria não dependem da versão do núcleo, então vão sempre.</p>
+          <p>Arquivos de BIOS e núcleos nunca são enviados: cada dispositivo usa os seus. Um jogo de um console que o
+            dispositivo que recebe não suporta é pulado, e a página de resultado mostra qual foi.</p>
+
+          <h3 id="share-code">O código de verificação</h3>
+          <p>Depois que a oferta é enviada, as duas telas mostram o mesmo código de seis dígitos: quem envia, enquanto
+            espera, e quem recebe, em <span class="ui">Jogos chegando</span>. Compare os dois antes de apertar
+            <span class="ui">Aceitar</span>. Se forem diferentes, você não está falando com o dispositivo que acha que
+            está: aperte <span class="ui">Recusar</span>.</p>
+          <p>O nome de um dispositivo é o que o dono dele digitou, então qualquer um na rede pode chamar um computador
+            de “PC da sala”. O código é a verificação de verdade. Ele vem das chaves dos dois dispositivos e de números
+            aleatórios que os dois escolhem só para aquela oferta, então um dispositivo no meio do caminho não consegue
+            fazer os dois códigos baterem, a não ser com um chute de uma chance em um milhão. A transferência é
+            criptografada, e os nomes e arquivos dos jogos só vão para o dispositivo que você escolheu.</p>
+
+          <h3 id="share-conflicts">Jogos que você já tem</h3>
+          <p>Quando a biblioteca que recebe já tem alguns dos arquivos, <span class="ui">Jogos chegando</span> mostra
+            <span class="ui">Revisar 1 conflito</span> (ou mais). A página <span class="ui">Já está na sua biblioteca</span>
+            lista cada um com as duas datas e deixa você escolher o que acontece com ele:</p>
+          <ul>
+            <li><span class="ui">Manter o mais novo</span>, o padrão para saves de bateria e save states: o arquivo que
+              chega só substitui o seu se for mais novo, então um save mais antigo nunca sobrescreve um mais novo.</li>
+            <li><span class="ui">Manter os dois</span>: o arquivo que chega fica ao lado do seu, com outro nome (um save
+              state vai para um slot livre).</li>
+            <li><span class="ui">Substituir</span>: o arquivo que chega toma o lugar do seu.</li>
+            <li><span class="ui">Pular</span>: o seu fica como está e o que chegaria não é enviado.</li>
+          </ul>
+          <p>Um jogo que você já tem idêntico, byte por byte, é pulado sozinho e nem aparece na lista. Uma capa ou um
+            rótulo que você já tem continua lá, a não ser que você escolha <span class="ui">Substituir</span>: a sua
+            arte vale mais.</p>
+
+          <h3 id="share-address">Conectar por endereço</h3>
+          <p>Às vezes dois dispositivos conseguem se alcançar mas não se encontram, por exemplo numa rede que descarta
+            os anúncios que eles usam para se achar. Aí é só conectar na mão.
+            <span class="ui">Conectar por endereço</span>, na janela de compartilhamento, mostra o endereço deste
+            dispositivo como <code>host:port</code>, a impressão digital dele e um QR code. No outro dispositivo, abra a
+            mesma página e digite esse endereço em <span class="ui">Endereço</span>. Um celular pode ler o QR code do
+            computador em vez disso: aponte o app da câmera para ele e o endereço abre no OpenEmux, já preenchido.</p>
+          <p>A impressão digital amarra a conexão àquele dispositivo exato: se outra coisa responder no endereço, nada é
+            enviado. Conectar por endereço não atravessa uma rede que impede os dispositivos de conversarem entre si
+            (veja a próxima seção).</p>
+
+          <h3 id="share-trouble">Quando os dispositivos não se enxergam</h3>
+          <p>Quando a lista continua vazia, depois de uns 15 segundos a janela mostra
+            <span class="ui">Nenhum dispositivo encontrado</span> com os motivos mais comuns. Siga por eles em ordem:</p>
+          <ul>
+            <li><strong>Abra uma tela de compartilhamento nos dois dispositivos.</strong> Um dispositivo só fica visível
+              enquanto uma delas está aberta nele, e por 30 segundos depois.</li>
+            <li><strong>Use a mesma rede.</strong> Os dois dispositivos precisam estar na mesma rede Wi-Fi, no mesmo
+              roteador: nada de um na rede de visitantes e o outro na principal, nem um nos dados móveis.</li>
+            <li><strong>Redes de visitantes e públicas.</strong> Redes de hotel, café, escola e de visitantes muitas vezes
+              impedem os dispositivos de conversarem entre si (isolamento de clientes). Nenhum app passa por isso, nem
+              com Conectar por endereço. Ative o ponto de acesso (roteador Wi-Fi) do celular e conecte o outro dispositivo nele.</li>
+            <li><strong>Um firewall no computador.</strong> Os dispositivos se encontram pela porta UDP 53318 (e pelo
+              mDNS, UDP 5353), e os jogos chegam pela porta TCP 53319. Libere as duas portas do OpenEmux, por exemplo
+              com <code>sudo ufw allow 53318/udp</code> e <code>sudo ufw allow 53319/tcp</code>, ou com
+              <code>sudo firewall-cmd --add-port=53318/udp --add-port=53319/tcp</code> (rode de novo com
+              <code>--permanent</code> para manter depois de reiniciar). Se outro programa já usa a 53319, o OpenEmux
+              pega uma porta livre, e Conectar por endereço mostra qual.</li>
+            <li><strong><span class="ui">Atualize o OpenEmux neste dispositivo</span>.</strong> O dispositivo aparece
+              na lista mas não pode ser escolhido: as duas cópias do OpenEmux falam versões diferentes do protocolo de
+              compartilhamento. Atualize a mais antiga.</li>
+            <li><strong>Uma VPN.</strong> Uma VPN em qualquer um dos dispositivos pode esconder a rede local dele.
+              Desligue enquanto compartilha.</li>
+            <li><strong><span class="ui">Compartilhar por perto indisponível</span>.</strong> No computador, falta ao
+              OpenEmux um componente de que ele precisa, com o nome na tela. No Android, o Compartilhar por perto
+              precisa do Android 10 ou mais novo e de uma conexão Wi-Fi. Quando o Android não permite a busca na rede,
+              alguns dispositivos podem não aparecer; Conectar por endereço continua funcionando.</li>
+          </ul>
+          <p>Quando os dois dispositivos continuam sem se enxergar mas um consegue alcançar o outro, use
+            <a href="#share-address">Conectar por endereço</a>.</p>
+
+          <h3 id="share-name">O nome do dispositivo</h3>
+          <p>Os outros dispositivos listam este pelo nome. No computador, ele fica em
+            <a href="#settings-system">Configurações → Sistema</a>, no grupo
+            <span class="ui">Compartilhar por perto</span>, em <span class="ui">Nome do dispositivo</span>; vazio, vale
+            o nome do computador (o hostname). No Android, fica na aba Ajustes, em Compartilhar por perto; vazio, vale o
+            nome que o celular tem nas configurações do Android, ou o modelo dele.</p>
+          <p>Para o lado técnico (como os dispositivos se encontram, a criptografia, como o código é gerado), veja o
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/docs/share-protocol.md">protocolo do
+            Compartilhar por perto</a>.</p>
         </section>
 
         <!-- ============================================================ -->

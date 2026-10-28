@@ -726,6 +726,18 @@
               <li><a href="#cores-menus">Tous les menus contextuels</a></li>
             </ul>
           </details></li>
+        <li><details open><summary><a href="#share">Partager à proximité</a></summary>
+            <ul>
+              <li><a href="#share-send">Envoyer des jeux</a></li>
+              <li><a href="#share-receive">Recevoir des jeux</a></li>
+              <li><a href="#share-what">Ce qui accompagne un jeu</a></li>
+              <li><a href="#share-code">Le code de vérification</a></li>
+              <li><a href="#share-conflicts">Les jeux que vous avez déjà</a></li>
+              <li><a href="#share-address">Se connecter par adresse</a></li>
+              <li><a href="#share-trouble">Quand les appareils ne se voient pas</a></li>
+              <li><a href="#share-name">Le nom de l’appareil</a></li>
+            </ul>
+          </details></li>
         <li><details open><summary><a href="#settings">Paramètres</a></summary>
             <ul>
               <li><a href="#settings-library">Bibliothèque</a></li>
@@ -1251,6 +1263,76 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               </tr>
             </table>
           </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="share">
+          <span class="eyebrow">Bibliothèque</span>
+          <h2>Partager à proximité</h2>
+          <p>Le partage à proximité envoie des jeux d’un OpenEmux à un autre sur le même réseau Wi-Fi : d’un ordinateur vers un téléphone, d’un téléphone vers un ordinateur, d’un téléphone vers une tablette, ou entre deux ordinateurs. Pas de compte, pas de cloud, pas de câble. Les jeux vont directement d’un appareil à l’autre, chiffrés.</p>
+          <p>Les deux appareils ont besoin d’OpenEmux 1.18 ou plus récent, sur ordinateur ou sur Android. Rien n’arrive sans avoir été accepté : l’appareil qui reçoit montre ce qui arrive et attend un oui.</p>
+
+          <h3 id="share-send">Envoyer des jeux</h3>
+          <p>Sur l’ordinateur, partez de l’un de ces points :</p>
+          <ul>
+            <li>Faites un clic droit sur un jeu et choisissez <span class="ui">Partager à proximité…</span>.</li>
+            <li>Sélectionnez plusieurs jeux (voir <a href="#views-select">Sélectionner plusieurs jeux</a>) et cliquez sur <span class="ui">Partager</span> dans la barre de sélection, ou faites un clic droit sur l’un d’eux : le menu affiche alors <span class="ui">Partager 3 jeux à proximité…</span>, avec le nombre sélectionné.</li>
+            <li>Faites un clic droit sur une console dans la barre latérale et choisissez <span class="ui">Partager tous les jeux à proximité…</span>.</li>
+          </ul>
+          <p>Sur Android, on retrouve les trois mêmes entrées dans le menu ⋯ de la fiche d’un jeu, dans la barre de sélection quand plusieurs jeux sont sélectionnés, et dans le menu d’une console sur l’Étagère (appui long dessus).</p>
+          <p>La fenêtre de partage liste les autres appareils sous <span class="ui">Appareils sur ce réseau</span> : le nom de chacun, s’il s’agit d’un ordinateur, d’un téléphone ou d’une tablette, et comment il a été trouvé. Avant d’en choisir un, <span class="ui">Quoi envoyer</span> permet d’écarter un jeu entier ou une partie d’un jeu (ses états, sa jaquette…), et le <span class="ui">Total</span> suit. Choisissez un appareil pour envoyer l’offre. La fenêtre attend alors que l’autre côté accepte, et affiche le code de vérification.</p>
+
+          <h3 id="share-receive">Recevoir des jeux</h3>
+          <p>Un appareil n’est visible que tant qu’un de ses écrans de partage est ouvert, et pendant 30 secondes après la fermeture du dernier. Le reste du temps, il n’envoie rien et n’écoute rien. Pour attendre des jeux sans en envoyer, cliquez sur la flèche à côté du bouton d’importation dans la barre d’en-tête et choisissez <span class="ui">Recevoir des jeux…</span>. Sur Android, ouvrez l’onglet Importer et touchez <span class="ui">Recevoir des jeux</span>.</p>
+          <p>Quand on vous envoie des jeux, <span class="ui">Jeux entrants</span> s’ouvre par-dessus ce qui est à l’écran. La fenêtre indique l’appareil qui envoie, combien de jeux arrivent et leur taille, affiche le code de vérification et lance un compte à rebours : une offre sans réponse expire au bout de 60 secondes. Comparez le code, puis appuyez sur <span class="ui">Accepter</span> ou <span class="ui">Refuser</span>. Fermer la fenêtre revient aussi à refuser. Si les jeux ne tiennent pas sur le disque, elle indique l’espace qui manque et <span class="ui">Accepter</span> reste désactivé.</p>
+          <p>À la fin du transfert, les jeux sont dans la bibliothèque, sans nouvelle analyse, et <span class="ui">Afficher dans la bibliothèque</span> vous y emmène. Chaque côté peut l’arrêter avec <span class="ui">Annuler le transfert</span> ; rien n’est conservé d’un transfert annulé. Sur Android, une offre qui arrive pendant que l’application est en arrière-plan apparaît sous forme de notification, et un transfert continue écran éteint.</p>
+
+          <h3 id="share-what">Ce qui accompagne un jeu</h3>
+          <p>Un jeu voyage avec tout ce qui en fait le vôtre :</p>
+          <ul>
+            <li><strong>Le jeu lui-même</strong> : la ROM, ou chaque fichier d’un jeu qui en compte plusieurs (un <code>.cue</code> avec ses pistes <code>.bin</code>, un <code>.m3u</code> avec ses disques).</li>
+            <li><strong>La sauvegarde sur pile</strong>, la sauvegarde en jeu d’une cartouche.</li>
+            <li><strong>Les sauvegardes d’état</strong>, celles que l’autre appareil peut charger (voir plus bas).</li>
+            <li><strong>La jaquette et l’étiquette de cartouche.</strong></li>
+            <li><strong>Les détails de la bibliothèque</strong> : favori, couleur de cartouche, et le cœur et le shader choisis pour le jeu.</li>
+          </ul>
+          <p>Une sauvegarde d’état est un instantané de la mémoire de l’émulateur, et seul le même cœur, dans la même version, peut la relire. Un état n’est donc envoyé que si l’appareil qui reçoit a le cœur et la version qui l’ont créé. Les autres sont ignorés, et <span class="ui">Jeux entrants</span> indique combien avant que vous acceptiez. Les sauvegardes sur pile ne dépendent pas d’une version de cœur : elles partent toujours.</p>
+          <p>Les fichiers BIOS et les cœurs ne sont jamais envoyés : chaque appareil utilise les siens. Un jeu pour une console que l’appareil qui reçoit ne prend pas en charge est ignoré, et la page de résultat le liste.</p>
+
+          <h3 id="share-code">Le code de vérification</h3>
+          <p>Une fois l’offre envoyée, les deux écrans affichent le même code à six chiffres : l’expéditeur pendant qu’il attend, le destinataire dans <span class="ui">Jeux entrants</span>. Comparez-les avant d’appuyer sur <span class="ui">Accepter</span>. S’ils sont différents, vous ne parlez pas à l’appareil que vous croyez : appuyez sur <span class="ui">Refuser</span>.</p>
+          <p>Le nom d’un appareil est celui que son propriétaire a tapé : n’importe qui sur le réseau pourrait appeler un ordinateur « PC du salon ». Le code est la vraie vérification. Il vient des clés des deux appareils et de nombres aléatoires que chacun tire pour cette offre-là, si bien qu’un appareil placé au milieu ne peut pas faire correspondre les deux codes, sauf par un coup de chance à une chance sur un million. Le transfert est chiffré, et les noms des jeux et les fichiers ne vont qu’à l’appareil que vous avez choisi.</p>
+
+          <h3 id="share-conflicts">Les jeux que vous avez déjà</h3>
+          <p>Quand la bibliothèque qui reçoit a déjà certains des fichiers, <span class="ui">Jeux entrants</span> affiche <span class="ui">Examiner 1 conflit</span> (ou plus). La page <span class="ui">Déjà dans votre bibliothèque</span> liste chacun avec les deux dates et vous laisse choisir ce qu’il advient :</p>
+          <ul>
+            <li><span class="ui">Garder la plus récente</span>, le choix par défaut pour les sauvegardes sur pile et les sauvegardes d’état : le fichier entrant ne remplace le vôtre que s’il est plus récent, donc une sauvegarde plus ancienne n’écrase jamais une plus récente.</li>
+            <li><span class="ui">Garder les deux</span> : le fichier entrant est conservé à côté du vôtre sous un autre nom (un état va dans un emplacement libre).</li>
+            <li><span class="ui">Remplacer</span> : le fichier entrant prend la place du vôtre.</li>
+            <li><span class="ui">Ignorer</span> : le vôtre reste tel quel et le fichier entrant n’est pas envoyé.</li>
+          </ul>
+          <p>Un jeu que vous avez déjà, identique octet pour octet, est ignoré de lui-même et n’apparaît pas dans la liste. Une jaquette ou une étiquette que vous avez déjà est conservée, sauf si vous choisissez <span class="ui">Remplacer</span> : vos propres images l’emportent.</p>
+
+          <h3 id="share-address">Se connecter par adresse</h3>
+          <p>Parfois, deux appareils peuvent se joindre mais ne se trouvent pas, par exemple sur un réseau qui bloque les annonces qu’ils utilisent pour se repérer. Reliez-les alors à la main. <span class="ui">Se connecter par adresse</span>, dans la fenêtre de partage, affiche l’adresse de cet appareil sous la forme <code>host:port</code>, son empreinte et un code QR. Sur l’autre appareil, ouvrez la même page et tapez cette adresse dans <span class="ui">Adresse</span>. Un téléphone peut plutôt lire le code QR de l’ordinateur : pointez l’application appareil photo dessus et l’adresse s’ouvre dans OpenEmux, déjà remplie.</p>
+          <p>L’empreinte lie la connexion à cet appareil précis : si autre chose répond à cette adresse, rien n’est envoyé. Se connecter par adresse ne passe pas un réseau qui empêche les appareils de communiquer entre eux (voir la section suivante).</p>
+
+          <h3 id="share-trouble">Quand les appareils ne se voient pas</h3>
+          <p>Si la liste reste vide, au bout d’environ 15 secondes la fenêtre affiche <span class="ui">Aucun appareil trouvé</span> avec les causes les plus courantes. Passez-les en revue dans l’ordre :</p>
+          <ul>
+            <li><strong>Ouvrez un écran de partage sur les deux appareils.</strong> Un appareil n’est visible que pendant qu’un de ces écrans est ouvert, et 30 secondes après.</li>
+            <li><strong>Utilisez le même réseau.</strong> Les deux appareils doivent être sur le même réseau Wi-Fi, derrière le même routeur : pas l’un sur le réseau invité et l’autre sur le réseau principal, et pas l’un sur les données mobiles.</li>
+            <li><strong>Réseaux invités et publics.</strong> Les réseaux d’hôtel, de café, d’école et les réseaux invités empêchent souvent les appareils de communiquer entre eux (isolation des clients). Aucune application ne passe outre, pas même avec Se connecter par adresse. Activez le point d’accès du téléphone et connectez-y l’autre appareil.</li>
+            <li><strong>Un pare-feu sur l’ordinateur.</strong> Les appareils se trouvent par le port UDP 53318 (et mDNS, UDP 5353), et les jeux arrivent par le port TCP 53319. Autorisez les deux ports d’OpenEmux, par exemple avec <code>sudo ufw allow 53318/udp</code> et <code>sudo ufw allow 53319/tcp</code>, ou avec <code>sudo firewall-cmd --add-port=53318/udp --add-port=53319/tcp</code> (relancez-la avec <code>--permanent</code> pour la garder après un redémarrage). Si un autre programme utilise déjà le 53319, OpenEmux prend un port libre, et Se connecter par adresse indique lequel.</li>
+            <li><strong><span class="ui">Mettez à jour OpenEmux sur cet appareil</span>.</strong> L’appareil est listé mais ne peut pas être choisi : les deux copies d’OpenEmux parlent des versions différentes du protocole de partage. Mettez à jour la plus ancienne.</li>
+            <li><strong>Un VPN.</strong> Un VPN sur l’un ou l’autre appareil peut lui cacher le réseau local. Coupez-le pendant le partage.</li>
+            <li><strong><span class="ui">« Partager à proximité » est indisponible</span>.</strong> Sur un ordinateur, il manque à OpenEmux un composant nécessaire, dont le nom s’affiche à l’écran. Sur Android, le Partage à proximité demande Android 10 ou plus récent et une connexion Wi-Fi. Quand Android n’autorise pas la recherche sur le réseau, certains appareils peuvent ne pas apparaître ; Se connecter par adresse fonctionne quand même.</li>
+          </ul>
+          <p>Si les deux appareils ne se voient toujours pas alors que chacun peut joindre l’autre, utilisez <a href="#share-address">Se connecter par adresse</a>.</p>
+
+          <h3 id="share-name">Le nom de l’appareil</h3>
+          <p>Les autres appareils listent celui-ci sous son nom. Sur l’ordinateur, il se règle dans <a href="#settings-system">Paramètres → Système</a>, dans le groupe <span class="ui">Partager à proximité</span>, sous <span class="ui">Nom de l’appareil</span> ; laissé vide, c’est le nom de l’ordinateur (son nom d’hôte). Sur Android, il se trouve dans l’onglet Paramètres, sous Partage à proximité ; laissé vide, c’est le nom du téléphone dans les paramètres d’Android, ou son modèle.</p>
+          <p>Pour le côté technique (comment les appareils se trouvent, le chiffrement, comment le code est calculé), voir le <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/docs/share-protocol.md">protocole du partage à proximité</a>.</p>
         </section>
 
         <!-- ============================================================ -->
