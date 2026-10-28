@@ -726,6 +726,18 @@
               <li><a href="#cores-menus">Alle Kontextmenüs</a></li>
             </ul>
           </details></li>
+        <li><details open><summary><a href="#share">In der Nähe teilen</a></summary>
+            <ul>
+              <li><a href="#share-send">Spiele senden</a></li>
+              <li><a href="#share-receive">Spiele empfangen</a></li>
+              <li><a href="#share-what">Was mit einem Spiel mitkommt</a></li>
+              <li><a href="#share-code">Der Bestätigungscode</a></li>
+              <li><a href="#share-conflicts">Spiele, die du schon hast</a></li>
+              <li><a href="#share-address">Über Adresse verbinden</a></li>
+              <li><a href="#share-trouble">Wenn sich Geräte nicht sehen</a></li>
+              <li><a href="#share-name">Der Gerätename</a></li>
+            </ul>
+          </details></li>
         <li><details open><summary><a href="#settings">Einstellungen</a></summary>
             <ul>
               <li><a href="#settings-library">Bibliothek</a></li>
@@ -1251,6 +1263,76 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               </tr>
             </table>
           </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="share">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>In der Nähe teilen</h2>
+          <p>„In der Nähe teilen“ schickt Spiele von einem OpenEmux zum anderen im selben WLAN: vom Computer aufs Handy, vom Handy auf den Computer, vom Handy aufs Tablet oder zwischen zwei Computern. Ohne Konto, ohne Cloud, ohne Kabel. Die Spiele gehen direkt und verschlüsselt von einem Gerät zum anderen.</p>
+          <p>Beide Geräte brauchen OpenEmux 1.18 oder neuer, auf einem Computer oder unter Android. Es kommt nichts an, was niemand angenommen hat: Das empfangende Gerät zeigt, was kommt, und wartet auf ein Ja.</p>
+
+          <h3 id="share-send">Spiele senden</h3>
+          <p>Am Computer startest du an einer dieser Stellen:</p>
+          <ul>
+            <li>Klick mit rechts auf ein Spiel und wähle <span class="ui">In der Nähe teilen…</span>.</li>
+            <li>Wähle mehrere Spiele aus (siehe <a href="#views-select">Mehrere Spiele auswählen</a>) und klick in der Auswahlleiste auf <span class="ui">Teilen</span>, oder klick mit rechts auf eines davon: Im Menü steht dann <span class="ui">3 Spiele in der Nähe teilen…</span>, mit der Zahl, die du ausgewählt hast.</li>
+            <li>Klick mit rechts auf eine Konsole in der Seitenleiste und wähle <span class="ui">Alle Spiele in der Nähe teilen…</span>.</li>
+          </ul>
+          <p>Unter Android findest du dieselben drei Einträge im ⋯-Menü der Detailansicht eines Spiels, in der Auswahlleiste, wenn mehrere Spiele ausgewählt sind, und im Menü einer Konsole im Regal (lange darauf drücken).</p>
+          <p>Das Teilen-Fenster listet die anderen Geräte unter <span class="ui">Geräte in diesem Netzwerk</span>: jeweils den Namen, ob es ein Computer, ein Handy oder ein Tablet ist, und wie es gefunden wurde. Bevor du eines wählst, kannst du unter <span class="ui">Was gesendet wird</span> ein ganzes Spiel oder einen Teil davon weglassen (seine Savestates, sein Cover…), und <span class="ui">Gesamt</span> passt sich an. Wähle ein Gerät, um das Angebot zu senden. Das Fenster wartet dann, bis die andere Seite annimmt, und zeigt den Bestätigungscode.</p>
+
+          <h3 id="share-receive">Spiele empfangen</h3>
+          <p>Ein Gerät ist nur auffindbar, solange einer seiner Teilen-Bildschirme offen ist, und 30 Sekunden, nachdem der letzte geschlossen wurde. Den Rest der Zeit sendet es nichts und lauscht auf nichts. Um auf Spiele zu warten, ohne selbst welche zu senden, klick in der Kopfleiste auf den Pfeil neben dem Import-Knopf und wähle <span class="ui">Spiele empfangen…</span>. Unter Android öffnest du den Tab Import und tippst auf <span class="ui">Spiele empfangen</span>.</p>
+          <p>Wenn dir jemand Spiele schickt, öffnet sich <span class="ui">Eingehende Spiele</span> über allem, was gerade zu sehen ist. Der Dialog nennt das sendende Gerät, sagt, wie viele Spiele kommen und wie groß sie sind, zeigt den Bestätigungscode und zählt herunter: Ein Angebot, auf das niemand antwortet, verfällt nach 60 Sekunden. Vergleiche den Code und drück dann <span class="ui">Annehmen</span> oder <span class="ui">Ablehnen</span>. Den Dialog zu schließen lehnt ebenfalls ab. Passen die Spiele nicht auf die Festplatte, steht dort, wie viel Platz fehlt, und <span class="ui">Annehmen</span> bleibt gesperrt.</p>
+          <p>Wenn die Übertragung fertig ist, sind die Spiele in der Bibliothek, ohne neuen Scan, und <span class="ui">In der Bibliothek zeigen</span> bringt dich hin. Beide Seiten können sie mit <span class="ui">Übertragung abbrechen</span> stoppen; von einer abgebrochenen Übertragung bleibt nichts übrig. Unter Android erscheint ein Angebot, das eintrifft, während die App im Hintergrund ist, als Benachrichtigung, und eine Übertragung läuft auch bei ausgeschaltetem Bildschirm weiter.</p>
+
+          <h3 id="share-what">Was mit einem Spiel mitkommt</h3>
+          <p>Ein Spiel reist mit allem, was es zu deinem macht:</p>
+          <ul>
+            <li><strong>Das Spiel selbst</strong>: die ROM oder alle Dateien eines Spiels, das aus mehreren besteht (eine <code>.cue</code> mit ihren <code>.bin</code>-Spuren, eine <code>.m3u</code> mit ihren Discs).</li>
+            <li><strong>Der Batteriespeicher</strong>, der Spielstand im Spiel bei einem Modul.</li>
+            <li><strong>Savestates</strong>, und zwar die, die das andere Gerät laden kann (siehe unten).</li>
+            <li><strong>Das Cover und der Modul-Aufkleber.</strong></li>
+            <li><strong>Die Bibliotheksdetails</strong>: Favorit, Modulfarbe sowie der Kern und der Shader, die für das Spiel gewählt sind.</li>
+          </ul>
+          <p>Ein Savestate ist ein Abbild des Emulatorspeichers, und nur derselbe Kern in derselben Version kann ihn wieder einlesen. Ein Savestate wird also nur gesendet, wenn das empfangende Gerät den Kern und die Version hat, mit denen er erstellt wurde. Die anderen werden übersprungen, und <span class="ui">Eingehende Spiele</span> sagt dir vor dem Annehmen, wie viele. Batteriespeicher hängen an keiner Kernversion, sie gehen also immer mit.</p>
+          <p>BIOS-Dateien und Kerne werden nie gesendet: Jedes Gerät nutzt seine eigenen. Ein Spiel für eine Konsole, die das empfangende Gerät nicht unterstützt, wird übersprungen, und die Ergebnisseite führt es auf.</p>
+
+          <h3 id="share-code">Der Bestätigungscode</h3>
+          <p>Sobald das Angebot gesendet ist, zeigen beide Bildschirme denselben sechsstelligen Code: der Sender, während er wartet, der Empfänger in <span class="ui">Eingehende Spiele</span>. Vergleiche die beiden, bevor du <span class="ui">Annehmen</span> drückst. Sind sie verschieden, sprichst du nicht mit dem Gerät, das du meinst: Drück <span class="ui">Ablehnen</span>.</p>
+          <p>Den Namen eines Geräts hat sein Besitzer eingetippt, also könnte jeder im Netzwerk einen Computer „Wohnzimmer-PC“ nennen. Der Code ist die eigentliche Prüfung. Er entsteht aus den Schlüsseln der beiden Geräte und aus Zufallszahlen, die beide für genau dieses Angebot wählen, sodass ein Gerät dazwischen die beiden Codes nicht übereinstimmen lassen kann, außer mit einem Glückstreffer von eins zu einer Million. Die Übertragung ist verschlüsselt, und Spielnamen und Dateien gehen nur an das Gerät, das du gewählt hast.</p>
+
+          <h3 id="share-conflicts">Spiele, die du schon hast</h3>
+          <p>Hat die empfangende Bibliothek einige der Dateien schon, zeigt <span class="ui">Eingehende Spiele</span> <span class="ui">1 Konflikt prüfen</span> (oder mehr). Die Seite <span class="ui">Bereits in deiner Bibliothek</span> listet jede davon mit beiden Daten auf, und du wählst, was damit passiert:</p>
+          <ul>
+            <li><span class="ui">Neueste behalten</span>, die Voreinstellung für Batteriespeicher und Savestates: Die eingehende Datei ersetzt deine nur, wenn sie neuer ist, ein älterer Spielstand überschreibt also nie einen neueren.</li>
+            <li><span class="ui">Beide behalten</span>: Die eingehende Datei kommt unter einem anderen Namen neben deine (ein Savestate landet in einem freien Slot).</li>
+            <li><span class="ui">Ersetzen</span>: Die eingehende Datei tritt an die Stelle deiner.</li>
+            <li><span class="ui">Überspringen</span>: Deine bleibt, wie sie ist, und die eingehende wird nicht gesendet.</li>
+          </ul>
+          <p>Ein Spiel, das du Byte für Byte schon hast, wird von selbst übersprungen und nicht aufgeführt. Ein Cover oder Aufkleber, den du schon hast, bleibt, außer du wählst <span class="ui">Ersetzen</span>: Deine eigenen Bilder haben Vorrang.</p>
+
+          <h3 id="share-address">Über Adresse verbinden</h3>
+          <p>Manchmal können zwei Geräte einander erreichen, finden sich aber nicht, zum Beispiel in einem Netzwerk, das die Ankündigungen verwirft, mit denen sie sich suchen. Dann verbindest du sie von Hand. <span class="ui">Über Adresse verbinden</span> im Teilen-Fenster zeigt die Adresse dieses Geräts als <code>host:port</code>, seinen Fingerabdruck und einen QR-Code. Öffne auf dem anderen Gerät dieselbe Seite und tippe die Adresse unter <span class="ui">Adresse</span> ein. Ein Handy kann stattdessen den QR-Code des Computers lesen: Richte die Kamera-App darauf, und die Adresse öffnet sich ausgefüllt in OpenEmux.</p>
+          <p>Der Fingerabdruck bindet die Verbindung an genau dieses Gerät: Antwortet unter der Adresse etwas anderes, wird nichts gesendet. „Über Adresse verbinden“ kommt nicht durch ein Netzwerk, das Geräte daran hindert, miteinander zu sprechen (siehe nächster Abschnitt).</p>
+
+          <h3 id="share-trouble">Wenn sich Geräte nicht sehen</h3>
+          <p>Bleibt die Liste leer, zeigt das Fenster nach etwa 15 Sekunden <span class="ui">Keine Geräte gefunden</span> mit den häufigsten Gründen. Geh sie der Reihe nach durch:</p>
+          <ul>
+            <li><strong>Öffne auf beiden Geräten einen Teilen-Bildschirm.</strong> Ein Gerät ist nur sichtbar, solange einer offen ist, und 30 Sekunden danach.</li>
+            <li><strong>Nutze dasselbe Netzwerk.</strong> Beide Geräte müssen im selben WLAN hinter demselben Router sein: nicht eines im Gastnetz und das andere im Hauptnetz, und keines über mobile Daten.</li>
+            <li><strong>Gast- und öffentliche Netze.</strong> Netze in Hotels, Cafés, Schulen und Gastnetze hindern Geräte oft daran, miteinander zu sprechen (Client-Isolation). Da kommt keine App durch, auch nicht mit „Über Adresse verbinden“. Schalte den Hotspot des Handys ein und verbinde das andere Gerät damit.</li>
+            <li><strong>Eine Firewall auf dem Computer.</strong> Geräte finden sich über UDP-Port 53318 (und mDNS, UDP 5353), und die Spiele kommen über TCP-Port 53319 an. Erlaube die beiden Ports von OpenEmux, zum Beispiel mit <code>sudo ufw allow 53318/udp</code> und <code>sudo ufw allow 53319/tcp</code> oder mit <code>sudo firewall-cmd --add-port=53318/udp --add-port=53319/tcp</code> (führ ihn noch einmal mit <code>--permanent</code> aus, damit es einen Neustart übersteht). Belegt schon ein anderes Programm 53319, nimmt OpenEmux einen freien Port, und „Über Adresse verbinden“ zeigt, welchen.</li>
+            <li><strong><span class="ui">OpenEmux auf diesem Gerät aktualisieren</span>.</strong> Das Gerät wird aufgeführt, lässt sich aber nicht wählen: Die beiden OpenEmux-Kopien sprechen verschiedene Versionen des Teilen-Protokolls. Aktualisiere die ältere.</li>
+            <li><strong>Ein VPN.</strong> Ein VPN auf einem der beiden Geräte kann ihm das lokale Netzwerk verbergen. Schalte es aus, während du teilst.</li>
+            <li><strong><span class="ui">„In der Nähe teilen“ ist nicht verfügbar</span>.</strong> Auf einem Computer fehlt OpenEmux ein Bestandteil, den es braucht; sein Name steht auf dem Bildschirm. Unter Android braucht „In der Nähe teilen“ Android 10 oder neuer und eine WLAN-Verbindung. Wenn Android die Suche im Netzwerk nicht erlaubt, erscheinen manche Geräte vielleicht nicht; „Über Adresse verbinden“ funktioniert trotzdem.</li>
+          </ul>
+          <p>Sehen sich die beiden Geräte immer noch nicht, obwohl jedes das andere erreicht, nutze <a href="#share-address">Über Adresse verbinden</a>.</p>
+
+          <h3 id="share-name">Der Gerätename</h3>
+          <p>Andere Geräte führen dieses unter seinem Namen. Am Computer stellst du ihn unter <a href="#settings-system">Einstellungen → System</a> ein, in der Gruppe <span class="ui">In der Nähe teilen</span>, unter <span class="ui">Gerätename</span>; bleibt er leer, ist es der Name des Computers (sein Hostname). Unter Android steht er im Tab Einstellungen unter „In der Nähe teilen“; bleibt er leer, ist es der Name, den das Handy in den Android-Einstellungen hat, oder sein Modell.</p>
+          <p>Die technische Seite (wie sich Geräte finden, die Verschlüsselung, wie der Code entsteht) beschreibt das <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/docs/share-protocol.md">Protokoll von „In der Nähe teilen“</a>.</p>
         </section>
 
         <!-- ============================================================ -->

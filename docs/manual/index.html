@@ -726,6 +726,18 @@
               <li><a href="#cores-menus">Every context menu</a></li>
             </ul>
           </details></li>
+        <li><details open><summary><a href="#share">Share Nearby</a></summary>
+            <ul>
+              <li><a href="#share-send">Sending games</a></li>
+              <li><a href="#share-receive">Receiving games</a></li>
+              <li><a href="#share-what">What goes with a game</a></li>
+              <li><a href="#share-code">The verification code</a></li>
+              <li><a href="#share-conflicts">Games you already have</a></li>
+              <li><a href="#share-address">Connect by Address</a></li>
+              <li><a href="#share-trouble">When devices do not see each other</a></li>
+              <li><a href="#share-name">The device name</a></li>
+            </ul>
+          </details></li>
         <li><details open><summary><a href="#settings">Settings</a></summary>
             <ul>
               <li><a href="#settings-library">Library</a></li>
@@ -1386,6 +1398,146 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               </tr>
             </table>
           </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="share">
+          <span class="eyebrow">Library</span>
+          <h2>Share Nearby</h2>
+          <p>Share Nearby sends games from one OpenEmux to another on the same Wi-Fi network: from a computer to a
+            phone, from a phone to a computer, from a phone to a tablet, or between two computers. There is no account,
+            no cloud and no cable. The games go straight from one device to the other, encrypted.</p>
+          <p>Both devices need OpenEmux 1.18 or later, on a computer or on Android. Nothing arrives that nobody
+            accepted: the receiving device shows what is coming and waits for a yes.</p>
+
+          <h3 id="share-send">Sending games</h3>
+          <p>On the computer, start from any of these:</p>
+          <ul>
+            <li>Right-click a game and choose <span class="ui">Share Nearby…</span>.</li>
+            <li>Select several games (see <a href="#views-select">Selecting several games</a>) and click
+              <span class="ui">Share</span> in the selection bar, or right-click one of them: the menu then reads
+              <span class="ui">Share 3 Games Nearby…</span>, with the number you selected.</li>
+            <li>Right-click a console in the sidebar and choose <span class="ui">Share All Games Nearby…</span>.</li>
+          </ul>
+          <p>On Android the same three entries are in the ⋯ menu of a game's detail screen, in the selection bar
+            when several games are selected, and in the menu of a console on the shelf (long-press it).</p>
+          <p>The share window lists the other devices under <span class="ui">Devices on This Network</span>: each
+            one's name, whether it is a computer, a phone or a tablet, and how it was found. Before you pick one,
+            <span class="ui">What to Send</span> lets you leave out a whole game or part of one (its save states, its
+            cover…), and the <span class="ui">Total</span> follows. Choose a device to send the offer. The window then
+            waits for the other side to accept, and shows the verification code.</p>
+
+          <h3 id="share-receive">Receiving games</h3>
+          <p>A device can be found only while one of its share screens is open, and for 30 seconds after the last one
+            closes. The rest of the time it sends nothing and listens on nothing. To wait for games without sending any,
+            click the arrow beside the Import button in the header and choose <span class="ui">Receive Games…</span>.
+            On Android, open the Import tab and tap <span class="ui">Receive games</span>.</p>
+          <p>When games are sent to you, <span class="ui">Incoming Games</span> opens over whatever is on the screen.
+            It names the sending device, says how many games are coming and how big they are, shows the verification
+            code and counts down: an offer nobody answers expires after 60 seconds. Compare the code, then press
+            <span class="ui">Accept</span> or <span class="ui">Decline</span>. Closing the dialog declines too. If
+            the games do not fit on the disk, it says how much space is missing and <span class="ui">Accept</span>
+            stays off.</p>
+          <p>When the transfer ends the games are in the library, with no rescan, and
+            <span class="ui">Show in Library</span> takes you to them. Either side can stop it with
+            <span class="ui">Cancel Transfer</span>; nothing from a cancelled transfer is kept. On Android an offer
+            that arrives while the app is in the background shows up as a notification, and a transfer keeps going
+            with the screen off.</p>
+
+          <h3 id="share-what">What goes with a game</h3>
+          <p>A game travels with what makes it yours:</p>
+          <ul>
+            <li><strong>The game itself</strong>: the ROM, or every file of a game made of several (a <code>.cue</code>
+              with its <code>.bin</code> tracks, an <code>.m3u</code> with its discs).</li>
+            <li><strong>The battery save</strong>, the in-game save of a cartridge.</li>
+            <li><strong>Save states</strong>, the ones the other device can load (see below).</li>
+            <li><strong>The cover and the cartridge label.</strong></li>
+            <li><strong>The library details</strong>: favorite, cartridge color, and the core and shader chosen for the
+              game.</li>
+          </ul>
+          <p>A save state is a snapshot of the emulator's memory, and only the same core, in the same version, can
+            read it back. So a state is sent only when the receiving device has the core and version that made it. The
+            others are skipped, and <span class="ui">Incoming Games</span> says how many before you accept. Battery
+            saves are not tied to a core version, so they always go.</p>
+          <p>BIOS files and cores are never sent: each device uses its own. A game for a console the receiving device
+            does not support is skipped, and the result page lists it.</p>
+
+          <h3 id="share-code">The verification code</h3>
+          <p>Once the offer is sent, both screens show the same six-digit code: the sender while it waits, the receiver
+            in <span class="ui">Incoming Games</span>. Compare the two before pressing <span class="ui">Accept</span>.
+            If they are different, you are not talking to the device you think you are: press
+            <span class="ui">Decline</span>.</p>
+          <p>A device's name is whatever its owner typed, so anyone on the network could call a computer “Living room
+            PC”. The code is the real check. It comes from the keys of the two devices and from random numbers both
+            pick for that one offer, so a device sitting in the middle cannot make the two codes match, except by a
+            one-in-a-million guess. The transfer is encrypted, and game names and files go only to the device you
+            chose.</p>
+
+          <h3 id="share-conflicts">Games you already have</h3>
+          <p>When the receiving library already has some of the files, <span class="ui">Incoming Games</span> shows
+            <span class="ui">Review 1 Conflict</span> (or more). The <span class="ui">Already in Your Library</span>
+            page lists each one with both dates and lets you choose what happens to it:</p>
+          <ul>
+            <li><span class="ui">Keep Newest</span>, the default for battery saves and save states: the incoming file
+              replaces yours only if it is newer, so an older save never overwrites a newer one.</li>
+            <li><span class="ui">Keep Both</span>: the incoming file is kept beside yours under another name (a save
+              state goes to a free slot).</li>
+            <li><span class="ui">Replace</span>: the incoming file takes the place of yours.</li>
+            <li><span class="ui">Skip</span>: yours stays as it is and the incoming one is not sent.</li>
+          </ul>
+          <p>A game you already have byte for byte is skipped on its own and not listed. A cover or a label you
+            already have stays unless you choose <span class="ui">Replace</span>: your own art wins.</p>
+
+          <h3 id="share-address">Connect by Address</h3>
+          <p>Sometimes two devices can reach each other but do not find each other, for example on a network that
+            drops the announcements they use to find each other. Then connect them by hand.
+            <span class="ui">Connect by Address</span>, in the share window, shows this device's address as
+            <code>host:port</code>, its fingerprint and a QR code. On the other device, open the same page and type
+            that address under <span class="ui">Address</span>. A phone can read the computer's QR code instead: point
+            the camera app at it and the address opens in OpenEmux, filled in.</p>
+          <p>The fingerprint ties the connection to that exact device: if something else answers at the address,
+            nothing is sent. Connect by Address does not get through a network that keeps devices from talking to each
+            other (see the next section).</p>
+
+          <h3 id="share-trouble">When devices do not see each other</h3>
+          <p>When the list stays empty, after about 15 seconds the window shows
+            <span class="ui">No Devices Found</span> with the most common reasons. Go through them in order:</p>
+          <ul>
+            <li><strong>Open a share screen on both devices.</strong> A device is visible only while one is open on it,
+              and for 30 seconds after.</li>
+            <li><strong>Use the same network.</strong> Both devices must be on the same Wi-Fi network, behind the same
+              router: not one on the guest network and the other on the main one, and not one on mobile data.</li>
+            <li><strong>Guest and public networks.</strong> Hotel, café, school and guest networks often keep devices
+              from talking to each other (client isolation). No app gets through that, not even with Connect by
+              Address. Turn on the phone's hotspot and connect the other device to it.</li>
+            <li><strong>A firewall on the computer.</strong> Devices find each other over UDP port 53318 (and mDNS,
+              UDP 5353), and the games arrive over TCP port 53319. Allow the two OpenEmux ports, for example with
+              <code>sudo ufw allow 53318/udp</code> and <code>sudo ufw allow 53319/tcp</code>, or with
+              <code>sudo firewall-cmd --add-port=53318/udp --add-port=53319/tcp</code> (run it again with
+              <code>--permanent</code> to keep it after a restart). If another program already uses 53319, OpenEmux
+              takes a free port, and Connect by Address shows which.</li>
+            <li><strong><span class="ui">Update OpenEmux on this device</span>.</strong> The device is listed but
+              cannot be chosen: the two copies of OpenEmux speak different versions of the share protocol. Update the
+              older one.</li>
+            <li><strong>A VPN.</strong> A VPN on either device can hide the local network from it. Turn it off while
+              you share.</li>
+            <li><strong><span class="ui">Share Nearby Is Unavailable</span>.</strong> On a computer, OpenEmux is missing
+              a component it needs, named on the screen. On Android, Share Nearby needs Android 10 or later and a Wi-Fi
+              connection. When Android does not allow the network search, some devices may not show up; Connect by
+              Address still works.</li>
+          </ul>
+          <p>When the two devices still do not see each other but each can reach the other, use
+            <a href="#share-address">Connect by Address</a>.</p>
+
+          <h3 id="share-name">The device name</h3>
+          <p>Other devices list this one by its name. On the computer it is set in
+            <a href="#settings-system">Settings → System</a>, in the <span class="ui">Share Nearby</span> group, under
+            <span class="ui">Device Name</span>; left empty, it is the computer's name (its hostname). On Android it
+            is in the Settings tab, under Share Nearby; left empty, it is the name the phone has in Android's settings,
+            or its model.</p>
+          <p>For the technical side (how devices find each other, the encryption, how the code is made), see the
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/blob/main/docs/share-protocol.md">Share Nearby
+            protocol</a>.</p>
         </section>
 
         <!-- ============================================================ -->
