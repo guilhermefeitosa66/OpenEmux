@@ -8492,6 +8492,227 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
+## Share nearby — cross-device
+
+The paths of Share nearby that need two different devices: desktop → Android, Android → desktop,
+games made of several files, save states across cores, conflicts, cancelling and protocol versions
+(issue 592, epic 586). The single-device behavior is in the two sections above, and Android →
+Android is RT-537; this section does not repeat them. Every scenario here is `MANUAL`: real
+hardware on one Wi-Fi network. Where a scenario says **pipeline variant**, the same steps can run
+on the devbox and a headless emulator, connected by address instead of by discovery: the emulator
+reaches the devbox app at `10.0.2.2:53319`, and the devbox reaches the emulator after
+`adb forward tcp:53320 tcp:53319` at `127.0.0.1:53320`. Multicast does not cross the emulator's
+NAT, so discovery itself is checked only on hardware.
+
+- `$PKG` is `com.openemux.mobile`; on Android the library lives under
+  `/sdcard/Android/data/$PKG/files/` (`roms/<CONSOLE>/`, `saves/<CONSOLE>/`, `states/<CONSOLE>/`).
+  On the desktop, ROMs and battery saves are in the ROMs folder (`~/games/roms/<CONSOLE>/` by
+  default) and states in `~/.openemux/states/<CONSOLE>/`.
+- **The test library**, on the sending side: one SFC game with a battery save (`.srm`), a cover, a
+  cartridge label and the favorite star; one PS game as a `.cue` with two `.bin` tracks; one GBA
+  game with two save states, one made by a core the receiver also has (same core, same version)
+  and one made by a core the receiver does not have (choose another core for the game with its
+  "Core ▸" menu before saving that state). The receiver has none of them unless a scenario says so.
+- The transfer can be read in the desktop log panel ("Log") and on Android with
+  `adb logcat -d -s OpenEmuxShare`.
+
+### RT-551 — A computer and a phone on one network list each other by name and platform
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A computer with OpenEmux and a phone with OpenEmux for Android on the same
+  Wi-Fi network.
+- **Steps:**
+  1. On the computer, right-click a game and choose "Share Nearby…".
+  2. On the phone, open the "Import" tab and tap "Receive games".
+  3. Close both, then do the reverse: share a game from the phone's detail "⋯" menu and open
+     "Receive Games…" from the arrow beside the Import button on the computer.
+- **Expected:** Within a few seconds the computer lists the phone under "Devices on This Network"
+  with a phone icon, its name and "Phone · found by mDNS and beacon" (or one of the two). In step 3
+  the phone lists the computer as "Desktop · found by …" with the computer's name.
+- **Check:** human only (a screenshot of each list).
+
+### RT-552 — A game sent from the computer arrives on the phone with its save, art and star
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's SFC game on the computer; the phone does not have it.
+- **Steps:**
+  1. On the phone, open "Receive games". On the computer, right-click the SFC game, "Share
+     Nearby…", and choose the phone.
+  2. Compare the six-digit code on the computer ("Waiting for <phone> to accept…") with the one in
+     the phone's "Incoming Games" sheet, then tap "Accept".
+  3. On the phone, tap "Show in Library" and start the game.
+- **Expected:** The two codes are the same. The sheet reads "<computer> wants to send you 1 game
+  (<size>)." The computer ends on "1 Game Sent", the phone on "1 Game Received". The game is in
+  the phone's library without restarting the app, with its cover, its cartridge label and the
+  favorite star, and it starts with the computer's in-game save.
+- **Check:** human only; `sha256sum` of the `.sfc` and the `.srm` on the computer equals
+  `adb shell sha256sum /sdcard/Android/data/$PKG/files/roms/SFC/<game>.sfc` and the same for the
+  save under `saves/SFC/`.
+
+### RT-553 — A game sent from the phone arrives on the computer with no rescan
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's SFC game on the phone; the computer does not have it.
+- **Steps:**
+  1. On the computer, open "Receive Games…". On the phone, share the game from its detail "⋯"
+     menu and tap the computer.
+  2. Compare the codes, then press "Accept" in the computer's "Incoming Games" dialog.
+  3. Press "Show in Library" and start the game.
+- **Expected:** The same code on both screens. The phone ends on "1 Game Sent" ("<computer> has
+  them now."), the computer on "1 Game Received". The game shows in the computer's library at
+  once, without "Rescan", with its cover, label and star, and it starts with the phone's save.
+- **Check:** human only; `sha256sum` of the ROM and the `.srm` in `~/games/roms/SFC/` equals the
+  phone's (`adb shell sha256sum …`).
+
+### RT-554 — A game made of several files arrives complete in both directions
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's PS game (`.cue` and two `.bin`) on the computer; for the
+  second part, a multi-disc game with its `.m3u` and discs.
+- **Steps:**
+  1. Send the PS game from the computer to the phone and accept there.
+  2. Start it on the phone.
+  3. Delete it from the computer's library, send it back from the phone and accept on the
+     computer. Start it there.
+  4. Repeat steps 1 and 2 with the `.m3u` game.
+- **Expected:** The offer counts one game, not three files. On the receiving side the `.cue`, both
+  `.bin` (and the `.m3u` with every disc) sit together in that console's folder, the library shows
+  a single game, and it starts and plays past the first track on both devices.
+- **Check:** human only; `adb shell ls /sdcard/Android/data/$PKG/files/roms/PS/` and
+  `ls ~/games/roms/PS/` after each direction.
+
+### RT-555 — A compatible save state loads on the other device; an incompatible one is skipped
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's GBA game with its two states on the sender (computer or
+  phone); the receiver has the core and version of one state only.
+- **Steps:**
+  1. Send the game and read the offer on the receiver before answering.
+  2. Accept. On the receiver, load the state made with the shared core.
+  3. Repeat in the other direction.
+- **Expected:** The offer says one state will be skipped: on the computer "1 save state was made
+  with a core you don't have and will be skipped.", on the phone "1 save state skipped: made with a
+  core this device doesn’t have.". After the transfer the compatible state is in the receiver's
+  states folder and loads into the game; the incompatible one is not there at all.
+- **Check:** human only; list the receiver's `states/GBA/` folder (`adb shell ls …` or
+  `ls ~/.openemux/states/GBA/`) and compare with the sender's.
+
+### RT-556 — "Keep Newest" keeps the newer save, whichever device has it
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The SFC game on both devices (after RT-552); play it on the receiver and save
+  in the game, so the receiver's `.srm` is newer than the sender's.
+- **Steps:**
+  1. Note the receiver's save hash. Send the game from the other device.
+  2. On the receiver, open "Review 1 Conflict", leave "Keep Newest" and accept.
+  3. Now save in the game on the sender, so the sender's save is the newer one, and send again with
+     "Keep Newest".
+  4. Do steps 1 to 3 once with the phone receiving and once with the computer receiving.
+- **Expected:** "Already in Your Library" lists the battery save with both dates, the receiver's
+  marked newer in step 2 and the incoming one in step 3, and "Keep Newest" is already chosen. After
+  step 2 the receiver's save is unchanged (same hash). After step 3 it is the sender's.
+- **Check:** human only; `sha256sum` of the receiver's `.srm` before and after each transfer.
+
+### RT-557 — Cancelling on the sender stops a transfer between a computer and a phone
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** A large game (a dummy ROM of a few hundred MB) on the sender.
+- **Steps:**
+  1. Send it from the computer to the phone and accept on the phone.
+  2. During the progress, press "Cancel Transfer" on the computer and confirm.
+  3. Repeat with the phone sending to the computer, cancelling on the phone.
+- **Expected:** Both sides end on "Transfer Cancelled" and nothing from the transfer is kept: the
+  receiver has neither the game nor a hidden `.tmp` file. Neither app closes or reports a failure.
+- **Check:** human only; on the phone `adb shell ls -a /sdcard/Android/data/$PKG/files/roms/<CONSOLE>/`,
+  on the computer `ls -la ~/games/roms/<CONSOLE>/`, both with no `.*.tmp` left.
+
+### RT-558 — Cancelling on the receiver stops a transfer between a computer and a phone
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** As RT-557.
+- **Steps:**
+  1. Send the large game from the computer to the phone and accept.
+  2. During the progress, cancel on the phone ("Cancel Transfer" or "Cancel" in the notification).
+  3. Repeat with the phone sending to the computer, cancelling on the computer.
+- **Expected:** The same as RT-557: "Transfer Cancelled" on both sides, no game and no `.tmp` file
+  on the receiver.
+- **Check:** human only; the same listings as RT-557.
+
+### RT-559 — Declining or letting the offer expire sends nothing to the other device
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The SFC game on the computer; the phone does not have it.
+- **Steps:**
+  1. Send the game from the computer to the phone and tap "Decline" on the phone.
+  2. Send it again from the phone to the computer and answer nothing for 60 seconds.
+- **Expected:** Step 1: the computer shows "Offer Declined" and nothing is added on the phone.
+  Step 2: the computer's "Incoming Games" closes on its own with "The offer from <phone> expired",
+  the phone shows "Offer Expired", and nothing is added on the computer.
+- **Check:** human only; the receiver's ROM folder listing is unchanged.
+
+### RT-560 — A device on another protocol version is listed, not hidden, on both platforms
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A stand-in peer on another protocol version: a throwaway checkout of OpenEmux
+  with `PROTOCOL_VERSION = 2` and `PROTOCOL_MIN_VERSION = 2` in
+  `src/openemux/core/share/protocol.py`, running with its own `HOME` on a computer on the network
+  (never the developer's real checkout or config).
+- **Steps:**
+  1. Open "Receive Games…" on the stand-in.
+  2. Open "Share Nearby…" on a game on the regular computer, and "Share Nearby" on a game on the
+     phone.
+  3. On the phone, also try "Connect by Address" with the stand-in's address.
+- **Expected:** The regular computer lists the stand-in greyed out with "Update OpenEmux on this
+  device · version 2, this one speaks 1"; the phone lists it greyed out with "<platform> · update
+  OpenEmux on this device" and "Version 2, this one speaks 1". Neither can be chosen, and neither
+  drops it from the list. The address attempt on the phone says it runs another version of
+  OpenEmux.
+- **Check:** human only (screenshots). The desktop listing is also in RT-509
+  (`tests/test_share_dialog.py`, `test_devices_compatible_and_not`).
+- **Restore:** Delete the throwaway checkout and its `HOME`.
+
+### RT-561 — A phone reaches a computer by scanning its QR code
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A computer with `python3-segno` (so the QR code shows) and a phone on the same
+  network.
+- **Steps:**
+  1. On the computer, open "Receive Games…" and then "Connect by Address".
+  2. On the phone, point the camera app at the QR code and open the link it offers.
+  3. On the phone, tap "Connect", then share a game to the computer.
+- **Expected:** OpenEmux opens on the phone in "Connect by Address" with the computer's
+  `openemux-share://host:port#fingerprint` already in "Address"; nothing connects before
+  "Connect". After it, the computer is listed as "Desktop · found by address" and the transfer
+  goes through with the same code on both screens.
+- **Check:** human only (screenshots of both screens).
+
+### RT-562 — On a network that isolates clients, both screens explain it and a hotspot works
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A guest or public Wi-Fi network with client isolation, a computer and a phone
+  on it.
+- **Steps:**
+  1. Open "Share Nearby…" on the computer and "Receive games" on the phone, and wait 20 seconds.
+  2. Turn on the phone's hotspot, connect the computer to it and open both screens again.
+- **Expected:** Step 1: neither lists the other; after about 15 seconds both show "No Devices
+  Found" with the guest and public network note suggesting a phone hotspot, and the firewall note
+  with TCP 53319 and UDP 53318. Step 2: the two devices list each other and a game goes across.
+- **Check:** human only (screenshots of both screens after each step).
+
+### RT-563 — The manual explains Share Nearby in every language and the README links to it
+- **Area:** Share nearby — cross-device
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Open the manual (`docs/manual/index.html`), find "Share Nearby" in the contents and follow
+     "When devices do not see each other".
+  2. Open the README and follow its Share Nearby links.
+- **Expected:** The chapter is in the contents of the manual in every language, with sections on
+  sending, receiving, what goes with a game, the verification code, conflicts, Connect by Address,
+  troubleshooting (with TCP 53319 and UDP 53318) and the device name. The README links to
+  `manual/#share` and `manual/#share-trouble`.
+- **Check:** `PYTHONPATH=src:tools .venv/bin/python -c "import build_site, pathlib; pages = [build_site.manual_output_path(l).read_text(encoding='utf-8') for l in build_site.ORDER]; assert all('id=\"share-trouble\"' in p and 'href=\"#share\"' in p and '53319' in p and '53318' in p for p in pages); readme = pathlib.Path('README.md').read_text(encoding='utf-8'); assert 'manual/#share)' in readme and 'manual/#share-trouble' in readme; print('RT-563 OK')"`
+
 ## Android — System bars
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
