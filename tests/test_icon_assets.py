@@ -27,6 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = PROJECT_ROOT / "src" / "openemux"
 ICONS_DIR = PACKAGE_ROOT / "ui" / "assets" / "icons"
 SYMBOLIC_DIR = ICONS_DIR / "symbolic"
+SYMBOLIC_SVG_DIR = SYMBOLIC_DIR / "hicolor" / "scalable" / "actions"
 SYSTEMS_DIR = ICONS_DIR / "systems"
 ATTRIBUTION = ICONS_DIR / "ATTRIBUTION.md"
 COPYRIGHT = PROJECT_ROOT / "packaging" / "common" / "copyright"
@@ -62,17 +63,17 @@ class IconAssetTests(unittest.TestCase):
         self.assertTrue(referenced, "no symbolic icon references found in src/")
         missing = sorted(
             name for name in referenced
-            if not (SYMBOLIC_DIR / f"{name}.svg").is_file()
+            if not (SYMBOLIC_SVG_DIR / f"{name}.svg").is_file()
         )
         self.assertEqual(
             missing,
             [],
             "these icon names are used by the UI but have no vendored SVG in "
-            f"ui/assets/icons/symbolic/: {missing}",
+            f"ui/assets/icons/symbolic/hicolor/scalable/actions/: {missing}",
         )
 
     def test_bundled_icons_are_valid_svg(self):
-        svgs = sorted(SYMBOLIC_DIR.glob("*.svg"))
+        svgs = sorted(SYMBOLIC_SVG_DIR.glob("*.svg"))
         self.assertTrue(svgs, "no vendored symbolic icons found")
         for svg in svgs:
             root = ElementTree.parse(svg).getroot()
@@ -110,7 +111,7 @@ class NothingShipsThatTheUiNeverDisplaysTests(unittest.TestCase):
 
     def test_no_symbolic_icon_ships_unreferenced(self):
         referenced = referenced_icon_names()
-        present = {path.stem for path in SYMBOLIC_DIR.glob("*.svg")}
+        present = {path.stem for path in SYMBOLIC_SVG_DIR.glob("*.svg")}
         self.assertEqual(sorted(present - referenced), [])
 
     def test_the_directories_the_ui_cannot_read_are_gone(self):

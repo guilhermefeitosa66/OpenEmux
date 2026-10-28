@@ -26,11 +26,13 @@ Comment: Vendored so the UI renders its symbolic icons on hosts whose icon
  theme does not provide these names. The notice ships beside them as
  src/openemux/ui/assets/icons/symbolic/LICENSE.
 
-Files: src/openemux/ui/assets/icons/symbolic/openemux-share-symbolic.svg
+Files: src/openemux/ui/assets/icons/symbolic/hicolor/index.theme
+ src/openemux/ui/assets/icons/symbolic/hicolor/scalable/actions/openemux-share-symbolic.svg
 Copyright: 2024-2026 Guilherme Feitoza de Sousa Lima
 License: MIT
 Comment: Share nearby's glyph, OpenEmux's own drawing rather than an Adwaita
  icon (issue #611).
+ The index.theme beside the icons (issue #626) is OpenEmux's too.
 
 Files: vendors/RetroArch-Linux-x86_64/*
 Copyright: 2010-2025 The RetroArch team and contributors

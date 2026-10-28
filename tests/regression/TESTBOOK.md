@@ -7932,15 +7932,21 @@ stands in for the other device; multicast may not cross the container.
   1. Right-click a game and choose "Share Nearby…".
   2. Close the dialog. Select three games, right-click one of them and look at the menu.
   3. Close the menu. Right-click a console in the sidebar.
+  4. Switch to the dark theme with the header toggle and repeat steps 2 and 3.
 - **Expected:** Step 1 opens a dialog titled "Share Nearby" with the subtitle "1 game · <size>"
   and a spinner beside "Devices on This Network". Step 2's menu reads "Share 3 Games Nearby…", and
   the selection bar has a "Share" button (text label beside the share glyph, three connected dots)
   with the tooltip "Share Nearby", between "Sync covers" and "Delete". Step 3's menu has "Share All
   Games Nearby…" right after "Sync covers". Every Share entry shows the three-dot share glyph,
-  never a Wi-Fi icon, in the light and the dark theme.
+  never a Wi-Fi icon, in the light and the dark theme. In step 4 the glyph is light on the dark
+  background, the same colour as the "Share" label and the icons around it, never a dark glyph
+  on a dark button (issue 626).
 - **Check:** One `make devbox-shot WIN=1` per step showing the dialog title and subtitle, the
-  "Share 3 Games Nearby…" entry, the labelled "Share" button and the console menu entry. Suite:
-  `tests/test_share_entry_points.py`.
+  "Share 3 Games Nearby…" entry, the labelled "Share" button and the console menu entry, and the
+  same button and menus in the dark theme. The devbox's GTK recolors loose icons on its own, so
+  the dark-glyph bug only showed on GTK 4.14 (Ubuntu 24.04): there the suite is the check,
+  `tests/test_icons.py` (`test_the_share_glyph_is_recolored_with_the_theme`, with a display).
+  Suite: `tests/test_share_entry_points.py`, `tests/test_icons.py`.
 
 ### RT-507 — "Receive Games…" makes this device visible without sending
 - **Area:** Share nearby (desktop)
@@ -7951,12 +7957,15 @@ stands in for the other device; multicast may not cross the container.
      "Receive Games…".
   2. Choose "Connect by Address".
   3. Close the dialog and open the "Main Menu".
+  4. Switch to the dark theme and repeat step 1.
 - **Expected:** A "Receive Games" dialog with "Ready to Receive" under the share glyph and
-  "Visible as “<name>”", and no device list. Step 3's "Main Menu" has no "Receive Games…" entry.
+  "Visible as “<name>”", and no device list. In step 4 the share glyph is light on the dark
+  dialog, like its title (issue 626). Step 3's "Main Menu" has no "Receive Games…" entry.
   The "Connect by Address" page shows the address as `host:port`, the fingerprint
   in groups of four and a "Copy Address" button; the QR code shows when `python3-segno` is
   installed and is simply absent otherwise.
-- **Check:** `make devbox-shot WIN=1` of both pages and of the "Main Menu". Suite:
+- **Check:** `make devbox-shot WIN=1` of both pages, of the "Main Menu" and of the dark-theme
+  dialog. Suite:
   `tests/test_share_dialog.py` (`TheRootTests`, `ConnectByAddressTests`),
   `tests/test_share_entry_points.py`.
 

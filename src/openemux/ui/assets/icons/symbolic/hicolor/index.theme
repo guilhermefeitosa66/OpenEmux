@@ -1,0 +1,12 @@
+[Icon Theme]
+Name=Hicolor
+Comment=OpenEmux's bundled symbolic icons, used only where the host has no hicolor theme
+Hidden=true
+Directories=scalable/actions
+
+[scalable/actions]
+MinSize=1
+Size=128
+MaxSize=256
+Context=Actions
+Type=Scalable
