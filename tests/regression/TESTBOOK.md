@@ -6209,8 +6209,10 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
 
 The quick-action strip of the Android app's on-screen skin
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
-save, load, turbo and fast forward (plus the screen layout on NDS). Turbo and fast forward show
-whether they are on: an accent pill behind the icon, the icon in white (#554). The runner has no
+save, load, turbo, slow motion and fast forward (plus the screen layout on NDS). Turbo, slow motion
+and fast forward show whether they are on: an accent pill behind the icon, the icon in white (#554).
+Slow motion (a play triangle in a dashed ring) runs the game at a third of its speed, and slow motion
+and fast forward never run together: turning one on turns the other off (issue 638). The runner has no
 Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
 (`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is `com.openemux.mobile`.
 
@@ -6230,18 +6232,26 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   The pill is readable on every skin, in both orientations, and nothing is clipped or stretched.
 - **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
 
-### RT-377 — Fast forward shows its state, and the strip and the pause sheet agree
+### RT-377 — Fast forward and slow motion show their state, never run together, and the strip and the pause sheet agree
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** RT-376's game running, both toggles off.
+- **Preconditions:** RT-376's game running, every toggle off.
 - **Steps:**
   1. Tap fast forward (the double arrow) on the strip.
   2. Open the pause sheet (the menu button between L and R).
   3. Tap the "Fast forward" tile, then resume.
   4. Open the pause sheet, tap "Fast forward" again, and resume.
+  5. With fast forward on, tap slow motion (the play triangle in a dashed ring) on the strip, then
+     tap fast forward again.
+  6. Open the pause sheet, tap "Slow motion", then "Fast forward", and resume.
+  7. Open the pause sheet, tap "Fast forward" (off), then "Slow motion", and resume.
 - **Expected:** After step 1 the double arrow shows the pill and the game runs faster. In step 2
   the "Fast forward" tile is shown active. After step 3 the strip has no pill and the game runs at
-  normal speed. After step 4 the strip shows the pill again.
+  normal speed. After step 4 the strip shows the pill again. In step 5, slow motion takes the pill
+  and the fast-forward pill goes away (the game runs slow); tapping fast forward moves the pill back
+  to it and slow motion's goes away (the game runs fast). In step 6 only "Fast forward" ends active
+  in the sheet, and after resuming only fast forward has the pill and the game runs fast. After
+  step 7 only slow motion has the pill and the game runs slow. Never are both pills shown at once.
 - **Check:** human only.
 
 ### RT-378 — The toggles' look survives pause, rotation and the background; a new session starts off
@@ -6253,20 +6263,76 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   2. Open and close the pause sheet; turn the phone to landscape and back; press Home and return to
      the app.
   3. Quit the game from the pause sheet and launch any game again.
+  4. Turn slow motion on from the strip and repeat step 2, then step 3.
 - **Expected:** Through step 2 both buttons keep the pill every time. After step 3 both buttons
-  have their normal look, the game runs at normal speed and turbo is off.
+  have their normal look, the game runs at normal speed and turbo is off. In step 4 slow motion
+  keeps its pill and the game stays slow through the pause sheet, the rotation and the background;
+  after quitting and launching again it has its normal look and the game runs at normal speed.
 - **Check:** human only.
 
-### RT-379 — In RetroAchievements hardcore, fast forward never shows as on
+### RT-379 — In RetroAchievements hardcore, fast forward and slow motion never show as on
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** Signed in to RetroAchievements with "Hardcore mode" on (RT-351).
 - **Steps:**
-  1. Launch a game and tap fast forward on the strip.
+  1. Launch a game and tap fast forward on the strip, then slow motion.
   2. Tap turbo on the strip.
   3. Open the pause sheet.
-- **Expected:** Fast forward is dimmed, does nothing and never shows the pill; turbo shows its pill
-  as in RT-376. The pause sheet's "Fast forward" tile is disabled and not active.
+- **Expected:** Fast forward and slow motion are dimmed, do nothing and never show the pill; the game
+  keeps its normal speed; turbo shows its pill as in RT-376. The pause sheet's "Fast forward" and
+  "Slow motion" tiles are disabled, not active and not reachable with a gamepad's D-pad.
+- **Check:** human only.
+
+### RT-572 — Slow motion on the strip shows its pill and slows the game
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running (Atari 2600 or SNES, drawn skin), every toggle off.
+- **Steps:**
+  1. Phone in portrait: tap slow motion, the fourth button on the strip (a play triangle in a dashed
+     ring, between turbo's bolt and fast forward's double arrow).
+  2. Tap it again.
+  3. Repeat steps 1-2 in landscape (the strip under the picture), on a tablet-size device, and in
+     tabletop posture on a foldable (or its emulator).
+- **Expected:** After step 1 the glyph sits on the purple pill with a light ring, drawn in white,
+  and the game runs visibly slower (about a third of its speed); turbo and fast forward keep their
+  normal look. After step 2 the glyph is back to its normal look and the game runs at normal speed.
+  In every layout of step 3 the glyph is there, the pill fits its slot and nothing is clipped.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+### RT-573 — The pause sheet's "Slow motion" tile
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running, every toggle off.
+- **Steps:**
+  1. Turn slow motion on from the strip and open the pause sheet.
+  2. Tap the "Slow motion" tile and resume.
+  3. Open the pause sheet, tap "Slow motion" and resume.
+  4. Switch the app's language to Português (Brasil) and to one more language, and open the pause
+     sheet.
+- **Expected:** In step 1 the tiles read "Fast forward", "Slow motion", "Screenshot", "Shader",
+  "Audio", and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
+  speed"; after resuming the strip has no slow-motion pill and the game runs at normal speed. Step
+  3 shows "Slow motion on resume"; after resuming slow motion has its pill and the game runs slow.
+  In step 4 the tile label and the toast are translated ("Câmera lenta", "Câmera lenta ao voltar")
+  and not clipped.
+- **Check:** human only.
+
+### RT-574 — NDS: six strip slots, and the pause sheet's tiles wrap on a narrow window
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game in the library; a phone (or emulator) whose portrait window is about
+  360 dp wide (`adb shell wm size 1080x2340` with `adb shell wm density 480`; restore with
+  `adb shell wm size reset` and `adb shell wm density reset`); a gamepad for step 3.
+- **Steps:**
+  1. Launch the NDS game in portrait and look at the strip.
+  2. Turn slow motion on from the strip, then open the pause sheet.
+  3. Connect the gamepad and move with the D-pad through every tile.
+  4. Turn the phone to landscape, close and reopen the pause sheet.
+- **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
+  and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
+  sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
+  into two rows of three, each tile full size with its full label. In step 3 the D-pad reaches all
+  six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the bundled package skins
