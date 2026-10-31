@@ -6218,7 +6218,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
-  the drawn skin; the package skins are RT-462); no gamepad connected.
+  the drawn skin; the package skins are RT-462); no gamepad connected (with one, the gamepad layout
+  shows: RT-564 to RT-571).
 - **Steps:**
   1. Launch the Atari 2600 game, phone in portrait.
   2. Tap the bolt (turbo) on the strip under the picture.
@@ -8794,6 +8795,131 @@ and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a star
   never covered by them. The search field stays above the keyboard; once it closes, the layout is
   back where it was.
 - **Check:** human only (the screenshots).
+
+## Android — In-game controls with a gamepad
+
+The Android app's in-game skin with a gamepad connected, and the hide / show key for the app
+controls (issue 637; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). With a pad, the skin switches to a gamepad layout: the app controls only
+(menu, save, load, turbo, fast forward, plus the screens key on NDS), on two side rails in landscape,
+a strip along the foot in portrait and a row under the fold in tabletop; the virtual game buttons
+are gone. A hide key (an eye with a slash) beside the menu key collapses every app control to a
+faint show key (an eye) where the menu key was. `MANUAL`, like the other Android sections: a phone
+or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad
+with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true` ("connect"
+below), `--ez connected false` ("disconnect") and `--ez clear true` (back to the real devices); a
+release APK needs a real controller (USB or Bluetooth).
+
+### RT-564 — A gamepad connected at launch opens on the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A Mega Drive game and an Atari 2600 game in the library; a gamepad connected
+  (a real one, or "connect" once the game has opened).
+- **Steps:**
+  1. Launch the Atari 2600 game, phone in landscape.
+  2. Repeat with the Mega Drive game (a bundled package skin).
+- **Expected:** No D-pad, face buttons or shoulders. A rail down each side in the strip's dark
+  colour: the menu key at the top of the left rail, save and load near its foot; turbo and fast
+  forward at the top of the right rail, the hide key at its foot. The picture fits between the
+  rails at full height. The package skin shows the same drawn layout.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`).
+
+### RT-565 — Connecting and disconnecting the pad mid-game switches the layout without a restart
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Atari 2600 game, no gamepad connected.
+- **Steps:**
+  1. In portrait, play a few seconds, then connect the pad.
+  2. Disconnect it.
+  3. Repeat steps 1-2 in landscape.
+- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load,
+  turbo, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
+  back. In landscape, the rails of RT-564 and back. The game keeps running throughout: no
+  restart, the play position is kept.
+- **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: portrait -> pad-portrait` (debug APK).
+
+### RT-566 — With a pad, the menu key opens the pause sheet and "Quit game" works
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout (RT-564).
+- **Steps:**
+  1. Tap the menu key.
+  2. Tap "Quit game".
+- **Expected:** The pause sheet opens over the game; "Quit game" returns to the library. The pad
+  never has to be disconnected.
+- **Check:** human only.
+
+### RT-567 — Save and load from the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout.
+- **Steps:**
+  1. Tap save.
+  2. Play on until the screen changes.
+  3. Tap load.
+- **Expected:** The state saved in step 1 is back after step 3; the on-screen messages are the ones
+  the touch strip shows.
+- **Check:** human only.
+
+### RT-568 — Hide and show in the touch layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Atari 2600 game, no gamepad connected, landscape.
+- **Steps:**
+  1. Tap the hide key beside the menu key.
+  2. Use the D-pad and the face buttons.
+  3. Tap the show key.
+  4. Repeat steps 1-3 in portrait.
+- **Expected:** After step 1 the menu key, the hide key and the quick-action strip are gone; a
+  faint show key sits where the menu key was; the strip's area is plain skin colour. The D-pad and
+  face buttons still work and the picture did not move. Step 3 brings every control back.
+- **Check:** human only.
+
+### RT-569 — Collapsed survives rotation and the pad coming and going; pad buttons press no key on screen
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout (landscape).
+- **Steps:**
+  1. Tap the hide key.
+  2. Turn the phone to portrait and back.
+  3. Disconnect the pad, then connect it again.
+  4. Press several pad buttons.
+  5. Tap the show key.
+  6. Quit the game and launch it again.
+- **Expected:** After step 1 only the faint show key remains and the picture fits the whole screen.
+  Steps 2-3 keep it collapsed (with the pad gone: the touch skin, collapsed). Step 4 moves the game
+  and opens nothing on screen. Step 5 expands the layout in use. Step 6 starts expanded.
+- **Check:** human only.
+
+### RT-570 — Turbo, fast forward and hardcore look the same in the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout; then one with RetroAchievements hardcore on
+  (RT-351).
+- **Steps:**
+  1. Tap turbo, then fast forward, on the rail (landscape) or the strip (portrait).
+  2. Open the pause sheet.
+  3. In the hardcore game, tap fast forward.
+- **Expected:** Each shows the purple pill with a light ring and a white icon, as on the touch strip
+  (RT-376); the sheet's "Fast forward" tile agrees. In hardcore, fast forward is dimmed and does
+  nothing.
+- **Check:** human only.
+
+### RT-571 — Tabletop, NDS and tablet with a pad
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A foldable AVD (e.g. `openemux-fold`) half open, a tablet AVD, an NDS game; a pad
+  connected.
+- **Steps:**
+  1. Launch a game on the half-open foldable.
+  2. Tap hide, then show.
+  3. Launch the NDS game in portrait and tap the screens key a few times.
+  4. Launch a game on the tablet in landscape.
+- **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
+  Step 2: the show key sits where the menu key was. Step 3: the screens key cycles the layouts and
+  stays in the gamepad layout. Step 4: the rails of RT-564, scaled to the tablet.
+- **Check:** human only.
+
 
 ## Retired
 
