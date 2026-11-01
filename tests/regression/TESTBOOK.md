@@ -5834,6 +5834,13 @@ gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) dr
 `KEYCODE_BUTTON_START`). The first D-pad press only enters gamepad mode. A library of a few games
 over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
+Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
+focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
+"Settings → General → Controller layout" ("Automatic", "Always", "Never"). The emulator has no real
+controller, and `adb shell input` is a virtual device that never counts as one: on a debug build a
+controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`
+(`false` disconnects it, `--ez clear true` goes back to the real devices).
+
 ### RT-434 — The landscape row keeps the focused game in the middle
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
@@ -5891,7 +5898,8 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
 ### RT-437 — Touch still works as before next to the gamepad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** RT-434's library; gamepad mode on with a game focused.
+- **Preconditions:** RT-434's library; no controller connected (or "Controller layout" set to
+  "Never"); gamepad mode on with a game focused.
 - **Steps:**
   1. Tap the screen, then scroll and fling the grid with a finger.
   2. Open the search and type a few letters.
@@ -5899,7 +5907,94 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   4. Long-press a shelf and drag it to another place.
 - **Expected:** The tap hides the highlight and the hint bar; scrolling and flinging feel as they did.
   The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
-  the item that had it. The dragged shelf stays drawn above the others while it moves.
+  the item that had it. The dragged shelf stays drawn above the others while it moves. With a
+  controller connected (the gamepad layout) the tap keeps the highlight and the hint bar instead:
+  see RT-579.
+- **Check:** human only.
+
+### RT-578 — Connecting a controller shows the gamepad layout, disconnecting hides it
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; "Controller layout" on "Automatic"; no
+  controller connected; the app open on a console's shelf in landscape, nothing touched since.
+- **Steps:**
+  1. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`)
+     and press nothing.
+  2. Disconnect it (the same broadcast with `false`).
+  3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
+- **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), a ring on one game, and "L1" and
+  "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
+  Disconnecting removes the hint bar, the ring and the pills and gives the chips and the toggle
+  their old size, again without a restart. With the controller connected every main tab keeps its
+  hint bar. No toast or message announces either change.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
+
+### RT-579 — A tap in the gamepad layout moves the focus and keeps it visible
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-578's setup with a controller connected, on a console's shelf.
+- **Steps:**
+  1. Tap a console chip other than the current one, then press RIGHT
+     (`adb shell input keyevent KEYCODE_DPAD_RIGHT`).
+  2. Tap the view toggle's second button, then press DOWN, then A (`KEYCODE_BUTTON_A`).
+  3. Back on the shelf, scroll and fling the grid with a finger, open the search and type, and on
+     the "Shelf" page long-press a shelf and drag it.
+  4. Tap a game's cover and come back with B.
+- **Expected:** Each tap moves the ring to the tapped item and the hint bar never hides. RIGHT moves
+  one chip right on that same press; DOWN goes from the toggle into the grid on the first press,
+  and A opens the focused game. A scroll, a fling or a drag never moves the ring to the item under
+  the finger, and clicking, long-pressing, dragging and typing behave as in the touch layout.
+  Back on the shelf the ring is on the game that was tapped.
+- **Check:** human only.
+
+### RT-580 — The "Controller layout" setting
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; no controller connected.
+- **Steps:**
+  1. Open "Settings" → "General" → "Controller layout" and look at the choices.
+  2. Pick "Always" and close the sheet.
+  3. Force-stop and relaunch (`adb shell am force-stop $PKG`, then open the app).
+  4. Pick "Never", connect a controller (the broadcast with `true`), press DOWN, then tap the screen.
+  5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
+     connect the controller.
+  6. On a tablet-size window (`adb shell wm size 1600x2560`, `adb shell wm size reset` after), open
+     the setting.
+- **Expected:** The row sits right after "Controls" and shows the current choice; the default is
+  "Automatic". The sheet lists "Automatic" ("The controller layout while a controller is
+  connected."), "Always" ("For handhelds with built-in controls.") and "Never" ("The touch layout,
+  even with a controller connected."). "Always" shows the gamepad layout with no controller, a tap
+  does not hide it, and it is still on after the relaunch. "Never" with a controller shows the touch
+  layout: DOWN still moves the focus with the ring and the hint bar showing, the tap hides them
+  again, and the chips keep their touch size. "Never" survives the relaunch. "Automatic" follows the
+  controller again. In split view the setting opens as a pane with the same three choices.
+  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`,
+  `never` or `auto`.
+- **Check:** human only.
+
+### RT-581 — Gamepad layout targets and shoulders
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-578's setup with a controller connected; then the same with none.
+- **Steps:**
+  1. On a console's shelf, compare the console chips and the view toggle with and without the
+     controller; press R1 and L1 (`KEYCODE_BUTTON_R1`, `KEYCODE_BUTTON_L1`).
+  2. Open a game's detail and walk the colour swatches and "See all" with the D-pad.
+  3. In "Settings", walk to the RetroAchievements links and, signed in, the "Sign out" pill;
+     after an import, the link back to the shelf on "Import".
+  4. On "Shelf", "Recent", "Import" and "Settings", press R1 and L1.
+  5. Do 1 to 4 with the D-pad only, in landscape, then in portrait; switch to pt-BR and to one CJK
+     language and look at the setting and the hint bar.
+  6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
+- **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
+  swatches are larger and every text link is a full-height target with its ring whole; without it
+  everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
+  the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
+  Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
+  nothing on these screens needs touch. The new texts are translated and not cut. The `adb` key
+  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips keep
+  their touch size and the hint bar hides again on the next tap.
 - **Check:** human only.
 
 ## Android — Multi-select and bulk remove
