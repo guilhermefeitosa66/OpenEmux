@@ -9093,7 +9093,9 @@ PlayStation) overrides the detection. `MANUAL`, like the other Android sections:
 emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK fakes the pad in use with
 `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ei vendor <id>` ("pad <id>" below;
 `--ei product <id>` and `--es name <text>` are optional, `--ez clear true` goes back to the real
-devices): Microsoft `1118`, Nintendo `1406`, Sony `1356`, DualSense product `3302`. `adb shell input
+devices): Microsoft `1118`, Nintendo `1406`, Sony `1356`, DualSense product `3302`. The emulator has no
+controller, so the gamepad layout (and its hint bar) needs one said to be connected first:
+`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`. `adb shell input
 keyevent` comes from a virtual device and never changes the family. A release APK needs real controllers.
 
 ### RT-582 — The hint bar names the buttons like the connected pad
