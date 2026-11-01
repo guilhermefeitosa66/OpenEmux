@@ -630,7 +630,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # The rows read the disk again, so the imported files show as present
         # now; the pre-launch check reads the disk on every launch already.
         self._reload_bios(show_toast=False)
-        self._build_bios_import_summary(summary).present(self)
+        # Settings may have been closed while the files were copying; an
+        # Adw.Dialog presented on an unrooted widget never shows, so fall back
+        # to the main window.
+        parent = self if self.get_root() is not None else self.win
+        self._build_bios_import_summary(summary).present(parent)
         return GLib.SOURCE_REMOVE
 
     def _bios_import_heading(self, imported, total):
@@ -642,10 +646,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return self.t("bios.import.heading_all", count=imported)
         return self.t("bios.import.heading_some", imported=imported, total=total)
 
-    def _bios_rejection_reason(self, entry):
+    def _bios_rejection_reason(self, entry, console_id):
         if entry["reason"] == REASON_ERROR:
             return self.t("bios.import.reason_error", error=entry["error"])
-        console = get_system_display_name(entry["console_id"])
+        console = get_system_display_name(console_id)
         if entry["reason"] == REASON_OTHER_CONSOLE:
             owners = ", ".join(get_system_display_name(c) for c in entry["consoles"])
             return self.t("bios.import.reason_other_console", owners=owners, console=console)
@@ -689,7 +693,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                     if entry["replaced"]:
                         row.set_subtitle(self.t("bios.import.replaced"))
                 else:
-                    row.set_subtitle(self._bios_rejection_reason(dict(entry, console_id=console_id)))
+                    row.set_subtitle(self._bios_rejection_reason(entry, console_id))
                 icon = Gtk.Image.new_from_icon_name(icon_name)
                 icon.add_css_class(css)
                 icon.update_property([Gtk.AccessibleProperty.LABEL], [self.t(section_key)])

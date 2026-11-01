@@ -12,6 +12,7 @@ from openemux.core.bios_importer import (
     REASON_ERROR,
     REASON_OTHER_CONSOLE,
     REASON_UNKNOWN,
+    _failed_summary,
     console_bios_names,
     consoles_expecting,
     import_bios_files,
@@ -166,6 +167,30 @@ class TheAsyncWrapperTests(_Case):
         import_bios_files_async([self.file("lynxboot.img")], self.config, "LYNX", on_done)
         self.assertTrue(done.wait(5))
         self.assertEqual(got[0]["imported"][0]["name"], "lynxboot.img")
+
+    def test_an_unexpected_failure_still_reaches_on_done(self):
+        done = threading.Event()
+        got = []
+
+        def on_done(summary):
+            got.append(summary)
+            done.set()
+
+        with mock.patch(
+            "openemux.core.bios_importer.import_bios_files", side_effect=RuntimeError("boom")
+        ), self.assertLogs("openemux.core.bios_importer", level="ERROR"):
+            import_bios_files_async(["/x/lynxboot.img"], self.config, "lynx", on_done)
+            self.assertTrue(done.wait(5))
+        self.assertEqual(got[0]["console"], "LYNX")
+        self.assertEqual(got[0]["imported"], [])
+        self.assertEqual(got[0]["rejected"], [{
+            "source": "/x/lynxboot.img", "name": "lynxboot.img", "reason": "error",
+            "consoles": [], "error": "boom",
+        }])
+
+    def test_a_failure_with_no_message_names_its_type(self):
+        summary = _failed_summary(["/x/a.bin"], "PS", RuntimeError())
+        self.assertEqual(summary["rejected"][0]["error"], "RuntimeError")
 
 
 if __name__ == "__main__":

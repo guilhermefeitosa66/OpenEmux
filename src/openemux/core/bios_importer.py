@@ -48,14 +48,20 @@ def console_bios_names(console):
     return names
 
 
+def _owners_by_name():
+    """``{lowercase name: [consoles]}`` over the whole catalog, built once per import."""
+    owners = {}
+    for console in CONSOLE_BIOS_REQUIREMENTS:
+        for name in console_bios_names(console):
+            consoles = owners.setdefault(name.lower(), [])
+            if console not in consoles:
+                consoles.append(console)
+    return owners
+
+
 def consoles_expecting(filename):
     """The consoles whose catalog lists ``filename`` (case-insensitive)."""
-    wanted = filename.lower()
-    owners = []
-    for console in CONSOLE_BIOS_REQUIREMENTS:
-        if any(name.lower() == wanted for name in console_bios_names(console)):
-            owners.append(console)
-    return owners
+    return list(_owners_by_name().get(filename.lower(), []))
 
 
 def _copy_into(source, dest):
@@ -81,12 +87,15 @@ def import_bios_files(paths, config_manager, console):
     expected = {name.lower(): name for name in console_bios_names(system_id)}
     bios_dir = Path(get_console_bios_dir(config_manager, system_id))
     summary = {"console": system_id, "imported": [], "rejected": []}
+    owners_by_name = None  # the whole catalog, read only when a name is rejected
 
     for raw in paths:
         source = Path(raw)
         canonical = expected.get(source.name.lower())
         if canonical is None:
-            owners = [c for c in consoles_expecting(source.name) if c != system_id]
+            if owners_by_name is None:
+                owners_by_name = _owners_by_name()
+            owners = [c for c in owners_by_name.get(source.name.lower(), []) if c != system_id]
             reason = REASON_OTHER_CONSOLE if owners else REASON_UNKNOWN
             logger.info("bios import: name=%s console=%s status=%s", source.name, system_id, reason)
             summary["rejected"].append({
@@ -114,10 +123,33 @@ def import_bios_files(paths, config_manager, console):
     return summary
 
 
+def _failed_summary(paths, console, exc):
+    """Every path rejected with ``exc``: what the caller gets when the import itself broke."""
+    error = str(exc) or type(exc).__name__
+    return {
+        "console": resolve_system_id(console),
+        "imported": [],
+        "rejected": [
+            {"source": str(raw), "name": Path(raw).name, "reason": REASON_ERROR,
+             "consoles": [], "error": error}
+            for raw in paths
+        ],
+    }
+
+
 def import_bios_files_async(paths, config_manager, console, on_done):
-    """Run :func:`import_bios_files` on a background thread; ``on_done(summary)`` there."""
+    """Run :func:`import_bios_files` on a background thread; ``on_done(summary)`` there.
+
+    ``on_done`` is always called, even when the import raises something
+    unexpected: the caller holds its Import buttons until it hears back.
+    """
 
     def _worker():
-        on_done(import_bios_files(paths, config_manager, console))
+        try:
+            summary = import_bios_files(paths, config_manager, console)
+        except Exception as exc:  # the UI must never wait forever
+            logger.exception("bios import: console=%s failed", console)
+            summary = _failed_summary(paths, console, exc)
+        on_done(summary)
 
     Thread(target=_worker, daemon=True).start()

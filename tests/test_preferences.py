@@ -468,12 +468,20 @@ class BiosImportTests(_PreferencesCase):
         bios_dir.mkdir(parents=True, exist_ok=True)
         (bios_dir / "lynxboot.img").write_bytes(b"x")
         built = mock.Mock()
-        with mock.patch.object(self.prefs, "_build_bios_import_summary", return_value=built):
+        with mock.patch.object(self.prefs, "_build_bios_import_summary", return_value=built), \
+                mock.patch.object(self.prefs, "get_root", return_value=mock.Mock()):
             result = self.prefs._on_bios_import_done(self.summary())
         self.assertEqual(result, GLib.SOURCE_REMOVE)
         self.assertTrue(self.expander("LYNX").get_subtitle().startswith("1/"))
         self.assertTrue(self.prefs._bios_import_buttons["LYNX"].get_sensitive())
         built.present.assert_called_once_with(self.prefs)
+
+    def test_a_summary_after_settings_closed_goes_to_the_main_window(self):
+        built = mock.Mock()
+        with mock.patch.object(self.prefs, "_build_bios_import_summary", return_value=built), \
+                mock.patch.object(self.prefs, "get_root", return_value=None):
+            self.prefs._on_bios_import_done(self.summary())
+        built.present.assert_called_once_with(self.prefs.win)
 
     def test_headings_follow_the_outcome(self):
         heading = self.prefs._bios_import_heading
@@ -516,10 +524,10 @@ class BiosImportTests(_PreferencesCase):
         self.prefs.t = lambda key, **kw: f"{key}:{sorted(kw.items())}"
         reason = self.prefs._bios_rejection_reason
         self.assertIn("Permission denied", reason(
-            {"reason": "error", "error": "Permission denied", "console_id": "PS"}))
+            {"reason": "error", "error": "Permission denied"}, "PS"))
         self.assertIn("Atari Lynx", reason(
-            {"reason": "other_console", "consoles": ["LYNX"], "console_id": "PS"}))
-        self.assertIn("PlayStation", reason({"reason": "unknown", "console_id": "PS"}))
+            {"reason": "other_console", "consoles": ["LYNX"]}, "PS"))
+        self.assertIn("PlayStation", reason({"reason": "unknown"}, "PS"))
 
 
 def _console_box(root):
