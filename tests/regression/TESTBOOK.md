@@ -6009,6 +6009,100 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
+### RT-604 — A phone on its side shows the game's detail in two halves
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator held sideways (`adb shell settings put system accelerometer_rotation 0`,
+  `adb shell settings put system user_rotation 1`), a Game Boy Advance game with an automatic state and
+  three slot states, and a Game Boy game.
+- **Steps:**
+  1. Open the Game Boy Advance game from the library.
+  2. Look at both halves.
+  3. Go back and open the Game Boy game.
+- **Expected:** Left: Back, Favourite and More options above the cartridge, sized to the height left,
+  then the title and "Game Boy Advance · <core> · <time played>" on one line each. Right: "Continue"
+  and "Restart", "Save states" with three thumbnails and "See all (4)", "Cartridge color" with its
+  swatches, then "Settings for this game" with Core, Shader, Controller skin and Cheats. The Game Boy
+  cartridge (taller than wide) fits the left half without being cut.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-605 — Continue, Restart and the colour fit 360dp of height, with or without the hint bar
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator held sideways (`adb shell settings put system accelerometer_rotation 0`,
+  `adb shell settings put system user_rotation 1`), a Game Boy Advance game with an automatic state and
+  three slot states, and a Game Boy game.
+- **Steps:**
+  1. `adb shell wm size 1600x720` and `adb shell wm density 320` (800×360dp); open the Game Boy
+     Advance game.
+  2. Press a D-pad key (`adb shell input keyevent KEYCODE_DPAD_DOWN`) so the gamepad hint bar shows.
+  3. Repeat at `adb shell wm size 1464x720` (732×360dp).
+- **Expected:** At each size, with and without the hint bar, "Continue", "Restart" and the whole row of
+  colour swatches are visible without scrolling; nothing is cut sideways and "Restart" is readable.
+  The settings card starts below them.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-606 — The right half shows that it scrolls
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp, the Game Boy Advance game open.
+- **Steps:**
+  1. Look at the foot of the right half, then scroll it to the end.
+  2. Scroll the colour swatches sideways to their end.
+- **Expected:** While more lies below, the foot of the right half fades into the page; at the end the
+  fade is gone and Core, Shader, Controller skin and Cheats are all reachable. While more swatches can
+  scroll in, the row's end fades; at its end the fade is gone. Tapping a swatch changes the cartridge
+  on the left; "See all", "Core" and "Shader" open their sheets as in portrait.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-607 — Rotating on the game's detail keeps the game, its sheet and the focus
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator in portrait (`user_rotation 0`), the Game Boy Advance game of RT-604,
+  a gamepad (or `adb shell input keyevent KEYCODE_DPAD_*`).
+- **Steps:**
+  1. Open the game, tap "Shader", then rotate to landscape (`user_rotation 1`).
+  2. Close the sheet, press a D-pad key, rotate back to portrait.
+  3. Rotate to the other landscape (`user_rotation 3`).
+- **Expected:** The same game stays on screen; the Shader sheet is still open after the first
+  rotation; after the second, "Continue" holds the gamepad's focus. In the other landscape nothing
+  sits under the camera cutout.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-608 — The gamepad walks the landscape detail left to right, then down
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp, the Game Boy Advance game open, gamepad mode.
+- **Steps:**
+  1. From "Continue" press Right, then Down repeatedly to the last setting.
+  2. Press Left from the right half, then Right from the header.
+  3. From "Continue" press Up; press L1, R1 and B.
+- **Expected:** Right goes to "Restart"; Down walks the thumbnails, "See all", the swatches and the
+  settings rows in that order, scrolling the right half. Left reaches the header on the left, Right
+  comes back to the right half. Up on "Continue" stays there (never the rail). L1/R1 open the
+  previous/next game of the console; B goes back.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-609 — Hardcore, no states and box-art consoles on the landscape detail
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp; a game with no save states; a game of a console without
+  cartridge frames (a disc console).
+- **Steps:**
+  1. Open the game with no states.
+  2. With RetroAchievements hardcore active, open the Game Boy Advance game.
+  3. Open the disc console's game.
+- **Expected:** No states: "None yet. Save from the in-game menu." and "Play" alone. Hardcore:
+  "Continue" hidden. Disc console: its box art on the left, no "Cartridge color" block, the right half
+  still starting with the play button.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
 ## Android — Gamepad navigation
 
 The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
@@ -7483,7 +7577,7 @@ at least two consoles, one with cartridge frames (e.g. Game Boy Advance), and a 
   Right: "GBA · <core>", the title, time played and last played, favourite and more buttons,
   "Continue"/"Restart", up to four saved states in a row, "Settings for this game" with Core,
   Shader, Controller skin and Cheats, and the file's name, size and folder at the foot. The colour
-  changes the cartridge; Core and Shader open their sheets. The phone keeps today's single column.
+  changes the cartridge; Core and Shader open their sheets. A phone in portrait keeps today's single column.
 - **Check:** human only.
 
 ### RT-485 — The gamepad moves between the list and its detail
