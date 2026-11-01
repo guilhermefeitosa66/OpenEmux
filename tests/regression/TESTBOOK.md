@@ -8908,7 +8908,7 @@ release APK needs a real controller (USB or Bluetooth).
   2. Repeat with the Mega Drive game (a bundled package skin).
 - **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
   from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
-  the top of the right rail, then turbo and fast forward. The keys are faint (a dim white glyph on a
+  the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
   barely visible disc), not a grey band. The picture fits between the rails at full height. The
   package skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
@@ -8981,18 +8981,19 @@ release APK needs a real controller (USB or Bluetooth).
   and opens nothing on screen. Step 5 expands the layout in use. Step 6 starts expanded.
 - **Check:** human only.
 
-### RT-570 — Turbo, fast forward and hardcore look the same in the gamepad layout
+### RT-570 — Turbo, slow motion, fast forward and hardcore look the same in the gamepad layout
 - **Area:** Android — In-game controls with a gamepad
 - **Mode:** MANUAL
 - **Preconditions:** A game running in the gamepad layout; then one with RetroAchievements hardcore on
   (RT-351).
 - **Steps:**
-  1. Tap turbo, then fast forward, on the rail (landscape) or the strip (portrait).
+  1. Tap turbo, then slow motion, then fast forward, on the rail (landscape) or the strip (portrait).
   2. Open the pause sheet.
-  3. In the hardcore game, tap fast forward.
-- **Expected:** Each shows the purple pill with a light ring and a white icon, as on the touch strip
-  (RT-376), but translucent so it does not pull the eye off the game; the sheet's "Fast forward" tile agrees. In hardcore, fast forward is dimmed and does
-  nothing.
+  3. In the hardcore game, tap slow motion and fast forward.
+- **Expected:** Slow motion sits right before fast forward. Each lit key shows the purple pill with a
+  light ring and a white icon, as on the touch strip (RT-376), but translucent so it does not pull the
+  eye off the game; turning fast forward on turns slow motion off (RT-377), and the sheet's speed
+  tiles agree. In hardcore, slow motion and fast forward are dimmed and do nothing.
 - **Check:** human only.
 
 ### RT-571 — Tabletop, NDS and tablet with a pad
