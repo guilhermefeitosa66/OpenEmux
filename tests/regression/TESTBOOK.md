@@ -5542,6 +5542,27 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
   in `pkg/android/openemux` of `openemux-android`.
 
+### RT-586 — Game Boy and Game Boy Color show different icons
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** A library with at least one game under `roms/GB` and one under `roms/GBC`;
+  dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf) and look at the "Game Boy" and "Game Boy Color" cards.
+  2. Switch to the light theme and look at the same two cards.
+  3. Settings → the console list (cores, shaders, extensions) and find the "GB" and "GBC" rows.
+  4. `adb shell wm density 260` (the tablet list), look at the two consoles in the list,
+     then `adb shell wm density reset`.
+- **Expected:** The Game Boy card shows the grey Game Boy icon; the Game Boy Color card shows a
+  different icon, the same pixel-art handheld in the Pikachu edition colours: yellow body, blue
+  around the screen and blue buttons, a dark screen. The two cards no longer look alike at a
+  glance. On the GBC card's purple (dark) and lavender (light) colour the icon stays legible: the
+  outline is visible and the screen reads as a screen. The settings rows and the tablet list show
+  the same two different icons, crisp (no blur). Every other console's icon is unchanged.
+- **Check:** human only (`adb exec-out screencap -p > shelf-gb-gbc.png`), plus
+  `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleIconTest'` in `pkg/android/openemux`
+  of `openemux-android`.
+
 
 ## Android — Backup and restore
 
