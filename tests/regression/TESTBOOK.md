@@ -8818,10 +8818,11 @@ release APK needs a real controller (USB or Bluetooth).
 - **Steps:**
   1. Launch the Atari 2600 game, phone in landscape.
   2. Repeat with the Mega Drive game (a bundled package skin).
-- **Expected:** No D-pad, face buttons or shoulders. A rail down each side in the strip's dark
-  colour: the menu key at the top of the left rail, save and load near its foot; turbo and fast
-  forward at the top of the right rail, the hide key at its foot. The picture fits between the
-  rails at full height. The package skin shows the same drawn layout.
+- **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
+  from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
+  the top of the right rail, then turbo and fast forward. The keys are faint (a dim white glyph on a
+  barely visible disc), not a grey band. The picture fits between the rails at full height. The
+  package skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
 
 ### RT-565 — Connecting and disconnecting the pad mid-game switches the layout without a restart
@@ -8871,7 +8872,7 @@ release APK needs a real controller (USB or Bluetooth).
   3. Tap the show key.
   4. Repeat steps 1-3 in portrait.
 - **Expected:** After step 1 the menu key, the hide key and the quick-action strip are gone; a
-  faint show key sits where the menu key was; the strip's area is plain skin colour. The D-pad and
+  faint show key sits exactly where the hide key was; the strip's area is plain skin colour. The D-pad and
   face buttons still work and the picture did not move. Step 3 brings every control back.
 - **Check:** human only.
 
@@ -8886,7 +8887,8 @@ release APK needs a real controller (USB or Bluetooth).
   4. Press several pad buttons.
   5. Tap the show key.
   6. Quit the game and launch it again.
-- **Expected:** After step 1 only the faint show key remains and the picture fits the whole screen.
+- **Expected:** After step 1 only the faint show key remains, exactly where the hide key was (top of
+  the right rail in landscape, end of the strip in portrait), and the picture fits the whole screen.
   Steps 2-3 keep it collapsed (with the pad gone: the touch skin, collapsed). Step 4 moves the game
   and opens nothing on screen. Step 5 expands the layout in use. Step 6 starts expanded.
 - **Check:** human only.
@@ -8901,7 +8903,7 @@ release APK needs a real controller (USB or Bluetooth).
   2. Open the pause sheet.
   3. In the hardcore game, tap fast forward.
 - **Expected:** Each shows the purple pill with a light ring and a white icon, as on the touch strip
-  (RT-376); the sheet's "Fast forward" tile agrees. In hardcore, fast forward is dimmed and does
+  (RT-376), but translucent so it does not pull the eye off the game; the sheet's "Fast forward" tile agrees. In hardcore, fast forward is dimmed and does
   nothing.
 - **Check:** human only.
 
@@ -8916,7 +8918,7 @@ release APK needs a real controller (USB or Bluetooth).
   3. Launch the NDS game in portrait and tap the screens key a few times.
   4. Launch a game on the tablet in landscape.
 - **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
-  Step 2: the show key sits where the menu key was. Step 3: the screens key cycles the layouts and
+  Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
   stays in the gamepad layout. Step 4: the rails of RT-564, scaled to the tablet.
 - **Check:** human only.
 
