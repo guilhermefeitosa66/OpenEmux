@@ -8795,6 +8795,73 @@ and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a star
   back where it was.
 - **Check:** human only (the screenshots).
 
+## Android — RetroArch menu
+
+The pause sheet of the Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) has an advanced row, "RetroArch menu" ("Advanced settings, for this session
+only"), after "Restart game" (a full-width row under the bottom row in tabletop). It closes the sheet
+and opens RetroArch's own menu (MaterialUI) over the running game, for settings the app does not
+expose (issue 639). Leaving it returns to the game, and the next menu request opens the pause sheet
+again. Everything changed there lasts for the session only: the app writes its own config at every
+launch. "Close Content" and "Quit RetroArch" leave the game like "Quit game", and the entries that
+would load other content or cores (Load Core, Load Content, the updaters, Restart RetroArch,
+Configuration File, History, Favorites, Playlists, Explore) are hidden. `MANUAL`, like the other
+Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with
+`adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-575 — The RetroArch menu opens from the pause sheet and gives the game back
+- **Area:** Android — RetroArch menu
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a GBA or SNES game running with
+  its touch skin, RetroAchievements hardcore off.
+- **Steps:**
+  1. Open the pause sheet (the menu button on the skin).
+  2. Tap "RetroArch menu".
+  3. Open "Quick Menu" and tap "Resume Content" (or "Resume").
+  4. Open the pause sheet and tap "RetroArch menu" again; at the menu's top level press BACK
+     (`adb shell input keyevent KEYCODE_BACK`).
+  5. Open the pause sheet the normal way (the skin's menu button).
+  6. Close the sheet. Connect a gamepad (or send `adb shell input keyevent KEYCODE_BUTTON_START`
+     and the D-pad/`KEYCODE_BUTTON_A`/`KEYCODE_BUTTON_B` key events), open the sheet, move to
+     "RetroArch menu" with the D-pad, press A, move through RetroArch's menu with the D-pad and A,
+     and leave it with B.
+  7. With RetroArch's menu open, press Home, wait a few seconds and come back to the game (or send
+     `KEYCODE_SLEEP` then `KEYCODE_WAKEUP`).
+  8. Turn on RetroAchievements hardcore (RT-351), launch the game, open "RetroArch menu" and look at
+     "Quick Menu".
+- **Expected:** In step 1 "RetroArch menu" sits after "Restart game" and above "Quit game", with
+  "Advanced settings, for this session only" under it (in the tablet side panel too; under the bottom
+  row on a half-open foldable). In step 2 the sheet closes, RetroArch's menu opens over the game and
+  the skin is hidden. In step 3 the game continues from where it was (the picture moves, sound
+  plays) and the skin is back. In step 4 BACK also returns to the running game. In step 5 the app's
+  pause sheet opens, not RetroArch's menu. In step 6 the gamepad reaches the row, drives RetroArch's
+  menu, and B leaves it with the game running. In step 7 RetroArch's menu is still shown on return,
+  with no pause sheet on top, and leaving it resumes the game (not left paused). In step 8 RetroArch
+  refuses "Load State", rewind and cheats while hardcore is on, and leaving the menu returns to the
+  game.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-576 — Leaving through RetroArch's menu quits like "Quit game", and its settings do not stay
+- **Area:** Android — RetroArch menu
+- **Mode:** MANUAL
+- **Preconditions:** RT-575's game running, hardcore off, played for a minute.
+- **Steps:**
+  1. Open "RetroArch menu" from the pause sheet and look at RetroArch's main menu.
+  2. In "Quick Menu" > "Core Options", change any option; in "Settings" > "Video", change something
+     visible (for example "Integer Scale"). Go back to the game.
+  3. Open "RetroArch menu" again and choose "Close Content".
+  4. Note the auto state's time in the game's details, launch the game again and open "RetroArch
+     menu".
+  5. Choose "Quit RetroArch".
+- **Expected:** In step 1 the main menu has no "Load Core", "Load Content", "Online Updater",
+  "Restart RetroArch", "Configuration File", History, Favorites, Playlists or Explore; "Quit
+  RetroArch" is there. In step 2 both changes take effect at once in the running game. In step 3 the
+  game closes and the app is back on the library, as with "Quit game": the auto state is written
+  (its time moved) and the playtime grew. In step 4 the core option and the video setting are back
+  to the app's values. In step 5 the game also closes back to the library, with the auto state
+  written.
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
