@@ -158,6 +158,27 @@ class TheTableItselfTests(unittest.TestCase):
         for name in names:
             self.assertTrue(name.strip())
 
+    def test_display_names_are_single_names_not_regional_pairs(self):
+        # Issue 654: "Sega Genesis / Mega Drive" style labels cluttered the
+        # sidebar and the shelf, so every console carries one name.
+        for system in SYSTEMS:
+            with self.subTest(system=system["id"]):
+                self.assertNotIn("/", system["display_name"])
+
+    def test_the_consoles_that_had_double_names_use_the_popular_one(self):
+        expected = {
+            "FC": "Nintendo (NES)",
+            "SFC": "Super Nintendo",
+            "MD": "Mega Drive",
+            "MCD": "Mega CD",
+            "PCE": "PC Engine",
+            "PCECD": "PC Engine CD",
+            "O2": "Odyssey\u00b2",
+        }
+        for system_id, name in expected.items():
+            with self.subTest(system=system_id):
+                self.assertEqual(get_system_display_name(system_id), name)
+
     def test_every_extension_is_a_dotted_suffix(self):
         for system in SYSTEMS:
             for ext in system["extensions"]:

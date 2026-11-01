@@ -90,7 +90,7 @@
   "window.li1": "<span class=\"ui\">All</span>: every game, grouped by console.",
   "window.li2": "<span class=\"ui\">Favorites</span>: the games you starred. The row only appears once something is\n              starred. See <a href=\"#favorites\">Favorites</a>.",
   "window.li3": "Your playlists, if you made any. Here, <span class=\"ui\">Couch co-op</span>. See\n              <a href=\"#playlists\">Playlists</a>.",
-  "window.li4": "One row per console that has games, written as its short id and its name, like\n              <span class=\"ui\">SFC - Super Nintendo (SNES)</span>.",
+  "window.li4": "One row per console that has games, written as its short id and its name, like\n              <span class=\"ui\">SFC - Super Nintendo</span>.",
   "window.p2": "Console and playlist rows have a menu: right-click them, or hover and click the <span class=\"ui\">⋮</span>\n            button. Console rows can also be dragged to change their order.",
   "window.h42": "The header buttons",
   "window.alt3": "The header bar, with the buttons on both sides framed",

@@ -406,21 +406,21 @@ builds on these rules.
 
 | Id | Console | Id | Console |
 | --- | --- | --- | --- |
-| `A2600` | Atari 2600 | `MCD` | Sega CD / Mega CD |
-| `A5200` | Atari 5200 | `MD` | Sega Genesis / Mega Drive |
+| `A2600` | Atari 2600 | `MCD` | Mega CD |
+| `A5200` | Atari 5200 | `MD` | Mega Drive |
 | `A7800` | Atari 7800 | `SMS` | Sega Master System |
 | `LYNX` | Atari Lynx | `SATURN` | Sega Saturn |
 | `CV` | ColecoVision | `PS` | Sony PlayStation |
 | `FDS` | Famicom Disk System | `PSP` | Sony PSP |
-| `FC` | Nintendo (NES) / Famicom | `SFC` | Super Nintendo (SNES) |
-| `GB` | Game Boy | `PCE` | TurboGrafx-16 / PC Engine / SuperGrafx |
-| `GBC` | Game Boy Color | `PCECD` | TurboGrafx-CD / PC Engine CD |
+| `FC` | Nintendo (NES) | `SFC` | Super Nintendo |
+| `GB` | Game Boy | `PCE` | PC Engine |
+| `GBC` | Game Boy Color | `PCECD` | PC Engine CD |
 | `GBA` | Game Boy Advance | `VECTREX` | Vectrex |
 | `GG` | Game Gear | `VB` | Virtual Boy |
 | `INTV` | Intellivision | `WS` | WonderSwan |
 | `NGP` | NeoGeo Pocket | `SG1000` | SG-1000 |
 | `N64` | Nintendo 64 | `S32X` | Sega 32X |
-| `NDS` | Nintendo DS | `O2` | Odyssey2 / Videopac+ |
+| `NDS` | Nintendo DS | `O2` | Odyssey² |
 | `GC` | Nintendo GameCube | | |
 
 A receiver that does not support a console answers its items
