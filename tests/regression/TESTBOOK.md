@@ -9290,6 +9290,116 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   cross on the purple one.
 - **Check:** human only (`adb exec-out screencap -p`).
 
+## Android — BIOS import
+
+Settings → BIOS on the Android app imports a console's BIOS files from the system file picker
+(issue 668; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). Each console card has its own "Import" button; a picked file is accepted only
+when its name (any case) is one that console expects, and is saved in the system folder under the
+catalog's spelling. Game Boy Advance also accepts its known BIOS by content. One sheet then lists the
+imported files and the rejected ones with a reason. `MANUAL`, like the other Android sections: a phone
+or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. Placeholder files (contents are
+not checked) are made with `head -c 2048 /dev/urandom > <name>` and pushed with
+`adb push <name> /sdcard/Download/bios-qa/`. The system folder is
+`/sdcard/Android/data/$PKG/files/system/` (`adb shell ls` it). The matching
+logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.kt`.
+
+### RT-594 — Importing a console's BIOS by name, all files good
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `scph5501.bin` and `SCPH1001.BIN` in `/sdcard/Download/bios-qa/`; no
+  PlayStation BIOS imported yet.
+- **Steps:**
+  1. Open Settings → "BIOS". Look at the "Sony PlayStation" card.
+  2. Tap its "Import" button and pick `scph5501.bin` and `SCPH1001.BIN` in the file picker.
+  3. Tap "Done".
+- **Expected:** The screen has no "Import from device" button; under the intro a paragraph says to
+  use Import on a console. Each console card shows the "x of y" count under its name and an "Import"
+  button at the end of its header. After the pick, one sheet titled "2 files imported" lists both
+  files under "Imported"; `SCPH1001.BIN` reads "Saved as scph1001.bin". "Sony PlayStation expects"
+  lists all eight names. Behind the sheet, the card already reads "1 of 1" with a green check.
+- **Check:** human only (a screenshot of the screen and of the sheet); the system folder has
+  `scph5501.bin` and `scph1001.bin`, both lowercase, and no `.part` file.
+
+### RT-595 — A mixed batch imports the good files and explains the rest
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `scph5500.bin`, `bios_CD_U.bin` and `psx bios (copy).bin` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Settings → "BIOS" → "PS1 - Sony PlayStation" → "Import", pick the three files.
+- **Expected:** One sheet titled "1 of 3 files imported": `scph5500.bin` under "Imported";
+  `bios_CD_U.bin` and `psx bios (copy).bin` under "Not imported", each with "Not a name this console
+  expects" in amber. No error dialog, and nothing else is written to the system folder.
+- **Check:** human only (a screenshot of the sheet); the system folder has no `bios_CD_U.bin`.
+
+### RT-596 — A batch with no good file imports nothing
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `5200.rom` and `random.bin` in `/sdcard/Download/bios-qa/`; no Lynx BIOS.
+- **Steps:**
+  1. Settings → "BIOS" → "Atari Lynx" → "Import", pick both files.
+  2. Import `scph5501.bin` for "Sony PlayStation" again, once with different bytes and once with the
+     same bytes.
+- **Expected:** Step 1: the sheet reads "No files imported", both files rejected with "Not a name
+  this console expects", and "Atari Lynx expects" names `lynxboot.img`; the Lynx card is unchanged.
+  Step 2: with different bytes the file's row reads "Replaced the file that was there"; with the same
+  bytes it has no note.
+- **Check:** human only (a screenshot of each sheet).
+
+### RT-597 — The Settings BIOS tile and the console card see an import at once
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** A Lynx game in the library, no Lynx BIOS, `lynxboot.img` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Open Settings and read the "BIOS" tile.
+  2. Open "BIOS", import `lynxboot.img` for "Atari Lynx", tap "Done" and go back to Settings.
+  3. Open the Lynx console's settings.
+- **Expected:** Before the import the tile counts the Lynx among the consoles that need files; after
+  it, without restarting the app, it no longer does. The Lynx console card's "BIOS" row reads
+  "Found" with a green check.
+- **Check:** human only (a screenshot before and after).
+
+### RT-598 — Importing with a gamepad
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK, a pad said to be connected (`adb shell am broadcast -a
+  com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`), `bios_CD_U.bin` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Open Settings → "BIOS" with the D-pad (`adb shell input keyevent KEYCODE_DPAD_DOWN`,
+     `KEYCODE_BUTTON_A`).
+  2. Move down with the D-pad to the "Sega CD" card's "Import" button and press A; pick the file.
+  3. Press A on the sheet.
+- **Expected:** The hint bar shows "A Import" and "B Back". D-pad down moves from one "Import" button
+  to the next, with the focus ring on the button. A opens the picker. The sheet opens with the focus
+  on "Done"; A closes it and the focus is back on the Sega CD "Import" button.
+- **Check:** human only (a screenshot with the focus ring on the button and on "Done").
+
+### RT-599 — Importing in the tablet list and detail layout
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** Tablet size (`adb shell wm size 1600x2560`, `adb shell wm density 320`), the
+  files of RT-595.
+- **Steps:**
+  1. Open Settings and tap the "BIOS" tile, which opens beside the list.
+  2. Repeat RT-595 in the detail pane.
+- **Expected:** The same result as RT-595; the sheet opens over the whole window and the list pane
+  still shows Settings. The BIOS tile in the list updates after the import.
+- **Check:** human only (a screenshot).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-600 — Backing out of the picker changes nothing
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** None.
+- **Steps:**
+  1. Settings → "BIOS" → any console's "Import", then press back in the file picker.
+- **Expected:** The BIOS screen comes back with no sheet and no change; its "Import" buttons still
+  work.
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
