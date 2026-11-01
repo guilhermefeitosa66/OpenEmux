@@ -186,6 +186,9 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.10-1
+- Android: the app no longer closes on start (the 1.18.5 and 1.18.9 APKs were missing bundled files)
+
 * Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.9-1
 - Android: every gamepad press acts, after a touch and in every sheet, dialog and menu
 - Android: a gamepad layout while a controller is connected, mixed with touch
