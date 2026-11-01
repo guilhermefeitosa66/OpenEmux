@@ -5491,11 +5491,34 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
      in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
 - **Expected:** Pastel cards with dark text; every icon is readable straight on its card's colour,
   with no tile colour behind it. The box-art console's card looks like the others (icon, tag, name,
-  count; no covers). On the small phone the icon keeps its portrait size and the long names
-  ("Nintendo (NES) / Famicom", "Sega Genesis / Mega Drive") end in "…" on their second line at
-  worst; in landscape a card is never narrower than 250dp, so the shelf
+  count; no covers). On the small phone the icon keeps its portrait size, names such as
+  "Mega Drive" fit without "…", and the long names ("Famicom Disk System", "Neo Geo Pocket Color")
+  end in "…" on their second line at worst; in landscape a card is never narrower than 250dp, so the shelf
   keeps one card per row when two would not fit beside the side rail. Nothing is clipped.
 - **Check:** human only.
+
+### RT-585 — Each console shows one name, not its regional names joined with "/"
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** A library with games under `roms/FC`, `roms/MD`, `roms/PCE` and `roms/O2`,
+  installed with the previous release and then upgraded to the build under test; the game count
+  of each console noted before the upgrade.
+- **Steps:**
+  1. Open the shelf and read the console cards.
+  2. Settings → the console list (cores, shaders, extensions) and read the rows.
+  3. Open a Mega Drive game's detail, then the "Mega Drive" library.
+  4. Compare each console's game count with the one noted before the upgrade; launch one game.
+  5. `adb shell wm size 720x1280 && adb shell wm density 360`, open the shelf in portrait, then
+     `adb shell wm size reset && adb shell wm density reset`.
+- **Expected:** The cards read "Nintendo (NES)", "Mega Drive", "PC Engine" and "Odyssey²"; no
+  console name anywhere contains " / ". Settings rows read "NES - Nintendo (NES)",
+  "MD - Mega Drive", "SEGA CD - Mega CD", "PCE - PC Engine", "PCE CD - PC Engine CD" and
+  "O2 - Odyssey²", the "²" drawn as a superscript two, not a box. The game detail's back link and
+  info line and the library title say "Mega Drive". Every console keeps the same games and covers,
+  and the game launches with the same core. On the small phone the renamed cards show their full
+  name with no "…".
+- **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
+  in `pkg/android/openemux` of `openemux-android`.
 
 
 ## Android — Backup and restore
@@ -7087,7 +7110,7 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   2. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/` and
      `adb shell rm "/sdcard/Android/data/com.openemux.mobile/files/roms/GBA/<one of the .gba ROMs>"`.
   3. Start recording the screen and open the app.
-- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES) / Famicom" shelf
+- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES)" shelf
   appears, the "Game Boy Advance" shelf counts one game less and the header reads
   "3 consoles · 5 games". No frame shows the empty state or a blank list in
   between.
@@ -7112,11 +7135,11 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   on).
 - **Steps:**
   1. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/`, open the app
-     and wait for the "Nintendo (NES) / Famicom" shelf.
+     and wait for the "Nintendo (NES)" shelf.
   2. Settings → "Back up and restore" → "Import data", pick the archive, tap "Replace and restore".
   3. Start recording the screen; let the app restart and finish the first-run setup.
 - **Expected:** After the setup the shelf shows "Game Boy Advance" and "Super Nintendo" with
-  "2 consoles · 5 games". The "Nintendo (NES) / Famicom" shelf and "3 consoles · 6 games", the
+  "2 consoles · 5 games". The "Nintendo (NES)" shelf and "3 consoles · 6 games", the
   library from before the restore, never appear, not even for a frame.
 - **Check:** human only (step through the recording), plus
   `adb shell run-as com.openemux.mobile cat files/library.index` lists the 5 restored ROMs and no
