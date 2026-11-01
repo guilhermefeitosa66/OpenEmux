@@ -5831,8 +5831,11 @@ The Android app's gamepad mode (#538): where scrolling puts the focused item, th
 never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
 gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
 `adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
-`KEYCODE_BUTTON_START`). The first D-pad press only enters gamepad mode. A library of a few games
-over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
+`KEYCODE_BUTTON_START`; `adb shell input gamepad keyevent ...` sends them from a gamepad source).
+No press is swallowed (#641): one that finds a focused item on screen acts on it, and one that finds
+nothing focused (after a tap, or with the focused item scrolled away by finger) lands focus visibly
+on the sensible item and does nothing else. A library of a few games over two consoles, one of them
+with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
 ### RT-434 — The landscape row keeps the focused game in the middle
 - **Area:** Android — Gamepad navigation
@@ -5898,8 +5901,91 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   3. Press a D-pad key.
   4. Long-press a shelf and drag it to another place.
 - **Expected:** The tap hides the highlight and the hint bar; scrolling and flinging feel as they did.
-  The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
-  the item that had it. The dragged shelf stays drawn above the others while it moves.
+  The search field opens and scrolls normally while typing. The D-pad press brings the highlight
+  back on the item that had it when that item still shows (or, scrolled away, on the visible item
+  nearest where it was), on that first press: it never jumps to the screen's header or first item,
+  and the next press moves from there. The dragged shelf stays drawn above the others while it
+  moves.
+- **Check:** human only.
+
+### RT-564 — The first pad press after a touch acts
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; landscape; a console's covers view open with a game focused
+  from the pad.
+- **Steps:**
+  1. Tap an empty spot of the screen (the hint bar hides), then press RIGHT.
+  2. Press RIGHT again.
+  3. Tap an empty spot again, then press A.
+  4. Press A again.
+- **Expected:** 1: the highlight comes back on the game that had it, on that first press. 2: focus
+  moves one game right. 3: the highlight comes back, nothing opens. 4: that game's detail opens. No
+  press does nothing, and focus never lands on the header or the console chips.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
+
+### RT-565 — A press with the focused item scrolled away lands on a visible one
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-564, on a console with 30 or more games.
+- **Steps:**
+  1. Focus the third game from the pad.
+  2. Swipe the row (or grid) with a finger until that game is well off screen.
+  3. Press RIGHT (or DOWN in a vertical grid), then RIGHT again.
+  4. Repeat 2 and 3 pressing A instead of the D-pad, then A again.
+- **Expected:** 3: the first press lands the highlight on a game that is on screen, near where the
+  focused one was, without scrolling back to it; the second moves on from there. 4: the first A
+  only lands focus, the second opens that game's detail.
+- **Check:** human only.
+
+### RT-566 — Sheets, dialogs and the detail menu work with the pad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; landscape, then portrait.
+- **Steps:**
+  1. On the shelf, focus a console and press Y (shelf options sheet).
+  2. In a game's detail, press Y (the "…" menu); move to "Remove from library" and press A.
+  3. In the remove dialog, press RIGHT, LEFT, then B.
+  4. Open from the pad: the detail's "Core" and "Shader" sheets and "See all" save states; in
+     "Settings", "Theme", "Language", a console's "Color" sheet, "Device Name"; the library's
+     remove-selected dialog (START, select two games, X); the cancel-transfer dialog of a running
+     share.
+  5. In each one: D-pad down to its last item, A on an item, then reopen it and press B.
+- **Expected:** Focus enters each sheet, dialog or menu on its first item (in the remove dialogs, on
+  "Cancel") with the ring visible; the D-pad moves inside it and reaches its last item, the sheet
+  scrolling when it is taller than the screen; A picks the focused item; B closes it, and focus is
+  back on the button or row that opened it. A sheet's own buttons (X, Y, L1/R1, START) work while
+  it is open, and none of them reaches the screen behind it.
+- **Check:** human only.
+
+### RT-567 — Touch inside a sheet, then the pad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** The shelf options sheet open from the pad (RT-566, step 1), its second row
+  focused.
+- **Steps:**
+  1. Tap the sheet's title (not a row), then press DOWN, and DOWN again.
+  2. Tap outside the sheet.
+- **Expected:** 1: the first DOWN brings the highlight back on the second row, the next moves to
+  the third. 2: the sheet closes as before.
+- **Check:** human only.
+
+### RT-568 — Every screen can be entered, used and left with the pad alone
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; landscape.
+- **Steps:**
+  1. With the pad only, walk every tab (L1/R1): Library, Recent, Import, Settings.
+  2. In "Settings", walk DOWN to "About" and open, with A, each of: "BIOS", "RetroAchievements",
+     a console's page, "Device Name", "Back up and restore", "Check for updates", "About", then
+     "Licenses" and a license text; on the license text, press DOWN several times, then UP.
+  3. In "Import", open "Receive games" and "Connect by Address"; in "Device Name" and "Connect by
+     Address", press DOWN and UP in the text field, and B with the keyboard open.
+  4. Leave each screen with B.
+- **Expected:** Every screen shows focus on an item as soon as it opens or on the first press; the
+  D-pad reaches every control; no press leaves focus on something invisible. DOWN and UP leave a
+  text field; B with the keyboard open closes the keyboard first, and the next B goes back. The
+  license text scrolls by most of a screen per press, both ways. Back on "Settings", focus is on
+  the row that opened the screen.
 - **Check:** human only.
 
 ## Android — Multi-select and bulk remove
