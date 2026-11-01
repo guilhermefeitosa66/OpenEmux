@@ -56,6 +56,12 @@ from openemux.core.theme import THEMES
 from openemux.ui import theming
 from openemux.ui.console_icons import console_icon
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
+from openemux.core.bios_importer import (
+    REASON_ERROR,
+    REASON_OTHER_CONSOLE,
+    console_bios_names,
+    import_bios_files_async,
+)
 from openemux.core.bios_manager import scan_all_bios_status
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 
@@ -501,19 +507,19 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("settings.bios.title"),
             description=GLib.markup_escape_text(self.t("bios.instructions")),
         )
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        open_btn = Gtk.Button(label=self.t("bios.open_roms_folder"))
-        open_btn.add_css_class("flat")
-        open_btn.connect("clicked", lambda _b: self.win._open_roms_folder())
-        header_box.append(open_btn)
+        # The reload stays for files copied in by hand through "Show folder";
+        # an import refreshes the rows by itself (issue 667).
         reload_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         reload_btn.add_css_class("flat")
+        reload_btn.set_valign(Gtk.Align.CENTER)
         reload_btn.set_tooltip_text(self.t("bios.reload"))
         reload_btn.connect("clicked", lambda _b: self._reload_bios(show_toast=True))
-        header_box.append(reload_btn)
-        self._bios_group.set_header_suffix(header_box)
+        self._bios_reload_btn = reload_btn
+        self._bios_group.set_header_suffix(reload_btn)
         page.add(self._bios_group)
         self._bios_rows = []
+        self._bios_import_buttons = {}
+        self._bios_import_running = False
         self._reload_bios(show_toast=False)
         return page
 
@@ -521,6 +527,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         for row in getattr(self, "_bios_rows", []):
             self._bios_group.remove(row)
         self._bios_rows = []
+        self._bios_import_buttons = {}
 
         status_by_console = scan_all_bios_status(self.config)
         if not status_by_console:
@@ -541,14 +548,19 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             )
             # The row names a console, so show its icon like everywhere else.
             expander.add_prefix(console_icon(console_id))
-            open_btn = Gtk.Button(icon_name="folder-open-symbolic")
-            open_btn.add_css_class("flat")
-            open_btn.set_valign(Gtk.Align.CENTER)
-            open_btn.set_tooltip_text(self.t("bios.open_console_folder"))
-            open_btn.connect(
-                "clicked", lambda _b, cid=console_id: self.win._open_console_bios_folder(cid)
+            # One Import per console: the file is checked against this
+            # console's names, so the row is the routing (issue 667).
+            import_btn = Gtk.Button(label=self.t("bios.import.button"))
+            import_btn.set_valign(Gtk.Align.CENTER)
+            import_btn.set_sensitive(not self._bios_import_running)
+            import_btn.set_tooltip_text(
+                self.t("bios.import.tooltip", console=status["display_name"])
             )
-            expander.add_suffix(open_btn)
+            import_btn.connect(
+                "clicked", lambda _b, cid=console_id: self._open_bios_import_picker(cid)
+            )
+            expander.add_suffix(import_btn)
+            self._bios_import_buttons[console_id] = import_btn
 
             for section_key, entries in (
                 ("bios.section.required", status["required"]),
@@ -565,11 +577,139 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                     icon.add_css_class("success" if entry["present"] else "warning")
                     row.add_prefix(icon)
                     expander.add_row(row)
+            # Opening the folder stays, quieter, for whoever manages files by hand.
+            folder_row = Adw.ActionRow(title=self.t("bios.show_folder"), activatable=True)
+            folder_row.add_prefix(Gtk.Image.new_from_icon_name("folder-symbolic"))
+            folder_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+            folder_row.connect(
+                "activated", lambda _r, cid=console_id: self.win._open_console_bios_folder(cid)
+            )
+            expander.add_row(folder_row)
             self._bios_group.add(expander)
             self._bios_rows.append(expander)
 
         if show_toast:
             self._toast(self.t("bios.reloaded"))
+
+    def _open_bios_import_picker(self, console_id):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(
+            self.t("bios.import.dialog_title", console=get_system_display_name(console_id))
+        )
+        dialog.set_modal(True)
+        # No file filter: BIOS extensions vary (.bin .rom .img .gg .nes ...),
+        # and a filter would hide the oddly named file the summary explains.
+        dialog.open_multiple(self._dialog_parent(), None, self._on_bios_files_chosen, console_id)
+
+    def _on_bios_files_chosen(self, dialog, result, console_id):
+        try:
+            files = dialog.open_multiple_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if files is None:
+            return
+        paths = [files.get_item(i).get_path() for i in range(files.get_n_items())]
+        paths = [path for path in paths if path]
+        if not paths:
+            return
+        self._set_bios_import_running(True)
+        import_bios_files_async(
+            paths,
+            self.config,
+            console_id,
+            lambda summary: GLib.idle_add(self._on_bios_import_done, summary),
+        )
+
+    def _set_bios_import_running(self, running):
+        self._bios_import_running = running
+        for button in self._bios_import_buttons.values():
+            button.set_sensitive(not running)
+
+    def _on_bios_import_done(self, summary):
+        self._set_bios_import_running(False)
+        # The rows read the disk again, so the imported files show as present
+        # now; the pre-launch check reads the disk on every launch already.
+        self._reload_bios(show_toast=False)
+        # Settings may have been closed while the files were copying; an
+        # Adw.Dialog presented on an unrooted widget never shows, so fall back
+        # to the main window.
+        parent = self if self.get_root() is not None else self.win
+        self._build_bios_import_summary(summary).present(parent)
+        return GLib.SOURCE_REMOVE
+
+    def _bios_import_heading(self, imported, total):
+        if imported == 0:
+            return self.t("bios.import.heading_none")
+        if imported == total:
+            if imported == 1:
+                return self.t("bios.import.heading_one")
+            return self.t("bios.import.heading_all", count=imported)
+        return self.t("bios.import.heading_some", imported=imported, total=total)
+
+    def _bios_rejection_reason(self, entry, console_id):
+        if entry["reason"] == REASON_ERROR:
+            return self.t("bios.import.reason_error", error=entry["error"])
+        console = get_system_display_name(console_id)
+        if entry["reason"] == REASON_OTHER_CONSOLE:
+            owners = ", ".join(get_system_display_name(c) for c in entry["consoles"])
+            return self.t("bios.import.reason_other_console", owners=owners, console=console)
+        return self.t("bios.import.reason_unknown", console=console)
+
+    def _build_bios_import_summary(self, summary):
+        console_id = summary["console"]
+        imported = summary["imported"]
+        rejected = summary["rejected"]
+        body = ""
+        if rejected:
+            body = self.t(
+                "bios.import.body",
+                console=get_system_display_name(console_id),
+                names=", ".join(console_bios_names(console_id)),
+            )
+        dialog = Adw.AlertDialog(
+            heading=self._bios_import_heading(len(imported), len(imported) + len(rejected)),
+            body=body,
+        )
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        sections = (
+            ("bios.import.section_imported", imported, "emblem-ok-symbolic", "success"),
+            ("bios.import.section_rejected", rejected, "dialog-warning-symbolic", "warning"),
+        )
+        for section_key, entries, icon_name, css in sections:
+            if not entries:
+                continue
+            header = Gtk.Label(label=self.t(section_key), xalign=0)
+            header.add_css_class("heading")
+            header.add_css_class("dim-label")
+            header.set_margin_top(6)
+            header.set_margin_bottom(6)
+            header.set_margin_start(12)
+            header_row = Gtk.ListBoxRow(child=header, activatable=False, selectable=False)
+            listbox.append(header_row)
+            for entry in entries:
+                row = Adw.ActionRow(title=entry["name"], use_markup=False)
+                if css == "success":
+                    if entry["replaced"]:
+                        row.set_subtitle(self.t("bios.import.replaced"))
+                else:
+                    row.set_subtitle(self._bios_rejection_reason(entry, console_id))
+                icon = Gtk.Image.new_from_icon_name(icon_name)
+                icon.add_css_class(css)
+                icon.update_property([Gtk.AccessibleProperty.LABEL], [self.t(section_key)])
+                row.add_prefix(icon)
+                listbox.append(row)
+        scroller = Gtk.ScrolledWindow(
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            propagate_natural_height=True,
+            max_content_height=320,
+        )
+        scroller.set_child(listbox)
+        dialog.set_extra_child(scroller)
+        dialog.add_response("ok", self.t("bios.import.ok"))
+        dialog.set_default_response("ok")
+        dialog.set_close_response("ok")
+        return dialog
 
     def _apply_console_icon_factory(self, combo_row):
         """Render a console ComboRow as "<icon> ID — Name", like the sidebar.
