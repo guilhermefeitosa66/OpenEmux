@@ -90,7 +90,7 @@
   "window.li1": "<span class=\"ui\">すべて</span>：すべてのゲームを、コンソールごとにまとめて表示します。",
   "window.li2": "<span class=\"ui\">お気に入り</span>：星を付けたゲームです。この行は、何かに星を付けたときにだけ表示されます。<a href=\"#favorites\">お気に入り</a>を参照してください。",
   "window.li3": "作成したプレイリスト（ある場合）。ここでは <span class=\"ui\">Couch co-op</span> です。<a href=\"#playlists\">プレイリスト</a>を参照してください。",
-  "window.li4": "ゲームがあるコンソールごとに1行ずつ、<span class=\"ui\">SFC - Super Nintendo (SNES)</span> のように短い ID と名前で表示されます。",
+  "window.li4": "ゲームがあるコンソールごとに1行ずつ、<span class=\"ui\">SFC - Super Nintendo</span> のように短い ID と名前で表示されます。",
   "window.p2": "コンソールとプレイリストの行にはメニューがあります。右クリックするか、マウスを合わせて <span class=\"ui\">⋮</span> ボタンをクリックしてください。コンソールの行はドラッグして並び順を変えることもできます。",
   "window.h42": "ヘッダーのボタン",
   "window.alt3": "両側のボタンを枠で囲んだヘッダーバー",

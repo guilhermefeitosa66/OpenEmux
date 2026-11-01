@@ -90,7 +90,7 @@
   "window.li1": "<span class=\"ui\">Alle</span>: jedes Spiel, nach Konsole gruppiert.",
   "window.li2": "<span class=\"ui\">Favoriten</span>: die Spiele, die du mit einem Stern markiert hast. Die Zeile erscheint erst, wenn etwas markiert ist. Siehe <a href=\"#favorites\">Favoriten</a>.",
   "window.li3": "Deine Playlists, falls du welche angelegt hast. Hier <span class=\"ui\">Couch co-op</span>. Siehe <a href=\"#playlists\">Playlists</a>.",
-  "window.li4": "Eine Zeile pro Konsole mit Spielen, mit ihrer Kurz-ID und ihrem Namen, etwa <span class=\"ui\">SFC - Super Nintendo (SNES)</span>.",
+  "window.li4": "Eine Zeile pro Konsole mit Spielen, mit ihrer Kurz-ID und ihrem Namen, etwa <span class=\"ui\">SFC - Super Nintendo</span>.",
   "window.p2": "Konsolen- und Playlist-Zeilen haben ein Menü: Rechtsklick darauf, oder mit der Maus darüberfahren und auf die Schaltfläche <span class=\"ui\">⋮</span> klicken. Konsolenzeilen lassen sich auch ziehen, um ihre Reihenfolge zu ändern.",
   "window.h42": "Die Schaltflächen in der Kopfleiste",
   "window.alt3": "Die Kopfleiste, mit den Schaltflächen auf beiden Seiten eingerahmt",

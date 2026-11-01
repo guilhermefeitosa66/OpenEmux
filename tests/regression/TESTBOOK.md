@@ -1108,8 +1108,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running, at least two consoles with games.
 - **Steps:**
-  1. Click a console in the sidebar (e.g. "FC - Nintendo (NES) / Famicom").
-  2. Click a different console (e.g. "SFC - Super Nintendo (SNES)").
+  1. Click a console in the sidebar (e.g. "FC - Nintendo (NES)").
+  2. Click a different console (e.g. "SFC - Super Nintendo").
 - **Expected:** The header title and the grid follow each selection; the game count subtitle
   matches the console.
 - **Check:** One screenshot per console; header title matches the clicked row.
@@ -1237,12 +1237,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app on its seeded library.
 - **Steps:**
-  1. Select "SFC - Super Nintendo (SNES)" in the sidebar.
+  1. Select "SFC - Super Nintendo" in the sidebar.
   2. Note the modification time of `~/.openemux/config.yaml` in the container.
   3. Restart the app (`make devbox-app ACTION=restart`).
   4. Repeat with "All", and with a collection.
 - **Expected:** The app opens on SNES, with the sidebar row selected and the header reading
-  "SFC — Super Nintendo (SNES)". Nothing was remembered before: the landing page was computed from
+  "SFC — Super Nintendo". Nothing was remembered before: the landing page was computed from
   what was on screen right now, and at startup that is nothing (issue #383). `config.yaml` is
   **untouched** — the view is written to `session.json`, a file of its own, because it is rewritten
   on every navigation and the ROM path, the credentials, the per-console cores and the input
@@ -1296,6 +1296,27 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 - **Restore:** none — everything happens inside `$SCRATCH`.
+
+### RT-585 — Every console has one name, with no regional double names
+- **Area:** Navigation & search
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the app on the devbox synthetic library and read the console rows
+  in the sidebar, the shelf group titles on "All Games" and the per-console rows in Preferences.
+- **Expected:** Every console is named once, never two or three names joined by " / ":
+  "FC - Nintendo (NES)", "SFC - Super Nintendo", "MD - Mega Drive", "MCD - Mega CD",
+  "PCE - PC Engine", "PCECD - PC Engine CD", "O2 - Odyssey²". Only the label changed: the ids, the
+  `nes`/`snes` aliases and the ROM folders are the same, so an existing library keeps every game
+  (issue 654).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from openemux.core.systems import SYSTEMS, get_system_display_name, resolve_system_id
+  assert not [s['id'] for s in SYSTEMS if '/' in s['display_name']]
+  assert get_system_display_name('MD') == 'Mega Drive' and get_system_display_name('O2') == 'Odyssey\u00b2'
+  assert resolve_system_id('nes') == 'FC' and resolve_system_id('snes') == 'SFC'
+  print('RT-585 OK')"
+  ```
 
 ## View modes & layout
 
@@ -2033,7 +2054,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   devbox home (`~/.local/share/openemux-devbox/home/` from the host), then
   `make devbox-app ACTION=restart`.
 - **Steps:**
-  1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
+  1. Open "Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
   2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-365.png WIN=1`).
 - **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
   the PNG whole, titled "Local file" with a "Local" pill; the details read
@@ -2375,7 +2396,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** None.
 - **Steps:**
   1. Open "Settings" → "Video" and find the "Bezels" group, between "In-Game Bar" and "Shaders".
-  2. Look at which consoles it lists, then set "MD — Sega Genesis / Mega Drive" to "Simple".
+  2. Look at which consoles it lists, then set "MD — Mega Drive" to "Simple".
   3. Close and reopen "Settings".
 - **Expected:** Every row reads "None" on a fresh config. There are rows for the home consoles (FC,
   SFC, MD, PS, N64, ...) and none for GB, GBC, GBA, GG, NDS, PSP, NGP, WS, VB, LYNX or VECTREX
@@ -2414,8 +2435,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. "Settings" → "Video" → "Bezels": set "PS — Sony PlayStation" to "Custom image…" and pick the
      PNG.
-  2. Set "SFC — Super Nintendo (SNES)" to "Custom image…" and pick the renamed JPEG.
-  3. Set "FC — Nintendo (NES) / Famicom" to "Custom image…" and cancel the picker.
+  2. Set "SFC — Super Nintendo" to "Custom image…" and pick the renamed JPEG.
+  3. Set "FC — Nintendo (NES)" to "Custom image…" and cancel the picker.
   4. Launch a PS game.
 - **Expected:** PS shows the picked file's name under its title and a "Choose another image"
   button. SFC shows the toast "That file is not a PNG image" and goes back to "None". FC goes back

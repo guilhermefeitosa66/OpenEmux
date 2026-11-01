@@ -57,7 +57,7 @@ SYSTEMS = [
     },
     {
         "id": "FC",
-        "display_name": "Nintendo (NES) / Famicom",
+        "display_name": "Nintendo (NES)",
         "aliases": ["nes"],
         "extensions": [".nes"],
         "thumbnail_system": "Nintendo - Nintendo Entertainment System",
@@ -147,7 +147,7 @@ SYSTEMS = [
     },
     {
         "id": "O2",
-        "display_name": "Odyssey2 / Videopac+",
+        "display_name": "Odyssey²",
         "aliases": [],
         "extensions": [".bin", ".rom"],
         "thumbnail_system": "Magnavox - Odyssey2",
@@ -174,7 +174,7 @@ SYSTEMS = [
     },
     {
         "id": "MCD",
-        "display_name": "Sega CD / Mega CD",
+        "display_name": "Mega CD",
         "aliases": [],
         "extensions": [".cue", ".chd", ".iso"],
         "thumbnail_system": "Sega - Mega-CD - Sega CD",
@@ -183,7 +183,7 @@ SYSTEMS = [
     },
     {
         "id": "MD",
-        "display_name": "Sega Genesis / Mega Drive",
+        "display_name": "Mega Drive",
         "aliases": [],
         "extensions": [".md", ".gen", ".bin", ".smd"],
         "thumbnail_system": "Sega - Mega Drive - Genesis",
@@ -228,7 +228,7 @@ SYSTEMS = [
     },
     {
         "id": "SFC",
-        "display_name": "Super Nintendo (SNES)",
+        "display_name": "Super Nintendo",
         "aliases": ["snes"],
         "extensions": [".sfc", ".smc"],
         "thumbnail_system": "Nintendo - Super Nintendo Entertainment System",
@@ -237,7 +237,7 @@ SYSTEMS = [
     },
     {
         "id": "PCE",
-        "display_name": "TurboGrafx-16 / PC Engine / SuperGrafx",
+        "display_name": "PC Engine",
         "aliases": [],
         "extensions": [".pce", ".sgx", ".bin"],
         "thumbnail_system": "NEC - PC Engine - TurboGrafx 16",
@@ -246,7 +246,7 @@ SYSTEMS = [
     },
     {
         "id": "PCECD",
-        "display_name": "TurboGrafx-CD / PC Engine CD",
+        "display_name": "PC Engine CD",
         "aliases": [],
         "extensions": [".cue", ".chd", ".iso"],
         "thumbnail_system": "NEC - PC Engine CD - TurboGrafx-CD",
