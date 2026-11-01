@@ -5429,8 +5429,8 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Preconditions:** The library above; phone in portrait, dark theme.
 - **Steps:**
   1. Open the "Library" tab (the shelf).
-- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon (a
-  star for "Favorites"), large (about two thirds of the card's height) and sitting straight on the
+- **Expected:** First a row shared by two half-width cards, "All" (blue, grid icon) and
+  "Favorites" (purple, star), no taller than a console card (RT-586). Then one card per row. Each console card shows, from the left, the console's pixel icon, large (about two thirds of the card's height) and sitting straight on the
   card's own colour: no lighter or darker square behind it, no border, no shadow. Beside it the
   short tag ("NES", "SNES"), the console name (two lines at most, then "…") and "N games". No
   cartridges on any card. Nothing overlaps. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
@@ -5444,7 +5444,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Steps:**
   1. Rotate the phone to landscape.
   2. Scroll to the end and back.
-- **Expected:** Two cards per row, "Favorites" first (top left), the order unchanged (left to
+- **Expected:** Two cards per row, "All games" first (top left) and "Favorites" beside it, the order unchanged (left to
   right, then down). The icon is the same size as in portrait, still on the card's own colour, and
   the name fits or ends in "…" on its second line. With an odd number of shelves the last card is on the left, as wide as the others. The scroll
   position and the order are kept across the rotation.
@@ -5455,7 +5455,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Press DPAD_DOWN until "Favorites" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  1. Press DPAD_DOWN until "All games" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
   2. Keep pressing DPAD_DOWN to the last row.
   3. Press L1 and R1.
   4. Focus a card in the right column, press A, then go back.
@@ -5475,8 +5475,8 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
   3. Focus a console in the right column with the gamepad, press Y, choose "Move up".
   4. Press Y again and choose "Restore default order".
 - **Expected:** While dragging the other cards make room and the dragged card stays under the
-  finger; the new order is kept after leaving the tab and after the restart. "Favorites" cannot be
-  dragged and stays first. "Move up" moves the console one place back in reading order (left to
+  finger; the new order is kept after leaving the tab and after the restart. "All games" and
+  "Favorites" cannot be dragged, never swap with a console and stay first. "Move up" moves the console one place back in reading order (left to
   right, then down). "Restore default order" brings back the default order.
 - **Check:** human only.
 
@@ -5518,6 +5518,65 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
   and the game launches with the same core. On the small phone the renamed cards show their full
   name with no "…".
 - **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
+
+### RT-586 — Portrait shows "All" and "Favorites" side by side and each opens its view
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's library (two favourite games); phone in portrait, dark theme.
+- **Steps:**
+  1. Open the shelf and look at the first row under the header.
+  2. Tap "All", then go back; tap "Favorites", then go back.
+  3. Switch to the light theme and look at the row again.
+  4. `adb shell settings put system font_scale 1.3`, look at the row, then
+     `adb shell settings put system font_scale 1.0`.
+- **Expected:** Step 1: one row with two cards of equal width, no taller than a console card.
+  Left: blue card, "LIBRARY" with a grid icon at the top right, "All" and the total game count.
+  Right: purple card, "FAVORITES" with a yellow star, "Favorites" and "2 games". Step 2: "All"
+  opens the library on the "All" chip with every game; "Favorites" on the "Favorites" chip. Step 3:
+  pale blue and pale purple cards with dark text. Step 4: both cards grow together, nothing is
+  clipped ("…" allowed).
+- **Check:** human only (`adb exec-out screencap -p > shelf-all-fav.png`).
+
+### RT-587 — With no favourites "All games" stands alone; an empty library shows neither
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-586's shelf.
+- **Steps:**
+  1. Unfavourite both favourite games and go back to the shelf.
+  2. Favourite one game again and go back to the shelf.
+  3. Import one more game and go back to the shelf.
+  4. On a fresh install (or after removing every game), open the shelf.
+- **Expected:** Step 1: "Favorites" is gone and "All games" is a full-width card like a console's
+  (grid icon on the left, "LIBRARY", "All games", the count). Step 2: the two half-width cards are
+  back, "Favorites" reading "1 game". Step 3: the "All" count goes up by one without reopening
+  the app. Step 4: the empty shelf as before (RT-500), no "All" card.
+- **Check:** human only.
+
+### RT-588 — Landscape and tablet show "All games" and "Favorites" as two full cards
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-586's shelf.
+- **Steps:**
+  1. Rotate the phone to landscape.
+  2. On a tablet (or `adb shell wm size 1600x2560 && adb shell wm density 320`), open the shelf in
+     both orientations; `adb shell wm size reset && adb shell wm density reset` afterwards.
+- **Expected:** "All games" and "Favorites" are the first two grid cards, each in one column like a
+  console card (large grid icon / star on the left, tag, name, count), before the consoles.
+- **Check:** human only (a screenshot per layout).
+
+### RT-589 — The gamepad moves between "All" and "Favorites" and Y ignores them
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-586's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. Open the shelf: press DPAD_DOWN until a focus ring shows on "All".
+  2. Press DPAD_RIGHT, then DPAD_LEFT, then DPAD_DOWN.
+  3. Go back up to "Favorites", press A, then go back.
+  4. With "All" focused, press Y.
+- **Expected:** Step 2: the ring moves to "Favorites", back to "All", then to the first console.
+  Step 3: the Favorites view opens, and after going back the ring is on "Favorites". Step 4: no
+  reorder menu opens.
+- **Check:** human only.
   in `pkg/android/openemux` of `openemux-android`.
 
 
