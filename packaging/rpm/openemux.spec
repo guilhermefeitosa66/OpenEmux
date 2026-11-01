@@ -186,6 +186,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sat Oct 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.5-1
+- Android: the on-screen app controls stay visible with a gamepad, with a gamepad layout and a collapse key
+- Android: slow-motion toggle on screen, right before fast forward, and in the pause sheet
+- Android: open RetroArch's own menu from the pause sheet for advanced settings
+
 * Tue Oct 27 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.0-1
 - Share nearby: send games with their saves, states and covers between devices on the local network
 - Bundled symbolic icons follow the theme color on GTK 4.14 (visible in the dark theme)

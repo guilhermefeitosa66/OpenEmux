@@ -6209,8 +6209,10 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
 
 The quick-action strip of the Android app's on-screen skin
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
-save, load, turbo and fast forward (plus the screen layout on NDS). Turbo and fast forward show
-whether they are on: an accent pill behind the icon, the icon in white (#554). The runner has no
+save, load, turbo, slow motion and fast forward (plus the screen layout on NDS). Turbo, slow motion
+and fast forward show whether they are on: an accent pill behind the icon, the icon in white (#554).
+Slow motion (a play triangle in a dashed ring) runs the game at a third of its speed, and slow motion
+and fast forward never run together: turning one on turns the other off (issue 638). The runner has no
 Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
 (`emulator -avd <avd> -no-window -read-only`) with `adb`. `$PKG` is `com.openemux.mobile`.
 
@@ -6218,7 +6220,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
-  the drawn skin; the package skins are RT-462); no gamepad connected.
+  the drawn skin; the package skins are RT-462); no gamepad connected (with one, the gamepad layout
+  shows: RT-564 to RT-571).
 - **Steps:**
   1. Launch the Atari 2600 game, phone in portrait.
   2. Tap the bolt (turbo) on the strip under the picture.
@@ -6230,18 +6233,26 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   The pill is readable on every skin, in both orientations, and nothing is clipped or stretched.
 - **Check:** human only (a screenshot of each state: `adb exec-out screencap -p > shot.png`).
 
-### RT-377 — Fast forward shows its state, and the strip and the pause sheet agree
+### RT-377 — Fast forward and slow motion show their state, never run together, and the strip and the pause sheet agree
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** RT-376's game running, both toggles off.
+- **Preconditions:** RT-376's game running, every toggle off.
 - **Steps:**
   1. Tap fast forward (the double arrow) on the strip.
   2. Open the pause sheet (the menu button between L and R).
   3. Tap the "Fast forward" tile, then resume.
   4. Open the pause sheet, tap "Fast forward" again, and resume.
+  5. With fast forward on, tap slow motion (the play triangle in a dashed ring) on the strip, then
+     tap fast forward again.
+  6. Open the pause sheet, tap "Slow motion", then "Fast forward", and resume.
+  7. Open the pause sheet, tap "Fast forward" (off), then "Slow motion", and resume.
 - **Expected:** After step 1 the double arrow shows the pill and the game runs faster. In step 2
   the "Fast forward" tile is shown active. After step 3 the strip has no pill and the game runs at
-  normal speed. After step 4 the strip shows the pill again.
+  normal speed. After step 4 the strip shows the pill again. In step 5, slow motion takes the pill
+  and the fast-forward pill goes away (the game runs slow); tapping fast forward moves the pill back
+  to it and slow motion's goes away (the game runs fast). In step 6 only "Fast forward" ends active
+  in the sheet, and after resuming only fast forward has the pill and the game runs fast. After
+  step 7 only slow motion has the pill and the game runs slow. Never are both pills shown at once.
 - **Check:** human only.
 
 ### RT-378 — The toggles' look survives pause, rotation and the background; a new session starts off
@@ -6253,20 +6264,76 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   2. Open and close the pause sheet; turn the phone to landscape and back; press Home and return to
      the app.
   3. Quit the game from the pause sheet and launch any game again.
+  4. Turn slow motion on from the strip and repeat step 2, then step 3.
 - **Expected:** Through step 2 both buttons keep the pill every time. After step 3 both buttons
-  have their normal look, the game runs at normal speed and turbo is off.
+  have their normal look, the game runs at normal speed and turbo is off. In step 4 slow motion
+  keeps its pill and the game stays slow through the pause sheet, the rotation and the background;
+  after quitting and launching again it has its normal look and the game runs at normal speed.
 - **Check:** human only.
 
-### RT-379 — In RetroAchievements hardcore, fast forward never shows as on
+### RT-379 — In RetroAchievements hardcore, fast forward and slow motion never show as on
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** Signed in to RetroAchievements with "Hardcore mode" on (RT-351).
 - **Steps:**
-  1. Launch a game and tap fast forward on the strip.
+  1. Launch a game and tap fast forward on the strip, then slow motion.
   2. Tap turbo on the strip.
   3. Open the pause sheet.
-- **Expected:** Fast forward is dimmed, does nothing and never shows the pill; turbo shows its pill
-  as in RT-376. The pause sheet's "Fast forward" tile is disabled and not active.
+- **Expected:** Fast forward and slow motion are dimmed, do nothing and never show the pill; the game
+  keeps its normal speed; turbo shows its pill as in RT-376. The pause sheet's "Fast forward" and
+  "Slow motion" tiles are disabled, not active and not reachable with a gamepad's D-pad.
+- **Check:** human only.
+
+### RT-572 — Slow motion on the strip shows its pill and slows the game
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running (Atari 2600 or SNES, drawn skin), every toggle off.
+- **Steps:**
+  1. Phone in portrait: tap slow motion, the fourth button on the strip (a play triangle in a dashed
+     ring, between turbo's bolt and fast forward's double arrow).
+  2. Tap it again.
+  3. Repeat steps 1-2 in landscape (the strip under the picture), on a tablet-size device, and in
+     tabletop posture on a foldable (or its emulator).
+- **Expected:** After step 1 the glyph sits on the purple pill with a light ring, drawn in white,
+  and the game runs visibly slower (about a third of its speed); turbo and fast forward keep their
+  normal look. After step 2 the glyph is back to its normal look and the game runs at normal speed.
+  In every layout of step 3 the glyph is there, the pill fits its slot and nothing is clipped.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+### RT-573 — The pause sheet's "Slow motion" tile
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** RT-376's game running, every toggle off.
+- **Steps:**
+  1. Turn slow motion on from the strip and open the pause sheet.
+  2. Tap the "Slow motion" tile and resume.
+  3. Open the pause sheet, tap "Slow motion" and resume.
+  4. Switch the app's language to Português (Brasil) and to one more language, and open the pause
+     sheet.
+- **Expected:** In step 1 the tiles read "Fast forward", "Slow motion", "Screenshot", "Shader",
+  "Audio", and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
+  speed"; after resuming the strip has no slow-motion pill and the game runs at normal speed. Step
+  3 shows "Slow motion on resume"; after resuming slow motion has its pill and the game runs slow.
+  In step 4 the tile label and the toast are translated ("Câmera lenta", "Câmera lenta ao voltar")
+  and not clipped.
+- **Check:** human only.
+
+### RT-574 — NDS: six strip slots, and the pause sheet's tiles wrap on a narrow window
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game in the library; a phone (or emulator) whose portrait window is about
+  360 dp wide (`adb shell wm size 1080x2340` with `adb shell wm density 480`; restore with
+  `adb shell wm size reset` and `adb shell wm density reset`); a gamepad for step 3.
+- **Steps:**
+  1. Launch the NDS game in portrait and look at the strip.
+  2. Turn slow motion on from the strip, then open the pause sheet.
+  3. Connect the gamepad and move with the D-pad through every tile.
+  4. Turn the phone to landscape, close and reopen the pause sheet.
+- **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
+  and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
+  sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
+  into two rows of three, each tile full size with its full label. In step 3 the D-pad reaches all
+  six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the bundled package skins
@@ -6281,12 +6348,34 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   3. Tap both again.
   4. Turn fast forward on, open the pause sheet, then resume.
   5. Repeat steps 2-3 in landscape, then on the other console's game.
-- **Expected:** After step 2 each button sits on the purple pill with a light ring, the skin's own
+- **Expected:** The chin has five keys, evenly spaced: save, load, turbo, slow motion (RT-577) and
+  fast forward. After step 2 each button sits on the purple pill with a light ring, the skin's own
   glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
   look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
   active. Landscape and the drawn skin show the same pill.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
+
+### RT-577 — Slow motion on the bundled package skins, right before fast forward
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; no skin in
+  `files/skins/`; no gamepad connected; RetroAchievements hardcore off.
+- **Steps:**
+  1. Launch the SNES game, phone in portrait, and look at the quick actions in the bezel's chin.
+  2. Tap slow motion (the play triangle in a dashed ring, right before the double arrow).
+  3. Tap fast forward, then slow motion again, then slow motion once more.
+  4. Repeat steps 1-3 in landscape, on the GBA game, and on a tablet-size device
+     (`adb shell wm size 1600x2560` with `adb shell wm density 320`; restore with `reset`).
+  5. With RetroAchievements hardcore on (an account signed in), launch the SNES game again.
+- **Expected:** In step 1 the chin holds five keys in the same span the four used to take, evenly
+  spaced: save, load, turbo, slow motion, fast forward, every glyph in the skin's own colour, none
+  clipped, nothing over the picture or the buttons around the chin. After step 2 slow motion sits on
+  the purple pill with the glyph in white and the game runs about three times slower. In step 3 fast
+  forward going on takes slow motion's pill off (and the reverse), and the last tap leaves both off at
+  normal speed. Every layout of step 4 shows the same five keys. In step 5 slow motion and fast forward
+  are drawn faded, do nothing when tapped and never show the pill.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 ## Android — On-screen analog stick
 
@@ -8492,6 +8581,227 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
+## Share nearby — cross-device
+
+The paths of Share nearby that need two different devices: desktop → Android, Android → desktop,
+games made of several files, save states across cores, conflicts, cancelling and protocol versions
+(issue 592, epic 586). The single-device behavior is in the two sections above, and Android →
+Android is RT-537; this section does not repeat them. Every scenario here is `MANUAL`: real
+hardware on one Wi-Fi network. Where a scenario says **pipeline variant**, the same steps can run
+on the devbox and a headless emulator, connected by address instead of by discovery: the emulator
+reaches the devbox app at `10.0.2.2:53319`, and the devbox reaches the emulator after
+`adb forward tcp:53320 tcp:53319` at `127.0.0.1:53320`. Multicast does not cross the emulator's
+NAT, so discovery itself is checked only on hardware.
+
+- `$PKG` is `com.openemux.mobile`; on Android the library lives under
+  `/sdcard/Android/data/$PKG/files/` (`roms/<CONSOLE>/`, `saves/<CONSOLE>/`, `states/<CONSOLE>/`).
+  On the desktop, ROMs and battery saves are in the ROMs folder (`~/games/roms/<CONSOLE>/` by
+  default) and states in `~/.openemux/states/<CONSOLE>/`.
+- **The test library**, on the sending side: one SFC game with a battery save (`.srm`), a cover, a
+  cartridge label and the favorite star; one PS game as a `.cue` with two `.bin` tracks; one GBA
+  game with two save states, one made by a core the receiver also has (same core, same version)
+  and one made by a core the receiver does not have (choose another core for the game with its
+  "Core ▸" menu before saving that state). The receiver has none of them unless a scenario says so.
+- The transfer can be read in the desktop log panel ("Log") and on Android with
+  `adb logcat -d -s OpenEmuxShare`.
+
+### RT-551 — A computer and a phone on one network list each other by name and platform
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A computer with OpenEmux and a phone with OpenEmux for Android on the same
+  Wi-Fi network.
+- **Steps:**
+  1. On the computer, right-click a game and choose "Share Nearby…".
+  2. On the phone, open the "Import" tab and tap "Receive games".
+  3. Close both, then do the reverse: share a game from the phone's detail "⋯" menu and open
+     "Receive Games…" from the arrow beside the Import button on the computer.
+- **Expected:** Within a few seconds the computer lists the phone under "Devices on This Network"
+  with a phone icon, its name and "Phone · found by mDNS and beacon" (or one of the two). In step 3
+  the phone lists the computer as "Desktop · found by …" with the computer's name.
+- **Check:** human only (a screenshot of each list).
+
+### RT-552 — A game sent from the computer arrives on the phone with its save, art and star
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's SFC game on the computer; the phone does not have it.
+- **Steps:**
+  1. On the phone, open "Receive games". On the computer, right-click the SFC game, "Share
+     Nearby…", and choose the phone.
+  2. Compare the six-digit code on the computer ("Waiting for <phone> to accept…") with the one in
+     the phone's "Incoming Games" sheet, then tap "Accept".
+  3. On the phone, tap "Show in Library" and start the game.
+- **Expected:** The two codes are the same. The sheet reads "<computer> wants to send you 1 game
+  (<size>)." The computer ends on "1 Game Sent", the phone on "1 Game Received". The game is in
+  the phone's library without restarting the app, with its cover, its cartridge label and the
+  favorite star, and it starts with the computer's in-game save.
+- **Check:** human only; `sha256sum` of the `.sfc` and the `.srm` on the computer equals
+  `adb shell sha256sum /sdcard/Android/data/$PKG/files/roms/SFC/<game>.sfc` and the same for the
+  save under `saves/SFC/`.
+
+### RT-553 — A game sent from the phone arrives on the computer with no rescan
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's SFC game on the phone; the computer does not have it.
+- **Steps:**
+  1. On the computer, open "Receive Games…". On the phone, share the game from its detail "⋯"
+     menu and tap the computer.
+  2. Compare the codes, then press "Accept" in the computer's "Incoming Games" dialog.
+  3. Press "Show in Library" and start the game.
+- **Expected:** The same code on both screens. The phone ends on "1 Game Sent" ("<computer> has
+  them now."), the computer on "1 Game Received". The game shows in the computer's library at
+  once, without "Rescan", with its cover, label and star, and it starts with the phone's save.
+- **Check:** human only; `sha256sum` of the ROM and the `.srm` in `~/games/roms/SFC/` equals the
+  phone's (`adb shell sha256sum …`).
+
+### RT-554 — A game made of several files arrives complete in both directions
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's PS game (`.cue` and two `.bin`) on the computer; for the
+  second part, a multi-disc game with its `.m3u` and discs.
+- **Steps:**
+  1. Send the PS game from the computer to the phone and accept there.
+  2. Start it on the phone.
+  3. Delete it from the computer's library, send it back from the phone and accept on the
+     computer. Start it there.
+  4. Repeat steps 1 and 2 with the `.m3u` game.
+- **Expected:** The offer counts one game, not three files. On the receiving side the `.cue`, both
+  `.bin` (and the `.m3u` with every disc) sit together in that console's folder, the library shows
+  a single game, and it starts and plays past the first track on both devices.
+- **Check:** human only; `adb shell ls /sdcard/Android/data/$PKG/files/roms/PS/` and
+  `ls ~/games/roms/PS/` after each direction.
+
+### RT-555 — A compatible save state loads on the other device; an incompatible one is skipped
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The test library's GBA game with its two states on the sender (computer or
+  phone); the receiver has the core and version of one state only.
+- **Steps:**
+  1. Send the game and read the offer on the receiver before answering.
+  2. Accept. On the receiver, load the state made with the shared core.
+  3. Repeat in the other direction.
+- **Expected:** The offer says one state will be skipped: on the computer "1 save state was made
+  with a core you don't have and will be skipped.", on the phone "1 save state skipped: made with a
+  core this device doesn’t have.". After the transfer the compatible state is in the receiver's
+  states folder and loads into the game; the incompatible one is not there at all.
+- **Check:** human only; list the receiver's `states/GBA/` folder (`adb shell ls …` or
+  `ls ~/.openemux/states/GBA/`) and compare with the sender's.
+
+### RT-556 — "Keep Newest" keeps the newer save, whichever device has it
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The SFC game on both devices (after RT-552); play it on the receiver and save
+  in the game, so the receiver's `.srm` is newer than the sender's.
+- **Steps:**
+  1. Note the receiver's save hash. Send the game from the other device.
+  2. On the receiver, open "Review 1 Conflict", leave "Keep Newest" and accept.
+  3. Now save in the game on the sender, so the sender's save is the newer one, and send again with
+     "Keep Newest".
+  4. Do steps 1 to 3 once with the phone receiving and once with the computer receiving.
+- **Expected:** "Already in Your Library" lists the battery save with both dates, the receiver's
+  marked newer in step 2 and the incoming one in step 3, and "Keep Newest" is already chosen. After
+  step 2 the receiver's save is unchanged (same hash). After step 3 it is the sender's.
+- **Check:** human only; `sha256sum` of the receiver's `.srm` before and after each transfer.
+
+### RT-557 — Cancelling on the sender stops a transfer between a computer and a phone
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** A large game (a dummy ROM of a few hundred MB) on the sender.
+- **Steps:**
+  1. Send it from the computer to the phone and accept on the phone.
+  2. During the progress, press "Cancel Transfer" on the computer and confirm.
+  3. Repeat with the phone sending to the computer, cancelling on the phone.
+- **Expected:** Both sides end on "Transfer Cancelled" and nothing from the transfer is kept: the
+  receiver has neither the game nor a hidden `.tmp` file. Neither app closes or reports a failure.
+- **Check:** human only; on the phone `adb shell ls -a /sdcard/Android/data/$PKG/files/roms/<CONSOLE>/`,
+  on the computer `ls -la ~/games/roms/<CONSOLE>/`, both with no `.*.tmp` left.
+
+### RT-558 — Cancelling on the receiver stops a transfer between a computer and a phone
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** As RT-557.
+- **Steps:**
+  1. Send the large game from the computer to the phone and accept.
+  2. During the progress, cancel on the phone ("Cancel Transfer" or "Cancel" in the notification).
+  3. Repeat with the phone sending to the computer, cancelling on the computer.
+- **Expected:** The same as RT-557: "Transfer Cancelled" on both sides, no game and no `.tmp` file
+  on the receiver.
+- **Check:** human only; the same listings as RT-557.
+
+### RT-559 — Declining or letting the offer expire sends nothing to the other device
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL (pipeline variant by address)
+- **Preconditions:** The SFC game on the computer; the phone does not have it.
+- **Steps:**
+  1. Send the game from the computer to the phone and tap "Decline" on the phone.
+  2. Send it again from the phone to the computer and answer nothing for 60 seconds.
+- **Expected:** Step 1: the computer shows "Offer Declined" and nothing is added on the phone.
+  Step 2: the computer's "Incoming Games" closes on its own with "The offer from <phone> expired",
+  the phone shows "Offer Expired", and nothing is added on the computer.
+- **Check:** human only; the receiver's ROM folder listing is unchanged.
+
+### RT-560 — A device on another protocol version is listed, not hidden, on both platforms
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A stand-in peer on another protocol version: a throwaway checkout of OpenEmux
+  with `PROTOCOL_VERSION = 2` and `PROTOCOL_MIN_VERSION = 2` in
+  `src/openemux/core/share/protocol.py`, running with its own `HOME` on a computer on the network
+  (never the developer's real checkout or config).
+- **Steps:**
+  1. Open "Receive Games…" on the stand-in.
+  2. Open "Share Nearby…" on a game on the regular computer, and "Share Nearby" on a game on the
+     phone.
+  3. On the phone, also try "Connect by Address" with the stand-in's address.
+- **Expected:** The regular computer lists the stand-in greyed out with "Update OpenEmux on this
+  device · version 2, this one speaks 1"; the phone lists it greyed out with "<platform> · update
+  OpenEmux on this device" and "Version 2, this one speaks 1". Neither can be chosen, and neither
+  drops it from the list. The address attempt on the phone says it runs another version of
+  OpenEmux.
+- **Check:** human only (screenshots). The desktop listing is also in RT-509
+  (`tests/test_share_dialog.py`, `test_devices_compatible_and_not`).
+- **Restore:** Delete the throwaway checkout and its `HOME`.
+
+### RT-561 — A phone reaches a computer by scanning its QR code
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A computer with `python3-segno` (so the QR code shows) and a phone on the same
+  network.
+- **Steps:**
+  1. On the computer, open "Receive Games…" and then "Connect by Address".
+  2. On the phone, point the camera app at the QR code and open the link it offers.
+  3. On the phone, tap "Connect", then share a game to the computer.
+- **Expected:** OpenEmux opens on the phone in "Connect by Address" with the computer's
+  `openemux-share://host:port#fingerprint` already in "Address"; nothing connects before
+  "Connect". After it, the computer is listed as "Desktop · found by address" and the transfer
+  goes through with the same code on both screens.
+- **Check:** human only (screenshots of both screens).
+
+### RT-562 — On a network that isolates clients, both screens explain it and a hotspot works
+- **Area:** Share nearby — cross-device
+- **Mode:** MANUAL
+- **Preconditions:** A guest or public Wi-Fi network with client isolation, a computer and a phone
+  on it.
+- **Steps:**
+  1. Open "Share Nearby…" on the computer and "Receive games" on the phone, and wait 20 seconds.
+  2. Turn on the phone's hotspot, connect the computer to it and open both screens again.
+- **Expected:** Step 1: neither lists the other; after about 15 seconds both show "No Devices
+  Found" with the guest and public network note suggesting a phone hotspot, and the firewall note
+  with TCP 53319 and UDP 53318. Step 2: the two devices list each other and a game goes across.
+- **Check:** human only (screenshots of both screens after each step).
+
+### RT-563 — The manual explains Share Nearby in every language and the README links to it
+- **Area:** Share nearby — cross-device
+- **Mode:** AUTO-PROBE
+- **Preconditions:** None.
+- **Steps:**
+  1. Open the manual (`docs/manual/index.html`), find "Share Nearby" in the contents and follow
+     "When devices do not see each other".
+  2. Open the README and follow its Share Nearby links.
+- **Expected:** The chapter is in the contents of the manual in every language, with sections on
+  sending, receiving, what goes with a game, the verification code, conflicts, Connect by Address,
+  troubleshooting (with TCP 53319 and UDP 53318) and the device name. The README links to
+  `manual/#share` and `manual/#share-trouble`.
+- **Check:** `PYTHONPATH=src:tools .venv/bin/python -c "import build_site, pathlib; pages = [build_site.manual_output_path(l).read_text(encoding='utf-8') for l in build_site.ORDER]; assert all('id=\"share-trouble\"' in p and 'href=\"#share\"' in p and '53319' in p and '53318' in p for p in pages); readme = pathlib.Path('README.md').read_text(encoding='utf-8'); assert 'manual/#share)' in readme and 'manual/#share-trouble' in readme; print('RT-563 OK')"`
+
 ## Android — System bars
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -8573,6 +8883,201 @@ and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a star
   never covered by them. The search field stays above the keyboard; once it closes, the layout is
   back where it was.
 - **Check:** human only (the screenshots).
+
+## Android — In-game controls with a gamepad
+
+The Android app's in-game skin with a gamepad connected, and the hide / show key for the app
+controls (issue 637; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). With a pad, the skin switches to a gamepad layout: the app controls only
+(menu, save, load, turbo, fast forward, plus the screens key on NDS), on two side rails in landscape,
+a strip along the foot in portrait and a row under the fold in tabletop; the virtual game buttons
+are gone. A hide key (an eye with a slash) beside the menu key collapses every app control to a
+faint show key (an eye) where the menu key was. `MANUAL`, like the other Android sections: a phone
+or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad
+with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true` ("connect"
+below), `--ez connected false` ("disconnect") and `--ez clear true` (back to the real devices); a
+release APK needs a real controller (USB or Bluetooth).
+
+### RT-564 — A gamepad connected at launch opens on the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A Mega Drive game and an Atari 2600 game in the library; a gamepad connected
+  (a real one, or "connect" once the game has opened).
+- **Steps:**
+  1. Launch the Atari 2600 game, phone in landscape.
+  2. Repeat with the Mega Drive game (a bundled package skin).
+- **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
+  from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
+  the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
+  barely visible disc), not a grey band. The picture fits between the rails at full height. The
+  package skin shows the same drawn layout.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`).
+
+### RT-565 — Connecting and disconnecting the pad mid-game switches the layout without a restart
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Atari 2600 game, no gamepad connected.
+- **Steps:**
+  1. In portrait, play a few seconds, then connect the pad.
+  2. Disconnect it.
+  3. Repeat steps 1-2 in landscape.
+- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load,
+  turbo, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
+  back. In landscape, the rails of RT-564 and back. The game keeps running throughout: no
+  restart, the play position is kept.
+- **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: portrait -> pad-portrait` (debug APK).
+
+### RT-566 — With a pad, the menu key opens the pause sheet and "Quit game" works
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout (RT-564).
+- **Steps:**
+  1. Tap the menu key.
+  2. Tap "Quit game".
+- **Expected:** The pause sheet opens over the game; "Quit game" returns to the library. The pad
+  never has to be disconnected.
+- **Check:** human only.
+
+### RT-567 — Save and load from the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout.
+- **Steps:**
+  1. Tap save.
+  2. Play on until the screen changes.
+  3. Tap load.
+- **Expected:** The state saved in step 1 is back after step 3; the on-screen messages are the ones
+  the touch strip shows.
+- **Check:** human only.
+
+### RT-568 — Hide and show in the touch layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Atari 2600 game, no gamepad connected, landscape.
+- **Steps:**
+  1. Tap the hide key beside the menu key.
+  2. Use the D-pad and the face buttons.
+  3. Tap the show key.
+  4. Repeat steps 1-3 in portrait.
+- **Expected:** After step 1 the menu key, the hide key and the quick-action strip are gone; a
+  faint show key sits exactly where the hide key was; the strip's area is plain skin colour. The D-pad and
+  face buttons still work and the picture did not move. Step 3 brings every control back.
+- **Check:** human only.
+
+### RT-569 — Collapsed survives rotation and the pad coming and going; pad buttons press no key on screen
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout (landscape).
+- **Steps:**
+  1. Tap the hide key.
+  2. Turn the phone to portrait and back.
+  3. Disconnect the pad, then connect it again.
+  4. Press several pad buttons.
+  5. Tap the show key.
+  6. Quit the game and launch it again.
+- **Expected:** After step 1 only the faint show key remains, exactly where the hide key was (top of
+  the right rail in landscape, end of the strip in portrait), and the picture fits the whole screen.
+  Steps 2-3 keep it collapsed (with the pad gone: the touch skin, collapsed). Step 4 moves the game
+  and opens nothing on screen. Step 5 expands the layout in use. Step 6 starts expanded.
+- **Check:** human only.
+
+### RT-570 — Turbo, slow motion, fast forward and hardcore look the same in the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running in the gamepad layout; then one with RetroAchievements hardcore on
+  (RT-351).
+- **Steps:**
+  1. Tap turbo, then slow motion, then fast forward, on the rail (landscape) or the strip (portrait).
+  2. Open the pause sheet.
+  3. In the hardcore game, tap slow motion and fast forward.
+- **Expected:** Slow motion sits right before fast forward. Each lit key shows the purple pill with a
+  light ring and a white icon, as on the touch strip (RT-376), but translucent so it does not pull the
+  eye off the game; turning fast forward on turns slow motion off (RT-377), and the sheet's speed
+  tiles agree. In hardcore, slow motion and fast forward are dimmed and do nothing.
+- **Check:** human only.
+
+### RT-571 — Tabletop, NDS and tablet with a pad
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A foldable AVD (e.g. `openemux-fold`) half open, a tablet AVD, an NDS game; a pad
+  connected.
+- **Steps:**
+  1. Launch a game on the half-open foldable.
+  2. Tap hide, then show.
+  3. Launch the NDS game in portrait and tap the screens key a few times.
+  4. Launch a game on the tablet in landscape.
+- **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
+  Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
+  stays in the gamepad layout. Step 4: the rails of RT-564, scaled to the tablet.
+- **Check:** human only.
+
+
+## Android — RetroArch menu
+
+The pause sheet of the Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) has an advanced row, "RetroArch menu" ("Advanced settings, for this session
+only"), after "Restart game" (a full-width row under the bottom row in tabletop). It closes the sheet
+and opens RetroArch's own menu (MaterialUI) over the running game, for settings the app does not
+expose (issue 639). Leaving it returns to the game, and the next menu request opens the pause sheet
+again. Everything changed there lasts for the session only: the app writes its own config at every
+launch. "Close Content" and "Quit RetroArch" leave the game like "Quit game", and the entries that
+would load other content or cores (Load Core, Load Content, the updaters, Restart RetroArch,
+Configuration File, History, Favorites, Playlists, Explore) are hidden. `MANUAL`, like the other
+Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with
+`adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-575 — The RetroArch menu opens from the pause sheet and gives the game back
+- **Area:** Android — RetroArch menu
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a GBA or SNES game running with
+  its touch skin, RetroAchievements hardcore off.
+- **Steps:**
+  1. Open the pause sheet (the menu button on the skin).
+  2. Tap "RetroArch menu".
+  3. Open "Quick Menu" and tap "Resume Content" (or "Resume").
+  4. Open the pause sheet and tap "RetroArch menu" again; at the menu's top level press BACK
+     (`adb shell input keyevent KEYCODE_BACK`).
+  5. Open the pause sheet the normal way (the skin's menu button).
+  6. Close the sheet. Connect a gamepad (or send `adb shell input keyevent KEYCODE_BUTTON_START`
+     and the D-pad/`KEYCODE_BUTTON_A`/`KEYCODE_BUTTON_B` key events), open the sheet, move to
+     "RetroArch menu" with the D-pad, press A, move through RetroArch's menu with the D-pad and A,
+     and leave it with B.
+  7. With RetroArch's menu open, press Home, wait a few seconds and come back to the game (or send
+     `KEYCODE_SLEEP` then `KEYCODE_WAKEUP`).
+  8. Turn on RetroAchievements hardcore (RT-351), launch the game, open "RetroArch menu" and look at
+     "Quick Menu".
+- **Expected:** In step 1 "RetroArch menu" sits after "Restart game" and above "Quit game", with
+  "Advanced settings, for this session only" under it (in the tablet side panel too; under the bottom
+  row on a half-open foldable). In step 2 the sheet closes, RetroArch's menu opens over the game and
+  the skin is hidden. In step 3 the game continues from where it was (the picture moves, sound
+  plays) and the skin is back. In step 4 BACK also returns to the running game. In step 5 the app's
+  pause sheet opens, not RetroArch's menu. In step 6 the gamepad reaches the row, drives RetroArch's
+  menu, and B leaves it with the game running. In step 7 RetroArch's menu is still shown on return,
+  with no pause sheet on top, and leaving it resumes the game (not left paused). In step 8 RetroArch
+  refuses "Load State", rewind and cheats while hardcore is on, and leaving the menu returns to the
+  game.
+- **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
+
+### RT-576 — Leaving through RetroArch's menu quits like "Quit game", and its settings do not stay
+- **Area:** Android — RetroArch menu
+- **Mode:** MANUAL
+- **Preconditions:** RT-575's game running, hardcore off, played for a minute.
+- **Steps:**
+  1. Open "RetroArch menu" from the pause sheet and look at RetroArch's main menu.
+  2. In "Quick Menu" > "Core Options", change any option; in "Settings" > "Video", change something
+     visible (for example "Integer Scale"). Go back to the game.
+  3. Open "RetroArch menu" again and choose "Close Content".
+  4. Note the auto state's time in the game's details, launch the game again and open "RetroArch
+     menu".
+  5. Choose "Quit RetroArch".
+- **Expected:** In step 1 the main menu has no "Load Core", "Load Content", "Online Updater",
+  "Restart RetroArch", "Configuration File", History, Favorites, Playlists or Explore; "Quit
+  RetroArch" is there. In step 2 both changes take effect at once in the running game. In step 3 the
+  game closes and the app is back on the library, as with "Quit game": the auto state is written
+  (its time moved) and the playtime grew. In step 4 the core option and the video setting are back
+  to the app's values. In step 5 the game also closes back to the library, with the auto state
+  written.
+- **Check:** human only.
 
 ## Retired
 

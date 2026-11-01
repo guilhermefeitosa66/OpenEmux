@@ -16,6 +16,7 @@ OpenEmux spans several repositories, all checked out next to this one (under `~/
 | `guilhermefeitosa66/openemux-android` | `../openemux-android` | `openemux-mobile` | The Android app (see below). |
 | `guilhermefeitosa66/openemux-artwork` | `../openemux-artwork` | `main` | Self-hosted cover-art mirror: reduced-size WebP synced from libretro-thumbnails, which cover sync downloads from. |
 | `guilhermefeitosa66/openemux-flatpak` | `../openemux-flatpak` | `main` | Flatpak distribution repo (ostree on `gh-pages`); its `publish.yml` is dispatched after each release (step 8 below). |
+| `guilhermefeitosa66/openemux-builds` | `../openemux-builds` | `main` | Android beta APKs, one pre-release per finished `repo-mobile` issue (`beta-<version>`), linked from the issue. Signed with the release key, patch number only bumped. Published by the pipeline after QA merges. |
 | `guilhermefeitosa66/openemux-evidence` | `../openemux-evidence` | `main` | Images embedded in issue comments: `qa/issue-<N>/<run>/` (QA screenshots) and `design/issue-<N>/` (design specs). Nothing is built or shipped from it. |
 | `guilhermefeitosa66/openemux-ops` (private) | `../openemux-ops` | `main` | Maintainer notes; `pipeline/PIPELINE.md` documents the autonomous issue pipeline. |
 | `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`docs/assets/openemux-promo.mp4` and its poster). |
