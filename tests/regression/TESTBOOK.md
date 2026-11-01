@@ -3917,10 +3917,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
      (left of the search button).
   2. Open "Settings" → "System" and read the "Theme" row.
 - **Expected:** The whole interface repaints in the other theme and the button's icon flips to
-  offer the way back (sun while dark, moon while light). The "Theme" row reads "Light" or "Dark",
-  matching what is on screen.
-- **Check:** screenshots before and after the click; `grep "theme:" ~/.openemux/config.yaml`
-  reports the same value the row shows.
+  offer the way back: while dark, a sun (a ring with eight rays clearly separate from it, light on
+  the dark header); while light, a crescent moon (dark on the light header). The "Theme" row reads
+  "Light" or "Dark", matching what is on screen.
+- **Check:** screenshots before and after the click, plus a 4x crop of the button in each theme;
+  `grep "theme:" ~/.openemux/config.yaml` reports the same value the row shows. The button's icon
+  name is `openemux-sun-symbolic` while dark and `openemux-moon-symbolic` while light
+  (`make devbox-tests CMD=tests.test_window` covers it in `TheThemeButtonTests`).
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
 
 ### RT-103 — The chosen theme survives a restart
@@ -3933,6 +3936,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The first frame is already light — no dark window that repaints a moment later.
 - **Check:** screenshot of the window right after it appears; the header bar is light.
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
+
+### RT-610 — The theme toggle's sun and moon do not change with the host icon theme
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**, in the devbox (its `$HOME` is throwaway). Back up the config
+  first (`cp ~/.openemux/config.yaml $SCRATCH/config.bak`), then set `theme: light` in
+  `~/.openemux/config.yaml` so the app opens light.
+- **Steps:**
+  1. Inside the devbox, pick an icon theme that does not inherit Adwaita: a third-party one from
+     `ls /usr/share/icons` (Papirus, Numix, Breeze...) if installed, else `hicolor`. Write it to
+     `~/.config/gtk-4.0/settings.ini` as `[Settings]` / `gtk-icon-theme-name=<theme>`.
+  2. Launch the app; with the light theme, look at the sun/moon button in the content header bar.
+  3. Click it to switch to dark and look again; click it once more to go back.
+- **Expected:** The same drawings as in RT-102 on the default theme: a crescent moon while light,
+  a ring with eight separate rays while dark, both recolored with the header (no dark-on-dark).
+- **Check:** a 4x crop of the button in each theme, compared side by side with the RT-102 crops.
+- **Restore:** remove `~/.config/gtk-4.0/settings.ini` (or the line it gained) and
+  `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
 
 ### RT-238 — Every file picker opens the desktop's own file chooser
 - **Area:** Settings
