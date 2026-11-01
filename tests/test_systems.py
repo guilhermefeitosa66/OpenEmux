@@ -73,10 +73,6 @@ class ResolveSystemIdTests(unittest.TestCase):
 class AccessorTests(unittest.TestCase):
     def test_the_accessors_take_an_alias_as_readily_as_an_id(self):
         self.assertEqual(get_system_display_name("NES"), get_system_display_name("FC"))
-        # Only the label changed in issue 654: the old aliases still resolve.
-        for alias, system_id in (("nes", "FC"), ("NES", "FC"), ("snes", "SFC"), ("SNES", "SFC")):
-            with self.subTest(alias=alias):
-                self.assertEqual(resolve_system_id(alias), system_id)
         self.assertEqual(get_supported_extensions("SNES"), get_supported_extensions("SFC"))
 
     def test_an_unknown_console_gets_answers_it_can_live_with(self):

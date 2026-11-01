@@ -1301,13 +1301,14 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Area:** Navigation & search
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
-- **Steps:** As a QA person: open the app on the devbox synthetic library and read the console rows
-  in the sidebar, the shelf group titles on "All Games" and the per-console rows in Preferences.
+- **Steps:**
+  1. Read the console names in the console table every label is built from (the sidebar rows, the
+     shelf group titles on "All Games" and the per-console rows in Preferences all read it).
 - **Expected:** Every console is named once, never two or three names joined by " / ":
-  "FC - Nintendo (NES)", "SFC - Super Nintendo", "MD - Mega Drive", "MCD - Mega CD",
-  "PCE - PC Engine", "PCECD - PC Engine CD", "O2 - Odyssey²". Only the label changed: the ids, the
-  `nes`/`snes` aliases and the ROM folders are the same, so an existing library keeps every game
-  (issue 654).
+  FC "Nintendo (NES)", SFC "Super Nintendo", MD "Mega Drive", MCD "Mega CD", PCE "PC Engine",
+  PCECD "PC Engine CD", O2 "Odyssey²". The sidebar shows them as "MD - Mega Drive", Preferences as
+  "MD — Mega Drive". Only the label changed: the ids, the `nes`/`snes` aliases and the ROM folders
+  are the same, so an existing library keeps every game (issue 654).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -c "
