@@ -5898,10 +5898,11 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Steps:**
   1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
   2. Start a game and open the pause sheet.
-- **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
-  sideways. On "All" the games of every console follow one another in that row, with no header
-  slot between consoles, and a small console label sits above the row (RT-590). The pause sheet
-  shows its main page in two columns.
+- **Expected:** The tabs move to a rail on the left side. In the cartridge and cover views the
+  library has a single top row (back, the filter pager, search, sort, view toggle; no console chips
+  row, RT-599) and one row of games that scrolls sideways. On "All" the games of every console
+  follow one another in that row, with no header slot between consoles, and a small console label
+  sits above the row (RT-590). The pause sheet shows its main page in two columns.
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -5951,11 +5952,13 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Preconditions:** As RT-381 (phone, landscape), with at least four games in each of two consoles
   (e.g. "NES" and "SNES").
 - **Steps:**
-  1. Open a console's library and tap the "All" chip; use the cartridge view.
+  1. Open a console's library and step to "All games" with the filter pager's previous button; use
+     the cartridge view.
   2. Look at the row where the first console's games end and the next console's begin.
   3. Switch to the cover view, then open "Favorites" (with favorites in both consoles) and a search
      that matches games of both consoles, in each view.
-  4. Tap the "SNES" chip, a single console's page.
+  4. Step to "Super Nintendo" with the pager's next button (or pick it in the filter menu), a single
+     console's page.
 - **Expected:** No item of the row is a console header: the last game of the first console is
   followed directly by the first game of the next. Above the row, in small type, a label shows the
   console's pixel icon and "NES – Nintendo (NES) · 4 games"; the cartridges are as tall as before.
@@ -5995,6 +5998,90 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
+### RT-599 — Phone landscape has a single top row with a filter pager
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-381 (phone, landscape), touch only (no pad), a library with games in at
+  least three consoles (e.g. NES, SNES, GBA) and two favorites.
+- **Steps:**
+  1. `adb shell wm size 1080x2400` and `adb shell wm density 480` (about 800×360dp in landscape).
+     Open "All games" from the shelf in the "Cartridges" view, then a console's page; repeat in the
+     "Covers" view.
+  2. `adb shell wm size 1080x1920` (about 640×360dp). Open "Super Nintendo", then "All games".
+  3. Read the header row with TalkBack or `adb shell uiautomator dump`.
+- **Expected:** One row above the games: an icon-only back button, a "previous" chevron, the current
+  filter (console pixel icon, or a star for "Favorites", none for "All games") with its name, a
+  "next" chevron, then search, sort and the view toggle. There is no console chips row and no second
+  row. With 680dp or more of row the bare game count and a down caret follow the name; on narrower
+  rows they are hidden. At 640×360dp the name is fully readable (shrunk if needed, never cut) and
+  nothing overlaps. The filter's content description reads "Filter: <name>, <N> games. Change
+  filter"; the steps read "Previous filter: <name>" / "Next filter: <name>".
+- **Check:** human only (a screenshot of each; `adb shell uiautomator dump`).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-600 — Previous/next and the filter menu cycle the same filters in the same order
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-599, at 800×360dp, on "All games".
+- **Steps:**
+  1. Tap "next" until it dims, then "previous" until it dims; tap each dimmed one once more.
+  2. Tap the filter name.
+  3. Pick a console in the menu.
+- **Expected:** The filter goes All games → Favorites → each console with games in the shelf's
+  console order, and back; the games row updates each time. "Previous" is dimmed on "All games" and
+  "next" on the last console; tapping a dimmed one does nothing. The menu lists "All games",
+  "Favorites" and each console with games, each with its icon and game count, the current one
+  highlighted; picking one switches the list and closes the menu.
+- **Check:** human only (a screenshot of the menu and of the two ends).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-601 — With a gamepad the pager shows the shoulder labels and the shoulders switch the filter
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-599, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
+- **Steps:**
+  1. Set Settings → "Button labels" to "Xbox", open "All games" and press
+     `KEYCODE_BUTTON_R1` twice, then `KEYCODE_BUTTON_L1` once.
+  2. Repeat step 1 with "Nintendo", then "PlayStation".
+  3. From a focused game press UP, then LEFT/RIGHT along the row; press A on the filter name, move in
+     the menu with the D-pad, press A on a console, then reopen it and press B.
+- **Expected:** "Previous"/"next" show LB/RB, then L/R, then L1/R1 instead of chevrons; the caret is
+  hidden. Each shoulder press switches the filter and the label follows. The hint bar has no
+  "Console" hint. UP reaches the header row; LEFT/RIGHT walk back, previous, the filter name, next,
+  search, sort and the view buttons with a whole focus ring (also on a dimmed step). A opens the
+  menu, the D-pad moves in it, A picks, B closes it.
+- **Check:** human only (a screenshot per family).
+- **Restore:** "Button labels" back to "Automatic"; `adb shell wm size reset`,
+  `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-602 — Search opens in the same row and closing it brings the pager back
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-599, at 800×360dp.
+- **Steps:**
+  1. On "All games" tap search, then type part of a title that exists.
+  2. Tap × (close search).
+  3. Open "Super Nintendo" and tap search again.
+- **Expected:** The search field takes the pager's place in the header row; no second row appears
+  and the search button becomes ×. The placeholder reads "Search all games" on "All games" and
+  "Search in Super Nintendo" on that console. The list filters as you type. × clears the query and
+  brings the pager back.
+- **Check:** human only (a screenshot of each step).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-603 — Landscape tiles are taller than before, with and without the hint bar
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-599, at 800×360dp; an APK from before issue 669 to compare with.
+- **Steps:**
+  1. On a console's page in the "Cartridges" view, take a screenshot with each APK.
+  2. Repeat with a pad in use, so the hint bar shows.
+- **Expected:** With the new APK the cartridges are clearly taller in both cases (about 44dp more:
+  roughly 220 vs 176dp, and 180 vs 136dp with the hint bar).
+- **Check:** human only (the screenshots side by side; `adb shell uiautomator dump` gives the tile
+  bounds).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
 ### RT-385 — Gamepad focus moves through every screen after a rotation or resize
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
@@ -6027,7 +6114,8 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   2. Press RIGHT one game at a time to the last one, then LEFT back to the first.
   3. With the last game focused, press RIGHT once more.
   4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
-  5. Press UP into the header (back link, search, sort, view toggle).
+  5. Press UP into the header row (back, previous, the filter name, next, search, sort, view
+     toggle) and walk it with LEFT/RIGHT.
 - **Expected:** The first games take focus without the row scrolling, and the first one rests at the
   row's left padding with nothing empty before it. From there on the focused game stays in the
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
@@ -9310,7 +9398,8 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
 - **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
-  of the console chips read LB and RB. Step 2, with no restart, shows B (purple), X, − and L R, and the
+  of the console chips read LB and RB (portrait; in landscape the chips row is gone and the filter
+  pager's previous/next show the same faces, RT-601). Step 2, with no restart, shows B (purple), X, − and L R, and the
   pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
   SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
