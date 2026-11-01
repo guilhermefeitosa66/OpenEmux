@@ -580,7 +580,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             # Opening the folder stays, quieter, for whoever manages files by hand.
             folder_row = Adw.ActionRow(title=self.t("bios.show_folder"), activatable=True)
             folder_row.add_prefix(Gtk.Image.new_from_icon_name("folder-symbolic"))
-            folder_row.add_suffix(Gtk.Image.new_from_icon_name("adw-external-link-symbolic"))
+            folder_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
             folder_row.connect(
                 "activated", lambda _r, cid=console_id: self.win._open_console_bios_folder(cid)
             )
