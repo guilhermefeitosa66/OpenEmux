@@ -5833,7 +5833,9 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
   2. Start a game and open the pause sheet.
 - **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
-  sideways. The pause sheet shows its main page in two columns.
+  sideways. On "All" the games of every console follow one another in that row, with no header
+  slot between consoles, and a small console label sits above the row (RT-590). The pause sheet
+  shows its main page in two columns.
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -5876,6 +5878,56 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   ran at 600×900dp with the bottom bar; a window that wide now gets the rail and less room.)
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-590 — The landscape row of a mixed page has no header slots and a console label above it
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-381 (phone, landscape), with at least four games in each of two consoles
+  (e.g. "NES" and "SNES").
+- **Steps:**
+  1. Open a console's library and tap the "All" chip; use the cartridge view.
+  2. Look at the row where the first console's games end and the next console's begin.
+  3. Switch to the cover view, then open "Favorites" (with favorites in both consoles) and a search
+     that matches games of both consoles, in each view.
+  4. Tap the "SNES" chip, a single console's page.
+- **Expected:** No item of the row is a console header: the last game of the first console is
+  followed directly by the first game of the next. Above the row, in small type, a label shows the
+  console's pixel icon and "NES – Nintendo (NES) · 4 games"; the cartridges are as tall as before.
+  The same holds in the cover view, in "Favorites" and in the search. On the single console's page
+  there is no label above the row.
+- **Check:** human only (a screenshot of each page).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-591 — The console label sticks at the row's start and the next console's label pushes it out
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-590, on "All" in the cartridge view, scrolled to the row's start.
+- **Steps:**
+  1. Drag the row slowly to the left by touch until the second console's games reach the start.
+  2. Drag it back to the start.
+- **Expected:** While the first console's games are at the row's start its label stays at the start,
+  over the first game in view. The second console's label rides over its own first game; when it
+  reaches the first label it pushes it out to the left and takes its place at the start. Dragging
+  back does the reverse. The labels never cover a game or the focus ring, and they do not jitter.
+- **Check:** human only (a screenshot at the start, mid-push and after the push).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-592 — Console group headers show the pixel icon and "<abbreviation> – <name>"
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380 (phone, portrait), with games in two consoles.
+- **Steps:**
+  1. Open "All" in the cartridge, cover and list views.
+  2. In landscape, open "All" in the list view.
+  3. At tablet size (`adb shell wm size 1600x2560`, `adb shell wm density 320`), in both
+     orientations, open "All".
+  4. Repeat step 1 in the light and the dark theme.
+- **Expected:** Each console's group starts with a full-width header line: the console's pixel icon
+  (no coloured square with the abbreviation), "SNES – Super Nintendo" and the game count at the end.
+  The tablet shows the grid with these header lines and no label above a row. Readable in both
+  themes.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-385 — Gamepad focus moves through every screen after a rotation or resize
 - **Area:** Android — Responsive layout
@@ -5967,6 +6019,21 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
   the item that had it. The dragged shelf stays drawn above the others while it moves.
 - **Check:** human only.
+
+### RT-593 — Left/right crosses console groups in the landscape row with no stop
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-590 (phone, landscape, "All", cartridge view), a gamepad connected (or
+  `adb shell input gamepad keyevent KEYCODE_DPAD_RIGHT`).
+- **Steps:**
+  1. Press right until the focus passes the last game of the first console.
+  2. Press left back across the boundary.
+  3. On the first game of the second console, press A to open its page, then B to come back.
+- **Expected:** One press moves from the last game of the first console to the first game of the
+  next, and back, with no stop on a header. Coming back from the game's page, the focus is on that
+  game and the label above the row names its console.
+- **Check:** human only.
+- **Restore:** `adb shell settings put system user_rotation 0`.
 
 ## Android — Multi-select and bulk remove
 
