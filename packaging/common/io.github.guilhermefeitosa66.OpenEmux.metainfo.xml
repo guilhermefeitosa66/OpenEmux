@@ -87,6 +87,16 @@
   </keywords>
 
   <releases>
+    <release version="1.18.5" date="2026-10-31">
+      <description>
+        <p>An Android update; the desktop app is unchanged and keeps the same version number.</p>
+        <ul>
+          <li>Android: the on-screen controls no longer vanish when a gamepad connects, and get a layout of their own for it</li>
+          <li>Android: slow motion, on screen next to fast forward and in the pause sheet</li>
+          <li>Android: RetroArch's own menu, from the pause sheet, for advanced settings</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.18.0" date="2026-10-27">
       <description>
         <p>Share nearby: send games between your devices over the local network, with their saves, states and covers.</p>
