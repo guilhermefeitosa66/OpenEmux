@@ -9103,17 +9103,18 @@ keyevent` comes from a virtual device and never changes the family. A release AP
 - **Mode:** MANUAL
 - **Preconditions:** A debug APK, "Button labels" on Automatic, a library with at least one console.
 - **Steps:**
-  1. On the library, run pad `1118`, then press `adb shell input keyevent KEYCODE_DPAD_RIGHT` so the
-     hint bar shows.
+  1. Open a console on the library, run pad `1118`, then press `adb shell input keyevent
+     KEYCODE_DPAD_RIGHT` so the hint bar shows.
   2. Run pad `1406`.
   3. Run pad `1356` with `--ei product 2508`, then with `--ei product 3302`, and open the selection
      mode (START) to see SELECT.
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
-- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB. Step 2, with no restart, shows B
-  (purple), X, − and L R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
-  SHARE and L1 R1; with the DualSense product SELECT reads CREATE. The shapes are crisp outlines, never
-  boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
+- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
+  of the console chips read LB and RB. Step 2, with no restart, shows B (purple), X, − and L R, and the
+  pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
+  SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
+  shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
   bottom button, labelled B, confirms) and comes back. On a 360dp-wide portrait phone every hint stays
   on screen with PlayStation faces (the row shrinks a little).
 - **Check:** human only (`adb exec-out screencap -p`; `adb shell uiautomator dump` lists the content
@@ -9124,8 +9125,8 @@ keyevent` comes from a virtual device and never changes the family. A release AP
 - **Mode:** MANUAL
 - **Preconditions:** A debug APK; pad `1356` (Sony) said to be in use.
 - **Steps:**
-  1. Settings → General → "Button labels" (right after "Controls"). On a phone it opens a sheet; in a
-     tablet-size window (`adb shell wm size 1600x2560`, reset after) it opens in the pane.
+  1. Settings → General → "Button labels" (right after "Controller layout"). On a phone it opens a
+     sheet; in a tablet-size window (`adb shell wm size 1600x2560`, reset after) it opens in the pane.
   2. Pick "Nintendo", then "Xbox", then "PlayStation", then "Automatic", looking at the hint bar after
      each.
   3. Pick "PlayStation", run `adb shell am force-stop $PKG` and `--ez clear true`, relaunch and press
@@ -9133,8 +9134,10 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   4. Switch the app to Português (Brasil), then 日本語, and open the row again.
 - **Expected:** The sheet (or pane) has the title, the line "How the button hints name each button. The
   bottom button always confirms and the right one goes back." and four cards, each with a small diamond
-  of that family's faces with the bottom one purple; the current choice is selected and the row shows
-  its name. Each forced family wins over the Sony pad, the sheet's own A/B hints change with it, and
+  of that family's faces with the bottom one purple (Automatic's diamond shows the detected pad's faces);
+  the current choice is selected and the row shows its name. With the pad in use the sheet shows its
+  own hint bar (A "Choose", B "Back"). Each forced family wins over the Sony pad, the sheet's own A/B
+  hints change with it, and
   Automatic goes back to PlayStation faces. After the restart, with no pad, the row still reads
   "PlayStation" and the hints show PlayStation faces. In each language the row, sheet, lead and
   descriptions are translated, while "Xbox", "Nintendo", "PlayStation" and the faces stay as they are.
