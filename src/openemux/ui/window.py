@@ -203,14 +203,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         breakpoint.add_setter(self.settings_box, "visible", False)
         self.add_breakpoint(breakpoint)
 
-        # Below this width the header cannot hold the segmented view switcher;
-        # the layout menu (which lists the same modes) remains the way in.
-        segment_breakpoint = Adw.Breakpoint.new(
-            Adw.BreakpointCondition.parse("max-width: 700sp")
-        )
-        segment_breakpoint.add_setter(self.view_mode_segment, "visible", False)
-        self.add_breakpoint(segment_breakpoint)
-
         self._install_actions()
 
         # ----- Gamepad / keyboard UI navigation -----
@@ -615,7 +607,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         header.pack_end(self._build_theme_button())
 
         header.pack_end(self._build_view_mode_button())
-        header.pack_end(self._build_view_mode_segment())
 
         # The two settings buttons ride in one box so the narrow breakpoint
         # can drop them together, without fighting the per-scope visibility
@@ -728,44 +719,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         "cartridge": "view-grid-symbolic",
         "list": "view-list-symbolic",
     }
-
-    #: Segmented-control icon per view mode. Unlike the menu-button icon these
-    #: three sit side by side, so each mode needs its own glyph. Adwaita only:
-    #: an icon from another installed theme renders as a broken image on a
-    #: stock GNOME system (`make icons` browses the safe set).
-    VIEW_MODE_SEGMENT_ICONS = {
-        # A tighter, fuller 2x2 than view-grid, which reads better against the
-        # other two at 16px.
-        "cover": "preferences-desktop-apps-symbolic",
-        # A Zip-disk glyph: the closest thing Adwaita has to a cartridge, and
-        # far more on-the-nose than the gamepad this used to be.
-        "cartridge": "media-zip-symbolic",
-        "list": "view-list-symbolic",
-    }
-
-    def _build_view_mode_segment(self):
-        """Cover / Cartridge / List as one visible click each (issue #70).
-
-        Linked toggle buttons bound to the stateful ``win.view-mode`` action:
-        GTK keeps them radio-exclusive and in sync with the menu entries for
-        free, so per-scope persistence is untouched. On narrow windows the
-        segment hides (a breakpoint below) and the menu remains the way in.
-        """
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        box.add_css_class("linked")
-        self._view_segment_buttons = {}
-        for mode in VIEW_MODES:
-            button = Gtk.ToggleButton()
-            button.set_icon_name(self.VIEW_MODE_SEGMENT_ICONS.get(mode, "view-grid-symbolic"))
-            self._translatable(
-                lambda b=button, m=mode: b.set_tooltip_text(self.t(f"view_mode.{m}"))
-            )
-            button.set_action_name("win.view-mode")
-            button.set_action_target_value(GLib.Variant("s", mode))
-            box.append(button)
-            self._view_segment_buttons[mode] = button
-        self.view_mode_segment = box
-        return box
 
     def _build_theme_button(self):
         """One click between light and dark (issue #198).

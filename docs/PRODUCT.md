@@ -179,10 +179,8 @@ Telling the user something has one right widget for each situation:
 
 ### Adaptive layout
 
-The window adapts at two breakpoints, both in `src/openemux/ui/window.py`:
+The window adapts at one breakpoint, in `src/openemux/ui/window.py`:
 
-- **Below 700sp** the segmented view-mode switcher leaves the header bar; the
-  layout menu, which lists the same modes, remains the way in.
 - **Below 550sp** the split view collapses into one pane with navigation
   between them, and the per-console settings buttons leave the content header.
 

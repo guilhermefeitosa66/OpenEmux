@@ -177,6 +177,20 @@ class TheLayoutControlsTests(WindowCase):
         action.activate(GLib.Variant("s", other))
         self.assertEqual(self.win._view_mode, other)
 
+    def test_the_view_mode_menu_is_the_only_view_switch_in_the_window(self):
+        # Issue #675: the Cover / Cartridge / List segment beside the menu
+        # duplicated it and is gone. The menu button stays in the header.
+        self.assertFalse(hasattr(self.win, "view_mode_segment"))
+        switches = [
+            w for w in _walk(self.win)
+            if isinstance(w, Gtk.ToggleButton)
+            and w.get_action_name() == "win.view-mode"
+        ]
+        self.assertEqual(switches, [])
+        header = self.win.view_mode_button.get_ancestor(Adw.HeaderBar)
+        self.assertIsNotNone(header)
+        self.assertIn(self.win.search_button, list(_walk(header)))
+
     def test_changing_the_sort_order_stores_it_and_says_so(self):
         other = next(
             o for o in window_module.SORT_ORDERS if o != self.win._sort_order

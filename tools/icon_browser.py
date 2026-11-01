@@ -13,7 +13,7 @@ without that theme package. ``adwaita-icon-theme`` is what the packages
 declare as a dependency, so Adwaita plus GTK's own built-ins is exactly the
 safe set, and the only thing this browser offers.
 
-The icons the view-mode segmented control uses today are marked, so a
+The icons the view modes use today are marked, so a
 candidate can be compared against what is already there.
 
     PYTHONPATH=src python3 tools/icon_browser.py [initial filter]
