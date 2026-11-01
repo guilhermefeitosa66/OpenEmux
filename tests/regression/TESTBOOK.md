@@ -3784,8 +3784,73 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Open "Settings" (`Ctrl+,`) → "BIOS".
 - **Expected:** Consoles that need BIOS files are listed with a present/missing status per file;
-  no crash, no empty page.
-- **Check:** Screenshot of the tab.
+  no crash, no empty page. Each console row has an "Import" button (text, not a folder icon); the
+  group header has only the reload button (no "Open ROMs folder"). Expanding a console shows its
+  files and, as the last row, "Show folder" (issue 667).
+- **Check:** Screenshot of the tab, collapsed and with "PS — PlayStation" expanded.
+
+### RT-594 — Importing good BIOS files marks them present at once
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** App running in the devbox, PS BIOS missing. In a scratch dir:
+  `head -c 1024 /dev/urandom > scph5501.bin; head -c 1024 /dev/urandom > SCPH1001.BIN`.
+- **Steps:**
+  1. "Settings" → "BIOS" → "Import" on "PS — PlayStation".
+  2. In the file chooser, pick both files (`ctrl+L`, type the path, select both) and confirm.
+- **Expected:** One dialog, "2 BIOS files imported", listing `scph5501.bin` and `scph1001.bin`
+  under "Imported". The PS row tally goes up without clicking reload. Both files are in
+  `<roms>/PS/bios/`, `SCPH1001.BIN` saved as `scph1001.bin`; the originals are still in the
+  scratch dir. Importing `scph5501.bin` again with other bytes lists it with "Replaced the
+  existing file".
+- **Check:** Screenshot of the dialog and of the page after "OK";
+  `ls <roms>/PS/bios/` inside the devbox. Remove the two files afterwards.
+
+### RT-595 — A mixed batch imports the good files and explains the rest
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** As RT-594, with `bios_CD_J.bin`, `lynxboot.img` and `readme.txt` in the
+  scratch dir.
+- **Steps:**
+  1. "Import" on "MCD — Mega CD" and pick the three files.
+- **Expected:** "1 of 3 files imported". `bios_CD_J.bin` under "Imported" (any of the Mega CD
+  regional names is accepted). Under "Not imported": `lynxboot.img` with "A BIOS file for Atari
+  Lynx, not Mega CD" and `readme.txt` with "Not a BIOS name Mega CD expects". The body line says
+  names must match exactly and lists the names Mega CD expects. Nothing is written for Lynx.
+- **Check:** Screenshot of the dialog; `ls <roms>/MCD/bios/ <roms>/LYNX/bios/`. Remove
+  `bios_CD_J.bin` afterwards.
+
+### RT-596 — A batch with no good file imports nothing
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** As RT-594, with `foo.bin` and `bar.rom` in the scratch dir.
+- **Steps:**
+  1. "Import" on "PS — PlayStation" and pick both files.
+- **Expected:** "No files imported", both under "Not imported" with a reason; no file added to
+  any BIOS folder. Cancelling the chooser instead shows nothing at all.
+- **Check:** Screenshot of the dialog; `find <roms> -path '*/bios/*' -newer <scratch dir>` is
+  empty.
+
+### RT-597 — A game launches right after its BIOS is imported
+- **Area:** BIOS
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: with the PS BIOS missing, launch a PS game (missing-BIOS warning),
+  import `scph5501.bin` on the PS row, launch again without restarting the app.
+- **Expected:** No missing-BIOS warning on the second launch: the pre-launch check reads the disk
+  every time, and the import writes the file with the same config.
+- **Check:** suite file `tests/test_bios_importer.py`
+  (`test_the_launch_check_sees_the_import_with_the_same_config`) and `tests/test_preferences.py`
+  (`BiosImportTests`).
+
+### RT-598 — The BIOS file chooser goes through the portal under Flatpak
+- **Area:** BIOS
+- **Mode:** MANUAL
+- **Preconditions:** The Flatpak build installed.
+- **Steps:**
+  1. "Settings" → "BIOS" → "Import" on any console; pick a file with a name it expects.
+- **Expected:** The desktop's own file chooser (portal) opens; the file is imported and the row
+  turns present. No new Flatpak permission was needed.
+- **Check:** human only (needs the Flatpak build on a desktop session).
 
 ## Settings & configuration
 
@@ -4624,7 +4689,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** MANUAL
 - **Preconditions:** A ROMs folder on a disk that is not mounted.
 - **Steps:**
-  1. Use "Open folder" (from the console menu, the BIOS page, or "Reveal in Files").
+  1. Use "Open folder" (from the console menu, "Show folder" inside a console on the BIOS page,
+     or "Reveal in Files").
 - **Expected:** An error toast naming the path. The `mkdir` used to sit *above* the `try`, so the
   failure escaped past every fallback and past the toast — the button silently did nothing.
 - **Check:** human only (needs an unmounted path); the reordering is visible in
