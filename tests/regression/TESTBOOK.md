@@ -1326,27 +1326,45 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running, a console with covers synced.
 - **Steps:**
-  1. In the header bar, switch through the three view segments: cartridge shelf, cover grid,
-     compact list.
+  1. Open the "View mode" menu in the header bar and pick "Cartridge", then "Cover", then
+     "List" (reopen the menu for each).
 - **Expected:** Each mode renders the same games; no blank canvas, no crash. On "All", "Favorites"
   and a collection too — picking "Cartridge" there used to change nothing at all (issue #385); see
-  RT-305.
-- **Check:** One screenshot per mode. Locate the three-segment switcher on a probe capture first —
-  its position moves as the header evolves.
+  RT-305. The header shows no Cover / Cartridge / List segmented buttons (issue #675); the
+  "View mode" menu is the only way to switch.
+- **Check:** One screenshot per mode. Locate the "View mode" menu button on a probe capture
+  first — its position moves as the header evolves.
 - **Restore:** Return to the mode that was active at the start (record it on the first capture).
 
 ### RT-031 — The view mode persists across a restart
 - **Area:** Views
 - **Mode:** AUTO-UI
-- **Preconditions:** RT-030 knowledge of the switcher position.
+- **Preconditions:** RT-030 knowledge of the "View mode" menu position.
 - **Steps:**
-  1. Record the current mode, then switch to a different one.
+  1. Record the current mode, then switch to a different one through the "View mode" menu.
   2. Quit (`Ctrl+Q`) and relaunch the app.
 - **Expected:** The app reopens in the mode chosen in step 1.
 - **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core.config import ConfigManager;
   print(ConfigManager().get_view_mode())"` after step 1 matches the chosen mode, and a screenshot
   after relaunch shows it.
 - **Restore:** Switch back to the recorded original mode.
+
+### RT-599 — The header carries only the View mode button
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, a console with games.
+- **Steps:**
+  1. At 1280 px wide, look at the content header on "All", then on a console page.
+  2. Narrow the window to 640 px wide, then to 520 px wide (`make devbox-res RES=520x900`).
+- **Expected:** At every width the header shows search, the theme toggle and the "View mode" menu
+  button, and no Cover / Cartridge / List segmented buttons (issue #675). On a console page at full
+  width the console-input and Preferences buttons sit next to "View mode"; at 640 px they are still
+  there and nothing is clipped; at 520 px they leave the header, as before. "View mode" still
+  opens and switches modes at 520 px.
+- **Check:** `make devbox-res RES=1280x800`, `RES=640x900`, `RES=520x900`, with
+  `make devbox-shot WIN=1 OUT=/tmp/rt599-<width>.png` after each; no three-button linked group in
+  any capture.
+- **Restore:** Resize back to the canonical geometry.
 
 ### RT-032 — Zoom in, out and reset
 - **Area:** Views
