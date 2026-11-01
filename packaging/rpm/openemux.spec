@@ -186,6 +186,11 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.9-1
+- Android: every gamepad press acts, after a touch and in every sheet, dialog and menu
+- Android: a gamepad layout while a controller is connected, mixed with touch
+- Android: button hints follow the connected controller (Xbox, Nintendo, PlayStation)
+
 * Sat Oct 31 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.5-1
 - Android: the on-screen app controls stay visible with a gamepad, with a gamepad layout and a collapse key
 - Android: slow-motion toggle on screen, right before fast forward, and in the pause sheet
