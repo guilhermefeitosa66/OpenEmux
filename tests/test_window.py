@@ -35,6 +35,7 @@ if HAVE_DISPLAY:
     from openemux.core import artwork_sources
     from openemux.core.rom_actions import RomActionError
     from openemux.core.scraper import COVER_ART, LABEL_ART
+    from openemux.ui import icons
     from openemux.ui import window as window_module
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
@@ -305,12 +306,10 @@ class TheThemeButtonTests(WindowCase):
     def test_the_icon_offers_the_appearance_the_click_would_give(self):
         with mock.patch.object(window_module.theming, "is_dark", return_value=True):
             self.win._sync_theme_button()
-        self.assertEqual(self.win.theme_btn.get_icon_name(), "weather-clear-symbolic")
+        self.assertEqual(self.win.theme_btn.get_icon_name(), icons.SUN_ICON)
         with mock.patch.object(window_module.theming, "is_dark", return_value=False):
             self.win._sync_theme_button()
-        self.assertEqual(
-            self.win.theme_btn.get_icon_name(), "weather-clear-night-symbolic"
-        )
+        self.assertEqual(self.win.theme_btn.get_icon_name(), icons.MOON_ICON)
 
     def test_clicking_it_stores_the_opposite_appearance(self):
         with mock.patch.object(

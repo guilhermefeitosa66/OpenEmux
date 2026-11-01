@@ -74,7 +74,7 @@ from openemux.ui.log_panel import BugReportDialog, LogPanel
 from openemux.ui.library_pages import LibraryPages, is_mixed_scope
 from openemux.ui.retranslate import RetranslateRegistry
 from openemux.ui.console_icons import console_icon
-from openemux.ui.icons import SHARE_ICON
+from openemux.ui.icons import MOON_ICON, SHARE_ICON, SUN_ICON
 from openemux.ui.console_sidebar import ConsoleSidebar
 from openemux.ui.file_dialogs import image_filters
 # Re-exported: `from openemux.ui.window import FAVORITES_ID` is what the tests
@@ -798,9 +798,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if button is None:
             return  # a retranslate that ran before the header was built
         dark = theming.is_dark()
-        button.set_icon_name(
-            "weather-clear-symbolic" if dark else "weather-clear-night-symbolic"
-        )
+        button.set_icon_name(SUN_ICON if dark else MOON_ICON)
         button.set_tooltip_text(
             self.t("header.theme.to_light" if dark else "header.theme.to_dark")
         )

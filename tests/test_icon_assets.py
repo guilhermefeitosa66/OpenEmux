@@ -149,6 +149,29 @@ class TheThirdPartyTermsShipWithTheArtworkTests(unittest.TestCase):
         self.assertIn("Redistribution and use in source and binary forms", text)
         self.assertIn("1d205104640d8410659d321809889cbfd06b99a9", text)
 
+    def test_every_glyph_of_our_own_is_attributed_as_ours(self):
+        # ``openemux-*`` names are drawings no icon theme ships. The ones that
+        # are OpenEmux's own work fall outside the Adwaita terms of the rest of
+        # symbolic/, so each one has to be named where the terms are recorded
+        # (issue #676). The moon is Adwaita's drawing renamed, under its terms.
+        attribution = ATTRIBUTION.read_text(encoding="utf-8")
+        copyright_text = COPYRIGHT.read_text(encoding="utf-8")
+        adwaita_renamed = {"openemux-moon-symbolic.svg"}
+        own = sorted(
+            path.name
+            for path in SYMBOLIC_SVG_DIR.glob("openemux-*-symbolic.svg")
+            if path.name not in adwaita_renamed
+        )
+        self.assertIn("openemux-sun-symbolic.svg", own)
+        for name in own:
+            with self.subTest(name=name):
+                self.assertIn(name, attribution)
+                self.assertIn(f"scalable/actions/{name}", copyright_text)
+        for name in sorted(adwaita_renamed):
+            with self.subTest(name=name):
+                self.assertTrue((SYMBOLIC_SVG_DIR / name).is_file())
+                self.assertIn(name, attribution)
+
     def test_the_attribution_ships_in_the_pip_installed_build(self):
         # The Flatpak installs from package-data rather than copying src/, so
         # a notice missing from that list ships nowhere but the repository.

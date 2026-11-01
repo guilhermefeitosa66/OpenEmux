@@ -31,6 +31,13 @@ logger = logging.getLogger(__name__)
 #: themes draw as anything from an arrow to a paper plane (issue #611).
 SHARE_ICON = "openemux-share-symbolic"
 
+#: The header's light/dark toggle: a sun while the app is dark, a moon while it
+#: is light. Names of our own for the same reason: Numix and Papirus draw the
+#: themed "weather clear" sun as a disc whose rays vanish at 16px, and the host
+#: theme wins over the bundled copy whenever it ships the name (issue #676).
+SUN_ICON = "openemux-sun-symbolic"
+MOON_ICON = "openemux-moon-symbolic"
+
 #: The icon search path: a base directory holding the ``hicolor`` theme.
 ICON_SEARCH_DIR = Path(__file__).resolve().parent / "assets" / "icons" / "symbolic"
 
