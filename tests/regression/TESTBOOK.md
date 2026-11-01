@@ -6347,12 +6347,34 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   3. Tap both again.
   4. Turn fast forward on, open the pause sheet, then resume.
   5. Repeat steps 2-3 in landscape, then on the other console's game.
-- **Expected:** After step 2 each button sits on the purple pill with a light ring, the skin's own
+- **Expected:** The chin has five keys, evenly spaced: save, load, turbo, slow motion (RT-577) and
+  fast forward. After step 2 each button sits on the purple pill with a light ring, the skin's own
   glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
   look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
   active. Landscape and the drawn skin show the same pill.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
+
+### RT-577 — Slow motion on the bundled package skins, right before fast forward
+- **Area:** Android — Skin quick actions
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; no skin in
+  `files/skins/`; no gamepad connected; RetroAchievements hardcore off.
+- **Steps:**
+  1. Launch the SNES game, phone in portrait, and look at the quick actions in the bezel's chin.
+  2. Tap slow motion (the play triangle in a dashed ring, right before the double arrow).
+  3. Tap fast forward, then slow motion again, then slow motion once more.
+  4. Repeat steps 1-3 in landscape, on the GBA game, and on a tablet-size device
+     (`adb shell wm size 1600x2560` with `adb shell wm density 320`; restore with `reset`).
+  5. With RetroAchievements hardcore on (an account signed in), launch the SNES game again.
+- **Expected:** In step 1 the chin holds five keys in the same span the four used to take, evenly
+  spaced: save, load, turbo, slow motion, fast forward, every glyph in the skin's own colour, none
+  clipped, nothing over the picture or the buttons around the chin. After step 2 slow motion sits on
+  the purple pill with the glyph in white and the game runs about three times slower. In step 3 fast
+  forward going on takes slow motion's pill off (and the reverse), and the last tap leaves both off at
+  normal speed. Every layout of step 4 shows the same five keys. In step 5 slow motion and fast forward
+  are drawn faded, do nothing when tapped and never show the pill.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 ## Android — On-screen analog stick
 
