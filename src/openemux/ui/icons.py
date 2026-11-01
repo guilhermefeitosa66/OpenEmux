@@ -16,9 +16,9 @@ The SVGs sit in ``hicolor/scalable/actions/`` rather than loose in the
 directory. GTK 4.14 (Ubuntu 24.04's, the oldest this runs on) never marks a
 loose ("unthemed") icon as symbolic, so it drew those in their literal dark
 fill instead of the theme's foreground: invisible in the dark theme.
-``openemux-share-symbolic``, the one name no theme ships, was where it showed
-(issue #626). ``hicolor/index.theme`` stands in for the host's on a system with
-no hicolor theme installed.
+``openemux-share-symbolic``, the first name of our own that no theme ships, was
+where it showed (issue #626). ``hicolor/index.theme`` stands in for the host's
+on a system with no hicolor theme installed.
 """
 
 import logging

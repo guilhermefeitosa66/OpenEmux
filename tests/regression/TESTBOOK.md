@@ -3919,11 +3919,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** screenshot of the window right after it appears; the header bar is light.
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
 
-### RT-599 — The theme toggle's sun and moon do not change with the host icon theme
+### RT-610 — The theme toggle's sun and moon do not change with the host icon theme
 - **Area:** Settings
 - **Mode:** AUTO-UI
 - **Preconditions:** App **closed**, in the devbox (its `$HOME` is throwaway). Back up the config
-  first (`cp ~/.openemux/config.yaml $SCRATCH/config.bak`).
+  first (`cp ~/.openemux/config.yaml $SCRATCH/config.bak`), then set `theme: light` in
+  `~/.openemux/config.yaml` so the app opens light.
 - **Steps:**
   1. Inside the devbox, pick an icon theme that does not inherit Adwaita: a third-party one from
      `ls /usr/share/icons` (Papirus, Numix, Breeze...) if installed, else `hicolor`. Write it to

@@ -171,6 +171,8 @@ class TheThirdPartyTermsShipWithTheArtworkTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((SYMBOLIC_SVG_DIR / name).is_file())
                 self.assertIn(name, attribution)
+                # Not claimed as MIT: it is Adwaita's drawing, under its terms.
+                self.assertNotIn(f"scalable/actions/{name}", copyright_text)
 
     def test_the_attribution_ships_in_the_pip_installed_build(self):
         # The Flatpak installs from package-data rather than copying src/, so
