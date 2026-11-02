@@ -48,6 +48,11 @@ def console_bios_names(console):
     return names
 
 
+def canonical_bios_names(console):
+    """``{lowercase name: catalog name}`` for ``console``: how a file name is matched to its catalog spelling."""
+    return {name.lower(): name for name in console_bios_names(console)}
+
+
 def _owners_by_name():
     """``{lowercase name: [consoles]}`` over the whole catalog, built once per import."""
     owners = {}
@@ -84,7 +89,7 @@ def import_bios_files(paths, config_manager, console):
     copied, never moved.
     """
     system_id = resolve_system_id(console)
-    expected = {name.lower(): name for name in console_bios_names(system_id)}
+    expected = canonical_bios_names(system_id)
     bios_dir = Path(get_console_bios_dir(config_manager, system_id))
     summary = {"console": system_id, "imported": [], "rejected": []}
     owners_by_name = None  # the whole catalog, read only when a name is rejected

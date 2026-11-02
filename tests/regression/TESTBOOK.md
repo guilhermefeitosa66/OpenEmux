@@ -7950,6 +7950,46 @@ or into an environment that cannot run the tests.
   ```
   Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
 
+### RT-611 — The site's screenshots are served as AVIF/WebP at responsive widths
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `docs/` and `site/images.json`).
+- **Steps:** As a QA person: open the site's home page in a browser with DevTools → Network, scroll
+  to "Your games, console by console" and look at what the screenshot carousel downloads; then open
+  `docs/assets/desktop/`.
+- **Expected:** Each carousel shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
+  the PNG; the carousel looks as before (three shots per slide, one on a phone) and a click opens
+  the full-size image in the lightbox. `docs/assets/desktop/` holds a 2× SNES cover grid and the
+  cartridge view of SNES, NES, GBA, N64, Mega Drive and PlayStation, each a TrueColor PNG at least
+  2560 px wide with AVIF and WebP at 640/1280/1920 px and full width, all from the fictional demo
+  library (issue #683).
+- **Check:**
+  ```bash
+  python3 tools/build_site.py --check
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  manifest = json.loads(Path("site/images.json").read_text())
+  for name in ["grid-sfc"] + [f"cart-{c}" for c in ("sfc", "fc", "gba", "n64", "md", "ps")]:
+      entry = manifest[f"desktop/{name}.png"]
+      assert entry["width"] >= 2560, name
+      widths = {v["width"] for v in entry["variants"]}
+      assert {640, 1280, 1920, entry["width"]} <= widths, name
+      for v in entry["variants"]:
+          assert Path("docs/assets", v["file"]).is_file(), v["file"]
+  for page in [Path("docs/index.html"), Path("docs/pt-br/index.html")]:
+      html = page.read_text(encoding="utf-8")
+      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*shelf/\w+-640\.avif 640w', html)
+      assert len(shots) == 7, (page, len(shots))
+      assert "data-picture" not in html, page
+  print("RT-611 OK")
+  EOF
+  ```
+  Visual: `identify -format '%[type] %w\n' docs/assets/desktop/*.png` (no `Palette`, every width
+  ≥ 2560) and a look at each capture: demo titles only, English UI, no toast, no red Log badge, no
+  "Search artwork…" placeholder. Unit-level: `tests/test_site.py` (`TheImagePipelineTests`,
+  `TheImageCheckTests`, `TheImageEncoderTests`).
+
 ### RT-342 — The README states the relationship with OpenEmu
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
@@ -8631,6 +8671,55 @@ stands in for the other device; multicast may not cross the container.
   step 3 to "Offer Declined". The spinners on these screens never hold the answer back.
 - **Check:** human only. Suite: `tests/test_share_coordinator.py`
   (`test_core_callbacks_run_at_the_default_priority`).
+
+### RT-600 — A shared game takes its console's BIOS along, and only catalog BIOS
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** With `scph5501.bin` (any case) and `notes.txt` in `<roms>/PS/bios/` and two PS
+  games selected, the manifest carries one `bios` item, `scph5501.bin`, in the first game only;
+  `notes.txt` and BIOS names of other consoles never go. "What to Send" shows "BIOS Files ·
+  scph5501.bin · …" under the first game; unchecking it leaves the console's BIOS out, and
+  unchecking the first game hands them to the second. On the receiver the file lands in
+  `<roms>/PS/bios/scph5501.bin` with the sender's bytes and date, Preferences' BIOS status reads it
+  as present, the incoming dialog lists "BIOS" among the game's items and both result pages say
+  "BIOS files added: …" / "BIOS files sent: …". When no game went (or only some did) but the BIOS
+  did, the sender's "BIOS files sent: …" comes before "<device> didn't take any of them:" / "These
+  didn't go:", so that line stays right above the "Not Sent" list it introduces, and the receiver's
+  page leaves out "Nothing from <device> was added to your library.".
+- **Check:** `tests/test_share_manifest.py` (`BiosTests`), `tests/test_share_selection.py`
+  (`BiosSelectionTests`), `tests/test_share_placement.py` (`BiosTests`), `tests/test_share_receive.py`
+  (`BiosReceiveTests`), `tests/test_share_dialog.py` (`BiosSendTests`) and
+  `tests/test_share_offer.py` (`BiosOfferTests`); on two real machines the same flow is `MANUAL`.
+
+### RT-601 — A BIOS the receiver already has is not sent again; a different one is kept unless replaced
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The same BIOS already in the receiver's BIOS folder is answered `exists_skip`
+  before any upload and is no conflict. A different file under the same name is a row on
+  "Review Conflicts" titled "<game> · BIOS <name>", with only "Skip" (the default) and "Replace";
+  skipping leaves the local file as it was, "Replace" puts the sender's bytes in its place. A name
+  the receiver's catalog does not list for that console is listed under "Skipped" as "Can't be
+  placed in your library". The BIOS go whether the game's ROM is new or already there.
+- **Check:** `tests/test_share_placement.py` (`BiosTests`), `tests/test_share_display.py`
+  (`BiosDisplayTests`), `tests/test_share_offer.py` (`BiosOfferTests`).
+
+### RT-602 — A peer that predates BIOS sharing still receives the game
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** An item of a kind the receiver does not know is answered `skip` / `invalid_item`
+  and the rest of the game is placed; the shared `manifest_sample` (with its `bios` item)
+  validates with nothing rejected.
+- **Check:** `tests/test_share_manifest.py` (`ValidateTests`, `SharedVectorTests`),
+  `tests/test_share_placement.py` (`GameLevelTests.test_unsupported_console`).
 
 ## Android — Share nearby
 
