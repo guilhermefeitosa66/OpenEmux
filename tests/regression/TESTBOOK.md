@@ -6054,7 +6054,7 @@ The Android app's cartridge frames re-rendered with relief by
 `pkg/android/openemux/tools/render-cartridge-frames.py` in
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android) (issue 702, done in parts:
 issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy; issue 705 the Master System, Game
-Gear, SG-1000 and 32X). Each later part adds its consoles to
+Gear, SG-1000 and 32X; issue 706 the Atari 2600, 5200, 7800 and Lynx). Each later part adds its consoles to
 RT-645's list. The runner has no Android device, so this is `MANUAL`: a person runs it on a phone and
 a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, with `adb`).
 
@@ -6063,7 +6063,7 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, games with real labels for
   each redone console: Game Boy, Game Boy Color, NES, Virtual Boy, Master System, Game Gear,
-  SG-1000, 32X.
+  SG-1000, 32X, Atari 2600, Atari 5200, Atari 7800, Lynx.
 - **Steps:**
   1. Open each console's library in the cartridge view, phone in portrait.
   2. Look at one cartridge of each console up close (open the game's detail screen).
@@ -6077,7 +6077,9 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
   "VIRTUAL BOY" on the Virtual Boy's dark band, "SEGA" on the Game Gear's plate), and the grooves,
   ribs, arrows, grip tabs and slots cast shadows (the Master System's three grooves under the label,
   the Game Gear's arch and top vents, the SG-1000's side grips, the 32X's bezel, side sweeps and
-  bottom slots). The
+  bottom slots, the Atari 2600 and 7800's bevelled rim, the Atari 5200's side teeth and its
+  embossed Atari symbol and "ATARI" on the lower plate, the Lynx's top grip ridge and its row of
+  contacts along the bottom). The
   label sits in a recess with a soft shadow along its top and left edges, filling the window with no
   gap and without covering the shell. Each color reads as that color with the relief still visible,
   including Black, White and Clear. The consoles in step 5 look exactly as before.
