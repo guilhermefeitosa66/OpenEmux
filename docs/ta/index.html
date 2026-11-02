@@ -759,6 +759,14 @@
       }
     }
 
+    /* Under 360 px the landscape phone would be wider than its slide. */
+    @media(max-width:359px) {
+      .phone.landscape {
+        --frame-w: 288px;
+        --frame-h: 145px
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .gal-track {
         scroll-behavior: auto
@@ -1391,7 +1399,7 @@
           </div>
           <div class="gal-slide" role="group" aria-roledescription="slide" aria-label="Game Boy Advance">
             <figure><div class="gal-pair"><div class="phone"><picture><source type="image/avif" srcset="../assets/android/game-gba-portrait-640.avif 640w, ../assets/android/game-gba-portrait-1080.avif 1080w" sizes="(max-width: 700px) 164px, 220px" /><source type="image/webp" srcset="../assets/android/game-gba-portrait-640.webp 640w, ../assets/android/game-gba-portrait-1080.webp 1080w" sizes="(max-width: 700px) 164px, 220px" /><img src="../assets/android/game-gba-portrait.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், நெடுக்குவாக்கில்: Game Boy Advance" width="1080" height="2238" loading="lazy" decoding="async" data-full="../assets/android/game-gba-portrait-1080.webp" /></picture></div>
-                <div class="phone landscape"><picture><source type="image/avif" srcset="../assets/android/game-gba-landscape-640.avif 640w, ../assets/android/game-gba-landscape-1280.avif 1280w, ../assets/android/game-gba-landscape-1920.avif 1920w, ../assets/android/game-gba-landscape-2238.avif 2238w" sizes="(max-width: 700px) 312px, 456px" /><source type="image/webp" srcset="../assets/android/game-gba-landscape-640.webp 640w, ../assets/android/game-gba-landscape-1280.webp 1280w, ../assets/android/game-gba-landscape-1920.webp 1920w, ../assets/android/game-gba-landscape-2238.webp 2238w" sizes="(max-width: 700px) 312px, 456px" /><img src="../assets/android/game-gba-landscape.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், கிடைமட்டத்தில்: Game Boy Advance" width="2238" height="1080" loading="lazy" decoding="async" data-full="../assets/android/game-gba-landscape-2238.webp" /></picture></div></div>
+                <div class="phone landscape"><picture><source type="image/avif" srcset="../assets/android/game-gba-landscape-640.avif 640w, ../assets/android/game-gba-landscape-1280.avif 1280w, ../assets/android/game-gba-landscape-1920.avif 1920w, ../assets/android/game-gba-landscape-2238.avif 2238w" sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" /><source type="image/webp" srcset="../assets/android/game-gba-landscape-640.webp 640w, ../assets/android/game-gba-landscape-1280.webp 1280w, ../assets/android/game-gba-landscape-1920.webp 1920w, ../assets/android/game-gba-landscape-2238.webp 2238w" sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" /><img src="../assets/android/game-gba-landscape.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், கிடைமட்டத்தில்: Game Boy Advance" width="2238" height="1080" loading="lazy" decoding="async" data-full="../assets/android/game-gba-landscape-2238.webp" /></picture></div></div>
               <figcaption>Game Boy Advance</figcaption>
             </figure>
           </div>
@@ -1412,7 +1420,7 @@
           </div>
           <div class="gal-slide" role="group" aria-roledescription="slide" aria-label="Nintendo DS">
             <figure><div class="gal-pair"><div class="phone"><picture><source type="image/avif" srcset="../assets/android/game-nds-portrait-640.avif 640w, ../assets/android/game-nds-portrait-1080.avif 1080w" sizes="(max-width: 700px) 164px, 220px" /><source type="image/webp" srcset="../assets/android/game-nds-portrait-640.webp 640w, ../assets/android/game-nds-portrait-1080.webp 1080w" sizes="(max-width: 700px) 164px, 220px" /><img src="../assets/android/game-nds-portrait.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், நெடுக்குவாக்கில்: Nintendo DS" width="1080" height="2238" loading="lazy" decoding="async" data-full="../assets/android/game-nds-portrait-1080.webp" /></picture></div>
-                <div class="phone landscape"><picture><source type="image/avif" srcset="../assets/android/game-nds-landscape-640.avif 640w, ../assets/android/game-nds-landscape-1280.avif 1280w, ../assets/android/game-nds-landscape-1920.avif 1920w, ../assets/android/game-nds-landscape-2238.avif 2238w" sizes="(max-width: 700px) 312px, 456px" /><source type="image/webp" srcset="../assets/android/game-nds-landscape-640.webp 640w, ../assets/android/game-nds-landscape-1280.webp 1280w, ../assets/android/game-nds-landscape-1920.webp 1920w, ../assets/android/game-nds-landscape-2238.webp 2238w" sizes="(max-width: 700px) 312px, 456px" /><img src="../assets/android/game-nds-landscape.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், கிடைமட்டத்தில்: Nintendo DS" width="2238" height="1080" loading="lazy" decoding="async" data-full="../assets/android/game-nds-landscape-2238.webp" /></picture></div></div>
+                <div class="phone landscape"><picture><source type="image/avif" srcset="../assets/android/game-nds-landscape-640.avif 640w, ../assets/android/game-nds-landscape-1280.avif 1280w, ../assets/android/game-nds-landscape-1920.avif 1920w, ../assets/android/game-nds-landscape-2238.avif 2238w" sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" /><source type="image/webp" srcset="../assets/android/game-nds-landscape-640.webp 640w, ../assets/android/game-nds-landscape-1280.webp 1280w, ../assets/android/game-nds-landscape-1920.webp 1920w, ../assets/android/game-nds-landscape-2238.webp 2238w" sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" /><img src="../assets/android/game-nds-landscape.png" alt="Android-இல் OpenEmux, திரைக் கட்டுப்படுத்தியுடன் விளையாட்டில், கிடைமட்டத்தில்: Nintendo DS" width="2238" height="1080" loading="lazy" decoding="async" data-full="../assets/android/game-nds-landscape-2238.webp" /></picture></div></div>
               <figcaption>Nintendo DS</figcaption>
             </figure>
           </div>

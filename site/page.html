@@ -751,6 +751,14 @@
       }
     }
 
+    /* Under 360 px the landscape phone would be wider than its slide. */
+    @media(max-width:359px) {
+      .phone.landscape {
+        --frame-w: 288px;
+        --frame-h: 145px
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .gal-track {
         scroll-behavior: auto
@@ -1362,7 +1370,7 @@
           </div>
           <div class="gal-slide" role="group" aria-roledescription="slide" aria-label="Game Boy Advance">
             <figure><div class="gal-pair"><div class="phone"><img data-picture data-sizes="(max-width: 700px) 164px, 220px" src="{{root}}assets/android/game-gba-portrait.png" alt="{{android.alt_portrait}}: Game Boy Advance" /></div>
-                <div class="phone landscape"><img data-picture data-sizes="(max-width: 700px) 312px, 456px" src="{{root}}assets/android/game-gba-landscape.png" alt="{{android.alt_landscape}}: Game Boy Advance" /></div></div>
+                <div class="phone landscape"><img data-picture data-sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" src="{{root}}assets/android/game-gba-landscape.png" alt="{{android.alt_landscape}}: Game Boy Advance" /></div></div>
               <figcaption>Game Boy Advance</figcaption>
             </figure>
           </div>
@@ -1383,7 +1391,7 @@
           </div>
           <div class="gal-slide" role="group" aria-roledescription="slide" aria-label="Nintendo DS">
             <figure><div class="gal-pair"><div class="phone"><img data-picture data-sizes="(max-width: 700px) 164px, 220px" src="{{root}}assets/android/game-nds-portrait.png" alt="{{android.alt_portrait}}: Nintendo DS" /></div>
-                <div class="phone landscape"><img data-picture data-sizes="(max-width: 700px) 312px, 456px" src="{{root}}assets/android/game-nds-landscape.png" alt="{{android.alt_landscape}}: Nintendo DS" /></div></div>
+                <div class="phone landscape"><img data-picture data-sizes="(max-width: 359px) 276px, (max-width: 700px) 312px, 456px" src="{{root}}assets/android/game-nds-landscape.png" alt="{{android.alt_landscape}}: Nintendo DS" /></div></div>
               <figcaption>Nintendo DS</figcaption>
             </figure>
           </div>

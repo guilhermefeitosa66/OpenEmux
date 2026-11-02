@@ -315,7 +315,7 @@ class TheGalleriesTests(unittest.TestCase):
         sizes = re.findall(r"--frame-w: (\d+)px;\s*--frame-h: (\d+)px(?:;\s*--frame-r: (\d+)px;\s*--bezel: (\d+)px)?",
                            css)
         self.assertEqual([tuple(int(v) for v in s if v) for s in sizes],
-                         [(236, 472, 34, 8), (472, 236), (176, 352, 26, 6), (324, 163)])
+                         [(236, 472, 34, 8), (472, 236), (176, 352, 26, 6), (324, 163), (288, 145)])
 
     def test_the_old_carousel_is_gone(self):
         page = build_site.TEMPLATE.read_text(encoding="utf-8")
