@@ -105,7 +105,7 @@ def main(out):
             print(f"{name}.png  {shot(wid, out / f'{name}.png')}")
     finally:
         subprocess.run(["devbox-app", "stop"])
-        subprocess.run(["devbox-res", os.environ.get("DEVBOX_GEOMETRY", "1600x1000")])
+        subprocess.run(["devbox-res", "1600x1100"])
 
 
 if __name__ == "__main__":  # pragma: no cover - a devbox tool, driven by hand

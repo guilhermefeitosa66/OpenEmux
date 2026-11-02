@@ -382,12 +382,6 @@ class TheImageCheckTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "Pillow"):
                 build_site.build_images(self.assets, self.assets / "images.json")
 
-    def test_images_without_the_avif_codec_says_what_to_install(self):
-        from PIL import features
-        with mock.patch.object(features, "check", return_value=False):
-            with self.assertRaisesRegex(SystemExit, "AVIF and WebP"):
-                build_site.build_images(self.assets, self.assets / "images.json")
-
 
 @unittest.skipUnless(_has_pillow_codecs(), "Pillow with AVIF and WebP is a dev-only dependency")
 class TheImageEncoderTests(unittest.TestCase):
@@ -425,16 +419,6 @@ class TheImageEncoderTests(unittest.TestCase):
         self.assertEqual(build_site.build_images(self.assets, self.manifest_path), [])
         self.assertEqual(sorted(p.name for p in (self.assets / "desktop").iterdir()), [])
         self.assertEqual(json.loads(self.manifest_path.read_text()), {})
-
-    def test_a_smaller_master_takes_its_dropped_widths_with_it(self):
-        from PIL import Image
-        build_site.build_images(self.assets, self.manifest_path)
-        Image.new("RGB", (1000, 500), (90, 20, 40)).save(self.assets / "desktop" / "a.png")
-        self.assertEqual(build_site.build_images(self.assets, self.manifest_path), ["desktop/a.png"])
-        self.assertEqual(sorted(p.name for p in (self.assets / "desktop").iterdir()), [
-            "a-1000.avif", "a-1000.webp", "a-640.avif", "a-640.webp", "a.png"])
-        manifest = json.loads(self.manifest_path.read_text())
-        self.assertEqual(build_site.check_images(self.assets, manifest), [])
 
     def test_a_deleted_variant_is_encoded_again(self):
         build_site.build_images(self.assets, self.manifest_path)

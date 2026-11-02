@@ -236,11 +236,9 @@ def build_images(assets=None, manifest_path=None):
     assets = assets if assets is not None else ASSETS
     manifest_path = manifest_path if manifest_path is not None else IMAGE_MANIFEST
     try:
-        from PIL import Image, features
+        from PIL import Image
     except ImportError:
         raise SystemExit("--images needs Pillow: pip install -r requirements-dev.lock") from None
-    if not (features.check("avif") and features.check("webp")):
-        raise SystemExit("--images needs a Pillow built with AVIF and WebP: pip install -r requirements-dev.lock")
     old = load_manifest(manifest_path)
     manifest, encoded = {}, []
     for source in image_sources(assets):
@@ -267,13 +265,9 @@ def build_images(assets=None, manifest_path=None):
         manifest[source] = {"sha256": digest, "width": width, "height": height,
                             "variants": variants}
         encoded.append(source)
-    # Variants no current entry owns: those of a removed source, and the widths
-    # a re-encoded source no longer has (a smaller master drops its top widths).
-    kept = {v["file"] for entry in manifest.values() for v in entry["variants"]}
-    for entry in old.values():
-        for variant in entry["variants"]:
-            if variant["file"] not in kept:
-                (assets / variant["file"]).unlink(missing_ok=True)
+    for source in set(old) - set(manifest):
+        for variant in old[source]["variants"]:
+            (assets / variant["file"]).unlink(missing_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return encoded
 
