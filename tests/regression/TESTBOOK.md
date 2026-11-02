@@ -8058,7 +8058,7 @@ or into an environment that cannot run the tests.
   bottom; then switch to each other language with the picker and do the same. Finally turn page
   styles off (Firefox: View › Page Style › No Style) and read it again.
 - **Expected:** The sections come in this order: the opening (headline, download buttons, the
-  desktop library with the phone over its corner), "Share nearby" (four numbered steps), "On the
+  desktop library with the phone over its corner), "Share nearby" (the phone and the computer stepping through one transfer as you scroll, or four numbered cards with reduced motion), "On the
   desktop" (the cartridge carousel), "On the phone" (the controller screenshots), the cartridge
   wall, "Installing", "Everything else", the credits and "Support the project", then the footer.
   Each of the opening, Share nearby, desktop and phone moments has one short headline and at most
@@ -8077,7 +8077,7 @@ or into an environment that cannot run the tests.
       html = page.read_text(encoding="utf-8")
       assert re.findall(r'<section[^>]* id="([a-z]+)"', html) == want, page
       for sid in ("share", "consoles", "android"):
-          sec = re.search(r'<section class="moment" id="%s">(.*?)</section>' % sid, html, re.S).group(1)
+          sec = re.search(r'<section class="moment[^"]*" id="%s"[^>]*>(.*?)</section>' % sid, html, re.S).group(1)
           assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"carousel", 1)[0]), (page, sid)
   print("RT-611 OK")
   EOF
@@ -8181,6 +8181,73 @@ or into an environment that cannot run the tests.
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheOpeningStageTests -v 2>&1 | tail -3
+  ```
+  Passes when the last line is `OK`.
+
+### RT-640 — Share nearby plays as you scroll: one transfer, step by step, on both screens
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
+  Chrome and Firefox (Safari too when one is at hand), window about 1280×800.
+- **Steps:**
+  1. Scroll from the opening into "Share nearby" with the mouse wheel, slowly, to the next section.
+  2. Scroll back up through it.
+  3. Do it again with Space / Page Down / the arrow keys and by dragging the scrollbar.
+  4. Repeat 1–2 in Firefox.
+  5. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
+- **Expected:** 1: under the heading, the phone on the left, three gold dots, the computer's
+  window on the right (the capture is the window itself: rounded corners and a shadow, no extra
+  title bar). They hold still while the page scrolls and step through four screens, each with its
+  caption and a four-part indicator under it: "Pick a game on your phone." (Robot Man X selected,
+  Linux Desktop listed; the computer ready to receive); "The same code shows on both screens."
+  (506 807 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
+  in your library now." (1 game sent on the phone; the computer's "1 Game Received", then its
+  Super Nintendo library with Robot Man X). Only one caption at a time. 2: it plays in reverse.
+  3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
+  the script fallback). 5: the screen sits in the middle of the phone body, the same bezel on all
+  four sides, corners concentric (issue 687).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheShareSequenceTests`).
+
+### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is four cards
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** as RT-640.
+- **Steps:**
+  1. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, scroll through
+     "Share nearby".
+  2. Firefox with JavaScript disabled, reload, scroll through it.
+  3. DevTools device mode at 360×600 (shorter than 640 px), reload, scroll through it.
+- **Expected:** "Share nearby" is a list of four numbered cards (four across on a wide window, two
+  under 900 px, one under 520 px), each with the computer's capture and the phone's over its lower
+  left corner and both caption lines; every card fully visible, nothing faded, no tall empty
+  scroll, no sticky stage (issue 687).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_without_a_driver_it_is_a_strip_of_cards`).
+
+### RT-642 — At phone width Share nearby stacks the devices and fits the screen
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** as RT-640; DevTools device mode.
+- **Steps:**
+  1. Set 390×844, reload, scroll through "Share nearby".
+  2. Set 360×740, reload, scroll through it; try to scroll sideways.
+- **Expected:** the computer's window on top at the full width, the phone under it, then the
+  caption and the indicator, all inside the screen while they hold; the steps change as on a wide
+  window, over a shorter stretch of scroll. No horizontal scroll caused by this section (issue 687).
+- **Check:** human only.
+
+### RT-643 — Share nearby's captions and image descriptions are translated
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `site/strings/`).
+- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the four captions
+  of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
+- **Expected:** each caption is a short headline and one sentence, in the page's language, with no
+  exclamation mark; every capture has a description in that language naming the screen, and the
+  ones of the second step mention the code 506 807 (issue 687).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3
   ```
   Passes when the last line is `OK`.
 

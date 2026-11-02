@@ -1106,6 +1106,13 @@ composition: that is what reduced motion, no JavaScript and old browsers
 get. Animate only `transform` and `opacity`, and never touch the scroll
 itself (no snap, no wheel or touch handlers); `tests/test_site.py` holds both.
 
+A stage whose final composition is not its last frame (Share nearby, issue
+687) keeps its staged layout under the motion query, written once per driver
+(`#share[data-stage]` under `@supports`, `#share.stage-js` for the script);
+outside it the same markup is the static version (there, four cards). Give
+each animated element a single class that names its keyframes, so one rule
+with an id can switch them all off where the stage does not fit.
+
 ### Composed images
 
 `tools/site_art.py` (Pillow) draws `docs/assets/og-opening.png`, the
