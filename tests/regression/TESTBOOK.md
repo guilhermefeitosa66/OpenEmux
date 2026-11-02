@@ -1629,8 +1629,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   top and left edges. Step 2 stays sharp. In step 3 each colour reads as that colour with the
   relief still visible, the label is never tinted, and the PC Engine's contacts stay gold and the
   WonderSwan's copper. The Nintendo DS card shows its side notches, the large rounded
-  bottom-left corner and the chamfered label corner in relief, the same card as on Android. Step 4
-  looks exactly as before.
+  bottom-left corner and the chamfered label corner in relief, the same card as on Android; like
+  today's card it has no lettering and no contacts (a real card's front is all label). Step 4 looks
+  exactly as before.
 - **Check:** human only (a screenshot per console and colour). The art itself:
   ```bash
   PYTHONPATH=src .venv/bin/python -c "
@@ -1645,7 +1646,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
               assert 'colorize-' not in text, (c, color)
           else:
               assert 'colorize-' in text, (c, color)
-  assert cr.FRAME_CACHE_VERSION >= 4
+  assert cr.FRAME_CACHE_VERSION >= 3
   print('RT-678 OK')"
   ```
   The rendering is in `tests/test_cartridge_render.py` (`ReliefFrameTests`).
@@ -6133,7 +6134,8 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
   and the WonderSwan's row of holes, the Nintendo 64's arched top, its two vertical grooves and the
   stepped lower shoulders, "GAME BOY ADVANCE" embossed under the Game Boy Advance's top arch and its
   arrow at the bottom, the Mega Drive's two big side columns, the Nintendo DS card's side notches,
-  large rounded bottom-left corner and chamfered label corner). The
+  large rounded bottom-left corner and chamfered label corner, with no lettering or contacts, as
+  today's card). The
   label sits in a recess with a soft shadow along its top and left edges, filling the window with no
   gap and without covering the shell. Each color reads as that color with the relief still visible,
   including Black, White and Clear. The PC Engine's contacts stay gold and the WonderSwan's stay
