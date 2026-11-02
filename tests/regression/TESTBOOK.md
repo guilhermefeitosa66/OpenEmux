@@ -1614,26 +1614,29 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** games with real labels for each relief console: NES, Game Boy, Game Boy Color,
   Master System, Game Gear, SG-1000, 32X, PC Engine, Atari 2600, 5200 and 7800, ColecoVision,
   Intellivision, Lynx, Neo Geo Pocket, Odyssey², Virtual Boy, Vectrex, WonderSwan, Nintendo 64,
-  Game Boy Advance and Mega Drive; one Super Nintendo and one Nintendo DS game. An existing
+  Game Boy Advance, Mega Drive and Nintendo DS (issue 724); one Super Nintendo game. An existing
   cartridge cache from an earlier version is fine (and is part of the test).
 - **Steps:** As a QA person:
   1. Open each of those consoles in the cartridge view.
   2. Zoom to the largest size; then run the app at 2× scale (`GDK_SCALE=2`) and look again.
   3. On a few of them, PC Engine and WonderSwan included, pick "Cartridge color" ▸ "Black", then
      "White", then "Clear", then "Red".
-  4. Open the Super Nintendo and Nintendo DS games in the cartridge view.
+  4. Open the Super Nintendo game in the cartridge view.
 - **Expected:** Every frame in step 1 is the Android app's relief frame: lit from the top left,
   with embossed lettering ("Nintendo GAME BOY", "VIRTUAL BOY", "SEGA", "WonderSwan"...), grooves,
   ribs and arrows casting shadows — no old flat art left, even for games whose cartridge was drawn
   before the update. The label fills its window exactly as before, with a soft shadow along its
   top and left edges. Step 2 stays sharp. In step 3 each colour reads as that colour with the
   relief still visible, the label is never tinted, and the PC Engine's contacts stay gold and the
-  WonderSwan's copper. Step 4 looks exactly as before.
+  WonderSwan's copper. The Nintendo DS card shows its side notches, the large rounded
+  bottom-left corner and the chamfered label corner in relief, the same card as on Android; like
+  today's card it has no lettering and no contacts (a real card's front is all label). Step 4 looks
+  exactly as before.
 - **Check:** human only (a screenshot per console and colour). The art itself:
   ```bash
   PYTHONPATH=src .venv/bin/python -c "
   from openemux.core import cartridge_render as cr
-  relief = 'FC GB GBC SMS GG SG1000 S32X PCE A2600 A5200 A7800 CV INTV LYNX NGP O2 VB VECTREX WS N64 GBA MD'.split()
+  relief = 'FC GB GBC SMS GG SG1000 S32X PCE A2600 A5200 A7800 CV INTV LYNX NGP O2 VB VECTREX WS N64 GBA MD NDS'.split()
   for c in cr.consoles_with_frames():
       kind = 'webp' if c in relief else 'png'
       for color in cr.frame_colors_for(c):
@@ -6098,7 +6101,7 @@ The Android app's cartridge frames re-rendered with relief by
 issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy; issue 705 the Master System, Game
 Gear, SG-1000 and 32X; issue 706 the Atari 2600, 5200, 7800 and Lynx; issue 707 the PC Engine, ColecoVision, Intellivision,
 Neo Geo Pocket, Odyssey 2, Vectrex and WonderSwan; issue 714 the Nintendo 64, Game Boy Advance and
-Mega Drive). Each later part adds its consoles to
+Mega Drive; issue 724 the Nintendo DS). Each later part adds its consoles to
 RT-645's list. The runner has no Android device, so this is `MANUAL`: a person runs it on a phone and
 a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, with `adb`).
 
@@ -6108,14 +6111,15 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 - **Preconditions:** The Android app installed, first-run setup done, games with real labels for
   each redone console: Game Boy, Game Boy Color, NES, Virtual Boy, Master System, Game Gear,
   SG-1000, 32X, Atari 2600, Atari 5200, Atari 7800, Lynx, PC Engine, ColecoVision, Intellivision,
-  Neo Geo Pocket, Odyssey 2, Vectrex, WonderSwan, Nintendo 64, Game Boy Advance, Mega Drive.
+  Neo Geo Pocket, Odyssey 2, Vectrex, WonderSwan, Nintendo 64, Game Boy Advance, Mega Drive,
+  Nintendo DS.
 - **Steps:**
   1. Open each console's library in the cartridge view, phone in portrait.
   2. Look at one cartridge of each console up close (open the game's detail screen).
   3. Turn the phone to landscape; then repeat step 1 on a tablet-sized screen.
   4. In "Settings", set each of those consoles' "Cartridge color" to Black, then White, then Clear,
      then one saturated color (Red), looking at the cartridge view after each.
-  5. Open a console that was not redone (Super Nintendo, Nintendo DS) in the cartridge view.
+  5. Open the console that was not redone (Super Nintendo) in the cartridge view.
 - **Expected:** Every redone frame is sharp (no pixelation in landscape or on the tablet), lit from
   the top left: embossed lettering is legible ("Nintendo GAME BOY" on Game Boy and Game Boy Color,
   "VIRTUAL BOY" on the Virtual Boy's dark band, "SEGA" on the Game Gear's plate), and the grooves,
@@ -6129,11 +6133,13 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
   its see-through hole, the Vectrex's up arrow and "INSERT TO THIS LINE", "WonderSwan" on its plate
   and the WonderSwan's row of holes, the Nintendo 64's arched top, its two vertical grooves and the
   stepped lower shoulders, "GAME BOY ADVANCE" embossed under the Game Boy Advance's top arch and its
-  arrow at the bottom, the Mega Drive's two big side columns). The
+  arrow at the bottom, the Mega Drive's two big side columns, the Nintendo DS card's side notches,
+  large rounded bottom-left corner and chamfered label corner, with no lettering or contacts, as
+  today's card). The
   label sits in a recess with a soft shadow along its top and left edges, filling the window with no
   gap and without covering the shell. Each color reads as that color with the relief still visible,
   including Black, White and Clear. The PC Engine's contacts stay gold and the WonderSwan's stay
-  copper in every color. The consoles in step 5 look exactly as before.
+  copper in every color. The console in step 5 looks exactly as before.
 - **Check:** human only (a screenshot of each console and color:
   `adb exec-out screencap -p > rt645-<console>-<color>.png`).
 

@@ -128,7 +128,7 @@ already baked from the Android generator.
 
 ## `import_cartridge_frames.py` — the relief cartridge frames
 
-Twenty-two consoles (all but SFC and NDS) have relief frames: real height, cast
+Twenty-three consoles (all but SFC) have relief frames: real height, cast
 shadows, embossed lettering. They are rendered by the Android app's generator,
 `pkg/android/openemux/tools/render-cartridge-frames.py` in
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -151,7 +151,7 @@ they were, and a raster whose shape is not the frame's is refused. Stdlib only.
 The art is WebP because PNG would make the frames three times heavier; librsvg
 2.58 and later decode it on their own (`tests/test_cartridge_render.py` fails if
 the shells come out blank). The Android `bake-frames.py` goes the other way for
-SFC and NDS, which stay hand-drawn.
+SFC, which stays hand-drawn.
 
 ## `selection_input_harness.py` — grid input, on a real display
 

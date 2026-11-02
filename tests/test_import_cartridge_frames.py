@@ -208,7 +208,7 @@ class ShippedFramesTests(unittest.TestCase):
 
     def test_every_relief_frame_is_a_clean_import(self):
         relief = [p for p in ASSETS.glob("*.svg") if "data:image/webp" in p.read_text()]
-        self.assertEqual(len(relief), 22 * 13)
+        self.assertEqual(len(relief), 23 * 13)
         for path in relief:
             text = path.read_text()
             with self.subTest(frame=path.name):

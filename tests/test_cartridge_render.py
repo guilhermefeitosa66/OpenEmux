@@ -455,11 +455,11 @@ class EveryShippedFrameTests(unittest.TestCase):
 
 
 #: The frames redone with relief by the Android generator and imported by
-#: tools/import_cartridge_frames.py (issue #703). SFC and NDS stay hand-drawn.
+#: tools/import_cartridge_frames.py (issues #703 and #724). SFC stays hand-drawn.
 RELIEF_CONSOLES = (
     "FC", "GB", "GBC", "SMS", "GG", "SG1000", "S32X", "PCE", "A2600", "A5200",
     "A7800", "CV", "INTV", "LYNX", "NGP", "O2", "VB", "VECTREX", "WS", "N64",
-    "GBA", "MD",
+    "GBA", "MD", "NDS",
 )
 
 
