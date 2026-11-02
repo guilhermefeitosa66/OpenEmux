@@ -969,6 +969,48 @@ A change to the site alone reaches the live page only through `main`. Merge it
 to `develop` as usual, then open a second pull request with just `docs/` to
 `main` — or let it ride with the next release.
 
+### Images
+
+Screenshots on the site are served as AVIF and WebP at several widths, through
+`<picture>` (issue #683). Every PNG matched by `IMAGE_SOURCES` in
+`tools/build_site.py` (today `docs/assets/desktop/*.png` and
+`docs/assets/shelf/*.png`) is the TrueColor master; next to it sit
+`<name>-<width>.avif` and `.webp` at 640 / 1280 / 1920 / 2560 px (only the
+widths below the source's own) plus the full width.
+
+```bash
+.venv/bin/python tools/build_site.py --images   # encode what changed, then rewrite docs/
+```
+
+`--images` needs Pillow, a dev-only dependency (`requirements-dev.txt`); the
+published site and the app never use it. It records each source's hash and each
+variant's size and hash in `site/images.json`, and re-encodes only a source
+whose hash changed, so running it again changes nothing. `--check` (what CI
+runs) compares those hashes and needs only the standard library: a PNG edited
+without `--images`, a variant missing or hand-edited, or a generated file no
+source owns fails it.
+
+To use an image in `site/page.html`, add `data-picture` to its `<img>` (and
+`data-sizes` with the CSS width it is shown at; the default is `100vw`). The
+build turns it into a `<picture>` with explicit `width`/`height`,
+`loading="lazy" decoding="async"` and a `data-full` (largest WebP) the lightbox
+opens; `data-picture="eager"` is for an image on the first screen. An opted-in
+image with no widths yet fails the build, naming the file.
+
+The desktop captures are made in the devbox from the fictional demo library,
+at 2× (`GDK_SCALE=2`), by `tools/site_captures.py` run inside the devbox
+(under the pipeline's devbox lock when other workers share it):
+
+```bash
+./devbox/devbox.sh exec env DEVBOX_REPO="$PWD" /usr/bin/python3 tools/site_captures.py /tmp/captures
+```
+
+It writes `grid-sfc.png` and `cart-{sfc,fc,gba,n64,md,ps}.png` (2640×1756, window
+content only). Look at each one (no toast, no red Log badge, no "Search
+artwork…" placeholder), copy them to `docs/assets/desktop/` and run
+`--images`. The other captures (README, carousel, welcome wizard) follow the
+same demo-library rules.
+
 ## Cutting a release
 
 `main` holds released code only and is protected by a repository ruleset: no
