@@ -1605,7 +1605,48 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
           assert cr.cartridge_frame(c, color=color) is not None, (c, color)
   print('RT-339 OK')"
   ```
-  The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
+  The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`); since
+  issue #703 the frames' look is RT-678.
+
+### RT-678 — Desktop relief frames match Android, in every shell colour
+- **Area:** View modes & layout
+- **Mode:** MANUAL
+- **Preconditions:** games with real labels for each relief console: NES, Game Boy, Game Boy Color,
+  Master System, Game Gear, SG-1000, 32X, PC Engine, Atari 2600, 5200 and 7800, ColecoVision,
+  Intellivision, Lynx, Neo Geo Pocket, Odyssey², Virtual Boy, Vectrex, WonderSwan, Nintendo 64,
+  Game Boy Advance and Mega Drive; one Super Nintendo and one Nintendo DS game. An existing
+  cartridge cache from an earlier version is fine (and is part of the test).
+- **Steps:** As a QA person:
+  1. Open each of those consoles in the cartridge view.
+  2. Zoom to the largest size; then run the app at 2× scale (`GDK_SCALE=2`) and look again.
+  3. On a few of them, PC Engine and WonderSwan included, pick "Cartridge color" ▸ "Black", then
+     "White", then "Clear", then "Red".
+  4. Open the Super Nintendo and Nintendo DS games in the cartridge view.
+- **Expected:** Every frame in step 1 is the Android app's relief frame: lit from the top left,
+  with embossed lettering ("Nintendo GAME BOY", "VIRTUAL BOY", "SEGA", "WonderSwan"...), grooves,
+  ribs and arrows casting shadows — no old flat art left, even for games whose cartridge was drawn
+  before the update. The label fills its window exactly as before, with a soft shadow along its
+  top and left edges. Step 2 stays sharp. In step 3 each colour reads as that colour with the
+  relief still visible, the label is never tinted, and the PC Engine's contacts stay gold and the
+  WonderSwan's copper. Step 4 looks exactly as before.
+- **Check:** human only (a screenshot per console and colour). The art itself:
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from openemux.core import cartridge_render as cr
+  relief = 'FC GB GBC SMS GG SG1000 S32X PCE A2600 A5200 A7800 CV INTV LYNX NGP O2 VB VECTREX WS N64 GBA MD'.split()
+  for c in cr.consoles_with_frames():
+      kind = 'webp' if c in relief else 'png'
+      for color in cr.frame_colors_for(c):
+          text = cr.frame_asset_for(c, color=color).read_text()
+          assert 'data:image/' + kind + ';base64,' in text, (c, color)
+          if c in relief or color == 'default':
+              assert 'colorize-' not in text, (c, color)
+          else:
+              assert 'colorize-' in text, (c, color)
+  assert cr.FRAME_CACHE_VERSION >= 3
+  print('RT-678 OK')"
+  ```
+  The rendering is in `tests/test_cartridge_render.py` (`ReliefFrameTests`).
 
 ### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout

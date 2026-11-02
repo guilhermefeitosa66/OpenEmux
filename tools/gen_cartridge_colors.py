@@ -15,6 +15,10 @@ same colour reads the same across every console -- the issue's "same plastic
 under the same light".
 
 The label-clip marker is never touched. Colours come from issue #79.
+
+Relief frames (the art embedded as WebP) are skipped: they come, already
+coloured, from the Android generator through import_cartridge_frames.py, and a
+filter copy would overwrite that colouring with a worse one.
 """
 
 import base64
@@ -175,14 +179,22 @@ def make_variant(source_text, source_name, color_id, color_name, base_hex, ramp)
     )
 
 
-def main():
-    only = sys.argv[1:] or BASE_FRAMES
+def is_relief_frame(svg_text):
+    """True when the art is an imported relief frame (see import_cartridge_frames.py)."""
+    return 'xlink:href="data:image/webp;base64,' in svg_text
+
+
+def main(argv=None):
+    only = (sys.argv[1:] if argv is None else argv) or BASE_FRAMES
     written = 0
     for console in only:
         source = ASSETS / f"{console}.svg"
         if not source.is_file():
             raise SystemExit(f"missing base frame: {source}")
         text = source.read_text()
+        if is_relief_frame(text):
+            print(f"{console:5} relief frame, skipped: run import_cartridge_frames.py")
+            continue
         ramp = measure_ramp(text, source.name)
         print(f"{console:5} ramp: slope={ramp[0]:.3f} intercept={ramp[1]:+.3f}")
         for color_id, color_name, base_hex in PALETTE:
