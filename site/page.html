@@ -338,13 +338,18 @@
       padding: 0 0 48px;
     }
 
+    /* The capture is the app's own window (libadwaita header bar and
+       buttons included): rounded corners and a shadow, never a fake title
+       bar around it. */
     .device-desktop {
       width: 86%;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
     }
 
+    /* Phone body: the same border on all four sides and the screenshot at
+       its own 720x1560 ratio, so the screen sits centred; the inner corner
+       is radius - border, concentric with the outer one. */
     .device-phone {
       position: absolute;
       right: 0;
