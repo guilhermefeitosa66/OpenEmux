@@ -37,7 +37,7 @@ DEFAULT_SOURCE = (
 )
 
 # Hand-drawn frames the Android generator does not redo; never touched here.
-KEEP = {"SFC", "NDS"}
+KEEP = {"SFC"}
 
 # How far each side of the raster may be from the frame's shape, in raster
 # pixels: the generator rounds the short side to a whole pixel.
