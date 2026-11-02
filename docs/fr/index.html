@@ -924,6 +924,12 @@
       width: 24px
     }
 
+    /* <picture> wraps the screenshots for AVIF/WebP (tools/build_site.py);
+       it must not add a box of its own to the layout. */
+    picture {
+      display: contents
+    }
+
     /* Zoomable screenshots -> lightbox */
     .shot img,
     .gallery img,
@@ -1457,25 +1463,25 @@
           <button class="carousel-btn carousel-prev" type="button" aria-label="Précédent">‹</button>
           <div class="carousel-viewport">
             <div class="carousel-track">
-              <figure><img src="../assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/sfc-640.avif 640w, ../assets/shelf/sfc-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/sfc-640.webp 640w, ../assets/shelf/sfc-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/sfc-1200.webp" /></picture>
                 <figcaption>Super Nintendo</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/gba-640.avif 640w, ../assets/shelf/gba-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/gba-640.webp 640w, ../assets/shelf/gba-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/gba-1200.webp" /></picture>
                 <figcaption>Game Boy Advance</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/n64-640.avif 640w, ../assets/shelf/n64-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/n64-640.webp 640w, ../assets/shelf/n64-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/n64-1200.webp" /></picture>
                 <figcaption>Nintendo 64</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/md.png" alt="OpenEmux — Mega Drive library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/md-640.avif 640w, ../assets/shelf/md-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/md-640.webp 640w, ../assets/shelf/md-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/md.png" alt="OpenEmux — Mega Drive library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/md-1200.webp" /></picture>
                 <figcaption>Mega Drive</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/sms-640.avif 640w, ../assets/shelf/sms-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/sms-640.webp 640w, ../assets/shelf/sms-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/sms-1200.webp" /></picture>
                 <figcaption>Sega Master System</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/ps-640.avif 640w, ../assets/shelf/ps-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/ps-640.webp 640w, ../assets/shelf/ps-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/ps.png" alt="OpenEmux — PlayStation library" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/ps-1200.webp" /></picture>
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/favorites.png" alt="OpenEmux — Favoris" />
+              <figure><picture><source type="image/avif" srcset="../assets/shelf/favorites-640.avif 640w, ../assets/shelf/favorites-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="../assets/shelf/favorites-640.webp 640w, ../assets/shelf/favorites-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="../assets/shelf/favorites.png" alt="OpenEmux — Favoris" width="1200" height="800" loading="lazy" decoding="async" data-full="../assets/shelf/favorites-1200.webp" /></picture>
                 <figcaption>Favoris</figcaption>
               </figure>
             </div>
@@ -1736,7 +1742,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         el.addEventListener('click', function () {
           var fig = el.closest('figure');
           var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
-          open(el.currentSrc || el.src, el.alt, caption);
+          open(el.dataset.full || el.currentSrc || el.src, el.alt, caption);
         });
       });
 
