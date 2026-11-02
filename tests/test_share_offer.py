@@ -289,6 +289,35 @@ class NotReceivedTests(_OfferCase):
         self.assertIsNone(dialog.result.missing_group)
 
 
+@needs_display
+class BiosOfferTests(_OfferCase):
+    """BIOS in an incoming offer (issue 677)."""
+
+    def disk(self, *bios):
+        return [game([item("r", "rom", "Disk.fds", b"disk")] + list(bios), console="FDS", title="Disk")]
+
+    def test_the_offer_says_bios_and_the_result_names_them(self):
+        dialog = self.receive(self.disk(item("b", "bios", "disksys.rom", b"fds")))
+        self.assertIn("Game, BIOS", texts(dialog.root_page))
+        dialog.accept()
+        with mock.patch.object(self.win, "_rescan_single_console"):
+            self.service.accepted[3]["on_done"]({"status": "done", "placed": [], "replaced": [], "skipped": []})
+        self.assertIn("\nBIOS files added: disksys.rom", status(dialog).get_description())
+
+    def test_a_different_bios_is_a_conflict_kept_by_default(self):
+        bios = self.home.console_dir("FDS") / "bios" / "disksys.rom"
+        bios.parent.mkdir()
+        bios.write_bytes(b"mine")
+        dialog = self.receive(self.disk(item("b", "bios", "disksys.rom", b"theirs"),
+                                        item("x", "bios", "notes.txt", b"no")))
+        dialog._push_conflicts()
+        row = dialog.combo_rows["b"]
+        self.assertEqual(row.get_title(), "Disk · BIOS disksys.rom")
+        self.assertEqual(row.get_model().get_n_items(), 2)
+        self.assertEqual(row.get_model().get_string(row.get_selected()), "Skip")
+        self.assertIn("Disk · BIOS notes.txt", texts(dialog.nav.get_visible_page()))
+
+
 def action_rows(widget):
     """Every ``Adw.ActionRow`` under ``widget``, in order."""
     found = []

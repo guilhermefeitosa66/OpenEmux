@@ -319,7 +319,7 @@ class SharedVectorTests(unittest.TestCase):
         validate_manifest(sample)
         [game] = validate_items(sample)
         self.assertEqual(game.rejected, {})
-        self.assertEqual({item["kind"] for item in game.items}, {"rom", "battery_save", "state", "cover"})
+        self.assertEqual({item["kind"] for item in game.items}, {"rom", "battery_save", "state", "cover", "bios"})
 
 
 
