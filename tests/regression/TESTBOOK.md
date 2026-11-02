@@ -6159,8 +6159,8 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
   the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
   on the back link, and B goes back to the row that opened it. 6: R1 and L1 land on the new page's
-  first game, never on search, a chip or the back link. 7: focus lands on "Play". Each placement holds: one second later the
-  focus is still on the game or "Play". At no point does A go back.
+  first game, never on search, a chip or the back link. 7: focus lands on "Play". Each placement
+  holds: one second later the focus is still on the game or "Play". At no point does A go back.
 - **Check:** human only.
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
