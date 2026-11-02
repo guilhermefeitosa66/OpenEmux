@@ -386,6 +386,24 @@ class TheImagePipelineTests(unittest.TestCase):
                 widths = {v["width"] for v in entry["variants"]}
                 self.assertTrue({640, 1280, 1920, entry["width"]} <= widths)
 
+    def test_the_android_and_share_captures_are_all_there(self):
+        # Issue 684: the Android imagery and one capture per Share nearby step,
+        # on both devices, each with its AVIF/WebP widths.
+        manifest = build_site.load_manifest()
+        names = (
+            ["android/library-snes"]
+            + [f"android/game-{c}-portrait" for c in ("snes", "gba", "n64", "megadrive", "ps", "nds")]
+            + [f"android/game-{c}-landscape" for c in ("gba", "nds")]
+            + [f"share/phone-{s}" for s in ("1-pick", "1-what", "2-code", "3-progress", "4-sent")]
+            + [f"share/desktop-{s}" for s in ("1-ready", "2-offer", "3-progress", "4-received", "4-library")]
+        )
+        for name in names:
+            with self.subTest(capture=name):
+                entry = manifest[f"{name}.png"]
+                self.assertGreaterEqual(min(entry["width"], entry["height"]), 1080)
+                formats = {Path(v["file"]).suffix for v in entry["variants"]}
+                self.assertEqual(formats, {".avif", ".webp"})
+
     def test_a_missing_manifest_is_empty(self):
         self.assertEqual(build_site.load_manifest(Path("/nonexistent/images.json")), {})
 
