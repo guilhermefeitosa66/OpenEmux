@@ -1,4 +1,833 @@
 {
+  "android/game-gba-landscape.png": {
+    "height": 1080,
+    "sha256": "e9d8cad93b9e522df5c6b19f9dc4250154a66210eb7744f885a9aa12671a890f",
+    "variants": [
+      {
+        "file": "android/game-gba-landscape-640.avif",
+        "height": 309,
+        "sha256": "310f73832098c664e30cf99e8791a4c19612dc8e9bd39a77aeadcc4cd07b04ff",
+        "width": 640
+      },
+      {
+        "file": "android/game-gba-landscape-640.webp",
+        "height": 309,
+        "sha256": "1616c2fd8b7d65dfb1238ea92637640bb3def7d7b75038bbb4df51a1a9b0e95a",
+        "width": 640
+      },
+      {
+        "file": "android/game-gba-landscape-1280.avif",
+        "height": 618,
+        "sha256": "5874474077c210bd0a440db5fa7f78b542310b24900cdeb68d717313860f035f",
+        "width": 1280
+      },
+      {
+        "file": "android/game-gba-landscape-1280.webp",
+        "height": 618,
+        "sha256": "003ccecba0fb600554b2411babd570632c729c3be7f7022084a1805f4f5e62ec",
+        "width": 1280
+      },
+      {
+        "file": "android/game-gba-landscape-1920.avif",
+        "height": 927,
+        "sha256": "a0146db4297edd64dd9fbe33c48952f038fe341666ec638f45773b0342aac117",
+        "width": 1920
+      },
+      {
+        "file": "android/game-gba-landscape-1920.webp",
+        "height": 927,
+        "sha256": "5933d38a6e91589dc78466a27f17501342b6f5ad86a0e50ed6b192cb1576e065",
+        "width": 1920
+      },
+      {
+        "file": "android/game-gba-landscape-2238.avif",
+        "height": 1080,
+        "sha256": "6a310290eb838027fe2b626b988d6309c9701542700d2ee9fd6dd1e105c8c4e2",
+        "width": 2238
+      },
+      {
+        "file": "android/game-gba-landscape-2238.webp",
+        "height": 1080,
+        "sha256": "7910f75495e799073ece459a6d9625e527274f4c07ab8457002f7083a7eb0a22",
+        "width": 2238
+      }
+    ],
+    "width": 2238
+  },
+  "android/game-gba-portrait.png": {
+    "height": 2238,
+    "sha256": "a3b11f16188d8c17ea959f78987beb03e9b6a470518b7602292d9a2dd7951d0d",
+    "variants": [
+      {
+        "file": "android/game-gba-portrait-640.avif",
+        "height": 1326,
+        "sha256": "93f5ffd046608b164ff35535a17113b352a60febef5245797f52f963ad4ba7ca",
+        "width": 640
+      },
+      {
+        "file": "android/game-gba-portrait-640.webp",
+        "height": 1326,
+        "sha256": "01f1cf2775ecea536a9d513a074d163b46aeb512bc063c11167103a032618331",
+        "width": 640
+      },
+      {
+        "file": "android/game-gba-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "7543b25ad248f90d0afc7142227dd0a1bee51033f6b661de0a5c14eafd24af06",
+        "width": 1080
+      },
+      {
+        "file": "android/game-gba-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "622f8f505611b3647635bdc1a92d4370ddf19e3aa89eac68c2b88d35bd2b29c5",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/game-megadrive-portrait.png": {
+    "height": 2238,
+    "sha256": "5aa7275bbf148b87d24207a116c01c16ef607721f6567de71279d5348c2fdf43",
+    "variants": [
+      {
+        "file": "android/game-megadrive-portrait-640.avif",
+        "height": 1326,
+        "sha256": "ceb0054ea9e63acebc9dcdfae054c2978803ae021b48fbca9f1865c2e9033d5e",
+        "width": 640
+      },
+      {
+        "file": "android/game-megadrive-portrait-640.webp",
+        "height": 1326,
+        "sha256": "9bd313049d61b960605c2bdc44046c2da255bf6cb48936a0564a1cfcbbbe1bd3",
+        "width": 640
+      },
+      {
+        "file": "android/game-megadrive-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "5ca5536bf7936d354f99e5b7c7e813c828c5598de81bf011d88eee36115e136d",
+        "width": 1080
+      },
+      {
+        "file": "android/game-megadrive-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "717e584bca1760aa14b10d966517320eeec11810150f16cb2e2177febc9f3ee1",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/game-n64-portrait.png": {
+    "height": 2238,
+    "sha256": "6d77dde4c3913a46952c52817fcdb7f0bff7fcfde7e6d772185075cef154228a",
+    "variants": [
+      {
+        "file": "android/game-n64-portrait-640.avif",
+        "height": 1326,
+        "sha256": "dee9bbbc605eb6b585975da22a6d8aeb3104055c3d58fa5c2c5a5c47529bb6ad",
+        "width": 640
+      },
+      {
+        "file": "android/game-n64-portrait-640.webp",
+        "height": 1326,
+        "sha256": "688d03f6582b6f1bad69296ed9dc264ca08b8a7b5201614f2b7cd8d52d4ea2b8",
+        "width": 640
+      },
+      {
+        "file": "android/game-n64-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "5a130af01ea41c2af183303bcf1ba63ea8c1bbba49ce946d67190a4e2b4146c4",
+        "width": 1080
+      },
+      {
+        "file": "android/game-n64-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "470d5d13acab4b7bf8ce412777098305c215cda0369596e5861ce4e81b1ecbaf",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/game-nds-landscape.png": {
+    "height": 1080,
+    "sha256": "6bee44df7bc4aaed032d5a828abc40bff38a0456c48e81d435e6ca1841dbb7b4",
+    "variants": [
+      {
+        "file": "android/game-nds-landscape-640.avif",
+        "height": 309,
+        "sha256": "94bd98d7825797bdadeb33e0d53c35ebd6564245f2d72ef2ead28e9b7ea23e8e",
+        "width": 640
+      },
+      {
+        "file": "android/game-nds-landscape-640.webp",
+        "height": 309,
+        "sha256": "741d45dd8feced3aec94d3bc113dc84cbc5c7e0fa787cb4957160abf7e1600c4",
+        "width": 640
+      },
+      {
+        "file": "android/game-nds-landscape-1280.avif",
+        "height": 618,
+        "sha256": "03c2f2aec8ce42d81724d4103b4a6e697cfddcf9d8d8deeeac8c08dadeb63e21",
+        "width": 1280
+      },
+      {
+        "file": "android/game-nds-landscape-1280.webp",
+        "height": 618,
+        "sha256": "73ece4b57b44a4485b3d9811084969183cd8d3c04f2baa7fac743899ff6abec5",
+        "width": 1280
+      },
+      {
+        "file": "android/game-nds-landscape-1920.avif",
+        "height": 927,
+        "sha256": "f5fad128ad02df0ad8e9efa49fdd7b93c6d60336f958e0ce444c29c42c8bf7ac",
+        "width": 1920
+      },
+      {
+        "file": "android/game-nds-landscape-1920.webp",
+        "height": 927,
+        "sha256": "f0387df9fe7399f4134e04e81b99975d439c2799aff105d4f5f393cbbc770716",
+        "width": 1920
+      },
+      {
+        "file": "android/game-nds-landscape-2238.avif",
+        "height": 1080,
+        "sha256": "e1b4bde6187b82c5caa68bbf4c0ba7af999de24d8685d713b1945e02ba6119c7",
+        "width": 2238
+      },
+      {
+        "file": "android/game-nds-landscape-2238.webp",
+        "height": 1080,
+        "sha256": "02a7c1789fd3a00aba6968af9c825c4b95ce1a4e80a64a54c6729c42ce6396c2",
+        "width": 2238
+      }
+    ],
+    "width": 2238
+  },
+  "android/game-nds-portrait.png": {
+    "height": 2238,
+    "sha256": "f94f8be8e3a26856520578543f4792f198404487325353a7ba971e288d0088e1",
+    "variants": [
+      {
+        "file": "android/game-nds-portrait-640.avif",
+        "height": 1326,
+        "sha256": "2028a4c49cd232e661a657a67215d49f9d8f4964457479c48331c19f00b2663c",
+        "width": 640
+      },
+      {
+        "file": "android/game-nds-portrait-640.webp",
+        "height": 1326,
+        "sha256": "2a582296a0375dfb4af26b64e106b2ed1a65fffaa3ecd6f3836766b7a7cfff91",
+        "width": 640
+      },
+      {
+        "file": "android/game-nds-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "7741ef0818041b2b684c13e27ee1e5008ee948bf579e3ee761c3026c71fc89c2",
+        "width": 1080
+      },
+      {
+        "file": "android/game-nds-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "bb6013a3717858dc8c256f1c81f3649ec5c777d96d481b0ca6e304db6f2fe07c",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/game-ps-portrait.png": {
+    "height": 2238,
+    "sha256": "72104cfae10da614748b809291293c862b28870d71b16974bc195bee64b02f62",
+    "variants": [
+      {
+        "file": "android/game-ps-portrait-640.avif",
+        "height": 1326,
+        "sha256": "dfb01487922b597aef31d7ee79861e5b2ad8c82fe1670fc951e3e4bb62e6f908",
+        "width": 640
+      },
+      {
+        "file": "android/game-ps-portrait-640.webp",
+        "height": 1326,
+        "sha256": "a6353bf032d5d0b00621568fcfa2ae20f103ca1d7e7719de8f70b49f6c586d62",
+        "width": 640
+      },
+      {
+        "file": "android/game-ps-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "854aeb062de0d93d45e68a82fc64fae420275c214f006d111ec16a511f249623",
+        "width": 1080
+      },
+      {
+        "file": "android/game-ps-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "249a36996a8598b8369d2ced1938c083d863656f5c4d40d04be90becd2c8ecb4",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/game-snes-portrait.png": {
+    "height": 2238,
+    "sha256": "2fae0bcab58dd540253b0e7faac83e1c57d266b02618aaeaba84ce2c488c6b00",
+    "variants": [
+      {
+        "file": "android/game-snes-portrait-640.avif",
+        "height": 1326,
+        "sha256": "857bdf509ac84804695ff9e5bc215b95d7bac8e8d5c002b50a243b9ee8afc406",
+        "width": 640
+      },
+      {
+        "file": "android/game-snes-portrait-640.webp",
+        "height": 1326,
+        "sha256": "679c738e085f32c7ce4bca39dbe73674d641c8cf7daffad2db59d3812c1e7f60",
+        "width": 640
+      },
+      {
+        "file": "android/game-snes-portrait-1080.avif",
+        "height": 2238,
+        "sha256": "a6ecef4c00a6cbbf8c39eb3bb0a7c75695310dda1c8bf1ce542dcf3e6f211723",
+        "width": 1080
+      },
+      {
+        "file": "android/game-snes-portrait-1080.webp",
+        "height": 2238,
+        "sha256": "9d3d3c16d4a379515d7d51aa4c2915636a61b7db9d49b35f38cd841f35a9d4c4",
+        "width": 1080
+      }
+    ],
+    "width": 1080
+  },
+  "android/library-snes.png": {
+    "height": 3120,
+    "sha256": "86f4e1ec1e8d5e0c7a6d2ed7e0389eb722e373339ce239bf92749332dc918d30",
+    "variants": [
+      {
+        "file": "android/library-snes-640.avif",
+        "height": 1387,
+        "sha256": "036cf8b7f4428fd8dd5b112cbe4868ccd3c29cc5579360deb4ac21313baab7ff",
+        "width": 640
+      },
+      {
+        "file": "android/library-snes-640.webp",
+        "height": 1387,
+        "sha256": "0c0245877236bb44b531deff5a4bc667a50310ddf2d147a2d7b6d7c7caa40187",
+        "width": 640
+      },
+      {
+        "file": "android/library-snes-1280.avif",
+        "height": 2773,
+        "sha256": "a71dc27e477f17f9a62e62528dd7d59a4592256e5179a71c6f19f9454a980fe0",
+        "width": 1280
+      },
+      {
+        "file": "android/library-snes-1280.webp",
+        "height": 2773,
+        "sha256": "33b7591378398a7ae0e6b28bfcfa54c8e196fc8fb74dfc1a0e8855b9d76d1c87",
+        "width": 1280
+      },
+      {
+        "file": "android/library-snes-1440.avif",
+        "height": 3120,
+        "sha256": "de18ab8232ef35b7a18e7975e6abbea97fe35c90d3de93df163e15b10632e665",
+        "width": 1440
+      },
+      {
+        "file": "android/library-snes-1440.webp",
+        "height": 3120,
+        "sha256": "a1b7079050f4c2270783af22e122224b8a12b26f5fdd84da26f25ac829b2f996",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
+  "share/desktop-1-ready.png": {
+    "height": 1516,
+    "sha256": "11164304dbd7af95fc9fb2490322db6d2b1757d203882e31664e2d3b0fe4e1e0",
+    "variants": [
+      {
+        "file": "share/desktop-1-ready-640.avif",
+        "height": 434,
+        "sha256": "2ee40cf318c148d441ac78c7827b9f069898dcf0f74f9166b0a966c13be4069c",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-1-ready-640.webp",
+        "height": 434,
+        "sha256": "774f0463758102bee067ebc8296afb3b9fcd74f4ebf27f0468354a36cd2c624a",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-1-ready-1280.avif",
+        "height": 868,
+        "sha256": "ca6e39e525f140aa9f433be8833505774d1108d1ba9eda7b5f284f2f09489667",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-1-ready-1280.webp",
+        "height": 868,
+        "sha256": "0625657ed2a678eac97b89c176f6280ca208c99bfb2333b72535bfdd60b643d9",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-1-ready-1920.avif",
+        "height": 1302,
+        "sha256": "9912d09e712aa1ae2ce9ca5b9a2ae7ea15269feb3806318ff0dc083f6b239a90",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-1-ready-1920.webp",
+        "height": 1302,
+        "sha256": "a79b97b1c0750fe770b41989be5cead7e12259a4612c02f0df446d655db29595",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-1-ready-2236.avif",
+        "height": 1516,
+        "sha256": "702be38d555228fab5d34ba1f2b884b0db595cb0c655fa0abee77e5ee087cc33",
+        "width": 2236
+      },
+      {
+        "file": "share/desktop-1-ready-2236.webp",
+        "height": 1516,
+        "sha256": "8a72569b20b25297b76bc3c1837f174c87c18882f93a97b9900b4b3baedee1fb",
+        "width": 2236
+      }
+    ],
+    "width": 2236
+  },
+  "share/desktop-2-offer.png": {
+    "height": 1516,
+    "sha256": "cd438bf56649a06ff797d2b2120cd90d2e67db0fd4470268cdc1465101a0505c",
+    "variants": [
+      {
+        "file": "share/desktop-2-offer-640.avif",
+        "height": 434,
+        "sha256": "cac46a558492b7f699786883b15210274c3e6e22394dcb339afe90abff6f4252",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-2-offer-640.webp",
+        "height": 434,
+        "sha256": "50fa15a3bc3334d224e2b0d4d9c41d30b8c81061b4ef353e67f46d8ead5854db",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-2-offer-1280.avif",
+        "height": 868,
+        "sha256": "f34efe2ab1d10337e4bf3e9bab85407c9d502f848f32c9d38d89633b3415ae7f",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-2-offer-1280.webp",
+        "height": 868,
+        "sha256": "dd640312d1c8fbd11cfe53598a17fc02b9cd612c4a648e86132e97994478c3fe",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-2-offer-1920.avif",
+        "height": 1302,
+        "sha256": "edf5c21b8daf57e12fbd6f93a3e9e14029da2bf2ea0f6eed1c51cfd02a8f01d3",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-2-offer-1920.webp",
+        "height": 1302,
+        "sha256": "2598e21ad4e64704e0b5e0a1247ad53ac5f855e19fce0f7b7aa020d732389158",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-2-offer-2236.avif",
+        "height": 1516,
+        "sha256": "7e4dddcfdf2551fac1a02c3c9ba6dfbb1ebe358e1587e2ca38190a012e6d5a7c",
+        "width": 2236
+      },
+      {
+        "file": "share/desktop-2-offer-2236.webp",
+        "height": 1516,
+        "sha256": "3150805aaeb5fb2d8640234abf92d06f4b454da6eacc7234c8bf10cab4fd2dda",
+        "width": 2236
+      }
+    ],
+    "width": 2236
+  },
+  "share/desktop-3-progress.png": {
+    "height": 1516,
+    "sha256": "b56343c11c8f94d08c782916dc773877f898d54314d429b57305c979e351ec2b",
+    "variants": [
+      {
+        "file": "share/desktop-3-progress-640.avif",
+        "height": 434,
+        "sha256": "a6c47d3baf12d20db8a3a1462bd98708e708b899eee8edefb97df1acaf34ad1b",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-3-progress-640.webp",
+        "height": 434,
+        "sha256": "7e07a93e5724acb19f84e1325d121b8c99e2d1dbe68cf3de613cef1de2568726",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-3-progress-1280.avif",
+        "height": 868,
+        "sha256": "23b0a0da1d0a2d6fc2978e7b106969a7d1af53b22d9c2b0693a9c0a4a0aec7be",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-3-progress-1280.webp",
+        "height": 868,
+        "sha256": "ba2f6f1a835ffea55b7d52e97ee78b075de66028c173b3527d7f1327213c88ac",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-3-progress-1920.avif",
+        "height": 1302,
+        "sha256": "ed69d6fe01bf8f0ffd62af6bee9eb7a1780bf5b1457eb4da33da9bdfa2665295",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-3-progress-1920.webp",
+        "height": 1302,
+        "sha256": "283b59697f31ef6502a8c8d61ad630d782a83484df4ccee964c6f7a8e87e10bb",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-3-progress-2236.avif",
+        "height": 1516,
+        "sha256": "eefadde39d717b7c702a2fe4dcb2d1716fdf5256121beb0dcd1faf3090f777cb",
+        "width": 2236
+      },
+      {
+        "file": "share/desktop-3-progress-2236.webp",
+        "height": 1516,
+        "sha256": "5ac9480d0f6802b2f090927bddd4b67cfa5f74559b67661deb47f2c86d70d824",
+        "width": 2236
+      }
+    ],
+    "width": 2236
+  },
+  "share/desktop-4-library.png": {
+    "height": 1516,
+    "sha256": "077fddf83e9d8e6167db8ca7a4ecec27c35ccf39a5b492c8eef1670a42d87fbb",
+    "variants": [
+      {
+        "file": "share/desktop-4-library-640.avif",
+        "height": 434,
+        "sha256": "fea08524126bf2e6946d95c2eaf0849be63660b9a6974386af8e9d3a7cb3b5cc",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-4-library-640.webp",
+        "height": 434,
+        "sha256": "56671a7f9901e13a26810b3f752d6bded119d589bd05559532cdfcf78a451d79",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-4-library-1280.avif",
+        "height": 868,
+        "sha256": "f77def57ac33330d9e826126a63a1c802a118a1123f83ab596a00a73bc9a64c4",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-4-library-1280.webp",
+        "height": 868,
+        "sha256": "dd9eb1492335bcfdcce056b6624785a4507e175c9d6782a488048a456c8e67d9",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-4-library-1920.avif",
+        "height": 1302,
+        "sha256": "55e893bc1cf6aafd3c95c5e88d4305e647a420d87cbdc5a4a2af43735f2a7b5b",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-4-library-1920.webp",
+        "height": 1302,
+        "sha256": "e6bd47b611efe48ec2c4e3ad7fba3fde42922b587b6c9ede251472699cfb9d4a",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-4-library-2236.avif",
+        "height": 1516,
+        "sha256": "cd049000e538e116e76deeaef68bce87f65bcd452869811e15540435e81a4422",
+        "width": 2236
+      },
+      {
+        "file": "share/desktop-4-library-2236.webp",
+        "height": 1516,
+        "sha256": "3668135c33724c7d2a8b31d3fdee3914ab128ab8c7127209a65f25f8e2c0de3a",
+        "width": 2236
+      }
+    ],
+    "width": 2236
+  },
+  "share/desktop-4-received.png": {
+    "height": 1516,
+    "sha256": "3e39c93f08b6702c00cdb9dd327673b82d41fb45c62ba5a89cda8fc5086c3246",
+    "variants": [
+      {
+        "file": "share/desktop-4-received-640.avif",
+        "height": 434,
+        "sha256": "23bd9b109754438cfa8e9de5bf9c3b66b49c16332ccecebee0775a8c9c8f80bd",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-4-received-640.webp",
+        "height": 434,
+        "sha256": "cbc75859a7d11de92e786ad74184c661d627357b8968bdd65e83a8c0caffdb91",
+        "width": 640
+      },
+      {
+        "file": "share/desktop-4-received-1280.avif",
+        "height": 868,
+        "sha256": "497d33f5cf8f21cb4ebc0174144568c805bc73b0af448a1fa00c4d55edb61d3c",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-4-received-1280.webp",
+        "height": 868,
+        "sha256": "fa0117a9aa983c55eaeac550f7efcf63f3060596b822abe225fec6efa690ddba",
+        "width": 1280
+      },
+      {
+        "file": "share/desktop-4-received-1920.avif",
+        "height": 1302,
+        "sha256": "b33a04295a85a8ec4f99f5ccea249117002cf11642febe97d33c8b26a90fa639",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-4-received-1920.webp",
+        "height": 1302,
+        "sha256": "5e6d9e3332b64084344168172086a8ca7d9a166af4f94608544726bcc77b7ae4",
+        "width": 1920
+      },
+      {
+        "file": "share/desktop-4-received-2236.avif",
+        "height": 1516,
+        "sha256": "499d21e64d53993d60bbc7b9bb40d89fb12cabf5cae53acc12b76d8aae4844d4",
+        "width": 2236
+      },
+      {
+        "file": "share/desktop-4-received-2236.webp",
+        "height": 1516,
+        "sha256": "a077520198dbb9c8680a68261a7a426c7100515a5d476b8ceea18f0638884cb2",
+        "width": 2236
+      }
+    ],
+    "width": 2236
+  },
+  "share/phone-1-pick.png": {
+    "height": 3120,
+    "sha256": "8488fc6d5a6ff1009774d1c89e9ab40d0b31f3b3a10bfb3067931ed88222302a",
+    "variants": [
+      {
+        "file": "share/phone-1-pick-640.avif",
+        "height": 1387,
+        "sha256": "64722a4ef02a729df327c4bd0a3f53af83e253271b7962d19f6e1dbc70dbe5aa",
+        "width": 640
+      },
+      {
+        "file": "share/phone-1-pick-640.webp",
+        "height": 1387,
+        "sha256": "82b34b22d3b2261142bf3cd42a29d64934f6dd6cd3eebfbc3b2e5e8aee8f5f62",
+        "width": 640
+      },
+      {
+        "file": "share/phone-1-pick-1280.avif",
+        "height": 2773,
+        "sha256": "30b786dc832be1b231829ec8953439cc03d84fa48bd4bde15633dc4f98942350",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-1-pick-1280.webp",
+        "height": 2773,
+        "sha256": "c26d04398996f590938312901ab1eb437d86c99eda5a17be2a058c00e2cc2182",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-1-pick-1440.avif",
+        "height": 3120,
+        "sha256": "527c3d1388f40c134e0bf3e73c832377e5b33cc2cec1fc85e02edbb476ac0238",
+        "width": 1440
+      },
+      {
+        "file": "share/phone-1-pick-1440.webp",
+        "height": 3120,
+        "sha256": "772f511b2f0e43706a45731d39396159bdf7d29a293e85329f1337aa34db4b6f",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
+  "share/phone-1-what.png": {
+    "height": 3120,
+    "sha256": "fb97fe3b57c52a881b652dbdeadc5913a98ecd19862d223a100c9022e1a7d8cf",
+    "variants": [
+      {
+        "file": "share/phone-1-what-640.avif",
+        "height": 1387,
+        "sha256": "7dec6458844df1439d65c9514ca4ed6f771f74089a4bba30299ae359f31d46ad",
+        "width": 640
+      },
+      {
+        "file": "share/phone-1-what-640.webp",
+        "height": 1387,
+        "sha256": "31e9ba88b35549ba8f52070c021e14751a9524e407767b88d63dfad2cc785d83",
+        "width": 640
+      },
+      {
+        "file": "share/phone-1-what-1280.avif",
+        "height": 2773,
+        "sha256": "fe436de6133f9b970271c93d287d031911417fbcbad6d6fa741f40c3e3ea05fc",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-1-what-1280.webp",
+        "height": 2773,
+        "sha256": "6089d9dceda0af0e687a6bc08d475ab7ab3e367d222b2829b5957332861ad0fc",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-1-what-1440.avif",
+        "height": 3120,
+        "sha256": "4669501bdf8da02054f70d66795222f6637e106eeba1e0e21556ad9e9d8a36f1",
+        "width": 1440
+      },
+      {
+        "file": "share/phone-1-what-1440.webp",
+        "height": 3120,
+        "sha256": "caa825e485219341a688ef28949a08ad0a41fb56c252899e95b8baae6015c6a4",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
+  "share/phone-2-code.png": {
+    "height": 3120,
+    "sha256": "d66526ad4c6e66f64691244d4310f045fd173ce0b259830413994db22b3a001d",
+    "variants": [
+      {
+        "file": "share/phone-2-code-640.avif",
+        "height": 1387,
+        "sha256": "cb23336f719752437c786c576c35a3ba7353dbd6cdad6f1bbdc1c013de11019b",
+        "width": 640
+      },
+      {
+        "file": "share/phone-2-code-640.webp",
+        "height": 1387,
+        "sha256": "5a92eb5a66b4c21de5e239eeb10b6ac78f8533313a751a3534fc98caad4de124",
+        "width": 640
+      },
+      {
+        "file": "share/phone-2-code-1280.avif",
+        "height": 2773,
+        "sha256": "29eb916a1e12de232c61ab6b6cff5713c4e464b0f109df0f149169a6d8417f5c",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-2-code-1280.webp",
+        "height": 2773,
+        "sha256": "dec2a6b6da207440fcc9c8ef77240e70fe2e3427c15163ba25ffcbf2d1454726",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-2-code-1440.avif",
+        "height": 3120,
+        "sha256": "f5767e4547649db762b238d52ed0aafbadaabc238ff7fbaa6086ad7557381951",
+        "width": 1440
+      },
+      {
+        "file": "share/phone-2-code-1440.webp",
+        "height": 3120,
+        "sha256": "4c899207a404daea16a098013d7220fccb260af2b856f7a80f16adeb0dca754f",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
+  "share/phone-3-progress.png": {
+    "height": 3120,
+    "sha256": "f29dab2a5e13825215f05e3c1f7d6ec0d1556dd0b822e520d5b131d274229463",
+    "variants": [
+      {
+        "file": "share/phone-3-progress-640.avif",
+        "height": 1387,
+        "sha256": "491936ee45a1ef2b051feb3699c36bcf10792ba71442e46a78586ed645c06733",
+        "width": 640
+      },
+      {
+        "file": "share/phone-3-progress-640.webp",
+        "height": 1387,
+        "sha256": "9f6c2c9de7dc825ba711da5ff58fdeb6dae4f3dab0a04ea4e1f5f773c926d761",
+        "width": 640
+      },
+      {
+        "file": "share/phone-3-progress-1280.avif",
+        "height": 2773,
+        "sha256": "74ef512e82f3dc05a31c444b89d8ed27c329e7352dbf8d790eb6cb30b8e0bcef",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-3-progress-1280.webp",
+        "height": 2773,
+        "sha256": "6063dbc4afaf252bd97ca6096b73ce54337f349f49dc320a17d46c70da36f6a6",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-3-progress-1440.avif",
+        "height": 3120,
+        "sha256": "d048499c6e68889c7609fc2fe543786b350cf71ac40a3e1aed09fda136ee8547",
+        "width": 1440
+      },
+      {
+        "file": "share/phone-3-progress-1440.webp",
+        "height": 3120,
+        "sha256": "f20b8d30e501e57b4f67266760696e206450af4953898015375efd14b993355d",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
+  "share/phone-4-sent.png": {
+    "height": 3120,
+    "sha256": "3746975b8393a7b7774a65de5f8e19014abc023843632621e0a76aeb59842b61",
+    "variants": [
+      {
+        "file": "share/phone-4-sent-640.avif",
+        "height": 1387,
+        "sha256": "760213930650fceee3e13629fd9630891cce95e77a419b68189c9abb47b1fbd8",
+        "width": 640
+      },
+      {
+        "file": "share/phone-4-sent-640.webp",
+        "height": 1387,
+        "sha256": "bc2112d8fe7e5b8fc28bf890c5bdeee2e4430bf8ef8ee8162467df6e2085aa96",
+        "width": 640
+      },
+      {
+        "file": "share/phone-4-sent-1280.avif",
+        "height": 2773,
+        "sha256": "f1c324a7b79bc7be02a793a756ae4b6810b8ea82e09a3bba2ae78eb4a79c2e75",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-4-sent-1280.webp",
+        "height": 2773,
+        "sha256": "8e992c28149c2b2d7c335761ee198aa3a06dab013bcd2b1a382a6c99d7e5774c",
+        "width": 1280
+      },
+      {
+        "file": "share/phone-4-sent-1440.avif",
+        "height": 3120,
+        "sha256": "2c37a32d0f9c7fcfa0ed70b3fedafd960e9c8779a230707000a59385548541d8",
+        "width": 1440
+      },
+      {
+        "file": "share/phone-4-sent-1440.webp",
+        "height": 3120,
+        "sha256": "ee2d77ac7c0d230d5bed3ce3119da9db7f60266fe176aecd9b38eca32d035f53",
+        "width": 1440
+      }
+    ],
+    "width": 1440
+  },
   "shelf/favorites.png": {
     "height": 800,
     "sha256": "cd5cee2cd184473a0a3102af03ce0b9682e57003f11c37cd641c5dc625010050",
