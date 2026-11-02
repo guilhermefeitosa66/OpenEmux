@@ -11,3 +11,8 @@ coverage[toml]
 # between releases, and a rule appearing on its own would fail CI on code
 # nobody touched.
 ruff~=0.17.2
+
+# Encodes the site's AVIF/WebP screenshot widths (tools/build_site.py --images,
+# issue #683). Build-time only: the published site and the app never import it,
+# and `build_site.py --check` (what CI runs) needs only the standard library.
+Pillow
