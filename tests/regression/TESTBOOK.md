@@ -6152,11 +6152,14 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   4. Rotate to landscape (`adb shell settings put system accelerometer_rotation 0`,
      `adb shell settings put system user_rotation 1`) and repeat 1 to 3.
   5. Press START, focus "BIOS" (then "Backup", then "About") and press A; press B.
+  6. In a console's list, press R1, then L1; then press UP to a console chip and press A on it.
 - **Expected:** 1: the console's first game holds the focus ring (or, coming back, the game that was
   opened), and the hint bar's "A: Details" is true. 2: the game's detail opens with "Play" (or
   "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
   the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
-  on the back link, and B goes back to the row that opened it. At no point does A go back.
+  on the back link, and B goes back to the row that opened it. 6: R1 and L1 land on the new page's
+  first game, never on search or the back link; A on a chip keeps the focus on the chip. At no point
+  does A go back.
 - **Check:** human only.
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
