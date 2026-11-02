@@ -31,12 +31,14 @@ SCALE = 2
 #: The 1x window of the README captures; its content is 1320x878.
 WINDOW = (1322, 880)
 SCREEN = "2800x1900"
-#: Sidebar rows (y at x=150) in the demo library, 1x content coordinates.
+#: Sidebar rows (y at x=120, the refresh-screenshots coordinates) in the demo library, 1x content coordinates.
 SIDEBAR = {"FC": 161, "GBA": 311, "N64": 361, "MD": 461, "PS": 561, "SFC": 611}
-#: The view switcher in the header bar, measured from the right edge.
-COVERS, CARTRIDGE = 1320 - 328, 1320 - 294
-SHOTS = [("grid-sfc", "SFC", COVERS)] + [
-    (f"cart-{c.lower()}", c, CARTRIDGE) for c in ("SFC", "FC", "GBA", "N64", "MD", "PS")]
+#: (view mode, shots): the view mode is set in the config between two runs of
+#: the app, rather than clicked, so a header bar redesign cannot break this.
+PHASES = [
+    ("cartridge", [(f"cart-{c.lower()}", c) for c in ("SFC", "FC", "GBA", "N64", "MD", "PS")]),
+    ("cover", [("grid-sfc", "SFC")]),
+]
 #: Cartridge composites render on a background thread; an early shot catches
 #: the "Search artwork..." placeholder.
 SETTLE = 8
@@ -47,9 +49,10 @@ def run(*cmd, **kw):
 
 
 def window_id():
+    # devbox-win finds the window of the app this kit launched (by its pid,
+    # never by name: the PID namespace is the host's).
     for _ in range(30):
-        out = subprocess.run(["xdotool", "search", "--name", "^OpenEmux$"],
-                             capture_output=True, text=True).stdout.split()
+        out = subprocess.run(["devbox-win"], capture_output=True, text=True).stdout.split()
         if out:
             return out[0]
         time.sleep(1)
@@ -73,40 +76,48 @@ def shot(wid, path):
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    # The devbox's own X server. distrobox forwards the host's DISPLAY and
+    # XAUTHORITY, which must never be the one driven here.
+    os.environ["DISPLAY"] = os.environ.get("DEVBOX_DISPLAY", ":77")
+    os.environ["XAUTHORITY"] = str(Path.home() / ".devbox" / "Xauthority")
     py = os.environ.get("DEVBOX_PYTHON", "/usr/bin/python3")
     subprocess.run(["devbox-app", "stop"], check=True)
     subprocess.run(["devbox-seed", "--wipe"], check=True)
     subprocess.run([py, str(REPO / "tools" / "demo_library.py"),
                     str(Path.home() / "games" / "demo"), "--configure"], check=True)
-    subprocess.run([py, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
-                    "from openemux.core.config import ConfigManager; ConfigManager().set_theme('dark')",
-                    str(REPO / "src")], check=True)
     subprocess.run(["devbox-res", SCREEN], check=True)
     try:
-        subprocess.run(["devbox-app", "start"], check=True, env={**os.environ, "GDK_SCALE": str(SCALE)})
-        wid = window_id()
-        subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "remove,maximized_vert,maximized_horz"])
-        run("xdotool", "windowsize", wid, str(WINDOW[0] * SCALE), str(WINDOW[1] * SCALE))
-        run("xdotool", "windowmove", wid, "40", "40")
-        time.sleep(2)
-        x0, y0 = geometry(wid)
-
-        def click(cx, cy):
-            run("xdotool", "mousemove", str(x0 + cx * SCALE), str(y0 + cy * SCALE), "click", "1")
-
-        for name, console, view in SHOTS:
-            click(150, SIDEBAR[console])
-            time.sleep(2)
-            click(view, 27)
-            time.sleep(SETTLE)
-            # Park the pointer where nothing reacts to hover.
-            run("xdotool", "mousemove", str(x0 + 1280 * SCALE), str(y0 + 850 * SCALE))
-            time.sleep(0.5)
-            print(f"{name}.png  {shot(wid, out / f'{name}.png')}")
+        for view_mode, shots in PHASES:
+            subprocess.run([py, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                            "from openemux.core.config import ConfigManager; c = ConfigManager(); "
+                            "c.set_theme('dark'); c.set_view_mode(sys.argv[2])",
+                            str(REPO / "src"), view_mode], check=True)
+            capture(out, shots)
     finally:
         subprocess.run(["devbox-app", "stop"])
         subprocess.run(["devbox-res", "1600x1100"])
 
+
+def capture(out, shots):
+    subprocess.run(["devbox-app", "stop"], check=True)
+    subprocess.run(["devbox-app", "start"], check=True, env={**os.environ, "GDK_SCALE": str(SCALE)})
+    wid = window_id()
+    subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "remove,maximized_vert,maximized_horz"])
+    run("xdotool", "windowsize", wid, str(WINDOW[0] * SCALE), str(WINDOW[1] * SCALE))
+    run("xdotool", "windowmove", wid, "40", "40")
+    time.sleep(2)
+    x0, y0 = geometry(wid)
+
+    def point(cx, cy):
+        run("xdotool", "mousemove", str(x0 + cx * SCALE), str(y0 + cy * SCALE))
+        time.sleep(0.4)  # GTK 4 drops a click that arrives with no motion before it
+
+    for name, console in shots:
+        point(120, SIDEBAR[console])
+        run("xdotool", "click", "1")
+        time.sleep(SETTLE)
+        point(1280, 850)  # park the pointer where nothing reacts to hover
+        print(f"{name}.png  {shot(wid, out / f'{name}.png')}")
 
 if __name__ == "__main__":  # pragma: no cover - a devbox tool, driven by hand
     if len(sys.argv) != 2:
