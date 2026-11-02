@@ -680,6 +680,9 @@ class RomItem(Gtk.Box):
         if self._is_stale(token) or self._is_abandoned():
             return False
         try:
+            # Set on every apply, either way: the grid recycles cards, and one
+            # that last showed a cartridge must not hand its look to a cover.
+            self._set_cartridge_look(full_resolution)
             if full_resolution:
                 self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
             else:
@@ -693,6 +696,20 @@ class RomItem(Gtk.Box):
         except Exception:
             logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
+
+    def _set_cartridge_look(self, cartridge):
+        """Shadow the cartridge's outline, or the cover's box.
+
+        Only a cartridge composite arrives at full resolution. Its picture
+        drops ``rom-cover`` (a box shadow and rounded corners, which drew a
+        rectangle around the cartridge) for ``rom-cartridge``, whose shadow
+        follows the composite's alpha (issue 725).
+        """
+        add, drop = (
+            ("rom-cartridge", "rom-cover") if cartridge else ("rom-cover", "rom-cartridge")
+        )
+        self.cover_image.remove_css_class(drop)
+        self.cover_image.add_css_class(add)
 
     def _fit_cover_to(self, pixbuf):
         """Fill the card with this cover, or show it whole on the backdrop.

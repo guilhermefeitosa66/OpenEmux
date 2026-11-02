@@ -105,6 +105,15 @@ flowboxchild:focus-visible {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
+/* A cartridge is not a box: its silhouette is the frame's alpha (the N64's
+   rounded top, the FC's notched corners, the Game Boy's cut corner). A
+   box-shadow and a radius follow the widget's rectangle, and drew one around
+   every cartridge; a drop-shadow filter blurs the rendered alpha instead, so
+   the shadow follows the outline (issue 725). */
+.rom-cartridge {
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+}
+
 /* Fills the leftover area around a cover kept at its own proportions inside
    the card's box: on pages that mix consoles, and on a console page for a
    cover whose shape differs from the console's box (issue #508). */

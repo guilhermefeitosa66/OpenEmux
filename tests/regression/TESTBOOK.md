@@ -1651,6 +1651,30 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
   The rendering is in `tests/test_cartridge_render.py` (`ReliefFrameTests`).
 
+### RT-679 — A cartridge's shadow follows its outline, never a rectangle
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with Nintendo 64, NES and Game Boy games, plus a
+  disc-console game (PlayStation).
+- **Steps:**
+  1. Open the Nintendo 64 page in the cartridge view and look at a cartridge at rest (pointer away
+     from the grid).
+  2. Do the same on the NES and Game Boy pages.
+  3. Switch to the light theme ("Preferences" ▸ appearance, or `ADW_DEBUG_COLOR_SCHEME=prefer-light`)
+     and repeat step 1.
+  4. Open "All" and choose "Cartridge Grid".
+  5. Hover a cartridge; switch to the cover view.
+- **Expected:** No rectangle (fill, border or shadow) shows around any cartridge, on either theme:
+  only a soft shadow under the cartridge's own outline, which follows the N64's rounded top and
+  stepped shoulders, the NES's notched bottom corners and the Game Boy's cut corner (issue 725).
+  Step 4 looks the same for every cartridge group, while the PlayStation group keeps its box art
+  with the usual rectangular shadow. Step 5: the hover lift and tint work as before, and covers in
+  the cover view keep their rounded rectangular shadow.
+- **Check:** a `make devbox-shot OUT=$SCRATCH/rt679-<step>.png WIN=1` per step, zoomed in on the
+  corners; suite file `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`,
+  `TheCartridgeShadowRuleTests`).
+- **Restore:** return the theme and the view mode to what they were.
+
 ### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout
 - **Mode:** AUTO-SUITE
