@@ -7923,12 +7923,13 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the line under
-  the download buttons, the credits section and the Android section.
+  the download buttons and the credits section.
 - **Expected:** Under the download buttons, one line says OpenEmux is inspired by OpenEmu for
   macOS but is not a fork, with RetroArch as the backend, and links to the credits. The credits say
-  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, and say
-  it is not affiliated with the OpenEmu Team. The Android section says the app is its own design
-  (issue #504).
+  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, say
+  the Android app is an independent design and that OpenEmux is not affiliated with the OpenEmu
+  Team (issue #504). Since the page was restructured (issue 685) that line sits in the opening
+  section, above the desktop and phone screenshots.
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -7939,7 +7940,7 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      hero = html.split('id="promo"')[0]
+      hero = re.search(r'<section class="hero" id="top">(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in hero and 'href="#thanks"' in hero, page
       thanks = re.search(r'<section id="thanks">(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in thanks, page
@@ -7976,8 +7977,8 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the small text
-  under the console carousel, under the Android screenshots and in the footer, after the
-  disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+  under the cartridge carousel ("On the desktop"), under the Android screenshots ("On the phone")
+  and in the footer, after the disclaimer. Then open the README on GitHub and read the line under "Screenshots".
 - **Expected:** In all three places, in every language, one small muted line says the games shown
   are fictional and for illustration only, are not real games for these consoles, and that their
   artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
@@ -7998,8 +7999,8 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      shots = re.search(r'<section id="screenshots">(.*?)</section>', html, re.S).group(1)
-      android = re.search(r'<section id="android">(.*?)</section>', html, re.S).group(1)
+      shots = re.search(r'<section class="moment" id="consoles">(.*?)</section>', html, re.S).group(1)
+      android = re.search(r'<section class="moment" id="android">(.*?)</section>', html, re.S).group(1)
       footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
       assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
       assert footer.count('class="disclaimer"') == 2, page
@@ -8009,6 +8010,87 @@ or into an environment that cannot run the tests.
   print("RT-386 OK")
   EOF
   ```
+
+
+### RT-611 — The site tells its story in order, one short moment at a time
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page (`docs/index.html`) and scroll from top to
+  bottom; then switch to each other language with the picker and do the same. Finally turn page
+  styles off (Firefox: View › Page Style › No Style) and read it again.
+- **Expected:** The sections come in this order: the opening (headline, download buttons, the
+  desktop library with the phone over its corner), "Share nearby" (four numbered steps), "On the
+  desktop" (the cartridge carousel), "On the phone" (the controller screenshots), the cartridge
+  wall, "Installing", "Everything else", the credits and "Support the project", then the footer.
+  Each of the opening, Share nearby, desktop and phone moments has one short headline and at most
+  two sentences under it, with no exclamation marks. With styles off the content still reads top
+  to bottom in that order (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  want = ["top", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support"]
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      assert re.findall(r'<section[^>]* id="([a-z]+)"', html) == want, page
+      for sid in ("share", "consoles", "android"):
+          sec = re.search(r'<section class="moment" id="%s">(.*?)</section>' % sid, html, re.S).group(1)
+          assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"carousel", 1)[0]), (page, sid)
+  print("RT-611 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`TheNarrativeTests`).
+
+### RT-612 — "Everything else" keeps every fact of the old sections
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the
+  "Everything else" section, after "Installing".
+- **Expected:** One grid holds what the old Features, About the games and Supported systems
+  sections said: "Built on RetroArch", covers by console, first launch, controls, shaders, BIOS
+  checklist, Linux first, the Android cards (skins, cartridges and covers, one download, gamepad,
+  light and dark, eight languages, RetroAchievements), a wide "Play the games you own" card with its
+  three points (no games, ROMs or BIOS shipped), and a "31 systems" card listing all 31 systems
+  (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      more = re.search(r'<section id="more">(.*?)</section>', page.read_text(encoding="utf-8"), re.S).group(1)
+      assert more.count('<span class="chip">') == 31, page
+      assert more.count('<ul class="checks">') == 1 and more.count("<li>") >= 3, page
+      assert more.count('<div class="card') >= 16, page
+  print("RT-612 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`test_nothing_of_the_folded_sections_is_lost`).
+
+### RT-613 — The promo video plays only when asked for
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
+- **Steps:**
+  1. Load the home page and scroll through it.
+  2. Click "Watch the video (45 s)" under the download buttons.
+  3. Press Escape.
+  4. With JavaScript disabled, click the same link.
+- **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
+  page. 2: a dialog opens over the page and the video plays, with the browser's own controls. 3:
+  the dialog closes, the sound stops and the focus returns to the link. 4: the browser opens the
+  video file itself. With Save-Data on, step 2 opens the dialog without starting playback
+  (issue 685).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
 
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
