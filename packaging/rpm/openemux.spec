@@ -186,6 +186,13 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.19.0-1
+- Share nearby sends the console's BIOS files along with the game
+- Import BIOS files per console from a file picker, checked by name
+- One name per console instead of regional double names
+- The header bar keeps only the View mode button
+- A theme toggle sun that reads as a sun
+
 * Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.18.10-1
 - Android: the app no longer closes on start (the 1.18.5 and 1.18.9 APKs were missing bundled files)
 
