@@ -551,8 +551,8 @@ class TheShareSequenceTests(unittest.TestCase):
         for locale in build_site.ORDER:
             strings = build_site.load_strings(locale)
             with self.subTest(locale=locale):
-                self.assertIn("506 807", strings["share.alt_phone2"])
-                self.assertIn("506 807", strings["share.alt_desk2"])
+                self.assertIn("657 970", strings["share.alt_phone2"])
+                self.assertIn("657 970", strings["share.alt_desk2"])
 
     def test_four_captions_a_headline_and_one_sentence_each(self):
         english = build_site.load_strings("en")

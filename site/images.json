@@ -835,7 +835,7 @@
   },
   "share/desktop-3-progress.png": {
     "height": 1516,
-    "sha256": "3607df4d6de5f22e43c9293e2495769b4def31d209408b67728f8bd74a9fc57f",
+    "sha256": "b56343c11c8f94d08c782916dc773877f898d54314d429b57305c979e351ec2b",
     "variants": [
       {
         "file": "share/desktop-3-progress-640.avif",

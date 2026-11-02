@@ -8618,7 +8618,7 @@ or into an environment that cannot run the tests.
   title bar). They hold still while the page scrolls and step through four screens, each with its
   caption and a four-part indicator under it: "Pick a game on your phone." (Robot Man X selected,
   Linux Desktop listed; the computer ready to receive); "The same code shows on both screens."
-  (506 807 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
+  (657 970 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
   in your library now." (1 game sent on the phone; the computer's "1 Game Received", then its
   Super Nintendo library with Robot Man X). Only one caption at a time. 2: it plays in reverse.
   3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
@@ -8662,7 +8662,7 @@ or into an environment that cannot run the tests.
   of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
 - **Expected:** each caption is a short headline and one sentence, in the page's language, with no
   exclamation mark; every capture has a description in that language naming the screen, and the
-  ones of the second step mention the code 506 807 (issue 687).
+  ones of the second step mention the code 657 970 (issue 687).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3
