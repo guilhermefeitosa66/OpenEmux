@@ -6441,6 +6441,156 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
   adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1   # "769"
   ```
 
+## Android — Dark controller skins
+
+Every console the Android app ships a skin for (FC, SFC, N64, GB, GBC, GBA, NDS, GC, MD, SMS, PS,
+PSP) has a second one, **Dark**: the same layout painted black, with dark grey controls and muted grey
+labels, for playing with the lights off. The choice is per console, in the console's settings (a
+"Default skin" section with two cards, below "Default shader") and from a game's detail screen (the
+"Controller skin" row opens the same choice), saved in `files/meta.json` as `consoles.<id>.skin` (`console` or `dark`; missing =
+`console`). The packages are built by `tools/skins/build.py` into `src/main/assets/skins/` and
+`src/main/assets/skins/dark/` ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). The runner has no Android device, so these are `MANUAL`: a person runs them
+on a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; a game's generated
+files are in `files/launch/current/`.
+
+### RT-670 — "Default skin" offers Console colors and Dark, Console colors by default
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install of the Android app (or one that never changed a console's skin)
+  with a SNES game in the library.
+- **Steps:**
+  1. Open Settings, then the SNES console.
+  2. Look at the "Default skin" section, below "Default shader".
+  3. Launch the SNES game, phone in portrait.
+- **Expected:** The section is titled "Default skin" with "Console colors" on its right, says "The
+  virtual controller every SNES game uses." and shows two cards right there, without opening anything:
+  "Console colors" (selected) and "Dark". A console the app has no Dark skin for (Atari 2600, for
+  example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
+  The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consoles",{}).get("SFC",{}).get("skin","console"))'   # console
+  ```
+
+### RT-671 — Picking Dark gives every game of that console the Dark skin, in every orientation
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** Two SNES games and one GBA game in the library.
+- **Steps:**
+  1. Settings → SNES → tap the "Dark" card under "Default skin".
+  2. Launch the first SNES game in portrait, then turn the phone to landscape.
+  3. Quit and launch the second SNES game.
+  4. Quit and launch the GBA game.
+- **Expected:** After step 1 the "Dark" card is selected and the section title reads "Dark" on its right. Both SNES games open on a black skin with dark
+  grey buttons and muted grey labels; every key sits exactly where it does on the Console colors
+  skin, in portrait and in landscape, and the game picture is the brightest thing on screen. The GBA
+  game still opens in its own purple colors.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark
+  adb shell run-as $PKG ls cache/skins/dark   # SFC.deltaskin, copied when the SNES game launched
+  ```
+
+### RT-672 — The Dark choice survives closing the game, restarting the app and updating it
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-671 done (SNES set to Dark).
+- **Steps:**
+  1. Force-stop the app (`adb shell am force-stop $PKG`) and open it again.
+  2. Open Settings → SNES, then launch a SNES game.
+  3. Install a newer build over this one (`adb install -r <apk>`), open the app and launch a SNES
+     game again.
+- **Expected:** The row still reads "Dark" and the games open on the Dark skin after the restart and
+  after the update. Consoles never changed keep their own colors.
+- **Check:** the `skin` key is still `dark` after each step (same command as RT-671).
+
+### RT-673 — Every control works and stays readable on the Dark skin
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** Dark picked for N64, PS and SNES; a game of each.
+- **Steps:**
+  1. In the SNES game, drag over the D-pad and press every face, shoulder, SELECT and START key.
+  2. Tap the turbo key, then fast forward, in the chin under the picture; tap them again.
+  3. Quick save, then quick load, from the chin.
+  4. In the N64 and PS games, move the analog stick(s) all the way round.
+  5. Open the menu key.
+- **Expected:** Every key reaches the game. The D-pad's circle and each stick's knob follow the thumb
+  and are visible on the black art. Turbo and fast forward show their on state clearly and go back
+  off. Save and load work. Labels and glyphs are readable without glowing.
+- **Check:** none beyond the steps (the touch frames come from the same `info.json` layout as the
+  Console colors skin: `BundledSkinsTest` in the app's unit tests compares them).
+
+### RT-674 — Nintendo DS on Dark: every screen layout gets the Dark art
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A Nintendo DS game; NDS set to Dark; the DeSmuME core.
+- **Steps:**
+  1. Launch the game in portrait and press the Screens key in the chin until it has gone through
+     every layout.
+  2. Turn to landscape and repeat.
+  3. Connect a gamepad (or on a foldable, half-open it) and look at the skin, then disconnect /
+     open flat.
+- **Expected:** Every layout (both screens, top only, bottom only, side by side) shows black art
+  with dark grey keys, the picture filling the room the layout needs, in both orientations. The
+  gamepad and tabletop layouts still appear and go away as they do with Console colors.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG ls cache/skins/dark   # NDS.deltaskin
+  ```
+
+### RT-675 — An imported skin still wins over both bundled ones
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A `.deltaskin` for the SNES that is not one of the app's (any third-party Delta
+  skin); SNES set to Dark.
+- **Steps:**
+  1. Put it in the app's external files folder:
+     `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
+  2. Settings → SNES → the "Default skin" section.
+  3. Launch a SNES game. Quit, pick "Console colors", launch again.
+  4. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
+     and launch once more.
+- **Expected:** The section reads "Imported skin" on its right and shows "A skin you imported for SNES
+  is used instead." under the cards. Both launches in step 3
+  use the imported skin. After step 4 the game opens on the Console colors skin (the choice made in
+  step 3), and the section no longer shows the note.
+- **Check:** none beyond the steps.
+
+### RT-676 — Switching back to Console colors restores the original skin
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** SNES set to Dark; a tablet or an emulator with a tablet-sized screen for step 3.
+- **Steps:**
+  1. Settings → SNES → the "Console colors" card under "Default skin".
+  2. Launch a SNES game.
+  3. On the tablet, set SNES to Dark again and launch the game in portrait and in landscape.
+- **Expected:** Step 2 shows the usual light grey SNES skin. Step 3 shows the Dark tablet art in both
+  orientations, laid out as the Console colors tablet skin.
+- **Check:** the `skin` key is `console` after step 1 and `dark` after step 3.
+
+### RT-677 — The skin can be picked from a game's detail screen and by gamepad
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** SNES set to Console colors; a SNES game in the library; a gamepad connected for
+  steps 4 and 5 (or `adb shell input gamepad keyevent ...`).
+- **Steps:**
+  1. Open the SNES game's detail screen and look at the "Controller skin" row.
+  2. Tap the row, then "Dark" in the sheet. Close the sheet.
+  3. Launch the game, quit, force-stop the app and open the game's detail screen again.
+  4. With the gamepad only: Settings (RB) → SNES (A) → D-pad down to the "Console colors" card → A.
+  5. Launch the game.
+- **Expected:** Step 1 reads "Console colors" (never a fixed "OpenEmux SNES"). The sheet in step 2 is
+  titled "Default skin" with the same two cards as the console's settings, and the row then reads
+  "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
+  focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
+  Step 5 opens the usual light grey SNES skin.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark after step 2, console after step 4
+  ```
+
 ## Android — Update check
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
