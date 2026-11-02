@@ -339,6 +339,8 @@ class BiosTests(ManifestTestCase):
 
     def test_the_exact_spelling_wins_over_a_case_variant(self):
         self.lib.file("roms/PS/bios/SCPH5501.BIN", b"variant")
+        if (self.lib.roms / "PS" / "bios" / "scph5501.bin").exists():
+            self.skipTest("a case-insensitive filesystem holds one spelling only")
         self.lib.file("roms/PS/bios/scph5501.bin", b"exact")
         self.lib.file("roms/PS/bios/Scph5501.Bin", b"variant too")
         [(name, path)] = manifest_module.bios_files(self.lib.roms, "PS")
@@ -360,7 +362,7 @@ class BiosTests(ManifestTestCase):
         bios = self.items(built, 0)[1]
         self.assertEqual((bios["size"], bios["mtime"]), (4, 1234))
         self.assertEqual(bios["sha256"], hashlib.sha256(b"bios").hexdigest())
-        self.assertEqual(built.sources[bios["id"]], self.lib.roms / "PS" / "bios" / "scph5501.bin")
+        self.assertTrue(built.sources[bios["id"]].samefile(self.lib.roms / "PS" / "bios" / "scph5501.bin"))
         self.assertEqual(built.manifest["file_count"], 5)
 
     def test_a_game_left_out_hands_them_to_the_next_one(self):
