@@ -7950,6 +7950,46 @@ or into an environment that cannot run the tests.
   ```
   Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
 
+### RT-611 — The site's screenshots are served as AVIF/WebP at responsive widths
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `docs/` and `site/images.json`).
+- **Steps:** As a QA person: open the site's home page in a browser with DevTools → Network, scroll
+  to "Your games, console by console" and look at what the screenshot carousel downloads; then open
+  `docs/assets/desktop/`.
+- **Expected:** Each carousel shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
+  the PNG; the carousel looks as before (three shots per slide, one on a phone) and a click opens
+  the full-size image in the lightbox. `docs/assets/desktop/` holds a 2× SNES cover grid and the
+  cartridge view of SNES, NES, GBA, N64, Mega Drive and PlayStation, each a TrueColor PNG at least
+  2560 px wide with AVIF and WebP at 640/1280/1920 px and full width, all from the fictional demo
+  library (issue #683).
+- **Check:**
+  ```bash
+  python3 tools/build_site.py --check
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  manifest = json.loads(Path("site/images.json").read_text())
+  for name in ["grid-sfc"] + [f"cart-{c}" for c in ("sfc", "fc", "gba", "n64", "md", "ps")]:
+      entry = manifest[f"desktop/{name}.png"]
+      assert entry["width"] >= 2560, name
+      widths = {v["width"] for v in entry["variants"]}
+      assert {640, 1280, 1920, entry["width"]} <= widths, name
+      for v in entry["variants"]:
+          assert Path("docs/assets", v["file"]).is_file(), v["file"]
+  for page in [Path("docs/index.html"), Path("docs/pt-br/index.html")]:
+      html = page.read_text(encoding="utf-8")
+      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*shelf/\w+-640\.avif 640w', html)
+      assert len(shots) == 7, (page, len(shots))
+      assert "data-picture" not in html, page
+  print("RT-611 OK")
+  EOF
+  ```
+  Visual: `identify -format '%[type] %w\n' docs/assets/desktop/*.png` (no `Palette`, every width
+  ≥ 2560) and a look at each capture: demo titles only, English UI, no toast, no red Log badge, no
+  "Search artwork…" placeholder. Unit-level: `tests/test_site.py` (`TheImagePipelineTests`,
+  `TheImageCheckTests`, `TheImageEncoderTests`).
+
 ### RT-342 — The README states the relationship with OpenEmu
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
