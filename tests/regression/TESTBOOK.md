@@ -5879,7 +5879,8 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   it, both the same size; the fold falls in the gap between them. The bottom screen sits between
   the d-pad and the face buttons with the strip under it; L and the menu key are at the top left,
   R and "NINTENDO DS" at the top right. The tap registers in the game. The layout key goes "One
-  per half" → "Top screen only" → "Bottom screen only" → "One per half". Going flat brings back the
+  per half" → "Top screen only" → "Bottom screen only" → "One per half", a toast naming each one
+  ("Screens: Top screen only"; issue 709). Going flat brings back the
   packaged Nintendo DS skin with its two screens one over the other and no gap between them; half
   open again opens on "Top screen only".
 - **Check:** human only (a screenshot per layout, compared with the DobFoldNDS board).
@@ -6679,7 +6680,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
   and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
   sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
-  into two rows of three, each tile full size with its full label. In step 3 the D-pad reaches all
+  into two rows of three, each tile full size with its full label; "Screens" has the layout in use under
+  its label (at most two lines, as narrow as the tile; issue 709). In step 3 the D-pad reaches all
   six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
@@ -9804,7 +9806,8 @@ release APK needs a real controller (USB or Bluetooth).
   4. Launch a game on the tablet in landscape.
 - **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
   Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
-  stays in the gamepad layout. Step 4: the rails of RT-564, scaled to the tablet.
+  stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
+  RT-564, scaled to the tablet.
 - **Check:** human only.
 
 
@@ -9952,6 +9955,116 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   cross (purple), the circle and OPTIONS. Step 3 shows dark outlines on the light badges and a white
   cross on the purple one.
 - **Check:** human only (`adb exec-out screencap -p`).
+
+## Android — NDS screen layouts
+
+Choosing how a Nintendo DS game's two screens are shown, in the Android app
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`;
+issue 709). The pause sheet's "Screens" tile names the layout in use and opens a "Screens" page listing
+the layouts of the orientation shown; in game, the skin's screens key and **R3** (the right stick click)
+on a gamepad step to the next layout and a toast names it. R3 stands in for DeSmuME's own "Quick Screen
+Switch" (the core never sees it on the DS). The layouts: portrait "Top screen only", "Bottom screen
+only", "One above the other"; landscape the first two and "Side by side"; tabletop the first two and
+"One per half". Each orientation remembers its own, in `files/nds-layout`. `MANUAL`, like the other
+Android sections: a phone or a headless emulator with `adb`, an NDS game on DeSmuME. `$PKG` is
+`com.openemux.mobile`. A debug APK simulates a pad with `adb shell am broadcast -a
+$PKG.DEBUG_GAMEPAD --ez connected true`; R3 is `adb shell input keyevent KEYCODE_BUTTON_THUMBR`
+(sent from a gamepad source by a real pad; the emulator's keyevent may arrive as a keyboard, so a real
+pad is the reference for steps that need R3).
+
+### RT-645 — The Screens tile names the layout in use and opens the list
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game in the library; phone in portrait; touch (no pad).
+- **Steps:**
+  1. Launch the NDS game and open the pause sheet.
+  2. Tap "Screens".
+- **Expected:** Step 1: the "Screens" tile has, under its label, the layout in use ("One above the
+  other" on a fresh install). Step 2: the sheet shows a "Screens" page, subtitle "Remembered for
+  portrait", listing "Top screen only", "Bottom screen only" and "One above the other", each with a
+  small drawing of the layout; the one in use is checked, tinted, and tagged "Current".
+- **Check:** human only (a screenshot of each step).
+
+### RT-646 — Picking a layout applies it and goes back to the menu
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** As RT-645, on the "Screens" page.
+- **Steps:**
+  1. Tap "Bottom screen only".
+  2. Tap "Back to game".
+  3. Open the pause sheet, open "Screens", tap the back button.
+- **Expected:** Step 1: the sheet is back on its main page with the banner "Screens: Bottom screen
+  only" and the tile reads "Bottom screen only". Step 2: the game shows the bottom screen only, and
+  taps on it reach the game. Step 3: "Bottom screen only" is the checked one; back returns to the main
+  page with nothing changed.
+- **Check:** human only.
+
+### RT-647 — Each orientation remembers its own layout, across games and restarts
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** As RT-646 (portrait on "Bottom screen only"); a second NDS game.
+- **Steps:**
+  1. Turn the phone to landscape and open "Screens" in the pause sheet.
+  2. Pick "Top screen only", go back to the game, turn back to portrait.
+  3. Quit, launch the second NDS game in portrait, then turn to landscape.
+  4. `adb shell am force-stop $PKG`, launch the app and an NDS game again, in both orientations.
+- **Expected:** Step 1: subtitle "Remembered for landscape"; the list has "Side by side" in place of
+  "One above the other". Step 2: portrait is still "Bottom screen only"; turning shows no toast. Steps
+  3 and 4: portrait opens on "Bottom screen only" and landscape on "Top screen only".
+  `adb shell run-as $PKG cat files/nds-layout` lists `portrait=bottom` and `landscape=top`.
+- **Check:** human only.
+
+### RT-648 — The Screens page with a gamepad
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; a gamepad connected (or the debug broadcast).
+- **Steps:**
+  1. Open the pause sheet with the pad and look at the hint bar.
+  2. Move to "Screens" with the D-pad and press A.
+  3. Move with the D-pad, press B.
+  4. Open "Screens" again, move to another layout and press A.
+- **Expected:** Step 1: the hint bar reads A "Choose", B "Back", R3 "Next layout" (RS on an Xbox
+  pad), START "Back to game". Step 2: focus lands on the layout in use; the hint bar has A, B and START
+  only. Step 3: focus moves between the cards; B returns to the main page without changing the layout.
+  Step 4: the layout is applied, the main page shows its banner, the tile its name.
+- **Check:** human only.
+
+### RT-649 — R3 steps the layout in game and on the sheet
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; a real gamepad connected (the gamepad layout shows no virtual buttons).
+- **Steps:**
+  1. In game, portrait, press R3 four times, a second apart.
+  2. Turn to landscape and press R3 three times.
+  3. Open the pause sheet and press R3.
+- **Expected:** Steps 1 and 2: each press steps to the orientation's next layout, in list order and
+  round again, and a toast names it ("Screens: Side by side"); the game itself never reacts to R3 (no
+  screen swap of its own). Holding R3 steps once. Step 3: the layout steps, the sheet's banner names it,
+  the "Screens" tile shows the new name; no toast over the sheet.
+- **Check:** human only.
+
+### RT-650 — The skin's screens key names the layout it lands on
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; touch, no pad.
+- **Steps:**
+  1. In game, tap the screens key on the strip three times.
+  2. Turn the phone to landscape and back.
+  3. Tap the hide key, then the show key.
+- **Expected:** Step 1: each tap steps the layout and a toast names it. Steps 2 and 3: the layout
+  stays, and no toast appears.
+- **Check:** human only.
+
+### RT-651 — Other consoles: no Screens tile, R3 untouched
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game; a gamepad connected.
+- **Steps:**
+  1. Launch the GBA game, press R3, open the pause sheet.
+- **Expected:** R3 shows no toast and changes nothing on screen; the sheet has no "Screens" tile and
+  the hint bar has no R3 entry.
+- **Check:** human only.
+
 
 ## Retired
 
