@@ -7923,12 +7923,13 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the line under
-  the download buttons, the credits section and the Android section.
+  the download buttons and the credits section.
 - **Expected:** Under the download buttons, one line says OpenEmux is inspired by OpenEmu for
   macOS but is not a fork, with RetroArch as the backend, and links to the credits. The credits say
-  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, and say
-  it is not affiliated with the OpenEmu Team. The Android section says the app is its own design
-  (issue #504).
+  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, say
+  the Android app is an independent design and that OpenEmux is not affiliated with the OpenEmu
+  Team (issue #504). Since the page was restructured (issue 685) that line sits in the opening
+  section, above the desktop and phone screenshots.
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -7939,7 +7940,7 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      hero = html.split('id="promo"')[0]
+      hero = re.search(r'<section class="hero" id="top">(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in hero and 'href="#thanks"' in hero, page
       thanks = re.search(r'<section id="thanks">(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in thanks, page
@@ -7948,6 +7949,46 @@ or into an environment that cannot run the tests.
   EOF
   ```
   Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
+
+### RT-611 — The site's screenshots are served as AVIF/WebP at responsive widths
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `docs/` and `site/images.json`).
+- **Steps:** As a QA person: open the site's home page in a browser with DevTools → Network, scroll
+  to "Every console, as cartridges." and look at what the cartridge gallery downloads; then open
+  `docs/assets/desktop/`.
+- **Expected:** Each gallery shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
+  the PNG, and a click opens the full-size image in the lightbox (issue 688 replaced the old shelf
+  carousel with this gallery). `docs/assets/desktop/` holds a 2× SNES cover grid and the
+  cartridge view of SNES, NES, GBA, N64, Mega Drive and PlayStation, each a TrueColor PNG at least
+  2560 px wide with AVIF and WebP at 640/1280/1920 px and full width, all from the fictional demo
+  library (issue #683).
+- **Check:**
+  ```bash
+  python3 tools/build_site.py --check
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  manifest = json.loads(Path("site/images.json").read_text())
+  for name in ["grid-sfc"] + [f"cart-{c}" for c in ("sfc", "fc", "gba", "n64", "md", "ps")]:
+      entry = manifest[f"desktop/{name}.png"]
+      assert entry["width"] >= 2560, name
+      widths = {v["width"] for v in entry["variants"]}
+      assert {640, 1280, 1920, entry["width"]} <= widths, name
+      for v in entry["variants"]:
+          assert Path("docs/assets", v["file"]).is_file(), v["file"]
+  for page in [Path("docs/index.html"), Path("docs/pt-br/index.html")]:
+      html = page.read_text(encoding="utf-8")
+      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*desktop/cart-\w+-640\.avif 640w', html)
+      assert len(shots) == 6, (page, len(shots))
+      assert "data-picture" not in html, page
+  print("RT-611 OK")
+  EOF
+  ```
+  Visual: `identify -format '%[type] %w\n' docs/assets/desktop/*.png` (no `Palette`, every width
+  ≥ 2560) and a look at each capture: demo titles only, English UI, no toast, no red Log badge, no
+  "Search artwork…" placeholder. Unit-level: `tests/test_site.py` (`TheImagePipelineTests`,
+  `TheImageCheckTests`, `TheImageEncoderTests`).
 
 ### RT-342 — The README states the relationship with OpenEmu
 - **Area:** Developer tooling & docs
@@ -7976,12 +8017,13 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the small text
-  under the console carousel, under the Android screenshots and in the footer, after the
-  disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+  under the cartridge carousel ("On the desktop"), under the Android screenshots ("On the phone")
+  and in the footer, after the disclaimer.
 - **Expected:** In all three places, in every language, one small muted line says the games shown
   are fictional and for illustration only, are not real games for these consoles, and that their
-  artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
-  same meaning in one line under "Screenshots" (issue #552).
+  artwork was created with AI. The footer disclaimer itself is unchanged (issue #552). The README
+  no longer shows screenshots of the demo library, so it no longer carries the line (dropped from
+  this scenario in issue 685).
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -7998,17 +8040,170 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      shots = re.search(r'<section id="screenshots">(.*?)</section>', html, re.S).group(1)
-      android = re.search(r'<section id="android">(.*?)</section>', html, re.S).group(1)
+      shots = re.search(r'<section class="moment" id="consoles">(.*?)</section>', html, re.S).group(1)
+      android = re.search(r'<section class="moment" id="android">(.*?)</section>', html, re.S).group(1)
       footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
       assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
       assert footer.count('class="disclaimer"') == 2, page
-  readme = Path("README.md").read_text(encoding="utf-8")
-  head = readme.split("## Screenshots", 1)[1].split("### ROM Library", 1)[0]
-  assert "fictional" in head and "AI" in head, "README notice missing"
   print("RT-386 OK")
   EOF
   ```
+
+
+### RT-611 — The site tells its story in order, one short moment at a time
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page (`docs/index.html`) and scroll from top to
+  bottom; then switch to each other language with the picker and do the same. Finally turn page
+  styles off (Firefox: View › Page Style › No Style) and read it again.
+- **Expected:** The sections come in this order: the opening (headline, download buttons, the
+  desktop library with the phone over its corner), "Share nearby" (four numbered steps), "On the
+  desktop" (the cartridge gallery), "On the phone" (the controller skin gallery), the cartridge
+  wall, "Installing", "Everything else", the credits and "Support the project", then the footer.
+  Each of the opening, Share nearby, desktop and phone moments has one short headline and at most
+  two sentences under it, with no exclamation marks. With styles off the content still reads top
+  to bottom in that order (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  want = ["top", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support"]
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      assert re.findall(r'<section[^>]* id="([a-z]+)"', html) == want, page
+      for sid in ("share", "consoles", "android"):
+          sec = re.search(r'<section class="moment" id="%s">(.*?)</section>' % sid, html, re.S).group(1)
+          assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"gal", 1)[0]), (page, sid)
+  print("RT-611 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`TheNarrativeTests`).
+
+### RT-612 — "Everything else" keeps every fact of the old sections
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the
+  "Everything else" section, after "Installing".
+- **Expected:** One grid holds what the old Features, About the games and Supported systems
+  sections said: "Built on RetroArch", covers by console, first launch, controls, shaders, BIOS
+  checklist, Linux first, the Android cards (skins, cartridges and covers, one download, gamepad,
+  light and dark, eight languages, RetroAchievements), a wide "Play the games you own" card with its
+  three points (no games, ROMs or BIOS shipped), and a "31 systems" card listing all 31 systems
+  (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      more = re.search(r'<section id="more">(.*?)</section>', page.read_text(encoding="utf-8"), re.S).group(1)
+      assert more.count('<span class="chip">') == 31, page
+      assert more.count('<ul class="checks">') == 1 and more.count("<li>") >= 3, page
+      assert more.count('<div class="card') >= 16, page
+  print("RT-612 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`test_nothing_of_the_folded_sections_is_lost`).
+
+### RT-613 — The promo video plays only when asked for
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
+- **Steps:**
+  1. Load the home page and scroll through it.
+  2. Click "Watch the video (45 s)" under the download buttons.
+  3. Press Escape.
+  4. With JavaScript disabled, click the same link.
+- **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
+  page. 2: a dialog opens over the page and the video plays, with the browser's own controls. 3:
+  the dialog closes, the sound stops and the focus returns to the link. 4: the browser opens the
+  video file itself. With Save-Data on, step 2 opens the dialog without starting playback
+  (issue 685).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
+
+### RT-620 — The cartridge gallery shows each console's cartridge view, by mouse
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`, browser window about 1280 px wide.
+- **Steps:**
+  1. Scroll to "Every console, as cartridges.".
+  2. Click the "Next console" arrow under the screenshot five times.
+  3. Click the third dot.
+  4. Click the screenshot.
+- **Expected:** 1: one large screenshot of the cartridge view, "Super Nintendo" under it, the first
+  dot is a gold pill and the "Previous console" arrow is dimmed. The screenshot is the app window
+  itself, with rounded corners and a shadow: no extra title bar or coloured window dots drawn
+  around it. 2: Nintendo (NES), Game Boy Advance, Nintendo 64, Mega Drive and PlayStation in turn,
+  each named under the screenshot; at PlayStation the "Next console" arrow is dimmed. 3: it slides
+  back to Game Boy Advance and that dot becomes the pill. 4: the lightbox opens the full-size image.
+  Every cartridge label is one of the fictional demo games (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheGalleriesTests`).
+
+### RT-621 — Both galleries work from the keyboard, with a visible focus ring
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`, window about 1280 px wide.
+- **Steps:**
+  1. Press Tab from the "Every console, as cartridges." heading until the gallery is focused.
+  2. Press Right arrow twice, then End, then Home.
+  3. Keep pressing Tab.
+  4. Do the same in "A controller for each console.".
+- **Expected:** 1: a gold ring appears around the gallery. 2: the slide moves to Game Boy Advance,
+  then the last console, then back to the first; the page itself does not scroll. 3: the focus
+  ring moves to "Previous console" (skipped while dimmed), each dot and "Next console"; Enter or
+  Space on any of them changes the slide. 4: the same, with the phones: Super Nintendo, Game Boy
+  Advance (portrait and landscape side by side), Nintendo 64, Mega Drive, PlayStation and
+  Nintendo DS (portrait and landscape), each named under its phone (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_the_script_moves_by_buttons_dots_and_arrow_keys`).
+
+### RT-622 — On a phone the galleries swipe one slide at a time, and the page never scrolls sideways
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** a phone, or a browser's device emulation at 360 px wide with touch.
+- **Steps:** As a QA person: open the home page at 360 px wide, scroll to the two galleries and
+  swipe sideways inside each; then swipe up and down while your finger starts on a gallery; then try
+  to drag the whole page sideways anywhere.
+- **Expected:** Each swipe moves one slide and settles on it, with the dots following; one slide
+  fills the width (the Game Boy Advance and Nintendo DS slides show the landscape phone under the
+  portrait one). Vertical swipes over a gallery scroll the page normally. The page never scrolls
+  sideways. Every phone's screen sits in the middle of its black body, with the same border on all
+  four sides and rounded corners that follow the body's (issue 688).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  css = re.search(r"<style>(.*?)</style>", Path("site/page.html").read_text(encoding="utf-8"), re.S).group(1)
+  assert css.count("scroll-snap-type") == 1 and "scroll-snap-type: x mandatory" in css
+  assert "border-radius: calc(var(--frame-r) - var(--bezel))" in css
+  assert "width: calc(var(--frame-w) - 2 * var(--bezel))" in css
+  assert re.search(r"\.phone \{[^}]*box-sizing: border-box[^}]*padding: var\(--bezel\)", css)
+  print("RT-622 OK")
+  EOF
+  ```
+  Visual, in DevTools at 360 px: `document.documentElement.scrollWidth === innerWidth`, and for each
+  `.phone` the screen's `getBoundingClientRect()` is inset by the same bezel on all four sides.
+
+### RT-623 — With reduced motion the galleries jump instead of sliding
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the system's "reduce motion" setting on (or DevTools → Rendering →
+  `prefers-reduced-motion: reduce`).
+- **Steps:** Open the home page; in each gallery click "Next console", a dot and "Previous
+  console".
+- **Expected:** The slide changes at once, with no sliding animation, and the dots change without
+  growing; nothing on the page moves by itself (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_reduced_motion_jumps_without_animation`).
 
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
