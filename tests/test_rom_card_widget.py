@@ -13,6 +13,7 @@ only one whose focus, parent and popover are real.
 
 import copy
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
@@ -836,17 +837,11 @@ class EntryMatchingTests(unittest.TestCase):
         self.assertFalse(entry_matches(entry, only_missing_artwork=True))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheCartridgeShadowRuleTests(unittest.TestCase):
     """The stylesheet side of issue 725, readable without a display."""
 
     @staticmethod
     def rule(selector):
-        from pathlib import Path
-
         css = (
             Path(__file__).resolve().parent.parent
             / "src" / "openemux" / "ui" / "style.css"
@@ -862,3 +857,7 @@ class TheCartridgeShadowRuleTests(unittest.TestCase):
 
     def test_covers_keep_their_box_shadow(self):
         self.assertIn("box-shadow", self.rule(".rom-cover"))
+
+
+if __name__ == "__main__":
+    unittest.main()

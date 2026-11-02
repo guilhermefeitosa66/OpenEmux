@@ -680,15 +680,17 @@ class RomItem(Gtk.Box):
         if self._is_stale(token) or self._is_abandoned():
             return False
         try:
-            # Set on every apply, either way: the grid recycles cards, and one
-            # that last showed a cartridge must not hand its look to a cover.
-            self._set_cartridge_look(full_resolution)
             if full_resolution:
                 self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
             else:
                 if self._backdrop is not None:
                     self._fit_cover_to(pixbuf)
                 self.cover_image.set_pixbuf(pixbuf)
+            # Set on every apply, either way: the grid recycles cards, and one
+            # that last showed a cartridge must not hand its look to a cover.
+            # Only once the art is attached, so a failed attach leaves the
+            # previous art with its own look.
+            self._set_cartridge_look(full_resolution)
             self._show_cover_image()
             if self._fade_next_apply:
                 self._fade_next_apply = False
