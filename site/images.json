@@ -340,54 +340,54 @@
   },
   "desktop/cart-fc.png": {
     "height": 1756,
-    "sha256": "ba831242f2253be20bf729e42934df6aa8e47fe2f118b154c91ca68533160ffc",
+    "sha256": "8d036edfa462eeaf13a9e35c320ded52b8fa557b12cadce3ddd05b5a21a9a240",
     "variants": [
       {
         "file": "desktop/cart-fc-640.avif",
         "height": 426,
-        "sha256": "f49c03b55472aa8c939fb6215766d4c723e5daf5911c5561fa38ac80cb9b847a",
+        "sha256": "f5002593383583dbcba64ea40ad4019b19ed57cb419f797d247e22210b8e2015",
         "width": 640
       },
       {
         "file": "desktop/cart-fc-640.webp",
         "height": 426,
-        "sha256": "94add7d900c599a53edaaa4451818f4e22bd234792ba32ba2c243b121a1c99b4",
+        "sha256": "8e3c4ce8541df0ccf96df6831f6e5e97a65f92f6bc3de5e4781a5d58fbf71071",
         "width": 640
       },
       {
         "file": "desktop/cart-fc-1280.avif",
         "height": 851,
-        "sha256": "61452095a4ecac8734ddfff83b50203825006fe389fd0557f85da44be032ae6d",
+        "sha256": "ae6ed8d5a310e9f38933b1634bfd758f30840e9b6003fe58b7bfe4442a96d2a2",
         "width": 1280
       },
       {
         "file": "desktop/cart-fc-1280.webp",
         "height": 851,
-        "sha256": "7c26f295760d05333dc149836658ecef6301fa821ac8c663757d16574b41b519",
+        "sha256": "cee284cf26045cc27c3a78fc7734ce7ae60d7c13ad22a98e41a676c27989dd50",
         "width": 1280
       },
       {
         "file": "desktop/cart-fc-1920.avif",
         "height": 1277,
-        "sha256": "4b214c72920162533c467bd875b005b214eaf4e0a64b6888703474ea82bb5f4c",
+        "sha256": "f93a4c1f24168af0279c52683996a845f0b35b30c24f848a69fee298bf9d2b9e",
         "width": 1920
       },
       {
         "file": "desktop/cart-fc-1920.webp",
         "height": 1277,
-        "sha256": "7253ee29523c55651c78d7884d263ea0fe688cdd5d571c93ba6d6d2bc3c0f609",
+        "sha256": "2f0a7f1ddd8f22214c34e99d83be5aaf2e3b12acc9524d459ed181c625ec42d1",
         "width": 1920
       },
       {
         "file": "desktop/cart-fc-2640.avif",
         "height": 1756,
-        "sha256": "698c6442b82815ef4e93bd5bba1c732900870dc8fd5bd5a298ee5ddd39d97d88",
+        "sha256": "f07e70c0e40117b0fc1e33a4a59a2db7b430ad2bce15939a10732fa13cd7db67",
         "width": 2640
       },
       {
         "file": "desktop/cart-fc-2640.webp",
         "height": 1756,
-        "sha256": "d3fc332c1af8b8d64d8027b74ed331cfcf32a6cd90992a8d8c0afca494cb0065",
+        "sha256": "cdef46ecec9f95f7063b6c943d8ab85a378a321357d0c79d83fb175f604c15dd",
         "width": 2640
       }
     ],
@@ -395,54 +395,54 @@
   },
   "desktop/cart-gba.png": {
     "height": 1756,
-    "sha256": "069b9765b50c0ff4534e92db3bd430d444619ec8f66230f2b4c6ad1dda4f22cf",
+    "sha256": "6264cb0bf77037ef3fd003340654570c60a54d131b1a99b35fa23dfdaa541c6b",
     "variants": [
       {
         "file": "desktop/cart-gba-640.avif",
         "height": 426,
-        "sha256": "74c1f79d6abe20ec0e586373e38c430ecc49f29179c0f6153e888fe7f6a084c3",
+        "sha256": "d64f6284b5fe370d58e8a8139e5479066bbfddf24d43dcff92a44089d0d7dc35",
         "width": 640
       },
       {
         "file": "desktop/cart-gba-640.webp",
         "height": 426,
-        "sha256": "70b063de25f0b9e8d3afe7b3a25c65ffa0e64611d680f26d17e1143e1309efeb",
+        "sha256": "dfe0879f623f31f57c73af281f38450f30c3a9a1621f8d921aa9ad4f6743be22",
         "width": 640
       },
       {
         "file": "desktop/cart-gba-1280.avif",
         "height": 851,
-        "sha256": "344f09573cd4ce7c23891ffb4ddeaf29f6cf535828d138db542d3d5c4817f62e",
+        "sha256": "111f5711ea950245053fdc6da4006ce7a72dc03f72747adc12d846e57d0a1900",
         "width": 1280
       },
       {
         "file": "desktop/cart-gba-1280.webp",
         "height": 851,
-        "sha256": "0c5393dfd392f622a4c56a85ccac48f0dc4b16cef55aa09f1dc89303483d01fe",
+        "sha256": "405b41798ce1e510411702a1326d0ba0679b8f80b3e077733fe366aa3ecae511",
         "width": 1280
       },
       {
         "file": "desktop/cart-gba-1920.avif",
         "height": 1277,
-        "sha256": "7dc5255050ee0557e4c3b93e918e321c49b8fb060368c0a411ec52ded32a52c7",
+        "sha256": "9a7f7c98188ce25a22dec8679faeaf363ebd3d0d71c4e4c89b2350ddfcd4ace7",
         "width": 1920
       },
       {
         "file": "desktop/cart-gba-1920.webp",
         "height": 1277,
-        "sha256": "8b0b96304bc40a332fc2c3b4f826608def02977474507d725b977b17f3b58010",
+        "sha256": "bfa02f85479062fecc8fef857b2e35fd2b3481ebbef9b04fa1604c74b5479e39",
         "width": 1920
       },
       {
         "file": "desktop/cart-gba-2640.avif",
         "height": 1756,
-        "sha256": "7061cc599fc850317542d57242b5c75a60071bbd1d8d21bd69c9562852d5edda",
+        "sha256": "1134bf5526243820daaa90e48eb0c56033391f004d4d0ff38d11d9611c760239",
         "width": 2640
       },
       {
         "file": "desktop/cart-gba-2640.webp",
         "height": 1756,
-        "sha256": "db1a5a8a183d3cbc9ab680adb0b3426324999c0f74eda1ce99ed967c2758af03",
+        "sha256": "7900679d648304a1842eb056bb0066804668fa1210b3dcb438917a5849f3554d",
         "width": 2640
       }
     ],
@@ -450,54 +450,54 @@
   },
   "desktop/cart-md.png": {
     "height": 1756,
-    "sha256": "fe2bee3ebd8f79552ef7670038d876191b2f6ab86944952029420bb8b53fc0d9",
+    "sha256": "20afbaa7ca3711e28576600e704dc1146795286c93bcf6a6d095255f60b64dcd",
     "variants": [
       {
         "file": "desktop/cart-md-640.avif",
         "height": 426,
-        "sha256": "eb57209de9cc102cbb50aa33b702d55622aa80c6327d8553447a2a1edb59dec9",
+        "sha256": "dc586d82fd7054b64d4a61d999c35ef0ef6828927b7c373272963f8801081f1e",
         "width": 640
       },
       {
         "file": "desktop/cart-md-640.webp",
         "height": 426,
-        "sha256": "9518c2a5fffae26d5e0c04c144d8fcdda25a71308917ed3684b8558ece67406d",
+        "sha256": "67eb3aa22a164fe2269b6767c8e73271071deee2d2b661fb0a28e101021666b0",
         "width": 640
       },
       {
         "file": "desktop/cart-md-1280.avif",
         "height": 851,
-        "sha256": "c575500601e8036a83d96d7775f2982a3815d53b0e5975ca9444029069587b4e",
+        "sha256": "8aa9920b14e0435e7f5832ad7f39dddaf1dd76c71bc73794cf769b18e149d3c9",
         "width": 1280
       },
       {
         "file": "desktop/cart-md-1280.webp",
         "height": 851,
-        "sha256": "f2ba7cf8cc2078ea48faabbcf28fcab3c92627a72004baf3b5ee45f21fe6489d",
+        "sha256": "4792c8732ab4e1a226fc4356b11b7ed1a3e696fe9a5eac4f3f19c04ac7754a26",
         "width": 1280
       },
       {
         "file": "desktop/cart-md-1920.avif",
         "height": 1277,
-        "sha256": "876d9916577c8baa80a40ddee755e8045ba90e8b12cb77bb6ab4e48ecd7b170c",
+        "sha256": "fc09b9293a3cbf3b07f8a360539d08b852bfb5c46c438933cd296b6e2f7bb4eb",
         "width": 1920
       },
       {
         "file": "desktop/cart-md-1920.webp",
         "height": 1277,
-        "sha256": "3db6b67db3e43e7eaa7d349942d59a8aa20718f334709047a05f7041b9846201",
+        "sha256": "64c69cf0c6e90a9ab33eda7b7c973ede91bb1bffab4abb0f372947a7c61f8ae7",
         "width": 1920
       },
       {
         "file": "desktop/cart-md-2640.avif",
         "height": 1756,
-        "sha256": "149897dedb1d8dcc017a2e98c00e09672b518749ff45020a2ebc995a6fd907dc",
+        "sha256": "93699b25c88de49c0fcf99aed2087999b9d58e074639067aceea133d78ba64e1",
         "width": 2640
       },
       {
         "file": "desktop/cart-md-2640.webp",
         "height": 1756,
-        "sha256": "75589b8a55013fdea138fb1f8cd995793e438105dea419dda421cc03cad5c899",
+        "sha256": "b3653112bce16b877fe4de3172e15f06e6519ed01335b8435782865c412223ca",
         "width": 2640
       }
     ],
@@ -505,54 +505,54 @@
   },
   "desktop/cart-n64.png": {
     "height": 1756,
-    "sha256": "32e61bbb3d045a7e17b8fff2b34dd3021691b0bfbaca2a3a289cf6108c02e29a",
+    "sha256": "d1d0b17959e5a2979ced205563e8bc97b8f0ce007043d2013c2da88e174abf6b",
     "variants": [
       {
         "file": "desktop/cart-n64-640.avif",
         "height": 426,
-        "sha256": "df333246bef13be1407d591b7788160582ae178d006c42a9bbc18220361a307a",
+        "sha256": "e8aa4ac135610209bee14be781cee4664444a86d0f3b837eb7b5ee5f715b8ff1",
         "width": 640
       },
       {
         "file": "desktop/cart-n64-640.webp",
         "height": 426,
-        "sha256": "38e4901ad169d2e490be9216816143c4ed1edebed8a25f2761cf9c34aaf8be7f",
+        "sha256": "58ddf00f1b76a178eea28b7a1e1d482b692b9d33b43d20e9d51376478a0e4fa7",
         "width": 640
       },
       {
         "file": "desktop/cart-n64-1280.avif",
         "height": 851,
-        "sha256": "cc28a0de81335031195826ac1e790f157e1de29445a7fe259f08027216c185d8",
+        "sha256": "3547cd3e3d74a1815b937d95e0683bb5967666e4c79b9588948a8f5d181793ca",
         "width": 1280
       },
       {
         "file": "desktop/cart-n64-1280.webp",
         "height": 851,
-        "sha256": "434e330fa96f9994ae29d8b632596b3c9eef8e957035041e7b33fabb342cf0cd",
+        "sha256": "67be938d7ad657294362e122e01a3358e0a7d11269d8909f2713bb722d1bf92b",
         "width": 1280
       },
       {
         "file": "desktop/cart-n64-1920.avif",
         "height": 1277,
-        "sha256": "c30ca0a9585d62941b9daa7d905e3abb6bd74e895ef5b0ad94b3c400a4d6f9e7",
+        "sha256": "44a35005b8c06665938d3c03f0884684434ff5a6d7c56a0358f4554b788e2406",
         "width": 1920
       },
       {
         "file": "desktop/cart-n64-1920.webp",
         "height": 1277,
-        "sha256": "8b40c558232c06a25f26e2e942546f5aba551a7a9abdc1df54fd7b7dd5ba7a1d",
+        "sha256": "566420185ece7d5cbdfb9ec03c61fa0897c6bf709f4baa296060ff0ef73ef78d",
         "width": 1920
       },
       {
         "file": "desktop/cart-n64-2640.avif",
         "height": 1756,
-        "sha256": "04f8da5050d8a8f3ed137d4adc1a38ee9b3b82cb110cf06b0068b120adb7826a",
+        "sha256": "24b6d20f0c900e86ce611cf8556b64c29edc378218b767ff4e4ed2c92a899fa2",
         "width": 2640
       },
       {
         "file": "desktop/cart-n64-2640.webp",
         "height": 1756,
-        "sha256": "746f4e77e3216a745c946da57e1c695036353d0777deae45d8be7a60853f70c9",
+        "sha256": "9cc526a84d0393ebafd3d03b9e38adec8850e18b500102334c982144b9a1dbd3",
         "width": 2640
       }
     ],
