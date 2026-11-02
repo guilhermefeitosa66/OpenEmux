@@ -93,6 +93,12 @@
       min-width: 0
     }
 
+    /* A path such as Android/data/com.openemux.mobile/files/roms is one
+       unbreakable word: let it wrap instead of widening the page at 360 px. */
+    .steps p {
+      overflow-wrap: anywhere
+    }
+
     section {
       padding: 96px 0;
       border-top: 1px solid var(--line)
@@ -714,6 +720,12 @@
     }
 
     @media(max-width:700px) {
+      /* One per view: a slide with a landscape phone under the portrait is
+         taller than the rest, so centre them rather than align the bottoms. */
+      .gal-skins .gal-track {
+        align-items: center
+      }
+
       .gal-skins .gal-slide {
         flex: 0 0 100%
       }

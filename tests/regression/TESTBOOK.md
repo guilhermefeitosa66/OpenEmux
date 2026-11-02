@@ -7955,11 +7955,11 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads `docs/` and `site/images.json`).
 - **Steps:** As a QA person: open the site's home page in a browser with DevTools → Network, scroll
-  to "Your games, console by console" and look at what the screenshot carousel downloads; then open
+  to "Every console, as cartridges." and look at what the cartridge gallery downloads; then open
   `docs/assets/desktop/`.
-- **Expected:** Each carousel shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
-  the PNG; the carousel looks as before (three shots per slide, one on a phone) and a click opens
-  the full-size image in the lightbox. `docs/assets/desktop/` holds a 2× SNES cover grid and the
+- **Expected:** Each gallery shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
+  the PNG, and a click opens the full-size image in the lightbox (issue 688 replaced the old shelf
+  carousel with this gallery). `docs/assets/desktop/` holds a 2× SNES cover grid and the
   cartridge view of SNES, NES, GBA, N64, Mega Drive and PlayStation, each a TrueColor PNG at least
   2560 px wide with AVIF and WebP at 640/1280/1920 px and full width, all from the fictional demo
   library (issue #683).
@@ -7979,8 +7979,8 @@ or into an environment that cannot run the tests.
           assert Path("docs/assets", v["file"]).is_file(), v["file"]
   for page in [Path("docs/index.html"), Path("docs/pt-br/index.html")]:
       html = page.read_text(encoding="utf-8")
-      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*shelf/\w+-640\.avif 640w', html)
-      assert len(shots) == 7, (page, len(shots))
+      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*desktop/cart-\w+-640\.avif 640w', html)
+      assert len(shots) == 6, (page, len(shots))
       assert "data-picture" not in html, page
   print("RT-611 OK")
   EOF
@@ -8059,7 +8059,7 @@ or into an environment that cannot run the tests.
   styles off (Firefox: View › Page Style › No Style) and read it again.
 - **Expected:** The sections come in this order: the opening (headline, download buttons, the
   desktop library with the phone over its corner), "Share nearby" (four numbered steps), "On the
-  desktop" (the cartridge carousel), "On the phone" (the controller screenshots), the cartridge
+  desktop" (the cartridge gallery), "On the phone" (the controller skin gallery), the cartridge
   wall, "Installing", "Everything else", the credits and "Support the project", then the footer.
   Each of the opening, Share nearby, desktop and phone moments has one short headline and at most
   two sentences under it, with no exclamation marks. With styles off the content still reads top
@@ -8078,7 +8078,7 @@ or into an environment that cannot run the tests.
       assert re.findall(r'<section[^>]* id="([a-z]+)"', html) == want, page
       for sid in ("share", "consoles", "android"):
           sec = re.search(r'<section class="moment" id="%s">(.*?)</section>' % sid, html, re.S).group(1)
-          assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"carousel", 1)[0]), (page, sid)
+          assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"gal", 1)[0]), (page, sid)
   print("RT-611 OK")
   EOF
   ```
@@ -8129,6 +8129,81 @@ or into an environment that cannot run the tests.
   video file itself. With Save-Data on, step 2 opens the dialog without starting playback
   (issue 685).
 - **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
+
+### RT-620 — The cartridge gallery shows each console's cartridge view, by mouse
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`, browser window about 1280 px wide.
+- **Steps:**
+  1. Scroll to "Every console, as cartridges.".
+  2. Click the "Next console" arrow under the screenshot five times.
+  3. Click the third dot.
+  4. Click the screenshot.
+- **Expected:** 1: one large screenshot of the cartridge view, "Super Nintendo" under it, the first
+  dot is a gold pill and the "Previous console" arrow is dimmed. The screenshot is the app window
+  itself, with rounded corners and a shadow: no extra title bar or coloured window dots drawn
+  around it. 2: Nintendo (NES), Game Boy Advance, Nintendo 64, Mega Drive and PlayStation in turn,
+  each named under the screenshot; at PlayStation the "Next console" arrow is dimmed. 3: it slides
+  back to Game Boy Advance and that dot becomes the pill. 4: the lightbox opens the full-size image.
+  Every cartridge label is one of the fictional demo games (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheGalleriesTests`).
+
+### RT-621 — Both galleries work from the keyboard, with a visible focus ring
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`, window about 1280 px wide.
+- **Steps:**
+  1. Press Tab from the "Every console, as cartridges." heading until the gallery is focused.
+  2. Press Right arrow twice, then End, then Home.
+  3. Keep pressing Tab.
+  4. Do the same in "A controller for each console.".
+- **Expected:** 1: a gold ring appears around the gallery. 2: the slide moves to Game Boy Advance,
+  then the last console, then back to the first; the page itself does not scroll. 3: the focus
+  ring moves to "Previous console" (skipped while dimmed), each dot and "Next console"; Enter or
+  Space on any of them changes the slide. 4: the same, with the phones: Super Nintendo, Game Boy
+  Advance (portrait and landscape side by side), Nintendo 64, Mega Drive, PlayStation and
+  Nintendo DS (portrait and landscape), each named under its phone (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_the_script_moves_by_buttons_dots_and_arrow_keys`).
+
+### RT-622 — On a phone the galleries swipe one slide at a time, and the page never scrolls sideways
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** a phone, or a browser's device emulation at 360 px wide with touch.
+- **Steps:** As a QA person: open the home page at 360 px wide, scroll to the two galleries and
+  swipe sideways inside each; then swipe up and down while your finger starts on a gallery; then try
+  to drag the whole page sideways anywhere.
+- **Expected:** Each swipe moves one slide and settles on it, with the dots following; one slide
+  fills the width (the Game Boy Advance and Nintendo DS slides show the landscape phone under the
+  portrait one). Vertical swipes over a gallery scroll the page normally. The page never scrolls
+  sideways. Every phone's screen sits in the middle of its black body, with the same border on all
+  four sides and rounded corners that follow the body's (issue 688).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  css = re.search(r"<style>(.*?)</style>", Path("site/page.html").read_text(encoding="utf-8"), re.S).group(1)
+  assert css.count("scroll-snap-type") == 1 and "scroll-snap-type: x mandatory" in css
+  assert "border-radius: calc(var(--frame-r) - var(--bezel))" in css
+  assert "width: calc(var(--frame-w) - 2 * var(--bezel))" in css
+  assert re.search(r"\.phone \{[^}]*box-sizing: border-box[^}]*padding: var\(--bezel\)", css)
+  print("RT-622 OK")
+  EOF
+  ```
+  Visual, in DevTools at 360 px: `document.documentElement.scrollWidth === innerWidth`, and for each
+  `.phone` the screen's `getBoundingClientRect()` is inset by the same bezel on all four sides.
+
+### RT-623 — With reduced motion the galleries jump instead of sliding
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the system's "reduce motion" setting on (or DevTools → Rendering →
+  `prefers-reduced-motion: reduce`).
+- **Steps:** Open the home page; in each gallery click "Next console", a dot and "Previous
+  console".
+- **Expected:** The slide changes at once, with no sliding animation, and the dots change without
+  growing; nothing on the page moves by itself (issue 688).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_reduced_motion_jumps_without_animation`).
 
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
