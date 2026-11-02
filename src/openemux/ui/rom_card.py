@@ -705,13 +705,19 @@ class RomItem(Gtk.Box):
         Only a cartridge composite arrives at full resolution. Its picture
         drops ``rom-cover`` (a box shadow and rounded corners, which drew a
         rectangle around the cartridge) for ``rom-cartridge``, whose shadow
-        follows the composite's alpha (issue 725).
+        follows the composite's alpha (issue 725). The play overlay drops its
+        dark layer over a cartridge for the same reason: it fills the image's
+        whole box.
         """
         add, drop = (
             ("rom-cartridge", "rom-cover") if cartridge else ("rom-cover", "rom-cartridge")
         )
         self.cover_image.remove_css_class(drop)
         self.cover_image.add_css_class(add)
+        if cartridge:
+            self.play_overlay.add_css_class("cartridge")
+        else:
+            self.play_overlay.remove_css_class("cartridge")
 
     def _fit_cover_to(self, pixbuf):
         """Fill the card with this cover, or show it whole on the backdrop.

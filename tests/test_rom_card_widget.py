@@ -151,6 +151,16 @@ class TheCoverArrivingTests(_CardCase):
         self.assertTrue(self.card.cover_image.has_css_class("rom-cover"))
         self.assertFalse(self.card.cover_image.has_css_class("rom-cartridge"))
 
+    def test_hovering_a_cartridge_draws_no_dark_layer_over_its_box(self):
+        # issue 725: the dark play overlay filled the image's whole box.
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.assertTrue(self.card.play_overlay.has_css_class("cartridge"))
+
+    def test_a_cover_on_a_card_that_showed_a_cartridge_gets_its_dark_overlay_back(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), False)
+        self.assertFalse(self.card.play_overlay.has_css_class("cartridge"))
+
     def test_a_cover_for_a_game_the_card_has_left_is_dropped(self):
         stale = self.card._generation
         self.card._generation += 1
@@ -857,6 +867,19 @@ class TheCartridgeShadowRuleTests(unittest.TestCase):
 
     def test_covers_keep_their_box_shadow(self):
         self.assertIn("box-shadow", self.rule(".rom-cover"))
+
+    def test_the_play_overlay_over_a_cartridge_is_transparent(self):
+        self.assertIn(
+            "background-color: transparent", self.rule(".play-overlay.cartridge")
+        )
+
+    def test_the_play_icon_over_a_cartridge_keeps_a_shadow_of_its_own(self):
+        self.assertIn(
+            "-gtk-icon-shadow", self.rule(".play-overlay.cartridge .play-icon")
+        )
+
+    def test_covers_keep_their_dark_play_overlay(self):
+        self.assertIn("alpha(black", self.rule(".play-overlay"))
 
 
 if __name__ == "__main__":
