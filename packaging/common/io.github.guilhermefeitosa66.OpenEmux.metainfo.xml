@@ -87,6 +87,18 @@
   </keywords>
 
   <releases>
+    <release version="1.19.0" date="2026-11-01">
+      <description>
+        <p>BIOS files travel with the game over Share nearby and can be imported per console from a file picker; plus simpler console names and a tidier header bar.</p>
+        <ul>
+          <li>Share nearby sends the console's BIOS files along with the game, between desktop and Android</li>
+          <li>Import BIOS files per console from a file picker, checked by name, with a report of what was not accepted</li>
+          <li>One name per console instead of regional double names</li>
+          <li>The header bar keeps only the View mode button</li>
+          <li>A theme toggle sun that reads as a sun</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.18.10" date="2026-11-01">
       <description>
         <p>An urgent Android fix; the desktop app is unchanged and keeps the same version number.</p>
