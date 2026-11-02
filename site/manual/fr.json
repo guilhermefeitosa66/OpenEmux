@@ -90,7 +90,7 @@
   "window.li1": "<span class=\"ui\">Tous</span> : tous les jeux, groupés par console.",
   "window.li2": "<span class=\"ui\">Favoris</span> : les jeux que vous avez marqués d’une étoile. La ligne n’apparaît qu’une fois un jeu marqué. Voir <a href=\"#favorites\">Favoris</a>.",
   "window.li3": "Vos playlists, si vous en avez créé. Ici, <span class=\"ui\">Couch co-op</span>. Voir <a href=\"#playlists\">Playlists</a>.",
-  "window.li4": "Une ligne par console qui a des jeux, écrite avec son identifiant court et son nom, comme <span class=\"ui\">SFC - Super Nintendo (SNES)</span>.",
+  "window.li4": "Une ligne par console qui a des jeux, écrite avec son identifiant court et son nom, comme <span class=\"ui\">SFC - Super Nintendo</span>.",
   "window.p2": "Les lignes de console et de playlist ont un menu : faites un clic droit dessus, ou survolez-les et cliquez sur le bouton <span class=\"ui\">⋮</span>. Les lignes de console peuvent aussi être glissées pour changer leur ordre.",
   "window.h42": "Les boutons de l’en-tête",
   "window.alt3": "La barre d’en-tête, avec les boutons des deux côtés encadrés",

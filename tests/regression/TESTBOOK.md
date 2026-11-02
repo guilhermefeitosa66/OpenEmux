@@ -1108,8 +1108,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running, at least two consoles with games.
 - **Steps:**
-  1. Click a console in the sidebar (e.g. "FC - Nintendo (NES) / Famicom").
-  2. Click a different console (e.g. "SFC - Super Nintendo (SNES)").
+  1. Click a console in the sidebar (e.g. "FC - Nintendo (NES)").
+  2. Click a different console (e.g. "SFC - Super Nintendo").
 - **Expected:** The header title and the grid follow each selection; the game count subtitle
   matches the console.
 - **Check:** One screenshot per console; header title matches the clicked row.
@@ -1237,12 +1237,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** The devbox app on its seeded library.
 - **Steps:**
-  1. Select "SFC - Super Nintendo (SNES)" in the sidebar.
+  1. Select "SFC - Super Nintendo" in the sidebar.
   2. Note the modification time of `~/.openemux/config.yaml` in the container.
   3. Restart the app (`make devbox-app ACTION=restart`).
   4. Repeat with "All", and with a collection.
 - **Expected:** The app opens on SNES, with the sidebar row selected and the header reading
-  "SFC — Super Nintendo (SNES)". Nothing was remembered before: the landing page was computed from
+  "SFC — Super Nintendo". Nothing was remembered before: the landing page was computed from
   what was on screen right now, and at startup that is nothing (issue #383). `config.yaml` is
   **untouched** — the view is written to `session.json`, a file of its own, because it is rewritten
   on every navigation and the ROM path, the credentials, the per-console cores and the input
@@ -1297,6 +1297,28 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   ```
 - **Restore:** none — everything happens inside `$SCRATCH`.
 
+### RT-585 — Every console has one name, with no regional double names
+- **Area:** Navigation & search
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Read the console names in the console table every label is built from (the sidebar rows, the
+     shelf group titles on "All Games" and the per-console rows in Preferences all read it).
+- **Expected:** Every console is named once, never two or three names joined by " / ":
+  FC "Nintendo (NES)", SFC "Super Nintendo", MD "Mega Drive", MCD "Mega CD", PCE "PC Engine",
+  PCECD "PC Engine CD", O2 "Odyssey²". The sidebar shows them as "MD - Mega Drive", Preferences as
+  "MD — Mega Drive". Only the label changed: the ids, the `nes`/`snes` aliases and the ROM folders
+  are the same, so an existing library keeps every game (issue 654).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from openemux.core.systems import SYSTEMS, get_system_display_name, resolve_system_id
+  assert not [s['id'] for s in SYSTEMS if '/' in s['display_name']]
+  assert get_system_display_name('MD') == 'Mega Drive' and get_system_display_name('O2') == 'Odyssey\u00b2'
+  assert resolve_system_id('nes') == 'FC' and resolve_system_id('snes') == 'SFC'
+  print('RT-585 OK')"
+  ```
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
@@ -1304,27 +1326,45 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running, a console with covers synced.
 - **Steps:**
-  1. In the header bar, switch through the three view segments: cartridge shelf, cover grid,
-     compact list.
+  1. Open the "View mode" menu in the header bar and pick "Cartridge", then "Cover", then
+     "List" (reopen the menu for each).
 - **Expected:** Each mode renders the same games; no blank canvas, no crash. On "All", "Favorites"
   and a collection too — picking "Cartridge" there used to change nothing at all (issue #385); see
-  RT-305.
-- **Check:** One screenshot per mode. Locate the three-segment switcher on a probe capture first —
-  its position moves as the header evolves.
+  RT-305. The header shows no Cover / Cartridge / List segmented buttons (issue #675); the
+  "View mode" menu is the only way to switch.
+- **Check:** One screenshot per mode. Locate the "View mode" menu button on a probe capture
+  first — its position moves as the header evolves.
 - **Restore:** Return to the mode that was active at the start (record it on the first capture).
 
 ### RT-031 — The view mode persists across a restart
 - **Area:** Views
 - **Mode:** AUTO-UI
-- **Preconditions:** RT-030 knowledge of the switcher position.
+- **Preconditions:** RT-030 knowledge of the "View mode" menu position.
 - **Steps:**
-  1. Record the current mode, then switch to a different one.
+  1. Record the current mode, then switch to a different one through the "View mode" menu.
   2. Quit (`Ctrl+Q`) and relaunch the app.
 - **Expected:** The app reopens in the mode chosen in step 1.
 - **Check:** `PYTHONPATH=src .venv/bin/python -c "from openemux.core.config import ConfigManager;
   print(ConfigManager().get_view_mode())"` after step 1 matches the chosen mode, and a screenshot
   after relaunch shows it.
 - **Restore:** Switch back to the recorded original mode.
+
+### RT-599 — The header carries only the View mode button
+- **Area:** Views
+- **Mode:** AUTO-UI
+- **Preconditions:** App running, a console with games.
+- **Steps:**
+  1. At 1280 px wide, look at the content header on "All", then on a console page.
+  2. Narrow the window to 640 px wide, then to 520 px wide (`make devbox-res RES=520x900`).
+- **Expected:** At every width the header shows search, the theme toggle and the "View mode" menu
+  button, and no Cover / Cartridge / List segmented buttons (issue #675). On a console page at full
+  width the console-input and Preferences buttons sit next to "View mode"; at 640 px they are still
+  there and nothing is clipped; at 520 px they leave the header, as before. "View mode" still
+  opens and switches modes at 520 px.
+- **Check:** `make devbox-res RES=1280x800`, `RES=640x900`, `RES=520x900`, with
+  `make devbox-shot WIN=1 OUT=/tmp/rt599-<width>.png` after each; no three-button linked group in
+  any capture.
+- **Restore:** Resize back to the canonical geometry.
 
 ### RT-032 — Zoom in, out and reset
 - **Area:** Views
@@ -2033,7 +2073,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   devbox home (`~/.local/share/openemux-devbox/home/` from the host), then
   `make devbox-app ACTION=restart`.
 - **Steps:**
-  1. Open "Sega Genesis / Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
+  1. Open "Mega Drive", right-click "Sonic the Hedgehog" and choose "Manage cover…".
   2. Capture the window (`make devbox-shot OUT=$SCRATCH/RT-365.png WIN=1`).
 - **Expected:** The window opens on the "Current" tab (not on "Cover"). The "Cover" section shows
   the PNG whole, titled "Local file" with a "Local" pill; the details read
@@ -2375,7 +2415,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** None.
 - **Steps:**
   1. Open "Settings" → "Video" and find the "Bezels" group, between "In-Game Bar" and "Shaders".
-  2. Look at which consoles it lists, then set "MD — Sega Genesis / Mega Drive" to "Simple".
+  2. Look at which consoles it lists, then set "MD — Mega Drive" to "Simple".
   3. Close and reopen "Settings".
 - **Expected:** Every row reads "None" on a fresh config. There are rows for the home consoles (FC,
   SFC, MD, PS, N64, ...) and none for GB, GBC, GBA, GG, NDS, PSP, NGP, WS, VB, LYNX or VECTREX
@@ -2414,8 +2454,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. "Settings" → "Video" → "Bezels": set "PS — Sony PlayStation" to "Custom image…" and pick the
      PNG.
-  2. Set "SFC — Super Nintendo (SNES)" to "Custom image…" and pick the renamed JPEG.
-  3. Set "FC — Nintendo (NES) / Famicom" to "Custom image…" and cancel the picker.
+  2. Set "SFC — Super Nintendo" to "Custom image…" and pick the renamed JPEG.
+  3. Set "FC — Nintendo (NES)" to "Custom image…" and cancel the picker.
   4. Launch a PS game.
 - **Expected:** PS shows the picked file's name under its title and a "Choose another image"
   button. SFC shows the toast "That file is not a PNG image" and goes back to "None". FC goes back
@@ -3762,8 +3802,73 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Open "Settings" (`Ctrl+,`) → "BIOS".
 - **Expected:** Consoles that need BIOS files are listed with a present/missing status per file;
-  no crash, no empty page.
-- **Check:** Screenshot of the tab.
+  no crash, no empty page. Each console row has an "Import" button (text, not a folder icon); the
+  group header has only the reload button (no "Open ROMs folder"). Expanding a console shows its
+  files and, as the last row, "Show folder" (issue 667).
+- **Check:** Screenshot of the tab, collapsed and with "PS — PlayStation" expanded.
+
+### RT-594 — Importing good BIOS files marks them present at once
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** App running in the devbox, PS BIOS missing. In a scratch dir:
+  `head -c 1024 /dev/urandom > scph5501.bin; head -c 1024 /dev/urandom > SCPH1001.BIN`.
+- **Steps:**
+  1. "Settings" → "BIOS" → "Import" on "PS — PlayStation".
+  2. In the file chooser, pick both files (`ctrl+L`, type the path, select both) and confirm.
+- **Expected:** One dialog, "2 BIOS files imported", listing `scph5501.bin` and `scph1001.bin`
+  under "Imported". The PS row tally goes up without clicking reload. Both files are in
+  `<roms>/PS/bios/`, `SCPH1001.BIN` saved as `scph1001.bin`; the originals are still in the
+  scratch dir. Importing `scph5501.bin` again with other bytes lists it with "Replaced the
+  existing file".
+- **Check:** Screenshot of the dialog and of the page after "OK";
+  `ls <roms>/PS/bios/` inside the devbox. Remove the two files afterwards.
+
+### RT-595 — A mixed batch imports the good files and explains the rest
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** As RT-594, with `bios_CD_J.bin`, `lynxboot.img` and `readme.txt` in the
+  scratch dir.
+- **Steps:**
+  1. "Import" on "MCD — Mega CD" and pick the three files.
+- **Expected:** "1 of 3 files imported". `bios_CD_J.bin` under "Imported" (any of the Mega CD
+  regional names is accepted). Under "Not imported": `lynxboot.img` with "A BIOS file for Atari
+  Lynx, not Mega CD" and `readme.txt` with "Not a BIOS name Mega CD expects". The body line says
+  names must match exactly and lists the names Mega CD expects. Nothing is written for Lynx.
+- **Check:** Screenshot of the dialog; `ls <roms>/MCD/bios/ <roms>/LYNX/bios/`. Remove
+  `bios_CD_J.bin` afterwards.
+
+### RT-596 — A batch with no good file imports nothing
+- **Area:** BIOS
+- **Mode:** AUTO-UI
+- **Preconditions:** As RT-594, with `foo.bin` and `bar.rom` in the scratch dir.
+- **Steps:**
+  1. "Import" on "PS — PlayStation" and pick both files.
+- **Expected:** "No files imported", both under "Not imported" with a reason; no file added to
+  any BIOS folder. Cancelling the chooser instead shows nothing at all.
+- **Check:** Screenshot of the dialog; `find <roms> -path '*/bios/*' -newer <scratch dir>` is
+  empty.
+
+### RT-597 — A game launches right after its BIOS is imported
+- **Area:** BIOS
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: with the PS BIOS missing, launch a PS game (missing-BIOS warning),
+  import `scph5501.bin` on the PS row, launch again without restarting the app.
+- **Expected:** No missing-BIOS warning on the second launch: the pre-launch check reads the disk
+  every time, and the import writes the file with the same config.
+- **Check:** suite file `tests/test_bios_importer.py`
+  (`test_the_launch_check_sees_the_import_with_the_same_config`) and `tests/test_preferences.py`
+  (`BiosImportTests`).
+
+### RT-598 — The BIOS file chooser goes through the portal under Flatpak
+- **Area:** BIOS
+- **Mode:** MANUAL
+- **Preconditions:** The Flatpak build installed.
+- **Steps:**
+  1. "Settings" → "BIOS" → "Import" on any console; pick a file with a name it expects.
+- **Expected:** The desktop's own file chooser (portal) opens; the file is imported and the row
+  turns present. No new Flatpak permission was needed.
+- **Check:** human only (needs the Flatpak build on a desktop session).
 
 ## Settings & configuration
 
@@ -3812,10 +3917,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
      (left of the search button).
   2. Open "Settings" → "System" and read the "Theme" row.
 - **Expected:** The whole interface repaints in the other theme and the button's icon flips to
-  offer the way back (sun while dark, moon while light). The "Theme" row reads "Light" or "Dark",
-  matching what is on screen.
-- **Check:** screenshots before and after the click; `grep "theme:" ~/.openemux/config.yaml`
-  reports the same value the row shows.
+  offer the way back: while dark, a sun (a ring with eight rays clearly separate from it, light on
+  the dark header); while light, a crescent moon (dark on the light header). The "Theme" row reads
+  "Light" or "Dark", matching what is on screen.
+- **Check:** screenshots before and after the click, plus a 4x crop of the button in each theme;
+  `grep "theme:" ~/.openemux/config.yaml` reports the same value the row shows. The button's icon
+  name is `openemux-sun-symbolic` while dark and `openemux-moon-symbolic` while light
+  (`make devbox-tests CMD=tests.test_window` covers it in `TheThemeButtonTests`).
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
 
 ### RT-103 — The chosen theme survives a restart
@@ -3828,6 +3936,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Expected:** The first frame is already light — no dark window that repaints a moment later.
 - **Check:** screenshot of the window right after it appears; the header bar is light.
 - **Restore:** `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
+
+### RT-610 — The theme toggle's sun and moon do not change with the host icon theme
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** App **closed**, in the devbox (its `$HOME` is throwaway). Back up the config
+  first (`cp ~/.openemux/config.yaml $SCRATCH/config.bak`), then set `theme: light` in
+  `~/.openemux/config.yaml` so the app opens light.
+- **Steps:**
+  1. Inside the devbox, pick an icon theme that does not inherit Adwaita: a third-party one from
+     `ls /usr/share/icons` (Papirus, Numix, Breeze...) if installed, else `hicolor`. Write it to
+     `~/.config/gtk-4.0/settings.ini` as `[Settings]` / `gtk-icon-theme-name=<theme>`.
+  2. Launch the app; with the light theme, look at the sun/moon button in the content header bar.
+  3. Click it to switch to dark and look again; click it once more to go back.
+- **Expected:** The same drawings as in RT-102 on the default theme: a crescent moon while light,
+  a ring with eight separate rays while dark, both recolored with the header (no dark-on-dark).
+- **Check:** a 4x crop of the button in each theme, compared side by side with the RT-102 crops.
+- **Restore:** remove `~/.config/gtk-4.0/settings.ini` (or the line it gained) and
+  `cp $SCRATCH/config.bak ~/.openemux/config.yaml` with the app closed.
 
 ### RT-238 — Every file picker opens the desktop's own file chooser
 - **Area:** Settings
@@ -4602,7 +4728,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** MANUAL
 - **Preconditions:** A ROMs folder on a disk that is not mounted.
 - **Steps:**
-  1. Use "Open folder" (from the console menu, the BIOS page, or "Reveal in Files").
+  1. Use "Open folder" (from the console menu, "Show folder" inside a console on the BIOS page,
+     or "Reveal in Files").
 - **Expected:** An error toast naming the path. The `mkdir` used to sit *above* the `try`, so the
   failure escaped past every fallback and past the toast — the button silently did nothing.
 - **Check:** human only (needs an unmounted path); the reordering is visible in
@@ -5491,11 +5618,55 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
      in portrait, then in landscape. `adb shell wm size reset && adb shell wm density reset`.
 - **Expected:** Pastel cards with dark text; every icon is readable straight on its card's colour,
   with no tile colour behind it. The box-art console's card looks like the others (icon, tag, name,
-  count; no covers). On the small phone the icon keeps its portrait size and the long names
-  ("Nintendo (NES) / Famicom", "Sega Genesis / Mega Drive") end in "…" on their second line at
-  worst; in landscape a card is never narrower than 250dp, so the shelf
+  count; no covers). On the small phone the icon keeps its portrait size, names such as
+  "Mega Drive" fit without "…", and the long names ("Famicom Disk System", "Neo Geo Pocket Color")
+  end in "…" on their second line at worst; in landscape a card is never narrower than 250dp, so the shelf
   keeps one card per row when two would not fit beside the side rail. Nothing is clipped.
 - **Check:** human only.
+
+### RT-585 — Each console shows one name, not its regional names joined with "/"
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** A library with games under `roms/FC`, `roms/MD`, `roms/PCE` and `roms/O2`,
+  installed with the previous release and then upgraded to the build under test; the game count
+  of each console noted before the upgrade.
+- **Steps:**
+  1. Open the shelf and read the console cards.
+  2. Settings → the console list (cores, shaders, extensions) and read the rows.
+  3. Open a Mega Drive game's detail, then the "Mega Drive" library.
+  4. Compare each console's game count with the one noted before the upgrade; launch one game.
+  5. `adb shell wm size 720x1280 && adb shell wm density 360`, open the shelf in portrait, then
+     `adb shell wm size reset && adb shell wm density reset`.
+- **Expected:** The cards read "Nintendo (NES)", "Mega Drive", "PC Engine" and "Odyssey²"; no
+  console name anywhere contains " / ". Settings rows read "NES - Nintendo (NES)",
+  "MD - Mega Drive", "SEGA CD - Mega CD", "PCE - PC Engine", "PCE CD - PC Engine CD" and
+  "O2 - Odyssey²", the "²" drawn as a superscript two, not a box. The game detail's back link and
+  info line and the library title say "Mega Drive". Every console keeps the same games and covers,
+  and the game launches with the same core. On the small phone the renamed cards show their full
+  name with no "…".
+- **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
+  in `pkg/android/openemux` of `openemux-android`.
+
+### RT-586 — Game Boy and Game Boy Color show different icons
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** A library with at least one game under `roms/GB` and one under `roms/GBC`;
+  dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf) and look at the "Game Boy" and "Game Boy Color" cards.
+  2. Switch to the light theme and look at the same two cards.
+  3. Settings → the console list (cores, shaders, extensions) and find the "GB" and "GBC" rows.
+  4. `adb shell wm density 260` (the tablet list), look at the two consoles in the list,
+     then `adb shell wm density reset`.
+- **Expected:** The Game Boy card shows the grey Game Boy icon; the Game Boy Color card shows a
+  different icon, the same pixel-art handheld in the Pikachu edition colours: yellow body, blue
+  around the screen and blue buttons, a dark screen. The two cards no longer look alike at a
+  glance. On the GBC card's purple (dark) and lavender (light) colour the icon stays legible: the
+  outline is visible and the screen reads as a screen. The settings rows and the tablet list show
+  the same two different icons, crisp (no blur). Every other console's icon is unchanged.
+- **Check:** human only (`adb exec-out screencap -p > shelf-gb-gbc.png`), plus
+  `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleIconTest'` in `pkg/android/openemux`
+  of `openemux-android`.
 
 
 ## Android — Backup and restore
@@ -5767,7 +5938,9 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
   2. Start a game and open the pause sheet.
 - **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
-  sideways. The pause sheet shows its main page in two columns.
+  sideways. On "All" the games of every console follow one another in that row, with no header
+  slot between consoles, and a small console label sits above the row (RT-590). The pause sheet
+  shows its main page in two columns.
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -5810,6 +5983,56 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   ran at 600×900dp with the bottom bar; a window that wide now gets the rail and less room.)
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-590 — The landscape row of a mixed page has no header slots and a console label above it
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-381 (phone, landscape), with at least four games in each of two consoles
+  (e.g. "NES" and "SNES").
+- **Steps:**
+  1. Open a console's library and tap the "All" chip; use the cartridge view.
+  2. Look at the row where the first console's games end and the next console's begin.
+  3. Switch to the cover view, then open "Favorites" (with favorites in both consoles) and a search
+     that matches games of both consoles, in each view.
+  4. Tap the "SNES" chip, a single console's page.
+- **Expected:** No item of the row is a console header: the last game of the first console is
+  followed directly by the first game of the next. Above the row, in small type, a label shows the
+  console's pixel icon and "NES – Nintendo (NES) · 4 games"; the cartridges are as tall as before.
+  The same holds in the cover view, in "Favorites" and in the search. On the single console's page
+  there is no label above the row.
+- **Check:** human only (a screenshot of each page).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-591 — The console label sticks at the row's start and the next console's label pushes it out
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-590, on "All" in the cartridge view, scrolled to the row's start.
+- **Steps:**
+  1. Drag the row slowly to the left by touch until the second console's games reach the start.
+  2. Drag it back to the start.
+- **Expected:** While the first console's games are at the row's start its label stays at the start,
+  over the first game in view. The second console's label rides over its own first game; when it
+  reaches the first label it pushes it out to the left and takes its place at the start. Dragging
+  back does the reverse. The labels never cover a game or the focus ring, and they do not jitter.
+- **Check:** human only (a screenshot at the start, mid-push and after the push).
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-592 — Console group headers show the pixel icon and "<abbreviation> – <name>"
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-380 (phone, portrait), with games in two consoles.
+- **Steps:**
+  1. Open "All" in the cartridge, cover and list views.
+  2. In landscape, open "All" in the list view.
+  3. At tablet size (`adb shell wm size 1600x2560`, `adb shell wm density 320`), in both
+     orientations, open "All".
+  4. Repeat step 1 in the light and the dark theme.
+- **Expected:** Each console's group starts with a full-width header line: the console's pixel icon
+  (no coloured square with the abbreviation), "SNES – Super Nintendo" and the game count at the end.
+  The tablet shows the grid with these header lines and no label above a row. Readable in both
+  themes.
+- **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-385 — Gamepad focus moves through every screen after a rotation or resize
 - **Area:** Android — Responsive layout
@@ -5901,6 +6124,21 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
   the item that had it. The dragged shelf stays drawn above the others while it moves.
 - **Check:** human only.
+
+### RT-593 — Left/right crosses console groups in the landscape row with no stop
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-590 (phone, landscape, "All", cartridge view), a gamepad connected (or
+  `adb shell input gamepad keyevent KEYCODE_DPAD_RIGHT`).
+- **Steps:**
+  1. Press right until the focus passes the last game of the first console.
+  2. Press left back across the boundary.
+  3. On the first game of the second console, press A to open its page, then B to come back.
+- **Expected:** One press moves from the last game of the first console to the first game of the
+  next, and back, with no stop on a header. Coming back from the game's page, the focus is on that
+  game and the label above the row names its console.
+- **Check:** human only.
+- **Restore:** `adb shell settings put system user_rotation 0`.
 
 ## Android — Multi-select and bulk remove
 
@@ -7087,7 +7325,7 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   2. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/` and
      `adb shell rm "/sdcard/Android/data/com.openemux.mobile/files/roms/GBA/<one of the .gba ROMs>"`.
   3. Start recording the screen and open the app.
-- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES) / Famicom" shelf
+- **Expected:** The previous shelf appears at once. Within a moment a "Nintendo (NES)" shelf
   appears, the "Game Boy Advance" shelf counts one game less and the header reads
   "3 consoles · 5 games". No frame shows the empty state or a blank list in
   between.
@@ -7112,11 +7350,11 @@ opens, or a burst of `adb exec-out screencap -p > shot-N.png`.
   on).
 - **Steps:**
   1. `adb push <a .nes ROM> /sdcard/Android/data/com.openemux.mobile/files/roms/FC/`, open the app
-     and wait for the "Nintendo (NES) / Famicom" shelf.
+     and wait for the "Nintendo (NES)" shelf.
   2. Settings → "Back up and restore" → "Import data", pick the archive, tap "Replace and restore".
   3. Start recording the screen; let the app restart and finish the first-run setup.
 - **Expected:** After the setup the shelf shows "Game Boy Advance" and "Super Nintendo" with
-  "2 consoles · 5 games". The "Nintendo (NES) / Famicom" shelf and "3 consoles · 6 games", the
+  "2 consoles · 5 games". The "Nintendo (NES)" shelf and "3 consoles · 6 games", the
   library from before the restore, never appear, not even for a frame.
 - **Check:** human only (step through the recording), plus
   `adb shell run-as com.openemux.mobile cat files/library.index` lists the 5 restored ROMs and no
@@ -8313,6 +8551,55 @@ stands in for the other device; multicast may not cross the container.
   step 3 to "Offer Declined". The spinners on these screens never hold the answer back.
 - **Check:** human only. Suite: `tests/test_share_coordinator.py`
   (`test_core_callbacks_run_at_the_default_priority`).
+
+### RT-600 — A shared game takes its console's BIOS along, and only catalog BIOS
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** With `scph5501.bin` (any case) and `notes.txt` in `<roms>/PS/bios/` and two PS
+  games selected, the manifest carries one `bios` item, `scph5501.bin`, in the first game only;
+  `notes.txt` and BIOS names of other consoles never go. "What to Send" shows "BIOS Files ·
+  scph5501.bin · …" under the first game; unchecking it leaves the console's BIOS out, and
+  unchecking the first game hands them to the second. On the receiver the file lands in
+  `<roms>/PS/bios/scph5501.bin` with the sender's bytes and date, Preferences' BIOS status reads it
+  as present, the incoming dialog lists "BIOS" among the game's items and both result pages say
+  "BIOS files added: …" / "BIOS files sent: …". When no game went (or only some did) but the BIOS
+  did, the sender's "BIOS files sent: …" comes before "<device> didn't take any of them:" / "These
+  didn't go:", so that line stays right above the "Not Sent" list it introduces, and the receiver's
+  page leaves out "Nothing from <device> was added to your library.".
+- **Check:** `tests/test_share_manifest.py` (`BiosTests`), `tests/test_share_selection.py`
+  (`BiosSelectionTests`), `tests/test_share_placement.py` (`BiosTests`), `tests/test_share_receive.py`
+  (`BiosReceiveTests`), `tests/test_share_dialog.py` (`BiosSendTests`) and
+  `tests/test_share_offer.py` (`BiosOfferTests`); on two real machines the same flow is `MANUAL`.
+
+### RT-601 — A BIOS the receiver already has is not sent again; a different one is kept unless replaced
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** The same BIOS already in the receiver's BIOS folder is answered `exists_skip`
+  before any upload and is no conflict. A different file under the same name is a row on
+  "Review Conflicts" titled "<game> · BIOS <name>", with only "Skip" (the default) and "Replace";
+  skipping leaves the local file as it was, "Replace" puts the sender's bytes in its place. A name
+  the receiver's catalog does not list for that console is listed under "Skipped" as "Can't be
+  placed in your library". The BIOS go whether the game's ROM is new or already there.
+- **Check:** `tests/test_share_placement.py` (`BiosTests`), `tests/test_share_display.py`
+  (`BiosDisplayTests`), `tests/test_share_offer.py` (`BiosOfferTests`).
+
+### RT-602 — A peer that predates BIOS sharing still receives the game
+- **Area:** Share nearby (desktop)
+- **Mode:** AUTO-SUITE
+- **Preconditions:** None.
+- **Steps:**
+  1. Run the suite.
+- **Expected:** An item of a kind the receiver does not know is answered `skip` / `invalid_item`
+  and the rest of the game is placed; the shared `manifest_sample` (with its `bios` item)
+  validates with nothing rejected.
+- **Check:** `tests/test_share_manifest.py` (`ValidateTests`, `SharedVectorTests`),
+  `tests/test_share_placement.py` (`GameLevelTests.test_unsupported_console`).
 
 ## Android — Share nearby
 

@@ -35,6 +35,7 @@ if HAVE_DISPLAY:
     from openemux.core import artwork_sources
     from openemux.core.rom_actions import RomActionError
     from openemux.core.scraper import COVER_ART, LABEL_ART
+    from openemux.ui import icons
     from openemux.ui import window as window_module
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
@@ -177,6 +178,20 @@ class TheLayoutControlsTests(WindowCase):
         action.activate(GLib.Variant("s", other))
         self.assertEqual(self.win._view_mode, other)
 
+    def test_the_view_mode_menu_is_the_only_view_switch_in_the_window(self):
+        # Issue #675: the Cover / Cartridge / List segment beside the menu
+        # duplicated it and is gone. The menu button stays in the header.
+        self.assertFalse(hasattr(self.win, "view_mode_segment"))
+        switches = [
+            w for w in _walk(self.win)
+            if isinstance(w, Gtk.ToggleButton)
+            and w.get_action_name() == "win.view-mode"
+        ]
+        self.assertEqual(switches, [])
+        header = self.win.view_mode_button.get_ancestor(Adw.HeaderBar)
+        self.assertIsNotNone(header)
+        self.assertIn(self.win.search_button, list(_walk(header)))
+
     def test_changing_the_sort_order_stores_it_and_says_so(self):
         other = next(
             o for o in window_module.SORT_ORDERS if o != self.win._sort_order
@@ -305,12 +320,10 @@ class TheThemeButtonTests(WindowCase):
     def test_the_icon_offers_the_appearance_the_click_would_give(self):
         with mock.patch.object(window_module.theming, "is_dark", return_value=True):
             self.win._sync_theme_button()
-        self.assertEqual(self.win.theme_btn.get_icon_name(), "weather-clear-symbolic")
+        self.assertEqual(self.win.theme_btn.get_icon_name(), icons.SUN_ICON)
         with mock.patch.object(window_module.theming, "is_dark", return_value=False):
             self.win._sync_theme_button()
-        self.assertEqual(
-            self.win.theme_btn.get_icon_name(), "weather-clear-night-symbolic"
-        )
+        self.assertEqual(self.win.theme_btn.get_icon_name(), icons.MOON_ICON)
 
     def test_clicking_it_stores_the_opposite_appearance(self):
         with mock.patch.object(

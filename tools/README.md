@@ -80,7 +80,7 @@ system name (e.g. `Nintendo - Super Nintendo Entertainment System`).
 
 A searchable grid of the symbolic icons, rendered through the app's own theme
 and stylesheet, with the icon name under each one; clicking one copies its name
-to the clipboard. The icons the view-mode segmented control uses today are
+to the clipboard. The icons the view modes use today are
 marked, so a candidate can be compared against what is already in the UI.
 
 ```bash

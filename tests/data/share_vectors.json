@@ -112,12 +112,20 @@
             "size": 204800,
             "mtime": 1700000700,
             "sha256": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a"
+          },
+          {
+            "id": "g1i7",
+            "kind": "bios",
+            "name": "scph5501.bin",
+            "size": 524288,
+            "mtime": 1700000800,
+            "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b"
           }
         ]
       }
     ],
-    "total_size": 529866872,
-    "file_count": 6
+    "total_size": 530391160,
+    "file_count": 7
   },
-  "manifest_sample_description": "A manifest both apps' tests parse (docs/share-protocol.md, section 10): one multi-file game (a cue and two bins, the big bin without a sha256), a battery save, a save state and a cover. Hashes are placeholders; nothing here is transferred."
+  "manifest_sample_description": "A manifest both apps' tests parse (docs/share-protocol.md, section 10): one multi-file game (a cue and two bins, the big bin without a sha256), a battery save, a save state, a cover and a BIOS file of the console (the catalog name scph5501.bin). Hashes are placeholders; nothing here is transferred."
 }

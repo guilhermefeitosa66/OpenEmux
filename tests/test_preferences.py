@@ -347,6 +347,189 @@ class TheBiosPageTests(_PreferencesCase):
         self.assertEqual(self.prefs._bios_rows[0].get_title(), "bios.no_requirements")
 
 
+def _descendants(root):
+    stack = [root]
+    while stack:
+        widget = stack.pop()
+        yield widget
+        children = []
+        child = widget.get_first_child()
+        while child is not None:
+            children.append(child)
+            child = child.get_next_sibling()
+        stack.extend(reversed(children))  # depth first, in on-screen order
+
+
+@needs_display
+class BiosImportTests(_PreferencesCase):
+    """Issue 667: one Import button per console, a summary, the rows refreshed."""
+
+    def setUp(self):
+        super().setUp()
+        self.dialogs = []
+        patcher = mock.patch.object(prefs_module.Gtk, "FileDialog", self._dialog_factory)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _dialog_factory(self):
+        dialog = mock.Mock()
+        self.dialogs.append(dialog)
+        return dialog
+
+    def expander(self, console_id):
+        return next(r for r in self.prefs._bios_rows if r.get_title().startswith(f"{console_id} "))
+
+    def chosen(self, paths):
+        dialog = mock.Mock()
+        files = mock.Mock()
+        files.get_n_items.return_value = len(paths)
+        items = []
+        for path in paths:
+            item = mock.Mock()
+            item.get_path.return_value = path
+            items.append(item)
+        files.get_item.side_effect = lambda i: items[i]
+        dialog.open_multiple_finish.return_value = files
+        return dialog
+
+    def summary(self, imported=(), rejected=()):
+        return {"console": "PS", "imported": list(imported), "rejected": list(rejected)}
+
+    def rows_of(self, dialog):
+        return [w for w in _descendants(dialog.get_extra_child()) if isinstance(w, Adw.ActionRow)]
+
+    def section_labels(self, dialog):
+        return [
+            w.get_label() for w in _descendants(dialog.get_extra_child())
+            if isinstance(w, Gtk.Label) and w.has_css_class("heading")
+        ]
+
+    def test_the_header_keeps_only_the_reload_button(self):
+        suffix = self.prefs._bios_group.get_header_suffix()
+        self.assertIs(suffix, self.prefs._bios_reload_btn)
+        self.assertEqual(suffix.get_icon_name(), "view-refresh-symbolic")
+
+    def test_every_console_row_has_an_import_button(self):
+        consoles = {r.get_title().split(" ")[0] for r in self.prefs._bios_rows}
+        self.assertEqual(set(self.prefs._bios_import_buttons), consoles)
+        button = self.prefs._bios_import_buttons["PS"]
+        self.assertEqual(button.get_label(), "bios.import.button")
+        self.assertIn(button, list(_descendants(self.expander("PS"))))
+
+    def test_import_opens_a_multi_file_chooser_for_that_console(self):
+        self.prefs._bios_import_buttons["LYNX"].emit("clicked")
+        dialog = self.dialogs[-1]
+        dialog.set_title.assert_called_once_with("bios.import.dialog_title")
+        args = dialog.open_multiple.call_args.args
+        self.assertEqual(args[2], self.prefs._on_bios_files_chosen)
+        self.assertEqual(args[3], "LYNX")
+
+    def test_show_folder_is_the_last_row_of_each_console_and_opens_it(self):
+        rows = [
+            w for w in _descendants(self.expander("PS"))
+            if isinstance(w, Adw.ActionRow) and w.get_title() == "bios.show_folder"
+        ]
+        self.assertEqual(len(rows), 1)
+        rows[0].emit("activated")
+        self.assertEqual(self.called("_open_console_bios_folder"), [("_open_console_bios_folder", ("PS",), {})])
+
+    def test_a_dismissed_chooser_does_nothing(self):
+        dialog = mock.Mock()
+        dialog.open_multiple_finish.side_effect = GLib.Error("dismissed")
+        with mock.patch.object(prefs_module, "import_bios_files_async") as run:
+            self.prefs._on_bios_files_chosen(dialog, None, "PS")
+        run.assert_not_called()
+
+    def test_no_files_or_no_local_paths_do_nothing(self):
+        dialog = mock.Mock()
+        dialog.open_multiple_finish.return_value = None
+        with mock.patch.object(prefs_module, "import_bios_files_async") as run:
+            self.prefs._on_bios_files_chosen(dialog, None, "PS")
+            self.prefs._on_bios_files_chosen(self.chosen([None]), None, "PS")
+        run.assert_not_called()
+
+    def test_chosen_files_import_with_the_buttons_held_until_done(self):
+        with mock.patch.object(prefs_module, "import_bios_files_async") as run, \
+                mock.patch.object(prefs_module.GLib, "idle_add") as idle:
+            self.prefs._on_bios_files_chosen(self.chosen(["/x/scph5501.bin"]), None, "PS")
+            paths, config, console, on_done = run.call_args.args
+            self.assertEqual((paths, config, console), (["/x/scph5501.bin"], self.config, "PS"))
+            self.assertFalse(self.prefs._bios_import_buttons["PS"].get_sensitive())
+            # A reload meanwhile builds the new buttons held too.
+            self.prefs._reload_bios()
+            self.assertFalse(self.prefs._bios_import_buttons["LYNX"].get_sensitive())
+            on_done("summary")
+        idle.assert_called_once_with(self.prefs._on_bios_import_done, "summary")
+
+    def test_the_import_refreshes_the_rows_and_presents_the_summary(self):
+        bios_dir = self.config.get_console_bios_dir("LYNX")
+        self.assertTrue(self.expander("LYNX").get_subtitle().startswith("0/"))
+        self.prefs._set_bios_import_running(True)
+        bios_dir.mkdir(parents=True, exist_ok=True)
+        (bios_dir / "lynxboot.img").write_bytes(b"x")
+        built = mock.Mock()
+        with mock.patch.object(self.prefs, "_build_bios_import_summary", return_value=built), \
+                mock.patch.object(self.prefs, "get_root", return_value=mock.Mock()):
+            result = self.prefs._on_bios_import_done(self.summary())
+        self.assertEqual(result, GLib.SOURCE_REMOVE)
+        self.assertTrue(self.expander("LYNX").get_subtitle().startswith("1/"))
+        self.assertTrue(self.prefs._bios_import_buttons["LYNX"].get_sensitive())
+        built.present.assert_called_once_with(self.prefs)
+
+    def test_a_summary_after_settings_closed_goes_to_the_main_window(self):
+        built = mock.Mock()
+        with mock.patch.object(self.prefs, "_build_bios_import_summary", return_value=built), \
+                mock.patch.object(self.prefs, "get_root", return_value=None):
+            self.prefs._on_bios_import_done(self.summary())
+        built.present.assert_called_once_with(self.prefs.win)
+
+    def test_headings_follow_the_outcome(self):
+        heading = self.prefs._bios_import_heading
+        self.assertEqual(heading(1, 1), "bios.import.heading_one")
+        self.assertEqual(heading(2, 2), "bios.import.heading_all")
+        self.assertEqual(heading(1, 3), "bios.import.heading_some")
+        self.assertEqual(heading(0, 2), "bios.import.heading_none")
+
+    def test_all_imported_has_no_body_and_no_rejected_section(self):
+        dialog = self.prefs._build_bios_import_summary(self.summary(imported=[
+            {"source": "/x/a", "name": "scph5501.bin", "replaced": False},
+            {"source": "/x/b", "name": "scph1001.bin", "replaced": True},
+        ]))
+        self.assertEqual(dialog.get_body(), "")
+        self.assertEqual(self.section_labels(dialog), ["bios.import.section_imported"])
+        rows = self.rows_of(dialog)
+        self.assertEqual([r.get_title() for r in rows], ["scph5501.bin", "scph1001.bin"])
+        self.assertIn(rows[0].get_subtitle(), (None, ""))
+        self.assertEqual(rows[1].get_subtitle(), "bios.import.replaced")
+        self.assertEqual(dialog.get_close_response(), "ok")
+
+    def test_rejections_carry_their_reason_and_the_expected_names(self):
+        dialog = self.prefs._build_bios_import_summary(self.summary(rejected=[
+            {"source": "/x/1", "name": "readme.txt", "reason": "unknown", "consoles": [], "error": None},
+            {"source": "/x/2", "name": "lynxboot.img", "reason": "other_console",
+             "consoles": ["LYNX"], "error": None},
+            {"source": "/x/3", "name": "scph5501.bin", "reason": "error", "consoles": [],
+             "error": "Permission denied"},
+        ]))
+        self.assertEqual(dialog.get_heading(), "bios.import.heading_none")
+        self.assertEqual(dialog.get_body(), "bios.import.body")
+        self.assertEqual(self.section_labels(dialog), ["bios.import.section_rejected"])
+        self.assertEqual(
+            [r.get_subtitle() for r in self.rows_of(dialog)],
+            ["bios.import.reason_unknown", "bios.import.reason_other_console",
+             "bios.import.reason_error"],
+        )
+
+    def test_the_reasons_are_filled_in_with_real_text(self):
+        self.prefs.t = lambda key, **kw: f"{key}:{sorted(kw.items())}"
+        reason = self.prefs._bios_rejection_reason
+        self.assertIn("Permission denied", reason(
+            {"reason": "error", "error": "Permission denied"}, "PS"))
+        self.assertIn("Atari Lynx", reason(
+            {"reason": "other_console", "consoles": ["LYNX"]}, "PS"))
+        self.assertIn("PlayStation", reason({"reason": "unknown"}, "PS"))
+
+
 def _console_box(root):
     """The box the console factory built, wherever GTK parented it."""
     stack = [root]

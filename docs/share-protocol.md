@@ -378,7 +378,7 @@ builds on these rules.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string, required | Unique within the manifest; used in `/file`. |
-| `kind` | string, required | `rom`, `battery_save`, `state`, `cover` or `label`. An unknown kind MUST be answered `skip`. |
+| `kind` | string, required | `rom`, `battery_save`, `state`, `cover`, `label` or `bios`. An unknown kind MUST be answered `skip`. |
 | `name` | string, required | A **bare file name**, at most 255 bytes of UTF-8. |
 | `size` | integer, required | Bytes, non-negative. |
 | `mtime` | number, required | Unix seconds. |
@@ -400,27 +400,50 @@ builds on these rules.
   or WebP.
 - Unknown fields MUST be ignored.
 - `tests/data/share_vectors.json` holds a `manifest_sample` (one multi-file
-  game, a battery save, a state and a cover) that both apps' tests parse.
+  game, a battery save, a state, a cover and a BIOS file) that both apps'
+  tests parse.
+
+**BIOS files.** An item of kind `bios` is a BIOS file of the game's console
+(added to protocol v1 without a version bump: a peer that predates it answers the
+unknown kind `skip`, and the game itself still goes).
+
+- A BIOS belongs to a console, not a game: the sender puts each console's
+  BIOS items in the **first game of that console** in the manifest only, never
+  once per game.
+- The sender offers only the files its BIOS catalog lists for that console
+  that it actually has -- never anything else from its BIOS folder -- and
+  `name` is the **catalog's spelling** of the file name (the one a core opens),
+  whatever the case on the sender's disk. Each item carries a `sha256`.
+- The receiver places a BIOS where its own platform looks for that console's
+  BIOS (the desktop app: `<roms>/<console>/bios/`), under its own catalog's
+  spelling, and answers `skip` / `invalid_item` for a name its catalog does
+  not list for that console (case-insensitive match).
+- The same content already there (size and `sha256`) is answered `skip` /
+  `exists_skip` before any upload, so only the BIOS the receiver lacks travel.
+  A different file under that name is a conflict: the receiver keeps its own
+  unless its user chooses to replace it. A BIOS is placed whatever happens to
+  the game's ROM (new, already there, kept beside), unless the user left the
+  game or the item out.
 
 **Console ids:**
 
 | Id | Console | Id | Console |
 | --- | --- | --- | --- |
-| `A2600` | Atari 2600 | `MCD` | Sega CD / Mega CD |
-| `A5200` | Atari 5200 | `MD` | Sega Genesis / Mega Drive |
+| `A2600` | Atari 2600 | `MCD` | Mega CD |
+| `A5200` | Atari 5200 | `MD` | Mega Drive |
 | `A7800` | Atari 7800 | `SMS` | Sega Master System |
 | `LYNX` | Atari Lynx | `SATURN` | Sega Saturn |
 | `CV` | ColecoVision | `PS` | Sony PlayStation |
 | `FDS` | Famicom Disk System | `PSP` | Sony PSP |
-| `FC` | Nintendo (NES) / Famicom | `SFC` | Super Nintendo (SNES) |
-| `GB` | Game Boy | `PCE` | TurboGrafx-16 / PC Engine / SuperGrafx |
-| `GBC` | Game Boy Color | `PCECD` | TurboGrafx-CD / PC Engine CD |
+| `FC` | Nintendo (NES) | `SFC` | Super Nintendo |
+| `GB` | Game Boy | `PCE` | PC Engine |
+| `GBC` | Game Boy Color | `PCECD` | PC Engine CD |
 | `GBA` | Game Boy Advance | `VECTREX` | Vectrex |
 | `GG` | Game Gear | `VB` | Virtual Boy |
 | `INTV` | Intellivision | `WS` | WonderSwan |
 | `NGP` | NeoGeo Pocket | `SG1000` | SG-1000 |
 | `N64` | Nintendo 64 | `S32X` | Sega 32X |
-| `NDS` | Nintendo DS | `O2` | Odyssey2 / Videopac+ |
+| `NDS` | Nintendo DS | `O2` | Odyssey² |
 | `GC` | Nintendo GameCube | | |
 
 A receiver that does not support a console answers its items

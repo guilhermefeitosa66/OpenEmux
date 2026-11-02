@@ -16,9 +16,9 @@ The SVGs sit in ``hicolor/scalable/actions/`` rather than loose in the
 directory. GTK 4.14 (Ubuntu 24.04's, the oldest this runs on) never marks a
 loose ("unthemed") icon as symbolic, so it drew those in their literal dark
 fill instead of the theme's foreground: invisible in the dark theme.
-``openemux-share-symbolic``, the one name no theme ships, was where it showed
-(issue #626). ``hicolor/index.theme`` stands in for the host's on a system with
-no hicolor theme installed.
+``openemux-share-symbolic``, the first name of our own that no theme ships, was
+where it showed (issue #626). ``hicolor/index.theme`` stands in for the host's
+on a system with no hicolor theme installed.
 """
 
 import logging
@@ -30,6 +30,13 @@ logger = logging.getLogger(__name__)
 #: name of our own rather than a themed "send to" or "share" name, which icon
 #: themes draw as anything from an arrow to a paper plane (issue #611).
 SHARE_ICON = "openemux-share-symbolic"
+
+#: The header's light/dark toggle: a sun while the app is dark, a moon while it
+#: is light. Names of our own for the same reason: Numix and Papirus draw the
+#: themed "weather clear" sun as a disc whose rays vanish at 16px, and the host
+#: theme wins over the bundled copy whenever it ships the name (issue #676).
+SUN_ICON = "openemux-sun-symbolic"
+MOON_ICON = "openemux-moon-symbolic"
 
 #: The icon search path: a base directory holding the ``hicolor`` theme.
 ICON_SEARCH_DIR = Path(__file__).resolve().parent / "assets" / "icons" / "symbolic"

@@ -9,6 +9,7 @@ that fallback to silently not happen.
 checks the registration.
 """
 
+import itertools
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -141,35 +142,39 @@ class AgainstRealGtkTests(unittest.TestCase):
 
         theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
         self.assertIn(str(icons.ICON_SEARCH_DIR), list(theme.get_search_path() or []))
-        self.assertTrue(theme.has_icon(icons.SHARE_ICON))
+        for name in (icons.SHARE_ICON, icons.SUN_ICON, icons.MOON_ICON):
+            with self.subTest(name=name):
+                self.assertTrue(theme.has_icon(name))
 
-    def test_the_share_glyph_is_recolored_with_the_theme(self):
-        # Issue #626: on GTK 4.14 the glyph resolved, but as a regular icon,
-        # so it kept its dark fill on the dark theme's dark header bar.
+    def test_our_own_glyphs_are_recolored_with_the_theme(self):
+        # Issue #626: on GTK 4.14 the share glyph resolved, but as a regular
+        # icon, so it kept its dark fill on the dark theme's dark header bar.
+        # The theme toggle's sun and moon (issue #676) sit on that same bar.
         import gi
 
         gi.require_version("Gtk", "4.0")
         from gi.repository import Gtk
 
-        for search_path in (
-            # As registered: after the host's own icon directories.
-            None,
-            # A host with no hicolor theme: the bundled index.theme is read.
-            [str(icons.ICON_SEARCH_DIR)],
+        for name, search_path in itertools.product(
+            (icons.SHARE_ICON, icons.SUN_ICON, icons.MOON_ICON),
+            (
+                # As registered: after the host's own icon directories.
+                None,
+                # A host with no hicolor theme: the bundled index.theme is read.
+                [str(icons.ICON_SEARCH_DIR)],
+            ),
         ):
-            with self.subTest(search_path=search_path):
+            with self.subTest(name=name, search_path=search_path):
                 theme = Gtk.IconTheme.new()
                 if search_path is None:
                     theme.add_search_path(str(icons.ICON_SEARCH_DIR))
                 else:
                     theme.set_search_path(search_path)
-                paintable = theme.lookup_icon(
-                    icons.SHARE_ICON, None, 16, 1, Gtk.TextDirection.LTR, 0
-                )
+                paintable = theme.lookup_icon(name, None, 16, 1, Gtk.TextDirection.LTR, 0)
                 # Path(): GTK hands back backslashes on Windows.
                 self.assertEqual(
                     Path(paintable.get_file().get_path()),
-                    icons.SYMBOLIC_ICON_DIR / f"{icons.SHARE_ICON}.svg",
+                    icons.SYMBOLIC_ICON_DIR / f"{name}.svg",
                 )
                 self.assertTrue(paintable.is_symbolic())
 

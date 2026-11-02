@@ -62,10 +62,18 @@ See [`symbolic/LICENSE`](symbolic/LICENSE): LGPL-3 or CC-BY-SA-3.0 US, at your
 option. Bundled so the UI renders its symbolic icons on hosts whose icon theme
 does not provide these names.
 
-The one exception is
-`symbolic/hicolor/scalable/actions/openemux-share-symbolic.svg`, Share nearby's
-three-node glyph (issue #611): it is OpenEmux's own drawing, the same one the
-Android app uses, and falls under the MIT terms of the section below.
+The exceptions are OpenEmux's own drawings, which fall under the MIT terms of
+the section below:
+
+- `symbolic/hicolor/scalable/actions/openemux-share-symbolic.svg`, Share
+  nearby's three-node glyph (issue #611), the same one the Android app uses;
+- `symbolic/hicolor/scalable/actions/openemux-sun-symbolic.svg`, the sun on
+  the header's light/dark toggle (issue #676).
+
+`symbolic/hicolor/scalable/actions/openemux-moon-symbolic.svg`, the toggle's
+moon, is not an exception: it is Adwaita's `weather-clear-night-symbolic`,
+unchanged, under a name no icon theme ships, and stays under the Adwaita terms
+above.
 
 ## Everything else under `ui/assets/`
 

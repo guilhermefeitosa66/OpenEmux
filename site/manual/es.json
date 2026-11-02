@@ -90,7 +90,7 @@
   "window.li1": "<span class=\"ui\">Todos</span>: todos los juegos, agrupados por consola.",
   "window.li2": "<span class=\"ui\">Favoritos</span>: los juegos que marcaste con la estrella. La fila solo aparece cuando hay\n              algo marcado. Consulta <a href=\"#favorites\">Favoritos</a>.",
   "window.li3": "Tus playlists, si creaste alguna. Aquí, <span class=\"ui\">Couch co-op</span>. Consulta\n              <a href=\"#playlists\">Playlists</a>.",
-  "window.li4": "Una fila por cada consola que tiene juegos, con su id corto y su nombre, como\n              <span class=\"ui\">SFC - Super Nintendo (SNES)</span>.",
+  "window.li4": "Una fila por cada consola que tiene juegos, con su id corto y su nombre, como\n              <span class=\"ui\">SFC - Super Nintendo</span>.",
   "window.p2": "Las filas de consolas y playlists tienen un menú: haz clic derecho sobre ellas, o pasa el ratón y haz clic en el botón\n            <span class=\"ui\">⋮</span>. Las filas de consolas también se pueden arrastrar para cambiar su orden.",
   "window.h42": "Los botones de la cabecera",
   "window.alt3": "La barra de cabecera, con los botones de ambos lados enmarcados",

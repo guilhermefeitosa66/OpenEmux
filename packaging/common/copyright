@@ -28,10 +28,11 @@ Comment: Vendored so the UI renders its symbolic icons on hosts whose icon
 
 Files: src/openemux/ui/assets/icons/symbolic/hicolor/index.theme
  src/openemux/ui/assets/icons/symbolic/hicolor/scalable/actions/openemux-share-symbolic.svg
+ src/openemux/ui/assets/icons/symbolic/hicolor/scalable/actions/openemux-sun-symbolic.svg
 Copyright: 2024-2026 Guilherme Feitoza de Sousa Lima
 License: MIT
-Comment: Share nearby's glyph, OpenEmux's own drawing rather than an Adwaita
- icon (issue #611).
+Comment: Share nearby's glyph (issue #611) and the theme toggle's sun
+ (issue #676), OpenEmux's own drawings rather than Adwaita icons.
  The index.theme beside the icons (issue #626) is OpenEmux's too.
 
 Files: vendors/RetroArch-Linux-x86_64/*
