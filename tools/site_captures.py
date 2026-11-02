@@ -133,6 +133,7 @@ def capture(out, shots):
         note = "" if size == expected else f"  (expected {expected}: retake it)"
         print(f"{name}.png  {size}{note}")
 
+
 if __name__ == "__main__":  # pragma: no cover - a devbox tool, driven by hand
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
