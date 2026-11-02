@@ -951,6 +951,7 @@
       gap: 6px;
       min-height: 32px;
       max-width: 88px;
+      overflow-wrap: anywhere;
       padding: 5px 10px;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, .14);
@@ -2577,8 +2578,24 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       });
 
       // ---- download buttons: the asset of the latest release, by name ----
+      // Asked once per visit: the answer is kept for the session, so moving
+      // between the language pages does not spend the API's hourly quota.
       var buttons = section.querySelectorAll("[data-asset]");
-      if (!buttons.length || !window.fetch) return;
+      if (!buttons.length) return;
+      var KEY = "openemux-latest-assets";
+
+      function point(assets) {
+        [].forEach.call(buttons, function (a) {
+          var pattern = new RegExp(a.getAttribute("data-asset"));
+          var hit = assets.filter(function (x) { return x && pattern.test(x.name); })[0];
+          if (hit && /^https:\/\/github\.com\//.test(hit.url)) a.href = hit.url;
+        });
+      }
+
+      var cached = null;
+      try { cached = JSON.parse(sessionStorage.getItem(KEY)); } catch (e) { }
+      if (Array.isArray(cached)) return point(cached);
+      if (!window.fetch) return;
       var abort = window.AbortController ? new AbortController() : null;
       var timeout = setTimeout(function () { if (abort) abort.abort(); }, 5000);
       fetch("https://api.github.com/repos/guilhermefeitosa66/OpenEmux/releases/latest",
@@ -2586,14 +2603,13 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (release) {
           clearTimeout(timeout);
-          var assets = (release && release.assets) || [];
-          [].forEach.call(buttons, function (a) {
-            var pattern = new RegExp(a.getAttribute("data-asset"));
-            var hit = assets.filter(function (x) { return pattern.test(x.name); })[0];
-            if (hit && /^https:\/\/github\.com\//.test(hit.browser_download_url)) {
-              a.href = hit.browser_download_url;
-            }
+          var assets = ((release && release.assets) || []).map(function (x) {
+            return { name: x.name, url: x.browser_download_url };
           });
+          if (assets.length) {
+            try { sessionStorage.setItem(KEY, JSON.stringify(assets)); } catch (e) { }
+          }
+          point(assets);
         })
         .catch(function () { clearTimeout(timeout); });
     })();

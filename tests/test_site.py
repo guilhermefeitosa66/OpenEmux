@@ -295,7 +295,7 @@ class TheInstallSectionTests(unittest.TestCase):
                         "sha256sum -c SHA256SUMS --ignore-missing",
                         "Get-FileHash .\\OpenEmux-*-setup.exe -Algorithm SHA256"):
             with self.subTest(command=command):
-                self.assertIn(f"{command}", section)
+                self.assertIn(command, section)
         self.assertGreaterEqual(section.count("<pre><code>"), 8)
 
     def test_checksum_verification_is_folded_away(self):
