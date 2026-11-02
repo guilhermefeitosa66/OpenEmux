@@ -108,7 +108,7 @@ class ThePublishedPagesTests(unittest.TestCase):
 
     def test_a_translated_page_reaches_the_shared_assets(self):
         text = build_site.render("ja")
-        self.assertIn('src="../assets/logo.png"', text)
+        self.assertIn('src="../assets/logo-128.png"', text)
         self.assertIn('src="../lang.js"', text)
         self.assertNotIn('src="assets/', text)
 
@@ -186,9 +186,196 @@ class TheNarrativeTests(unittest.TestCase):
                 self.assertNotIn("autoplay", videos[0])
                 self.assertIn('preload="none"', videos[0])
                 self.assertNotRegex(videos[0], r'\ssrc=|\sposter=')
-                hero = re.search(r'<section class="hero" id="top">(.*?)</section>', text, re.S).group(1)
+                hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', text, re.S).group(1)
                 self.assertIn('id="watchVideo" href="', hero)
                 self.assertIn("assets/openemux-promo.mp4", hero)
+
+
+def _png_size(path):
+    """A PNG's (width, height), from its IHDR chunk."""
+    import struct
+
+    with open(path, "rb") as f:
+        head = f.read(24)
+    assert head[:8] == b"\x89PNG\r\n\x1a\n", path
+    return struct.unpack(">II", head[16:24])
+
+
+def _css(text):
+    return re.search(r"<style>(.*?)</style>", text, re.S).group(1)
+
+
+def _blocks(css, opener):
+    """The bodies of every ``opener { ... }`` block in ``css`` (braces balanced)."""
+    out, start = [], 0
+    while True:
+        i = css.find(opener, start)
+        if i < 0:
+            return out
+        j = css.index("{", i)
+        depth, k = 1, j + 1
+        while depth:
+            depth += {"{": 1, "}": -1}.get(css[k], 0)
+            k += 1
+        out.append(css[j + 1:k - 1])
+        start = k
+
+
+class TheOpeningStageTests(unittest.TestCase):
+    """The opening as a scroll stage: the desktop, then the phone (issue 686)."""
+
+    FIRST_SCREEN_BUDGET = 600 * 1024
+    PAGE_BUDGET = 6 * 1024 * 1024
+
+    def setUp(self):
+        self.en = (REPO / "docs" / "index.html").read_text(encoding="utf-8")
+        self.css = _css(self.en)
+
+    def test_the_opening_is_a_stage_with_the_desktop_and_the_phone(self):
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            hero = re.search(r'<section class="hero" id="top" data-stage>(.*?)</section>', text, re.S)
+            with self.subTest(locale=locale):
+                self.assertIsNotNone(hero)
+                hero = hero.group(1)
+                self.assertIn('class="stage-sticky"', hero)
+                layers = re.findall(r'<div class="(device-[a-z]+)" data-stage-layer>\s*<picture>(.*?)</picture>',
+                                    hero, re.S)
+                self.assertEqual([name for name, _ in layers], ["device-desktop", "device-phone"])
+                self.assertIn("assets/desktop/grid-sfc.png", layers[0][1])
+                self.assertIn("assets/android/library-snes.png", layers[1][1])
+                for _, pic in layers:
+                    self.assertIn('fetchpriority="high"', pic)
+
+    def test_the_frames_are_css_only(self):
+        # The desktop capture is the app's own window (header bar and window
+        # buttons included): no second, fake title bar around it.
+        hero = re.search(r'<section class="hero".*?</section>', self.en, re.S).group(0)
+        self.assertNotIn("window-bar", hero)
+        self.assertNotIn("window-bar", self.css)
+
+    def test_the_phone_screen_is_centred_with_concentric_corners(self):
+        phone = _blocks(self.css, ".device-phone {")[0]
+        self.assertIn("padding: var(--bezel)", phone)
+        self.assertIn("border-radius: var(--phone-r)", phone)
+        self.assertIn("border: 1px solid", phone)
+        screen = _blocks(self.css, ".device-phone img {")[-1]
+        self.assertIn("border-radius: calc(var(--phone-r) - var(--bezel) - 1px)", screen)
+
+    def test_only_transform_and_opacity_animate(self):
+        frames = re.findall(r"@keyframes (stage-[a-z-]+)", self.css)
+        self.assertEqual(sorted(frames), ["stage-desktop-in", "stage-phone-in"])
+        for name in frames:
+            body = _blocks(self.css, f"@keyframes {name}")[0]
+            props = set(re.findall(r"([a-z-]+)\s*:", body))
+            with self.subTest(keyframes=name):
+                self.assertLessEqual(props, {"transform", "opacity", "animation-timing-function"})
+
+    def test_motion_only_with_a_driver_and_never_under_reduced_motion(self):
+        # Without a driver the CSS is the final composition: the tall height
+        # and the sticky box appear only inside the motion query, under the
+        # CSS driver's @supports or the script's .stage-js.
+        outside = self.css
+        for block in _blocks(self.css, "@media (prefers-reduced-motion: no-preference)") + _blocks(
+                self.css, "@media (max-width: 899px) and (prefers-reduced-motion: no-preference)"):
+            outside = outside.replace(block, "")
+        self.assertNotIn("var(--stage-len", outside)
+        self.assertNotIn("position: sticky;\n      top: var(--nav-h)", outside)
+        motion = _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (min-height: 560px)")[0]
+        self.assertIn("@supports (animation-timeline: view())", motion)
+        self.assertIn(".stage-js [data-stage-layer]", motion)
+        self.assertIn("animation-play-state: paused", motion)
+        self.assertIn("calc(var(--p, 0) * -1s)", motion)
+        self.assertIn('"(prefers-reduced-motion: no-preference) and (min-height: 560px)"', self.en)
+
+    def test_scrolling_is_never_taken_over(self):
+        self.assertNotIn("scroll-snap", self.css)
+        engine = re.search(r"<!-- Scroll stages: the fallback driver.*?</script>", self.en, re.S).group(0)
+        for needle in ("wheel", "touchmove", "touchstart", "keydown", "preventDefault", "scrollTo(",
+                       "scrollBy(", "scrollIntoView"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, engine)
+        self.assertIn('addEventListener("scroll", function () { if (motion.matches) request(); }, '
+                      '{ passive: true })', engine)
+
+    def test_the_first_screen_image_is_preloaded(self):
+        head = self.en.split("</head>")[0]
+        links = re.findall(r'<link rel="preload" as="image" type="image/avif" imagesrcset="([^"]*)" '
+                           r'imagesizes="([^"]*)" fetchpriority="high" />', head)
+        self.assertEqual(len(links), 1)
+        source = re.search(r'<source type="image/avif" srcset="([^"]*)" sizes="([^"]*)" />', self.en)
+        self.assertEqual(links[0], source.groups())
+        self.assertIn("desktop/grid-sfc-", links[0][0])
+
+    def test_the_link_preview_is_the_opening(self):
+        self.assertIn('<meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/'
+                      'assets/og-opening.png" />', self.en)
+        self.assertEqual(_png_size(REPO / "docs" / "assets" / "og-opening.png"), (1200, 630))
+        self.assertIn('<meta property="og:image:width" content="1200" />', self.en)
+
+    def test_the_header_logo_is_the_small_one(self):
+        self.assertIn('href="assets/logo-128.png"', self.en)
+        self.assertIn('<img src="assets/logo-128.png" width="30" height="30"', self.en)
+        self.assertNotIn('"assets/logo.png"', self.en)
+        self.assertEqual(_png_size(REPO / "docs" / "assets" / "logo-128.png"), (128, 128))
+
+    def _weight(self, first_screen):
+        docs = REPO / "docs"
+        manifest = build_site.load_manifest()
+        text = self.en
+        total = len(text.encode("utf-8")) + (docs / "lang.js").stat().st_size
+        pictures = re.findall(r"<picture><source.*?</picture>", text, re.S)
+        if first_screen:
+            pictures = [p for p in pictures if 'fetchpriority="high"' in p]
+            plain = ["assets/logo-128.png"]
+        else:
+            # Every <img> outside a <picture>, the video's poster excluded.
+            rest = re.sub(r"<picture><source.*?</picture>", "", text, flags=re.S)
+            plain = sorted(set(re.findall(r'<img[^>]*\ssrc="(assets/[^"]+)"', rest)))
+            total += sum(f.stat().st_size for f in (docs / "assets" / "carts").glob("*.webp"))
+        total += sum((docs / p).stat().st_size for p in plain)
+        for pic in pictures:
+            source = re.search(r'<img src="assets/([^"]+)"', pic).group(1)
+            largest = max((v for v in manifest[source]["variants"] if v["file"].endswith(".avif")),
+                          key=lambda v: v["width"])
+            total += (docs / "assets" / largest["file"]).stat().st_size
+        return total
+
+    def test_the_first_screen_fits_its_budget(self):
+        self.assertLessEqual(self._weight(first_screen=True), self.FIRST_SCREEN_BUDGET)
+
+    def test_the_whole_page_fits_its_budget(self):
+        self.assertLessEqual(self._weight(first_screen=False), self.PAGE_BUDGET)
+
+    def test_the_visitors_system_comes_first_among_the_downloads(self):
+        cta = re.search(r'<div class="cta" id="downloads">(.*?)</div>', self.en, re.S).group(1)
+        self.assertEqual(re.findall(r'data-os="([a-z]+)"', cta), ["linux", "windows", "android"])
+        self.assertIn("/Android/i.test(ua)", self.en)
+        self.assertIn("box.insertBefore(mine, box.firstChild)", self.en)
+
+
+@unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is a dev-only dependency")
+class TheSiteArtTests(unittest.TestCase):
+    """tools/site_art.py: the link preview and the small logo (issue 686)."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("site_art", REPO / "tools" / "site_art.py")
+        self.art = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.art)
+
+    def test_both_images_at_their_sizes(self):
+        with tempfile.TemporaryDirectory() as out:
+            with redirect_stdout(io.StringIO()) as printed:
+                self.assertEqual(self.art.main(["--out", out]), 0)
+            self.assertIn("og-opening.png", printed.getvalue())
+            self.assertEqual(_png_size(Path(out) / "og-opening.png"), (1200, 630))
+            self.assertEqual(_png_size(Path(out) / "logo-128.png"), (128, 128))
+
+    def test_without_pillow_it_says_what_to_install(self):
+        with mock.patch.dict("sys.modules", {"PIL": None}):
+            with self.assertRaises(SystemExit) as raised:
+                self.art.build(out=tempfile.gettempdir())
+        self.assertIn("Pillow", str(raised.exception))
 
 
 def _app_strings(locale):
@@ -332,6 +519,25 @@ class TheImagePipelineTests(unittest.TestCase):
                       'loading="lazy" decoding="async" data-full="../assets/shelf/a-1200.webp" /></picture>', out)
         self.assertNotIn("data-picture", out)
         self.assertNotIn("data-sizes", out)
+
+    def test_the_first_eager_picture_is_preloaded_from_the_head(self):
+        manifest = {"desktop/b.png": _entry(2640, 1756, "desktop/b", (640, 2640)),
+                    "shelf/a.png": _entry()}
+        page = ('<head>\n</head><body><img data-picture src="assets/shelf/a.png">'
+                '<img data-picture="eager" data-sizes="50vw" src="assets/desktop/b.png">'
+                '<img data-picture="eager" src="assets/shelf/a.png"></body>')
+        out = build_site.apply_pictures(page, "", manifest)
+        head = out.split("</head>")[0]
+        self.assertEqual(head.count('rel="preload"'), 1)
+        self.assertIn('imagesrcset="assets/desktop/b-640.avif 640w, assets/desktop/b-2640.avif 2640w" '
+                      'imagesizes="50vw" fetchpriority="high"', head)
+
+    def test_no_eager_picture_or_no_head_means_no_preload(self):
+        manifest = {"shelf/a.png": _entry()}
+        lazy = build_site.apply_pictures('<head></head><img data-picture src="assets/shelf/a.png">', "", manifest)
+        self.assertNotIn("preload", lazy)
+        headless = build_site.apply_pictures('<img data-picture="eager" src="assets/shelf/a.png">', "", manifest)
+        self.assertNotIn("preload", headless)
 
     def test_an_eager_image_is_fetched_first_and_sizes_default_to_the_viewport(self):
         manifest = {"desktop/b.png": _entry(2640, 1756, "desktop/b", (640, 2640))}
