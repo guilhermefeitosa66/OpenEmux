@@ -28,12 +28,14 @@ from openemux.core.share.protocol import (
 )
 from openemux.core.share.selection import (
     BATTERY,
+    BIOS,
     COVER,
     DETAILS,
     GAME,
     LABEL,
     STATES,
     apply_selection,
+    group_key,
     inventory,
     kept_roms,
     summarize,
@@ -63,6 +65,7 @@ _GROUP_TITLES = {
     STATES: "share.items.states",
     COVER: "share.items.cover",
     LABEL: "share.items.label",
+    BIOS: "share.items.bios",
     DETAILS: "share.items.details",
 }
 _ADDRESS_ERRORS = {
@@ -322,6 +325,7 @@ class ShareDialog(Adw.Dialog):
         games, excluded = inventory(self.built)
         group = Adw.PreferencesGroup()
         self._game_checks = {}
+        self._group_pairs = {}
         for game in games:
             group.add(self._game_row(game))
         for entry in excluded:
@@ -371,12 +375,13 @@ class ShareDialog(Adw.Dialog):
         parent.connect("toggled", lambda b, k=key: self._on_game_toggled(k, b))
         row.add_prefix(parent)
         children = {}
+        self._group_pairs[key] = {category: group_key(game, category) for category in game["groups"]}
         for category, group in game["groups"].items():
             child = Adw.ActionRow(title=t(_GROUP_TITLES[category]), subtitle=self._group_detail(category, group))
             child.set_use_markup(False)
             check = Gtk.CheckButton()
             check.set_valign(Gtk.Align.CENTER)
-            check.connect("toggled", lambda b, k=key, c=category: self._on_group_toggled(k, c, b))
+            check.connect("toggled", lambda b, k=key, g=group_key(game, category): self._on_group_toggled(k, g, b))
             child.add_prefix(check)
             child.set_activatable_widget(check)
             row.add_row(child)
@@ -388,7 +393,7 @@ class ShareDialog(Adw.Dialog):
     def _group_detail(self, category, group):
         t = self.t
         size = format_size(group["size"], t)
-        if category == GAME:
+        if category in (GAME, BIOS):
             name = group["name"] if group["count"] == 1 else plural(
                 t, group["count"], "share.files.one", "share.files.many")
             return f"{name} · {size}"
@@ -405,12 +410,15 @@ class ShareDialog(Adw.Dialog):
         self._syncing = True
         try:
             game_on = (key, GAME) not in self.unchecked
-            mixed = game_on and any((key, c) in self.unchecked for c in children)
+            pairs = self._group_pairs[key]
+            mixed = game_on and any(pairs[c] in self.unchecked for c in children)
             parent.set_active(game_on)
             parent.set_inconsistent(mixed)
             for category, (child, check) in children.items():
-                check.set_active((key, category) not in self.unchecked)
-                child.set_sensitive(game_on or category == GAME)
+                check.set_active(pairs[category] not in self.unchecked)
+                # The BIOS go with the next game of the console when this one
+                # stays behind, so their choice stays open.
+                child.set_sensitive(game_on or category in (GAME, BIOS))
         finally:
             self._syncing = False
 
@@ -424,13 +432,13 @@ class ShareDialog(Adw.Dialog):
         self._sync_checks(key)
         self._update_summary()
 
-    def _on_group_toggled(self, key, category, button):
+    def _on_group_toggled(self, key, pair, button):
         if self._syncing:
             return
         if button.get_active():
-            self.unchecked.discard((key, category))
+            self.unchecked.discard(pair)
         else:
-            self.unchecked.add((key, category))
+            self.unchecked.add(pair)
         self._sync_checks(key)
         self._update_summary()
 

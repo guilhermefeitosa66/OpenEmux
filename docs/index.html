@@ -431,12 +431,14 @@
       perspective: 1600px
     }
 
+    /* The capture is the app's own window (libadwaita header bar and
+       buttons included): rounded corners and a shadow, never a fake title
+       bar around it. */
     .device-desktop {
       width: 88%;
       border-radius: 12px;
       overflow: hidden;
       background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
       transform-origin: 50% 100%;
       animation-name: stage-desktop-in
