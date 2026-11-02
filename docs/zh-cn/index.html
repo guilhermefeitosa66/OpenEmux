@@ -680,8 +680,11 @@
       margin-bottom: 10px
     }
 
+    /* Its own stacking context, so the phone's z-index (over the window's
+       corner on a still card) never reaches the moments stacked above. */
     .share-shots {
       position: relative;
+      isolation: isolate;
       padding-bottom: 14%;
       margin-bottom: 16px
     }
@@ -730,8 +733,7 @@
 
     .share-ov {
       position: absolute;
-      display: block;
-      box-sizing: border-box
+      display: block
     }
 
     /* Phone: the checkbox (119-195 x 557-633), its centre, "Done" (centre
@@ -790,18 +792,19 @@
       margin: -15px 0 0 -15px;
       border: 3px solid var(--gold);
       border-radius: 50%;
-      background: rgba(245, 197, 66, .22);
-      box-shadow: 0 0 0 6px rgba(245, 197, 66, .16)
+      background: rgba(255, 210, 30, .22);
+      box-shadow: 0 0 0 6px rgba(255, 210, 30, .16)
     }
 
+    /* Outside the box by its padding and border (4px + 2px), all round. */
     .share-glow {
       opacity: 0;
-      margin: -4px;
+      margin: -6px;
       padding: 4px;
       box-sizing: content-box;
       border: 2px solid var(--gold);
       border-radius: 10px;
-      box-shadow: 0 0 18px rgba(245, 197, 66, .55)
+      box-shadow: 0 0 18px rgba(255, 210, 30, .55)
     }
 
     /* The progress bars: the track over the captured one, the fill growing
@@ -821,7 +824,7 @@
       transform: scaleX(.6)
     }
 
-    .share-fill-p { background: #8b5cf6 }
+    .share-fill-p { background: var(--violet) }
     .share-fill-d { background: #ed5b00 }
 
     /* The screen sits exactly in the middle of the body (the same bezel on
@@ -832,6 +835,7 @@
       --phone-r: 12px;
       --bezel: 3px;
       position: absolute;
+      z-index: 1;
       left: 0;
       bottom: 0;
       width: 27%;

@@ -552,7 +552,7 @@ class TheShareSequenceTests(unittest.TestCase):
                     self.assertNotIn('alt=""', tag)
                 self.assertEqual(share.count("<picture>"), 13)
 
-    def test_the_second_step_shows_the_same_code_on_both_screens(self):
+    def test_the_code_moment_shows_the_same_code_on_both_screens(self):
         for locale in build_site.ORDER:
             strings = build_site.load_strings(locale)
             with self.subTest(locale=locale):
@@ -675,6 +675,12 @@ class TheShareSequenceTests(unittest.TestCase):
         for driver in ("#share[data-stage]", "#share.stage-js"):
             self.assertIn(f"{driver} .share-same {{", self.css)
             self.assertIn(f"{driver} .share-idle {{", self.css)
+
+    def test_on_a_still_card_the_phone_sits_over_the_window(self):
+        # The window is positioned (its overlays need it), so the phone needs
+        # a z-index to stay over its corner, kept inside each moment's shots.
+        self.assertIn("z-index: 1", _blocks(self.css, ".share-phone {")[0])
+        self.assertIn("isolation: isolate", _blocks(self.css, ".share-shots {")[0])
 
     def test_each_moment_holds_for_a_stretch_of_scroll(self):
         share = _blocks(self.css, "#share {")[0]
