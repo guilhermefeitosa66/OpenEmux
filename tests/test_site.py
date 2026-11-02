@@ -357,7 +357,6 @@ class TheOpeningStageTests(unittest.TestCase):
         self.assertIn("box.insertBefore(mine, box.firstChild)", self.en)
 
 
-@unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is a dev-only dependency")
 class TheShareSequenceTests(unittest.TestCase):
     """Share nearby as a scroll stage: one transfer on both screens (issue 687)."""
 
@@ -481,6 +480,7 @@ class TheShareSequenceTests(unittest.TestCase):
             self.assertNotIn(needle, scripts)
 
 
+@unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is a dev-only dependency")
 class TheSiteArtTests(unittest.TestCase):
     """tools/site_art.py: the link preview and the small logo (issue 686)."""
 
