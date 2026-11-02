@@ -9,11 +9,13 @@
   <title>OpenEmux — உங்கள் ரெட்ரோ தொகுப்பை எளிதாக விளையாட ஒரு வழி</title>
   <meta name="description"
     content="OpenEmux என்பது பின்னணியில் RetroArch-ஐப் பயன்படுத்தும் இலவச, திறந்த மூல எமுலேஷன் முகப்பு. விளையாட மட்டும் விரும்புபவர்களுக்கு RetroArch-ஐ எளிதாக்குகிறது: உங்கள் சொந்த விளையாட்டுகளைச் சேர்த்து, ஒன்றைத் தேர்ந்தெடுத்தால் அது தொடங்கும். இதன் முதன்மைத் தளம் Linux; Windows-உம் பீட்டாவில் ஆதரிக்கப்படுகிறது." />
-  <link rel="icon" href="../assets/logo.png" />
+  <link rel="icon" href="../assets/logo-128.png" />
   <meta property="og:title" content="OpenEmux — உங்கள் ரெட்ரோ தொகுப்பை எளிதாக விளையாட ஒரு வழி" />
   <meta property="og:description"
     content="RetroArch-ஐ எளிதாகப் பயன்படுத்த உதவும் இலவச, திறந்த மூல எமுலேஷன் முகப்பு. இதன் முதன்மைத் தளம் Linux; Windows-உம் பீட்டாவில் ஆதரிக்கப்படுகிறது." />
-  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-library-snes.png" />
+  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/og-opening.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/ta/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/ta/" />
   <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
@@ -247,14 +249,89 @@
       font-size: .87rem
     }
 
-    /* ---------- hero ---------- */
+    /* ---------- scroll stages ----------
+       A stage is a tall section (`data-stage`, height `--stage-len`) whose
+       `.stage-sticky` box holds still in the viewport while the section
+       scrolls past. The progress through it, 0 -> 1, plays the @keyframes of
+       its `data-stage-layer` elements. Each layer's keyframes span the whole
+       stage, so its own timing lives in the stops, and one set of keyframes
+       serves both drivers: CSS scroll-driven animations where the browser has
+       them, the script at the end of the page (which writes `--p`) elsewhere.
+       Scrolling itself is never touched: no snap, no wheel or touch handler.
+       Without a driver the CSS below IS the final composition, which is what
+       reduced motion, no JavaScript and older browsers get, at the section's
+       natural height. Only transform and opacity animate. */
+    :root {
+      --nav-h: 65px
+    }
+
+    @media (prefers-reduced-motion: no-preference) and (min-height: 560px) {
+      @supports (animation-timeline: view()) {
+        [data-stage] {
+          view-timeline: --stage block;
+          view-timeline-inset: var(--nav-h) 0;
+          min-height: var(--stage-len, 260vh)
+        }
+
+        [data-stage] .stage-sticky {
+          position: sticky;
+          top: var(--nav-h)
+        }
+
+        [data-stage] [data-stage-layer] {
+          animation-timeline: --stage;
+          animation-range: contain 0% contain 100%;
+          animation-duration: auto;
+          animation-timing-function: linear;
+          animation-fill-mode: both
+        }
+      }
+
+      [data-stage].stage-js {
+        min-height: var(--stage-len, 260vh)
+      }
+
+      .stage-js .stage-sticky {
+        position: sticky;
+        top: var(--nav-h)
+      }
+
+      .stage-js [data-stage-layer] {
+        animation-duration: 1s;
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        animation-play-state: paused;
+        animation-delay: calc(var(--p, 0) * -1s)
+      }
+
+      [data-stage].is-active [data-stage-layer] {
+        will-change: transform, opacity
+      }
+    }
+
+    /* ---------- hero (the opening stage) ---------- */
     .hero {
+      --stage-len: 260vh;
       position: relative;
-      overflow: hidden;
       border-top: 0;
-      padding: 104px 0 0;
+      padding: 0;
+    }
+
+    /* Positioned for the stars; a driver makes it sticky, so this stays a
+       single-class rule the driver's selectors win over. */
+    .stage-sticky {
+      position: relative
+    }
+
+    .hero .stage-sticky {
+      overflow: clip;
+      min-height: calc(100vh - var(--nav-h));
+      display: flex;
+      align-items: center;
+      padding: 56px 0;
+      box-sizing: border-box;
       background:
-        radial-gradient(900px 460px at 50% -8%, rgba(139, 92, 246, .4), transparent 68%),
+        radial-gradient(900px 460px at 30% -8%, rgba(139, 92, 246, .4), transparent 68%),
         radial-gradient(600px 380px at 88% 12%, rgba(255, 210, 30, .1), transparent 62%),
         linear-gradient(180deg, var(--bg-2), var(--bg) 78%);
     }
@@ -275,9 +352,15 @@
         radial-gradient(1.1px 1.1px at 54% 84%, #fff, transparent);
     }
 
+    /* Wide: copy on the left, the devices on the right, both in one screen. */
     .hero-inner {
       position: relative;
-      text-align: center
+      width: 100%;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+      gap: 48px;
+      align-items: center
     }
 
     .beta {
@@ -295,10 +378,10 @@
     }
 
     .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4.2rem);
+      font-size: clamp(2.3rem, 4.2vw, 3.6rem);
       line-height: 1.04;
       letter-spacing: -.035em;
-      margin: 0 0 20px;
+      margin: 0 0 18px;
       font-weight: 800;
     }
 
@@ -310,68 +393,195 @@
     }
 
     .hero p.lede {
-      margin: 0 auto 32px;
-      font-size: 1.18rem
+      margin: 0 0 26px;
+      font-size: 1.12rem
     }
 
     .cta {
       display: flex;
-      gap: 14px;
-      justify-content: center;
+      gap: 12px;
       flex-wrap: wrap
     }
 
     .cta-note {
-      margin-top: 16px;
-      font-size: .85rem;
+      margin: 12px 0 0;
+      font-size: .82rem;
       color: var(--muted)
     }
 
     .hero-links {
-      margin: 20px 0 0;
+      margin: 18px 0 0;
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
       gap: 8px 22px;
       font-weight: 600
     }
 
-    /* Opening: the desktop window, with the phone set over its lower right
-       corner so both read as one product. Frames are CSS, not baked into the
-       screenshots. The phone stays inside the stage box at any width. */
+    /* The desktop window with the phone over its lower right corner, so both
+       read as one product. Frames are CSS, not baked into the screenshots:
+       the desktop capture already has the app's own header bar and window
+       buttons, so its frame is the border, the corners and the shadow. */
     .stage-devices {
       position: relative;
-      max-width: 1000px;
-      margin: 64px auto 0;
       padding: 0 0 48px;
+      perspective: 1600px
     }
 
     .device-desktop {
-      width: 86%;
-      border-radius: 14px;
+      width: 88%;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--panel);
       border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
+      transform-origin: 50% 100%;
+      animation-name: stage-desktop-in
     }
 
+    .device-desktop img,
+    .device-phone img {
+      width: 100%;
+      cursor: zoom-in
+    }
+
+    /* The screen sits exactly in the middle of the body: the same bezel on
+       all four sides (padding; the <img> is a block, so no line gap below
+       it) and concentric corners, the screen's radius being the body's
+       minus its border and the bezel. */
     .device-phone {
+      --phone-r: 24px;
+      --bezel: 6px;
       position: absolute;
       right: 0;
       bottom: 0;
-      width: 24%;
-      border-radius: 26px;
-      border: 6px solid var(--panel);
+      width: 23%;
+      padding: var(--bezel);
+      box-sizing: border-box;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .16);
+      border-radius: var(--phone-r);
       box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
+      animation-name: stage-phone-in
     }
 
-    @media(max-width:560px) {
+    .device-phone img {
+      border-radius: calc(var(--phone-r) - var(--bezel) - 1px)
+    }
+
+    /* The window flattens into place over the first 40% of the stage; the
+       phone arrives from 30% to 75%; the rest holds the composition. */
+    @keyframes stage-desktop-in {
+      0% {
+        transform: translateY(7%) rotateX(16deg) scale(.9);
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
+      }
+
+      40%,
+      100% {
+        transform: translateY(0) rotateX(0) scale(1)
+      }
+    }
+
+    @keyframes stage-phone-in {
+      0%,
+      30% {
+        opacity: 0;
+        transform: translate(18%, 60%) rotate(7deg);
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
+      }
+
+      48% {
+        opacity: 1
+      }
+
+      75%,
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0)
+      }
+    }
+
+    /* Phone width: copy on top, the window and then the phone stacked under
+       it (nothing overlaps). The devices block is what holds still. */
+    @media(max-width:899px) {
+      .hero {
+        --stage-len: 240vh
+      }
+
+      .hero .stage-sticky {
+        display: block;
+        padding: 40px 0 32px
+      }
+
+      .hero-inner {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 32px;
+        text-align: center
+      }
+
+      .cta,
+      .hero-links {
+        justify-content: center
+      }
+
+      .stage-devices {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        padding: 0
+      }
+
       .device-desktop {
-        width: 92%
+        width: 100%
       }
 
       .device-phone {
-        width: 30%;
-        border-width: 4px;
-        border-radius: 16px
+        --phone-r: 18px;
+        --bezel: 4px;
+        position: relative;
+        width: 34%
+      }
+    }
+
+    /* With a driver at phone width the box that holds still is the devices
+       block, so the copy above it scrolls away first. Its containing block
+       has to be as tall as the stage for it to travel. */
+    @media (max-width: 899px) and (prefers-reduced-motion: no-preference) and (min-height: 560px) {
+      @supports (animation-timeline: view()) {
+        [data-stage].hero .stage-sticky {
+          position: relative;
+          top: auto;
+          min-height: var(--stage-len)
+        }
+
+        [data-stage].hero .hero-inner {
+          display: block;
+          min-height: calc(var(--stage-len) - 72px)
+        }
+
+        [data-stage].hero .stage-devices {
+          position: sticky;
+          top: calc(var(--nav-h) + 12px);
+          margin-top: 32px
+        }
+      }
+
+      .hero.stage-js .stage-sticky {
+        position: relative;
+        top: auto;
+        min-height: var(--stage-len)
+      }
+
+      .hero.stage-js .hero-inner {
+        display: block;
+        min-height: calc(var(--stage-len) - 72px)
+      }
+
+      .hero.stage-js .stage-devices {
+        position: sticky;
+        top: calc(var(--nav-h) + 12px);
+        margin-top: 32px
       }
     }
 
@@ -1160,13 +1370,14 @@
     }
   </style>
   <script src="../lang.js"></script>
+  <link rel="preload" as="image" type="image/avif" imagesrcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), 50vw" fetchpriority="high" />
 </head>
 
 <body>
 
   <header>
     <div class="wrap nav">
-      <a class="brand" href="#top"><img src="../assets/logo.png" alt="" /> OpenEmux</a>
+      <a class="brand" href="#top"><img src="../assets/logo-128.png" width="30" height="30" alt="" /> OpenEmux</a>
       <nav class="nav-links">
         <a href="#share">அருகில் பகிர்</a>
         <a href="#consoles">கார்ட்ரிட்ஜ்கள்</a>
@@ -1196,35 +1407,43 @@
   </header>
 
   <main>
-  <!-- OPENING: the desktop library, the phone in front of it -->
-  <section class="hero" id="top">
-    <div class="stars"></div>
-    <div class="wrap hero-inner">
-      <h1>உங்கள் பழைய விளையாட்டுத் தொகுப்பு,<br /><span class="grad">விளையாடத் தயார்.</span></h1>
-      <p class="lede">உங்களிடம் உள்ள விளையாட்டுகளைச் சேர்க்கவும். Linux, Windows, Android ஆகியவற்றில் OpenEmux அவற்றை அட்டைப் படங்களுடன் கன்சோல் வாரியாக அடுக்குகிறது.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Linux-க்குப்
+  <!-- OPENING: the desktop library, the phone in front of it. A scroll
+       stage (see "scroll stages" in the CSS): the window settles into
+       place, then the phone lands over its lower right corner. -->
+  <section class="hero" id="top" data-stage>
+    <div class="stage-sticky">
+      <div class="stars"></div>
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <h1>உங்கள் பழைய விளையாட்டுத் தொகுப்பு,<br /><span class="grad">விளையாடத் தயார்.</span></h1>
+          <p class="lede">உங்களிடம் உள்ள விளையாட்டுகளைச் சேர்க்கவும். Linux, Windows, Android ஆகியவற்றில் OpenEmux அவற்றை அட்டைப் படங்களுடன் கன்சோல் வாரியாக அடுக்குகிறது.</p>
+          <div class="cta" id="downloads">
+            <a class="btn btn-primary" data-os="linux" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Linux-க்குப்
           பதிவிறக்கு</a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Windows-க்குப்
+            <a class="btn btn-ghost" data-os="windows" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Windows-க்குப்
           பதிவிறக்கு <span class="beta">Beta</span></a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Android-க்கு
+            <a class="btn btn-ghost" data-os="android" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Android-க்கு
           பதிவிறக்கு</a>
-      </div>
-      <p class="hero-links">
-        <a href="#install">நிறுவுவது எப்படி ↓</a>
-        <!-- The promo video, on demand only: without JavaScript the link is
-             the file itself; with it, a dialog that loads nothing before the
-             click. -->
-        <a id="watchVideo" href="../assets/openemux-promo.mp4">▶ காணொளியைப் பார்க்க (45 வி)</a>
-      </p>
-      <p class="cta-note">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·
+          </div>
+          <p class="hero-links">
+            <a href="#install">நிறுவுவது எப்படி ↓</a>
+            <!-- The promo video, on demand only: without JavaScript the link is
+                 the file itself; with it, a dialog that loads nothing before the
+                 click. -->
+            <a id="watchVideo" href="../assets/openemux-promo.mp4">▶ காணொளியைப் பார்க்க (45 வி)</a>
+          </p>
+          <p class="cta-note">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·
         Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>
-      <p class="cta-note">macOS-க்கான <a href="https://openemu.org/">OpenEmu</a>-வால் ஈர்க்கப்பட்டது, ஆனால் இது ஒரு fork அல்ல: எமுலேஷனுக்கு RetroArch-ஐப் பயன்படுத்தும் தனிக் குறியீடு. <a href="#thanks">இதைப் பற்றி மேலும்</a>.</p>
-      <div class="stage-devices">
-        <img class="device-desktop" src="../assets/openemux-library-snes.png" width="1320" height="878"
-          fetchpriority="high" alt="கணினியில் OpenEmux, அட்டைப் படங்களுடன் Super Nintendo நூலகம்" />
-        <img class="device-phone" src="../assets/openemux-mobile-shelf.png" width="720" height="1560"
-          decoding="async" alt="Android இல் OpenEmux, கன்சோல்களின் அலமாரி" />
+          <p class="cta-note">macOS-க்கான <a href="https://openemu.org/">OpenEmu</a>-வால் ஈர்க்கப்பட்டது, ஆனால் இது ஒரு fork அல்ல: எமுலேஷனுக்கு RetroArch-ஐப் பயன்படுத்தும் தனிக் குறியீடு. <a href="#thanks">இதைப் பற்றி மேலும்</a>.</p>
+        </div>
+        <div class="stage-devices">
+          <div class="device-desktop" data-stage-layer>
+            <picture><source type="image/avif" srcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), 50vw" /><source type="image/webp" srcset="../assets/desktop/grid-sfc-640.webp 640w, ../assets/desktop/grid-sfc-1280.webp 1280w, ../assets/desktop/grid-sfc-1920.webp 1920w, ../assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), 50vw" /><img src="../assets/desktop/grid-sfc.png" alt="கணினியில் OpenEmux, அட்டைப் படங்களுடன் Super Nintendo நூலகம்" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="../assets/desktop/grid-sfc-2640.webp" /></picture>
+          </div>
+          <div class="device-phone" data-stage-layer>
+            <picture><source type="image/avif" srcset="../assets/android/library-snes-640.avif 640w, ../assets/android/library-snes-1280.avif 1280w, ../assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, 13vw" /><source type="image/webp" srcset="../assets/android/library-snes-640.webp 640w, ../assets/android/library-snes-1280.webp 1280w, ../assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, 13vw" /><img src="../assets/android/library-snes.png" alt="Android இல் OpenEmux, கன்சோல்களின் அலமாரி" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="../assets/android/library-snes-1440.webp" /></picture>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1849,6 +2068,89 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         if (!ticking) { ticking = true; requestAnimationFrame(parallax); }
       }, { passive: true });
       build();
+    })();
+  </script>
+  <!-- Scroll stages: the fallback driver (see "scroll stages" in the CSS).
+       Browsers with scroll-driven animations need nothing from here but the
+       will-change switch; elsewhere this writes each on-screen stage's
+       progress into --p. It only reads the scroll position: one passive
+       listener, one requestAnimationFrame, nothing that moves the page. -->
+  <script>
+    (function () {
+      var stages = [].slice.call(document.querySelectorAll("[data-stage]"));
+      if (!stages.length) return;
+      var motion = window.matchMedia("(prefers-reduced-motion: no-preference) and (min-height: 560px)");
+      var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
+      var visible = [];
+      var ticking = false;
+
+      function navHeight() {
+        var header = document.querySelector("header");
+        return header ? header.getBoundingClientRect().height : 0;
+      }
+
+      // 0 when the section's top reaches the bottom of the header, 1 when
+      // its bottom reaches the bottom of the viewport: the same range as
+      // the CSS driver's `contain`.
+      function update() {
+        ticking = false;
+        var top = navHeight();
+        var vh = window.innerHeight;
+        visible.forEach(function (stage) {
+          var r = stage.getBoundingClientRect();
+          var travel = r.height - (vh - top);
+          var p = travel > 0 ? (top - r.top) / travel : 1;
+          stage.style.setProperty("--p", Math.max(0, Math.min(1, p)).toFixed(4));
+        });
+      }
+
+      function request() {
+        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+      }
+
+      function apply() {
+        var js = motion.matches && !native;
+        stages.forEach(function (stage) { stage.classList.toggle("stage-js", js); });
+        if (js) update();
+      }
+
+      if ("IntersectionObserver" in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            entry.target.classList.toggle("is-active", entry.isIntersecting);
+            var i = visible.indexOf(entry.target);
+            if (entry.isIntersecting && i < 0) visible.push(entry.target);
+            if (!entry.isIntersecting && i >= 0) visible.splice(i, 1);
+          });
+          request();
+        });
+        stages.forEach(function (stage) { io.observe(stage); });
+      } else {
+        visible = stages.slice();
+      }
+
+      if (!native) {
+        window.addEventListener("scroll", function () { if (motion.matches) request(); }, { passive: true });
+        window.addEventListener("resize", function () { if (motion.matches) request(); });
+      }
+      if (motion.addEventListener) motion.addEventListener("change", apply);
+      apply();
+    })();
+
+    // The visitor's own system first among the download buttons: Android
+    // and Windows move to the front and take the primary style; anything
+    // else keeps the order as written (Linux first).
+    (function () {
+      var ua = navigator.userAgent;
+      var os = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "";
+      var box = document.getElementById("downloads");
+      var mine = os && box && box.querySelector('[data-os="' + os + '"]');
+      if (!mine) return;
+      [].forEach.call(box.querySelectorAll("[data-os]"), function (btn) {
+        btn.classList.toggle("btn-primary", btn === mine);
+        btn.classList.toggle("btn-ghost", btn !== mine);
+      });
+      box.insertBefore(mine, box.firstChild);
     })();
   </script>
 </body>
