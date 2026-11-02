@@ -839,12 +839,22 @@
     #share {
       --stage-len: 400vh;
       --dh: min(488px, calc(100vh - var(--nav-h) - 230px), calc((100vw - 150px) / 1.94));
-      --ww: calc(var(--dh) * 1.475)
+      --ww: calc(var(--dh) * 1.475);
+      --ph: var(--dh)
     }
 
     @media (prefers-reduced-motion: no-preference) and (min-height: 640px) {
       @supports (animation-timeline: view()) {
+        #share[data-stage] {
+          padding-bottom: 0
+        }
+
         #share[data-stage] .share-stage {
+          min-height: calc(100vh - var(--nav-h));
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
           padding: 24px 0;
           background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
         }
@@ -890,7 +900,7 @@
           --bezel: 8px;
           position: relative;
           flex: none;
-          width: calc((var(--dh) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+          width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
         }
 
         #share[data-stage] .share-step+.share-step .share-window,
@@ -922,7 +932,16 @@
         }
       }
 
+      #share.stage-js {
+        padding-bottom: 0
+      }
+
       #share.stage-js .share-stage {
+        min-height: calc(100vh - var(--nav-h));
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
         padding: 24px 0;
         background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
       }
@@ -968,7 +987,7 @@
         --bezel: 8px;
         position: relative;
         flex: none;
-        width: calc((var(--dh) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+        width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
       }
 
       #share.stage-js .share-step+.share-step .share-window,
@@ -1050,12 +1069,14 @@
 
     /* Phone width: the window on top at full width, the phone under it, a
        shorter stage. The phone takes the height the window and the caption
-       leave, within 160-380px. */
+       leave, within 160-380px; on a wide but short screen (a narrow desktop
+       window) the window narrows too, so the smallest phone still fits. */
     @media(max-width:899px) {
       #share {
         --stage-len: 300vh;
-        --ph: clamp(160px, calc(100vh - var(--nav-h) - (100vw - 48px) / 1.475 - 250px), 380px);
-        --ww: 100%
+        --wh: min(calc((100vw - 48px) / 1.475), calc(100vh - var(--nav-h) - 410px));
+        --ph: clamp(160px, calc(100vh - var(--nav-h) - var(--wh) - 250px), 380px);
+        --ww: min(100%, calc((100vh - var(--nav-h) - 410px) * 1.475))
       }
     }
 
@@ -1069,8 +1090,7 @@
 
         #share[data-stage] .share-phone {
           --phone-r: 26px;
-          --bezel: 6px;
-          width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+          --bezel: 6px
         }
 
         #share[data-stage] .share-link {
@@ -1102,8 +1122,7 @@
 
       #share.stage-js .share-phone {
         --phone-r: 26px;
-        --bezel: 6px;
-        width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+        --bezel: 6px
       }
 
       #share.stage-js .share-link {
