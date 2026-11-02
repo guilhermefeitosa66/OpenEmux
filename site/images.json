@@ -1,0 +1,219 @@
+{
+  "shelf/favorites.png": {
+    "height": 800,
+    "sha256": "cd5cee2cd184473a0a3102af03ce0b9682e57003f11c37cd641c5dc625010050",
+    "variants": [
+      {
+        "file": "shelf/favorites-640.avif",
+        "height": 427,
+        "sha256": "024a19b42c62d162ccf44348d3021a9d62c3a0d72381ad884bea7e11ab0395dd",
+        "width": 640
+      },
+      {
+        "file": "shelf/favorites-640.webp",
+        "height": 427,
+        "sha256": "25c30b3689bf39bf0a37055a4f4245847994b85d74a6e383a683d7aa482ef3d1",
+        "width": 640
+      },
+      {
+        "file": "shelf/favorites-1200.avif",
+        "height": 800,
+        "sha256": "88434752b760c801254139556f82176cdeb83bba92ba0a63b6b2539b6ff46e50",
+        "width": 1200
+      },
+      {
+        "file": "shelf/favorites-1200.webp",
+        "height": 800,
+        "sha256": "573b561c7d8af557279f7ed6fcd8e85b04ac773a6fa8005fd361d981f9d3bbd7",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/gba.png": {
+    "height": 800,
+    "sha256": "88a83fe92b1f58c8dd0264d5cb9e38190e96f3fc169b4ba8897ab92ca2425465",
+    "variants": [
+      {
+        "file": "shelf/gba-640.avif",
+        "height": 427,
+        "sha256": "c284f999ec6d42d3b792ae65849cc5a8b7d01c4bc549369623d00bc9cff7d4af",
+        "width": 640
+      },
+      {
+        "file": "shelf/gba-640.webp",
+        "height": 427,
+        "sha256": "4500b261d65be21f1f56ac74c86ea7950a58cd7b6642b4a10bd076a8a3d600d5",
+        "width": 640
+      },
+      {
+        "file": "shelf/gba-1200.avif",
+        "height": 800,
+        "sha256": "a7e78eb98ec196a012c41b0a7f61cbb987806864d66bb2253929c789dbd3aab4",
+        "width": 1200
+      },
+      {
+        "file": "shelf/gba-1200.webp",
+        "height": 800,
+        "sha256": "245fb5415310e8410375dc68b77df77013f86a8a724e1ca342fd8902317638e5",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/md.png": {
+    "height": 800,
+    "sha256": "8f26e725e97ca80c4fef07f35ee729d7131cef17642e2f32f8f14647605a007e",
+    "variants": [
+      {
+        "file": "shelf/md-640.avif",
+        "height": 427,
+        "sha256": "8fc59fea70df83701184832486b83a7f228116e688706509054ddf65038d932f",
+        "width": 640
+      },
+      {
+        "file": "shelf/md-640.webp",
+        "height": 427,
+        "sha256": "6a79e4672761d9b5cfe73616a77ebd7729c90f9d7b4f9839790d46823a40dbac",
+        "width": 640
+      },
+      {
+        "file": "shelf/md-1200.avif",
+        "height": 800,
+        "sha256": "602f1dc51df35931b743864d7c6a2d6a79079bfb6d31a44606f345632078de13",
+        "width": 1200
+      },
+      {
+        "file": "shelf/md-1200.webp",
+        "height": 800,
+        "sha256": "a00520b83ef825944b35f361c0df02d3b8a0c2ba98dec006789eda8648a81f52",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/n64.png": {
+    "height": 800,
+    "sha256": "2b6b1fcaf1b7559391b0b21a5060987b2baca4ccfb0ab7072f820ebfbd8fd0ab",
+    "variants": [
+      {
+        "file": "shelf/n64-640.avif",
+        "height": 427,
+        "sha256": "add99740751dc3faf731d6cbcd9319ed044b2ecbf0d568c0f071107d8f37a9da",
+        "width": 640
+      },
+      {
+        "file": "shelf/n64-640.webp",
+        "height": 427,
+        "sha256": "4a70b86c7223112d86fa6fdb2d3b5a95f60ee4d7018cde88083b53602f5a9cbb",
+        "width": 640
+      },
+      {
+        "file": "shelf/n64-1200.avif",
+        "height": 800,
+        "sha256": "d5f1b43c2b5f5ecc5be4846a23ec566443195e1363b1dad617eb958cfdf38375",
+        "width": 1200
+      },
+      {
+        "file": "shelf/n64-1200.webp",
+        "height": 800,
+        "sha256": "d51490e9e2d5ed86b7552dacff09d03dc596a6e2953ba2cf8270af227dbc9196",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/ps.png": {
+    "height": 800,
+    "sha256": "71135065d99514158a3138d45f316b8ff756cd49d364a35d214ba9e672041505",
+    "variants": [
+      {
+        "file": "shelf/ps-640.avif",
+        "height": 427,
+        "sha256": "0ee0462c6caf47a6d707e898c90145846fcc2a3e9477bb0ffae189c7a3bb68c2",
+        "width": 640
+      },
+      {
+        "file": "shelf/ps-640.webp",
+        "height": 427,
+        "sha256": "21c89f6320e2114020353494bbe32086193fb0f0272dcc01bc4708224360f5e7",
+        "width": 640
+      },
+      {
+        "file": "shelf/ps-1200.avif",
+        "height": 800,
+        "sha256": "ce08199a25101c62aa2a5f47e79f2a3e5d7a04cb19a064fe98279cc4019795b2",
+        "width": 1200
+      },
+      {
+        "file": "shelf/ps-1200.webp",
+        "height": 800,
+        "sha256": "4617bd0df90ebfd143e8ce5361fd18ae9221af45267c3f01de71367e88bec58f",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/sfc.png": {
+    "height": 800,
+    "sha256": "7cfbceb8e68888fd6753ebf3183daf314532001de2c95bffb3b5f19628512003",
+    "variants": [
+      {
+        "file": "shelf/sfc-640.avif",
+        "height": 427,
+        "sha256": "ef3ee77126d94dbb885addbffd1d0aae73f692b3b96d083b976979dde14eada3",
+        "width": 640
+      },
+      {
+        "file": "shelf/sfc-640.webp",
+        "height": 427,
+        "sha256": "c2e31727628a4219c32714b343f5bb9bf823db938dba5f675612420b97013f0d",
+        "width": 640
+      },
+      {
+        "file": "shelf/sfc-1200.avif",
+        "height": 800,
+        "sha256": "46d1043e3b3bd2d45c87f40864626ad426de04673102752bf5043111169bde2d",
+        "width": 1200
+      },
+      {
+        "file": "shelf/sfc-1200.webp",
+        "height": 800,
+        "sha256": "1f1110aa8b9c901683be03a04f3b81581e343fc445974f7850127aae869f4098",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  },
+  "shelf/sms.png": {
+    "height": 800,
+    "sha256": "a85f609f4d95641785f270a533c84ea24e4ac7b01b85b6d31c58dc8284fb888b",
+    "variants": [
+      {
+        "file": "shelf/sms-640.avif",
+        "height": 427,
+        "sha256": "c189365ba61ecc92a6d5583bd94be86b66a3c4dcd72973d3e5de3dec9d4f702a",
+        "width": 640
+      },
+      {
+        "file": "shelf/sms-640.webp",
+        "height": 427,
+        "sha256": "3e2a8658fc6ddefb7b02e62fa293aaee700e7e208809ae8a1c2c7629f9988ef4",
+        "width": 640
+      },
+      {
+        "file": "shelf/sms-1200.avif",
+        "height": 800,
+        "sha256": "789c4d02274581432550bcc7f5d250a9008390e105499209a494a26b607b7286",
+        "width": 1200
+      },
+      {
+        "file": "shelf/sms-1200.webp",
+        "height": 800,
+        "sha256": "0cbec2a539cde53d6880f635da07b9ba19030f341f5e84adbe16b10f107fb17c",
+        "width": 1200
+      }
+    ],
+    "width": 1200
+  }
+}
