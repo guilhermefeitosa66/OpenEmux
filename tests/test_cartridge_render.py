@@ -474,6 +474,7 @@ class ReliefFrameTests(unittest.TestCase):
                 with self.subTest(frame=path.name):
                     self.assertIn(f'xlink:href="data:image/{expected};base64,', path.read_text())
 
+    @unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
     def test_every_relief_shell_is_drawn(self):
         # A librsvg that cannot decode the WebP draws nothing where the shell
         # is: the cartridge would be a bare sticker. Outside the label window

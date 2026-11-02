@@ -89,6 +89,14 @@ class ImportFrameTests(unittest.TestCase):
         self.assertEqual(second.count("data:image/webp"), 1)
         self.assertIn(base64.b64encode(vp8(GB_W, GB_H)).decode(), second)
 
+    def test_a_filter_that_is_not_colorize_is_kept(self):
+        svg = SVG.replace('id="colorize-red"', 'id="shadow"').replace(
+            'style="filter:url(#colorize-red)"', 'style="filter:url(#shadow)"'
+        )
+        out = tool.import_frame(svg, vp8l(GB_W, GB_H), "GB.svg")
+        self.assertIn('id="shadow"', out)
+        self.assertIn("filter:url(#shadow)", out)
+
     def test_a_base_frame_keeps_its_plain_defs(self):
         base = SVG.replace('<defs\n     id="defs1"><filter\n       id="colorize-red">'
                            '<feFlood flood-color="#B23A34" /></filter></defs>', '<defs\n     id="defs1" />')
@@ -177,6 +185,14 @@ class MainTests(unittest.TestCase):
         code, _out, err = self.run_tool()
         self.assertEqual(code, 1)
         self.assertIn("no MD.svg to put it in", err)
+
+    def test_a_relief_frame_with_no_webp_is_an_error(self):
+        (self.src / "cart_gb_red.webp").unlink()
+        gb_before = (self.assets / "GB.svg").read_bytes()
+        code, _out, err = self.run_tool()
+        self.assertEqual(code, 1)
+        self.assertIn("for GB-red.svg", err)
+        self.assertEqual((self.assets / "GB.svg").read_bytes(), gb_before)
 
     def test_nothing_is_written_when_one_frame_fails(self):
         (self.src / "cart_gb_red.webp").write_bytes(vp8l(800, 800))

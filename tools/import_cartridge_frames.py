@@ -45,7 +45,9 @@ ASPECT_TOLERANCE_PX = 1.0
 
 WEBP_NAME_RE = re.compile(r"^cart_([a-z0-9]+?)(?:_([a-z]+))?\.webp$")
 HREF_RE = re.compile(r'(xlink:href="data:image/)(?:png|webp)(;base64,)[^"]*(")', re.S)
-FILTER_DEFS_RE = re.compile(r'<defs\s+id="defs1">\s*<filter\b.*?</filter>\s*</defs>', re.S)
+FILTER_DEFS_RE = re.compile(
+    r'<defs\s+id="defs1">\s*<filter\b[^>]*\bid="colorize-[a-z]+"[^>]*>.*?</filter>\s*</defs>', re.S
+)
 FILTER_STYLE_RE = re.compile(r'\s+style="filter:url\(#colorize-[a-z]+\)"')
 VIEWBOX_RE = re.compile(r'viewBox="\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)\s*"')
 
@@ -81,6 +83,11 @@ def svg_name(webp_name: str) -> str | None:
     return f"{console}-{color}.svg" if color else f"{console}.svg"
 
 
+def console_of(svg_filename: str) -> str:
+    """`GB-red.svg` -> `GB`."""
+    return svg_filename.removesuffix(".svg").split("-")[0]
+
+
 def import_frame(svg_text: str, webp: bytes, name: str) -> str:
     """The SVG with its art replaced by `webp` and any colorize filter removed."""
     vb = VIEWBOX_RE.search(svg_text)
@@ -107,7 +114,7 @@ def plan(source: Path, assets: Path, consoles=None):
         name = svg_name(webp.name)
         if name is None:
             continue
-        console = name.split("-")[0].removesuffix(".svg")
+        console = console_of(name)
         if console in KEEP or (consoles and console not in consoles):
             continue
         target = assets / name
@@ -133,11 +140,22 @@ def main(argv=None) -> int:
         return 1
     try:
         pairs = plan(args.source, args.assets, consoles)
-        missing = consoles - {svg.name.split("-")[0].removesuffix(".svg") for _w, svg in pairs}
+        missing = consoles - {console_of(svg.name) for _w, svg in pairs}
         if missing:
             raise FrameImportError(f"no relief frame for {' '.join(sorted(missing))} in {args.source}")
         if not pairs:
             raise FrameImportError(f"no cart_*.webp in {args.source}")
+        # A relief console's frame left out (a colour the generator does not
+        # render) would keep the old flat art next to the new relief.
+        imported = {svg.name for _w, svg in pairs}
+        left = sorted(
+            svg.name for svg in args.assets.glob("*.svg")
+            if console_of(svg.name) not in KEEP
+            and (not consoles or console_of(svg.name) in consoles)
+            and svg.name not in imported
+        )
+        if left:
+            raise FrameImportError(f"no WebP in {args.source} for {' '.join(left)}")
         updates = [(svg, import_frame(svg.read_text(), webp.read_bytes(), svg.name)) for webp, svg in pairs]
     except FrameImportError as exc:
         print(f"import_cartridge_frames: {exc}", file=sys.stderr)

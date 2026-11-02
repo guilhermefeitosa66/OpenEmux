@@ -1606,9 +1606,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print('RT-339 OK')"
   ```
   The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`); since
-  issue #703 the frames' look is RT-703.
+  issue #703 the frames' look is RT-678.
 
-### RT-703 — Desktop relief frames match Android, in every shell colour
+### RT-678 — Desktop relief frames match Android, in every shell colour
 - **Area:** View modes & layout
 - **Mode:** MANUAL
 - **Preconditions:** games with real labels for each relief console: NES, Game Boy, Game Boy Color,
@@ -1644,7 +1644,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
           else:
               assert 'colorize-' in text, (c, color)
   assert cr.FRAME_CACHE_VERSION >= 3
-  print('RT-703 OK')"
+  print('RT-678 OK')"
   ```
   The rendering is in `tests/test_cartridge_render.py` (`ReliefFrameTests`).
 
