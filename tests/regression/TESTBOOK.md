@@ -9040,6 +9040,57 @@ NAT, so discovery itself is checked only on hardware.
   `manual/#share` and `manual/#share-trouble`.
 - **Check:** `PYTHONPATH=src:tools .venv/bin/python -c "import build_site, pathlib; pages = [build_site.manual_output_path(l).read_text(encoding='utf-8') for l in build_site.ORDER]; assert all('id=\"share-trouble\"' in p and 'href=\"#share\"' in p and '53319' in p and '53318' in p for p in pages); readme = pathlib.Path('README.md').read_text(encoding='utf-8'); assert 'manual/#share)' in readme and 'manual/#share-trouble' in readme; print('RT-563 OK')"`
 
+### RT-611 — A game shared to the phone brings its console's BIOS into the system folder
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A desktop OpenEmux with Share nearby, a PS game and `scph5501.bin` plus a
+  `notes.txt` in `<roms>/PS/bios/`; the phone (or emulator) without `scph5501.bin` in
+  `/sdcard/Android/data/$PKG/files/system/`.
+- **Steps:**
+  1. On the desktop, share the PS game to the phone (on an emulator, add the desktop with "Connect
+     by Address").
+  2. Read the game's line on the phone's "Incoming Games" sheet, then press "Accept".
+  3. When it ends, read the result card; then open "Settings" → "BIOS" and launch the game.
+- **Expected:** 2 lists "BIOS scph5501.bin" among the game's items. 3: the card ends with
+  "BIOS files added: scph5501.bin"; the BIOS screen shows the PlayStation BIOS present and the game
+  starts. `notes.txt` is not on the phone.
+- **Check:** `adb shell ls /sdcard/Android/data/$PKG/files/system/` lists `scph5501.bin` and no
+  `notes.txt`. Suite: `./gradlew testDebugUnitTest --no-daemon` (`ShareBiosTest`,
+  `ShareTransferLoopbackTest`).
+
+### RT-612 — The phone sends its BIOS with the first game of the console, to a desktop or a phone
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone with two PS games and `scph5501.bin` (any case) in
+  `/sdcard/Android/data/$PKG/files/system/`, plus a file there that is no catalog BIOS; a desktop
+  OpenEmux or a second phone to receive.
+- **Steps:**
+  1. Select both PS games and open "Share Nearby" → "What to Send"; expand both games.
+  2. Uncheck the first game, then check it again; uncheck "BIOS Files", then check it again.
+  3. Send to the desktop and accept there; repeat to a second phone.
+- **Expected:** 1: "BIOS Files" is listed under the first PS game only. 2: with the first game
+  unchecked the BIOS still count in the total (they go with the second game); with "BIOS Files"
+  unchecked the total drops by their size, and the game's own checkbox stays checked. 3: the
+  phone's card ends with "BIOS files sent: scph5501.bin"; the desktop has it in
+  `<roms>/PS/bios/scph5501.bin`, the second phone in its `files/system/`. The other file never goes.
+- **Check:** on the desktop, `ls <roms>/PS/bios/`. Suite: `ShareBiosTest`, `SendSelectionTest`.
+
+### RT-613 — A BIOS the phone already has is not sent again; a different one is kept unless replaced
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** RT-611 done.
+- **Steps:**
+  1. Share the same game from the desktop again and accept.
+  2. Replace the desktop's `<roms>/PS/bios/scph5501.bin` with a different file of the same name and
+     share again; on the sheet, open the conflicts.
+  3. Accept with the default; share again and pick "Replace" on the BIOS row.
+- **Expected:** 1: no BIOS conflict and the BIOS is not uploaded (the card has no "BIOS files
+  added" line). 2: one conflict row "Game · BIOS scph5501.bin" with only "Skip" (selected) and
+  "Replace". 3: with Skip the phone's file is unchanged; with Replace it has the desktop's bytes.
+- **Check:** `adb shell md5sum /sdcard/Android/data/$PKG/files/system/scph5501.bin` before and after
+  each step. Suite: `ShareBiosTest` (an older peer skipping the `bios` kind and still taking the
+  game is `PlacementTest`'s unknown-kind case).
+
 ## Android — System bars
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
