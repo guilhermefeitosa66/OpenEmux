@@ -349,10 +349,38 @@ def picture(tag, root, manifest):
     return "<picture>" + "".join(sources) + img + "</picture>"
 
 
+def preload(picture_html):
+    """The ``<link rel="preload">`` that fetches a ``<picture>``'s AVIF early.
+
+    The browser picks the same width the ``<source>`` would (same
+    ``imagesrcset`` and ``imagesizes``), so the preload is the request the
+    image then uses, not a second download.
+    """
+    avif = re.search(r'<source type="image/avif" srcset="([^"]*)" sizes="([^"]*)" />', picture_html)
+    return (f'<link rel="preload" as="image" type="image/avif" imagesrcset="{avif.group(1)}" '
+            f'imagesizes="{avif.group(2)}" fetchpriority="high" />')
+
+
 def apply_pictures(text, root, manifest=None):
-    """Every ``<img data-picture ...>`` in a rendered page as a ``<picture>``."""
+    """Every ``<img data-picture ...>`` in a rendered page as a ``<picture>``.
+
+    The first ``data-picture="eager"`` one is the first screen's main image
+    (issue #686): it is also preloaded from ``<head>``, so its request starts
+    before the parser reaches the ``<body>``.
+    """
     manifest = manifest if manifest is not None else load_manifest()
-    return IMG_TAG.sub(lambda m: picture(m.group(0), root, manifest), text)
+    first_eager = []
+
+    def _sub(match):
+        out = picture(match.group(0), root, manifest)
+        if not first_eager and 'data-picture="eager"' in match.group(0):
+            first_eager.append(out)
+        return out
+
+    text = IMG_TAG.sub(_sub, text)
+    if first_eager and "</head>" in text:
+        text = text.replace("</head>", "  " + preload(first_eager[0]) + "\n</head>", 1)
+    return text
 
 
 def output_path(locale):
