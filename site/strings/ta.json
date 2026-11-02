@@ -15,7 +15,7 @@
   "hero.install_link": "நிறுவுவது எப்படி ↓",
   "hero.watch": "▶ காணொளியைப் பார்க்க (45 வி)",
   "hero.shot_desktop": "கணினியில் OpenEmux, அட்டைப் படங்களுடன் Super Nintendo நூலகம்",
-  "hero.shot_phone": "Android இல் OpenEmux, கன்சோல்களின் அலமாரி",
+  "hero.shot_phone": "Android இல் OpenEmux, Super Nintendo நூலகம்",
   "hero.download_linux": "⬇ Linux-க்குப்\n          பதிவிறக்கு</a>",
   "hero.download_windows": "⬇ Windows-க்குப்\n          பதிவிறக்கு <span class=\"beta\">Beta</span></a>",
   "hero.note": "<p class=\"cta-note\">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·\n        Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>",

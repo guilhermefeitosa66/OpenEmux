@@ -1090,6 +1090,30 @@ Convert the phone PNGs to RGB (the screencap is RGBA), copy everything into
 place, run `--images`, and take the emulator down (`adb emu kill` happens when
 `emulator-lock.sh`'s command ends; `avdmanager delete avd -n <name>`).
 
+### Scroll stages
+
+A moment that plays as the visitor scrolls (the opening, issue 686) is a
+*scroll stage*: a tall `<section data-stage>` (its length in `--stage-len`)
+whose `.stage-sticky` box holds still while the section scrolls past. Its
+`data-stage-layer` elements carry an `animation-name`, and their `@keyframes`
+span the whole stage (0 % to 100 % is the progress through it), so each
+layer's timing lives in the keyframe stops. Two drivers play the same
+keyframes: CSS scroll-driven animations (`view-timeline`, range `contain`)
+where the browser has them, and otherwise the small script at the end of
+`site/page.html`, which writes the progress into `--p` and seeks paused
+animations with `animation-delay`. The CSS with no driver is the final
+composition: that is what reduced motion, no JavaScript and old browsers
+get. Animate only `transform` and `opacity`, and never touch the scroll
+itself (no snap, no wheel or touch handlers); `tests/test_site.py` holds both.
+
+### Composed images
+
+`tools/site_art.py` (Pillow) draws `docs/assets/og-opening.png`, the
+1200×630 link preview, from the opening's two captures
+(`desktop/grid-sfc.png`, `android/library-snes.png`), and
+`docs/assets/logo-128.png`, the header and favicon logo. Run it again after
+retaking those captures or changing `logo.png`.
+
 ## Cutting a release
 
 `main` holds released code only and is protected by a repository ruleset: no

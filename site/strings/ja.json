@@ -15,7 +15,7 @@
   "hero.install_link": "インストール方法 ↓",
   "hero.watch": "▶ 動画を見る（45 秒）",
   "hero.shot_desktop": "デスクトップの OpenEmux、カバー付きのスーパーファミコンのライブラリ",
-  "hero.shot_phone": "Android の OpenEmux、コンソールの棚",
+  "hero.shot_phone": "Android の OpenEmux、スーパーファミコンのライブラリ",
   "hero.download_linux": "⬇ Linux 版を\n          ダウンロード</a>",
   "hero.download_windows": "⬇ Windows 版を\n          ダウンロード <span class=\"beta\">Beta</span></a>",
   "hero.note": "<p class=\"cta-note\">無料のオープンソース · MIT ライセンス · Linux 向けに AppImage、.deb、.rpm &amp; Flatpak ·\n        Windows 向けにインストーラー &amp; ポータブル ZIP · Android 向けに APK（GPLv3）</p>",

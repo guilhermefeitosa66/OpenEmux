@@ -15,7 +15,7 @@
   "hero.install_link": "Cómo instalar ↓",
   "hero.watch": "▶ Ver el vídeo (45 s)",
   "hero.shot_desktop": "OpenEmux en el ordenador, la biblioteca de Super Nintendo con sus portadas",
-  "hero.shot_phone": "OpenEmux en Android, la estantería de consolas",
+  "hero.shot_phone": "OpenEmux en Android, la biblioteca de Super Nintendo",
   "hero.download_linux": "⬇ Descargar para\n          Linux</a>",
   "hero.download_windows": "⬇ Descargar para\n          Windows <span class=\"beta\">Beta</span></a>",
   "hero.note": "<p class=\"cta-note\">Libre y de código abierto · Licencia MIT · AppImage, .deb, .rpm &amp; Flatpak en Linux ·\n        instalador &amp; ZIP portátil en Windows · APK en Android (GPLv3)</p>",

@@ -15,7 +15,7 @@
   "hero.install_link": "如何安装 ↓",
   "hero.watch": "▶ 观看视频（45 秒）",
   "hero.shot_desktop": "桌面版 OpenEmux，带封面的超级任天堂游戏库",
-  "hero.shot_phone": "安卓版 OpenEmux，主机书架",
+  "hero.shot_phone": "安卓版 OpenEmux，超级任天堂游戏库",
   "hero.download_linux": "⬇ 下载\n          Linux 版</a>",
   "hero.download_windows": "⬇ 下载\n          Windows 版 <span class=\"beta\">Beta</span></a>",
   "hero.note": "<p class=\"cta-note\">免费开源 · MIT 许可 · Linux 提供 AppImage、.deb、.rpm &amp; Flatpak ·\n        Windows 提供安装程序 &amp; 便携版 ZIP · Android 提供 APK（GPLv3）</p>",
