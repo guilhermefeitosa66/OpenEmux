@@ -6053,7 +6053,8 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 The Android app's cartridge frames re-rendered with relief by
 `pkg/android/openemux/tools/render-cartridge-frames.py` in
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android) (issue 702, done in parts:
-issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy). Each later part adds its consoles to
+issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy; issue 705 the Master System, Game
+Gear, SG-1000 and 32X). Each later part adds its consoles to
 RT-645's list. The runner has no Android device, so this is `MANUAL`: a person runs it on a phone and
 a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, with `adb`).
 
@@ -6061,7 +6062,8 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 - **Area:** Android — Relief cartridge frames
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, games with real labels for
-  each redone console: Game Boy, Game Boy Color, NES, Virtual Boy.
+  each redone console: Game Boy, Game Boy Color, NES, Virtual Boy, Master System, Game Gear,
+  SG-1000, 32X.
 - **Steps:**
   1. Open each console's library in the cartridge view, phone in portrait.
   2. Look at one cartridge of each console up close (open the game's detail screen).
@@ -6072,7 +6074,10 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
      Drive, Nintendo DS) in the cartridge view.
 - **Expected:** Every redone frame is sharp (no pixelation in landscape or on the tablet), lit from
   the top left: embossed lettering is legible ("Nintendo GAME BOY" on Game Boy and Game Boy Color,
-  "VIRTUAL BOY" on the Virtual Boy's dark band), and the grooves, ribs and arrows cast shadows. The
+  "VIRTUAL BOY" on the Virtual Boy's dark band, "SEGA" on the Game Gear's plate), and the grooves,
+  ribs, arrows, grip tabs and slots cast shadows (the Master System's three grooves under the label,
+  the Game Gear's arch and top vents, the SG-1000's side grips, the 32X's bezel, side sweeps and
+  bottom slots). The
   label sits in a recess with a soft shadow along its top and left edges, filling the window with no
   gap and without covering the shell. Each color reads as that color with the relief still visible,
   including Black, White and Clear. The consoles in step 5 look exactly as before.
