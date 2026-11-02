@@ -514,8 +514,8 @@ class TheOpeningStageTests(unittest.TestCase):
 
 
 class TheShareSequenceTests(unittest.TestCase):
-    """Share nearby as a scroll stage: one transfer on both screens (issue 687),
-    animated in six moments over the real captures (issue 737)."""
+    """Share nearby: one transfer on both screens (issue 687), animated in six
+    moments over the real captures, playing by itself on a loop (issue 737)."""
 
     PHONE = ["phone-1-what", "phone-1-pick", "phone-1-pick", "phone-2-code", "phone-3-progress", "phone-4-sent"]
     WINDOW = ["desktop-4-library", "desktop-4-library", "desktop-1-ready", "desktop-2-offer", "desktop-3-progress",
@@ -529,7 +529,7 @@ class TheShareSequenceTests(unittest.TestCase):
         self.css = _css(self.en)
 
     def _section(self, text):
-        found = re.search(r'<section class="moment share" id="share" data-stage>(.*?)</section>', text, re.S)
+        found = re.search(r'<section class="moment share" id="share">(.*?)</section>', text, re.S)
         self.assertIsNotNone(found)
         return found.group(1)
 
@@ -537,7 +537,9 @@ class TheShareSequenceTests(unittest.TestCase):
         for locale in build_site.ORDER:
             share = self._section(build_site.render(locale))
             with self.subTest(locale=locale):
-                self.assertEqual(share.count('class="stage-sticky share-stage"'), 1)
+                self.assertEqual(share.count('<div class="share-stage">'), 1)
+                self.assertNotIn("stage-sticky", share)
+                self.assertNotIn("data-stage", share)
                 self.assertEqual(share.count('<li class="share-step">'), 6)
                 phones = re.findall(r'<div class="share-phone[^"]*"[^>]*>\s*<picture>.*?assets/share/([a-z0-9-]+)\.png',
                                     share, re.S)
@@ -598,29 +600,29 @@ class TheShareSequenceTests(unittest.TestCase):
             with self.subTest(keyframes=name):
                 self.assertLessEqual(set(re.findall(r"([a-z-]+)\s*:", body)), {"transform", "opacity"})
                 self.assertIn(f".{name} {{ animation-name: {name} }}", self.css)
-                self.assertRegex(self._section(self.en), rf'class="[^"]*\b{name}\b[^"]*" data-stage-layer')
+                self.assertRegex(self._section(self.en), rf'class="[^"]*\b{name}\b[^"]*" data-share-layer')
 
     def test_without_a_driver_it_is_a_strip_of_cards(self):
-        # The stage layout lives only under the motion query, for both
-        # drivers; outside it the list is a grid of four cards.
-        inside = "".join(_blocks(self.css, self.STAGE_MEDIA + " {")
-                         + _blocks(self.css, self.STAGE_MEDIA + " and (max-width: 899px) {"))
-        self.assertIn("@supports (animation-timeline: view())", inside)
+        # The animated layout lives only under the motion query and the
+        # script's .share-play; outside it the list is a grid of six cards.
+        # The query leaves out reduced motion and screens under 640px, and
+        # without JavaScript nothing sets the class.
+        blocks = _blocks(self.css, self.STAGE_MEDIA + " {") + _blocks(
+            self.css, self.STAGE_MEDIA + " and (max-width: 899px) {")
+        self.assertEqual(len(blocks), 2)
+        inside = "".join(blocks)
         outside = self.css
-        for block in _blocks(self.css, self.STAGE_MEDIA + " {") + _blocks(
-                self.css, self.STAGE_MEDIA + " and (max-width: 899px) {"):
+        for block in blocks:
             outside = outside.replace(block, "")
-        for driver in ("#share[data-stage] .share", "#share.stage-js .share"):
-            with self.subTest(driver=driver):
-                self.assertIn(driver + "-step {", inside)
-                self.assertIn(driver + "-shots {", inside)
-                self.assertNotIn(driver, outside)
+        self.assertIn("#share.share-play .share-step {", inside)
+        self.assertIn("#share.share-play .share-shots {", inside)
+        self.assertNotIn("#share.share-play", outside)
+        self.assertNotIn("#share[data-stage]", self.css)
+        self.assertNotIn("#share.stage-js", self.css)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", _blocks(self.css, ".share-seq {")[0])
-        # Too short for the window, the phone and the caption: the cards, still.
-        short = _blocks(self.css, "@media (max-height: 639px) {")[0]
-        self.assertIn("#share [data-stage-layer] {\n        animation: none", short)
-        self.assertIn("min-height: 0", short)
         self.assertNotIn("prefers-reduced-motion: reduce", inside)
+        self.assertIn('window.matchMedia("(prefers-reduced-motion: no-preference) and (min-height: 640px)")',
+                      self._script())
 
     def test_the_phone_screen_is_centred_with_concentric_corners(self):
         body = _blocks(self.css, ".share-phone {")[0]
@@ -638,7 +640,7 @@ class TheShareSequenceTests(unittest.TestCase):
         share = self._section(self.en)
         for name in self.OVERLAYS:
             with self.subTest(overlay=name):
-                self.assertRegex(share, rf'<i class="[^"]*\b{name}\b[^"]*" data-stage-layer>')
+                self.assertRegex(share, rf'<i class="[^"]*\b{name}\b[^"]*" data-share-layer>')
                 self.assertIn(f"@keyframes {name} ", self.css)
         # Every overlay sits in a box the screen reader skips.
         boxes = re.findall(r'<span class="share-scr"([^>]*)>(.*?)</span>', share, re.S)
@@ -672,9 +674,8 @@ class TheShareSequenceTests(unittest.TestCase):
         # the dimmed window does not stack.
         self.assertEqual(steps[0].count('class="share-ov share-slot"'), 1)
         self.assertIn("share-window share-idle share-same", steps[1])
-        for driver in ("#share[data-stage]", "#share.stage-js"):
-            self.assertIn(f"{driver} .share-same {{", self.css)
-            self.assertIn(f"{driver} .share-idle {{", self.css)
+        self.assertIn("#share.share-play .share-same {", self.css)
+        self.assertIn("#share.share-play .share-idle {", self.css)
 
     def test_on_a_still_card_the_phone_sits_over_the_window(self):
         # The window is positioned (its overlays need it), so the phone needs
@@ -682,11 +683,62 @@ class TheShareSequenceTests(unittest.TestCase):
         self.assertIn("z-index: 1", _blocks(self.css, ".share-phone {")[0])
         self.assertIn("isolation: isolate", _blocks(self.css, ".share-shots {")[0])
 
-    def test_each_moment_holds_for_a_stretch_of_scroll(self):
-        share = _blocks(self.css, "#share {")[0]
-        self.assertIn("--stage-len: 720vh", share)
-        self.assertIn("--stage-len: 540vh", self.css)
+    def _script(self):
+        found = re.search(r"<!-- Share nearby: the switch.*?<script>(.*?)</script>", self.en, re.S)
+        self.assertIsNotNone(found)
+        return found.group(1)
+
+    def test_it_plays_on_a_clock_not_on_the_scroll(self):
+        # No stage: no tall section, no sticky box, natural height.
+        self.assertNotIn("--stage-len", "".join(_blocks(self.css, "#share {")))
+        self.assertNotIn("sticky", "".join(b for b in _blocks(self.css, self.STAGE_MEDIA + " {")))
+        self.assertIn("--share-loop: 32s", _blocks(self.css, "#share {")[0])
+        loop = _blocks(self.css, "#share.share-play [data-share-layer] {")[0]
+        for rule in ("animation-duration: var(--share-loop)", "animation-timing-function: linear",
+                     "animation-iteration-count: infinite", "animation-fill-mode: both",
+                     "animation-play-state: paused"):
+            self.assertIn(rule, loop)
+        running = _blocks(self.css, "#share.share-play.is-playing [data-share-layer] {")[0]
+        self.assertIn("animation-play-state: running", running)
+        self.assertIn("will-change: transform, opacity", running)
+        self.assertIn("animation-name: none", _blocks(self.css, "#share.share-reset [data-share-layer] {")[0])
+        # The scroll engine's rules never reach these layers.
+        self.assertNotIn("data-stage-layer", self._section(self.en))
         self.assertIn("width: calc(100% / 6);\n      background: var(--gold)", self.css)
+
+    def test_the_loop_holds_on_the_library_then_comes_back_to_the_first_moment(self):
+        # Moments 2-6 stay until 97% and fade out by 100%, uncovering the
+        # first one, whose caption, tick and indicator are back by then.
+        for n in range(2, 7):
+            with self.subTest(moment=n):
+                body = _blocks(self.css, f"@keyframes share-in-{n} ")[0]
+                self.assertRegex(body, r"\d+%, 97% \{ opacity: 1 \}\s*100% \{ opacity: 0 \}")
+        self.assertIn("100% { opacity: 1 }", _blocks(self.css, "@keyframes share-cap-1 ")[0])
+        self.assertIn("100% { opacity: 0; transform: translateY(0) }", _blocks(self.css, "@keyframes share-cap-6 ")[0])
+        self.assertIn("97%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-tick ")[0])
+        self.assertIn("100% { transform: scaleX(0) }", _blocks(self.css, "@keyframes share-done ")[0])
+        self.assertIn("100% { transform: translateX(0) }", _blocks(self.css, "@keyframes share-now ")[0])
+        # The library arrives at 84%: the last ~13% of the loop is the hold.
+        self.assertIn("84%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-lib-in ")[0])
+        # Six moments, 15% of the loop each.
+        starts = [re.search(r"0%, (\d+)% \{ opacity: 0 \}", _blocks(self.css, f"@keyframes share-in-{n} ")[0]).group(1)
+                  for n in range(2, 7)]
+        self.assertEqual(starts, ["15", "30", "45", "60", "75"])
+
+    def test_the_switch_plays_in_view_pauses_away_and_starts_over(self):
+        script = self._script()
+        self.assertIn('"IntersectionObserver" in window', script)
+        self.assertIn("threshold: [0, 0.35]", script)
+        self.assertIn('classList.toggle("share-play", motion.matches)', script)
+        self.assertIn('classList.toggle("is-playing", motion.matches && inView && !document.hidden)', script)
+        self.assertIn('addEventListener("visibilitychange", sync)', script)
+        self.assertIn("if (inView && away) restart();", script)
+        self.assertIn("if (!entry.isIntersecting) away = true;", script)
+        self.assertIn('share.classList.add("share-reset");\n        void share.offsetWidth;', script)
+        # It decides when, never where: nothing about the scroll.
+        for needle in ("scroll", "wheel", "touch", "preventDefault", "requestAnimationFrame"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, script)
 
     def test_the_window_is_the_capture_itself(self):
         share = self._section(self.en)
@@ -699,11 +751,10 @@ class TheShareSequenceTests(unittest.TestCase):
         # track (issue 688), which moves the gallery, not the page.
         self.assertEqual(re.findall(r"scroll-snap-type:[^;}]*", self.css), ["scroll-snap-type: x mandatory"])
         self.assertIn("scroll-snap-type: x mandatory", _blocks(self.css, ".gal-track {")[0])
-        # The engine's one driver moves it: no script of its own. The only
-        # wheel listener is the galleries' passive one on their own track
-        # (issue 688), which can never hold the page.
+        # The section leaves the scroll engine and its switch never listens
+        # to the scroll. The only wheel listener is the galleries' passive
+        # one on their own track (issue 688), which can never hold the page.
         scripts = "".join(re.findall(r"<script>(.*?)</script>", self.en, re.S))
-        self.assertNotIn("share", scripts)
         self.assertNotIn("touchmove", scripts)
         self.assertEqual(re.findall(r"addEventListener\('wheel'[^)]*\)", scripts),
                          ["addEventListener('wheel', release, { passive: true })"])
