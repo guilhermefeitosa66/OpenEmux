@@ -55,7 +55,7 @@ ASSETS = DOCS / "assets"
 IMAGE_MANIFEST = REPO / "site" / "images.json"
 
 #: The PNGs, under docs/assets/, that get AVIF/WebP widths and a <picture>.
-IMAGE_SOURCES = ("desktop/*.png", "shelf/*.png")
+IMAGE_SOURCES = ("desktop/*.png", "shelf/*.png", "android/*.png", "share/*.png")
 
 #: The responsive widths offered, each only when it is below the source's own.
 WIDTHS = (640, 1280, 1920, 2560)
