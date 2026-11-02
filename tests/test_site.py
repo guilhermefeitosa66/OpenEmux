@@ -191,6 +191,137 @@ class TheNarrativeTests(unittest.TestCase):
                 self.assertIn("assets/openemux-promo.mp4", hero)
 
 
+class TheGalleriesTests(unittest.TestCase):
+    """The cartridge and controller-skin galleries (issue 688)."""
+
+    CARTS = ("Super Nintendo", "Nintendo (NES)", "Game Boy Advance", "Nintendo 64", "Mega Drive", "PlayStation")
+    SKINS = ("Super Nintendo", "Game Boy Advance", "Nintendo 64", "Mega Drive", "PlayStation", "Nintendo DS")
+
+    @staticmethod
+    def _gallery(text, kind):
+        start = text.index(f'<div class="gal gal-{kind}"')
+        return text[start:text.index('<div class="gal-controls"', start)], \
+            text[text.index('<div class="gal-controls"', start):text.index("</section>", start)]
+
+    @staticmethod
+    def _style():
+        return re.search(r"<style>(.*?)</style>", build_site.TEMPLATE.read_text(encoding="utf-8"), re.S).group(1)
+
+    @staticmethod
+    def _rule(css, selector):
+        return re.search(r"(?:^|\n)\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", css).group(1)
+
+    def test_each_moment_has_one_labelled_carousel_in_every_language(self):
+        english = build_site.load_strings("en")
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            strings = build_site.load_strings(locale)
+            with self.subTest(locale=locale):
+                self.assertEqual(text.count('aria-roledescription="carousel"'), 2)
+                consoles = re.search(r'id="consoles">(.*?)</section>', text, re.S).group(1)
+                android = re.search(r'id="android">(.*?)</section>', text, re.S).group(1)
+                self.assertIn(f'aria-label="{strings["gal.carts"]}"', consoles)
+                self.assertIn(f'aria-label="{strings["gal.skins"]}"', android)
+                for key in ("gal.carts", "gal.skins", "gal.prev", "gal.next", "gal.dots",
+                            "android.alt_portrait", "android.alt_landscape"):
+                    if locale != "en":
+                        self.assertNotEqual(strings[key], english[key], key)
+
+    def test_every_slide_names_its_console(self):
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            for kind, names in (("carts", self.CARTS), ("skins", self.SKINS)):
+                track, _ = self._gallery(text, kind)
+                slides = re.findall(r'<div class="gal-slide" role="group" aria-roledescription="slide" '
+                                    r'aria-label="([^"]+)">(.*?)</figure>', track, re.S)
+                with self.subTest(locale=locale, gallery=kind):
+                    self.assertEqual(tuple(n for n, _ in slides), names)
+                    for name, body in slides:
+                        self.assertIn(f"<figcaption>{name}</figcaption>", body)
+                        for alt in re.findall(r'alt="([^"]+)"', body):
+                            self.assertTrue(alt.endswith(": " + name), alt)
+
+    def test_the_skins_show_portrait_and_the_landscape_of_gba_and_nds(self):
+        track, _ = self._gallery(build_site.render("en"), "skins")
+        self.assertEqual(track.count('<div class="phone">'), 6)
+        self.assertEqual(re.findall(r'game-(\w+)-landscape\.png', track), ["gba", "nds"])
+        self.assertEqual(track.count('<div class="phone landscape">'), 2)
+
+    def test_previous_next_and_a_dot_per_slide_are_buttons(self):
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            strings = build_site.load_strings(locale)
+            for kind, names in (("carts", self.CARTS), ("skins", self.SKINS)):
+                _, controls = self._gallery(text, kind)
+                with self.subTest(locale=locale, gallery=kind):
+                    self.assertTrue(controls.startswith('<div class="gal-controls" hidden>'))
+                    self.assertIn(f'<button class="gal-btn gal-prev" type="button" aria-label="{strings["gal.prev"]}">',
+                                  controls)
+                    self.assertIn(f'<button class="gal-btn gal-next" type="button" aria-label="{strings["gal.next"]}">',
+                                  controls)
+                    self.assertIn(f'role="group" aria-label="{strings["gal.dots"]}"', controls)
+                    self.assertEqual(tuple(re.findall(r'<button class="gal-dot" type="button" aria-label="([^"]+)">',
+                                                      controls)), names)
+
+    def test_only_the_gallery_snaps_and_it_is_reachable_by_keyboard(self):
+        css = self._style()
+        self.assertEqual(len(re.findall(r"scroll-snap-type", css)), 1)
+        self.assertIn("scroll-snap-type: x mandatory", self._rule(css, ".gal-track"))
+        self.assertNotIn("scroll-snap", self._rule(css, "body"))
+        self.assertEqual(build_site.render("en").count('<div class="gal-track" tabindex="0">'), 2)
+        self.assertIn("outline: 3px solid var(--gold)", self._rule(css, ".gal-dot:focus-visible"))
+
+    def test_the_script_moves_by_buttons_dots_and_arrow_keys(self):
+        page = build_site.TEMPLATE.read_text(encoding="utf-8")
+        script = page[page.index("// Galleries (cartridges, skins)"):]
+        script = script[:script.index("</script>")]
+        for needle in ("ArrowLeft", "ArrowRight", "Home:", "End:", "e.preventDefault()",
+                       "'.gal-dot'", "aria-current", "prev.disabled", "next.disabled",
+                       "{ passive: true }", "scrollend", ".hidden = false"):
+            self.assertIn(needle, script)
+        self.assertNotIn("setInterval", script)
+
+    def test_reduced_motion_jumps_without_animation(self):
+        page = build_site.TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("behavior: reduceMotion.matches ? 'auto' : 'smooth'", page)
+        reduced = self._style().split("@media (prefers-reduced-motion: reduce)")
+        self.assertTrue(any(".gal-track" in block.split("@media", 1)[0] for block in reduced[1:]))
+
+    def test_the_desktop_capture_is_the_window_with_no_drawn_chrome(self):
+        css = self._style()
+        frame = self._rule(css, ".gal-carts img")
+        self.assertIn("border-radius: 12px", frame)
+        self.assertIn("box-shadow", frame)
+        self.assertNotRegex(css, r"\.gal-carts[^{]*::(before|after)")
+        self.assertNotRegex(css.lower(), r"traffic|titlebar|title-bar|#ff5f5[67]|#febc2e|#28c840")
+
+    def test_the_phone_screen_is_centred_with_concentric_corners(self):
+        css = self._style()
+        body = self._rule(css, ".phone")
+        for needle in ("box-sizing: border-box", "padding: var(--bezel)", "display: grid", "place-items: center",
+                       "border-radius: var(--frame-r)"):
+            self.assertIn(needle, body)
+        screen = self._rule(css, ".phone img")
+        self.assertIn("width: calc(var(--frame-w) - 2 * var(--bezel))", screen)
+        self.assertIn("height: calc(var(--frame-h) - 2 * var(--bezel))", screen)
+        self.assertIn("border-radius: calc(var(--frame-r) - var(--bezel))", screen)
+        # The sizes the design measured: screen = body - 2 * bezel, both ways.
+        sizes = re.findall(r"--frame-w: (\d+)px;\s*--frame-h: (\d+)px(?:;\s*--frame-r: (\d+)px;\s*--bezel: (\d+)px)?",
+                           css)
+        self.assertEqual([tuple(int(v) for v in s if v) for s in sizes],
+                         [(236, 472, 34, 8), (472, 236), (176, 352, 26, 6), (324, 163)])
+
+    def test_the_old_carousel_is_gone(self):
+        page = build_site.TEMPLATE.read_text(encoding="utf-8")
+        for gone in ("shelfCarousel", "carousel-track", "gallery skins", "{{js.slide}}"):
+            self.assertNotIn(gone, page)
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            for key in ("js.slide", "shots.prev", "shots.next", "shots.dots", "shots.favorites",
+                        "android.shot_game", "android.shot_landscape", "android.shot_nds"):
+                self.assertNotIn(key, strings)
+
+
 def _app_strings(locale):
     return importlib.import_module(f"openemux.i18n.locales.{locale}").TRANSLATIONS
 
@@ -361,16 +492,19 @@ class TheImagePipelineTests(unittest.TestCase):
         self.assertTrue(out.startswith('<img src="assets/logo.png" /> <picture>'))
         self.assertEqual(out.count("<picture>"), 1)
 
-    def test_every_carousel_shot_is_a_picture_on_every_page(self):
+    def test_every_gallery_shot_is_a_picture_on_every_page(self):
         manifest = build_site.load_manifest()
+        shots = [f"desktop/cart-{c}" for c in ("sfc", "fc", "gba", "n64", "md", "ps")]
+        shots += [f"android/game-{c}-portrait" for c in ("snes", "gba", "n64", "megadrive", "ps", "nds")]
+        shots += ["android/game-gba-landscape", "android/game-nds-landscape"]
         for locale in build_site.ORDER:
             text = build_site.render(locale)
             root = "" if locale == "en" else "../"
-            for name in ("sfc", "gba", "n64", "md", "sms", "ps", "favorites"):
+            for name in shots:
                 with self.subTest(locale=locale, shot=name):
-                    self.assertIn(f'<img src="{root}assets/shelf/{name}.png"', text)
+                    self.assertIn(f'<img src="{root}assets/{name}.png"', text)
                     self.assertRegex(text, rf'<picture><source type="image/avif" srcset="{re.escape(root)}'
-                                           rf'assets/shelf/{name}-640\.avif 640w')
+                                           rf'assets/{name}-640\.avif 640w')
             self.assertNotIn("data-picture", text)
         for entry in manifest.values():
             for variant in entry["variants"]:
