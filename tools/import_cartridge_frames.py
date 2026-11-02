@@ -39,8 +39,8 @@ DEFAULT_SOURCE = (
 # Hand-drawn frames the Android generator does not redo; never touched here.
 KEEP = {"SFC", "NDS"}
 
-# How far the raster's shape may drift from the frame's, in raster pixels on
-# its long side: the generator rounds each side to a whole pixel.
+# How far each side of the raster may be from the frame's shape, in raster
+# pixels: the generator rounds the short side to a whole pixel.
 ASPECT_TOLERANCE_PX = 1.0
 
 WEBP_NAME_RE = re.compile(r"^cart_([a-z0-9]+?)(?:_([a-z]+))?\.webp$")
@@ -88,9 +88,9 @@ def import_frame(svg_text: str, webp: bytes, name: str) -> str:
         raise FrameImportError(f"{name}: no viewBox")
     vw, vh = float(vb.group(1)), float(vb.group(2))
     w, h = webp_size(webp)
-    long_side = max(w, h)
-    expected_h = w * vh / vw
-    if abs(expected_h - h) > ASPECT_TOLERANCE_PX * long_side / 800:
+    # The generator sizes the long side and rounds the other: compare like that.
+    k = max(w, h) / max(vw, vh)
+    if abs(vw * k - w) > ASPECT_TOLERANCE_PX or abs(vh * k - h) > ASPECT_TOLERANCE_PX:
         raise FrameImportError(f"{name}: raster {w}x{h} does not have the frame's {vw:g}x{vh:g} shape")
     payload = base64.b64encode(webp).decode("ascii")
     text, n = HREF_RE.subn(lambda m: f"{m.group(1)}webp{m.group(2)}{payload}{m.group(3)}", svg_text)

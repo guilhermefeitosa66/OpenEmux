@@ -454,6 +454,48 @@ class EveryShippedFrameTests(unittest.TestCase):
                     self.assertLess(g, 60)
 
 
+#: The frames redone with relief by the Android generator and imported by
+#: tools/import_cartridge_frames.py (issue #703). SFC and NDS stay hand-drawn.
+RELIEF_CONSOLES = (
+    "FC", "GB", "GBC", "SMS", "GG", "SG1000", "S32X", "PCE", "A2600", "A5200",
+    "A7800", "CV", "INTV", "LYNX", "NGP", "O2", "VB", "VECTREX", "WS", "N64",
+    "GBA", "MD",
+)
+
+
+class ReliefFrameTests(unittest.TestCase):
+    """The relief frames embed WebP, which only an image-rs librsvg decodes."""
+
+    def test_relief_frames_embed_webp_and_the_others_png(self):
+        for console in CARTRIDGE_CONSOLES:
+            expected = "webp" if console in RELIEF_CONSOLES else "png"
+            for color in cartridge_render.frame_colors_for(console):
+                path = cartridge_render.frame_asset_for(console, color=color)
+                with self.subTest(frame=path.name):
+                    self.assertIn(f'xlink:href="data:image/{expected};base64,', path.read_text())
+
+    def test_every_relief_shell_is_drawn(self):
+        # A librsvg that cannot decode the WebP draws nothing where the shell
+        # is: the cartridge would be a bare sticker. Outside the label window
+        # only the shell can be opaque, so count there.
+        for console in RELIEF_CONSOLES:
+            for color in cartridge_render.frame_colors_for(console):
+                with self.subTest(console=console, color=color):
+                    frame = CartridgeFrame(cartridge_render.frame_asset_for(console, color=color))
+                    surface = frame.render(None, width=200)
+                    data, stride = surface.get_data(), surface.get_stride()
+                    w, h = surface.get_width(), surface.get_height()
+                    bx, by, bw, bh = frame._label_bbox(w, h)
+                    outside = [
+                        data[y * stride + x * 4 + 3]
+                        for y in range(0, h, 4)
+                        for x in range(0, w, 4)
+                        if not (bx <= x < bx + bw and by <= y < by + bh)
+                    ]
+                    opaque = sum(1 for a in outside if a == 255)
+                    self.assertGreater(opaque / len(outside), 0.3)
+
+
 class FrameAssetLookupTests(unittest.TestCase):
     """Which consoles have a cartridge frame: the SVG assets are the list."""
 
