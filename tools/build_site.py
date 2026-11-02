@@ -265,9 +265,14 @@ def build_images(assets=None, manifest_path=None):
         manifest[source] = {"sha256": digest, "width": width, "height": height,
                             "variants": variants}
         encoded.append(source)
-    for source in set(old) - set(manifest):
-        for variant in old[source]["variants"]:
-            (assets / variant["file"]).unlink(missing_ok=True)
+    # A removed source takes its widths along, and a re-encoded one whose
+    # widths changed (a capture retaken at another size) drops the ones it no
+    # longer has: either would be an orphan --check fails on.
+    keep = {v["file"] for entry in manifest.values() for v in entry["variants"]}
+    for entry in old.values():
+        for variant in entry["variants"]:
+            if variant["file"] not in keep:
+                (assets / variant["file"]).unlink(missing_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return encoded
 
@@ -309,7 +314,7 @@ def check_images(assets=None, manifest=None):
 
 
 IMG_TAG = re.compile(r"<img\b[^>]*\bdata-picture\b[^>]*>")
-ATTR = re.compile(r'\s([a-zA-Z-]+)(?:="([^"]*)")?')
+ATTR = re.compile(r'\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:="([^"]*)")?')
 
 
 def picture(tag, root, manifest):
