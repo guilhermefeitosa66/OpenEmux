@@ -636,40 +636,520 @@
       font-size: clamp(1.9rem, 4vw, 2.8rem)
     }
 
-    /* Share nearby: the four steps, until the scroll-driven sequence. */
-    .share-steps {
+    /* ---------- Share nearby (a scroll stage) ----------
+       Without a driver: a strip of four cards, each with the computer's
+       capture and the phone's over its lower left corner. With one: the
+       four steps stacked in one place on the stage, each step's devices
+       fading in over the one before and its caption replacing the last.
+       Steps start at 34%, 56% and 78% of the stage: the header above the
+       sticky box takes the first ~15% of the scroll before it holds. */
+    .share-seq {
       list-style: none;
       padding: 0;
       margin: 44px 0 0;
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 18px;
       text-align: left;
       counter-reset: step
     }
 
-    .share-steps>li {
+    .share-step {
       min-width: 0;
-      counter-increment: step
+      counter-increment: step;
+      background: linear-gradient(180deg, var(--panel), rgba(21, 16, 41, .45));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px
     }
 
-    .share-steps>li::before {
+    .share-step::before {
       content: counter(step);
       display: block;
       color: var(--gold);
       font-weight: 800;
-      margin-bottom: 6px
+      margin-bottom: 10px
+    }
+
+    .share-shots {
+      position: relative;
+      padding-bottom: 14%;
+      margin-bottom: 16px
+    }
+
+    /* The computer's capture is the app's own window (header bar and window
+       buttons included): its frame is the border, the corners and the
+       shadow, never a second title bar. */
+    .share-window {
+      display: grid;
+      width: 84%;
+      margin-left: auto;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .6)
+    }
+
+    /* The capture received and the library after it share one place. */
+    .share-window img,
+    .share-lib {
+      grid-area: 1 / 1
+    }
+
+    /* The screen sits exactly in the middle of the body (the same bezel on
+       all four sides) with concentric corners: the screen's radius is the
+       body's minus its border and the bezel. Sizes change per layout
+       through --phone-r and --bezel only. */
+    .share-phone {
+      --phone-r: 12px;
+      --bezel: 3px;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 27%;
+      padding: var(--bezel);
+      box-sizing: border-box;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .16);
+      border-radius: var(--phone-r);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .65)
+    }
+
+    .share-phone img {
+      width: 100%;
+      border-radius: calc(var(--phone-r) - var(--bezel) - 1px)
+    }
+
+    .share-cap h3 {
+      font-size: 1rem
+    }
+
+    .share-cap p {
+      color: var(--muted);
+      font-size: .94rem;
+      margin: 0
+    }
+
+    .share-link,
+    .share-meter {
+      display: none
     }
 
     @media(max-width:900px) {
-      .share-steps {
-        grid-template-columns: 1fr 1fr
+      .share-seq {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
       }
     }
 
     @media(max-width:520px) {
-      .share-steps {
-        grid-template-columns: 1fr
+      .share-seq {
+        grid-template-columns: minmax(0, 1fr)
+      }
+    }
+
+    /* Each animated layer names its keyframes with a single class, so the
+       short-screen rule below (an id) can switch them all off. */
+    .share-in-2 { animation-name: share-in-2 }
+    .share-in-3 { animation-name: share-in-3 }
+    .share-in-4 { animation-name: share-in-4 }
+    .share-settle-2 { animation-name: share-settle-2 }
+    .share-settle-3 { animation-name: share-settle-3 }
+    .share-settle-4 { animation-name: share-settle-4 }
+    .share-lib-in { animation-name: share-lib-in }
+    .share-cap-1 { animation-name: share-cap-1 }
+    .share-cap-2 { animation-name: share-cap-2 }
+    .share-cap-3 { animation-name: share-cap-3 }
+    .share-cap-4 { animation-name: share-cap-4 }
+    .share-done { animation-name: share-done }
+    .share-now { animation-name: share-now }
+
+    @keyframes share-in-2 {
+      0%, 34% { opacity: 0 }
+      40%, 100% { opacity: 1 }
+    }
+
+    @keyframes share-in-3 {
+      0%, 56% { opacity: 0 }
+      62%, 100% { opacity: 1 }
+    }
+
+    @keyframes share-in-4 {
+      0%, 78% { opacity: 0 }
+      84%, 100% { opacity: 1 }
+    }
+
+    /* Step 4's second half: the received dialog gives way to the library. */
+    @keyframes share-lib-in {
+      0%, 90% { opacity: 0 }
+      95%, 100% { opacity: 1 }
+    }
+
+    /* The phone settles 12px as its screen changes; the computer holds. */
+    @keyframes share-settle-2 {
+      0%, 34% { transform: translateY(12px) }
+      40%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-3 {
+      0%, 56% { transform: translateY(12px) }
+      62%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-4 {
+      0%, 78% { transform: translateY(12px) }
+      84%, 100% { transform: translateY(0) }
+    }
+
+    /* A caption leaves before the next one rises 8px into place. */
+    @keyframes share-cap-1 {
+      0%, 30% { opacity: 1 }
+      34%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-cap-2 {
+      0%, 34% { opacity: 0; transform: translateY(8px) }
+      39%, 52% { opacity: 1; transform: translateY(0) }
+      56%, 100% { opacity: 0; transform: translateY(0) }
+    }
+
+    @keyframes share-cap-3 {
+      0%, 56% { opacity: 0; transform: translateY(8px) }
+      61%, 74% { opacity: 1; transform: translateY(0) }
+      78%, 100% { opacity: 0; transform: translateY(0) }
+    }
+
+    @keyframes share-cap-4 {
+      0%, 78% { opacity: 0; transform: translateY(8px) }
+      83%, 100% { opacity: 1; transform: translateY(0) }
+    }
+
+    /* The step indicator: the steps done fill in white, the current one is
+       the gold quarter sliding along. */
+    @keyframes share-done {
+      0%, 34% { transform: scaleX(0) }
+      37%, 56% { transform: scaleX(.25) }
+      59%, 78% { transform: scaleX(.5) }
+      81%, 100% { transform: scaleX(.75) }
+    }
+
+    @keyframes share-now {
+      0%, 34% { transform: translateX(0) }
+      37%, 56% { transform: translateX(100%) }
+      59%, 78% { transform: translateX(200%) }
+      81%, 100% { transform: translateX(300%) }
+    }
+
+    /* The stage layout. The devices are sized from one height, --dh, which
+       fits the screen (with the caption and the indicator under it) and the
+       width (phone, the link mark and the window side by side). The same
+       rules twice: under the CSS driver and under the script's .stage-js. */
+    #share {
+      --stage-len: 400vh;
+      --dh: min(488px, calc(100vh - var(--nav-h) - 230px), calc((100vw - 150px) / 1.94));
+      --ww: calc(var(--dh) * 1.475)
+    }
+
+    @media (prefers-reduced-motion: no-preference) and (min-height: 640px) {
+      @supports (animation-timeline: view()) {
+        #share[data-stage] .share-stage {
+          padding: 24px 0;
+          background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
+        }
+
+        #share[data-stage] .share-seq {
+          grid-template-columns: minmax(0, 1fr);
+          margin: 0;
+          text-align: center
+        }
+
+        #share[data-stage] .share-step {
+          grid-area: 1 / 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: none;
+          border: 0;
+          padding: 0
+        }
+
+        #share[data-stage] .share-step::before {
+          content: none
+        }
+
+        #share[data-stage] .share-shots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 28px;
+          padding: 0;
+          margin: 0
+        }
+
+        #share[data-stage] .share-window {
+          flex: none;
+          width: var(--ww);
+          margin: 0;
+          border-radius: 14px
+        }
+
+        #share[data-stage] .share-phone {
+          --phone-r: 34px;
+          --bezel: 8px;
+          position: relative;
+          flex: none;
+          width: calc((var(--dh) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+        }
+
+        #share[data-stage] .share-step+.share-step .share-window,
+        #share[data-stage] .share-step+.share-step .share-phone {
+          box-shadow: none
+        }
+
+        #share[data-stage] .share-link {
+          display: flex;
+          gap: 7px
+        }
+
+        #share[data-stage] .share-cap {
+          max-width: 46ch;
+          margin-top: 26px
+        }
+
+        #share[data-stage] .share-cap h3 {
+          font-size: 1.375rem;
+          font-weight: 600
+        }
+
+        #share[data-stage] .share-cap p {
+          font-size: 1.06rem
+        }
+
+        #share[data-stage] .share-meter {
+          display: block
+        }
+      }
+
+      #share.stage-js .share-stage {
+        padding: 24px 0;
+        background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
+      }
+
+      #share.stage-js .share-seq {
+        grid-template-columns: minmax(0, 1fr);
+        margin: 0;
+        text-align: center
+      }
+
+      #share.stage-js .share-step {
+        grid-area: 1 / 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: none;
+        border: 0;
+        padding: 0
+      }
+
+      #share.stage-js .share-step::before {
+        content: none
+      }
+
+      #share.stage-js .share-shots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 0;
+        margin: 0
+      }
+
+      #share.stage-js .share-window {
+        flex: none;
+        width: var(--ww);
+        margin: 0;
+        border-radius: 14px
+      }
+
+      #share.stage-js .share-phone {
+        --phone-r: 34px;
+        --bezel: 8px;
+        position: relative;
+        flex: none;
+        width: calc((var(--dh) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+      }
+
+      #share.stage-js .share-step+.share-step .share-window,
+      #share.stage-js .share-step+.share-step .share-phone {
+        box-shadow: none
+      }
+
+      #share.stage-js .share-link {
+        display: flex;
+        gap: 7px
+      }
+
+      #share.stage-js .share-cap {
+        max-width: 46ch;
+        margin-top: 26px
+      }
+
+      #share.stage-js .share-cap h3 {
+        font-size: 1.375rem;
+        font-weight: 600
+      }
+
+      #share.stage-js .share-cap p {
+        font-size: 1.06rem
+      }
+
+      #share.stage-js .share-meter {
+        display: block
+      }
+    }
+
+    .share-link i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gold)
+    }
+
+    .share-link i:nth-child(2) {
+      opacity: .6
+    }
+
+    .share-link i:nth-child(3) {
+      opacity: .3
+    }
+
+    /* Four segments: a white track, the steps done over it, the gold one. */
+    .share-meter {
+      position: relative;
+      width: min(240px, 60%);
+      height: 4px;
+      margin: 26px auto 0;
+      overflow: hidden;
+      -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
+      mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
+      background: rgba(255, 255, 255, .12)
+    }
+
+    .share-done,
+    .share-now {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0
+    }
+
+    .share-done {
+      right: 0;
+      background: rgba(255, 255, 255, .25);
+      transform-origin: 0 50%;
+      transform: scaleX(.75)
+    }
+
+    .share-now {
+      width: 25%;
+      background: var(--gold);
+      transform: translateX(300%)
+    }
+
+    /* Phone width: the window on top at full width, the phone under it, a
+       shorter stage. The phone takes the height the window and the caption
+       leave, within 160-380px. */
+    @media(max-width:899px) {
+      #share {
+        --stage-len: 300vh;
+        --ph: clamp(160px, calc(100vh - var(--nav-h) - (100vw - 48px) / 1.475 - 250px), 380px);
+        --ww: 100%
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) and (min-height: 640px) and (max-width: 899px) {
+      @supports (animation-timeline: view()) {
+        #share[data-stage] .share-shots {
+          flex-direction: column-reverse;
+          gap: 14px;
+          width: 100%
+        }
+
+        #share[data-stage] .share-phone {
+          --phone-r: 26px;
+          --bezel: 6px;
+          width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+        }
+
+        #share[data-stage] .share-link {
+          display: none
+        }
+
+        #share[data-stage] .share-cap {
+          margin-top: 16px
+        }
+
+        #share[data-stage] .share-cap h3 {
+          font-size: 1.15rem
+        }
+
+        #share[data-stage] .share-cap p {
+          font-size: .98rem
+        }
+
+        #share[data-stage] .share-meter {
+          margin-top: 16px
+        }
+      }
+
+      #share.stage-js .share-shots {
+        flex-direction: column-reverse;
+        gap: 14px;
+        width: 100%
+      }
+
+      #share.stage-js .share-phone {
+        --phone-r: 26px;
+        --bezel: 6px;
+        width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+      }
+
+      #share.stage-js .share-link {
+        display: none
+      }
+
+      #share.stage-js .share-cap {
+        margin-top: 16px
+      }
+
+      #share.stage-js .share-cap h3 {
+        font-size: 1.15rem
+      }
+
+      #share.stage-js .share-cap p {
+        font-size: .98rem
+      }
+
+      #share.stage-js .share-meter {
+        margin-top: 16px
+      }
+    }
+
+    /* The engine moves stages from 560px of height at phone width; this one
+       needs 640px for the window, the phone and the caption at once, so
+       below that it stays the strip of cards. */
+    @media (max-height: 639px) {
+      #share[data-stage] {
+        min-height: 0
+      }
+
+      #share .stage-sticky {
+        position: relative;
+        top: auto
+      }
+
+      #share [data-stage-layer] {
+        animation: none
       }
     }
 
@@ -1494,22 +1974,90 @@
     </div>
   </section>
 
-  <!-- SHARE NEARBY -->
-  <section class="moment" id="share">
+  <!-- SHARE NEARBY: a scroll stage (see "scroll stages" in the CSS). The
+       phone and the computer side by side while the real captures step
+       through one transfer of Robot Man X: pick, the same code on both,
+       progress, the game in the computer's library. Without a driver
+       (reduced motion, no JavaScript, short screens) the same list is a
+       strip of four static cards. -->
+  <section class="moment share" id="share" data-stage>
     <div class="wrap center">
       <span class="eyebrow">Share nearby</span>
       <h2>From one device to another.</h2>
       <p class="lede">On the same Wi-Fi, send a game from your computer to your phone, or back. No account, no cloud, no cable.</p>
-      <ol class="share-steps">
-        <li class="card"><h3>Pick a game</h3>
-          <p>Open its menu and choose Share Nearby.</p></li>
-        <li class="card"><h3>Choose the device</h3>
-          <p>Every OpenEmux on the network is listed.</p></li>
-        <li class="card"><h3>Compare the code</h3>
-          <p>The other side sees the same code and accepts.</p></li>
-        <li class="card"><h3>Play it there</h3>
-          <p>The game lands in the other library, with its saves.</p></li>
+    </div>
+    <div class="stage-sticky share-stage">
+      <div class="wrap">
+      <ol class="share-seq" aria-label="How it works">
+        <li class="share-step">
+          <div class="share-shots">
+            <div class="share-phone">
+              <picture><source type="image/avif" srcset="assets/share/phone-1-pick-640.avif 640w, assets/share/phone-1-pick-1280.avif 1280w, assets/share/phone-1-pick-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-1-pick-640.webp 640w, assets/share/phone-1-pick-1280.webp 1280w, assets/share/phone-1-pick-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-1-pick.png" alt="OpenEmux on Android, Share Nearby: Robot Man X ready to send and Linux Desktop found on the network" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-1-pick-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-1-ready-640.avif 640w, assets/share/desktop-1-ready-1280.avif 1280w, assets/share/desktop-1-ready-1920.avif 1920w, assets/share/desktop-1-ready-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-1-ready-640.webp 640w, assets/share/desktop-1-ready-1280.webp 1280w, assets/share/desktop-1-ready-1920.webp 1920w, assets/share/desktop-1-ready-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-1-ready.png" alt="OpenEmux on the desktop, Receive Games: ready to receive as Linux Desktop" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-1-ready-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-1" data-stage-layer>
+            <h3>Pick a game on your phone.</h3>
+          <p>Your computer shows up in the list by itself.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-2" data-stage-layer>
+            <div class="share-phone share-settle-2" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-2-code-640.avif 640w, assets/share/phone-2-code-1280.avif 1280w, assets/share/phone-2-code-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-2-code-640.webp 640w, assets/share/phone-2-code-1280.webp 1280w, assets/share/phone-2-code-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-2-code.png" alt="OpenEmux on Android waiting for Linux Desktop to accept, verification code 506 807" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-2-code-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-2-offer-640.avif 640w, assets/share/desktop-2-offer-1280.avif 1280w, assets/share/desktop-2-offer-1920.avif 1920w, assets/share/desktop-2-offer-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-2-offer-640.webp 640w, assets/share/desktop-2-offer-1280.webp 1280w, assets/share/desktop-2-offer-1920.webp 1920w, assets/share/desktop-2-offer-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-2-offer.png" alt="OpenEmux on the desktop, Incoming Games: Android Phone wants to send Robot Man X, verification code 506 807" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-2-offer-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-2" data-stage-layer>
+            <h3>The same code shows on both screens.</h3>
+          <p>If they match, accept on the computer.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-3" data-stage-layer>
+            <div class="share-phone share-settle-3" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-3-progress-640.avif 640w, assets/share/phone-3-progress-1280.avif 1280w, assets/share/phone-3-progress-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-3-progress-640.webp 640w, assets/share/phone-3-progress-1280.webp 1280w, assets/share/phone-3-progress-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-3-progress.png" alt="OpenEmux on Android sending Robot Man X to Linux Desktop, the progress bar part way" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-3-progress-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-3-progress-640.avif 640w, assets/share/desktop-3-progress-1280.avif 1280w, assets/share/desktop-3-progress-1920.avif 1920w, assets/share/desktop-3-progress-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-3-progress-640.webp 640w, assets/share/desktop-3-progress-1280.webp 1280w, assets/share/desktop-3-progress-1920.webp 1920w, assets/share/desktop-3-progress-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-3-progress.png" alt="OpenEmux on the desktop receiving a game from Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-3-progress-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-3" data-stage-layer>
+            <h3>The game goes straight over your Wi-Fi.</h3>
+          <p>Nothing leaves your home network.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-4" data-stage-layer>
+            <div class="share-phone share-settle-4" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-4-sent-640.avif 640w, assets/share/phone-4-sent-1280.avif 1280w, assets/share/phone-4-sent-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-4-sent-640.webp 640w, assets/share/phone-4-sent-1280.webp 1280w, assets/share/phone-4-sent-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-4-sent.png" alt="OpenEmux on Android: 1 game sent, Linux Desktop has it now" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-4-sent-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-4-received-640.avif 640w, assets/share/desktop-4-received-1280.avif 1280w, assets/share/desktop-4-received-1920.avif 1920w, assets/share/desktop-4-received-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-4-received-640.webp 640w, assets/share/desktop-4-received-1280.webp 1280w, assets/share/desktop-4-received-1920.webp 1920w, assets/share/desktop-4-received-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-4-received.png" alt="OpenEmux on the desktop: 1 game received from Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-4-received-2236.webp" /></picture>
+              <div class="share-lib share-lib-in" data-stage-layer>
+                <picture><source type="image/avif" srcset="assets/share/desktop-4-library-640.avif 640w, assets/share/desktop-4-library-1280.avif 1280w, assets/share/desktop-4-library-1920.avif 1920w, assets/share/desktop-4-library-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-4-library-640.webp 640w, assets/share/desktop-4-library-1280.webp 1280w, assets/share/desktop-4-library-1920.webp 1920w, assets/share/desktop-4-library-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-4-library.png" alt="OpenEmux on the desktop, the Super Nintendo library with Robot Man X in it" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-4-library-2236.webp" /></picture>
+              </div>
+            </div>
+          </div>
+          <div class="share-cap share-cap-4" data-stage-layer>
+            <h3>It is in your library now.</h3>
+          <p>Open it and play on the big screen.</p>
+          </div>
+        </li>
       </ol>
+      <div class="share-meter" aria-hidden="true">
+        <span class="share-done" data-stage-layer></span>
+        <span class="share-now" data-stage-layer></span>
+      </div>
+      </div>
     </div>
   </section>
 
