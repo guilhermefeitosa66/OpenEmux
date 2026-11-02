@@ -372,6 +372,35 @@ class BiosTests(ManifestTestCase):
         built = self.build([missing, kept])
         self.assertEqual(self.names(built, 0), [("rom", "Kept.chd"), ("bios", "scph5501.bin")])
 
+    def test_bios_that_do_not_fit_never_take_a_game_s_place(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        self.lib.file("roms/PS/bios/scph1001.bin", b"other")
+        first = self.lib.rom("PS", "First.chd")
+        second = self.lib.rom("PS", "Second.chd")
+        with mock.patch.object(manifest_module, "MAX_ITEMS", 2):
+            built = self.build([first, second])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
+        self.assertEqual(self.names(built, 1), [("rom", "Second.chd")])
+        self.assertEqual(built.excluded, [])
+
+    def test_an_unreadable_bios_never_leaves_its_game_out(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        first = self.lib.rom("PS", "First.chd")
+        second = self.lib.rom("PS", "Second.chd")
+        real = manifest_module.bios_files
+        calls = []
+
+        def flaky(roms_dir, console):
+            calls.append(console)
+            if len(calls) == 1:
+                return [("scph5501.bin", self.lib.roms / "PS" / "bios" / "gone.bin")]
+            return real(roms_dir, console)
+
+        with mock.patch.object(manifest_module, "bios_files", side_effect=flaky):
+            built = self.build([first, second])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
+        self.assertEqual(self.names(built, 1), [("rom", "Second.chd"), ("bios", "scph5501.bin")])
+
 
 if __name__ == "__main__":
     unittest.main()

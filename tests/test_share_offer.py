@@ -304,6 +304,16 @@ class BiosOfferTests(_OfferCase):
             self.service.accepted[3]["on_done"]({"status": "done", "placed": [], "replaced": [], "skipped": []})
         self.assertIn("\nBIOS files added: disksys.rom", status(dialog).get_description())
 
+    def test_bios_alone_are_not_called_nothing_added(self):
+        (self.home.console_dir("FDS") / "Disk.fds").write_bytes(b"disk")
+        dialog = self.receive(self.disk(item("b", "bios", "disksys.rom", b"fds")))
+        dialog.accept()
+        with mock.patch.object(self.win, "_rescan_single_console"):
+            self.service.accepted[3]["on_done"]({"status": "done", "placed": [], "replaced": [], "skipped": []})
+        page = status(dialog)
+        self.assertEqual(page.get_title(), "No Games Received")
+        self.assertEqual(page.get_description().split("\n")[0], "BIOS files added: disksys.rom")
+
     def test_a_different_bios_is_a_conflict_kept_by_default(self):
         bios = self.home.console_dir("FDS") / "bios" / "disksys.rom"
         bios.parent.mkdir()

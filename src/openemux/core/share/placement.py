@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from openemux.core.archives import ARCHIVE_EXTENSIONS
-from openemux.core.bios_importer import console_bios_names
+from openemux.core.bios_importer import canonical_bios_names
 from openemux.core.save_backup import (
     ON_COLLISION_KEEP_BOTH,
     ON_COLLISION_NEWEST,
@@ -484,14 +484,16 @@ class _Planner:
 
 
     def plan_bios(self, plan, console, item):
-        canonical = {name.lower(): name for name in console_bios_names(console)}.get(item["name"].lower())
+        canonical = canonical_bios_names(console).get(item["name"].lower())
         if canonical is None:
             return self.skip(plan, item, SkipReason.INVALID_ITEM)
         base = self.roms_dir / console / "bios"
         target = base / canonical
-        if target in self.taken or _same_content(target, item):
+        if target in self.taken or ("sha256" in item and _same_content(target, item)):
             # The same BIOS is already there (or already coming): nothing to
-            # ask about, and nothing to upload.
+            # ask about, and nothing to upload. Only a hash says so: a
+            # console's BIOS dumps share a size (every PS one is 512 KiB), so
+            # one that comes without a hash is a conflict, never a match.
             return self.skip(plan, item, SkipReason.EXISTS_SKIP)
         if os.path.lexists(target) and not target.is_file():
             return self.skip(plan, item, SkipReason.INVALID_ITEM)

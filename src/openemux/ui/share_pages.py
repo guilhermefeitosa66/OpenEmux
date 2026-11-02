@@ -178,8 +178,9 @@ def _done_text(t, report, device, receiving):
         elif count:
             title = t("share.result.received_partial", received=count, total=report.total)
         else:
-            return "dialog-warning-symbolic", t("share.result.received_none"), \
-                t("share.result.received_none_body", device=device)
+            # "Nothing was added" would deny the BIOS files the page lists next.
+            body = "" if report.bios else t("share.result.received_none_body", device=device)
+            return "dialog-warning-symbolic", t("share.result.received_none"), body
         description = t("share.result.received_body", device=device)
     elif report.complete:
         title = plural(t, count, "share.result.sent.one", "share.result.sent.many")
@@ -232,7 +233,7 @@ def result_page(t, result, device, receiving, report=None, summary="", on_close=
         page_box.set_title(title)
         if report.bios:
             key = "share.result.bios_received" if receiving else "share.result.bios_sent"
-            description = f"{description}\n{t(key, names=', '.join(report.bios))}"
+            description = "\n".join(filter(None, (description, t(key, names=", ".join(report.bios)))))
         if summary:
             description = f"{description}\n{summary}"
         if not report.complete:

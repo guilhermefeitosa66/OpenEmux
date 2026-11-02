@@ -478,6 +478,12 @@ class BiosTests(PlacementTestCase):
         # Keeping both means nothing: a core opens one name.
         self.assertEqual(self.answers(self.plan(m, overrides={"b": "keep_both"}))["b"], "exists_skip")
 
+    def test_a_bios_without_a_hash_is_never_taken_for_the_same_file(self):
+        existing = self.lib.file("roms/PS/bios/scph5501.bin", b"mine", mtime=1)
+        m = self.ps(item("b", "bios", "scph5501.bin", b"diff", hashed=False))
+        replaced = self.decisions(self.plan(m, overrides={"b": "overwrite"}))["b"]
+        self.assertEqual((replaced.action, replaced.replaces), ("send", existing))
+
     def test_a_folder_under_the_bios_name_is_refused(self):
         (self.lib.roms / "PS" / "bios" / "scph5501.bin").mkdir(parents=True)
         plan = self.plan(self.ps(item("b", "bios", "scph5501.bin", b"bios")))

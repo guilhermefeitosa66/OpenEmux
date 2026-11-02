@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from openemux.core.bios_importer import console_bios_names
+from openemux.core.bios_importer import canonical_bios_names
 from openemux.core.save_backup import is_battery_save
 from openemux.core.save_states import list_states
 from openemux.core.scanner import _CUE_FILE_RE
@@ -257,7 +257,7 @@ def bios_files(roms_dir, console):
     spelling, which is what a core opens. A file with the exact spelling wins
     over a case variant. Nothing else in the folder is ever offered.
     """
-    expected = {name.lower(): name for name in console_bios_names(console)}
+    expected = canonical_bios_names(console)
     directory = Path(roms_dir) / console / "bios"
     found = {}
     try:
@@ -271,6 +271,19 @@ def bios_files(roms_dir, console):
         if canonical not in found or entry.name == canonical:
             found[canonical] = entry
     return sorted(found.items())
+
+
+def _bios_entries(roms_dir, console, room):
+    """``[((kind, path, extra), stat)]`` of the console's BIOS, or ``None`` when they cannot go now.
+
+    ``None`` when one cannot be read or they need more than ``room`` items.
+    """
+    try:
+        entries = [((KIND_BIOS, path, {"name": name}), path.stat()) for name, path in bios_files(roms_dir, console)]
+    except OSError as exc:
+        logger.warning("share manifest: %s BIOS left for a later game: %s", console, exc)
+        return None
+    return entries if len(entries) <= room else None
 
 
 def _sendable_name(name):
@@ -317,8 +330,6 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
             continue
         try:
             files = _game_files(rom, unit, console, roms_dir, states_dir, catalog, resolve_core)
-            if console not in carried:
-                files += [(KIND_BIOS, path, {"name": name}) for name, path in bios_files(roms_dir, console)]
             stats = [path.stat() for _, path, _ in files]
         except OSError as exc:
             logger.warning("share manifest: %s left out: %s", rom.get("path"), exc)
@@ -330,8 +341,15 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
         if count + len(files) > MAX_ITEMS:
             built.excluded.append({"rom": rom, "reason": SkipReason.TOO_MANY_ITEMS})
             continue
+        if console not in carried:
+            # The BIOS never cost the game its place: one that cannot be read,
+            # or that would not fit, is left for the next game of the console.
+            bios = _bios_entries(roms_dir, console, MAX_ITEMS - count - len(files))
+            if bios is not None:
+                files += [entry for entry, _ in bios]
+                stats += [stat for _, stat in bios]
+                carried.add(console)
         count += len(files)
-        carried.add(console)
 
         game_id = f"g{len(built.manifest['games']) + 1}"
         game = {"id": game_id, "console": console, "title": rom.get("name") or unit.main.stem, "items": []}
