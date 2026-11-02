@@ -6056,7 +6056,8 @@ The Android app's cartridge frames re-rendered with relief by
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android) (issue 702, done in parts:
 issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy; issue 705 the Master System, Game
 Gear, SG-1000 and 32X; issue 706 the Atari 2600, 5200, 7800 and Lynx; issue 707 the PC Engine, ColecoVision, Intellivision,
-Neo Geo Pocket, Odyssey 2, Vectrex and WonderSwan). Each later part adds its consoles to
+Neo Geo Pocket, Odyssey 2, Vectrex and WonderSwan; issue 714 the Nintendo 64, Game Boy Advance and
+Mega Drive). Each later part adds its consoles to
 RT-645's list. The runner has no Android device, so this is `MANUAL`: a person runs it on a phone and
 a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, with `adb`).
 
@@ -6066,15 +6067,14 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 - **Preconditions:** The Android app installed, first-run setup done, games with real labels for
   each redone console: Game Boy, Game Boy Color, NES, Virtual Boy, Master System, Game Gear,
   SG-1000, 32X, Atari 2600, Atari 5200, Atari 7800, Lynx, PC Engine, ColecoVision, Intellivision,
-  Neo Geo Pocket, Odyssey 2, Vectrex, WonderSwan.
+  Neo Geo Pocket, Odyssey 2, Vectrex, WonderSwan, Nintendo 64, Game Boy Advance, Mega Drive.
 - **Steps:**
   1. Open each console's library in the cartridge view, phone in portrait.
   2. Look at one cartridge of each console up close (open the game's detail screen).
   3. Turn the phone to landscape; then repeat step 1 on a tablet-sized screen.
   4. In "Settings", set each of those consoles' "Cartridge color" to Black, then White, then Clear,
      then one saturated color (Red), looking at the cartridge view after each.
-  5. Open a console that was not redone (Super Nintendo, Nintendo 64, Game Boy Advance, Mega
-     Drive, Nintendo DS) in the cartridge view.
+  5. Open a console that was not redone (Super Nintendo, Nintendo DS) in the cartridge view.
 - **Expected:** Every redone frame is sharp (no pixelation in landscape or on the tablet), lit from
   the top left: embossed lettering is legible ("Nintendo GAME BOY" on Game Boy and Game Boy Color,
   "VIRTUAL BOY" on the Virtual Boy's dark band, "SEGA" on the Game Gear's plate), and the grooves,
@@ -6086,7 +6086,9 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
   ColecoVision's side grips, "INSERT TO" / "THIS LINE" and the side slots on the Intellivision, the
   Neo Geo Pocket's ribbed top with "SNK", its arrow and "NEOGEO POCKET", the Odyssey 2's handle with
   its see-through hole, the Vectrex's up arrow and "INSERT TO THIS LINE", "WonderSwan" on its plate
-  and the WonderSwan's row of holes). The
+  and the WonderSwan's row of holes, the Nintendo 64's arched top, its two vertical grooves and the
+  stepped lower shoulders, "GAME BOY ADVANCE" embossed under the Game Boy Advance's top arch and its
+  arrow at the bottom, the Mega Drive's two big side columns). The
   label sits in a recess with a soft shadow along its top and left edges, filling the window with no
   gap and without covering the shell. Each color reads as that color with the relief still visible,
   including Black, White and Clear. The PC Engine's contacts stay gold and the WonderSwan's stay
