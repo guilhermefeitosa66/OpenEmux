@@ -98,7 +98,7 @@
   "share.eyebrow": "<span class=\"eyebrow\">Share nearby</span>",
   "share.title": "<h2>From one device to another.</h2>",
   "share.lede": "<p class=\"lede\">On the same Wi-Fi, send a game from your computer to your phone, or back. No account, no cloud, no cable.</p>",
-  "share.step_pick": "<h3>Pick a game</h3>\n          <p>Right-click it and choose Share Nearby.</p>",
+  "share.step_pick": "<h3>Pick a game</h3>\n          <p>Open its menu and choose Share Nearby.</p>",
   "share.step_device": "<h3>Choose the device</h3>\n          <p>Every OpenEmux on the network is listed.</p>",
   "share.step_code": "<h3>Compare the code</h3>\n          <p>The other side sees the same code and accepts.</p>",
   "share.step_play": "<h3>Play it there</h3>\n          <p>The game lands in the other library, with its saves.</p>",

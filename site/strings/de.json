@@ -98,7 +98,7 @@
   "share.eyebrow": "<span class=\"eyebrow\">In der Nähe teilen</span>",
   "share.title": "<h2>Von einem Gerät aufs andere.</h2>",
   "share.lede": "<p class=\"lede\">Im selben WLAN schickst du ein Spiel vom Computer aufs Handy oder zurück. Kein Konto, keine Cloud, kein Kabel.</p>",
-  "share.step_pick": "<h3>Wähle ein Spiel</h3>\n          <p>Rechtsklick darauf und In der Nähe teilen wählen.</p>",
+  "share.step_pick": "<h3>Wähle ein Spiel</h3>\n          <p>Öffne sein Menü und wähle In der Nähe teilen.</p>",
   "share.step_device": "<h3>Wähle das Gerät</h3>\n          <p>Jedes OpenEmux im Netzwerk steht in der Liste.</p>",
   "share.step_code": "<h3>Vergleiche den Code</h3>\n          <p>Die andere Seite sieht denselben Code und nimmt an.</p>",
   "share.step_play": "<h3>Spiel dort weiter</h3>\n          <p>Das Spiel landet in der anderen Bibliothek, mit seinen Spielständen.</p>",

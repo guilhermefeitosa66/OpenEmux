@@ -375,10 +375,6 @@
       }
     }
 
-    .stage-devices img {
-      cursor: zoom-in
-    }
-
     /* ---------- moments ---------- */
     .moment h2 {
       font-size: clamp(1.9rem, 4vw, 2.8rem)
@@ -446,6 +442,8 @@
       max-width: min(1100px, 100%);
       max-height: 86vh;
       width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
       border-radius: 12px;
       background: #000
     }
@@ -487,18 +485,6 @@
       color: var(--muted);
       font-size: .94rem;
       margin: 0
-    }
-
-    .ico {
-      width: 42px;
-      height: 42px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      background: rgba(139, 92, 246, .16);
-      border: 1px solid rgba(139, 92, 246, .32);
-      margin-bottom: 16px;
-      font-size: 1.25rem;
     }
 
     ul.checks {
@@ -844,9 +830,8 @@
     }
 
     /* Zoomable screenshots -> lightbox */
-    .shot img,
+    .stage-devices img,
     .gallery img,
-    .split img,
     .carousel-track img {
       cursor: zoom-in;
       transition: transform .15s ease
@@ -1246,7 +1231,7 @@
       <p class="lede">En la misma red Wi-Fi, envía un juego del ordenador al móvil, o al revés. Sin cuenta, sin nube, sin cable.</p>
       <ol class="share-steps">
         <li class="card"><h3>Elige un juego</h3>
-          <p>Haz clic derecho y elige Compartir cerca.</p></li>
+          <p>Abre su menú y elige Compartir cerca.</p></li>
         <li class="card"><h3>Elige el dispositivo</h3>
           <p>Aparece cada OpenEmux de la red.</p></li>
         <li class="card"><h3>Compara el código</h3>
@@ -1656,6 +1641,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var conn = navigator.connection || {};
 
       function open(e) {
+        // Ctrl/Cmd/Shift-click still opens the file in a new tab or window.
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button) return;
         e.preventDefault();
         video.poster = video.dataset.poster;
         video.src = video.dataset.src;
@@ -1680,7 +1667,16 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       link.addEventListener('click', open);
       closeBtn.addEventListener('click', close);
       box.addEventListener('click', function (e) { if (e.target === box) close(); });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+      document.addEventListener('keydown', function (e) {
+        if (!box.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
+        // aria-modal: Tab cycles between the close button and the video and
+        // never reaches the page under the backdrop.
+        else if (e.key === 'Tab') {
+          e.preventDefault();
+          (document.activeElement === closeBtn ? video : closeBtn).focus();
+        }
+      });
     })();
 
     // Shelf carousel: 3 shots per slide (1 on mobile), dots, and wrap-around arrows.

@@ -98,7 +98,7 @@
   "share.eyebrow": "<span class=\"eyebrow\">附近分享</span>",
   "share.title": "<h2>从一台设备到另一台。</h2>",
   "share.lede": "<p class=\"lede\">在同一个 Wi-Fi 下，把游戏从电脑发到手机，或者反过来。无需账号、云端或数据线。</p>",
-  "share.step_pick": "<h3>选一个游戏</h3>\n          <p>右键点击它，选择“附近分享”。</p>",
+  "share.step_pick": "<h3>选一个游戏</h3>\n          <p>打开它的菜单，选择“附近分享”。</p>",
   "share.step_device": "<h3>选择设备</h3>\n          <p>网络中的每个 OpenEmux 都会列出来。</p>",
   "share.step_code": "<h3>核对验证码</h3>\n          <p>另一端看到同样的验证码，然后接受。</p>",
   "share.step_play": "<h3>在那边玩</h3>\n          <p>游戏连同存档一起进入另一边的游戏库。</p>",

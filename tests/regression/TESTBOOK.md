@@ -7978,11 +7978,12 @@ or into an environment that cannot run the tests.
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the small text
   under the cartridge carousel ("On the desktop"), under the Android screenshots ("On the phone")
-  and in the footer, after the disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+  and in the footer, after the disclaimer.
 - **Expected:** In all three places, in every language, one small muted line says the games shown
   are fictional and for illustration only, are not real games for these consoles, and that their
-  artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
-  same meaning in one line under "Screenshots" (issue #552).
+  artwork was created with AI. The footer disclaimer itself is unchanged (issue #552). The README
+  no longer shows screenshots of the demo library, so it no longer carries the line (dropped from
+  this scenario in issue 685).
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -8004,9 +8005,6 @@ or into an environment that cannot run the tests.
       footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
       assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
       assert footer.count('class="disclaimer"') == 2, page
-  readme = Path("README.md").read_text(encoding="utf-8")
-  head = readme.split("## Screenshots", 1)[1].split("### ROM Library", 1)[0]
-  assert "fictional" in head and "AI" in head, "README notice missing"
   print("RT-386 OK")
   EOF
   ```

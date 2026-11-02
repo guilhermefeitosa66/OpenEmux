@@ -152,7 +152,10 @@ class TheNarrativeTests(unittest.TestCase):
                     self.assertIn(strings[key], more)
 
     def test_every_image_has_alt_text_in_every_language(self):
-        english = build_site.render("en")
+        def alts(text):
+            return re.findall(r'<img\s[^>]*\balt="([^"]+)"', text.split("</header>", 1)[1])
+
+        english = set(alts(build_site.render("en")))
         for locale in build_site.ORDER:
             text = build_site.render(locale)
             # The logo beside the "OpenEmux" name in the header is decorative;
@@ -166,7 +169,7 @@ class TheNarrativeTests(unittest.TestCase):
                     alt = re.search(r'alt="([^"]*)"', tag)
                     self.assertTrue(alt and alt.group(1).strip(), tag)
                     if locale != "en":
-                        self.assertNotIn(tag, english, "alt text left in English")
+                        self.assertNotIn(alt.group(1), english, "alt text left in English")
 
     def test_the_promo_video_loads_only_on_demand(self):
         for locale in build_site.ORDER:

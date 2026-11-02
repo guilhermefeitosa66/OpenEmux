@@ -98,7 +98,7 @@
   "share.eyebrow": "<span class=\"eyebrow\">Compartilhar por perto</span>",
   "share.title": "<h2>De um aparelho para outro.</h2>",
   "share.lede": "<p class=\"lede\">Na mesma rede Wi-Fi, mande um jogo do computador para o celular, ou de volta. Sem conta, sem nuvem, sem cabo.</p>",
-  "share.step_pick": "<h3>Escolha um jogo</h3>\n          <p>Clique com o botão direito e escolha Compartilhar por perto.</p>",
+  "share.step_pick": "<h3>Escolha um jogo</h3>\n          <p>Abra o menu dele e escolha Compartilhar por perto.</p>",
   "share.step_device": "<h3>Escolha o aparelho</h3>\n          <p>Todo OpenEmux da rede aparece na lista.</p>",
   "share.step_code": "<h3>Confira o código</h3>\n          <p>O outro lado vê o mesmo código e aceita.</p>",
   "share.step_play": "<h3>Jogue lá</h3>\n          <p>O jogo chega na outra biblioteca, com os saves.</p>",
