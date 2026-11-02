@@ -1754,7 +1754,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var prev = root.querySelector('.gal-prev');
       var next = root.querySelector('.gal-next');
       var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      var current = 0, frame = 0;
+      // target: the slide a button, dot or key is scrolling to. Until the
+      // scroll gets there, the slides it passes do not take over `current`.
+      var current = 0, frame = 0, target = -1, width = 0;
 
       // Room before the first slide and after the last, so each can sit in
       // the middle like the others.
@@ -1779,24 +1781,38 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         dots.forEach(function (d, k) {
           if (k === i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
         });
+        // A button disabled while focused would drop the focus to the page:
+        // hand it to the other one first.
+        if (i === 0 && document.activeElement === prev) next.focus();
+        if (i === slides.length - 1 && document.activeElement === next) prev.focus();
         prev.disabled = i === 0;
         next.disabled = i === slides.length - 1;
       }
       function go(i) {
         i = Math.max(0, Math.min(slides.length - 1, i));
+        // Already there: no scroll event will come to clear the target.
+        target = Math.abs(offsetOf(i) - track.scrollLeft) < 1 ? -1 : i;
         track.scrollTo({ left: offsetOf(i), behavior: reduceMotion.matches ? 'auto' : 'smooth' });
         show(i);
       }
       function sync() {
         frame = 0;
         var i = nearest();
+        if (target !== -1) {
+          if (i !== target) return;
+          target = -1;
+        }
         if (i !== current) show(i);
       }
+      function settle() { target = -1; sync(); }
+      // The user taking over mid-scroll ends the programmatic one.
+      function release() { target = -1; }
 
       prev.addEventListener('click', function () { go(current - 1); });
       next.addEventListener('click', function () { go(current + 1); });
       dots.forEach(function (d, k) { d.addEventListener('click', function () { go(k); }); });
       track.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         var to = { ArrowLeft: current - 1, ArrowRight: current + 1, Home: 0, End: slides.length - 1 }[e.key];
         if (to === undefined) return;
         e.preventDefault();
@@ -1805,14 +1821,24 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       track.addEventListener('scroll', function () {
         if (!frame) frame = requestAnimationFrame(sync);
       }, { passive: true });
-      track.addEventListener('scrollend', sync);
+      track.addEventListener('scrollend', settle);
+      track.addEventListener('pointerdown', release, { passive: true });
+      track.addEventListener('wheel', release, { passive: true });
       var t;
+      // Only a change of width moves the slides: a phone's address bar
+      // showing or hiding resizes the window too, and must not yank a swipe.
       window.addEventListener('resize', function () {
         clearTimeout(t);
-        t = setTimeout(function () { pad(); track.scrollLeft = offsetOf(current); }, 120);
+        t = setTimeout(function () {
+          if (track.clientWidth === width) return;
+          width = track.clientWidth;
+          pad();
+          track.scrollLeft = offsetOf(current);
+        }, 120);
       });
 
       root.querySelector('.gal-controls').hidden = false;
+      width = track.clientWidth;
       pad();
       track.scrollLeft = offsetOf(0);
       show(0);

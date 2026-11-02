@@ -277,7 +277,13 @@ class TheGalleriesTests(unittest.TestCase):
         script = script[:script.index("</script>")]
         for needle in ("ArrowLeft", "ArrowRight", "Home:", "End:", "e.preventDefault()",
                        "'.gal-dot'", "aria-current", "prev.disabled", "next.disabled",
-                       "{ passive: true }", "scrollend", ".hidden = false"):
+                       "{ passive: true }", "scrollend", ".hidden = false",
+                       # a programmatic scroll is not taken over by the slides it passes
+                       "if (i !== target) return;",
+                       # a button disabled under the focus hands it to the other one
+                       "document.activeElement === next) prev.focus()",
+                       # Alt+Left (browser back) is not swallowed
+                       "e.altKey"):
             self.assertIn(needle, script)
         self.assertNotIn("setInterval", script)
 
