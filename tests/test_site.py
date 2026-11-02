@@ -113,6 +113,22 @@ class ThePublishedPagesTests(unittest.TestCase):
         self.assertNotIn('src="assets/', text)
 
 
+class SupportButtonsTests(unittest.TestCase):
+    """The support card centres its buttons, not the shared .cta row (issue 726)."""
+
+    def test_the_support_buttons_are_centred_and_the_hero_row_is_not(self):
+        for locale in build_site.ORDER:
+            page = build_site.render(locale)
+            with self.subTest(locale=locale):
+                self.assertRegex(page, r"\.support \.cta\s*\{\s*justify-content:\s*center")
+                shared = re.search(r"\n    \.cta \{([^}]*)\}", page)
+                self.assertIsNotNone(shared)
+                self.assertNotIn("justify-content", shared.group(1))
+                support = re.search(r'<section id="support">(.*?)</section>', page, re.S)
+                self.assertIsNotNone(support)
+                self.assertRegex(support.group(1), r'(?s)class="support".*class="cta"')
+
+
 class TheNarrativeTests(unittest.TestCase):
     """The page tells the story of the issue 680 redesign, in order (issue 685)."""
 
