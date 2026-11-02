@@ -61,8 +61,11 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* height:auto keeps the aspect ratio of an <img> that carries width and
+       height attributes (set so the page does not shift while it loads). */
     img {
       max-width: 100%;
+      height: auto;
       display: block
     }
 
@@ -86,7 +89,6 @@
        drags the whole document past the viewport. */
     .grid>*,
     .steps>*,
-    .split>*,
     .gallery>*,
     .carousel-track>* {
       min-width: 0
@@ -278,28 +280,6 @@
       text-align: center
     }
 
-    /* Announcement pill above the headline — carries whatever is new this
-       release without touching the h1. */
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 18px 7px 9px;
-      margin: 0 0 22px;
-      border-radius: 999px;
-      background: rgba(139, 92, 246, .13);
-      border: 1px solid rgba(139, 92, 246, .42);
-      color: var(--text);
-      font-size: .88rem;
-      font-weight: 600;
-    }
-
-    .hero-pill:hover {
-      text-decoration: none;
-      background: rgba(139, 92, 246, .22);
-      border-color: rgba(139, 92, 246, .7);
-    }
-
     .beta {
       flex: none;
       font-size: .68rem;
@@ -312,21 +292,6 @@
       border-radius: 999px;
       padding: 4px 10px;
       line-height: 1;
-    }
-
-    .hero-logo {
-      width: 118px;
-      height: 118px;
-      margin: 0 auto 12px;
-      filter: drop-shadow(0 18px 40px rgba(139, 92, 246, .55))
-    }
-
-    .hero-name {
-      margin: 0 0 24px;
-      font-size: 1.7rem;
-      font-weight: 800;
-      letter-spacing: -.02em;
-      color: var(--text)
     }
 
     .hero h1 {
@@ -362,149 +327,127 @@
       color: var(--muted)
     }
 
-    .shot {
-      margin: 64px auto -110px;
+    .hero-links {
+      margin: 20px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 22px;
+      font-weight: 600
+    }
+
+    /* Opening: the desktop window, with the phone set over its lower right
+       corner so both read as one product. Frames are CSS, not baked into the
+       screenshots. The phone stays inside the stage box at any width. */
+    .stage-devices {
+      position: relative;
       max-width: 1000px;
+      margin: 64px auto 0;
+      padding: 0 0 48px;
+    }
+
+    .device-desktop {
+      width: 86%;
       border-radius: 14px;
-      overflow: hidden;
       border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
     }
 
-    .shot-video {
-      position: relative;
-      aspect-ratio: 16 / 9;
-      background: #08060f;
-    }
-
-    .shot-video video {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .video-controls {
+    .device-phone {
       position: absolute;
-      right: 16px;
-      bottom: 16px;
-      display: flex;
-      gap: 10px;
+      right: 0;
+      bottom: 0;
+      width: 24%;
+      border-radius: 26px;
+      border: 6px solid var(--panel);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
     }
 
-    .video-controls[hidden] {
-      display: none
-    }
-
-    .vbtn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-width: 44px;
-      height: 44px;
-      padding: 0 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, .22);
-      background: rgba(8, 6, 15, .72);
-      backdrop-filter: blur(8px);
-      color: var(--text);
-      font: inherit;
-      font-size: .9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s ease, border-color .15s ease;
-    }
-
-    .vbtn:hover {
-      background: rgba(139, 92, 246, .35);
-      border-color: rgba(139, 92, 246, .8)
-    }
-
-    .vbtn:focus-visible {
-      outline: 2px solid var(--gold);
-      outline-offset: 2px
-    }
-
-    .vbtn svg {
-      width: 20px;
-      height: 20px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round
-    }
-
-    .vbtn .i-play {
-      fill: currentColor
-    }
-
-    /* The sound button is the one people are invited to press: gold, with
-       its label, until the sound is on. */
-    .vbtn-sound {
-      padding: 0 18px 0 14px;
-      background: var(--gold);
-      border-color: var(--gold);
-      color: #1a1300
-    }
-
-    .vbtn-sound:hover {
-      background: #ffe066;
-      border-color: #ffe066
-    }
-
-    .vbtn-sound[aria-pressed="true"] {
-      background: rgba(8, 6, 15, .72);
-      border-color: rgba(255, 255, 255, .22);
-      color: var(--text)
-    }
-
-    #promoPlay .i-play,
-    #promoPlay.paused .i-pause,
-    .vbtn-sound .i-sound,
-    .vbtn-sound[aria-pressed="true"] .i-muted {
-      display: none
-    }
-
-    #promoPlay.paused .i-play,
-    .vbtn-sound[aria-pressed="true"] .i-sound {
-      display: block
-    }
-
-    /* On a phone the video is too short to carry buttons over it: they move
-       to a strip of their own underneath. */
     @media(max-width:560px) {
-      .shot-video {
-        aspect-ratio: auto
+      .device-desktop {
+        width: 92%
       }
 
-      .shot-video video {
-        height: auto;
-        aspect-ratio: 16 / 9
-      }
-
-      .video-controls {
-        position: static;
-        justify-content: flex-end;
-        padding: 10px;
-        border-top: 1px solid rgba(255, 255, 255, .1)
-      }
-
-      .vbtn-sound span {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0)
-      }
-
-      .vbtn-sound {
-        padding: 0 12px
+      .device-phone {
+        width: 30%;
+        border-width: 4px;
+        border-radius: 16px
       }
     }
 
-    .hero-pad {
-      height: 130px
+    .stage-devices img {
+      cursor: zoom-in
+    }
+
+    /* ---------- moments ---------- */
+    .moment h2 {
+      font-size: clamp(1.9rem, 4vw, 2.8rem)
+    }
+
+    /* Share nearby: the four steps, until the scroll-driven sequence. */
+    .share-steps {
+      list-style: none;
+      padding: 0;
+      margin: 44px 0 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      text-align: left;
+      counter-reset: step
+    }
+
+    .share-steps>li {
+      min-width: 0;
+      counter-increment: step
+    }
+
+    .share-steps>li::before {
+      content: counter(step);
+      display: block;
+      color: var(--gold);
+      font-weight: 800;
+      margin-bottom: 6px
+    }
+
+    @media(max-width:900px) {
+      .share-steps {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    @media(max-width:520px) {
+      .share-steps {
+        grid-template-columns: 1fr
+      }
+    }
+
+    /* Everything else: the facts of the old sections, compact. */
+    #more .grid {
+      text-align: left
+    }
+
+    #more .card.wide {
+      grid-column: 1 / -1
+    }
+
+    #more .card .lede {
+      font-size: .98rem;
+      max-width: none
+    }
+
+    #more .systems {
+      justify-content: flex-start;
+      margin-top: 18px
+    }
+
+    /* The promo video, only when asked for: nothing is fetched before the
+       click, and closing it stops the sound. */
+    .watch-box video {
+      max-width: min(1100px, 100%);
+      max-height: 86vh;
+      width: 100%;
+      border-radius: 12px;
+      background: #000
     }
 
     /* ---------- feature grid ---------- */
@@ -556,28 +499,6 @@
       border: 1px solid rgba(139, 92, 246, .32);
       margin-bottom: 16px;
       font-size: 1.25rem;
-    }
-
-    /* ---------- split ---------- */
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 56px;
-      align-items: center
-    }
-
-    @media(max-width:860px) {
-      .split {
-        grid-template-columns: 1fr;
-        gap: 36px
-      }
-    }
-
-    .split img,
-    .frame {
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, .55);
     }
 
     ul.checks {
@@ -650,29 +571,27 @@
       box-shadow: 0 24px 60px rgba(0, 0, 0, .5)
     }
 
-    .gallery.thirds {
-      grid-template-columns: repeat(3, 1fr)
+    /* Android: one phone in portrait beside two in landscape. */
+    .gallery.skins {
+      grid-template-columns: 1fr 2fr;
+      align-items: end
+    }
+
+    .gallery.skins .landscapes {
+      display: grid;
+      gap: 18px
+    }
+
+    .gallery.skins .portrait img {
+      max-width: 300px;
+      margin: 0 auto;
+      border-radius: 22px
     }
 
     @media(max-width:700px) {
-      .gallery.thirds {
+      .gallery.skins {
         grid-template-columns: 1fr
       }
-    }
-
-    /* Android: phone screens, four to a row (two on a phone) */
-    .gallery.phones {
-      grid-template-columns: repeat(4, 1fr)
-    }
-
-    @media(max-width:700px) {
-      .gallery.phones {
-        grid-template-columns: 1fr 1fr
-      }
-    }
-
-    .gallery.phones img {
-      border-radius: 22px
     }
 
     figure {
@@ -1258,10 +1177,11 @@
     <div class="wrap nav">
       <a class="brand" href="#top"><img src="../assets/logo.png" alt="" /> OpenEmux</a>
       <nav class="nav-links">
-        <a href="#features">Recursos</a>
-        <a href="#systems">Sistemas</a>
-        <a href="#screenshots">Capturas de tela</a>
+        <a href="#share">Compartilhar por perto</a>
+        <a href="#consoles">Cartuchos</a>
+        <a href="#android">Android</a>
         <a href="#install">Instalação</a>
+        <a href="#more">Mais</a>
         <a href="manual/">Manual</a>
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
         <a href="https://www.reddit.com/r/OpenEmux/">Comunidade</a>
@@ -1284,15 +1204,13 @@
     </div>
   </header>
 
-  <!-- HERO -->
+  <main>
+  <!-- OPENING: the desktop library, the phone in front of it -->
   <section class="hero" id="top">
     <div class="stars"></div>
     <div class="wrap hero-inner">
-      <img class="hero-logo" src="../assets/logo.png" alt="Logo do OpenEmux" />
-      <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#android"><span class="beta">Novo</span> O OpenEmux agora roda no Android →</a>
-      <h1>Um jeito simples de jogar<br /><span class="grad">sua coleção retrô.</span></h1>
-      <p class="lede">O OpenEmux é um frontend de emulação livre e de código aberto. Você adiciona os jogos que já tem, e o OpenEmux organiza tudo por console, com capas, e abre cada jogo com os controles e os shaders já configurados, sem precisar fuçar em menus de configuração. O Linux é a plataforma principal; o Windows também é suportado, em beta.</p>
+      <h1>Sua coleção retrô,<br /><span class="grad">pronta para jogar.</span></h1>
+      <p class="lede">Adicione os jogos que você tem. O OpenEmux organiza tudo por console, com capas, no Linux, no Windows e no Android.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Baixar para
           Linux</a>
@@ -1300,182 +1218,75 @@
           Windows <span class="beta">Beta</span></a>
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Baixar para
           Android</a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ Ver no GitHub</a>
       </div>
+      <p class="hero-links">
+        <a href="#install">Como instalar ↓</a>
+        <!-- The promo video, on demand only: without JavaScript the link is
+             the file itself; with it, a dialog that loads nothing before the
+             click. -->
+        <a id="watchVideo" href="../assets/openemux-promo.mp4">▶ Assistir ao vídeo (45 s)</a>
+      </p>
       <p class="cta-note">Livre e de código aberto · Licença MIT · AppImage, .deb, .rpm &amp; Flatpak no Linux ·
         instalador &amp; ZIP portátil no Windows · APK no Android (GPLv3)</p>
       <p class="cta-note">Inspirado no <a href="https://openemu.org/">OpenEmu</a> para macOS, mas não é um fork: o código é outro, separado, com o RetroArch cuidando da emulação. <a href="#thanks">Saiba mais</a>.</p>
-      <!-- Promo video: plays muted on its own (browsers refuse sound without a
-           click), loops while it is on screen, and stays still for people who
-           asked for reduced motion. The native controls are the no-JS fallback. -->
-      <div class="shot shot-video" id="promo">
-        <video id="promoVideo" controls muted loop playsinline preload="metadata"
-          poster="../assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="O OpenEmux em 45 segundos: a biblioteca, a visão de cartuchos e um jogo rodando no desktop, e depois o app Android com a estante, as skins de controle, retrato e paisagem e o Nintendo DS">
-          <source src="../assets/openemux-promo.mp4" type="video/mp4" />
-        </video>
-        <div class="video-controls" hidden>
-          <button type="button" class="vbtn" id="promoPlay" aria-label="Pausar vídeo"
-            data-play="Reproduzir vídeo" data-pause="Pausar vídeo">
-            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
-          </button>
-          <button type="button" class="vbtn vbtn-sound" id="promoSound" aria-pressed="false"
-            data-on="Ativar som" data-off="Desativar som">
-            <svg class="i-muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6" /></svg>
-            <svg class="i-sound" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" /></svg>
-            <span>Ativar som</span>
-          </button>
-        </div>
+      <div class="stage-devices">
+        <img class="device-desktop" src="../assets/openemux-library-snes.png" width="1320" height="878"
+          fetchpriority="high" alt="OpenEmux no computador, a biblioteca do Super Nintendo com as capas" />
+        <img class="device-phone" src="../assets/openemux-mobile-shelf.png" width="720" height="1560"
+          decoding="async" alt="OpenEmux no Android, a estante de consoles" />
       </div>
     </div>
-    <div class="hero-pad"></div>
   </section>
 
-  <!-- FEATURES -->
-  <section id="features">
+  <!-- SHARE NEARBY -->
+  <section class="moment" id="share">
     <div class="wrap center">
-      <span class="eyebrow">Recursos</span>
-      <h2>O que o OpenEmux faz</h2>
-      <p class="lede">Por baixo, quem emula é o RetroArch. Ele é poderoso, mas os menus e as configurações dele podem assustar quem só quer jogar. O OpenEmux cuida do que fica em volta: organizar seus jogos, baixar os cores e configurar controles e shaders.</p>
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🎨</div>
-          <h3>Seus jogos, por console</h3>
-          <p>Os jogos que você adiciona ficam agrupados por console, com capas baixadas do acervo de miniaturas do libretro.</p>
-        </div>
-        <div class="card">
-          <div class="ico">✨</div>
-          <h3>Pronto na primeira abertura</h3>
-          <p>Na primeira vez que abre, o OpenEmux cria a configuração e baixa os cores que os seus consoles usam, normalmente em uns dez segundos. O restante continua baixando em segundo plano.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          <h3>Controles por console</h3>
-          <p>Configure teclado e controle de cada console num painel só. O OpenEmux repassa tudo ao RetroArch quando o jogo começa.</p>
-        </div>
-        <div class="card">
-          <div class="ico">📺</div>
-          <h3>Shaders por console</h3>
-          <p>Escolha um shader de CRT ou de scanlines para cada console numa lista curta, sem passar pelo menu de shaders do RetroArch.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🐧</div>
-          <h3>Linux em primeiro lugar</h3>
-          <p>O Linux é a plataforma principal do OpenEmux. O app é feito com GTK4 e Adwaita, segue as diretrizes do GNOME, e toda mudança é testada primeiro no Linux. O Windows também é suportado, com uma versão ainda em beta.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🔍</div>
-          <h3>Lista de BIOS</h3>
-          <p>Mostra quais arquivos de BIOS cada console precisa e quais você já tem, para um arquivo faltando não virar um jogo que simplesmente não abre.</p>
-        </div>
-      </div>
+      <span class="eyebrow">Compartilhar por perto</span>
+      <h2>De um aparelho para outro.</h2>
+      <p class="lede">Na mesma rede Wi-Fi, mande um jogo do computador para o celular, ou de volta. Sem conta, sem nuvem, sem cabo.</p>
+      <ol class="share-steps">
+        <li class="card"><h3>Escolha um jogo</h3>
+          <p>Clique com o botão direito e escolha Compartilhar por perto.</p></li>
+        <li class="card"><h3>Escolha o aparelho</h3>
+          <p>Todo OpenEmux da rede aparece na lista.</p></li>
+        <li class="card"><h3>Confira o código</h3>
+          <p>O outro lado vê o mesmo código e aceita.</p></li>
+        <li class="card"><h3>Jogue lá</h3>
+          <p>O jogo chega na outra biblioteca, com os saves.</p></li>
+      </ol>
     </div>
   </section>
 
-  <!-- PHILOSOPHY -->
-  <section id="philosophy">
-    <div class="wrap split">
-      <div>
-        <span class="eyebrow">Sobre os jogos</span>
-        <h2>Jogue os jogos que você tem</h2>
-        <p class="lede">O OpenEmux é um frontend para o RetroArch, feito para que quem só quer jogar não precise aprender os menus do RetroArch antes. Ele <strong>não</strong> é uma fonte de jogos: não traz jogos, nem ROMs, nem arquivos de BIOS, e nunca vai trazer.</p>
-        <ul class="checks">
-          <li><strong>Use só conteúdo que você possui legalmente.</strong> Faça o dump dos seus próprios cartuchos e
-            discos, ou use backups de jogos que você comprou.</li>
-          <li><strong>Pirataria não é o propósito.</strong> Baixar jogos protegidos por direitos autorais que você não
-            tem é ilegal na maioria dos países.</li>
-          <li><strong>A emulação ajuda a preservar a história.</strong> Muito da arte, da música e do design dos games vive em hardware que está envelhecendo. Manter isso jogável vale a pena, e funciona melhor quando respeita quem fez esses jogos.</li>
-        </ul>
-      </div>
-      <div>
-        <img src="../assets/openemux-all.png" alt="OpenEmux — todos os consoles da biblioteca" />
-      </div>
-    </div>
-  </section>
-
-  <!-- SYSTEMS -->
-  <section id="systems">
+  <!-- CARTRIDGES ON THE DESKTOP -->
+  <section class="moment" id="consoles">
     <div class="wrap center">
-      <span class="eyebrow">31 sistemas</span>
-      <h2>Sistemas suportados</h2>
-      <p class="lede">Cada sistema roda com os cores do próprio RetroArch, e tem no OpenEmux as suas capas, controles e configurações de shader.</p>
-      <div class="systems">
-        <span class="chip">Nintendo (NES)</span>
-        <span class="chip">Famicom Disk System</span>
-        <span class="chip">Super Nintendo</span>
-        <span class="chip">Nintendo 64</span>
-        <span class="chip">GameCube</span>
-        <span class="chip">Game Boy</span>
-        <span class="chip">Game Boy Color</span>
-        <span class="chip">Game Boy Advance</span>
-        <span class="chip">Nintendo DS</span>
-        <span class="chip">Virtual Boy</span>
-        <span class="chip">Mega Drive</span>
-        <span class="chip">Sega Master System</span>
-        <span class="chip">Mega CD</span>
-        <span class="chip">Sega 32X</span>
-        <span class="chip">Sega Saturn</span>
-        <span class="chip">Game Gear</span>
-        <span class="chip">SG-1000</span>
-        <span class="chip">Sony PlayStation</span>
-        <span class="chip">Sony PSP</span>
-        <span class="chip">PC Engine</span>
-        <span class="chip">PC Engine CD</span>
-        <span class="chip">NeoGeo Pocket</span>
-        <span class="chip">WonderSwan</span>
-        <span class="chip">Atari 2600</span>
-        <span class="chip">Atari 5200</span>
-        <span class="chip">Atari 7800</span>
-        <span class="chip">Atari Lynx</span>
-        <span class="chip">ColecoVision</span>
-        <span class="chip">Intellivision</span>
-        <span class="chip">Odyssey²</span>
-        <span class="chip">Vectrex</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- CARTRIDGES -->
-  <section id="cartridges" aria-labelledby="cartridges-title">
-    <div class="wrap center">
-      <span class="eyebrow">Visão de cartucho</span>
-      <h2 id="cartridges-title">Cada jogo no cartucho do seu console</h2>
-      <p class="lede">Na visão de cartucho, os jogos que você adicionou aparecem com a arte do rótulo no cartucho do console deles. Os cartuchos abaixo são um exemplo dessa visão.</p>
-    </div>
-    <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="Fileiras de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 e Mega Drive passando pela tela"></div>
-  </section>
-
-  <!-- SCREENSHOTS -->
-  <section id="screenshots">
-    <div class="wrap center">
-      <span class="eyebrow">Capturas de tela</span>
-      <h2>Seus jogos, console por console</h2>
-      <p class="lede">Cada console tem a sua página, com os jogos que você adicionou a ele. Use as setas para passar por elas e clique numa captura para vê-la em tamanho real.</p>
+      <span class="eyebrow">No computador</span>
+      <h2>Cada console, em cartuchos.</h2>
+      <p class="lede">Cada console tem uma página com os jogos nos próprios cartuchos. Troque para capas ou lista quando quiser.</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="Anterior">‹</button>
           <div class="carousel-viewport">
             <div class="carousel-track">
-              <figure><img src="../assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
+              <figure><img src="../assets/shelf/sfc.png" alt="OpenEmux, visão de cartuchos: Super Nintendo" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Super Nintendo</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
+              <figure><img src="../assets/shelf/gba.png" alt="OpenEmux, visão de cartuchos: Game Boy Advance" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Game Boy Advance</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
+              <figure><img src="../assets/shelf/n64.png" alt="OpenEmux, visão de cartuchos: Nintendo 64" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Nintendo 64</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/md.png" alt="OpenEmux — Mega Drive library" />
+              <figure><img src="../assets/shelf/md.png" alt="OpenEmux, visão de cartuchos: Mega Drive" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Mega Drive</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
+              <figure><img src="../assets/shelf/sms.png" alt="OpenEmux, visão de cartuchos: Sega Master System" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Sega Master System</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+              <figure><img src="../assets/shelf/ps.png" alt="OpenEmux, visão de cartuchos: PlayStation" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="../assets/shelf/favorites.png" alt="OpenEmux — Favoritos" />
+              <figure><img src="../assets/shelf/favorites.png" width="1200" height="800" loading="lazy" decoding="async" alt="OpenEmux — Favoritos" />
                 <figcaption>Favoritos</figcaption>
               </figure>
             </div>
@@ -1489,76 +1300,40 @@
     </div>
   </section>
 
-  <!-- ANDROID -->
-  <section id="android">
+  <!-- SKINS ON THE PHONE -->
+  <section class="moment" id="android">
     <div class="wrap center">
-      <span class="eyebrow">Android</span>
-      <h2>Sua estante, no bolso</h2>
-      <p class="lede">O OpenEmux para Android leva a mesma biblioteca para o celular: os jogos que você tem, como cartuchos numa estante por console, jogados com controles na tela desenhados para cada sistema ou com um gamepad. O app para Android tem design próprio: o OpenEmu não tem versão para celular, então só os ícones dos consoles vêm do OpenEmu.</p>
-      <div class="gallery phones">
-        <figure><img src="../assets/openemux-mobile-shelf.png" alt="OpenEmux no Android, a estante" />
-          <figcaption>A estante</figcaption>
-        </figure>
-        <figure><img src="../assets/openemux-mobile-roms-gba.png" alt="OpenEmux no Android, os cartuchos de um console" />
-          <figcaption>Os jogos de um console</figcaption>
-        </figure>
-        <figure><img src="../assets/openemux-mobile-gameplay-gba.png" alt="OpenEmux no Android, um jogo de Game Boy Advance com seus controles" />
+      <span class="eyebrow">No celular</span>
+      <h2>Um controle para cada console.</h2>
+      <p class="lede">No Android, cada console tem o próprio controle na tela, em retrato e em paisagem. Conecte um gamepad e ele sai da frente.</p>
+      <div class="gallery skins">
+        <figure class="portrait"><img src="../assets/openemux-mobile-gameplay-gba.png" width="720" height="1560" loading="lazy" decoding="async" alt="OpenEmux no Android, um jogo de Game Boy Advance com seus controles" />
           <figcaption>Jogando, em retrato</figcaption>
         </figure>
-        <figure><img src="../assets/openemux-mobile-shelf-light.png" alt="OpenEmux no Android, a estante no tema claro" />
-          <figcaption>Tema claro</figcaption>
-        </figure>
-      </div>
-      <div class="gallery">
-        <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" alt="OpenEmux no Android, um jogo na horizontal" />
+        <div class="landscapes">
+          <figure><img src="../assets/openemux-mobile-gameplay-gba-landscape.png" width="1280" height="618" loading="lazy" decoding="async" alt="OpenEmux no Android, um jogo na horizontal" />
           <figcaption>Gire o celular e os controles acompanham</figcaption>
         </figure>
-        <figure><img src="../assets/openemux-mobile-nds-landscape.png" alt="OpenEmux no Android, Nintendo DS com as duas telas" />
+          <figure><img src="../assets/openemux-mobile-nds-landscape.png" width="1280" height="618" loading="lazy" decoding="async" alt="OpenEmux no Android, Nintendo DS com as duas telas" />
           <figcaption>Nintendo DS, as duas telas</figcaption>
         </figure>
+        </div>
       </div>
       <p class="fineprint">Os jogos mostrados são fictícios e meramente ilustrativos. Não são jogos reais desses consoles, e suas artes foram criadas com IA.</p>
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🕹️</div>
-          <h3>Uma skin para cada console</h3>
-          <p>Cada um dos 31 consoles tem o seu controle na tela, no desenho do controle original, em retrato e na horizontal. Uma faixa embaixo da imagem salva, carrega, liga o turbo e acelera o jogo.</p>
-        </div>
-        <div class="card">
-          <div class="ico">📼</div>
-          <h3>Cartuchos e capas</h3>
-          <p>Os jogos aparecem como cartuchos com seus rótulos, ou como capas e em lista. As estantes ficam na ordem que você quiser.</p>
-        </div>
-        <div class="card">
-          <div class="ico">⬇️</div>
-          <h3>Pronto depois de um download</h3>
-          <p>O app não traz os cores: na primeira vez que abre, baixa do buildbot do RetroArch os de todos os consoles, junto com os arquivos de sistema que o PSP e o GameCube usam.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          <h3>Com gamepad também</h3>
-          <p>Conecte um controle e a skin da tela sai da frente: o jogo ocupa a tela toda, e os menus seguem o direcional e os botões.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🌗</div>
-          <h3>Claro e escuro</h3>
-          <p>Segue o tema do celular, ou escolha um nos Ajustes.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🌐</div>
-          <h3>Oito idiomas</h3>
-          <p>Os mesmos idiomas do app de desktop, seguindo o celular ou escolhidos nos Ajustes.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🏆</div>
-          <h3>RetroAchievements</h3>
-          <p>Entre uma vez nos Ajustes e cada jogo desbloqueia conquistas no seu perfil do RetroAchievements, com modo hardcore quando você quiser.</p>
-        </div>
-      </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
           href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Baixar o APK</a></p>
       <p class="cta-note">Android 8 ou mais novo, 64 bits (arm64). O app Android é um fork do RetroArch, por isso tem licença GPLv3; o código-fonte está em <a href="https://github.com/guilhermefeitosa66/openemux-android">openemux-android</a>.</p>
     </div>
+  </section>
+
+  <!-- CARTRIDGES -->
+  <section id="cartridges" aria-labelledby="cartridges-title">
+    <div class="wrap center">
+      <span class="eyebrow">Visão de cartucho</span>
+      <h2 id="cartridges-title">Cada jogo no cartucho do seu console</h2>
+      <p class="lede">Na visão de cartucho, os jogos que você adicionou aparecem com a arte do rótulo no cartucho do console deles. Os cartuchos abaixo são um exemplo dessa visão.</p>
+    </div>
+    <div class="cart-wall" id="cartWall" data-base="../assets/carts/" role="img" aria-label="Fileiras de cartuchos de Super Nintendo, Game Boy Advance, Nintendo 64 e Mega Drive passando pela tela"></div>
   </section>
 
   <!-- INSTALL -->
@@ -1661,6 +1436,121 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     </div>
   </section>
 
+  <!-- EVERYTHING ELSE: what the old features, philosophy and systems
+       sections said, folded into one grid. -->
+  <section id="more">
+    <div class="wrap center">
+      <span class="eyebrow">Detalhes</span>
+      <h2>Todo o resto</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Feito sobre o RetroArch</h3>
+          <p>Por baixo, quem emula é o RetroArch. Ele é poderoso, mas os menus e as configurações dele podem assustar quem só quer jogar. O OpenEmux cuida do que fica em volta: organizar seus jogos, baixar os cores e configurar controles e shaders.</p>
+        </div>
+        <div class="card">
+          <h3>Seus jogos, por console</h3>
+          <p>Os jogos que você adiciona ficam agrupados por console, com capas baixadas do acervo de miniaturas do libretro.</p>
+        </div>
+        <div class="card">
+          <h3>Pronto na primeira abertura</h3>
+          <p>Na primeira vez que abre, o OpenEmux cria a configuração e baixa os cores que os seus consoles usam, normalmente em uns dez segundos. O restante continua baixando em segundo plano.</p>
+        </div>
+        <div class="card">
+          <h3>Controles por console</h3>
+          <p>Configure teclado e controle de cada console num painel só. O OpenEmux repassa tudo ao RetroArch quando o jogo começa.</p>
+        </div>
+        <div class="card">
+          <h3>Shaders por console</h3>
+          <p>Escolha um shader de CRT ou de scanlines para cada console numa lista curta, sem passar pelo menu de shaders do RetroArch.</p>
+        </div>
+        <div class="card">
+          <h3>Lista de BIOS</h3>
+          <p>Mostra quais arquivos de BIOS cada console precisa e quais você já tem, para um arquivo faltando não virar um jogo que simplesmente não abre.</p>
+        </div>
+        <div class="card">
+          <h3>Linux em primeiro lugar</h3>
+          <p>O Linux é a plataforma principal do OpenEmux. O app é feito com GTK4 e Adwaita, segue as diretrizes do GNOME, e toda mudança é testada primeiro no Linux. O Windows também é suportado, com uma versão ainda em beta.</p>
+        </div>
+        <div class="card">
+          <h3>Uma skin para cada console</h3>
+          <p>Cada um dos 31 consoles tem o seu controle na tela, no desenho do controle original, em retrato e na horizontal. Uma faixa embaixo da imagem salva, carrega, liga o turbo e acelera o jogo.</p>
+        </div>
+        <div class="card">
+          <h3>Cartuchos e capas</h3>
+          <p>Os jogos aparecem como cartuchos com seus rótulos, ou como capas e em lista. As estantes ficam na ordem que você quiser.</p>
+        </div>
+        <div class="card">
+          <h3>Pronto depois de um download</h3>
+          <p>O app não traz os cores: na primeira vez que abre, baixa do buildbot do RetroArch os de todos os consoles, junto com os arquivos de sistema que o PSP e o GameCube usam.</p>
+        </div>
+        <div class="card">
+          <h3>Com gamepad também</h3>
+          <p>Conecte um controle e a skin da tela sai da frente: o jogo ocupa a tela toda, e os menus seguem o direcional e os botões.</p>
+        </div>
+        <div class="card">
+          <h3>Claro e escuro</h3>
+          <p>Segue o tema do celular, ou escolha um nos Ajustes.</p>
+        </div>
+        <div class="card">
+          <h3>Oito idiomas</h3>
+          <p>Os mesmos idiomas do app de desktop, seguindo o celular ou escolhidos nos Ajustes.</p>
+        </div>
+        <div class="card">
+          <h3>RetroAchievements</h3>
+          <p>Entre uma vez nos Ajustes e cada jogo desbloqueia conquistas no seu perfil do RetroAchievements, com modo hardcore quando você quiser.</p>
+        </div>
+        <div class="card wide">
+          <h3>Jogue os jogos que você tem</h3>
+          <p class="lede">O OpenEmux é um frontend para o RetroArch, feito para que quem só quer jogar não precise aprender os menus do RetroArch antes. Ele <strong>não</strong> é uma fonte de jogos: não traz jogos, nem ROMs, nem arquivos de BIOS, e nunca vai trazer.</p>
+          <ul class="checks">
+            <li><strong>Use só conteúdo que você possui legalmente.</strong> Faça o dump dos seus próprios cartuchos e
+            discos, ou use backups de jogos que você comprou.</li>
+            <li><strong>Pirataria não é o propósito.</strong> Baixar jogos protegidos por direitos autorais que você não
+            tem é ilegal na maioria dos países.</li>
+            <li><strong>A emulação ajuda a preservar a história.</strong> Muito da arte, da música e do design dos games vive em hardware que está envelhecendo. Manter isso jogável vale a pena, e funciona melhor quando respeita quem fez esses jogos.</li>
+          </ul>
+        </div>
+        <div class="card wide">
+          <h3>31 sistemas</h3>
+          <p class="lede">Cada sistema roda com os cores do próprio RetroArch, e tem no OpenEmux as suas capas, controles e configurações de shader.</p>
+          <div class="systems">
+            <span class="chip">Nintendo (NES)</span>
+            <span class="chip">Famicom Disk System</span>
+            <span class="chip">Super Nintendo</span>
+            <span class="chip">Nintendo 64</span>
+            <span class="chip">GameCube</span>
+            <span class="chip">Game Boy</span>
+            <span class="chip">Game Boy Color</span>
+            <span class="chip">Game Boy Advance</span>
+            <span class="chip">Nintendo DS</span>
+            <span class="chip">Virtual Boy</span>
+            <span class="chip">Mega Drive</span>
+            <span class="chip">Sega Master System</span>
+            <span class="chip">Mega CD</span>
+            <span class="chip">Sega 32X</span>
+            <span class="chip">Sega Saturn</span>
+            <span class="chip">Game Gear</span>
+            <span class="chip">SG-1000</span>
+            <span class="chip">Sony PlayStation</span>
+            <span class="chip">Sony PSP</span>
+            <span class="chip">PC Engine</span>
+            <span class="chip">PC Engine CD</span>
+            <span class="chip">NeoGeo Pocket</span>
+            <span class="chip">WonderSwan</span>
+            <span class="chip">Atari 2600</span>
+            <span class="chip">Atari 5200</span>
+            <span class="chip">Atari 7800</span>
+            <span class="chip">Atari Lynx</span>
+            <span class="chip">ColecoVision</span>
+            <span class="chip">Intellivision</span>
+            <span class="chip">Odyssey²</span>
+            <span class="chip">Vectrex</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
@@ -1684,6 +1574,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       </div>
     </div>
   </section>
+
+  </main>
 
   <footer>
     <div class="wrap">
@@ -1712,6 +1604,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <img id="lightboxImg" src="" alt="" />
     <div class="lightbox-cap" id="lightboxCap"></div>
   </div>
+  <div class="lightbox watch-box" id="watchBox" role="dialog" aria-modal="true" aria-label="O OpenEmux em 45 segundos: a biblioteca, a visão de cartuchos e um jogo rodando no desktop, e depois o app Android com a estante, as skins de controle, retrato e paisagem e o Nintendo DS">
+    <button class="lightbox-close" id="watchClose" aria-label="Fechar">×</button>
+    <video id="promoVideo" controls playsinline preload="none" width="1920" height="1080"
+      data-src="../assets/openemux-promo.mp4" data-poster="../assets/openemux-promo-poster.jpg"></video>
+  </div>
   <script>
     (function () {
       var box = document.getElementById('lightbox');
@@ -1732,7 +1629,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         img.src = '';
       }
 
-      document.querySelectorAll('.shot img, .gallery img, .split img, .carousel-track img').forEach(function (el) {
+      document.querySelectorAll('.stage-devices img, .gallery img, .carousel-track img').forEach(function (el) {
         el.addEventListener('click', function () {
           var fig = el.closest('figure');
           var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
@@ -1747,68 +1644,44 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       });
     })();
 
-    // Promo video in the hero. Browsers only autoplay muted video, so it starts
-    // silent and the gold button turns the sound on -- from the top, so the
-    // music starts with the intro. It plays only while on screen, and never on
-    // its own for reduced motion or Save-Data.
+    // Promo video, on demand: the link opens a dialog and only then gives the
+    // <video> its source. It starts on that click, except under Save-Data,
+    // where it waits for the play button. Closing stops it and drops the
+    // source, so nothing keeps downloading.
     (function () {
+      var link = document.getElementById('watchVideo');
+      var box = document.getElementById('watchBox');
       var video = document.getElementById('promoVideo');
-      if (!video) return;
-      var controls = video.parentNode.querySelector('.video-controls');
-      var playBtn = document.getElementById('promoPlay');
-      var soundBtn = document.getElementById('promoSound');
-      var soundLabel = soundBtn.querySelector('span');
+      if (!link || !box || !video) return;
+      var closeBtn = document.getElementById('watchClose');
       var conn = navigator.connection || {};
-      var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches || conn.saveData;
-      var userPaused = still;
-      var visible = false;
 
-      video.removeAttribute('controls');
-      controls.hidden = false;
-
-      function sync() {
-        var paused = video.paused;
-        playBtn.classList.toggle('paused', paused);
-        playBtn.setAttribute('aria-label', paused ? playBtn.dataset.play : playBtn.dataset.pause);
-        soundBtn.setAttribute('aria-pressed', video.muted ? 'false' : 'true');
-        soundLabel.textContent = video.muted ? soundBtn.dataset.on : soundBtn.dataset.off;
-      }
-
-      function play() {
-        var p = video.play();
-        if (p && p.catch) p.catch(sync);
-      }
-
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(function (entries) {
-          visible = entries[0].isIntersecting;
-          if (visible && !userPaused) play();
-          else if (!visible && !video.paused) video.pause();
-        }, { threshold: .35 }).observe(video);
-      } else if (!userPaused) {
-        play();
-      }
-
-      playBtn.addEventListener('click', function () {
-        if (video.paused) { userPaused = false; play(); }
-        else { userPaused = true; video.pause(); }
-      });
-
-      soundBtn.addEventListener('click', function () {
-        if (video.muted) {
-          video.muted = false;
-          video.currentTime = 0;
-          userPaused = false;
-          play();
-        } else {
-          video.muted = true;
+      function open(e) {
+        e.preventDefault();
+        video.poster = video.dataset.poster;
+        video.src = video.dataset.src;
+        box.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+        if (!conn.saveData) {
+          var p = video.play();
+          if (p && p.catch) p.catch(function () {});
         }
-        sync();
-      });
+      }
+      function close() {
+        if (!box.classList.contains('open')) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        box.classList.remove('open');
+        document.body.style.overflow = '';
+        link.focus();
+      }
 
-      video.addEventListener('play', sync);
-      video.addEventListener('pause', sync);
-      sync();
+      link.addEventListener('click', open);
+      closeBtn.addEventListener('click', close);
+      box.addEventListener('click', function (e) { if (e.target === box) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     })();
 
     // Shelf carousel: 3 shots per slide (1 on mobile), dots, and wrap-around arrows.
