@@ -8645,7 +8645,7 @@ or into an environment that cannot run the tests.
   Nintendo library without Robot Man X); "Open Share Nearby." (the device list empty); "Open
   Receive on the computer." (the computer's "Ready to Receive" comes forward and "Linux Desktop"
   appears in the phone's list, outlined in gold, then a tap on it); "The same code shows on both
-  screens." (506 807 on both, both codes outlined in gold together, then a tap on "Accept");
+  screens." (657 970 on both, both codes outlined in gold together, then a tap on "Accept");
   "The games go straight over your Wi-Fi." (both progress bars, purple on the phone and orange on
   the computer, fill from empty to full as you scroll); "They are in your library now." (1 game
   sent on the phone; the computer's "1 Game Received", then its library, where Robot Man X
@@ -8695,7 +8695,7 @@ or into an environment that cannot run the tests.
   of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
 - **Expected:** each caption is a short headline and one sentence, in the page's language, with no
   exclamation mark; every capture has a description in that language naming the screen, and the
-  ones of the code moment mention the code 506 807 (issues 687, 737).
+  ones of the code moment mention the code 657 970 (issues 687, 737).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3

@@ -149,54 +149,54 @@
   },
   "android/game-nds-landscape.png": {
     "height": 1080,
-    "sha256": "6bee44df7bc4aaed032d5a828abc40bff38a0456c48e81d435e6ca1841dbb7b4",
+    "sha256": "d2ee3fc78150f86ef2c242b37d7a03ca03c1a1adaee1a0a91dc2ddfc70200777",
     "variants": [
       {
         "file": "android/game-nds-landscape-640.avif",
         "height": 309,
-        "sha256": "94bd98d7825797bdadeb33e0d53c35ebd6564245f2d72ef2ead28e9b7ea23e8e",
+        "sha256": "3b30b711af5ac9654cd659205e2df2366f398dd64a232ef569cbdb2349049f2e",
         "width": 640
       },
       {
         "file": "android/game-nds-landscape-640.webp",
         "height": 309,
-        "sha256": "741d45dd8feced3aec94d3bc113dc84cbc5c7e0fa787cb4957160abf7e1600c4",
+        "sha256": "5edf0173edd4d6456b7ca053c431e671ff3542b6476f9658652860746d217bd5",
         "width": 640
       },
       {
         "file": "android/game-nds-landscape-1280.avif",
         "height": 618,
-        "sha256": "03c2f2aec8ce42d81724d4103b4a6e697cfddcf9d8d8deeeac8c08dadeb63e21",
+        "sha256": "6d67c7ab7d945ff29aaf6b6d518bbeb23ffd7a98fda2b0485bd6c0856d23b641",
         "width": 1280
       },
       {
         "file": "android/game-nds-landscape-1280.webp",
         "height": 618,
-        "sha256": "73ece4b57b44a4485b3d9811084969183cd8d3c04f2baa7fac743899ff6abec5",
+        "sha256": "213c7856fc2751b1ee941b88a1974b94c416d682b694b4d3ef1c632b621a8982",
         "width": 1280
       },
       {
         "file": "android/game-nds-landscape-1920.avif",
         "height": 927,
-        "sha256": "f5fad128ad02df0ad8e9efa49fdd7b93c6d60336f958e0ce444c29c42c8bf7ac",
+        "sha256": "1efd5d2b279043c90d8ebe23799cf4397836e79ccf1523a36942d19687569abc",
         "width": 1920
       },
       {
         "file": "android/game-nds-landscape-1920.webp",
         "height": 927,
-        "sha256": "f0387df9fe7399f4134e04e81b99975d439c2799aff105d4f5f393cbbc770716",
+        "sha256": "b2323ac122d94acf9ef611e58692d51528d6f9ee0501073d4d4ee77c72a9d29d",
         "width": 1920
       },
       {
         "file": "android/game-nds-landscape-2238.avif",
         "height": 1080,
-        "sha256": "e1b4bde6187b82c5caa68bbf4c0ba7af999de24d8685d713b1945e02ba6119c7",
+        "sha256": "d85668264c84b20e3d062113a00d959f764d9cbca2caaed1dfcc0a03e6cc4640",
         "width": 2238
       },
       {
         "file": "android/game-nds-landscape-2238.webp",
         "height": 1080,
-        "sha256": "02a7c1789fd3a00aba6968af9c825c4b95ce1a4e80a64a54c6729c42ce6396c2",
+        "sha256": "a016ef3e76e54af4d6f4f172f1fd2682e75309bf9f729d28c8e534fef18c8343",
         "width": 2238
       }
     ],
@@ -204,30 +204,30 @@
   },
   "android/game-nds-portrait.png": {
     "height": 2238,
-    "sha256": "f94f8be8e3a26856520578543f4792f198404487325353a7ba971e288d0088e1",
+    "sha256": "3eb81ac7ff3e4d0b19a8413f41e206647e21774378a5aaa36aa41518500c8595",
     "variants": [
       {
         "file": "android/game-nds-portrait-640.avif",
         "height": 1326,
-        "sha256": "2028a4c49cd232e661a657a67215d49f9d8f4964457479c48331c19f00b2663c",
+        "sha256": "69abda51b6e6587ccc4e1b1b0c57d13c374d6bf55900b5295e9a2f82837a30fe",
         "width": 640
       },
       {
         "file": "android/game-nds-portrait-640.webp",
         "height": 1326,
-        "sha256": "2a582296a0375dfb4af26b64e106b2ed1a65fffaa3ecd6f3836766b7a7cfff91",
+        "sha256": "7ebe9ce6fc0bde95e0847ec5f669e1396beae41f7ce4c2f951bbdc8860fce931",
         "width": 640
       },
       {
         "file": "android/game-nds-portrait-1080.avif",
         "height": 2238,
-        "sha256": "7741ef0818041b2b684c13e27ee1e5008ee948bf579e3ee761c3026c71fc89c2",
+        "sha256": "8bc177a1a78835cd5b5818c319d68a4447f3c57272a79f7b727156f5bf511cec",
         "width": 1080
       },
       {
         "file": "android/game-nds-portrait-1080.webp",
         "height": 2238,
-        "sha256": "bb6013a3717858dc8c256f1c81f3649ec5c777d96d481b0ca6e304db6f2fe07c",
+        "sha256": "ec307dadb76ddfb9051329dca1f92e47fcdd62c1e732af432f836f9cd8d76193",
         "width": 1080
       }
     ],
@@ -297,42 +297,42 @@
   },
   "android/library-snes.png": {
     "height": 3120,
-    "sha256": "86f4e1ec1e8d5e0c7a6d2ed7e0389eb722e373339ce239bf92749332dc918d30",
+    "sha256": "79064ff503f299add3d0f3c1394793b94970426a552a656c4e4f9ae68caf1940",
     "variants": [
       {
         "file": "android/library-snes-640.avif",
         "height": 1387,
-        "sha256": "036cf8b7f4428fd8dd5b112cbe4868ccd3c29cc5579360deb4ac21313baab7ff",
+        "sha256": "0639a2e4c66d650b4358a4b27a53a1732e0939f253cd4e681fe48ab41b2d3735",
         "width": 640
       },
       {
         "file": "android/library-snes-640.webp",
         "height": 1387,
-        "sha256": "0c0245877236bb44b531deff5a4bc667a50310ddf2d147a2d7b6d7c7caa40187",
+        "sha256": "15a2ed270f63207d0dadbf18d62b3571c48fefac1414e5e59df850790659854f",
         "width": 640
       },
       {
         "file": "android/library-snes-1280.avif",
         "height": 2773,
-        "sha256": "a71dc27e477f17f9a62e62528dd7d59a4592256e5179a71c6f19f9454a980fe0",
+        "sha256": "aeb0bcb9e5769eb860af35ae28c281efab850b013fccfc1425146927ca4d5c55",
         "width": 1280
       },
       {
         "file": "android/library-snes-1280.webp",
         "height": 2773,
-        "sha256": "33b7591378398a7ae0e6b28bfcfa54c8e196fc8fb74dfc1a0e8855b9d76d1c87",
+        "sha256": "473b3fc80e9344a9576984d476e4e3be0edd1a36cd2ff690e8f524a59b83ea3d",
         "width": 1280
       },
       {
         "file": "android/library-snes-1440.avif",
         "height": 3120,
-        "sha256": "de18ab8232ef35b7a18e7975e6abbea97fe35c90d3de93df163e15b10632e665",
+        "sha256": "e31a56ea57660af3275df53ffc3c362a6f86da75c15736b52774399c7e2dc24b",
         "width": 1440
       },
       {
         "file": "android/library-snes-1440.webp",
         "height": 3120,
-        "sha256": "a1b7079050f4c2270783af22e122224b8a12b26f5fdd84da26f25ac829b2f996",
+        "sha256": "b375c0f54cc271738e9883ec4a1f1953435ff6d1a6a2963a6fe43ed6c83853a5",
         "width": 1440
       }
     ],
@@ -725,54 +725,54 @@
   },
   "share/desktop-1-ready.png": {
     "height": 1516,
-    "sha256": "11164304dbd7af95fc9fb2490322db6d2b1757d203882e31664e2d3b0fe4e1e0",
+    "sha256": "db6227a91001d0a8316e81964dec81addbdabfa0287f7aca07242dd0680d7d0d",
     "variants": [
       {
         "file": "share/desktop-1-ready-640.avif",
         "height": 434,
-        "sha256": "2ee40cf318c148d441ac78c7827b9f069898dcf0f74f9166b0a966c13be4069c",
+        "sha256": "b934211412cb3f142b289aa448e07d4da4f29d59ef1b49fcde8a3d6a916b7026",
         "width": 640
       },
       {
         "file": "share/desktop-1-ready-640.webp",
         "height": 434,
-        "sha256": "774f0463758102bee067ebc8296afb3b9fcd74f4ebf27f0468354a36cd2c624a",
+        "sha256": "1562d46336a79b01d5e353084f15d837446987bbef239228c5b49beb3cc7c4ba",
         "width": 640
       },
       {
         "file": "share/desktop-1-ready-1280.avif",
         "height": 868,
-        "sha256": "ca6e39e525f140aa9f433be8833505774d1108d1ba9eda7b5f284f2f09489667",
+        "sha256": "99072669368673cc877def4057483c81c6d72dcaffe34852cc5ce293722e9239",
         "width": 1280
       },
       {
         "file": "share/desktop-1-ready-1280.webp",
         "height": 868,
-        "sha256": "0625657ed2a678eac97b89c176f6280ca208c99bfb2333b72535bfdd60b643d9",
+        "sha256": "79bd81be8bd7baeea4e01fe61b21aa3aca82de382a11a4c71f45a660f627c838",
         "width": 1280
       },
       {
         "file": "share/desktop-1-ready-1920.avif",
         "height": 1302,
-        "sha256": "9912d09e712aa1ae2ce9ca5b9a2ae7ea15269feb3806318ff0dc083f6b239a90",
+        "sha256": "25215c00b019098a69a157442f885b130e1bed1fff53d57c02efdcad875e507c",
         "width": 1920
       },
       {
         "file": "share/desktop-1-ready-1920.webp",
         "height": 1302,
-        "sha256": "a79b97b1c0750fe770b41989be5cead7e12259a4612c02f0df446d655db29595",
+        "sha256": "ffac51fd25eda381d2486cdb2980ad4d2d06930f73ddb16b836982c2312404ee",
         "width": 1920
       },
       {
         "file": "share/desktop-1-ready-2236.avif",
         "height": 1516,
-        "sha256": "702be38d555228fab5d34ba1f2b884b0db595cb0c655fa0abee77e5ee087cc33",
+        "sha256": "f4753eef70a2dcc86cd15671af782a2790c76d510fb6c2c43b6d85c78af77ac2",
         "width": 2236
       },
       {
         "file": "share/desktop-1-ready-2236.webp",
         "height": 1516,
-        "sha256": "8a72569b20b25297b76bc3c1837f174c87c18882f93a97b9900b4b3baedee1fb",
+        "sha256": "360687d3be4d4b4dbe1435666e6b506ec1575e4249f45735bd404dcb8c9e493b",
         "width": 2236
       }
     ],
@@ -780,54 +780,54 @@
   },
   "share/desktop-2-offer.png": {
     "height": 1516,
-    "sha256": "cd438bf56649a06ff797d2b2120cd90d2e67db0fd4470268cdc1465101a0505c",
+    "sha256": "76cb3a3d75c44e119c181fb3e63ed815af391b1dd0cda7b650192f1c5d90c16b",
     "variants": [
       {
         "file": "share/desktop-2-offer-640.avif",
         "height": 434,
-        "sha256": "cac46a558492b7f699786883b15210274c3e6e22394dcb339afe90abff6f4252",
+        "sha256": "9565869ef90b6688114dd5fa20b1f37fdba23ab29594fcfe9a3a661603573bea",
         "width": 640
       },
       {
         "file": "share/desktop-2-offer-640.webp",
         "height": 434,
-        "sha256": "50fa15a3bc3334d224e2b0d4d9c41d30b8c81061b4ef353e67f46d8ead5854db",
+        "sha256": "9b85c0e059a3df3b57b7d87fed951f7c5595d174d35ea3008915f11f6e9515c2",
         "width": 640
       },
       {
         "file": "share/desktop-2-offer-1280.avif",
         "height": 868,
-        "sha256": "f34efe2ab1d10337e4bf3e9bab85407c9d502f848f32c9d38d89633b3415ae7f",
+        "sha256": "771f80648a19cbeb0a7bd9c921f33d9db3c60ebec76ea1741c724b6c63559bae",
         "width": 1280
       },
       {
         "file": "share/desktop-2-offer-1280.webp",
         "height": 868,
-        "sha256": "dd640312d1c8fbd11cfe53598a17fc02b9cd612c4a648e86132e97994478c3fe",
+        "sha256": "bb9c6f06e0cd76c73326386e0d59a9e5910f5a2a675687e2c17b312e03ecd307",
         "width": 1280
       },
       {
         "file": "share/desktop-2-offer-1920.avif",
         "height": 1302,
-        "sha256": "edf5c21b8daf57e12fbd6f93a3e9e14029da2bf2ea0f6eed1c51cfd02a8f01d3",
+        "sha256": "4db24996c5565e7a817ab05a8b78101f04271ee817f8f4215ed2106a767a308a",
         "width": 1920
       },
       {
         "file": "share/desktop-2-offer-1920.webp",
         "height": 1302,
-        "sha256": "2598e21ad4e64704e0b5e0a1247ad53ac5f855e19fce0f7b7aa020d732389158",
+        "sha256": "cb97641af31981f4ce08434f77c6ec681f0b16aaea963b6cb270d71363440d9e",
         "width": 1920
       },
       {
         "file": "share/desktop-2-offer-2236.avif",
         "height": 1516,
-        "sha256": "7e4dddcfdf2551fac1a02c3c9ba6dfbb1ebe358e1587e2ca38190a012e6d5a7c",
+        "sha256": "53f0bed32b4197615990ec94a253f7f04e77f2269d4523a6ec10f97749db8bd0",
         "width": 2236
       },
       {
         "file": "share/desktop-2-offer-2236.webp",
         "height": 1516,
-        "sha256": "3150805aaeb5fb2d8640234abf92d06f4b454da6eacc7234c8bf10cab4fd2dda",
+        "sha256": "23e251225c0cea5ebb26fd2b0c39e43ac9470889669fb65189d6474d61db4437",
         "width": 2236
       }
     ],
@@ -890,54 +890,54 @@
   },
   "share/desktop-4-library.png": {
     "height": 1516,
-    "sha256": "077fddf83e9d8e6167db8ca7a4ecec27c35ccf39a5b492c8eef1670a42d87fbb",
+    "sha256": "ee5af7a58186e87053f804867adc37f3de9dffbb34d8de1aceb003bf8050f386",
     "variants": [
       {
         "file": "share/desktop-4-library-640.avif",
         "height": 434,
-        "sha256": "fea08524126bf2e6946d95c2eaf0849be63660b9a6974386af8e9d3a7cb3b5cc",
+        "sha256": "38432b190f39dd26a70ff8a76632da33049266f6f84e9fbdc561e3f5e885b6fc",
         "width": 640
       },
       {
         "file": "share/desktop-4-library-640.webp",
         "height": 434,
-        "sha256": "56671a7f9901e13a26810b3f752d6bded119d589bd05559532cdfcf78a451d79",
+        "sha256": "aa2647c7de5f64e569fce71acf979585ac19f6c6a18985c6ced9a590c7110a3f",
         "width": 640
       },
       {
         "file": "share/desktop-4-library-1280.avif",
         "height": 868,
-        "sha256": "f77def57ac33330d9e826126a63a1c802a118a1123f83ab596a00a73bc9a64c4",
+        "sha256": "1f5e4355390d5cfec470b4c1ca58b2e3d351a618136bf90585e49aa0fa658e6c",
         "width": 1280
       },
       {
         "file": "share/desktop-4-library-1280.webp",
         "height": 868,
-        "sha256": "dd9eb1492335bcfdcce056b6624785a4507e175c9d6782a488048a456c8e67d9",
+        "sha256": "c0fedfc019089050204c8bf2eaeae1c87d85856b2fb703eb64ae31d8b68b48d6",
         "width": 1280
       },
       {
         "file": "share/desktop-4-library-1920.avif",
         "height": 1302,
-        "sha256": "55e893bc1cf6aafd3c95c5e88d4305e647a420d87cbdc5a4a2af43735f2a7b5b",
+        "sha256": "7d3d655ec391cbfb4add7a91bfc08e02b640587f614011dc77f68447bed0bf62",
         "width": 1920
       },
       {
         "file": "share/desktop-4-library-1920.webp",
         "height": 1302,
-        "sha256": "e6bd47b611efe48ec2c4e3ad7fba3fde42922b587b6c9ede251472699cfb9d4a",
+        "sha256": "114bb999187a4a9a6825841fdd6512d56bcad300f39332610f918125145a742b",
         "width": 1920
       },
       {
         "file": "share/desktop-4-library-2236.avif",
         "height": 1516,
-        "sha256": "cd049000e538e116e76deeaef68bce87f65bcd452869811e15540435e81a4422",
+        "sha256": "1d2b3a057f5cfab501a740771a1db2a4fb809d69e1d4fb7054d0bc7e93beee4c",
         "width": 2236
       },
       {
         "file": "share/desktop-4-library-2236.webp",
         "height": 1516,
-        "sha256": "3668135c33724c7d2a8b31d3fdee3914ab128ab8c7127209a65f25f8e2c0de3a",
+        "sha256": "ab169ead3a3fda5e073852b778b5d99848d930a0bf55aee5e9f0a38e31c92e33",
         "width": 2236
       }
     ],
@@ -945,54 +945,54 @@
   },
   "share/desktop-4-received.png": {
     "height": 1516,
-    "sha256": "3e39c93f08b6702c00cdb9dd327673b82d41fb45c62ba5a89cda8fc5086c3246",
+    "sha256": "ea26cbc7d7ebd95cdedd4d4fae7dcb06ad4941db092929da75c228a5bb364883",
     "variants": [
       {
         "file": "share/desktop-4-received-640.avif",
         "height": 434,
-        "sha256": "23bd9b109754438cfa8e9de5bf9c3b66b49c16332ccecebee0775a8c9c8f80bd",
+        "sha256": "e370d604ff67d1a22b3875709d2eb9c13a24eea1e6b9778b9ee49b2fb58f211e",
         "width": 640
       },
       {
         "file": "share/desktop-4-received-640.webp",
         "height": 434,
-        "sha256": "cbc75859a7d11de92e786ad74184c661d627357b8968bdd65e83a8c0caffdb91",
+        "sha256": "430ca565108adcac8b56d571ac54e9375f59619e421922eb8771d2983a480eac",
         "width": 640
       },
       {
         "file": "share/desktop-4-received-1280.avif",
         "height": 868,
-        "sha256": "497d33f5cf8f21cb4ebc0174144568c805bc73b0af448a1fa00c4d55edb61d3c",
+        "sha256": "01dce786f1e16cd2e20ffd47c66352f3d7cef56f6764255fc25ecd9c351c8576",
         "width": 1280
       },
       {
         "file": "share/desktop-4-received-1280.webp",
         "height": 868,
-        "sha256": "fa0117a9aa983c55eaeac550f7efcf63f3060596b822abe225fec6efa690ddba",
+        "sha256": "c919bdd7b6576e6a955449a5b21932b83ebbad426f1b5e521ecbbb6c59d738a7",
         "width": 1280
       },
       {
         "file": "share/desktop-4-received-1920.avif",
         "height": 1302,
-        "sha256": "b33a04295a85a8ec4f99f5ccea249117002cf11642febe97d33c8b26a90fa639",
+        "sha256": "f0c96010c7feacc9a20416a94947bca7c00040e5d5c30573da4a3ec72c1c260f",
         "width": 1920
       },
       {
         "file": "share/desktop-4-received-1920.webp",
         "height": 1302,
-        "sha256": "5e6d9e3332b64084344168172086a8ca7d9a166af4f94608544726bcc77b7ae4",
+        "sha256": "2f93ab5588696dfbb474bfafa7d967efb0357b97a8284da3474d4da5358dda74",
         "width": 1920
       },
       {
         "file": "share/desktop-4-received-2236.avif",
         "height": 1516,
-        "sha256": "499d21e64d53993d60bbc7b9bb40d89fb12cabf5cae53acc12b76d8aae4844d4",
+        "sha256": "773deb34450c6fde8d785cde7e4509f7f83b3be8e638edba26b128794ab03a13",
         "width": 2236
       },
       {
         "file": "share/desktop-4-received-2236.webp",
         "height": 1516,
-        "sha256": "a077520198dbb9c8680a68261a7a426c7100515a5d476b8ceea18f0638884cb2",
+        "sha256": "45899ac05b8cba6edf93f148b30243ad6a0dbc31d468cceaa2160a1c9f839c64",
         "width": 2236
       }
     ],
@@ -1000,42 +1000,42 @@
   },
   "share/phone-1-pick.png": {
     "height": 3120,
-    "sha256": "8488fc6d5a6ff1009774d1c89e9ab40d0b31f3b3a10bfb3067931ed88222302a",
+    "sha256": "5a05493dd2d71f94c34360bb8f6e0419c1bee1b0b8bfab8752fff5dba4d70e27",
     "variants": [
       {
         "file": "share/phone-1-pick-640.avif",
         "height": 1387,
-        "sha256": "64722a4ef02a729df327c4bd0a3f53af83e253271b7962d19f6e1dbc70dbe5aa",
+        "sha256": "5836b16874679c44469c7e5b8c638e5e4ed065856aa6ae9e9e35e8b9acb098fd",
         "width": 640
       },
       {
         "file": "share/phone-1-pick-640.webp",
         "height": 1387,
-        "sha256": "82b34b22d3b2261142bf3cd42a29d64934f6dd6cd3eebfbc3b2e5e8aee8f5f62",
+        "sha256": "a28f6b99b1aa210d89aa4730b643b4409b97e9d72a9f5a7290eb54800e05db15",
         "width": 640
       },
       {
         "file": "share/phone-1-pick-1280.avif",
         "height": 2773,
-        "sha256": "30b786dc832be1b231829ec8953439cc03d84fa48bd4bde15633dc4f98942350",
+        "sha256": "0a38c8f9fe03619b879eb2b7384d89b722b703102e4c117c2fc8980d1e9e9f03",
         "width": 1280
       },
       {
         "file": "share/phone-1-pick-1280.webp",
         "height": 2773,
-        "sha256": "c26d04398996f590938312901ab1eb437d86c99eda5a17be2a058c00e2cc2182",
+        "sha256": "02a879e44fd6b86666f566ea5667662a12ef63766bb53d8901a41b49ff68cfaa",
         "width": 1280
       },
       {
         "file": "share/phone-1-pick-1440.avif",
         "height": 3120,
-        "sha256": "527c3d1388f40c134e0bf3e73c832377e5b33cc2cec1fc85e02edbb476ac0238",
+        "sha256": "a18f8ca78bf77ef31043eac6166657f28a979af037059dd33b9e2fc7fc37dd8a",
         "width": 1440
       },
       {
         "file": "share/phone-1-pick-1440.webp",
         "height": 3120,
-        "sha256": "772f511b2f0e43706a45731d39396159bdf7d29a293e85329f1337aa34db4b6f",
+        "sha256": "1ec1f1a9fc0113bd2af28f136824f97a41e8764ccf62b1c43e22a25fbfe3ce65",
         "width": 1440
       }
     ],
@@ -1086,42 +1086,42 @@
   },
   "share/phone-2-code.png": {
     "height": 3120,
-    "sha256": "d66526ad4c6e66f64691244d4310f045fd173ce0b259830413994db22b3a001d",
+    "sha256": "1c7f21fda89326e6e9bc64d4ac40fb9976c28b21aefb22c69d2746cc39734c0f",
     "variants": [
       {
         "file": "share/phone-2-code-640.avif",
         "height": 1387,
-        "sha256": "cb23336f719752437c786c576c35a3ba7353dbd6cdad6f1bbdc1c013de11019b",
+        "sha256": "ccc03eba0299a2e8fd883a739cd1c56163d5b30596d2c2eb304fa2667af47c60",
         "width": 640
       },
       {
         "file": "share/phone-2-code-640.webp",
         "height": 1387,
-        "sha256": "5a92eb5a66b4c21de5e239eeb10b6ac78f8533313a751a3534fc98caad4de124",
+        "sha256": "12f99437045156501e6f883aff2a335a474fdcc74b4898f3e8e48e9c41cdeeb2",
         "width": 640
       },
       {
         "file": "share/phone-2-code-1280.avif",
         "height": 2773,
-        "sha256": "29eb916a1e12de232c61ab6b6cff5713c4e464b0f109df0f149169a6d8417f5c",
+        "sha256": "2c00e8c77b424c8105b27c559ed97dd04edb18b23947b06e15b6e50d37df5f70",
         "width": 1280
       },
       {
         "file": "share/phone-2-code-1280.webp",
         "height": 2773,
-        "sha256": "dec2a6b6da207440fcc9c8ef77240e70fe2e3427c15163ba25ffcbf2d1454726",
+        "sha256": "51632c0ccbbb3666cc8486f619e3d86d9bb74edb51459080a928d0cfbdb4ae5e",
         "width": 1280
       },
       {
         "file": "share/phone-2-code-1440.avif",
         "height": 3120,
-        "sha256": "f5767e4547649db762b238d52ed0aafbadaabc238ff7fbaa6086ad7557381951",
+        "sha256": "96b381c80a442da58ae90f48354f9a635b65ac2fecb6f061b2034e0327d045be",
         "width": 1440
       },
       {
         "file": "share/phone-2-code-1440.webp",
         "height": 3120,
-        "sha256": "4c899207a404daea16a098013d7220fccb260af2b856f7a80f16adeb0dca754f",
+        "sha256": "13f7192d06692a7b21381d0720e761ba492cd0594aafdf96c54f035924055a93",
         "width": 1440
       }
     ],
@@ -1129,42 +1129,42 @@
   },
   "share/phone-3-progress.png": {
     "height": 3120,
-    "sha256": "f29dab2a5e13825215f05e3c1f7d6ec0d1556dd0b822e520d5b131d274229463",
+    "sha256": "5a893c88f93c47304cadaed82b16bb9ea36c6f0643ec89ecb8a4ab7e5b41e3a7",
     "variants": [
       {
         "file": "share/phone-3-progress-640.avif",
         "height": 1387,
-        "sha256": "491936ee45a1ef2b051feb3699c36bcf10792ba71442e46a78586ed645c06733",
+        "sha256": "7b4e26c0ff4c69c9681eed69b141fdd7a9ea9a6f15c2e4397d2ea76f537a0ef4",
         "width": 640
       },
       {
         "file": "share/phone-3-progress-640.webp",
         "height": 1387,
-        "sha256": "9f6c2c9de7dc825ba711da5ff58fdeb6dae4f3dab0a04ea4e1f5f773c926d761",
+        "sha256": "59ba3ebfc1c09f1d93795518f74335b10822c0beea71dade64c336ea5d39993e",
         "width": 640
       },
       {
         "file": "share/phone-3-progress-1280.avif",
         "height": 2773,
-        "sha256": "74ef512e82f3dc05a31c444b89d8ed27c329e7352dbf8d790eb6cb30b8e0bcef",
+        "sha256": "612f33145fae51a62034f245b2547a31b8a74a0ae6fd139909f486c6144418b4",
         "width": 1280
       },
       {
         "file": "share/phone-3-progress-1280.webp",
         "height": 2773,
-        "sha256": "6063dbc4afaf252bd97ca6096b73ce54337f349f49dc320a17d46c70da36f6a6",
+        "sha256": "754ff9d3562d5a402fc97a3f2e9355f1fe795763915abee194d045b0b476792f",
         "width": 1280
       },
       {
         "file": "share/phone-3-progress-1440.avif",
         "height": 3120,
-        "sha256": "d048499c6e68889c7609fc2fe543786b350cf71ac40a3e1aed09fda136ee8547",
+        "sha256": "aedfe50e39576a4d07fd8ba473c767f74a87cf4fc06fd983559038ddeb12fbac",
         "width": 1440
       },
       {
         "file": "share/phone-3-progress-1440.webp",
         "height": 3120,
-        "sha256": "f20b8d30e501e57b4f67266760696e206450af4953898015375efd14b993355d",
+        "sha256": "5fed6cad5147af8779fa7e25f97739f44f191dbbe89d9542bced1caa490e0d2e",
         "width": 1440
       }
     ],
