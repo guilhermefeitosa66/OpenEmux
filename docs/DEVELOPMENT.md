@@ -965,6 +965,14 @@ Commit the regenerated pages with the source: Pages serves `docs/` as is.
 `tests/test_site.py` fails when they drift apart, when a language lacks a
 string, or when a translation changes the markup rather than the text.
 
+The install section's download buttons find their file by name. Each carries a
+`data-asset` pattern (`^openemux_[0-9.]+_amd64\.deb$` …) that a small script
+matches against the latest release's assets through the GitHub API, once per
+visit; the `href` written in the page (the Releases page, or the APK's
+version-free link) is what a visitor gets when that fails. Renaming an artifact
+in `packaging/` means updating its pattern too: `TheInstallSectionTests` holds
+the patterns against the names of a real release.
+
 A change to the site alone reaches the live page only through `main`. Merge it
 to `develop` as usual, then open a second pull request with just `docs/` to
 `main` — or let it ride with the next release.
