@@ -8543,8 +8543,11 @@ stands in for the other device; multicast may not cross the container.
   scph5501.bin · …" under the first game; unchecking it leaves the console's BIOS out, and
   unchecking the first game hands them to the second. On the receiver the file lands in
   `<roms>/PS/bios/scph5501.bin` with the sender's bytes and date, Preferences' BIOS status reads it
-  as present, the incoming dialog lists "BIOS" among the game's items and both result pages end with
-  "BIOS files added: …" / "BIOS files sent: …".
+  as present, the incoming dialog lists "BIOS" among the game's items and both result pages say
+  "BIOS files added: …" / "BIOS files sent: …". When no game went (or only some did) but the BIOS
+  did, the sender's "BIOS files sent: …" comes before "<device> didn't take any of them:" / "These
+  didn't go:", so that line stays right above the "Not Sent" list it introduces, and the receiver's
+  page leaves out "Nothing from <device> was added to your library.".
 - **Check:** `tests/test_share_manifest.py` (`BiosTests`), `tests/test_share_selection.py`
   (`BiosSelectionTests`), `tests/test_share_placement.py` (`BiosTests`), `tests/test_share_receive.py`
   (`BiosReceiveTests`), `tests/test_share_dialog.py` (`BiosSendTests`) and

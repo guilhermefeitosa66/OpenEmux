@@ -499,6 +499,23 @@ class BiosSendTests(_DialogCase):
         callbacks["on_done"]({"status": "done", "sent": ids, "skipped": []})
         self.assertIn("\nBIOS files sent: disksys.rom", _status(self.dialog).get_description())
 
+    def test_the_bios_line_never_splits_a_colon_from_its_list(self):
+        # The games were already there, only the BIOS went (QA round 1, BUG-1).
+        self.peers(peer("Phone"))
+        self.dialog._peer_rows[0].emit("activated")
+        _peer, built, callbacks = self.service.sent
+        items = [item for game in built.manifest["games"] for item in game["items"]]
+        callbacks["on_done"]({
+            "status": "done",
+            "sent": [item["id"] for item in items if item["kind"] == "bios"],
+            "skipped": [{"item_id": item["id"], "reason": "user_unchecked"} for item in items if item["kind"] != "bios"],
+        })
+        status = _status(self.dialog)
+        self.assertEqual(status.get_title(), "No Games Sent")
+        self.assertEqual(status.get_description().split("\n"),
+                         ["BIOS files sent: disksys.rom", "Phone didn't take any of them:"])
+        self.assertEqual(len(_action_rows(self.dialog.result.missing_group)), 2)
+
 
 def _action_rows(widget):
     found = []

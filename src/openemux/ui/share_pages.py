@@ -233,7 +233,12 @@ def result_page(t, result, device, receiving, report=None, summary="", on_close=
         page_box.set_title(title)
         if report.bios:
             key = "share.result.bios_received" if receiving else "share.result.bios_sent"
-            description = "\n".join(filter(None, (description, t(key, names=", ".join(report.bios)))))
+            lines = [description, t(key, names=", ".join(report.bios))]
+            if not receiving and not report.complete:
+                # The sender's partial/none bodies end in a colon that
+                # introduces the "Not Sent" list: they stay right above it.
+                lines.reverse()
+            description = "\n".join(filter(None, lines))
         if summary:
             description = f"{description}\n{summary}"
         if not report.complete:
