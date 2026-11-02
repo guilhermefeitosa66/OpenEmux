@@ -206,6 +206,105 @@ class TheManualTests(unittest.TestCase):
             build_site.render_manual("fr", template="{{nope-1}}", strings={})
 
 
+class TheInstallSectionTests(unittest.TestCase):
+    """The install section: platform tabs, one download per package, copy
+    buttons, the checksum block folded away (issue 689)."""
+
+    #: What ``make packages`` publishes, as named on the 1.18.10 release.
+    RELEASE_ASSETS = (
+        "OpenEmux-1.18.10.flatpak", "OpenEmux-1.18.10-aarch64.flatpak",
+        "OpenEmux-1.18.10-x86_64.AppImage", "openemux_1.18.10_amd64.deb",
+        "openemux-1.18.10-1.fc40.x86_64.rpm", "OpenEmux-1.18.10-setup.exe",
+        "OpenEmux-1.18.10-windows-x86_64.zip", "OpenEmux-mobile.apk",
+        "OpenEmux-mobile-1.18.10.apk", "openemux-1.18.10-1-x86_64.pkg.tar.zst", "SHA256SUMS",
+    )
+
+    @staticmethod
+    def _section(locale="en"):
+        text = build_site.render(locale)
+        start = text.index('<section id="install"')
+        return text[start:text.index("</section>", start)]
+
+    @staticmethod
+    def _panel(section, key):
+        """The markup of ``data-panel="key"`` up to the next panel of its kind."""
+        start = section.index(f'data-panel="{key}"')
+        kind = section.rfind('class="', 0, start)
+        cls = section[kind:section.index('"', kind + 7) + 1]
+        end = section.find(cls, start)
+        return section[start:end if end > 0 else len(section)]
+
+    def test_each_tab_has_its_panel(self):
+        section = self._section()
+        lists = re.findall(r'<div class="[^"]*" data-tablist aria-label="([^"]+)" hidden>(.*?)</div>',
+                           section, re.S)
+        self.assertEqual([label for label, _ in lists], ["Platform", "Linux package", "Windows build"])
+        tabs = [re.findall(r'data-tab="([a-z]+)"', body) for _, body in lists]
+        self.assertEqual(tabs, [["linux", "windows", "android"],
+                                ["flatpak", "appimage", "deb", "rpm"],
+                                ["installer", "portable"]])
+        for key in sum(tabs, []):
+            with self.subTest(tab=key):
+                self.assertEqual(section.count(f'data-panel="{key}"'), 1)
+
+    def test_without_javascript_every_panel_is_shown(self):
+        # Only the tab rows wait for the script; the panels never start hidden.
+        section = self._section()
+        self.assertNotRegex(section, r'data-panel="[a-z]+"[^>]*hidden')
+        self.assertEqual(section.count(" hidden>"), 3)
+
+    def test_every_package_has_one_primary_download(self):
+        section = self._section()
+        for key in ("flatpak", "appimage", "deb", "rpm", "installer", "portable", "android"):
+            with self.subTest(package=key):
+                self.assertEqual(self._panel(section, key).count('class="btn btn-primary"'), 1)
+
+    def test_the_download_patterns_find_their_release_file(self):
+        patterns = re.findall(r'data-asset="([^"]+)"', self._section())
+        self.assertEqual(len(patterns), 6)
+        for pattern in patterns:
+            with self.subTest(pattern=pattern):
+                hits = [name for name in self.RELEASE_ASSETS if re.search(html.unescape(pattern), name)]
+                self.assertEqual(len(hits), 1, hits)
+
+    def test_every_download_works_without_the_api(self):
+        # The href is what a visitor gets when the script cannot ask GitHub.
+        for href in re.findall(r'class="btn btn-primary"[^>]*href="([^"]+)"', self._section(), re.S):
+            with self.subTest(href=href):
+                self.assertTrue(href.startswith(
+                    "https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"))
+
+    def test_the_copy_labels_are_translated_on_every_page(self):
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            section = self._section(locale)
+            with self.subTest(locale=locale):
+                for attr, key in (("data-copy", "install.copy"), ("data-copied", "install.copied"),
+                                  ("data-copy-manual", "install.copy_manual")):
+                    self.assertIn(f'{attr}="{strings[key]}"', section)
+                # The script swaps the shortcut for ⌘C on a Mac.
+                self.assertRegex(strings["install.copy_manual"], r"(Ctrl|Strg)\+C")
+
+    def test_the_commands_are_all_still_there(self):
+        section = self._section()
+        for command in ("flatpak install -y flathub org.libretro.RetroArch",
+                        "flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux",
+                        "chmod +x OpenEmux-*-x86_64.AppImage",
+                        "sudo apt install ./openemux_*_amd64.deb",
+                        "sudo dnf install ./openemux-*.x86_64.rpm",
+                        "sha256sum -c SHA256SUMS --ignore-missing",
+                        "Get-FileHash .\\OpenEmux-*-setup.exe -Algorithm SHA256"):
+            with self.subTest(command=command):
+                self.assertIn(command, section)
+        self.assertGreaterEqual(section.count("<pre><code>"), 8)
+
+    def test_checksum_verification_is_folded_away(self):
+        section = self._section()
+        details = section[section.index('<details class="verify">'):section.index("</details>")]
+        self.assertIn("SHA256SUMS", details)
+        self.assertNotIn("<details class=\"verify\" open", section)
+
+
 class TheBuildScriptTests(unittest.TestCase):
     def test_check_passes_on_a_fresh_build(self):
         self.assertEqual(build_site.main(["--check"]), 0)

@@ -687,18 +687,120 @@
     }
 
     /* ---------- install ---------- */
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      margin-top: 44px;
-      text-align: left
+    /* Without JavaScript: every platform stacked under its heading, every
+       package under its gold tag. With it (`.tabs-on` on the section): two
+       rows of tabs and one panel at a time. */
+    #install [hidden] {
+      display: none !important
     }
 
-    @media(max-width:820px) {
-      .steps {
-        grid-template-columns: 1fr
-      }
+    .install-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 6px;
+      margin-top: 40px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      max-width: 100%;
+    }
+
+    .install-tabs button,
+    .format-tabs button {
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .install-tabs button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 10px 24px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .install-tabs button:hover {
+      color: var(--text)
+    }
+
+    .install-tabs button[aria-selected="true"] {
+      background: linear-gradient(135deg, var(--violet), var(--violet-deep));
+      color: #fff;
+    }
+
+    .format-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 26px;
+    }
+
+    .format-tabs button {
+      min-height: 40px;
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .05);
+      color: var(--text);
+      font-size: .9rem;
+    }
+
+    .format-tabs button:hover {
+      border-color: rgba(255, 210, 30, .5)
+    }
+
+    .format-tabs button[aria-selected="true"] {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #1a1206;
+      font-weight: 800;
+    }
+
+    .install-tabs button:focus-visible,
+    .format-tabs button:focus-visible,
+    .install-panel:focus-visible,
+    .format-panel:focus-visible,
+    .verify summary:focus-visible,
+    .copy:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 3px;
+    }
+
+    .install-panel {
+      max-width: 860px;
+      margin: 0 auto;
+      border-radius: var(--radius);
+    }
+
+    .install-card {
+      margin-top: 20px;
+      text-align: left;
+    }
+
+    .install-card:hover {
+      transform: none;
+      border-color: var(--line)
+    }
+
+    .tabs-on .install-panel {
+      margin-top: 24px
+    }
+
+    .tabs-on .platform-head,
+    .tabs-on .format-tag {
+      display: none
+    }
+
+    .tabs-on .install-panel>.lede {
+      margin-top: 0
     }
 
     .platform-head {
@@ -711,18 +813,99 @@
       margin: 52px 0 0;
     }
 
-    .platform-head+.lede {
+    .install-panel>.lede {
       margin: 10px auto 0;
       font-size: 1rem;
     }
 
-    .platform-head+.steps,
-    .platform-head+.lede+.steps {
-      margin-top: 20px;
+    .format-panel {
+      border-radius: 10px
     }
 
-    .step-n {
-      max-width: 120px;
+    .format-panel+.format-panel {
+      margin-top: 40px
+    }
+
+    .tabs-on .format-panel+.format-panel {
+      margin-top: 0
+    }
+
+    .format-tag {
+      display: inline-block;
+      border-radius: 8px;
+      padding: 3px 12px;
+      background: var(--gold);
+      color: #1a1206;
+      font-weight: 800;
+      font-size: .9rem;
+      margin-bottom: 14px;
+    }
+
+    .format-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px 24px;
+    }
+
+    .format-head h3 {
+      margin: 0;
+      font-size: 1.3rem;
+      letter-spacing: -.02em;
+    }
+
+    #install .note {
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    #install .note p {
+      margin: 10px 0 0
+    }
+
+    .format-head .note p {
+      margin-top: 2px
+    }
+
+    .format-panel>.note p {
+      margin: 22px 0 10px
+    }
+
+    .dl-icon {
+      width: 18px;
+      height: 18px;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .install-steps {
+      list-style: none;
+      counter-reset: step;
+      margin: 26px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 22px;
+    }
+
+    .install-steps>li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 46px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .install-steps>li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 30px;
       height: 30px;
       border-radius: 8px;
       display: grid;
@@ -731,7 +914,220 @@
       color: #1a1206;
       font-weight: 800;
       font-size: .9rem;
-      margin-bottom: 14px;
+    }
+
+    .install-steps>li>p,
+    .install-steps>li>h3 {
+      margin: 2px 0 10px;
+      color: var(--text);
+    }
+
+    .install-steps>li>h3 {
+      font-size: 1rem
+    }
+
+    .install-steps>li>p:last-child {
+      margin-bottom: 0
+    }
+
+    /* A command and its copy button. The button keeps its own corner, so
+       the text never runs under it; long lines wrap inside the box. */
+    .cmd {
+      position: relative
+    }
+
+    .cmd pre {
+      padding-right: 104px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .copy {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      max-width: 88px;
+      overflow-wrap: anywhere;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 650;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease;
+    }
+
+    .copy:hover {
+      background: rgba(255, 255, 255, .12)
+    }
+
+    .copy.done {
+      background: #c7f0d8;
+      border-color: #c7f0d8;
+      color: #0b2a18;
+    }
+
+    .copy svg {
+      width: 14px;
+      height: 14px;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .verify {
+      max-width: 860px;
+      margin: 18px auto 0;
+      padding: 0 22px;
+      text-align: left;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .verify[open] {
+      padding-bottom: 20px
+    }
+
+    .verify summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 12px 0;
+      cursor: pointer;
+      list-style: none;
+      border-radius: 8px;
+    }
+
+    .verify summary::-webkit-details-marker {
+      display: none
+    }
+
+    .verify summary::after {
+      content: "";
+      margin-left: auto;
+      width: 9px;
+      height: 9px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg);
+      transition: transform .15s ease;
+    }
+
+    .verify[open] summary::after {
+      transform: rotate(-135deg)
+    }
+
+    .verify summary h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .verify-icon {
+      width: 20px;
+      height: 20px;
+      flex: none;
+      fill: none;
+      stroke: var(--gold);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .verify>p {
+      margin: 6px 0 10px;
+      font-size: .92rem;
+    }
+
+    .verify .note p {
+      margin: 10px 0 16px
+    }
+
+    .all-files {
+      margin: 30px 0 0;
+      font-weight: 650;
+    }
+
+    .all-files+.lede {
+      margin-top: 18px;
+      font-size: 1rem;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media(max-width:560px) {
+      .install-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+        gap: 4px;
+        padding: 4px;
+        margin-top: 28px;
+      }
+
+      .install-tabs button {
+        flex-direction: column;
+        gap: 3px;
+        padding: 8px 4px;
+        font-size: .88rem;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+
+      .install-tabs .beta {
+        padding: 2px 6px;
+        font-size: .58rem;
+      }
+
+      .format-head .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .install-steps>li {
+        padding-left: 40px
+      }
+
+      .verify {
+        padding: 0 16px
+      }
+
+      .cmd pre {
+        padding-right: 14px;
+        padding-top: 48px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .install-tabs button,
+      .format-tabs button,
+      .copy,
+      .verify summary::after {
+        transition: none
+      }
     }
 
     pre {
@@ -1561,102 +1957,181 @@
     </div>
   </section>
 
-  <!-- INSTALL -->
-  <section id="install">
+  <!-- INSTALL
+       Without JavaScript every platform and package is shown, stacked, each
+       under its own name. The script turns the two rows of buttons on (they
+       are `hidden` until then) into tabs, picks the visitor's platform, adds
+       a copy button to every command and points the download buttons at the
+       files of the latest release (issue 689). -->
+  <section id="install" data-copy="コピー" data-copied="コピーしました"
+    data-copy-manual="Ctrl+C を押してください">
     <div class="wrap center">
       <span class="eyebrow">はじめよう</span>
       <h2>インストール</h2>
       <p class="lede">Debian、Ubuntu、Fedora 向けのパッケージ、AppImage、Flatpak、Windows 向けのインストーラー、そして Android 向けの APK があります。初回起動時に、残りは OpenEmux が設定します。</p>
-      <h3 class="platform-head">Linux</h3>
-      <div class="steps">
-        <div class="card">
-          <div class="step-n">AppImage</div>
-          <h3>どのディストリビューションでも</h3>
-          <pre><code>chmod +x OpenEmux-x86_64.AppImage
-./OpenEmux-x86_64.AppImage</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">FUSE がない場合は、先頭に <code>APPIMAGE_EXTRACT_AND_RUN=1</code> を付けてください。</p>
-        </div>
-        <div class="card">
-          <div class="step-n">.deb</div>
-          <h3>Debian / Ubuntu</h3>
-          <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Ubuntu 24.04 LTS 以降。</p>
-        </div>
-        <div class="card">
-          <div class="step-n">.rpm</div>
-          <h3>Fedora</h3>
-          <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">Fedora 40 以降。</p>
-        </div>
-        <div class="card">
-          <div class="step-n">Flatpak</div>
-          <h3>サンドボックスで自動更新</h3>
-          <pre><code>flatpak install -y flathub org.libretro.RetroArch
-flatpak remote-add --if-not-exists --no-gpg-verify \
+
+      <div class="install-tabs" data-tablist aria-label="プラットフォーム" hidden>
+        <button type="button" data-tab="linux">Linux</button>
+        <button type="button" data-tab="windows">Windows <span class="beta">Beta</span></button>
+        <button type="button" data-tab="android">Android</button>
+      </div>
+
+      <div class="install-panel" data-panel="linux">
+        <h3 class="platform-head">Linux</h3>
+        <div class="card install-card">
+          <div class="format-tabs" data-tablist aria-label="Linux 用パッケージ" hidden>
+            <button type="button" data-tab="flatpak">Flatpak</button>
+            <button type="button" data-tab="appimage">AppImage</button>
+            <button type="button" data-tab="deb">.deb</button>
+            <button type="button" data-tab="rpm">.rpm</button>
+          </div>
+
+          <div class="format-panel" data-panel="flatpak">
+            <div class="format-tag">Flatpak</div>
+            <div class="format-head">
+              <div><h3>サンドボックスで自動更新</h3></div>
+              <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+\.flatpak$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.flatpak をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>Flathub から RetroArch をインストールします:</p>
+                <pre><code>flatpak install -y flathub org.libretro.RetroArch</code></pre>
+              </li>
+              <li><p>OpenEmux のリポジトリを追加して OpenEmux をインストールします:</p>
+                <pre><code>flatpak remote-add --if-not-exists --no-gpg-verify \
   openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
 flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">更新は <code>flatpak update</code> で届きます。単一ファイルの
-            <code>.flatpak</code> バンドルも Releases ページにあります。
-          </p>
+                <div class="note"><p>更新は <code>flatpak update</code> で届きます。</p></div>
+              </li>
+            </ol>
+            <div class="note"><p>ダウンロードしたバンドルを使う場合は、手順 1 のあとに実行します:</p></div>
+            <pre><code>flatpak install -y ./OpenEmux-*.flatpak</code></pre>
+          </div>
+
+          <div class="format-panel" data-panel="appimage">
+            <div class="format-tag">AppImage</div>
+            <div class="format-head">
+              <div><h3>どのディストリビューションでも</h3></div>
+              <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-x86_64\.AppImage$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>AppImage をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p>実行可能にして起動します:</p>
+                <pre><code>chmod +x OpenEmux-*-x86_64.AppImage
+./OpenEmux-*-x86_64.AppImage</code></pre>
+                <div class="note"><p>FUSE がない場合は、先頭に <code>APPIMAGE_EXTRACT_AND_RUN=1</code> を付けてください。</p></div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="format-panel" data-panel="deb">
+            <div class="format-tag">.deb</div>
+            <div class="format-head">
+              <div>
+                <h3>Debian / Ubuntu</h3>
+                <div class="note"><p>Ubuntu 24.04 LTS 以降。</p></div>
+              </div>
+              <a class="btn btn-primary" data-asset="^openemux_[0-9.]+_amd64\.deb$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.deb をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p>保存したフォルダーからインストールします:</p>
+                <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
+              </li>
+            </ol>
+          </div>
+
+          <div class="format-panel" data-panel="rpm">
+            <div class="format-tag">.rpm</div>
+            <div class="format-head">
+              <div>
+                <h3>Fedora</h3>
+                <div class="note"><p>Fedora 40 以降。</p></div>
+              </div>
+              <a class="btn btn-primary" data-asset="^openemux-[0-9.]+-[0-9]+\.[a-z0-9]+\.x86_64\.rpm$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.rpm をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p>保存したフォルダーからインストールします:</p>
+                <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
+              </li>
+            </ol>
+          </div>
         </div>
       </div>
 
-      <h3 class="platform-head">Windows <span class="beta">Beta</span></h3>
-      <p class="lede">どちらのビルドにも GTK 4、Python ランタイム、そして RetroArch 自体が含まれているので、別途インストールするものは
-        ありません。Windows 10 または 11（64 ビット）に対応。まだ新しいので、何かおかしな動作があれば <a
-          href="https://github.com/guilhermefeitosa66/OpenEmux/issues">issue を作成</a>してください。</p>
-      <div class="steps">
-        <div class="card">
-          <div class="step-n">インストーラー</div>
-          <h3>いつもの方法で</h3>
-          <pre><code>OpenEmux-*-setup.exe</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">現在のユーザーだけにインストールされるので、管理者権限の確認は出ません。
-            ビルドにはまだコード署名がないため SmartScreen の警告が表示されますが、<em>詳細情報 → 実行</em> で
-            先に進めます。</p>
-        </div>
-        <div class="card">
-          <div class="step-n">ポータブル</div>
-          <h3>インストール不要</h3>
-          <pre><code>OpenEmux-*-windows-x86_64.zip</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">好きな場所に展開して、<code>OpenEmux.exe</code> を実行してください（中にある
-            <code>OpenEmux\</code> フォルダーに入っています）。USB メモリーや、ソフトウェアをインストールできないマシンにぴったりです。</p>
+      <div class="install-panel" data-panel="windows">
+        <h3 class="platform-head">Windows <span class="beta">Beta</span></h3>
+        <p class="lede">どちらのビルドにも GTK 4、Python ランタイム、そして RetroArch 自体が含まれているので、別途インストールするものは ありません。Windows 10 または 11（64 ビット）に対応。まだ新しいので、何かおかしな動作があれば <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">issue を作成</a>してください。</p>
+        <div class="card install-card">
+          <div class="format-tabs" data-tablist aria-label="Windows 版" hidden>
+            <button type="button" data-tab="installer">インストーラー</button>
+            <button type="button" data-tab="portable">ポータブル</button>
+          </div>
+
+          <div class="format-panel" data-panel="installer">
+            <div class="format-tag">インストーラー</div>
+            <div class="format-head">
+              <div><h3>いつもの方法で</h3></div>
+              <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-setup\.exe$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>インストーラーをダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p><code>OpenEmux-*-setup.exe</code> を開き、インストーラーの指示に従います。</p>
+                <div class="note"><p>現在のユーザーだけにインストールされるので、管理者権限の確認は出ません。 ビルドにはまだコード署名がないため SmartScreen の警告が表示されますが、<em>詳細情報 → 実行</em> で 先に進めます。</p></div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="format-panel" data-panel="portable">
+            <div class="format-tag">ポータブル</div>
+            <div class="format-head">
+              <div><h3>インストール不要</h3></div>
+              <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-windows-x86_64\.zip$"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.zip をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p>好きな場所に展開して、<code>OpenEmux.exe</code> を実行してください（中にある <code>OpenEmux\</code> フォルダーに入っています）。USB メモリーや、ソフトウェアをインストールできないマシンにぴったりです。</p></li>
+            </ol>
+          </div>
         </div>
       </div>
 
-      <h3 class="platform-head">Android</h3>
-      <p class="lede">APK はまだ Play ストアにありません。Releases からダウンロードし、Android に聞かれたらブラウザーやファイルマネージャーにアプリのインストールを許可してください。Android 8 以降、64 ビット。</p>
-      <div class="steps">
-        <div class="card">
-          <div class="step-n">APK</div>
-          <h3>APK をインストール</h3>
-          <pre><code>OpenEmux-mobile.apk</code></pre>
-          <p style="margin-top:12px;font-size:.85rem">ダウンロードしたファイルを開いて確認します。アップデートも同じ方法で、前のバージョンの上にインストールします。</p>
-        </div>
-        <div class="card">
-          <div class="step-n">初回起動</div>
-          <h3>コアのダウンロードを待つ</h3>
-          <p>初回起動時に、アプリがエミュレーターのコアをダウンロードします。その後、ROM を「インポート」から追加するか、スマートフォンの Android/data/com.openemux.mobile/files/roms に置いてください。</p>
+      <div class="install-panel" data-panel="android">
+        <h3 class="platform-head">Android</h3>
+        <p class="lede">APK はまだ Play ストアにありません。Releases からダウンロードし、Android に聞かれたらブラウザーやファイルマネージャーにアプリのインストールを許可してください。Android 8 以降、64 ビット。</p>
+        <div class="card install-card">
+          <div class="format-panel">
+            <div class="format-head">
+              <div><h3>APK をインストール</h3></div>
+              <a class="btn btn-primary"
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>APK をダウンロード</a>
+            </div>
+            <ol class="install-steps">
+              <li><p>上のボタンからダウンロードします。</p></li>
+              <li><p>ダウンロードしたファイルを開いて確認します。アップデートも同じ方法で、前のバージョンの上にインストールします。</p></li>
+              <li><h3>コアのダウンロードを待つ</h3><p>初回起動時に、アプリがエミュレーターのコアをダウンロードします。その後、ROM を「インポート」から追加するか、スマートフォンの Android/data/com.openemux.mobile/files/roms に置いてください。</p></li>
+            </ol>
+          </div>
         </div>
       </div>
 
-      <div class="card" style="margin-top:22px;text-align:left">
-        <div class="step-n">チェックサム</div>
-        <h3>ダウンロードを検証する</h3>
-        <p style="font-size:.9rem">すべてのリリースに <code>SHA256SUMS</code> ファイルが付いています。ダウンロードしたファイルと同じ場所に置いて、
-          次を実行してください:</p>
+      <details class="verify">
+        <summary><svg class="verify-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" /></svg><h3>ダウンロードを検証する</h3></summary>
+        <p>すべてのリリースに <code>SHA256SUMS</code> ファイルが付いています。ダウンロードしたファイルと同じ場所に置いて、 次を実行してください:</p>
         <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
-        <p style="margin-top:12px;font-size:.85rem"><code>OK</code> と表示されれば、ファイルは公開されたものとまったく同じです。
-          それ以外の場合は破損または改ざんされています。実行しないでください。</p>
-        <p style="margin-top:16px;font-size:.9rem">Windows では PowerShell がハッシュを表示するので、
-          <code>SHA256SUMS</code> の該当する行と目で見比べてください:</p>
+        <div class="note"><p><code>OK</code> と表示されれば、ファイルは公開されたものとまったく同じです。 それ以外の場合は破損または改ざんされています。実行しないでください。</p></div>
+        <p>Windows では PowerShell がハッシュを表示するので、 <code>SHA256SUMS</code> の該当する行と目で見比べてください:</p>
         <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
-      </div>
-      <p style="margin-top:22px"><a class="btn btn-primary btn-sm"
-          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases からダウンロード →</a></p>
-      <p class="lede" style="margin-top:40px">自分でビルドしたい方は
-        <code>make bootstrap &amp;&amp; make run</code>。詳しくは<a
-          href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">ビルド手順</a>をご覧ください。
-      </p>
+      </details>
+      <p class="all-files"><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">Releases ページのすべてのファイル →</a></p>
+      <p class="lede">自分でビルドしたい方は <code>make bootstrap &amp;&amp; make run</code>。詳しくは<a href="https://github.com/guilhermefeitosa66/OpenEmux#build-from-source">ビルド手順</a>をご覧ください。</p>
+      <p class="visually-hidden" id="copyStatus" aria-live="polite"></p>
     </div>
   </section>
 
@@ -1974,6 +2449,169 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         if (!ticking) { ticking = true; requestAnimationFrame(parallax); }
       }, { passive: true });
       build();
+    })();
+  </script>
+  <script>
+    // Install section (issue 689): tabs, the visitor's platform picked,
+    // a copy button on every command, and the download buttons pointed at the
+    // files of the latest release. Each part fails quietly to the page as
+    // written: every panel visible, links to the Releases page.
+    (function () {
+      var section = document.getElementById("install");
+      if (!section) return;
+      var ua = navigator.userAgent;
+
+      // ---- tabs: roving tabindex, arrows/Home/End move and select ----
+      var uid = 0;
+      function tablist(list, panelOf, onSelect) {
+        var tabs = [].slice.call(list.querySelectorAll("[data-tab]"));
+        list.setAttribute("role", "tablist");
+        tabs.forEach(function (tab) {
+          var panel = panelOf(tab.getAttribute("data-tab"));
+          var id = "install-tab-" + (++uid);
+          tab.id = id;
+          tab.setAttribute("role", "tab");
+          panel.id = panel.id || id + "-panel";
+          panel.setAttribute("role", "tabpanel");
+          panel.setAttribute("aria-labelledby", id);
+          panel.tabIndex = 0;
+          tab.setAttribute("aria-controls", panel.id);
+          tab.addEventListener("click", function () { select(tab); });
+        });
+
+        function select(tab, focus) {
+          tabs.forEach(function (t) {
+            var on = t === tab;
+            t.setAttribute("aria-selected", on ? "true" : "false");
+            t.tabIndex = on ? 0 : -1;
+            panelOf(t.getAttribute("data-tab")).hidden = !on;
+          });
+          if (focus) tab.focus();
+          if (onSelect) onSelect(tab.getAttribute("data-tab"));
+        }
+
+        list.addEventListener("keydown", function (e) {
+          var i = tabs.indexOf(document.activeElement);
+          if (i < 0) return;
+          var next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+          if (next === undefined) return;
+          e.preventDefault();
+          select(tabs[(next + tabs.length) % tabs.length], true);
+        });
+        list.hidden = false;
+        return function (key) {
+          var tab = tabs.filter(function (t) { return t.getAttribute("data-tab") === key; })[0];
+          select(tab || tabs[0]);
+        };
+      }
+
+      function panelsIn(scope) {
+        return function (key) { return scope.querySelector('[data-panel="' + key + '"]'); };
+      }
+
+      var lists = section.querySelectorAll("[data-tablist]");
+      var platforms = tablist(lists[0], panelsIn(section));
+      var linuxPanel = section.querySelector('[data-panel="linux"]');
+      var windowsPanel = section.querySelector('[data-panel="windows"]');
+      var linux = tablist(linuxPanel.querySelector("[data-tablist]"), panelsIn(linuxPanel));
+      var windows = tablist(windowsPanel.querySelector("[data-tablist]"), panelsIn(windowsPanel));
+      section.classList.add("tabs-on");
+
+      platforms(/Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "linux");
+      linux(/Ubuntu|Debian|Mint/i.test(ua) ? "deb" : /Fedora|Red Hat/i.test(ua) ? "rpm" : "flatpak");
+      windows("installer");
+
+      // ---- copy buttons ----
+      var status = document.getElementById("copyStatus");
+      var label = section.getAttribute("data-copy");
+      var copied = section.getAttribute("data-copied");
+      var manual = section.getAttribute("data-copy-manual");
+      if (/Mac|iPhone|iPad/.test(navigator.platform || "")) manual = manual.replace(/(Ctrl|Strg)\+C/, "⌘C");
+      var copyIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
+      var doneIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>';
+
+      function show(button, text, icon, done) {
+        button.innerHTML = icon;
+        button.appendChild(document.createTextNode(text));
+        button.classList.toggle("done", !!done);
+        status.textContent = done ? text : "";
+      }
+
+      function selectText(node) {
+        var range = document.createRange();
+        range.selectNodeContents(node);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      [].forEach.call(section.querySelectorAll("pre"), function (pre) {
+        var code = pre.querySelector("code") || pre;
+        var box = document.createElement("div");
+        box.className = "cmd";
+        pre.parentNode.insertBefore(box, pre);
+        box.appendChild(pre);
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "copy";
+        show(button, label, copyIcon);
+        box.appendChild(button);
+        var timer;
+        function reset(after) {
+          clearTimeout(timer);
+          timer = setTimeout(function () { show(button, label, copyIcon); }, after);
+        }
+        function fallback() {
+          selectText(code);
+          show(button, manual, copyIcon);
+          status.textContent = manual;
+          reset(4000);
+        }
+        button.addEventListener("click", function () {
+          var text = code.textContent;
+          if (!navigator.clipboard || !window.isSecureContext) return fallback();
+          navigator.clipboard.writeText(text).then(function () {
+            show(button, copied, doneIcon, true);
+            reset(2000);
+          }, fallback);
+        });
+      });
+
+      // ---- download buttons: the asset of the latest release, by name ----
+      // Asked once per visit: the answer is kept for the session, so moving
+      // between the language pages does not spend the API's hourly quota.
+      var buttons = section.querySelectorAll("[data-asset]");
+      if (!buttons.length) return;
+      var KEY = "openemux-latest-assets";
+
+      function point(assets) {
+        [].forEach.call(buttons, function (a) {
+          var pattern = new RegExp(a.getAttribute("data-asset"));
+          var hit = assets.filter(function (x) { return x && pattern.test(x.name); })[0];
+          if (hit && /^https:\/\/github\.com\//.test(hit.url)) a.href = hit.url;
+        });
+      }
+
+      var cached = null;
+      try { cached = JSON.parse(sessionStorage.getItem(KEY)); } catch (e) { }
+      if (Array.isArray(cached)) return point(cached);
+      if (!window.fetch) return;
+      var abort = window.AbortController ? new AbortController() : null;
+      var timeout = setTimeout(function () { if (abort) abort.abort(); }, 5000);
+      fetch("https://api.github.com/repos/guilhermefeitosa66/OpenEmux/releases/latest",
+        { headers: { Accept: "application/vnd.github+json" }, signal: abort ? abort.signal : undefined })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (release) {
+          clearTimeout(timeout);
+          var assets = ((release && release.assets) || []).map(function (x) {
+            return { name: x.name, url: x.browser_download_url };
+          });
+          if (assets.length) {
+            try { sessionStorage.setItem(KEY, JSON.stringify(assets)); } catch (e) { }
+          }
+          point(assets);
+        })
+        .catch(function () { clearTimeout(timeout); });
     })();
   </script>
 </body>
