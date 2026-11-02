@@ -704,6 +704,8 @@ class TheShareSequenceTests(unittest.TestCase):
         self.assertIn("animation-name: none", _blocks(self.css, "#share.share-reset [data-share-layer] {")[0])
         # The scroll engine's rules never reach these layers.
         self.assertNotIn("data-stage-layer", self._section(self.en))
+
+    def test_the_indicator_has_six_parts(self):
         self.assertIn("width: calc(100% / 6);\n      background: var(--gold)", self.css)
 
     def test_the_loop_holds_on_the_library_then_comes_back_to_the_first_moment(self):
@@ -712,12 +714,19 @@ class TheShareSequenceTests(unittest.TestCase):
         for n in range(2, 7):
             with self.subTest(moment=n):
                 body = _blocks(self.css, f"@keyframes share-in-{n} ")[0]
-                self.assertRegex(body, r"\d+%, 97% \{ opacity: 1 \}\s*100% \{ opacity: 0 \}")
+                self.assertRegex(body, r"\d+%, 97% \{ opacity: 1 \}\s*(97\.01%, )?100% \{ opacity: 0 \}")
+                # Under the sixth, the earlier moments leave in one step, so
+                # the fade back never blends their screens together.
+                if n < 6:
+                    self.assertIn("97.01%, 100% { opacity: 0 }", body)
         self.assertIn("100% { opacity: 1 }", _blocks(self.css, "@keyframes share-cap-1 ")[0])
-        self.assertIn("100% { opacity: 0; transform: translateY(0) }", _blocks(self.css, "@keyframes share-cap-6 ")[0])
+        # The last caption is gone by 97%, when the first starts back: one
+        # caption at a time, the loop included.
+        self.assertIn("97%, 100% { opacity: 0; transform: translateY(0) }", _blocks(self.css, "@keyframes share-cap-6 ")[0])
+        self.assertIn("15%, 97% { opacity: 0 }", _blocks(self.css, "@keyframes share-cap-1 ")[0])
         self.assertIn("97%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-tick ")[0])
-        self.assertIn("100% { transform: scaleX(0) }", _blocks(self.css, "@keyframes share-done ")[0])
-        self.assertIn("100% { transform: translateX(0) }", _blocks(self.css, "@keyframes share-now ")[0])
+        self.assertIn("97.01%, 100% { transform: scaleX(0) }", _blocks(self.css, "@keyframes share-done ")[0])
+        self.assertIn("97.01%, 100% { transform: translateX(0) }", _blocks(self.css, "@keyframes share-now ")[0])
         # The library arrives at 84%: the last ~13% of the loop is the hold.
         self.assertIn("84%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-lib-in ")[0])
         # Six moments, 15% of the loop each.
@@ -732,6 +741,7 @@ class TheShareSequenceTests(unittest.TestCase):
         self.assertIn('classList.toggle("share-play", motion.matches)', script)
         self.assertIn('classList.toggle("is-playing", motion.matches && inView && !document.hidden)', script)
         self.assertIn('addEventListener("visibilitychange", sync)', script)
+        self.assertIn('motion.addEventListener("change", function () { restart(); sync(); })', script)
         self.assertIn("if (inView && away) restart();", script)
         self.assertIn("if (!entry.isIntersecting) away = true;", script)
         self.assertIn('share.classList.add("share-reset");\n        void share.offsetWidth;', script)

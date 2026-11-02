@@ -918,28 +918,31 @@
     .share-slot-out { animation-name: share-slot-out }
     .share-cart-glow { animation-name: share-cart-glow }
 
+    /* Moments 2-5 drop out at once at 97%, hidden under the sixth, so only
+       the sixth fades back to the first: fading them all together would
+       blend every earlier screen into the fade. */
     @keyframes share-in-2 {
       0%, 15% { opacity: 0 }
       18%, 97% { opacity: 1 }
-      100% { opacity: 0 }
+      97.01%, 100% { opacity: 0 }
     }
 
     @keyframes share-in-3 {
       0%, 30% { opacity: 0 }
       33%, 97% { opacity: 1 }
-      100% { opacity: 0 }
+      97.01%, 100% { opacity: 0 }
     }
 
     @keyframes share-in-4 {
       0%, 45% { opacity: 0 }
       48%, 97% { opacity: 1 }
-      100% { opacity: 0 }
+      97.01%, 100% { opacity: 0 }
     }
 
     @keyframes share-in-5 {
       0%, 60% { opacity: 0 }
       63%, 97% { opacity: 1 }
-      100% { opacity: 0 }
+      97.01%, 100% { opacity: 0 }
     }
 
     @keyframes share-in-6 {
@@ -1015,12 +1018,13 @@
 
     @keyframes share-cap-6 {
       0%, 75% { opacity: 0; transform: translateY(8px) }
-      80%, 97% { opacity: 1; transform: translateY(0) }
-      100% { opacity: 0; transform: translateY(0) }
+      80%, 94% { opacity: 1; transform: translateY(0) }
+      97%, 100% { opacity: 0; transform: translateY(0) }
     }
 
     /* The step indicator: the moments done fill in white, the current one
-       is the gold sixth sliding along, and back to the start as it loops. */
+       is the gold sixth sliding along; as the first caption comes back it
+       jumps back to the start with it. */
     @keyframes share-done {
       0%, 15% { transform: scaleX(0) }
       17%, 30% { transform: scaleX(.1667) }
@@ -1028,7 +1032,7 @@
       47%, 60% { transform: scaleX(.5) }
       62%, 75% { transform: scaleX(.6667) }
       77%, 97% { transform: scaleX(.8333) }
-      100% { transform: scaleX(0) }
+      97.01%, 100% { transform: scaleX(0) }
     }
 
     @keyframes share-now {
@@ -1038,7 +1042,7 @@
       47%, 60% { transform: translateX(300%) }
       62%, 75% { transform: translateX(400%) }
       77%, 97% { transform: translateX(500%) }
-      100% { transform: translateX(0) }
+      97.01%, 100% { transform: translateX(0) }
     }
 
     /* Moment 1: a tap ticks the game, a tap on Done. The box is unticked
@@ -3767,7 +3771,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       }, { threshold: [0, 0.35] }).observe(stage);
 
       document.addEventListener("visibilitychange", sync);
-      if (motion.addEventListener) motion.addEventListener("change", sync);
+      // Switched on again (a taller window, motion allowed again): from the
+      // first moment, not wherever the clock drifted while it was off.
+      if (motion.addEventListener) motion.addEventListener("change", function () { restart(); sync(); });
       sync();
     })();
   </script>
