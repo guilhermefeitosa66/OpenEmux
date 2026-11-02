@@ -276,17 +276,20 @@ class TheOpeningStageTests(unittest.TestCase):
         # and the sticky box appear only inside the motion query, under the
         # CSS driver's @supports or the script's .stage-js.
         outside = self.css
-        for block in _blocks(self.css, "@media (prefers-reduced-motion: no-preference)") + _blocks(
+        for block in _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),") + _blocks(
                 self.css, "@media (max-width: 899px) and (prefers-reduced-motion: no-preference)"):
             outside = outside.replace(block, "")
         self.assertNotIn("var(--stage-len", outside)
         self.assertNotIn("position: sticky;\n      top: var(--nav-h)", outside)
-        motion = _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (min-height: 560px)")[0]
+        motion = _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),")[0]
         self.assertIn("@supports (animation-timeline: view())", motion)
         self.assertIn(".stage-js [data-stage-layer]", motion)
         self.assertIn("animation-play-state: paused", motion)
         self.assertIn("calc(var(--p, 0) * -1s)", motion)
-        self.assertIn('"(prefers-reduced-motion: no-preference) and (min-height: 560px)"', self.en)
+        # The script's query is the stylesheet's, so both drivers agree on when to move.
+        self.assertIn('"(prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px), " +\n'
+                      '        "(prefers-reduced-motion: no-preference) and (min-height: 640px)"', self.en)
+        self.assertIn("(prefers-reduced-motion: no-preference) and (min-height: 640px) {", self.css)
 
     def test_scrolling_is_never_taken_over(self):
         self.assertNotIn("scroll-snap", self.css)

@@ -251,13 +251,17 @@
        them, the script at the end of the page (which writes `--p`) elsewhere.
        Scrolling itself is never touched: no snap, no wheel or touch handler.
        Without a driver the CSS below IS the final composition, which is what
-       reduced motion, no JavaScript and older browsers get, at the section's
-       natural height. Only transform and opacity animate. */
+       reduced motion, no JavaScript, older browsers and screens too short for
+       the stage get, at the section's natural height. Only transform and opacity animate. */
     :root {
       --nav-h: 65px
     }
 
-    @media (prefers-reduced-motion: no-preference) and (min-height: 560px) {
+    /* Motion needs the stage to fit while it holds still: 560px of height
+       at phone width (only the devices hold), 640px in the wide layout
+       (copy and devices together). Below that the final composition. */
+    @media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),
+    (prefers-reduced-motion: no-preference) and (min-height: 640px) {
       @supports (animation-timeline: view()) {
         [data-stage] {
           view-timeline: --stage block;
@@ -490,6 +494,42 @@
       100% {
         opacity: 1;
         transform: translate(0, 0) rotate(0)
+      }
+    }
+
+    /* Wide: the whole stage, copy included, has to fit one screen while it
+       holds still, so the copy column is set tighter than a normal section. */
+    @media(min-width:900px) {
+      .hero .stage-sticky {
+        padding: 28px 0
+      }
+
+      .hero h1 {
+        font-size: clamp(2.2rem, 3.4vw, 3.1rem);
+        margin-bottom: 14px
+      }
+
+      .hero p.lede {
+        margin-bottom: 20px;
+        font-size: 1.05rem
+      }
+
+      .hero .cta {
+        gap: 10px
+      }
+
+      .hero .cta .btn {
+        padding: 10px 16px;
+        font-size: .95rem
+      }
+
+      .hero-links {
+        margin-top: 14px
+      }
+
+      .hero .cta-note {
+        margin-top: 10px;
+        font-size: .78rem
       }
     }
 
@@ -2017,7 +2057,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     (function () {
       var stages = [].slice.call(document.querySelectorAll("[data-stage]"));
       if (!stages.length) return;
-      var motion = window.matchMedia("(prefers-reduced-motion: no-preference) and (min-height: 560px)");
+      var motion = window.matchMedia(
+        "(prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px), " +
+        "(prefers-reduced-motion: no-preference) and (min-height: 640px)");
       var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
       var visible = [];
       var ticking = false;
@@ -2065,7 +2107,9 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         });
         stages.forEach(function (stage) { io.observe(stage); });
       } else {
+        // No observer: every stage counts as on screen.
         visible = stages.slice();
+        stages.forEach(function (stage) { stage.classList.add("is-active"); });
       }
 
       if (!native) {

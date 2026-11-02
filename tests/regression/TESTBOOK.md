@@ -8158,7 +8158,8 @@ or into an environment that cannot run the tests.
   1. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, scroll through.
   2. Firefox with JavaScript disabled (`javascript.enabled` false), reload, scroll through.
   3. DevTools device mode at 360×740, reload, scroll through; try to scroll sideways.
-- **Expected:** 1 and 2: the final composition (window flat, phone over its corner), static, at
+  4. A wide window under 640 px tall (device mode 1280×600), reload, scroll through.
+- **Expected:** 1, 2 and 4: the final composition (window flat, phone over its corner), static, at
   the section's natural height: no long empty scroll, every button and link works. 3: the copy
   on top, then the window and the phone below it, centred, nothing overlapping or cut; while the
   copy scrolls away the window settles, the devices hold at the top while the phone lands, then
