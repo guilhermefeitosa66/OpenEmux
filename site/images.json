@@ -297,7 +297,7 @@
   },
   "android/library-snes.png": {
     "height": 3120,
-    "sha256": "a27d7f1e1d0cedbde6fa8091aa884f4fe638d6043311c5a1832ed8e586b4e4b0",
+    "sha256": "79064ff503f299add3d0f3c1394793b94970426a552a656c4e4f9ae68caf1940",
     "variants": [
       {
         "file": "android/library-snes-640.avif",
@@ -725,7 +725,7 @@
   },
   "share/desktop-1-ready.png": {
     "height": 1516,
-    "sha256": "fd2454c6010a9e59eb237799d10d7a7f5a75951d984809f2c6f53fbbe86b58c1",
+    "sha256": "db6227a91001d0a8316e81964dec81addbdabfa0287f7aca07242dd0680d7d0d",
     "variants": [
       {
         "file": "share/desktop-1-ready-640.avif",
@@ -780,7 +780,7 @@
   },
   "share/desktop-2-offer.png": {
     "height": 1516,
-    "sha256": "253d1c80d90cd130262cc9b2136d869696956d788994890e9652307461f20fcf",
+    "sha256": "76cb3a3d75c44e119c181fb3e63ed815af391b1dd0cda7b650192f1c5d90c16b",
     "variants": [
       {
         "file": "share/desktop-2-offer-640.avif",
@@ -890,7 +890,7 @@
   },
   "share/desktop-4-library.png": {
     "height": 1516,
-    "sha256": "8e960ac7f9c26254672d52bbc81faaa666c9f65828084fbb429eb3860d974025",
+    "sha256": "ee5af7a58186e87053f804867adc37f3de9dffbb34d8de1aceb003bf8050f386",
     "variants": [
       {
         "file": "share/desktop-4-library-640.avif",
@@ -945,7 +945,7 @@
   },
   "share/desktop-4-received.png": {
     "height": 1516,
-    "sha256": "6b7dee6d0cdd1c45240e66c9c917a55f44dc6a63f4e179cda914154882a66ff2",
+    "sha256": "ea26cbc7d7ebd95cdedd4d4fae7dcb06ad4941db092929da75c228a5bb364883",
     "variants": [
       {
         "file": "share/desktop-4-received-640.avif",
@@ -1000,7 +1000,7 @@
   },
   "share/phone-1-pick.png": {
     "height": 3120,
-    "sha256": "db1bc27ec0a7b3ee7a98bb0a1a21c4affbf4ddf7edcb132eb7f91307fecad714",
+    "sha256": "5a05493dd2d71f94c34360bb8f6e0419c1bee1b0b8bfab8752fff5dba4d70e27",
     "variants": [
       {
         "file": "share/phone-1-pick-640.avif",
@@ -1086,7 +1086,7 @@
   },
   "share/phone-2-code.png": {
     "height": 3120,
-    "sha256": "392eb6fa4c13827e4db8a5a6c328a15e54986c6ae57d0d08edc7aaae63736a30",
+    "sha256": "1c7f21fda89326e6e9bc64d4ac40fb9976c28b21aefb22c69d2746cc39734c0f",
     "variants": [
       {
         "file": "share/phone-2-code-640.avif",
@@ -1129,7 +1129,7 @@
   },
   "share/phone-3-progress.png": {
     "height": 3120,
-    "sha256": "9aeb48bf46e114196c4a30918175e27c52ebb83ea05e48f0eba64b5016ae9b8c",
+    "sha256": "5a893c88f93c47304cadaed82b16bb9ea36c6f0643ec89ecb8a4ab7e5b41e3a7",
     "variants": [
       {
         "file": "share/phone-3-progress-640.avif",
