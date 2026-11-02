@@ -10138,6 +10138,51 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
   nothing; the sheet has no "Screens" tile and the hint bar has no R3 entry.
 - **Check:** human only.
 
+### RT-664 — A shader picked in game is remembered for that game only
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** Two ROMs of the same console (e.g. two GBA games); neither has a shader set on
+  its detail screen; the console's default shader known (Settings → the console's row).
+- **Steps:**
+  1. Launch the first game, open the pause sheet and tap "Shader".
+  2. Pick a shader other than the selected one, then go back to the game.
+  3. Close the game and launch the same ROM again; open the pause sheet → "Shader".
+  4. Close it and launch the second ROM; open the pause sheet → "Shader".
+- **Expected:** Step 1: the page subtitle reads "Saved for this game" (never "Only for this
+  session"). Step 2: the shader applies at once and a toast names it. Step 3: the game starts with
+  the shader picked in step 2, which is the one selected on the page. Step 4: the second ROM starts
+  with the console's default shader, selected on its page.
+- **Check:** human only.
+
+### RT-665 — The detail screen shows the in-game pick, and the last change wins
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** RT-664 done: the first ROM has a shader picked in game.
+- **Steps:**
+  1. Open the first ROM's detail screen and read the "Shader" row.
+  2. Tap "Shader" and pick a third shader; launch the ROM and open pause → "Shader".
+  3. Pick a fourth shader there, close the game and launch it again.
+  4. In game, pick the shader that is the console's default; close the game and open the ROM's
+     detail screen.
+- **Expected:** Step 1: the row names the shader picked in game, not "Console default". Step 2:
+  the game starts with the third shader. Step 3: it starts with the fourth one, and the detail
+  screen's row names it. Step 4: the row reads "Console default"; changing the console's default
+  shader in Settings is now followed by this ROM on its next launch.
+- **Check:** human only.
+
+### RT-666 — The in-game shader pick survives an app restart
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** Any ROM.
+- **Steps:**
+  1. Launch it, pick a different shader in pause → "Shader" and close the game.
+  2. Force stop the app (Android Settings → Apps → OpenEmux → "Force stop"), open it again and
+     launch the same ROM.
+  3. Switch the app's language to Português and open pause → "Shader" again.
+- **Expected:** Step 2: the game starts with the shader picked in step 1. Step 3: the subtitle is
+  translated ("Fica salvo para este jogo").
+- **Check:** human only.
+
 
 ## Retired
 
