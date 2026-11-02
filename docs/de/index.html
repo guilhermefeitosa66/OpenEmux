@@ -644,18 +644,20 @@
     }
 
     /* ---------- Share nearby (a scroll stage) ----------
-       Without a driver: a strip of four cards, each with the computer's
+       Without a driver: a strip of six cards, each with the computer's
        capture and the phone's over its lower left corner. With one: the
-       four steps stacked in one place on the stage, each step's devices
+       six moments stacked in one place on the stage, each one's devices
        fading in over the one before and its caption replacing the last.
-       Steps start at 34%, 56% and 78% of the stage: the header above the
-       sticky box takes the first ~15% of the scroll before it holds. */
+       Moments start at 25%, 40%, 55%, 70% and 85% of the stage (the
+       header above the sticky box takes the first ~7-12% of the scroll);
+       inside each, the overlays (.share-ov) play what a still cannot: the
+       taps, the tick, the device appearing, the bars, the cartridge. */
     .share-seq {
       list-style: none;
       padding: 0;
       margin: 44px 0 0;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
       text-align: left;
       counter-reset: step
@@ -678,8 +680,11 @@
       margin-bottom: 10px
     }
 
+    /* Its own stacking context, so the phone's z-index (over the window's
+       corner on a still card) never reaches the moments stacked above. */
     .share-shots {
       position: relative;
+      isolation: isolate;
       padding-bottom: 14%;
       margin-bottom: 16px
     }
@@ -688,6 +693,7 @@
        buttons included): its frame is the border, the corners and the
        shadow, never a second title bar. */
     .share-window {
+      position: relative;
       display: grid;
       width: 84%;
       margin-left: auto;
@@ -704,6 +710,123 @@
       grid-area: 1 / 1
     }
 
+    .share-lib {
+      position: relative
+    }
+
+    /* The overlays. .share-scr is the capture's own box (inside the phone's
+       bezel, or the whole window); each overlay sits on the capture in
+       percentages of its source pixels, measured on the captures in
+       docs/assets/share/ (phone 1440x3120, computer 2236x1516). A re-shot
+       capture means re-measuring the .share-at-* boxes below. Their base
+       style is what a still card shows (reduced motion, no driver, short
+       screens); the stage animates them from there. */
+    .share-scr {
+      position: absolute;
+      inset: 0;
+      pointer-events: none
+    }
+
+    .share-phone .share-scr {
+      inset: var(--bezel)
+    }
+
+    .share-ov {
+      position: absolute;
+      display: block
+    }
+
+    /* Phone: the checkbox (119-195 x 557-633), its centre, "Done" (centre
+       1201, 2910), the device row (70-1369 x 986-1209) and its centre, the
+       code box (70-1369 x 882-1284), the progress track (70-1369 x 729-756). */
+    .share-at-check { left: 8.13%; top: 17.79%; width: 5.56%; height: 2.56% }
+    .share-at-check-c { left: 10.9%; top: 19.07% }
+    .share-at-done { left: 83.4%; top: 93.27% }
+    .share-at-row { left: 4.58%; top: 31.47%; width: 90.83%; height: 7.4% }
+    .share-at-row-c { left: 50%; top: 35.16% }
+    .share-at-pcode { left: 4.86%; top: 28.27%; width: 90.28%; height: 12.92% }
+    .share-at-pbar { left: 4.86%; top: 23.37%; width: 90.28%; height: .9% }
+
+    /* Computer: the code box (672-1561 x 260-454), the centre of "Accept"
+       (1351, 1401), the progress track (746-1489 x 708-723), Robot Man X's
+       cartridge and title in the library (700-1100 x 236-548). */
+    .share-at-dcode { left: 30.05%; top: 17.15%; width: 39.8%; height: 12.8% }
+    .share-at-accept { left: 60.42%; top: 92.41% }
+    .share-at-dbar { left: 33.36%; top: 46.7%; width: 33.27%; height: 1.06% }
+    .share-at-cart { left: 31.31%; top: 15.57%; width: 17.89%; height: 20.58% }
+
+    /* An unticked checkbox over the ticked one: the card's colour, the
+       outline of an empty box. */
+    .share-tick {
+      opacity: 0;
+      background: #1c1c23;
+      border: 2px solid #9a98a6;
+      border-radius: 22%;
+      box-shadow: 0 0 0 3px #1c1c23
+    }
+
+    /* The phone's device row before the computer shows up, and Robot Man
+       X's place in the library before it arrives: the page behind them. */
+    .share-cover {
+      background: #121216
+    }
+
+    .share-slot {
+      left: 31.04%;
+      top: 15.3%;
+      width: 18.43%;
+      height: 21.11%;
+      background: #212125
+    }
+
+    .share-row-out,
+    .share-slot-out {
+      opacity: 0
+    }
+
+    /* A finger: a gold ring that lands, then lifts. */
+    .share-tap {
+      opacity: 0;
+      width: 30px;
+      height: 30px;
+      margin: -15px 0 0 -15px;
+      border: 3px solid var(--gold);
+      border-radius: 50%;
+      background: rgba(255, 210, 30, .22);
+      box-shadow: 0 0 0 6px rgba(255, 210, 30, .16)
+    }
+
+    /* Outside the box by its padding and border (4px + 2px), all round. */
+    .share-glow {
+      opacity: 0;
+      margin: -6px;
+      padding: 4px;
+      box-sizing: content-box;
+      border: 2px solid var(--gold);
+      border-radius: 10px;
+      box-shadow: 0 0 18px rgba(255, 210, 30, .55)
+    }
+
+    /* The progress bars: the track over the captured one, the fill growing
+       from its left end (purple on the phone, the accent on the computer). */
+    .share-bar {
+      overflow: hidden;
+      border-radius: 99px
+    }
+
+    .share-at-pbar { background: #2a2a33 }
+    .share-at-dbar { background: #434346 }
+
+    .share-fill {
+      display: block;
+      height: 100%;
+      transform-origin: 0 50%;
+      transform: scaleX(.6)
+    }
+
+    .share-fill-p { background: var(--violet) }
+    .share-fill-d { background: #ed5b00 }
+
     /* The screen sits exactly in the middle of the body (the same bezel on
        all four sides) with concentric corners: the screen's radius is the
        body's minus its border and the bezel. Sizes change per layout
@@ -712,6 +835,7 @@
       --phone-r: 12px;
       --bezel: 3px;
       position: absolute;
+      z-index: 1;
       left: 0;
       bottom: 0;
       width: 27%;
@@ -760,91 +884,212 @@
     .share-in-2 { animation-name: share-in-2 }
     .share-in-3 { animation-name: share-in-3 }
     .share-in-4 { animation-name: share-in-4 }
+    .share-in-5 { animation-name: share-in-5 }
+    .share-in-6 { animation-name: share-in-6 }
     .share-settle-2 { animation-name: share-settle-2 }
     .share-settle-3 { animation-name: share-settle-3 }
     .share-settle-4 { animation-name: share-settle-4 }
+    .share-settle-5 { animation-name: share-settle-5 }
+    .share-settle-6 { animation-name: share-settle-6 }
     .share-lib-in { animation-name: share-lib-in }
     .share-cap-1 { animation-name: share-cap-1 }
     .share-cap-2 { animation-name: share-cap-2 }
     .share-cap-3 { animation-name: share-cap-3 }
     .share-cap-4 { animation-name: share-cap-4 }
+    .share-cap-5 { animation-name: share-cap-5 }
+    .share-cap-6 { animation-name: share-cap-6 }
     .share-done { animation-name: share-done }
     .share-now { animation-name: share-now }
+    .share-tick { animation-name: share-tick }
+    .share-tap-check { animation-name: share-tap-check }
+    .share-tap-done { animation-name: share-tap-done }
+    .share-row-out { animation-name: share-row-out }
+    .share-row-glow { animation-name: share-row-glow }
+    .share-tap-row { animation-name: share-tap-row }
+    .share-code-glow { animation-name: share-code-glow }
+    .share-tap-accept { animation-name: share-tap-accept }
+    .share-fill { animation-name: share-fill }
+    .share-slot-out { animation-name: share-slot-out }
+    .share-cart-glow { animation-name: share-cart-glow }
 
     @keyframes share-in-2 {
-      0%, 34% { opacity: 0 }
-      40%, 100% { opacity: 1 }
+      0%, 25% { opacity: 0 }
+      28%, 100% { opacity: 1 }
     }
 
     @keyframes share-in-3 {
-      0%, 56% { opacity: 0 }
-      62%, 100% { opacity: 1 }
+      0%, 40% { opacity: 0 }
+      43%, 100% { opacity: 1 }
     }
 
     @keyframes share-in-4 {
-      0%, 78% { opacity: 0 }
-      84%, 100% { opacity: 1 }
+      0%, 55% { opacity: 0 }
+      58%, 100% { opacity: 1 }
     }
 
-    /* Step 4's second half: the received dialog gives way to the library. */
+    @keyframes share-in-5 {
+      0%, 70% { opacity: 0 }
+      73%, 100% { opacity: 1 }
+    }
+
+    @keyframes share-in-6 {
+      0%, 85% { opacity: 0 }
+      88%, 100% { opacity: 1 }
+    }
+
+    /* The last moment's second half: the received dialog gives way to the
+       library. */
     @keyframes share-lib-in {
-      0%, 90% { opacity: 0 }
-      95%, 100% { opacity: 1 }
+      0%, 91% { opacity: 0 }
+      94%, 100% { opacity: 1 }
     }
 
     /* The phone settles 12px as its screen changes; the computer holds. */
     @keyframes share-settle-2 {
-      0%, 34% { transform: translateY(12px) }
-      40%, 100% { transform: translateY(0) }
+      0%, 25% { transform: translateY(12px) }
+      28%, 100% { transform: translateY(0) }
     }
 
     @keyframes share-settle-3 {
-      0%, 56% { transform: translateY(12px) }
-      62%, 100% { transform: translateY(0) }
+      0%, 40% { transform: translateY(12px) }
+      43%, 100% { transform: translateY(0) }
     }
 
     @keyframes share-settle-4 {
-      0%, 78% { transform: translateY(12px) }
-      84%, 100% { transform: translateY(0) }
+      0%, 55% { transform: translateY(12px) }
+      58%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-5 {
+      0%, 70% { transform: translateY(12px) }
+      73%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-6 {
+      0%, 85% { transform: translateY(12px) }
+      88%, 100% { transform: translateY(0) }
     }
 
     /* A caption leaves before the next one rises 8px into place. */
     @keyframes share-cap-1 {
-      0%, 30% { opacity: 1 }
-      34%, 100% { opacity: 0 }
+      0%, 21% { opacity: 1 }
+      25%, 100% { opacity: 0 }
     }
 
     @keyframes share-cap-2 {
-      0%, 34% { opacity: 0; transform: translateY(8px) }
-      39%, 52% { opacity: 1; transform: translateY(0) }
-      56%, 100% { opacity: 0; transform: translateY(0) }
+      0%, 25% { opacity: 0; transform: translateY(8px) }
+      30%, 36% { opacity: 1; transform: translateY(0) }
+      40%, 100% { opacity: 0; transform: translateY(0) }
     }
 
     @keyframes share-cap-3 {
-      0%, 56% { opacity: 0; transform: translateY(8px) }
-      61%, 74% { opacity: 1; transform: translateY(0) }
-      78%, 100% { opacity: 0; transform: translateY(0) }
+      0%, 40% { opacity: 0; transform: translateY(8px) }
+      45%, 51% { opacity: 1; transform: translateY(0) }
+      55%, 100% { opacity: 0; transform: translateY(0) }
     }
 
     @keyframes share-cap-4 {
-      0%, 78% { opacity: 0; transform: translateY(8px) }
-      83%, 100% { opacity: 1; transform: translateY(0) }
+      0%, 55% { opacity: 0; transform: translateY(8px) }
+      60%, 66% { opacity: 1; transform: translateY(0) }
+      70%, 100% { opacity: 0; transform: translateY(0) }
     }
 
-    /* The step indicator: the steps done fill in white, the current one is
-       the gold quarter sliding along. */
+    @keyframes share-cap-5 {
+      0%, 70% { opacity: 0; transform: translateY(8px) }
+      75%, 81% { opacity: 1; transform: translateY(0) }
+      85%, 100% { opacity: 0; transform: translateY(0) }
+    }
+
+    @keyframes share-cap-6 {
+      0%, 85% { opacity: 0; transform: translateY(8px) }
+      90%, 100% { opacity: 1; transform: translateY(0) }
+    }
+
+    /* The step indicator: the moments done fill in white, the current one
+       is the gold sixth sliding along. */
     @keyframes share-done {
-      0%, 34% { transform: scaleX(0) }
-      37%, 56% { transform: scaleX(.25) }
-      59%, 78% { transform: scaleX(.5) }
-      81%, 100% { transform: scaleX(.75) }
+      0%, 25% { transform: scaleX(0) }
+      27%, 40% { transform: scaleX(.1667) }
+      42%, 55% { transform: scaleX(.3333) }
+      57%, 70% { transform: scaleX(.5) }
+      72%, 85% { transform: scaleX(.6667) }
+      87%, 100% { transform: scaleX(.8333) }
     }
 
     @keyframes share-now {
-      0%, 34% { transform: translateX(0) }
-      37%, 56% { transform: translateX(100%) }
-      59%, 78% { transform: translateX(200%) }
-      81%, 100% { transform: translateX(300%) }
+      0%, 25% { transform: translateX(0) }
+      27%, 40% { transform: translateX(100%) }
+      42%, 55% { transform: translateX(200%) }
+      57%, 70% { transform: translateX(300%) }
+      72%, 85% { transform: translateX(400%) }
+      87%, 100% { transform: translateX(500%) }
+    }
+
+    /* Moment 1: a tap ticks the game, a tap on Done. */
+    @keyframes share-tick {
+      0%, 15% { opacity: 1 }
+      16.5%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-tap-check {
+      0%, 13% { opacity: 0; transform: scale(.6) }
+      14.5% { opacity: 1; transform: scale(1) }
+      17.5%, 100% { opacity: 0; transform: scale(1.3) }
+    }
+
+    @keyframes share-tap-done {
+      0%, 19% { opacity: 0; transform: scale(.6) }
+      20.5% { opacity: 1; transform: scale(1) }
+      23.5%, 100% { opacity: 0; transform: scale(1.3) }
+    }
+
+    /* Moment 3: the computer shows up in the list, outlined, and is tapped. */
+    @keyframes share-row-out {
+      0%, 44% { opacity: 1 }
+      46.5%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-row-glow {
+      0%, 45% { opacity: 0 }
+      47%, 50% { opacity: 1 }
+      53%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-tap-row {
+      0%, 49% { opacity: 0; transform: scale(.6) }
+      50.5% { opacity: 1; transform: scale(1) }
+      53.5%, 100% { opacity: 0; transform: scale(1.3) }
+    }
+
+    /* Moment 4: the two codes glow together, then a tap on Accept. */
+    @keyframes share-code-glow {
+      0%, 58% { opacity: 0 }
+      60%, 64% { opacity: 1 }
+      66%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-tap-accept {
+      0%, 64% { opacity: 0; transform: scale(.6) }
+      65.5% { opacity: 1; transform: scale(1) }
+      68.5%, 100% { opacity: 0; transform: scale(1.3) }
+    }
+
+    /* Moment 5: both bars fill, in step, over the longest stretch. */
+    @keyframes share-fill {
+      0%, 73% { transform: scaleX(0) }
+      83%, 100% { transform: scaleX(1) }
+    }
+
+    /* Moment 6: the cartridge takes its place in the library. */
+    @keyframes share-slot-out {
+      0%, 94% { opacity: 1 }
+      96%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-cart-glow {
+      0%, 95% { opacity: 0 }
+      97% { opacity: 1 }
+      100% { opacity: .35 }
     }
 
     /* The stage layout. The devices are sized from one height, --dh, which
@@ -852,7 +1097,7 @@
        width (phone, the link mark and the window side by side). The same
        rules twice: under the CSS driver and under the script's .stage-js. */
     #share {
-      --stage-len: 400vh;
+      --stage-len: 720vh;
       --dh: min(488px, calc(100vh - var(--nav-h) - 230px), calc((100vw - 150px) / 1.94));
       --ww: calc(var(--dh) * 1.475);
       --ph: var(--dh)
@@ -921,6 +1166,14 @@
         #share[data-stage] .share-step+.share-step .share-window,
         #share[data-stage] .share-step+.share-step .share-phone {
           box-shadow: none
+        }
+
+        #share[data-stage] .share-idle {
+          opacity: .55
+        }
+
+        #share[data-stage] .share-same {
+          visibility: hidden
         }
 
         #share[data-stage] .share-link {
@@ -1010,6 +1263,14 @@
         box-shadow: none
       }
 
+      #share.stage-js .share-idle {
+        opacity: .55
+      }
+
+      #share.stage-js .share-same {
+        visibility: hidden
+      }
+
       #share.stage-js .share-link {
         display: flex;
         gap: 7px
@@ -1049,15 +1310,15 @@
       opacity: .3
     }
 
-    /* Four segments: a white track, the steps done over it, the gold one. */
+    /* Six segments: a white track, the moments done over it, the gold one. */
     .share-meter {
       position: relative;
-      width: min(240px, 60%);
+      width: min(300px, 70%);
       height: 4px;
       margin: 26px auto 0;
       overflow: hidden;
-      -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
-      mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
+      -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(100% / 6 - 5px), transparent calc(100% / 6 - 5px) calc(100% / 6));
+      mask-image: repeating-linear-gradient(90deg, #000 0 calc(100% / 6 - 5px), transparent calc(100% / 6 - 5px) calc(100% / 6));
       background: rgba(255, 255, 255, .12)
     }
 
@@ -1073,13 +1334,13 @@
       right: 0;
       background: rgba(255, 255, 255, .25);
       transform-origin: 0 50%;
-      transform: scaleX(.75)
+      transform: scaleX(.8333)
     }
 
     .share-now {
-      width: 25%;
+      width: calc(100% / 6);
       background: var(--gold);
-      transform: translateX(300%)
+      transform: translateX(500%)
     }
 
     /* Phone width: the window on top at full width, the phone under it, a
@@ -1088,7 +1349,7 @@
        window) the window narrows too, so the smallest phone still fits. */
     @media(max-width:899px) {
       #share {
-        --stage-len: 300vh;
+        --stage-len: 540vh;
         --wh: min(calc((100vw - 48px) / 1.475), calc(100vh - var(--nav-h) - 410px));
         --ph: clamp(160px, calc(100vh - var(--nav-h) - var(--wh) - 250px), 380px);
         --ww: min(100%, calc((100vh - var(--nav-h) - 410px) * 1.475))
@@ -2477,11 +2738,15 @@
   </section>
 
   <!-- SHARE NEARBY: a scroll stage (see "scroll stages" in the CSS). The
-       phone and the computer side by side while the real captures step
-       through one transfer of Robot Man X: pick, the same code on both,
-       progress, the game in the computer's library. Without a driver
-       (reduced motion, no JavaScript, short screens) the same list is a
-       strip of four static cards. -->
+       phone and the computer side by side while one transfer of Robot Man X
+       plays out on the real captures, in six moments: the game ticked on the
+       phone, Share Nearby searching, Receive opened on the computer and the
+       computer appearing on the phone, the same code on both and Accept,
+       both progress bars filling, the cartridge landing in the library.
+       What a still cannot show (the taps, the tick, the device appearing,
+       the bars, the cartridge) is drawn over the captures by the share-ov
+       overlays. Without a driver (reduced motion, no JavaScript, short
+       screens) the same list is a strip of six static cards. -->
   <section class="moment share" id="share" data-stage>
     <div class="wrap center">
       <span class="eyebrow">In der Nähe teilen</span>
@@ -2494,51 +2759,113 @@
         <li class="share-step">
           <div class="share-shots">
             <div class="share-phone">
+              <picture><source type="image/avif" srcset="../assets/share/phone-1-what-640.avif 640w, ../assets/share/phone-1-what-1280.avif 1280w, ../assets/share/phone-1-what-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-1-what-640.webp 640w, ../assets/share/phone-1-what-1280.webp 1280w, ../assets/share/phone-1-what-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-1-what.png" alt="OpenEmux auf Android, Was senden: Robot Man X angehakt, dann Fertig" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-1-what-1440.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-at-check share-tick" data-stage-layer></i>
+                <i class="share-ov share-tap share-at-check-c share-tap-check" data-stage-layer></i>
+                <i class="share-ov share-tap share-at-done share-tap-done" data-stage-layer></i>
+              </span>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window share-idle">
+              <picture><source type="image/avif" srcset="../assets/share/desktop-4-library-640.avif 640w, ../assets/share/desktop-4-library-1280.avif 1280w, ../assets/share/desktop-4-library-1920.avif 1920w, ../assets/share/desktop-4-library-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-4-library-640.webp 640w, ../assets/share/desktop-4-library-1280.webp 1280w, ../assets/share/desktop-4-library-1920.webp 1920w, ../assets/share/desktop-4-library-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-4-library.png" alt="OpenEmux auf dem Desktop, die Super-Nintendo-Bibliothek, bevor das Spiel ankommt" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-4-library-2236.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-slot"></i>
+              </span>
+            </div>
+          </div>
+          <div class="share-cap share-cap-1" data-stage-layer>
+            <h3>Wähle auf dem Handy Spiele aus.</h3>
+          <p>Hake an, was du senden willst.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-2" data-stage-layer>
+            <div class="share-phone share-settle-2" data-stage-layer>
+              <picture><source type="image/avif" srcset="../assets/share/phone-1-pick-640.avif 640w, ../assets/share/phone-1-pick-1280.avif 1280w, ../assets/share/phone-1-pick-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-1-pick-640.webp 640w, ../assets/share/phone-1-pick-1280.webp 1280w, ../assets/share/phone-1-pick-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-1-pick.png" alt="OpenEmux auf Android, In der Nähe teilen: sucht Geräte im Netzwerk" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-1-pick-1440.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-at-row share-cover"></i>
+              </span>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window share-idle share-same">
+              <picture><source type="image/avif" srcset="../assets/share/desktop-4-library-640.avif 640w, ../assets/share/desktop-4-library-1280.avif 1280w, ../assets/share/desktop-4-library-1920.avif 1920w, ../assets/share/desktop-4-library-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-4-library-640.webp 640w, ../assets/share/desktop-4-library-1280.webp 1280w, ../assets/share/desktop-4-library-1920.webp 1920w, ../assets/share/desktop-4-library-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-4-library.png" alt="OpenEmux auf dem Desktop, die Super-Nintendo-Bibliothek, bevor das Spiel ankommt" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-4-library-2236.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-slot"></i>
+              </span>
+            </div>
+          </div>
+          <div class="share-cap share-cap-2" data-stage-layer>
+            <h3>Öffne In der Nähe teilen.</h3>
+          <p>Es sucht Geräte in deinem WLAN.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-3" data-stage-layer>
+            <div class="share-phone share-settle-3" data-stage-layer>
               <picture><source type="image/avif" srcset="../assets/share/phone-1-pick-640.avif 640w, ../assets/share/phone-1-pick-1280.avif 1280w, ../assets/share/phone-1-pick-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-1-pick-640.webp 640w, ../assets/share/phone-1-pick-1280.webp 1280w, ../assets/share/phone-1-pick-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-1-pick.png" alt="OpenEmux auf Android, In der Nähe teilen: Robot Man X bereit zum Senden, Linux Desktop im Netzwerk gefunden" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-1-pick-1440.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-at-row share-cover share-row-out" data-stage-layer></i>
+                <i class="share-ov share-glow share-at-row share-row-glow" data-stage-layer></i>
+                <i class="share-ov share-tap share-at-row-c share-tap-row" data-stage-layer></i>
+              </span>
             </div>
             <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
             <div class="share-window">
               <picture><source type="image/avif" srcset="../assets/share/desktop-1-ready-640.avif 640w, ../assets/share/desktop-1-ready-1280.avif 1280w, ../assets/share/desktop-1-ready-1920.avif 1920w, ../assets/share/desktop-1-ready-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-1-ready-640.webp 640w, ../assets/share/desktop-1-ready-1280.webp 1280w, ../assets/share/desktop-1-ready-1920.webp 1920w, ../assets/share/desktop-1-ready-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-1-ready.png" alt="OpenEmux auf dem Desktop, Spiele empfangen: bereit zum Empfang als Linux Desktop" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-1-ready-2236.webp" /></picture>
             </div>
           </div>
-          <div class="share-cap share-cap-1" data-stage-layer>
-            <h3>Wähle auf dem Handy ein Spiel.</h3>
-          <p>Dein Computer erscheint von selbst in der Liste.</p>
-          </div>
-        </li>
-        <li class="share-step">
-          <div class="share-shots share-in-2" data-stage-layer>
-            <div class="share-phone share-settle-2" data-stage-layer>
-              <picture><source type="image/avif" srcset="../assets/share/phone-2-code-640.avif 640w, ../assets/share/phone-2-code-1280.avif 1280w, ../assets/share/phone-2-code-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-2-code-640.webp 640w, ../assets/share/phone-2-code-1280.webp 1280w, ../assets/share/phone-2-code-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-2-code.png" alt="OpenEmux auf Android wartet, bis Linux Desktop annimmt, Bestätigungscode 506 807" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-2-code-1440.webp" /></picture>
-            </div>
-            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
-            <div class="share-window">
-              <picture><source type="image/avif" srcset="../assets/share/desktop-2-offer-640.avif 640w, ../assets/share/desktop-2-offer-1280.avif 1280w, ../assets/share/desktop-2-offer-1920.avif 1920w, ../assets/share/desktop-2-offer-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-2-offer-640.webp 640w, ../assets/share/desktop-2-offer-1280.webp 1280w, ../assets/share/desktop-2-offer-1920.webp 1920w, ../assets/share/desktop-2-offer-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-2-offer.png" alt="OpenEmux auf dem Desktop, Eingehende Spiele: Android Phone möchte Robot Man X senden, Bestätigungscode 506 807" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-2-offer-2236.webp" /></picture>
-            </div>
-          </div>
-          <div class="share-cap share-cap-2" data-stage-layer>
-            <h3>Auf beiden Bildschirmen steht derselbe Code.</h3>
-          <p>Stimmt er überein, nimm am Computer an.</p>
-          </div>
-        </li>
-        <li class="share-step">
-          <div class="share-shots share-in-3" data-stage-layer>
-            <div class="share-phone share-settle-3" data-stage-layer>
-              <picture><source type="image/avif" srcset="../assets/share/phone-3-progress-640.avif 640w, ../assets/share/phone-3-progress-1280.avif 1280w, ../assets/share/phone-3-progress-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-3-progress-640.webp 640w, ../assets/share/phone-3-progress-1280.webp 1280w, ../assets/share/phone-3-progress-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-3-progress.png" alt="OpenEmux auf Android sendet Robot Man X an Linux Desktop, der Fortschrittsbalken halb voll" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-3-progress-1440.webp" /></picture>
-            </div>
-            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
-            <div class="share-window">
-              <picture><source type="image/avif" srcset="../assets/share/desktop-3-progress-640.avif 640w, ../assets/share/desktop-3-progress-1280.avif 1280w, ../assets/share/desktop-3-progress-1920.avif 1920w, ../assets/share/desktop-3-progress-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-3-progress-640.webp 640w, ../assets/share/desktop-3-progress-1280.webp 1280w, ../assets/share/desktop-3-progress-1920.webp 1920w, ../assets/share/desktop-3-progress-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-3-progress.png" alt="OpenEmux auf dem Desktop empfängt ein Spiel von Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-3-progress-2236.webp" /></picture>
-            </div>
-          </div>
           <div class="share-cap share-cap-3" data-stage-layer>
-            <h3>Das Spiel geht direkt über dein WLAN.</h3>
-          <p>Nichts verlässt dein Heimnetz.</p>
+            <h3>Öffne Empfangen am Computer.</h3>
+          <p>Er erscheint von selbst auf dem Handy.</p>
           </div>
         </li>
         <li class="share-step">
           <div class="share-shots share-in-4" data-stage-layer>
             <div class="share-phone share-settle-4" data-stage-layer>
+              <picture><source type="image/avif" srcset="../assets/share/phone-2-code-640.avif 640w, ../assets/share/phone-2-code-1280.avif 1280w, ../assets/share/phone-2-code-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-2-code-640.webp 640w, ../assets/share/phone-2-code-1280.webp 1280w, ../assets/share/phone-2-code-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-2-code.png" alt="OpenEmux auf Android wartet, bis Linux Desktop annimmt, Bestätigungscode 506 807" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-2-code-1440.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-glow share-at-pcode share-code-glow" data-stage-layer></i>
+              </span>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="../assets/share/desktop-2-offer-640.avif 640w, ../assets/share/desktop-2-offer-1280.avif 1280w, ../assets/share/desktop-2-offer-1920.avif 1920w, ../assets/share/desktop-2-offer-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-2-offer-640.webp 640w, ../assets/share/desktop-2-offer-1280.webp 1280w, ../assets/share/desktop-2-offer-1920.webp 1920w, ../assets/share/desktop-2-offer-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-2-offer.png" alt="OpenEmux auf dem Desktop, Eingehende Spiele: Android Phone möchte Robot Man X senden, Bestätigungscode 506 807" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-2-offer-2236.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-glow share-at-dcode share-code-glow" data-stage-layer></i>
+                <i class="share-ov share-tap share-at-accept share-tap-accept" data-stage-layer></i>
+              </span>
+            </div>
+          </div>
+          <div class="share-cap share-cap-4" data-stage-layer>
+            <h3>Auf beiden Bildschirmen steht derselbe Code.</h3>
+          <p>Stimmt er überein, nimm am Computer an.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-5" data-stage-layer>
+            <div class="share-phone share-settle-5" data-stage-layer>
+              <picture><source type="image/avif" srcset="../assets/share/phone-3-progress-640.avif 640w, ../assets/share/phone-3-progress-1280.avif 1280w, ../assets/share/phone-3-progress-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-3-progress-640.webp 640w, ../assets/share/phone-3-progress-1280.webp 1280w, ../assets/share/phone-3-progress-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-3-progress.png" alt="OpenEmux auf Android sendet Robot Man X an Linux Desktop, der Fortschrittsbalken halb voll" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-3-progress-1440.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-bar share-at-pbar"><i class="share-fill share-fill-p" data-stage-layer></i></i>
+              </span>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="../assets/share/desktop-3-progress-640.avif 640w, ../assets/share/desktop-3-progress-1280.avif 1280w, ../assets/share/desktop-3-progress-1920.avif 1920w, ../assets/share/desktop-3-progress-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-3-progress-640.webp 640w, ../assets/share/desktop-3-progress-1280.webp 1280w, ../assets/share/desktop-3-progress-1920.webp 1920w, ../assets/share/desktop-3-progress-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-3-progress.png" alt="OpenEmux auf dem Desktop empfängt ein Spiel von Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-3-progress-2236.webp" /></picture>
+              <span class="share-scr" aria-hidden="true">
+                <i class="share-ov share-bar share-at-dbar"><i class="share-fill share-fill-d" data-stage-layer></i></i>
+              </span>
+            </div>
+          </div>
+          <div class="share-cap share-cap-5" data-stage-layer>
+            <h3>Die Spiele gehen direkt über dein WLAN.</h3>
+          <p>Nichts verlässt dein Heimnetz.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-6" data-stage-layer>
+            <div class="share-phone share-settle-6" data-stage-layer>
               <picture><source type="image/avif" srcset="../assets/share/phone-4-sent-640.avif 640w, ../assets/share/phone-4-sent-1280.avif 1280w, ../assets/share/phone-4-sent-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="../assets/share/phone-4-sent-640.webp 640w, ../assets/share/phone-4-sent-1280.webp 1280w, ../assets/share/phone-4-sent-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="../assets/share/phone-4-sent.png" alt="OpenEmux auf Android: 1 Spiel gesendet, Linux Desktop hat es jetzt" width="1440" height="3120" loading="lazy" decoding="async" data-full="../assets/share/phone-4-sent-1440.webp" /></picture>
             </div>
             <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -2546,12 +2873,16 @@
               <picture><source type="image/avif" srcset="../assets/share/desktop-4-received-640.avif 640w, ../assets/share/desktop-4-received-1280.avif 1280w, ../assets/share/desktop-4-received-1920.avif 1920w, ../assets/share/desktop-4-received-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-4-received-640.webp 640w, ../assets/share/desktop-4-received-1280.webp 1280w, ../assets/share/desktop-4-received-1920.webp 1920w, ../assets/share/desktop-4-received-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-4-received.png" alt="OpenEmux auf dem Desktop: 1 Spiel von Android Phone empfangen" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-4-received-2236.webp" /></picture>
               <div class="share-lib share-lib-in" data-stage-layer>
                 <picture><source type="image/avif" srcset="../assets/share/desktop-4-library-640.avif 640w, ../assets/share/desktop-4-library-1280.avif 1280w, ../assets/share/desktop-4-library-1920.avif 1920w, ../assets/share/desktop-4-library-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="../assets/share/desktop-4-library-640.webp 640w, ../assets/share/desktop-4-library-1280.webp 1280w, ../assets/share/desktop-4-library-1920.webp 1920w, ../assets/share/desktop-4-library-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="../assets/share/desktop-4-library.png" alt="OpenEmux auf dem Desktop, die Super-Nintendo-Bibliothek mit Robot Man X darin" width="2236" height="1516" loading="lazy" decoding="async" data-full="../assets/share/desktop-4-library-2236.webp" /></picture>
+                <span class="share-scr" aria-hidden="true">
+                  <i class="share-ov share-slot share-slot-out" data-stage-layer></i>
+                  <i class="share-ov share-glow share-at-cart share-cart-glow" data-stage-layer></i>
+                </span>
               </div>
             </div>
           </div>
-          <div class="share-cap share-cap-4" data-stage-layer>
-            <h3>Jetzt ist es in deiner Bibliothek.</h3>
-          <p>Öffne es und spiel auf dem großen Bildschirm.</p>
+          <div class="share-cap share-cap-6" data-stage-layer>
+            <h3>Jetzt sind sie in deiner Bibliothek.</h3>
+          <p>Öffne eins und spiel auf dem großen Bildschirm.</p>
           </div>
         </li>
       </ol>

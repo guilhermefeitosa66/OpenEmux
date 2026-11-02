@@ -8602,7 +8602,7 @@ or into an environment that cannot run the tests.
   ```
   Passes when the last line is `OK`.
 
-### RT-640 — Share nearby plays as you scroll: one transfer, step by step, on both screens
+### RT-640 — Share nearby plays as you scroll: one transfer, animated, on both screens
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
@@ -8615,18 +8615,24 @@ or into an environment that cannot run the tests.
   5. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
 - **Expected:** 1: under the heading, the phone on the left, three gold dots, the computer's
   window on the right (the capture is the window itself: rounded corners and a shadow, no extra
-  title bar). They hold still while the page scrolls and step through four screens, each with its
-  caption and a four-part indicator under it: "Pick a game on your phone." (Robot Man X selected,
-  Linux Desktop listed; the computer ready to receive); "The same code shows on both screens."
-  (506 807 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
-  in your library now." (1 game sent on the phone; the computer's "1 Game Received", then its
-  Super Nintendo library with Robot Man X). Only one caption at a time. 2: it plays in reverse.
+  title bar). They hold still while the page scrolls and play six moments, each with its caption
+  and a six-part indicator under it: "Select games on your phone." (a gold ring taps the
+  checkbox and Robot Man X gets ticked, then a tap on "Done"; the computer dimmed, its Super
+  Nintendo library without Robot Man X); "Open Share Nearby." (the device list empty); "Open
+  Receive on the computer." (the computer's "Ready to Receive" comes forward and "Linux Desktop"
+  appears in the phone's list, outlined in gold, then a tap on it); "The same code shows on both
+  screens." (506 807 on both, both codes outlined in gold together, then a tap on "Accept");
+  "The games go straight over your Wi-Fi." (both progress bars, purple on the phone and orange on
+  the computer, fill from empty to full as you scroll); "They are in your library now." (1 game
+  sent on the phone; the computer's "1 Game Received", then its library, where Robot Man X
+  appears in the empty place with a gold outline). Every ring, outline and bar sits exactly on
+  the element of the capture it belongs to. Only one caption at a time. 2: it plays in reverse.
   3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
   the script fallback). 5: the screen sits in the middle of the phone body, the same bezel on all
-  four sides, corners concentric (issue 687).
+  four sides, corners concentric (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheShareSequenceTests`).
 
-### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is four cards
+### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is six cards
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** as RT-640.
@@ -8635,10 +8641,12 @@ or into an environment that cannot run the tests.
      "Share nearby".
   2. Firefox with JavaScript disabled, reload, scroll through it.
   3. DevTools device mode at 360×600 (shorter than 640 px), reload, scroll through it.
-- **Expected:** "Share nearby" is a list of four numbered cards (four across on a wide window, two
+- **Expected:** "Share nearby" is a list of six numbered cards (three across on a wide window, two
   under 900 px, one under 520 px), each with the computer's capture and the phone's over its lower
-  left corner and both caption lines; every card fully visible, nothing faded, no tall empty
-  scroll, no sticky stage (issue 687).
+  left corner and both caption lines; each card matches its caption with nothing moving (1: the
+  game ticked; 2: the phone's device list empty; 3: Linux Desktop listed; 5: both bars part way;
+  6: Robot Man X in the library), no gold rings or outlines; every card fully visible, nothing
+  faded, no tall empty scroll, no sticky stage (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py`
   (`test_without_a_driver_it_is_a_strip_of_cards`).
 
@@ -8650,19 +8658,20 @@ or into an environment that cannot run the tests.
   1. Set 390×844, reload, scroll through "Share nearby".
   2. Set 360×740, reload, scroll through it; try to scroll sideways.
 - **Expected:** the computer's window on top at the full width, the phone under it, then the
-  caption and the indicator, all inside the screen while they hold; the steps change as on a wide
-  window, over a shorter stretch of scroll. No horizontal scroll caused by this section (issue 687).
+  caption and the indicator, all inside the screen while they hold; the six moments play as on a
+  wide window, over a shorter stretch of scroll. No horizontal scroll caused by this section
+  (issues 687, 737).
 - **Check:** human only.
 
 ### RT-643 — Share nearby's captions and image descriptions are translated
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads `site/strings/`).
-- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the four captions
+- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the six captions
   of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
 - **Expected:** each caption is a short headline and one sentence, in the page's language, with no
   exclamation mark; every capture has a description in that language naming the screen, and the
-  ones of the second step mention the code 506 807 (issue 687).
+  ones of the code moment mention the code 506 807 (issues 687, 737).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3
