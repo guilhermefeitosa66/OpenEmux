@@ -8626,34 +8626,41 @@ or into an environment that cannot run the tests.
   ```
   Passes when the last line is `OK`.
 
-### RT-640 — Share nearby plays as you scroll: one transfer, animated, on both screens
+### RT-640 — Share nearby plays by itself: one transfer, animated, on both screens, on a loop
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
   Chrome and Firefox (Safari too when one is at hand), window about 1280×800.
 - **Steps:**
-  1. Scroll from the opening into "Share nearby" with the mouse wheel, slowly, to the next section.
-  2. Scroll back up through it.
-  3. Do it again with Space / Page Down / the arrow keys and by dragging the scrollbar.
-  4. Repeat 1–2 in Firefox.
-  5. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
+  1. Scroll from the opening into "Share nearby" until the phone and the computer are on screen,
+     then stop touching the mouse and the keyboard for about 40 seconds.
+  2. Scroll through the section and on to the next one, once fast and once slowly, with the
+     mouse wheel, Space / Page Down and by dragging the scrollbar.
+  3. Mid-animation (say on the progress bars), scroll away from the section and come back.
+  4. Mid-animation, switch to another tab for 10 seconds and back.
+  5. Repeat 1–4 in Firefox.
+  6. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
 - **Expected:** 1: under the heading, the phone on the left, three gold dots, the computer's
   window on the right (the capture is the window itself: rounded corners and a shadow, no extra
-  title bar). They hold still while the page scrolls and play six moments, each with its caption
-  and a six-part indicator under it: "Select games on your phone." (a gold ring taps the
-  checkbox and Robot Man X gets ticked, then a tap on "Done"; the computer dimmed, its Super
-  Nintendo library without Robot Man X); "Open Share Nearby." (the device list empty); "Open
-  Receive on the computer." (the computer's "Ready to Receive" comes forward and "Linux Desktop"
-  appears in the phone's list, outlined in gold, then a tap on it); "The same code shows on both
-  screens." (657 970 on both, both codes outlined in gold together, then a tap on "Accept");
-  "The games go straight over your Wi-Fi." (both progress bars, purple on the phone and orange on
-  the computer, fill from empty to full as you scroll); "They are in your library now." (1 game
-  sent on the phone; the computer's "1 Game Received", then its library, where Robot Man X
-  appears in the empty place with a gold outline). Every ring, outline and bar sits exactly on
-  the element of the capture it belongs to. Only one caption at a time. 2: it plays in reverse.
-  3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
-  the script fallback). 5: the screen sits in the middle of the phone body, the same bezel on all
-  four sides, corners concentric (issues 687, 737).
+  title bar). With no scrolling, it plays six moments at a steady pace (about 5 seconds each),
+  each with its caption and a six-part indicator under it: "Select games on your phone." (a gold
+  ring taps the checkbox and Robot Man X gets ticked, then a tap on "Done"; the computer dimmed,
+  its Super Nintendo library without Robot Man X, its title included); "Open Share Nearby." (the
+  device list empty); "Open Receive on the computer." (the computer's "Ready to Receive" comes
+  forward and "Linux Desktop" appears in the phone's list, outlined in gold, then a tap on it);
+  "The same code shows on both screens." (657 970 on both, both codes outlined in gold together,
+  then a tap on "Accept"); "The games go straight over your Wi-Fi." (both progress bars, purple
+  on the phone and orange on the computer, fill from empty to full); "They are in your library
+  now." (1 game sent on the phone; the computer's "1 Game Received", then its library, where
+  Robot Man X appears in the empty place with a gold outline). It holds a few seconds on the
+  library, fades back to the first moment and plays again. Every ring, outline and bar sits
+  exactly on the element of the capture it belongs to. Only one caption at a time, and the
+  indicator always on the moment shown. 2: the page scrolls through the section at its normal
+  pace, like any other section; nothing sticks, snaps, holds or jumps, and the animation's pace
+  does not change with the scrolling. 3: back on screen, it starts again from "Select games on
+  your phone.". 4: back on the tab, it goes on from where it was. 5: the same in Firefox.
+  6: the screen sits in the middle of the phone body, the same bezel on all four sides, corners
+  concentric (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheShareSequenceTests`).
 
 ### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is six cards
@@ -8670,7 +8677,7 @@ or into an environment that cannot run the tests.
   left corner and both caption lines; each card matches its caption with nothing moving (1: the
   game ticked; 2: the phone's device list empty; 3: Linux Desktop listed; 5: both bars part way;
   6: Robot Man X in the library), no gold rings or outlines; every card fully visible, nothing
-  faded, no tall empty scroll, no sticky stage (issues 687, 737).
+  faded, nothing playing by itself, no tall empty scroll (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py`
   (`test_without_a_driver_it_is_a_strip_of_cards`).
 
@@ -8682,8 +8689,8 @@ or into an environment that cannot run the tests.
   1. Set 390×844, reload, scroll through "Share nearby".
   2. Set 360×740, reload, scroll through it; try to scroll sideways.
 - **Expected:** the computer's window on top at the full width, the phone under it, then the
-  caption and the indicator, all inside the screen while they hold; the six moments play as on a
-  wide window, over a shorter stretch of scroll. No horizontal scroll caused by this section
+  caption and the indicator, all inside the screen at once; once on screen the six moments play
+  by themselves as on a wide window, and loop. No horizontal scroll caused by this section
   (issues 687, 737).
 - **Check:** human only.
 
