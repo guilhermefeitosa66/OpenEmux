@@ -1016,8 +1016,42 @@ at 2× (`GDK_SCALE=2`), by `tools/site_captures.py` run inside the devbox
 It writes `grid-sfc.png` and `cart-{sfc,fc,gba,n64,md,ps}.png` (2640×1756, window
 content only). Look at each one (no toast, no red Log badge, no "Search
 artwork…" placeholder), copy them to `docs/assets/desktop/` and run
-`--images`. The other captures (README, carousel, welcome wizard) follow the
-same demo-library rules.
+`--images`. The other captures (AppStream, welcome assistant, manual) follow
+the same demo-library rules; the table below says where each one comes from.
+
+#### Published images
+
+Every image and video the project publishes, what uses it and what makes it.
+A refresh re-shoots the same set: same files, names, scenes, games, framing,
+pixel sizes and variants. A file that can no longer be produced is listed in
+the pull request, not renamed or dropped. "Widths" are the AVIF/WebP variants
+`--images` writes next to the master (exact sizes in `site/images.json`).
+
+| Files | Used in | Made by | Size | Widths |
+| --- | --- | --- | --- | --- |
+| `docs/assets/desktop/grid-sfc.png` | opening (desktop), OG image | `tools/site_captures.py` (devbox, 2×) | 2640×1756 | 640, 1280, 1920, 2640 |
+| `docs/assets/desktop/cart-{sfc,fc,gba,n64,md,ps}.png` | screenshot gallery | `tools/site_captures.py` | 2640×1756 | 640, 1280, 1920, 2640 |
+| `docs/assets/android/library-snes.png` | opening (phone), OG image | emulator capture (below) | 1440×3120 | 640, 1280, 1440 |
+| `docs/assets/android/game-{snes,gba,n64,megadrive,ps,nds}-portrait.png` | Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 1080×2238 | 640, 1080 |
+| `docs/assets/android/game-{gba,nds}-landscape.png` | Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 2238×1080 | 640, 1280, 1920, 2238 |
+| `docs/assets/share/phone-{1-pick,2-code,3-progress,4-sent}.png` | Share nearby | emulator capture (below) | 1440×3120 | 640, 1280, 1440 |
+| `docs/assets/share/desktop-{1-ready,2-offer,3-progress,4-received,4-library}.png` | Share nearby | devbox capture (below) | 2236×1516 | 640, 1280, 1920, 2236 |
+| `docs/assets/carts/<console>-<slug>.webp` (84) | cartridge wall (`CONSOLES` in `site/page.html`) | `tools/demo_library.py --wall` | 400 px wide | — |
+| `docs/assets/og-opening.png` | `og:image` | `tools/site_art.py` | 1200×630 | — |
+| `docs/assets/logo-128.png` | header, favicon | `tools/site_art.py` | 128×128 | — |
+| `docs/assets/logo.png` | README, manual, promo video (the app ships its own copy, `src/openemux/ui/assets/images/logo.png`) | original art, not re-made | 735×776 | — |
+| `docs/assets/openemux-promo.mp4`, `openemux-promo-poster.jpg` | the opening's video | `openemux-video` (Remotion; its README) | 1920×1080 | — |
+| `docs/manual/img/*.webp` (64) | the manual (`site/manual.html`); `overview.webp` is also its `og:image` | devbox crops of a 1880×1280 window, lossless WebP (issue 524) | as in `site/manual.html` | — |
+| `docs/assets/openemux-{roms-nes,roms-snes,settings}.png` | AppStream `<screenshots>` (pinned to a commit) | devbox, 1320×878 window | 1320×878 | — |
+| `docs/assets/openemux-gameplay-gba.png` | AppStream `<screenshots>` (pinned) | devbox: a `demo_gameplay.py` frame in RetroArch over the library | 1300×860 | — |
+| `docs/assets/openemux-{all,library-snes}.png` | no page: inputs of the promo video | devbox, 1320×878 window | 1320×878 | — |
+| `src/openemux/ui/assets/images/welcome/*.png` (10, `SLIDES` in `welcome.py`) | welcome assistant | devbox 1320×878 captures resized | 1200×800 | — |
+
+The README shows only `logo.png`. Nothing references these any more (kept,
+not re-shot): `docs/assets/openemux-gameplay-nes.png`,
+`openemux-roms-{gba,n64}.png`, `openemux-settings-{bios,input}.png`, the six
+`openemux-mobile-*.png`, `docs/assets/shelf/` (the carousel left the site) and
+`share/phone-1-what.png`.
 
 #### Android and Share nearby captures
 
