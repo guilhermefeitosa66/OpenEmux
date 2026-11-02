@@ -982,7 +982,7 @@ widths below the source's own) plus the full width.
 .venv/bin/python tools/build_site.py --images   # encode what changed, then rewrite docs/
 ```
 
-`--images` needs Pillow, a dev-only dependency (`requirements-dev.txt`); the
+`--images` needs Pillow 13 (Python 3.11+), a dev-only dependency (`requirements-dev.txt`); the
 published site and the app never use it. It records each source's hash and each
 variant's size and hash in `site/images.json`, and re-encodes only a source
 whose hash changed, so running it again changes nothing. `--check` (what CI

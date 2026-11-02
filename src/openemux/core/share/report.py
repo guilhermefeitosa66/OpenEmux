@@ -6,6 +6,9 @@ receiver left out still came out as sent. These helpers turn the sender's
 manifest and the core's result -- or the receiver's plan -- into the games
 that arrived and the ones that did not, each with the reason the core gave.
 
+BIOS files (issue 677) belong to a console: they never make a game count as
+delivered, and are reported apart, by name.
+
 Pure: no GTK, no files read.
 """
 
@@ -14,7 +17,7 @@ from pathlib import Path
 
 from openemux.core.share.manifest import is_main_rom
 from openemux.core.share.placement import ACTION_SEND, ROM_ABSENT, ROM_EXISTING
-from openemux.core.share.protocol import KIND_ROM, SkipReason
+from openemux.core.share.protocol import KIND_BIOS, KIND_ROM, SkipReason
 
 
 @dataclass
@@ -24,6 +27,8 @@ class DeliveryReport:
     #: ``{title, console, reason, excluded}`` for every game that did not
     #: arrive; ``excluded`` when the sender's own build left it out.
     missing: list = field(default_factory=list)
+    #: The names of the BIOS files that went through, in manifest order.
+    bios: list = field(default_factory=list)
 
     @property
     def complete(self):
@@ -38,6 +43,11 @@ def game_delivered(rom_status, actions):
     else new is not a game delivered: it is "already on the device".
     """
     return rom_status != ROM_ABSENT and ACTION_SEND in actions
+
+
+def game_actions(decisions):
+    """The actions a game's own files were given: its console's BIOS left out."""
+    return {decision.action for decision in decisions if decision.kind != KIND_BIOS}
 
 
 def send_report(built, result):
@@ -55,13 +65,16 @@ def send_report(built, result):
     }
     report = DeliveryReport()
     for game in built.manifest["games"]:
+        report.bios += [
+            item["name"] for item in game["items"] if item["kind"] == KIND_BIOS and item["id"] in sent
+        ]
         roms = sorted(
             (item for item in game["items"] if item["kind"] == KIND_ROM),
             key=lambda item: not is_main_rom(item),
         )
         unsent = [item for item in roms if item["id"] not in sent]
         missing = [item for item in unsent if reasons.get(item["id"]) != SkipReason.EXISTS_SKIP]
-        anything_sent = any(item["id"] in sent for item in game["items"])
+        anything_sent = any(item["id"] in sent for item in game["items"] if item["kind"] != KIND_BIOS)
         if not missing and anything_sent:
             report.delivered += 1
             continue
@@ -89,8 +102,9 @@ def receive_report(plan, unchecked=()):
     for game in plan.games:
         if game.game_id in unchecked:
             continue
+        report.bios += [d.target.name for d in game.decisions if d.kind == KIND_BIOS and d.action == ACTION_SEND]
         report.total += 1
-        if game_delivered(game.rom_status, {decision.action for decision in game.decisions}):
+        if game_delivered(game.rom_status, game_actions(game.decisions)):
             report.delivered += 1
             continue
         report.missing.append({"title": game.title, "console": game.console, "reason": _receive_reason(game),

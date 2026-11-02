@@ -273,7 +273,7 @@ class ValidateTests(unittest.TestCase):
 
     def test_bad_items_become_invalid_item(self):
         bad = [
-            {"id": "k", "kind": "bios", "name": "x.bin", "size": 1, "mtime": 1},
+            {"id": "k", "kind": "hologram", "name": "x.bin", "size": 1, "mtime": 1},
             {"id": "n1", "kind": "cover", "name": "../evil.png", "size": 1, "mtime": 1},
             {"id": "n2", "kind": "cover", "name": ".hidden.png", "size": 1, "mtime": 1},
             {"id": "n3", "kind": "cover", "name": "a/b.png", "size": 1, "mtime": 1},
@@ -319,7 +319,106 @@ class SharedVectorTests(unittest.TestCase):
         validate_manifest(sample)
         [game] = validate_items(sample)
         self.assertEqual(game.rejected, {})
-        self.assertEqual({item["kind"] for item in game.items}, {"rom", "battery_save", "state", "cover"})
+        self.assertEqual({item["kind"] for item in game.items}, {"rom", "battery_save", "state", "cover", "bios"})
+
+
+
+class BiosTests(ManifestTestCase):
+    """A console's BIOS go with the first of its games (issue 677)."""
+
+    def test_catalog_bios_are_found_under_the_catalog_spelling(self):
+        self.lib.file("roms/PS/bios/SCPH5501.BIN", b"bios")
+        self.lib.file("roms/PS/bios/scph1001.bin", b"other")
+        self.lib.file("roms/PS/bios/notes.txt", b"mine")
+        self.lib.file("roms/PS/bios/bios7.bin", b"a DS BIOS")
+        (self.lib.roms / "PS" / "bios" / "scph7001.bin").mkdir()
+        self.assertEqual(
+            [(name, path.name) for name, path in manifest_module.bios_files(self.lib.roms, "PS")],
+            [("scph1001.bin", "scph1001.bin"), ("scph5501.bin", "SCPH5501.BIN")],
+        )
+
+    def test_the_exact_spelling_wins_over_a_case_variant(self):
+        self.lib.file("roms/PS/bios/SCPH5501.BIN", b"variant")
+        if (self.lib.roms / "PS" / "bios" / "scph5501.bin").exists():
+            self.skipTest("a case-insensitive filesystem holds one spelling only")
+        self.lib.file("roms/PS/bios/scph5501.bin", b"exact")
+        self.lib.file("roms/PS/bios/Scph5501.Bin", b"variant too")
+        [(name, path)] = manifest_module.bios_files(self.lib.roms, "PS")
+        self.assertEqual((name, path.name), ("scph5501.bin", "scph5501.bin"))
+
+    def test_no_bios_folder_is_no_bios(self):
+        self.assertEqual(manifest_module.bios_files(self.lib.roms, "PS"), [])
+
+    def test_only_the_first_game_of_a_console_carries_them(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios", mtime=1234)
+        self.lib.file("roms/FDS/bios/disksys.rom", b"fds")
+        first = self.lib.rom("PS", "First.chd")
+        second = self.lib.rom("PS", "Second.chd")
+        fds = self.lib.rom("FDS", "Disk.fds")
+        built = self.build([first, second, fds])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd"), ("bios", "scph5501.bin")])
+        self.assertEqual(self.names(built, 1), [("rom", "Second.chd")])
+        self.assertEqual(self.names(built, 2), [("rom", "Disk.fds"), ("bios", "disksys.rom")])
+        bios = self.items(built, 0)[1]
+        self.assertEqual((bios["size"], bios["mtime"]), (4, 1234))
+        self.assertEqual(bios["sha256"], hashlib.sha256(b"bios").hexdigest())
+        self.assertTrue(built.sources[bios["id"]].samefile(self.lib.roms / "PS" / "bios" / "scph5501.bin"))
+        self.assertEqual(built.manifest["file_count"], 5)
+
+    def test_a_game_left_out_hands_them_to_the_next_one(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        missing = {"name": "Gone", "path": str(self.lib.roms / "PS" / "Gone.chd"), "console": "PS"}
+        kept = self.lib.rom("PS", "Kept.chd")
+        built = self.build([missing, kept])
+        self.assertEqual(self.names(built, 0), [("rom", "Kept.chd"), ("bios", "scph5501.bin")])
+
+    def test_bios_that_do_not_fit_never_take_a_game_s_place(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        self.lib.file("roms/PS/bios/scph1001.bin", b"other")
+        first = self.lib.rom("PS", "First.chd")
+        second = self.lib.rom("PS", "Second.chd")
+        real = manifest_module.bios_files
+        with mock.patch.object(manifest_module, "MAX_ITEMS", 2), \
+                mock.patch.object(manifest_module, "bios_files", side_effect=real) as listing:
+            built = self.build([first, second])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
+        self.assertEqual(self.names(built, 1), [("rom", "Second.chd")])
+        self.assertEqual(built.excluded, [])
+        # The room only shrinks: the folder is not read again for each game.
+        self.assertEqual(listing.call_count, 1)
+
+    def test_a_bios_that_cannot_be_opened_never_fails_the_build(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        first = self.lib.rom("PS", "First.chd")
+        real_open = open
+
+        def guarded(path, *args, **kwargs):
+            # By name: the separators differ between platforms (Windows CI).
+            if Path(path).name == "scph5501.bin":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=guarded):
+            built = self.build([first])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
+
+    def test_an_unreadable_bios_never_leaves_its_game_out(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        first = self.lib.rom("PS", "First.chd")
+        second = self.lib.rom("PS", "Second.chd")
+        real = manifest_module.bios_files
+        calls = []
+
+        def flaky(roms_dir, console):
+            calls.append(console)
+            if len(calls) == 1:
+                return [("scph5501.bin", self.lib.roms / "PS" / "bios" / "gone.bin")]
+            return real(roms_dir, console)
+
+        with mock.patch.object(manifest_module, "bios_files", side_effect=flaky):
+            built = self.build([first, second])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
+        self.assertEqual(self.names(built, 1), [("rom", "Second.chd"), ("bios", "scph5501.bin")])
 
 
 if __name__ == "__main__":
