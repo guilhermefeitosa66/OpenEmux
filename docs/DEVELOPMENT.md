@@ -969,6 +969,158 @@ A change to the site alone reaches the live page only through `main`. Merge it
 to `develop` as usual, then open a second pull request with just `docs/` to
 `main` — or let it ride with the next release.
 
+### Images
+
+Screenshots on the site are served as AVIF and WebP at several widths, through
+`<picture>` (issue #683). Every PNG matched by `IMAGE_SOURCES` in
+`tools/build_site.py` (today `docs/assets/{desktop,shelf,android,share}/*.png`)
+is the TrueColor master; next to it sit
+`<name>-<width>.avif` and `.webp` at 640 / 1280 / 1920 / 2560 px (only the
+widths below the source's own) plus the full width.
+
+```bash
+.venv/bin/python tools/build_site.py --images   # encode what changed, then rewrite docs/
+```
+
+`--images` needs Pillow 13 (Python 3.11+), a dev-only dependency (`requirements-dev.txt`); the
+published site and the app never use it. It records each source's hash and each
+variant's size and hash in `site/images.json`, and re-encodes only a source
+whose hash changed, so running it again changes nothing. `--check` (what CI
+runs) compares those hashes and needs only the standard library: a PNG edited
+without `--images`, a variant missing or hand-edited, or a generated file no
+source owns fails it.
+
+To use an image in `site/page.html`, add `data-picture` to its `<img>` (and
+`data-sizes` with the CSS width it is shown at; the default is `100vw`). The
+build turns it into a `<picture>` with explicit `width`/`height`,
+`loading="lazy" decoding="async"` and a `data-full` (largest WebP) the lightbox
+opens; `data-picture="eager"` is for an image on the first screen. An opted-in
+image with no widths yet fails the build, naming the file.
+
+The desktop captures are made in the devbox from the fictional demo library,
+at 2× (`GDK_SCALE=2`), by `tools/site_captures.py` run inside the devbox
+(under the pipeline's devbox lock when other workers share it):
+
+```bash
+./devbox/devbox.sh exec env DEVBOX_REPO="$PWD" /usr/bin/python3 tools/site_captures.py /tmp/captures
+```
+
+It writes `grid-sfc.png` and `cart-{sfc,fc,gba,n64,md,ps}.png` (2640×1756, window
+content only). Look at each one (no toast, no red Log badge, no "Search
+artwork…" placeholder), copy them to `docs/assets/desktop/` and run
+`--images`. The other captures (README, carousel, welcome wizard) follow the
+same demo-library rules.
+
+#### Android and Share nearby captures
+
+`docs/assets/android/` and `docs/assets/share/` (issue #684) come from the
+Android app and from both apps talking to each other. Nothing in them is real
+game art: the same demo library, the same fictional gameplay.
+
+**In-game shots** (`android/game-<console>-<orientation>.png`) are composites,
+because the demo games have no ROM to run: `tools/phone_shots.py` draws the
+frame from `tools/demo_gameplay.py` into the screen rectangles of the app's own
+bundled skin, with the skin art on top, exactly as the app layers them.
+
+```bash
+.venv/bin/python tools/demo_gameplay.py /tmp/frames \
+    --console SFC --console GBA --console N64 --console MD --console PS --console NDS
+.venv/bin/python tools/phone_shots.py \
+    ../openemux-android/pkg/android/openemux/src/main/assets/skins /tmp/frames docs/assets/android
+```
+
+The default set is every console portrait plus GBA and NDS landscape;
+`--shot CONSOLE:ORIENTATION` picks others. Output is the skin art's size
+(1080 px on the short side).
+
+**The library shot and the Share nearby steps are real captures.** The phone
+is a throwaway AVD (`pixel_7_pro`, 1440×3120, `android-35` `google_apis`
+x86_64; deleted afterwards), booted only through the pipeline's
+`emulator-lock.sh` (port 5580, no window) — never the maintainer's emulator.
+The desktop is the devbox app (`GDK_SCALE=2`, dark theme), on its own
+display `:77`.
+
+1. **Phone.** Build a debug APK (`./gradlew assembleDebug --no-daemon`; a
+   debug build is what lets `run-as` write the labels), install it, run its
+   first-boot download, then `adb shell cmd locale set-app-locales
+   com.openemux.mobile --locales en-US` and `adb shell cmd uimode night yes`.
+   Generate the demo library (`tools/demo_library.py /tmp/demolib`), push
+   each console's ROMs to
+   `/sdcard/Android/data/com.openemux.mobile/files/roms/<CONSOLE>/` and its
+   `labels/*.png` to the app's private `files/labels/<CONSOLE>/` (a tar pushed
+   to `/data/local/tmp` and unpacked with `run-as`), and restart the app.
+   Clean status bar: `adb shell settings put global sysui_demo_allowed 1`,
+   then the SystemUI demo broadcasts (`enter`, `clock -e hhmm 0941`,
+   `battery -e level 100`, `network -e wifi show -e level 4 -e fully true`,
+   `notifications -e visible false`). Settings → Share Nearby → Device Name:
+   "Android Phone". Capture with `adb exec-out screencap -p`.
+2. **SNES library** (`android/library-snes.png`): Library → Super Nintendo,
+   cartridge view, top of the list.
+3. **Desktop.** Under the devbox lock: `devbox-seed --wipe`,
+   `tools/demo_library.py ~/games/demo --configure`, theme dark, share device
+   name "Linux Desktop" (both through `ConfigManager`), `devbox-res
+   2800x1900`, `GDK_SCALE=2 devbox-app start`. Move the game being sent
+   (ROM, cover, label) out of the desktop library first, so step 4 shows it
+   arriving. Every `xdotool` call must run with `DISPLAY=:77` (source
+   `/openemux/devkit/lib.sh` in the same shell): a bare call inside
+   `devbox.sh exec` reaches the developer's own screen. Window actions are
+   easiest over D-Bus (`org.gtk.Actions.Activate` on
+   `/io/github/guilhermefeitosa66/OpenEmux/window/1`, e.g. `receive-games`);
+   capture with `devbox-shot --win`.
+4. **The game sent** is the SNES demo title whose gameplay the site shows,
+   *Robot Man X*. On the phone its ROM and label are named `Robot Man X.sfc` /
+   `Robot Man X.png` (no region tag): the desktop stores a received label under
+   the game's title, so with the tag the received cartridge shows a blank label.
+   Pad the ROM to a realistic 512 KB (`truncate -s 524288`), and slow the
+   phone's uplink so the progress step can be caught: `adb root`, then
+   `adb shell tc qdisc add dev wlan0 root tbf rate 300kbit burst 16kbit
+   latency 400ms` (a slower rate makes the desktop drop the connection).
+5. **The flow, phone → desktop.** The phone finds the devbox app by mDNS
+   through the emulator's network (Connect by Address with `10.0.2.2` is the
+   fallback). Desktop: Import ▾ → Receive Games. Phone: the game → ⋯ → Share
+   Nearby. Capture, in one session so the code matches:
+   `share/phone-1-pick.png` and `phone-1-what.png` (What to Send) with
+   `desktop-1-ready.png`; tap Linux Desktop → `phone-2-code.png` with
+   `desktop-2-offer.png` (same six digits); Accept →
+   `desktop-3-progress.png` with `phone-3-progress.png`; then
+   `phone-4-sent.png`, `desktop-4-received.png` and, after Show in Library and
+   scrolling to the game, `desktop-4-library.png`.
+
+Convert the phone PNGs to RGB (the screencap is RGBA), copy everything into
+place, run `--images`, and take the emulator down (`adb emu kill` happens when
+`emulator-lock.sh`'s command ends; `avdmanager delete avd -n <name>`).
+
+### Scroll stages
+
+A moment that plays as the visitor scrolls (the opening, issue 686) is a
+*scroll stage*: a tall `<section data-stage>` (its length in `--stage-len`)
+whose `.stage-sticky` box holds still while the section scrolls past. Its
+`data-stage-layer` elements carry an `animation-name`, and their `@keyframes`
+span the whole stage (0 % to 100 % is the progress through it), so each
+layer's timing lives in the keyframe stops. Two drivers play the same
+keyframes: CSS scroll-driven animations (`view-timeline`, range `contain`)
+where the browser has them, and otherwise the small script at the end of
+`site/page.html`, which writes the progress into `--p` and seeks paused
+animations with `animation-delay`. The CSS with no driver is the final
+composition: that is what reduced motion, no JavaScript and old browsers
+get. Animate only `transform` and `opacity`, and never touch the scroll
+itself (no snap, no wheel or touch handlers); `tests/test_site.py` holds both.
+
+A stage whose final composition is not its last frame (Share nearby, issue
+687) keeps its staged layout under the motion query, written once per driver
+(`#share[data-stage]` under `@supports`, `#share.stage-js` for the script);
+outside it the same markup is the static version (there, four cards). Give
+each animated element a single class that names its keyframes, so one rule
+with an id can switch them all off where the stage does not fit.
+
+### Composed images
+
+`tools/site_art.py` (Pillow) draws `docs/assets/og-opening.png`, the
+1200×630 link preview, from the opening's two captures
+(`desktop/grid-sfc.png`, `android/library-snes.png`), and
+`docs/assets/logo-128.png`, the header and favicon logo. Run it again after
+retaking those captures or changing `logo.png`.
+
 ## Cutting a release
 
 `main` holds released code only and is protected by a repository ruleset: no

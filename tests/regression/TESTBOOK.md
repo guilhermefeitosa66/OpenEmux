@@ -7923,12 +7923,13 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the line under
-  the download buttons, the credits section and the Android section.
+  the download buttons and the credits section.
 - **Expected:** Under the download buttons, one line says OpenEmux is inspired by OpenEmu for
   macOS but is not a fork, with RetroArch as the backend, and links to the credits. The credits say
-  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, and say
-  it is not affiliated with the OpenEmu Team. The Android section says the app is its own design
-  (issue #504).
+  it shares no code with OpenEmu, credit the console icons with a link to `ATTRIBUTION.md`, say
+  the Android app is an independent design and that OpenEmux is not affiliated with the OpenEmu
+  Team (issue #504). Since the page was restructured (issue 685) that line sits in the opening
+  section, above the desktop and phone screenshots.
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -7939,7 +7940,7 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      hero = html.split('id="promo"')[0]
+      hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in hero and 'href="#thanks"' in hero, page
       thanks = re.search(r'<section id="thanks">(.*?)</section>', html, re.S).group(1)
       assert 'href="https://openemu.org/"' in thanks, page
@@ -7948,6 +7949,46 @@ or into an environment that cannot run the tests.
   EOF
   ```
   Unit-level: `tests/test_site.py` (`test_every_language_states_the_relationship_with_openemu`).
+
+### RT-611 — The site's screenshots are served as AVIF/WebP at responsive widths
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `docs/` and `site/images.json`).
+- **Steps:** As a QA person: open the site's home page in a browser with DevTools → Network, scroll
+  to "Your games, console by console" and look at what the screenshot carousel downloads; then open
+  `docs/assets/desktop/`.
+- **Expected:** Each carousel shot is a `<picture>` whose AVIF (or WebP) width is what loads, not
+  the PNG; the carousel looks as before (three shots per slide, one on a phone) and a click opens
+  the full-size image in the lightbox. `docs/assets/desktop/` holds a 2× SNES cover grid and the
+  cartridge view of SNES, NES, GBA, N64, Mega Drive and PlayStation, each a TrueColor PNG at least
+  2560 px wide with AVIF and WebP at 640/1280/1920 px and full width, all from the fictional demo
+  library (issue #683).
+- **Check:**
+  ```bash
+  python3 tools/build_site.py --check
+  python3 - <<'EOF'
+  import json, re
+  from pathlib import Path
+  manifest = json.loads(Path("site/images.json").read_text())
+  for name in ["grid-sfc"] + [f"cart-{c}" for c in ("sfc", "fc", "gba", "n64", "md", "ps")]:
+      entry = manifest[f"desktop/{name}.png"]
+      assert entry["width"] >= 2560, name
+      widths = {v["width"] for v in entry["variants"]}
+      assert {640, 1280, 1920, entry["width"]} <= widths, name
+      for v in entry["variants"]:
+          assert Path("docs/assets", v["file"]).is_file(), v["file"]
+  for page in [Path("docs/index.html"), Path("docs/pt-br/index.html")]:
+      html = page.read_text(encoding="utf-8")
+      shots = re.findall(r'<picture><source type="image/avif" srcset="[^"]*shelf/\w+-640\.avif 640w', html)
+      assert len(shots) == 7, (page, len(shots))
+      assert "data-picture" not in html, page
+  print("RT-611 OK")
+  EOF
+  ```
+  Visual: `identify -format '%[type] %w\n' docs/assets/desktop/*.png` (no `Palette`, every width
+  ≥ 2560) and a look at each capture: demo titles only, English UI, no toast, no red Log badge, no
+  "Search artwork…" placeholder. Unit-level: `tests/test_site.py` (`TheImagePipelineTests`,
+  `TheImageCheckTests`, `TheImageEncoderTests`).
 
 ### RT-342 — The README states the relationship with OpenEmu
 - **Area:** Developer tooling & docs
@@ -7976,12 +8017,13 @@ or into an environment that cannot run the tests.
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none.
 - **Steps:** As a QA person: open the site's home page in each language and read the small text
-  under the console carousel, under the Android screenshots and in the footer, after the
-  disclaimer. Then open the README on GitHub and read the line under "Screenshots".
+  under the cartridge carousel ("On the desktop"), under the Android screenshots ("On the phone")
+  and in the footer, after the disclaimer.
 - **Expected:** In all three places, in every language, one small muted line says the games shown
   are fictional and for illustration only, are not real games for these consoles, and that their
-  artwork was created with AI. The footer disclaimer itself is unchanged. The README carries the
-  same meaning in one line under "Screenshots" (issue #552).
+  artwork was created with AI. The footer disclaimer itself is unchanged (issue #552). The README
+  no longer shows screenshots of the demo library, so it no longer carries the line (dropped from
+  this scenario in issue 685).
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -7998,17 +8040,216 @@ or into an environment that cannot run the tests.
   assert len(pages) == 8, pages
   for page in pages:
       html = page.read_text(encoding="utf-8")
-      shots = re.search(r'<section id="screenshots">(.*?)</section>', html, re.S).group(1)
-      android = re.search(r'<section id="android">(.*?)</section>', html, re.S).group(1)
+      shots = re.search(r'<section class="moment" id="consoles">(.*?)</section>', html, re.S).group(1)
+      android = re.search(r'<section class="moment" id="android">(.*?)</section>', html, re.S).group(1)
       footer = re.search(r"<footer>(.*?)</footer>", html, re.S).group(1)
       assert 'class="fineprint"' in shots and 'class="fineprint"' in android, page
       assert footer.count('class="disclaimer"') == 2, page
-  readme = Path("README.md").read_text(encoding="utf-8")
-  head = readme.split("## Screenshots", 1)[1].split("### ROM Library", 1)[0]
-  assert "fictional" in head and "AI" in head, "README notice missing"
   print("RT-386 OK")
   EOF
   ```
+
+
+### RT-611 — The site tells its story in order, one short moment at a time
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page (`docs/index.html`) and scroll from top to
+  bottom; then switch to each other language with the picker and do the same. Finally turn page
+  styles off (Firefox: View › Page Style › No Style) and read it again.
+- **Expected:** The sections come in this order: the opening (headline, download buttons, the
+  desktop library with the phone over its corner), "Share nearby" (the phone and the computer stepping through one transfer as you scroll, or four numbered cards with reduced motion), "On the
+  desktop" (the cartridge carousel), "On the phone" (the controller screenshots), the cartridge
+  wall, "Installing", "Everything else", the credits and "Support the project", then the footer.
+  Each of the opening, Share nearby, desktop and phone moments has one short headline and at most
+  two sentences under it, with no exclamation marks. With styles off the content still reads top
+  to bottom in that order (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  want = ["top", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support"]
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      assert re.findall(r'<section[^>]* id="([a-z]+)"', html) == want, page
+      for sid in ("share", "consoles", "android"):
+          sec = re.search(r'<section class="moment[^"]*" id="%s"[^>]*>(.*?)</section>' % sid, html, re.S).group(1)
+          assert "!" not in re.sub(r"<[^>]+>", "", sec.split("<ol", 1)[0].split("<div class=\"carousel", 1)[0]), (page, sid)
+  print("RT-611 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`TheNarrativeTests`).
+
+### RT-612 — "Everything else" keeps every fact of the old sections
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open the site's home page in each language and read the
+  "Everything else" section, after "Installing".
+- **Expected:** One grid holds what the old Features, About the games and Supported systems
+  sections said: "Built on RetroArch", covers by console, first launch, controls, shaders, BIOS
+  checklist, Linux first, the Android cards (skins, cartridges and covers, one download, gamepad,
+  light and dark, eight languages, RetroAchievements), a wide "Play the games you own" card with its
+  three points (no games, ROMs or BIOS shipped), and a "31 systems" card listing all 31 systems
+  (issue 685).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      more = re.search(r'<section id="more">(.*?)</section>', page.read_text(encoding="utf-8"), re.S).group(1)
+      assert more.count('<span class="chip">') == 31, page
+      assert more.count('<ul class="checks">') == 1 and more.count("<li>") >= 3, page
+      assert more.count('<div class="card') >= 16, page
+  print("RT-612 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`test_nothing_of_the_folded_sections_is_lost`).
+
+### RT-613 — The promo video plays only when asked for
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
+- **Steps:**
+  1. Load the home page and scroll through it.
+  2. Click "Watch the video (45 s)" under the download buttons.
+  3. Press Escape.
+  4. With JavaScript disabled, click the same link.
+- **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
+  page. 2: a dialog opens over the page and the video plays, with the browser's own controls. 3:
+  the dialog closes, the sound stops and the focus returns to the link. 4: the browser opens the
+  video file itself. With Save-Data on, step 2 opens the dialog without starting playback
+  (issue 685).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
+
+### RT-614 — The opening plays as you scroll: the desktop settles, then the phone lands
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
+  Chrome and Firefox (Safari too when one is at hand), window about 1440×900.
+- **Steps:**
+  1. Load the home page and look at the opening before scrolling.
+  2. Scroll down slowly with the mouse wheel through the opening, then back up.
+  3. Do the same with Space / Page Down / the arrow keys, by dragging the scrollbar and, in
+     DevTools device mode, by touch.
+  4. Repeat 1–2 in Firefox.
+- **Expected:** 1: headline, buttons and links on the left; on the right the desktop Super
+  Nintendo library, slightly tilted and smaller, in a plain frame (rounded corners and a shadow,
+  no extra title bar: the capture already has the app's own). 2: the window flattens into place,
+  then the phone (the Android Super Nintendo library) slides up and lands over the window's lower
+  right corner; the composition holds a moment and the next section follows. Scrolling up plays
+  it in reverse. 3: the page scrolls exactly as any page does: no snapping, no point where the
+  scroll sticks or jumps. 4: the same motion (Firefox runs the script fallback) (issue 686).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheOpeningStageTests`).
+
+### RT-615 — With reduced motion, without JavaScript and at phone width the opening is complete
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** as RT-614.
+- **Steps:**
+  1. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, scroll through.
+  2. Firefox with JavaScript disabled (`javascript.enabled` false), reload, scroll through.
+  3. DevTools device mode at 360×740, reload, scroll through; try to scroll sideways.
+  4. A wide window under 640 px tall (device mode 1280×600), reload, scroll through.
+- **Expected:** 1, 2 and 4: the final composition (window flat, phone over its corner), static, at
+  the section's natural height: no long empty scroll, every button and link works. 3: the copy
+  on top, then the window and the phone below it, centred, nothing overlapping or cut; while the
+  copy scrolls away the window settles, the devices hold at the top while the phone lands, then
+  the page goes on; no horizontal scroll (issue 686).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_motion_only_with_a_driver_and_never_under_reduced_motion`).
+
+### RT-616 — The opening's weight, preload, link preview and download order
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `docs/`).
+- **Steps:** As a QA person: open the home page with the Network panel (cache disabled), then
+  with an Android and a Windows user agent; paste the site's URL into a link-preview tester.
+- **Expected:** the first screen transfers at most ~600 KB and the page at most ~6 MB without
+  the video; the desktop capture's AVIF is preloaded from `<head>`; the header uses the 128 px
+  logo; the link preview is `og-opening.png` (1200×630, the opening's composition); an Android
+  user agent gets "Download for Android" first and highlighted, Windows gets Windows first,
+  anything else Linux first (issue 686).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheOpeningStageTests -v 2>&1 | tail -3
+  ```
+  Passes when the last line is `OK`.
+
+### RT-640 — Share nearby plays as you scroll: one transfer, step by step, on both screens
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
+  Chrome and Firefox (Safari too when one is at hand), window about 1280×800.
+- **Steps:**
+  1. Scroll from the opening into "Share nearby" with the mouse wheel, slowly, to the next section.
+  2. Scroll back up through it.
+  3. Do it again with Space / Page Down / the arrow keys and by dragging the scrollbar.
+  4. Repeat 1–2 in Firefox.
+  5. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
+- **Expected:** 1: under the heading, the phone on the left, three gold dots, the computer's
+  window on the right (the capture is the window itself: rounded corners and a shadow, no extra
+  title bar). They hold still while the page scrolls and step through four screens, each with its
+  caption and a four-part indicator under it: "Pick a game on your phone." (Robot Man X selected,
+  Linux Desktop listed; the computer ready to receive); "The same code shows on both screens."
+  (506 807 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
+  in your library now." (1 game sent on the phone; the computer's "1 Game Received", then its
+  Super Nintendo library with Robot Man X). Only one caption at a time. 2: it plays in reverse.
+  3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
+  the script fallback). 5: the screen sits in the middle of the phone body, the same bezel on all
+  four sides, corners concentric (issue 687).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheShareSequenceTests`).
+
+### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is four cards
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** as RT-640.
+- **Steps:**
+  1. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, scroll through
+     "Share nearby".
+  2. Firefox with JavaScript disabled, reload, scroll through it.
+  3. DevTools device mode at 360×600 (shorter than 640 px), reload, scroll through it.
+- **Expected:** "Share nearby" is a list of four numbered cards (four across on a wide window, two
+  under 900 px, one under 520 px), each with the computer's capture and the phone's over its lower
+  left corner and both caption lines; every card fully visible, nothing faded, no tall empty
+  scroll, no sticky stage (issue 687).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_without_a_driver_it_is_a_strip_of_cards`).
+
+### RT-642 — At phone width Share nearby stacks the devices and fits the screen
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** as RT-640; DevTools device mode.
+- **Steps:**
+  1. Set 390×844, reload, scroll through "Share nearby".
+  2. Set 360×740, reload, scroll through it; try to scroll sideways.
+- **Expected:** the computer's window on top at the full width, the phone under it, then the
+  caption and the indicator, all inside the screen while they hold; the steps change as on a wide
+  window, over a shorter stretch of scroll. No horizontal scroll caused by this section (issue 687).
+- **Check:** human only.
+
+### RT-643 — Share nearby's captions and image descriptions are translated
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none (reads `site/strings/`).
+- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the four captions
+  of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
+- **Expected:** each caption is a short headline and one sentence, in the page's language, with no
+  exclamation mark; every capture has a description in that language naming the screen, and the
+  ones of the second step mention the code 506 807 (issue 687).
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3
+  ```
+  Passes when the last line is `OK`.
 
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling

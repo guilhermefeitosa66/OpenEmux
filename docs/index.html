@@ -9,11 +9,13 @@
   <title>OpenEmux — A simple way to play your retro collection</title>
   <meta name="description"
     content="OpenEmux is a free and open-source emulation frontend that uses RetroArch underneath. It makes RetroArch easier for anyone who just wants to play: add your own games, pick one, and it starts. Linux is its main platform; Windows is supported too, in beta." />
-  <link rel="icon" href="assets/logo.png" />
+  <link rel="icon" href="assets/logo-128.png" />
   <meta property="og:title" content="OpenEmux — A simple way to play your retro collection" />
   <meta property="og:description"
     content="A free and open-source emulation frontend that makes RetroArch easier to use. Linux is its main platform; Windows is supported too, in beta." />
-  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/openemux-library-snes.png" />
+  <meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/assets/og-opening.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:url" content="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <link rel="canonical" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
   <link rel="alternate" hreflang="en" href="https://guilhermefeitosa66.github.io/OpenEmux/" />
@@ -61,8 +63,11 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* height:auto keeps the aspect ratio of an <img> that carries width and
+       height attributes (set so the page does not shift while it loads). */
     img {
       max-width: 100%;
+      height: auto;
       display: block
     }
 
@@ -86,7 +91,6 @@
        drags the whole document past the viewport. */
     .grid>*,
     .steps>*,
-    .split>*,
     .gallery>*,
     .carousel-track>* {
       min-width: 0
@@ -245,14 +249,93 @@
       font-size: .87rem
     }
 
-    /* ---------- hero ---------- */
+    /* ---------- scroll stages ----------
+       A stage is a tall section (`data-stage`, height `--stage-len`) whose
+       `.stage-sticky` box holds still in the viewport while the section
+       scrolls past. The progress through it, 0 -> 1, plays the @keyframes of
+       its `data-stage-layer` elements. Each layer's keyframes span the whole
+       stage, so its own timing lives in the stops, and one set of keyframes
+       serves both drivers: CSS scroll-driven animations where the browser has
+       them, the script at the end of the page (which writes `--p`) elsewhere.
+       Scrolling itself is never touched: no snap, no wheel or touch handler.
+       Without a driver the CSS below IS the final composition, which is what
+       reduced motion, no JavaScript, older browsers and screens too short for
+       the stage get, at the section's natural height. Only transform and opacity animate. */
+    :root {
+      --nav-h: 65px
+    }
+
+    /* Motion needs the stage to fit while it holds still: 560px of height
+       at phone width (only the devices hold), 640px in the wide layout
+       (copy and devices together). Below that the final composition. */
+    @media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),
+    (prefers-reduced-motion: no-preference) and (min-height: 640px) {
+      @supports (animation-timeline: view()) {
+        [data-stage] {
+          view-timeline: --stage block;
+          view-timeline-inset: var(--nav-h) 0;
+          min-height: var(--stage-len, 260vh)
+        }
+
+        [data-stage] .stage-sticky {
+          position: sticky;
+          top: var(--nav-h)
+        }
+
+        [data-stage] [data-stage-layer] {
+          animation-timeline: --stage;
+          animation-range: contain 0% contain 100%;
+          animation-duration: auto;
+          animation-timing-function: linear;
+          animation-fill-mode: both
+        }
+      }
+
+      [data-stage].stage-js {
+        min-height: var(--stage-len, 260vh)
+      }
+
+      .stage-js .stage-sticky {
+        position: sticky;
+        top: var(--nav-h)
+      }
+
+      .stage-js [data-stage-layer] {
+        animation-duration: 1s;
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        animation-play-state: paused;
+        animation-delay: calc(var(--p, 0) * -1s)
+      }
+
+      [data-stage].is-active [data-stage-layer] {
+        will-change: transform, opacity
+      }
+    }
+
+    /* ---------- hero (the opening stage) ---------- */
     .hero {
+      --stage-len: 260vh;
       position: relative;
-      overflow: hidden;
       border-top: 0;
-      padding: 104px 0 0;
+      padding: 0;
+    }
+
+    /* Positioned for the stars; a driver makes it sticky, so this stays a
+       single-class rule the driver's selectors win over. */
+    .stage-sticky {
+      position: relative
+    }
+
+    .hero .stage-sticky {
+      overflow: clip;
+      min-height: calc(100vh - var(--nav-h));
+      display: flex;
+      align-items: center;
+      padding: 56px 0;
+      box-sizing: border-box;
       background:
-        radial-gradient(900px 460px at 50% -8%, rgba(139, 92, 246, .4), transparent 68%),
+        radial-gradient(900px 460px at 30% -8%, rgba(139, 92, 246, .4), transparent 68%),
         radial-gradient(600px 380px at 88% 12%, rgba(255, 210, 30, .1), transparent 62%),
         linear-gradient(180deg, var(--bg-2), var(--bg) 78%);
     }
@@ -273,31 +356,15 @@
         radial-gradient(1.1px 1.1px at 54% 84%, #fff, transparent);
     }
 
+    /* Wide: copy on the left, the devices on the right, both in one screen. */
     .hero-inner {
       position: relative;
-      text-align: center
-    }
-
-    /* Announcement pill above the headline — carries whatever is new this
-       release without touching the h1. */
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 18px 7px 9px;
-      margin: 0 0 22px;
-      border-radius: 999px;
-      background: rgba(139, 92, 246, .13);
-      border: 1px solid rgba(139, 92, 246, .42);
-      color: var(--text);
-      font-size: .88rem;
-      font-weight: 600;
-    }
-
-    .hero-pill:hover {
-      text-decoration: none;
-      background: rgba(139, 92, 246, .22);
-      border-color: rgba(139, 92, 246, .7);
+      width: 100%;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+      gap: 48px;
+      align-items: center
     }
 
     .beta {
@@ -314,26 +381,11 @@
       line-height: 1;
     }
 
-    .hero-logo {
-      width: 118px;
-      height: 118px;
-      margin: 0 auto 12px;
-      filter: drop-shadow(0 18px 40px rgba(139, 92, 246, .55))
-    }
-
-    .hero-name {
-      margin: 0 0 24px;
-      font-size: 1.7rem;
-      font-weight: 800;
-      letter-spacing: -.02em;
-      color: var(--text)
-    }
-
     .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4.2rem);
+      font-size: clamp(2.3rem, 4.2vw, 3.6rem);
       line-height: 1.04;
       letter-spacing: -.035em;
-      margin: 0 0 20px;
+      margin: 0 0 18px;
       font-weight: 800;
     }
 
@@ -345,166 +397,810 @@
     }
 
     .hero p.lede {
-      margin: 0 auto 32px;
-      font-size: 1.18rem
+      margin: 0 0 26px;
+      font-size: 1.12rem
     }
 
     .cta {
       display: flex;
-      gap: 14px;
-      justify-content: center;
+      gap: 12px;
       flex-wrap: wrap
     }
 
     .cta-note {
-      margin-top: 16px;
-      font-size: .85rem;
+      margin: 12px 0 0;
+      font-size: .82rem;
       color: var(--muted)
     }
 
-    .shot {
-      margin: 64px auto -110px;
-      max-width: 1000px;
-      border-radius: 14px;
+    .hero-links {
+      margin: 18px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 22px;
+      font-weight: 600
+    }
+
+    /* The desktop window with the phone over its lower right corner, so both
+       read as one product. Frames are CSS, not baked into the screenshots:
+       the desktop capture already has the app's own header bar and window
+       buttons, so its frame is the border, the corners and the shadow. */
+    .stage-devices {
+      position: relative;
+      padding: 0 0 48px;
+      perspective: 1600px
+    }
+
+    .device-desktop {
+      width: 88%;
+      border-radius: 12px;
       overflow: hidden;
+      background: var(--panel);
       border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
+      transform-origin: 50% 100%;
+      animation-name: stage-desktop-in
     }
 
-    .shot-video {
-      position: relative;
-      aspect-ratio: 16 / 9;
-      background: #08060f;
-    }
-
-    .shot-video video {
-      display: block;
+    .device-desktop img,
+    .device-phone img {
       width: 100%;
-      height: 100%;
+      cursor: zoom-in
     }
 
-    .video-controls {
+    /* The screen sits exactly in the middle of the body: the same bezel on
+       all four sides (padding; the <img> is a block, so no line gap below
+       it) and concentric corners, the screen's radius being the body's
+       minus its border and the bezel. */
+    .device-phone {
+      --phone-r: 24px;
+      --bezel: 6px;
       position: absolute;
-      right: 16px;
-      bottom: 16px;
-      display: flex;
-      gap: 10px;
+      right: 0;
+      bottom: 0;
+      width: 23%;
+      padding: var(--bezel);
+      box-sizing: border-box;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .16);
+      border-radius: var(--phone-r);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
+      animation-name: stage-phone-in
     }
 
-    .video-controls[hidden] {
+    .device-phone img {
+      border-radius: calc(var(--phone-r) - var(--bezel) - 1px)
+    }
+
+    /* The window flattens into place over the first 40% of the stage; the
+       phone arrives from 30% to 75%; the rest holds the composition. */
+    @keyframes stage-desktop-in {
+      0% {
+        transform: translateY(7%) rotateX(16deg) scale(.9);
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
+      }
+
+      40%,
+      100% {
+        transform: translateY(0) rotateX(0) scale(1)
+      }
+    }
+
+    @keyframes stage-phone-in {
+      0%,
+      30% {
+        opacity: 0;
+        transform: translate(18%, 60%) rotate(7deg);
+        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
+      }
+
+      48% {
+        opacity: 1
+      }
+
+      75%,
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0)
+      }
+    }
+
+    /* Wide: the whole stage, copy included, has to fit one screen while it
+       holds still, so the copy column is set tighter than a normal section. */
+    @media(min-width:900px) {
+      .hero .stage-sticky {
+        padding: 28px 0
+      }
+
+      .hero h1 {
+        font-size: clamp(2.2rem, 3.4vw, 3.1rem);
+        margin-bottom: 14px
+      }
+
+      .hero p.lede {
+        margin-bottom: 20px;
+        font-size: 1.05rem
+      }
+
+      .hero .cta {
+        gap: 10px
+      }
+
+      .hero .cta .btn {
+        padding: 10px 16px;
+        font-size: .95rem
+      }
+
+      .hero-links {
+        margin-top: 14px
+      }
+
+      .hero .cta-note {
+        margin-top: 10px;
+        font-size: .78rem
+      }
+    }
+
+    /* Phone width: copy on top, the window and then the phone stacked under
+       it (nothing overlaps). The devices block is what holds still. */
+    @media(max-width:899px) {
+      .hero {
+        --stage-len: 240vh
+      }
+
+      .hero .stage-sticky {
+        display: block;
+        padding: 40px 0 32px
+      }
+
+      .hero-inner {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 32px;
+        text-align: center
+      }
+
+      .cta,
+      .hero-links {
+        justify-content: center
+      }
+
+      /* The lede is a 60ch box: centre the box, not only its lines. */
+      .hero p.lede {
+        margin-left: auto;
+        margin-right: auto
+      }
+
+      .stage-devices {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        padding: 0
+      }
+
+      .device-desktop {
+        width: 100%
+      }
+
+      .device-phone {
+        --phone-r: 18px;
+        --bezel: 4px;
+        position: relative;
+        width: 34%
+      }
+    }
+
+    /* With a driver at phone width the box that holds still is the devices
+       block, so the copy above it scrolls away first. Its containing block
+       has to be as tall as the stage for it to travel. */
+    @media (max-width: 899px) and (prefers-reduced-motion: no-preference) and (min-height: 560px) {
+      @supports (animation-timeline: view()) {
+        [data-stage].hero .stage-sticky {
+          position: relative;
+          top: auto;
+          min-height: var(--stage-len)
+        }
+
+        [data-stage].hero .hero-inner {
+          display: block;
+          min-height: calc(var(--stage-len) - 72px)
+        }
+
+        [data-stage].hero .stage-devices {
+          position: sticky;
+          top: calc(var(--nav-h) + 12px);
+          margin-top: 32px
+        }
+      }
+
+      .hero.stage-js .stage-sticky {
+        position: relative;
+        top: auto;
+        min-height: var(--stage-len)
+      }
+
+      .hero.stage-js .hero-inner {
+        display: block;
+        min-height: calc(var(--stage-len) - 72px)
+      }
+
+      .hero.stage-js .stage-devices {
+        position: sticky;
+        top: calc(var(--nav-h) + 12px);
+        margin-top: 32px
+      }
+    }
+
+    /* ---------- moments ---------- */
+    .moment h2 {
+      font-size: clamp(1.9rem, 4vw, 2.8rem)
+    }
+
+    /* ---------- Share nearby (a scroll stage) ----------
+       Without a driver: a strip of four cards, each with the computer's
+       capture and the phone's over its lower left corner. With one: the
+       four steps stacked in one place on the stage, each step's devices
+       fading in over the one before and its caption replacing the last.
+       Steps start at 34%, 56% and 78% of the stage: the header above the
+       sticky box takes the first ~15% of the scroll before it holds. */
+    .share-seq {
+      list-style: none;
+      padding: 0;
+      margin: 44px 0 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      text-align: left;
+      counter-reset: step
+    }
+
+    .share-step {
+      min-width: 0;
+      counter-increment: step;
+      background: linear-gradient(180deg, var(--panel), rgba(21, 16, 41, .45));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px
+    }
+
+    .share-step::before {
+      content: counter(step);
+      display: block;
+      color: var(--gold);
+      font-weight: 800;
+      margin-bottom: 10px
+    }
+
+    .share-shots {
+      position: relative;
+      padding-bottom: 14%;
+      margin-bottom: 16px
+    }
+
+    /* The computer's capture is the app's own window (header bar and window
+       buttons included): its frame is the border, the corners and the
+       shadow, never a second title bar. */
+    .share-window {
+      display: grid;
+      width: 84%;
+      margin-left: auto;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .6)
+    }
+
+    /* The capture received and the library after it share one place. */
+    .share-window img,
+    .share-lib {
+      grid-area: 1 / 1
+    }
+
+    /* The screen sits exactly in the middle of the body (the same bezel on
+       all four sides) with concentric corners: the screen's radius is the
+       body's minus its border and the bezel. Sizes change per layout
+       through --phone-r and --bezel only. */
+    .share-phone {
+      --phone-r: 12px;
+      --bezel: 3px;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 27%;
+      padding: var(--bezel);
+      box-sizing: border-box;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, .16);
+      border-radius: var(--phone-r);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .65)
+    }
+
+    .share-phone img {
+      width: 100%;
+      border-radius: calc(var(--phone-r) - var(--bezel) - 1px)
+    }
+
+    .share-cap h3 {
+      font-size: 1rem
+    }
+
+    .share-cap p {
+      color: var(--muted);
+      font-size: .94rem;
+      margin: 0
+    }
+
+    .share-link,
+    .share-meter {
       display: none
     }
 
-    .vbtn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-width: 44px;
-      height: 44px;
-      padding: 0 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, .22);
-      background: rgba(8, 6, 15, .72);
-      backdrop-filter: blur(8px);
-      color: var(--text);
-      font: inherit;
-      font-size: .9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s ease, border-color .15s ease;
+    @media(max-width:900px) {
+      .share-seq {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+      }
     }
 
-    .vbtn:hover {
-      background: rgba(139, 92, 246, .35);
-      border-color: rgba(139, 92, 246, .8)
+    @media(max-width:520px) {
+      .share-seq {
+        grid-template-columns: minmax(0, 1fr)
+      }
     }
 
-    .vbtn:focus-visible {
-      outline: 2px solid var(--gold);
-      outline-offset: 2px
+    /* Each animated layer names its keyframes with a single class, so the
+       short-screen rule below (an id) can switch them all off. */
+    .share-in-2 { animation-name: share-in-2 }
+    .share-in-3 { animation-name: share-in-3 }
+    .share-in-4 { animation-name: share-in-4 }
+    .share-settle-2 { animation-name: share-settle-2 }
+    .share-settle-3 { animation-name: share-settle-3 }
+    .share-settle-4 { animation-name: share-settle-4 }
+    .share-lib-in { animation-name: share-lib-in }
+    .share-cap-1 { animation-name: share-cap-1 }
+    .share-cap-2 { animation-name: share-cap-2 }
+    .share-cap-3 { animation-name: share-cap-3 }
+    .share-cap-4 { animation-name: share-cap-4 }
+    .share-done { animation-name: share-done }
+    .share-now { animation-name: share-now }
+
+    @keyframes share-in-2 {
+      0%, 34% { opacity: 0 }
+      40%, 100% { opacity: 1 }
     }
 
-    .vbtn svg {
-      width: 20px;
-      height: 20px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round
+    @keyframes share-in-3 {
+      0%, 56% { opacity: 0 }
+      62%, 100% { opacity: 1 }
     }
 
-    .vbtn .i-play {
-      fill: currentColor
+    @keyframes share-in-4 {
+      0%, 78% { opacity: 0 }
+      84%, 100% { opacity: 1 }
     }
 
-    /* The sound button is the one people are invited to press: gold, with
-       its label, until the sound is on. */
-    .vbtn-sound {
-      padding: 0 18px 0 14px;
+    /* Step 4's second half: the received dialog gives way to the library. */
+    @keyframes share-lib-in {
+      0%, 90% { opacity: 0 }
+      95%, 100% { opacity: 1 }
+    }
+
+    /* The phone settles 12px as its screen changes; the computer holds. */
+    @keyframes share-settle-2 {
+      0%, 34% { transform: translateY(12px) }
+      40%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-3 {
+      0%, 56% { transform: translateY(12px) }
+      62%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes share-settle-4 {
+      0%, 78% { transform: translateY(12px) }
+      84%, 100% { transform: translateY(0) }
+    }
+
+    /* A caption leaves before the next one rises 8px into place. */
+    @keyframes share-cap-1 {
+      0%, 30% { opacity: 1 }
+      34%, 100% { opacity: 0 }
+    }
+
+    @keyframes share-cap-2 {
+      0%, 34% { opacity: 0; transform: translateY(8px) }
+      39%, 52% { opacity: 1; transform: translateY(0) }
+      56%, 100% { opacity: 0; transform: translateY(0) }
+    }
+
+    @keyframes share-cap-3 {
+      0%, 56% { opacity: 0; transform: translateY(8px) }
+      61%, 74% { opacity: 1; transform: translateY(0) }
+      78%, 100% { opacity: 0; transform: translateY(0) }
+    }
+
+    @keyframes share-cap-4 {
+      0%, 78% { opacity: 0; transform: translateY(8px) }
+      83%, 100% { opacity: 1; transform: translateY(0) }
+    }
+
+    /* The step indicator: the steps done fill in white, the current one is
+       the gold quarter sliding along. */
+    @keyframes share-done {
+      0%, 34% { transform: scaleX(0) }
+      37%, 56% { transform: scaleX(.25) }
+      59%, 78% { transform: scaleX(.5) }
+      81%, 100% { transform: scaleX(.75) }
+    }
+
+    @keyframes share-now {
+      0%, 34% { transform: translateX(0) }
+      37%, 56% { transform: translateX(100%) }
+      59%, 78% { transform: translateX(200%) }
+      81%, 100% { transform: translateX(300%) }
+    }
+
+    /* The stage layout. The devices are sized from one height, --dh, which
+       fits the screen (with the caption and the indicator under it) and the
+       width (phone, the link mark and the window side by side). The same
+       rules twice: under the CSS driver and under the script's .stage-js. */
+    #share {
+      --stage-len: 400vh;
+      --dh: min(488px, calc(100vh - var(--nav-h) - 230px), calc((100vw - 150px) / 1.94));
+      --ww: calc(var(--dh) * 1.475);
+      --ph: var(--dh)
+    }
+
+    @media (prefers-reduced-motion: no-preference) and (min-height: 640px) {
+      @supports (animation-timeline: view()) {
+        #share[data-stage] {
+          padding-bottom: 0
+        }
+
+        #share[data-stage] .share-stage {
+          min-height: calc(100vh - var(--nav-h));
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 24px 0;
+          background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
+        }
+
+        #share[data-stage] .share-seq {
+          grid-template-columns: minmax(0, 1fr);
+          margin: 0;
+          text-align: center
+        }
+
+        #share[data-stage] .share-step {
+          grid-area: 1 / 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: none;
+          border: 0;
+          padding: 0
+        }
+
+        #share[data-stage] .share-step::before {
+          content: none
+        }
+
+        #share[data-stage] .share-shots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 28px;
+          padding: 0;
+          margin: 0
+        }
+
+        #share[data-stage] .share-window {
+          flex: none;
+          width: var(--ww);
+          margin: 0;
+          border-radius: 14px
+        }
+
+        #share[data-stage] .share-phone {
+          --phone-r: 34px;
+          --bezel: 8px;
+          position: relative;
+          flex: none;
+          width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+        }
+
+        #share[data-stage] .share-step+.share-step .share-window,
+        #share[data-stage] .share-step+.share-step .share-phone {
+          box-shadow: none
+        }
+
+        #share[data-stage] .share-link {
+          display: flex;
+          gap: 7px
+        }
+
+        #share[data-stage] .share-cap {
+          max-width: 46ch;
+          margin-top: 26px
+        }
+
+        #share[data-stage] .share-cap h3 {
+          font-size: 1.375rem;
+          font-weight: 600
+        }
+
+        #share[data-stage] .share-cap p {
+          font-size: 1.06rem
+        }
+
+        #share[data-stage] .share-meter {
+          display: block
+        }
+      }
+
+      #share.stage-js {
+        padding-bottom: 0
+      }
+
+      #share.stage-js .share-stage {
+        min-height: calc(100vh - var(--nav-h));
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 24px 0;
+        background: radial-gradient(640px 340px at 50% 42%, rgba(139, 92, 246, .2), transparent 70%)
+      }
+
+      #share.stage-js .share-seq {
+        grid-template-columns: minmax(0, 1fr);
+        margin: 0;
+        text-align: center
+      }
+
+      #share.stage-js .share-step {
+        grid-area: 1 / 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: none;
+        border: 0;
+        padding: 0
+      }
+
+      #share.stage-js .share-step::before {
+        content: none
+      }
+
+      #share.stage-js .share-shots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 0;
+        margin: 0
+      }
+
+      #share.stage-js .share-window {
+        flex: none;
+        width: var(--ww);
+        margin: 0;
+        border-radius: 14px
+      }
+
+      #share.stage-js .share-phone {
+        --phone-r: 34px;
+        --bezel: 8px;
+        position: relative;
+        flex: none;
+        width: calc((var(--ph) - 2 * var(--bezel) - 2px) * .4615 + 2 * var(--bezel) + 2px)
+      }
+
+      #share.stage-js .share-step+.share-step .share-window,
+      #share.stage-js .share-step+.share-step .share-phone {
+        box-shadow: none
+      }
+
+      #share.stage-js .share-link {
+        display: flex;
+        gap: 7px
+      }
+
+      #share.stage-js .share-cap {
+        max-width: 46ch;
+        margin-top: 26px
+      }
+
+      #share.stage-js .share-cap h3 {
+        font-size: 1.375rem;
+        font-weight: 600
+      }
+
+      #share.stage-js .share-cap p {
+        font-size: 1.06rem
+      }
+
+      #share.stage-js .share-meter {
+        display: block
+      }
+    }
+
+    .share-link i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gold)
+    }
+
+    .share-link i:nth-child(2) {
+      opacity: .6
+    }
+
+    .share-link i:nth-child(3) {
+      opacity: .3
+    }
+
+    /* Four segments: a white track, the steps done over it, the gold one. */
+    .share-meter {
+      position: relative;
+      width: min(240px, 60%);
+      height: 4px;
+      margin: 26px auto 0;
+      overflow: hidden;
+      -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
+      mask-image: repeating-linear-gradient(90deg, #000 0 calc(25% - 6px), transparent calc(25% - 6px) 25%);
+      background: rgba(255, 255, 255, .12)
+    }
+
+    .share-done,
+    .share-now {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0
+    }
+
+    .share-done {
+      right: 0;
+      background: rgba(255, 255, 255, .25);
+      transform-origin: 0 50%;
+      transform: scaleX(.75)
+    }
+
+    .share-now {
+      width: 25%;
       background: var(--gold);
-      border-color: var(--gold);
-      color: #1a1300
+      transform: translateX(300%)
     }
 
-    .vbtn-sound:hover {
-      background: #ffe066;
-      border-color: #ffe066
-    }
-
-    .vbtn-sound[aria-pressed="true"] {
-      background: rgba(8, 6, 15, .72);
-      border-color: rgba(255, 255, 255, .22);
-      color: var(--text)
-    }
-
-    #promoPlay .i-play,
-    #promoPlay.paused .i-pause,
-    .vbtn-sound .i-sound,
-    .vbtn-sound[aria-pressed="true"] .i-muted {
-      display: none
-    }
-
-    #promoPlay.paused .i-play,
-    .vbtn-sound[aria-pressed="true"] .i-sound {
-      display: block
-    }
-
-    /* On a phone the video is too short to carry buttons over it: they move
-       to a strip of their own underneath. */
-    @media(max-width:560px) {
-      .shot-video {
-        aspect-ratio: auto
-      }
-
-      .shot-video video {
-        height: auto;
-        aspect-ratio: 16 / 9
-      }
-
-      .video-controls {
-        position: static;
-        justify-content: flex-end;
-        padding: 10px;
-        border-top: 1px solid rgba(255, 255, 255, .1)
-      }
-
-      .vbtn-sound span {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0)
-      }
-
-      .vbtn-sound {
-        padding: 0 12px
+    /* Phone width: the window on top at full width, the phone under it, a
+       shorter stage. The phone takes the height the window and the caption
+       leave, within 160-380px; on a wide but short screen (a narrow desktop
+       window) the window narrows too, so the smallest phone still fits. */
+    @media(max-width:899px) {
+      #share {
+        --stage-len: 300vh;
+        --wh: min(calc((100vw - 48px) / 1.475), calc(100vh - var(--nav-h) - 410px));
+        --ph: clamp(160px, calc(100vh - var(--nav-h) - var(--wh) - 250px), 380px);
+        --ww: min(100%, calc((100vh - var(--nav-h) - 410px) * 1.475))
       }
     }
 
-    .hero-pad {
-      height: 130px
+    @media (prefers-reduced-motion: no-preference) and (min-height: 640px) and (max-width: 899px) {
+      @supports (animation-timeline: view()) {
+        #share[data-stage] .share-shots {
+          flex-direction: column-reverse;
+          gap: 14px;
+          width: 100%
+        }
+
+        #share[data-stage] .share-phone {
+          --phone-r: 26px;
+          --bezel: 6px
+        }
+
+        #share[data-stage] .share-link {
+          display: none
+        }
+
+        #share[data-stage] .share-cap {
+          margin-top: 16px
+        }
+
+        #share[data-stage] .share-cap h3 {
+          font-size: 1.15rem
+        }
+
+        #share[data-stage] .share-cap p {
+          font-size: .98rem
+        }
+
+        #share[data-stage] .share-meter {
+          margin-top: 16px
+        }
+      }
+
+      #share.stage-js .share-shots {
+        flex-direction: column-reverse;
+        gap: 14px;
+        width: 100%
+      }
+
+      #share.stage-js .share-phone {
+        --phone-r: 26px;
+        --bezel: 6px
+      }
+
+      #share.stage-js .share-link {
+        display: none
+      }
+
+      #share.stage-js .share-cap {
+        margin-top: 16px
+      }
+
+      #share.stage-js .share-cap h3 {
+        font-size: 1.15rem
+      }
+
+      #share.stage-js .share-cap p {
+        font-size: .98rem
+      }
+
+      #share.stage-js .share-meter {
+        margin-top: 16px
+      }
+    }
+
+    /* The engine moves stages from 560px of height at phone width; this one
+       needs 640px for the window, the phone and the caption at once, so
+       below that it stays the strip of cards. */
+    @media (max-height: 639px) {
+      #share[data-stage] {
+        min-height: 0
+      }
+
+      #share .stage-sticky {
+        position: relative;
+        top: auto
+      }
+
+      #share [data-stage-layer] {
+        animation: none
+      }
+    }
+
+    /* Everything else: the facts of the old sections, compact. */
+    #more .grid {
+      text-align: left
+    }
+
+    #more .card.wide {
+      grid-column: 1 / -1
+    }
+
+    #more .card .lede {
+      font-size: .98rem;
+      max-width: none
+    }
+
+    #more .systems {
+      justify-content: flex-start;
+      margin-top: 18px
+    }
+
+    /* The promo video, only when asked for: nothing is fetched before the
+       click, and closing it stops the sound. */
+    .watch-box video {
+      max-width: min(1100px, 100%);
+      max-height: 86vh;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      background: #000
     }
 
     /* ---------- feature grid ---------- */
@@ -544,40 +1240,6 @@
       color: var(--muted);
       font-size: .94rem;
       margin: 0
-    }
-
-    .ico {
-      width: 42px;
-      height: 42px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      background: rgba(139, 92, 246, .16);
-      border: 1px solid rgba(139, 92, 246, .32);
-      margin-bottom: 16px;
-      font-size: 1.25rem;
-    }
-
-    /* ---------- split ---------- */
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 56px;
-      align-items: center
-    }
-
-    @media(max-width:860px) {
-      .split {
-        grid-template-columns: 1fr;
-        gap: 36px
-      }
-    }
-
-    .split img,
-    .frame {
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, .55);
     }
 
     ul.checks {
@@ -650,29 +1312,27 @@
       box-shadow: 0 24px 60px rgba(0, 0, 0, .5)
     }
 
-    .gallery.thirds {
-      grid-template-columns: repeat(3, 1fr)
+    /* Android: one phone in portrait beside two in landscape. */
+    .gallery.skins {
+      grid-template-columns: 1fr 2fr;
+      align-items: end
+    }
+
+    .gallery.skins .landscapes {
+      display: grid;
+      gap: 18px
+    }
+
+    .gallery.skins .portrait img {
+      max-width: 300px;
+      margin: 0 auto;
+      border-radius: 22px
     }
 
     @media(max-width:700px) {
-      .gallery.thirds {
+      .gallery.skins {
         grid-template-columns: 1fr
       }
-    }
-
-    /* Android: phone screens, four to a row (two on a phone) */
-    .gallery.phones {
-      grid-template-columns: repeat(4, 1fr)
-    }
-
-    @media(max-width:700px) {
-      .gallery.phones {
-        grid-template-columns: 1fr 1fr
-      }
-    }
-
-    .gallery.phones img {
-      border-radius: 22px
     }
 
     figure {
@@ -924,10 +1584,15 @@
       width: 24px
     }
 
+    /* <picture> wraps the screenshots for AVIF/WebP (tools/build_site.py);
+       it must not add a box of its own to the layout. */
+    picture {
+      display: contents
+    }
+
     /* Zoomable screenshots -> lightbox */
-    .shot img,
+    .stage-devices img,
     .gallery img,
-    .split img,
     .carousel-track img {
       cursor: zoom-in;
       transition: transform .15s ease
@@ -1250,18 +1915,20 @@
     }
   </style>
   <script src="lang.js"></script>
+  <link rel="preload" as="image" type="image/avif" imagesrcset="assets/desktop/grid-sfc-640.avif 640w, assets/desktop/grid-sfc-1280.avif 1280w, assets/desktop/grid-sfc-1920.avif 1920w, assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" fetchpriority="high" />
 </head>
 
 <body>
 
   <header>
     <div class="wrap nav">
-      <a class="brand" href="#top"><img src="assets/logo.png" alt="" /> OpenEmux</a>
+      <a class="brand" href="#top"><img src="assets/logo-128.png" width="30" height="30" alt="" /> OpenEmux</a>
       <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#systems">Systems</a>
-        <a href="#screenshots">Screenshots</a>
+        <a href="#share">Share nearby</a>
+        <a href="#consoles">Cartridges</a>
+        <a href="#android">Android</a>
         <a href="#install">Install</a>
+        <a href="#more">More</a>
         <a href="manual/">Manual</a>
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
         <a href="https://www.reddit.com/r/OpenEmux/">Community</a>
@@ -1284,198 +1951,165 @@
     </div>
   </header>
 
-  <!-- HERO -->
-  <section class="hero" id="top">
-    <div class="stars"></div>
-    <div class="wrap hero-inner">
-      <img class="hero-logo" src="assets/logo.png" alt="OpenEmux logo" />
-      <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#android"><span class="beta">New</span> OpenEmux now runs on Android →</a>
-      <h1>A simple way to play<br /><span class="grad">your retro collection.</span></h1>
-      <p class="lede">OpenEmux is a free and open-source emulation frontend. Add the games you already have, and OpenEmux organizes them by console with cover art and opens each one with the controls and shaders already set, without digging through settings menus. Linux is its main platform; Windows is supported too, in beta.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
+  <main>
+  <!-- OPENING: the desktop library, the phone in front of it. A scroll
+       stage (see "scroll stages" in the CSS): the window settles into
+       place, then the phone lands over its lower right corner. -->
+  <section class="hero" id="top" data-stage>
+    <div class="stage-sticky">
+      <div class="stars"></div>
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <h1>Your retro collection,<br /><span class="grad">ready to play.</span></h1>
+          <p class="lede">Add the games you own. OpenEmux sorts them by console, with covers, on Linux, Windows and Android.</p>
+          <div class="cta" id="downloads">
+            <a class="btn btn-primary" data-os="linux" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
           Linux</a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
+            <a class="btn btn-ghost" data-os="windows" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Download for
           Windows <span class="beta">Beta</span></a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Download for
+            <a class="btn btn-ghost" data-os="android" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Download for
           Android</a>
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">★ View on GitHub</a>
-      </div>
-      <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak on Linux ·
+          </div>
+          <p class="hero-links">
+            <a href="#install">How to install ↓</a>
+            <!-- The promo video, on demand only: without JavaScript the link is
+                 the file itself; with it, a dialog that loads nothing before the
+                 click. -->
+            <a id="watchVideo" href="assets/openemux-promo.mp4">▶ Watch the video (45 s)</a>
+          </p>
+          <p class="cta-note">Free and open source · MIT licensed · AppImage, .deb, .rpm &amp; Flatpak on Linux ·
         installer &amp; portable ZIP on Windows · APK on Android (GPLv3)</p>
-      <p class="cta-note">Inspired by <a href="https://openemu.org/">OpenEmu</a> for macOS, but not a fork: a separate codebase with RetroArch as the emulation backend. <a href="#thanks">More about that</a>.</p>
-      <!-- Promo video: plays muted on its own (browsers refuse sound without a
-           click), loops while it is on screen, and stays still for people who
-           asked for reduced motion. The native controls are the no-JS fallback. -->
-      <div class="shot shot-video" id="promo">
-        <video id="promoVideo" controls muted loop playsinline preload="metadata"
-          poster="assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="OpenEmux in 45 seconds: the library, the cartridge view and a game running on the desktop, then the Android app with its shelf, controller skins, portrait and landscape and the Nintendo DS">
-          <source src="assets/openemux-promo.mp4" type="video/mp4" />
-        </video>
-        <div class="video-controls" hidden>
-          <button type="button" class="vbtn" id="promoPlay" aria-label="Pause video"
-            data-play="Play video" data-pause="Pause video">
-            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
-          </button>
-          <button type="button" class="vbtn vbtn-sound" id="promoSound" aria-pressed="false"
-            data-on="Sound on" data-off="Sound off">
-            <svg class="i-muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6" /></svg>
-            <svg class="i-sound" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" /></svg>
-            <span>Sound on</span>
-          </button>
+          <p class="cta-note">Inspired by <a href="https://openemu.org/">OpenEmu</a> for macOS, but not a fork: a separate codebase with RetroArch as the emulation backend. <a href="#thanks">More about that</a>.</p>
+        </div>
+        <div class="stage-devices">
+          <div class="device-desktop" data-stage-layer>
+            <picture><source type="image/avif" srcset="assets/desktop/grid-sfc-640.avif 640w, assets/desktop/grid-sfc-1280.avif 1280w, assets/desktop/grid-sfc-1920.avif 1920w, assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><source type="image/webp" srcset="assets/desktop/grid-sfc-640.webp 640w, assets/desktop/grid-sfc-1280.webp 1280w, assets/desktop/grid-sfc-1920.webp 1920w, assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><img src="assets/desktop/grid-sfc.png" alt="OpenEmux on the desktop, the Super Nintendo library with its covers" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="assets/desktop/grid-sfc-2640.webp" /></picture>
+          </div>
+          <div class="device-phone" data-stage-layer>
+            <picture><source type="image/avif" srcset="assets/android/library-snes-640.avif 640w, assets/android/library-snes-1280.avif 1280w, assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><source type="image/webp" srcset="assets/android/library-snes-640.webp 640w, assets/android/library-snes-1280.webp 1280w, assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><img src="assets/android/library-snes.png" alt="OpenEmux on Android, the Super Nintendo library" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="assets/android/library-snes-1440.webp" /></picture>
+          </div>
         </div>
       </div>
     </div>
-    <div class="hero-pad"></div>
   </section>
 
-  <!-- FEATURES -->
-  <section id="features">
+  <!-- SHARE NEARBY: a scroll stage (see "scroll stages" in the CSS). The
+       phone and the computer side by side while the real captures step
+       through one transfer of Robot Man X: pick, the same code on both,
+       progress, the game in the computer's library. Without a driver
+       (reduced motion, no JavaScript, short screens) the same list is a
+       strip of four static cards. -->
+  <section class="moment share" id="share" data-stage>
     <div class="wrap center">
-      <span class="eyebrow">Features</span>
-      <h2>What OpenEmux does</h2>
-      <p class="lede">Under the hood, the emulation is done by RetroArch. It is powerful, but its menus and settings can be a lot for someone who just wants to play. OpenEmux takes care of what is around it: organizing your games, downloading the cores, and setting up controls and shaders.</p>
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🎨</div>
-          <h3>Your games, by console</h3>
-          <p>The games you add are grouped by console, with cover art downloaded from the libretro thumbnail archive.</p>
-        </div>
-        <div class="card">
-          <div class="ico">✨</div>
-          <h3>Ready on first launch</h3>
-          <p>The first time it opens, OpenEmux creates its configuration and downloads the cores your consoles need, usually in about ten seconds. The rest keep downloading in the background.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          <h3>Controls per console</h3>
-          <p>Set keyboard and gamepad buttons for each console in one panel. OpenEmux passes them to RetroArch when a game starts.</p>
-        </div>
-        <div class="card">
-          <div class="ico">📺</div>
-          <h3>Shaders per console</h3>
-          <p>Choose a CRT or scanline shader for each console from a short list, without going through RetroArch's shader menu.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🐧</div>
-          <h3>Linux first</h3>
-          <p>Linux is OpenEmux's main platform. The app is built with GTK4 and Adwaita, follows the GNOME guidelines, and every change is tested on Linux first. Windows is supported too, with a build still in beta.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🔍</div>
-          <h3>BIOS checklist</h3>
-          <p>Shows which BIOS files each console needs and which ones you already have, so a missing file does not end up as a game that silently fails to start.</p>
-        </div>
+      <span class="eyebrow">Share nearby</span>
+      <h2>From one device to another.</h2>
+      <p class="lede">On the same Wi-Fi, send a game from your computer to your phone, or back. No account, no cloud, no cable.</p>
+    </div>
+    <div class="stage-sticky share-stage">
+      <div class="wrap">
+      <ol class="share-seq" aria-label="How it works">
+        <li class="share-step">
+          <div class="share-shots">
+            <div class="share-phone">
+              <picture><source type="image/avif" srcset="assets/share/phone-1-pick-640.avif 640w, assets/share/phone-1-pick-1280.avif 1280w, assets/share/phone-1-pick-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-1-pick-640.webp 640w, assets/share/phone-1-pick-1280.webp 1280w, assets/share/phone-1-pick-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-1-pick.png" alt="OpenEmux on Android, Share Nearby: Robot Man X ready to send and Linux Desktop found on the network" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-1-pick-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-1-ready-640.avif 640w, assets/share/desktop-1-ready-1280.avif 1280w, assets/share/desktop-1-ready-1920.avif 1920w, assets/share/desktop-1-ready-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-1-ready-640.webp 640w, assets/share/desktop-1-ready-1280.webp 1280w, assets/share/desktop-1-ready-1920.webp 1920w, assets/share/desktop-1-ready-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-1-ready.png" alt="OpenEmux on the desktop, Receive Games: ready to receive as Linux Desktop" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-1-ready-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-1" data-stage-layer>
+            <h3>Pick a game on your phone.</h3>
+          <p>Your computer shows up in the list by itself.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-2" data-stage-layer>
+            <div class="share-phone share-settle-2" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-2-code-640.avif 640w, assets/share/phone-2-code-1280.avif 1280w, assets/share/phone-2-code-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-2-code-640.webp 640w, assets/share/phone-2-code-1280.webp 1280w, assets/share/phone-2-code-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-2-code.png" alt="OpenEmux on Android waiting for Linux Desktop to accept, verification code 506 807" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-2-code-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-2-offer-640.avif 640w, assets/share/desktop-2-offer-1280.avif 1280w, assets/share/desktop-2-offer-1920.avif 1920w, assets/share/desktop-2-offer-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-2-offer-640.webp 640w, assets/share/desktop-2-offer-1280.webp 1280w, assets/share/desktop-2-offer-1920.webp 1920w, assets/share/desktop-2-offer-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-2-offer.png" alt="OpenEmux on the desktop, Incoming Games: Android Phone wants to send Robot Man X, verification code 506 807" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-2-offer-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-2" data-stage-layer>
+            <h3>The same code shows on both screens.</h3>
+          <p>If they match, accept on the computer.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-3" data-stage-layer>
+            <div class="share-phone share-settle-3" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-3-progress-640.avif 640w, assets/share/phone-3-progress-1280.avif 1280w, assets/share/phone-3-progress-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-3-progress-640.webp 640w, assets/share/phone-3-progress-1280.webp 1280w, assets/share/phone-3-progress-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-3-progress.png" alt="OpenEmux on Android sending Robot Man X to Linux Desktop, the progress bar part way" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-3-progress-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-3-progress-640.avif 640w, assets/share/desktop-3-progress-1280.avif 1280w, assets/share/desktop-3-progress-1920.avif 1920w, assets/share/desktop-3-progress-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-3-progress-640.webp 640w, assets/share/desktop-3-progress-1280.webp 1280w, assets/share/desktop-3-progress-1920.webp 1920w, assets/share/desktop-3-progress-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-3-progress.png" alt="OpenEmux on the desktop receiving a game from Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-3-progress-2236.webp" /></picture>
+            </div>
+          </div>
+          <div class="share-cap share-cap-3" data-stage-layer>
+            <h3>The game goes straight over your Wi-Fi.</h3>
+          <p>Nothing leaves your home network.</p>
+          </div>
+        </li>
+        <li class="share-step">
+          <div class="share-shots share-in-4" data-stage-layer>
+            <div class="share-phone share-settle-4" data-stage-layer>
+              <picture><source type="image/avif" srcset="assets/share/phone-4-sent-640.avif 640w, assets/share/phone-4-sent-1280.avif 1280w, assets/share/phone-4-sent-1440.avif 1440w" sizes="(max-width: 899px) 176px, 236px" /><source type="image/webp" srcset="assets/share/phone-4-sent-640.webp 640w, assets/share/phone-4-sent-1280.webp 1280w, assets/share/phone-4-sent-1440.webp 1440w" sizes="(max-width: 899px) 176px, 236px" /><img src="assets/share/phone-4-sent.png" alt="OpenEmux on Android: 1 game sent, Linux Desktop has it now" width="1440" height="3120" loading="lazy" decoding="async" data-full="assets/share/phone-4-sent-1440.webp" /></picture>
+            </div>
+            <span class="share-link" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="share-window">
+              <picture><source type="image/avif" srcset="assets/share/desktop-4-received-640.avif 640w, assets/share/desktop-4-received-1280.avif 1280w, assets/share/desktop-4-received-1920.avif 1920w, assets/share/desktop-4-received-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-4-received-640.webp 640w, assets/share/desktop-4-received-1280.webp 1280w, assets/share/desktop-4-received-1920.webp 1920w, assets/share/desktop-4-received-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-4-received.png" alt="OpenEmux on the desktop: 1 game received from Android Phone" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-4-received-2236.webp" /></picture>
+              <div class="share-lib share-lib-in" data-stage-layer>
+                <picture><source type="image/avif" srcset="assets/share/desktop-4-library-640.avif 640w, assets/share/desktop-4-library-1280.avif 1280w, assets/share/desktop-4-library-1920.avif 1920w, assets/share/desktop-4-library-2236.avif 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><source type="image/webp" srcset="assets/share/desktop-4-library-640.webp 640w, assets/share/desktop-4-library-1280.webp 1280w, assets/share/desktop-4-library-1920.webp 1920w, assets/share/desktop-4-library-2236.webp 2236w" sizes="(max-width: 899px) calc(100vw - 48px), 720px" /><img src="assets/share/desktop-4-library.png" alt="OpenEmux on the desktop, the Super Nintendo library with Robot Man X in it" width="2236" height="1516" loading="lazy" decoding="async" data-full="assets/share/desktop-4-library-2236.webp" /></picture>
+              </div>
+            </div>
+          </div>
+          <div class="share-cap share-cap-4" data-stage-layer>
+            <h3>It is in your library now.</h3>
+          <p>Open it and play on the big screen.</p>
+          </div>
+        </li>
+      </ol>
+      <div class="share-meter" aria-hidden="true">
+        <span class="share-done" data-stage-layer></span>
+        <span class="share-now" data-stage-layer></span>
+      </div>
       </div>
     </div>
   </section>
 
-  <!-- PHILOSOPHY -->
-  <section id="philosophy">
-    <div class="wrap split">
-      <div>
-        <span class="eyebrow">About the games</span>
-        <h2>Play the games you own</h2>
-        <p class="lede">OpenEmux is a frontend for RetroArch, made so that someone who just wants to play does not have to learn RetroArch's menus first. It is <strong>not</strong> a source of games: it ships no games, no ROMs and no BIOS files, and never will.</p>
-        <ul class="checks">
-          <li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of
-            games you purchased.</li>
-          <li><strong>Piracy isn't what this is for.</strong> Downloading copyrighted games you don't own is illegal in
-            most countries.</li>
-          <li><strong>Emulation helps preserve history.</strong> A lot of gaming's art, music and design lives on aging hardware. Keeping it playable is worthwhile, and it works best when it respects the people who made these games.</li>
-        </ul>
-      </div>
-      <div>
-        <img src="assets/openemux-all.png" alt="OpenEmux — every console in the library" />
-      </div>
-    </div>
-  </section>
-
-  <!-- SYSTEMS -->
-  <section id="systems">
+  <!-- CARTRIDGES ON THE DESKTOP -->
+  <section class="moment" id="consoles">
     <div class="wrap center">
-      <span class="eyebrow">31 systems</span>
-      <h2>Supported systems</h2>
-      <p class="lede">Each system runs on RetroArch's own cores, and has its own cover art, controls and shader settings in OpenEmux.</p>
-      <div class="systems">
-        <span class="chip">Nintendo (NES)</span>
-        <span class="chip">Famicom Disk System</span>
-        <span class="chip">Super Nintendo</span>
-        <span class="chip">Nintendo 64</span>
-        <span class="chip">GameCube</span>
-        <span class="chip">Game Boy</span>
-        <span class="chip">Game Boy Color</span>
-        <span class="chip">Game Boy Advance</span>
-        <span class="chip">Nintendo DS</span>
-        <span class="chip">Virtual Boy</span>
-        <span class="chip">Mega Drive</span>
-        <span class="chip">Sega Master System</span>
-        <span class="chip">Mega CD</span>
-        <span class="chip">Sega 32X</span>
-        <span class="chip">Sega Saturn</span>
-        <span class="chip">Game Gear</span>
-        <span class="chip">SG-1000</span>
-        <span class="chip">Sony PlayStation</span>
-        <span class="chip">Sony PSP</span>
-        <span class="chip">PC Engine</span>
-        <span class="chip">PC Engine CD</span>
-        <span class="chip">NeoGeo Pocket</span>
-        <span class="chip">WonderSwan</span>
-        <span class="chip">Atari 2600</span>
-        <span class="chip">Atari 5200</span>
-        <span class="chip">Atari 7800</span>
-        <span class="chip">Atari Lynx</span>
-        <span class="chip">ColecoVision</span>
-        <span class="chip">Intellivision</span>
-        <span class="chip">Odyssey²</span>
-        <span class="chip">Vectrex</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- CARTRIDGES -->
-  <section id="cartridges" aria-labelledby="cartridges-title">
-    <div class="wrap center">
-      <span class="eyebrow">Cartridge view</span>
-      <h2 id="cartridges-title">Each game on its console's cartridge</h2>
-      <p class="lede">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>
-    </div>
-    <div class="cart-wall" id="cartWall" data-base="assets/carts/" role="img" aria-label="Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past"></div>
-  </section>
-
-  <!-- SCREENSHOTS -->
-  <section id="screenshots">
-    <div class="wrap center">
-      <span class="eyebrow">Screenshots</span>
-      <h2>Your games, console by console</h2>
-      <p class="lede">Each console gets its own page with the games you added to it. Use the arrows to go through them, and click a screenshot to see it full size.</p>
+      <span class="eyebrow">On the desktop</span>
+      <h2>Every console, as cartridges.</h2>
+      <p class="lede">Each console has a page with its games on their own cartridges. Switch to covers or a list when you like.</p>
       <div class="carousel" id="shelfCarousel">
         <div class="carousel-stage">
           <button class="carousel-btn carousel-prev" type="button" aria-label="Previous">‹</button>
           <div class="carousel-viewport">
             <div class="carousel-track">
-              <figure><img src="assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/sfc-640.avif 640w, assets/shelf/sfc-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/sfc-640.webp 640w, assets/shelf/sfc-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/sfc.png" alt="OpenEmux, cartridge view: Super Nintendo" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/sfc-1200.webp" /></picture>
                 <figcaption>Super Nintendo</figcaption>
               </figure>
-              <figure><img src="assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/gba-640.avif 640w, assets/shelf/gba-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/gba-640.webp 640w, assets/shelf/gba-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/gba.png" alt="OpenEmux, cartridge view: Game Boy Advance" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/gba-1200.webp" /></picture>
                 <figcaption>Game Boy Advance</figcaption>
               </figure>
-              <figure><img src="assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/n64-640.avif 640w, assets/shelf/n64-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/n64-640.webp 640w, assets/shelf/n64-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/n64.png" alt="OpenEmux, cartridge view: Nintendo 64" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/n64-1200.webp" /></picture>
                 <figcaption>Nintendo 64</figcaption>
               </figure>
-              <figure><img src="assets/shelf/md.png" alt="OpenEmux — Mega Drive library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/md-640.avif 640w, assets/shelf/md-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/md-640.webp 640w, assets/shelf/md-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/md.png" alt="OpenEmux, cartridge view: Mega Drive" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/md-1200.webp" /></picture>
                 <figcaption>Mega Drive</figcaption>
               </figure>
-              <figure><img src="assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/sms-640.avif 640w, assets/shelf/sms-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/sms-640.webp 640w, assets/shelf/sms-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/sms.png" alt="OpenEmux, cartridge view: Sega Master System" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/sms-1200.webp" /></picture>
                 <figcaption>Sega Master System</figcaption>
               </figure>
-              <figure><img src="assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/ps-640.avif 640w, assets/shelf/ps-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/ps-640.webp 640w, assets/shelf/ps-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/ps.png" alt="OpenEmux, cartridge view: PlayStation" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/ps-1200.webp" /></picture>
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="assets/shelf/favorites.png" alt="OpenEmux — Favorites" />
+              <figure><picture><source type="image/avif" srcset="assets/shelf/favorites-640.avif 640w, assets/shelf/favorites-1200.avif 1200w" sizes="(max-width: 820px) 100vw, 380px" /><source type="image/webp" srcset="assets/shelf/favorites-640.webp 640w, assets/shelf/favorites-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 380px" /><img src="assets/shelf/favorites.png" alt="OpenEmux — Favorites" width="1200" height="800" loading="lazy" decoding="async" data-full="assets/shelf/favorites-1200.webp" /></picture>
                 <figcaption>Favorites</figcaption>
               </figure>
             </div>
@@ -1489,76 +2123,40 @@
     </div>
   </section>
 
-  <!-- ANDROID -->
-  <section id="android">
+  <!-- SKINS ON THE PHONE -->
+  <section class="moment" id="android">
     <div class="wrap center">
-      <span class="eyebrow">Android</span>
-      <h2>Your shelf, in your pocket</h2>
-      <p class="lede">OpenEmux for Android brings the same library to the phone: the games you own, as cartridges on a shelf per console, played with on-screen controls drawn for each system or with a gamepad. The Android app is its own design: OpenEmu has no mobile version, so only the console icons come from OpenEmu.</p>
-      <div class="gallery phones">
-        <figure><img src="assets/openemux-mobile-shelf.png" alt="OpenEmux on Android, the shelf" />
-          <figcaption>The shelf</figcaption>
-        </figure>
-        <figure><img src="assets/openemux-mobile-roms-gba.png" alt="OpenEmux on Android, a console's cartridges" />
-          <figcaption>A console's games</figcaption>
-        </figure>
-        <figure><img src="assets/openemux-mobile-gameplay-gba.png" alt="OpenEmux on Android, a Game Boy Advance game with its controls" />
+      <span class="eyebrow">On the phone</span>
+      <h2>A controller for each console.</h2>
+      <p class="lede">On Android, every console has its own on-screen controller, in portrait and in landscape. Connect a gamepad and it steps aside.</p>
+      <div class="gallery skins">
+        <figure class="portrait"><img src="assets/openemux-mobile-gameplay-gba.png" width="720" height="1560" loading="lazy" decoding="async" alt="OpenEmux on Android, a Game Boy Advance game with its controls" />
           <figcaption>Playing, in portrait</figcaption>
         </figure>
-        <figure><img src="assets/openemux-mobile-shelf-light.png" alt="OpenEmux on Android, the shelf in the light theme" />
-          <figcaption>Light theme</figcaption>
-        </figure>
-      </div>
-      <div class="gallery">
-        <figure><img src="assets/openemux-mobile-gameplay-gba-landscape.png" alt="OpenEmux on Android, a game in landscape" />
+        <div class="landscapes">
+          <figure><img src="assets/openemux-mobile-gameplay-gba-landscape.png" width="1280" height="618" loading="lazy" decoding="async" alt="OpenEmux on Android, a game in landscape" />
           <figcaption>Turn the phone and the controls follow</figcaption>
         </figure>
-        <figure><img src="assets/openemux-mobile-nds-landscape.png" alt="OpenEmux on Android, Nintendo DS with both screens" />
+          <figure><img src="assets/openemux-mobile-nds-landscape.png" width="1280" height="618" loading="lazy" decoding="async" alt="OpenEmux on Android, Nintendo DS with both screens" />
           <figcaption>Nintendo DS, both screens</figcaption>
         </figure>
+        </div>
       </div>
       <p class="fineprint">Games shown are fictional and for illustration only. They are not real games for these consoles, and their artwork was created with AI.</p>
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🕹️</div>
-          <h3>A skin for every console</h3>
-          <p>Each of the 31 consoles has its own on-screen controller, laid out like the original pad, in portrait and in landscape. A strip under the picture saves, loads, turns on turbo and speeds the game up.</p>
-        </div>
-        <div class="card">
-          <div class="ico">📼</div>
-          <h3>Cartridges and covers</h3>
-          <p>Games show up as cartridges with their labels, or as covers and a list. The shelves can be put in any order.</p>
-        </div>
-        <div class="card">
-          <div class="ico">⬇️</div>
-          <h3>Ready after one download</h3>
-          <p>The app does not carry the cores: the first time it opens, it downloads the ones every console needs from the RetroArch buildbot, with the system files PSP and GameCube use.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          <h3>Gamepad too</h3>
-          <p>Connect a controller and the on-screen skin steps aside: the game takes the whole screen, and the menus follow the D-pad and buttons.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🌗</div>
-          <h3>Light and dark</h3>
-          <p>Follows the phone's theme, or pick one in Settings.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🌐</div>
-          <h3>Eight languages</h3>
-          <p>The same languages as the desktop app, following the phone or chosen in Settings.</p>
-        </div>
-        <div class="card">
-          <div class="ico">🏆</div>
-          <h3>RetroAchievements</h3>
-          <p>Sign in once in Settings and every game unlocks achievements on your RetroAchievements profile, with hardcore mode when you want it.</p>
-        </div>
-      </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
           href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Download the APK</a></p>
       <p class="cta-note">Android 8 or newer, 64-bit (arm64). The Android app is a fork of RetroArch, so it is licensed under the GPLv3; its source is at <a href="https://github.com/guilhermefeitosa66/openemux-android">openemux-android</a>.</p>
     </div>
+  </section>
+
+  <!-- CARTRIDGES -->
+  <section id="cartridges" aria-labelledby="cartridges-title">
+    <div class="wrap center">
+      <span class="eyebrow">Cartridge view</span>
+      <h2 id="cartridges-title">Each game on its console's cartridge</h2>
+      <p class="lede">In the cartridge view, the games you added show up with their label art on the cartridge of their console. The cartridges below are an example of that view.</p>
+    </div>
+    <div class="cart-wall" id="cartWall" data-base="assets/carts/" role="img" aria-label="Rows of Super Nintendo, Game Boy Advance, Nintendo 64 and Mega Drive cartridges scrolling past"></div>
   </section>
 
   <!-- INSTALL -->
@@ -1660,6 +2258,121 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     </div>
   </section>
 
+  <!-- EVERYTHING ELSE: what the old features, philosophy and systems
+       sections said, folded into one grid. -->
+  <section id="more">
+    <div class="wrap center">
+      <span class="eyebrow">Details</span>
+      <h2>Everything else</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Built on RetroArch</h3>
+          <p>Under the hood, the emulation is done by RetroArch. It is powerful, but its menus and settings can be a lot for someone who just wants to play. OpenEmux takes care of what is around it: organizing your games, downloading the cores, and setting up controls and shaders.</p>
+        </div>
+        <div class="card">
+          <h3>Your games, by console</h3>
+          <p>The games you add are grouped by console, with cover art downloaded from the libretro thumbnail archive.</p>
+        </div>
+        <div class="card">
+          <h3>Ready on first launch</h3>
+          <p>The first time it opens, OpenEmux creates its configuration and downloads the cores your consoles need, usually in about ten seconds. The rest keep downloading in the background.</p>
+        </div>
+        <div class="card">
+          <h3>Controls per console</h3>
+          <p>Set keyboard and gamepad buttons for each console in one panel. OpenEmux passes them to RetroArch when a game starts.</p>
+        </div>
+        <div class="card">
+          <h3>Shaders per console</h3>
+          <p>Choose a CRT or scanline shader for each console from a short list, without going through RetroArch's shader menu.</p>
+        </div>
+        <div class="card">
+          <h3>BIOS checklist</h3>
+          <p>Shows which BIOS files each console needs and which ones you already have, so a missing file does not end up as a game that silently fails to start.</p>
+        </div>
+        <div class="card">
+          <h3>Linux first</h3>
+          <p>Linux is OpenEmux's main platform. The app is built with GTK4 and Adwaita, follows the GNOME guidelines, and every change is tested on Linux first. Windows is supported too, with a build still in beta.</p>
+        </div>
+        <div class="card">
+          <h3>A skin for every console</h3>
+          <p>Each of the 31 consoles has its own on-screen controller, laid out like the original pad, in portrait and in landscape. A strip under the picture saves, loads, turns on turbo and speeds the game up.</p>
+        </div>
+        <div class="card">
+          <h3>Cartridges and covers</h3>
+          <p>Games show up as cartridges with their labels, or as covers and a list. The shelves can be put in any order.</p>
+        </div>
+        <div class="card">
+          <h3>Ready after one download</h3>
+          <p>The app does not carry the cores: the first time it opens, it downloads the ones every console needs from the RetroArch buildbot, with the system files PSP and GameCube use.</p>
+        </div>
+        <div class="card">
+          <h3>Gamepad too</h3>
+          <p>Connect a controller and the on-screen skin steps aside: the game takes the whole screen, and the menus follow the D-pad and buttons.</p>
+        </div>
+        <div class="card">
+          <h3>Light and dark</h3>
+          <p>Follows the phone's theme, or pick one in Settings.</p>
+        </div>
+        <div class="card">
+          <h3>Eight languages</h3>
+          <p>The same languages as the desktop app, following the phone or chosen in Settings.</p>
+        </div>
+        <div class="card">
+          <h3>RetroAchievements</h3>
+          <p>Sign in once in Settings and every game unlocks achievements on your RetroAchievements profile, with hardcore mode when you want it.</p>
+        </div>
+        <div class="card wide">
+          <h3>Play the games you own</h3>
+          <p class="lede">OpenEmux is a frontend for RetroArch, made so that someone who just wants to play does not have to learn RetroArch's menus first. It is <strong>not</strong> a source of games: it ships no games, no ROMs and no BIOS files, and never will.</p>
+          <ul class="checks">
+            <li><strong>Use only content you legally own.</strong> Dump your own cartridges and discs, or use backups of
+            games you purchased.</li>
+            <li><strong>Piracy isn't what this is for.</strong> Downloading copyrighted games you don't own is illegal in
+            most countries.</li>
+            <li><strong>Emulation helps preserve history.</strong> A lot of gaming's art, music and design lives on aging hardware. Keeping it playable is worthwhile, and it works best when it respects the people who made these games.</li>
+          </ul>
+        </div>
+        <div class="card wide">
+          <h3>31 systems</h3>
+          <p class="lede">Each system runs on RetroArch's own cores, and has its own cover art, controls and shader settings in OpenEmux.</p>
+          <div class="systems">
+            <span class="chip">Nintendo (NES)</span>
+            <span class="chip">Famicom Disk System</span>
+            <span class="chip">Super Nintendo</span>
+            <span class="chip">Nintendo 64</span>
+            <span class="chip">GameCube</span>
+            <span class="chip">Game Boy</span>
+            <span class="chip">Game Boy Color</span>
+            <span class="chip">Game Boy Advance</span>
+            <span class="chip">Nintendo DS</span>
+            <span class="chip">Virtual Boy</span>
+            <span class="chip">Mega Drive</span>
+            <span class="chip">Sega Master System</span>
+            <span class="chip">Mega CD</span>
+            <span class="chip">Sega 32X</span>
+            <span class="chip">Sega Saturn</span>
+            <span class="chip">Game Gear</span>
+            <span class="chip">SG-1000</span>
+            <span class="chip">Sony PlayStation</span>
+            <span class="chip">Sony PSP</span>
+            <span class="chip">PC Engine</span>
+            <span class="chip">PC Engine CD</span>
+            <span class="chip">NeoGeo Pocket</span>
+            <span class="chip">WonderSwan</span>
+            <span class="chip">Atari 2600</span>
+            <span class="chip">Atari 5200</span>
+            <span class="chip">Atari 7800</span>
+            <span class="chip">Atari Lynx</span>
+            <span class="chip">ColecoVision</span>
+            <span class="chip">Intellivision</span>
+            <span class="chip">Odyssey²</span>
+            <span class="chip">Vectrex</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
@@ -1683,6 +2396,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       </div>
     </div>
   </section>
+
+  </main>
 
   <footer>
     <div class="wrap">
@@ -1711,6 +2426,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <img id="lightboxImg" src="" alt="" />
     <div class="lightbox-cap" id="lightboxCap"></div>
   </div>
+  <div class="lightbox watch-box" id="watchBox" role="dialog" aria-modal="true" aria-label="OpenEmux in 45 seconds: the library, the cartridge view and a game running on the desktop, then the Android app with its shelf, controller skins, portrait and landscape and the Nintendo DS">
+    <button class="lightbox-close" id="watchClose" aria-label="Close">×</button>
+    <video id="promoVideo" controls playsinline preload="none" width="1920" height="1080"
+      data-src="assets/openemux-promo.mp4" data-poster="assets/openemux-promo-poster.jpg"></video>
+  </div>
   <script>
     (function () {
       var box = document.getElementById('lightbox');
@@ -1731,11 +2451,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         img.src = '';
       }
 
-      document.querySelectorAll('.shot img, .gallery img, .split img, .carousel-track img').forEach(function (el) {
+      document.querySelectorAll('.stage-devices img, .gallery img, .carousel-track img').forEach(function (el) {
         el.addEventListener('click', function () {
           var fig = el.closest('figure');
           var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
-          open(el.currentSrc || el.src, el.alt, caption);
+          open(el.dataset.full || el.currentSrc || el.src, el.alt, caption);
         });
       });
 
@@ -1746,68 +2466,55 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       });
     })();
 
-    // Promo video in the hero. Browsers only autoplay muted video, so it starts
-    // silent and the gold button turns the sound on -- from the top, so the
-    // music starts with the intro. It plays only while on screen, and never on
-    // its own for reduced motion or Save-Data.
+    // Promo video, on demand: the link opens a dialog and only then gives the
+    // <video> its source. It starts on that click, except under Save-Data,
+    // where it waits for the play button. Closing stops it and drops the
+    // source, so nothing keeps downloading.
     (function () {
+      var link = document.getElementById('watchVideo');
+      var box = document.getElementById('watchBox');
       var video = document.getElementById('promoVideo');
-      if (!video) return;
-      var controls = video.parentNode.querySelector('.video-controls');
-      var playBtn = document.getElementById('promoPlay');
-      var soundBtn = document.getElementById('promoSound');
-      var soundLabel = soundBtn.querySelector('span');
+      if (!link || !box || !video) return;
+      var closeBtn = document.getElementById('watchClose');
       var conn = navigator.connection || {};
-      var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches || conn.saveData;
-      var userPaused = still;
-      var visible = false;
 
-      video.removeAttribute('controls');
-      controls.hidden = false;
-
-      function sync() {
-        var paused = video.paused;
-        playBtn.classList.toggle('paused', paused);
-        playBtn.setAttribute('aria-label', paused ? playBtn.dataset.play : playBtn.dataset.pause);
-        soundBtn.setAttribute('aria-pressed', video.muted ? 'false' : 'true');
-        soundLabel.textContent = video.muted ? soundBtn.dataset.on : soundBtn.dataset.off;
-      }
-
-      function play() {
-        var p = video.play();
-        if (p && p.catch) p.catch(sync);
-      }
-
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(function (entries) {
-          visible = entries[0].isIntersecting;
-          if (visible && !userPaused) play();
-          else if (!visible && !video.paused) video.pause();
-        }, { threshold: .35 }).observe(video);
-      } else if (!userPaused) {
-        play();
-      }
-
-      playBtn.addEventListener('click', function () {
-        if (video.paused) { userPaused = false; play(); }
-        else { userPaused = true; video.pause(); }
-      });
-
-      soundBtn.addEventListener('click', function () {
-        if (video.muted) {
-          video.muted = false;
-          video.currentTime = 0;
-          userPaused = false;
-          play();
-        } else {
-          video.muted = true;
+      function open(e) {
+        // Ctrl/Cmd/Shift-click still opens the file in a new tab or window.
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button) return;
+        e.preventDefault();
+        video.poster = video.dataset.poster;
+        video.src = video.dataset.src;
+        box.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+        if (!conn.saveData) {
+          var p = video.play();
+          if (p && p.catch) p.catch(function () {});
         }
-        sync();
-      });
+      }
+      function close() {
+        if (!box.classList.contains('open')) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        box.classList.remove('open');
+        document.body.style.overflow = '';
+        link.focus();
+      }
 
-      video.addEventListener('play', sync);
-      video.addEventListener('pause', sync);
-      sync();
+      link.addEventListener('click', open);
+      closeBtn.addEventListener('click', close);
+      box.addEventListener('click', function (e) { if (e.target === box) close(); });
+      document.addEventListener('keydown', function (e) {
+        if (!box.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
+        // aria-modal: Tab cycles between the close button and the video and
+        // never reaches the page under the backdrop.
+        else if (e.key === 'Tab') {
+          e.preventDefault();
+          (document.activeElement === closeBtn ? video : closeBtn).focus();
+        }
+      });
     })();
 
     // Shelf carousel: 3 shots per slide (1 on mobile), dots, and wrap-around arrows.
@@ -1974,6 +2681,94 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         if (!ticking) { ticking = true; requestAnimationFrame(parallax); }
       }, { passive: true });
       build();
+    })();
+  </script>
+  <!-- Scroll stages: the fallback driver (see "scroll stages" in the CSS).
+       Browsers with scroll-driven animations need nothing from here but the
+       will-change switch; elsewhere this writes each on-screen stage's
+       progress into --p. It only reads the scroll position: one passive
+       listener, one requestAnimationFrame, nothing that moves the page. -->
+  <script>
+    (function () {
+      var stages = [].slice.call(document.querySelectorAll("[data-stage]"));
+      if (!stages.length) return;
+      var motion = window.matchMedia(
+        "(prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px), " +
+        "(prefers-reduced-motion: no-preference) and (min-height: 640px)");
+      var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
+      var visible = [];
+      var ticking = false;
+      var js = false;
+      var header = document.querySelector("header");
+
+      function navHeight() {
+        return header ? header.getBoundingClientRect().height : 0;
+      }
+
+      // 0 when the section's top reaches the bottom of the header, 1 when
+      // its bottom reaches the bottom of the viewport: the same range as
+      // the CSS driver's `contain`.
+      function update() {
+        ticking = false;
+        var top = navHeight();
+        var vh = window.innerHeight;
+        visible.forEach(function (stage) {
+          var r = stage.getBoundingClientRect();
+          var travel = r.height - (vh - top);
+          var p = travel > 0 ? (top - r.top) / travel : 1;
+          stage.style.setProperty("--p", Math.max(0, Math.min(1, p)).toFixed(4));
+        });
+      }
+
+      function request() {
+        if (js && !ticking) { ticking = true; requestAnimationFrame(update); }
+      }
+
+      function apply() {
+        js = motion.matches && !native;
+        stages.forEach(function (stage) { stage.classList.toggle("stage-js", js); });
+        if (js) update();
+      }
+
+      if ("IntersectionObserver" in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            entry.target.classList.toggle("is-active", entry.isIntersecting);
+            var i = visible.indexOf(entry.target);
+            if (entry.isIntersecting && i < 0) visible.push(entry.target);
+            if (!entry.isIntersecting && i >= 0) visible.splice(i, 1);
+          });
+          request();
+        });
+        stages.forEach(function (stage) { io.observe(stage); });
+      } else {
+        // No observer: every stage counts as on screen.
+        visible = stages.slice();
+        stages.forEach(function (stage) { stage.classList.add("is-active"); });
+      }
+
+      if (!native) {
+        window.addEventListener("scroll", function () { if (motion.matches) request(); }, { passive: true });
+        window.addEventListener("resize", function () { if (motion.matches) request(); });
+      }
+      if (motion.addEventListener) motion.addEventListener("change", apply);
+      apply();
+    })();
+
+    // The visitor's own system first among the download buttons: Android
+    // and Windows move to the front and take the primary style; anything
+    // else keeps the order as written (Linux first).
+    (function () {
+      var ua = navigator.userAgent;
+      var os = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "";
+      var box = document.getElementById("downloads");
+      var mine = os && box && box.querySelector('[data-os="' + os + '"]');
+      if (!mine) return;
+      [].forEach.call(box.querySelectorAll("[data-os]"), function (btn) {
+        btn.classList.toggle("btn-primary", btn === mine);
+        btn.classList.toggle("btn-ghost", btn !== mine);
+      });
+      box.insertBefore(mine, box.firstChild);
     })();
   </script>
 </body>
