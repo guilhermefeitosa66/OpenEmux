@@ -391,11 +391,11 @@ class BiosTests(ManifestTestCase):
         self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
         first = self.lib.rom("PS", "First.chd")
         real_open = open
-        bios = str(self.lib.roms / "PS" / "bios" / "scph5501.bin")
 
         def guarded(path, *args, **kwargs):
-            if str(path) == bios:
-                raise PermissionError(13, "Permission denied", bios)
+            # By name: the separators differ between platforms (Windows CI).
+            if Path(path).name == "scph5501.bin":
+                raise PermissionError(13, "Permission denied", str(path))
             return real_open(path, *args, **kwargs)
 
         with mock.patch("builtins.open", side_effect=guarded):
