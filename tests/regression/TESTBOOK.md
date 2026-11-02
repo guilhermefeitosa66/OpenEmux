@@ -8347,6 +8347,39 @@ or into an environment that cannot run the tests.
   ```
   Unit-level: `tests/test_site.py` (`TheNarrativeTests`).
 
+### RT-678 — The "Support the project" buttons are centered under its text
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Open the site's home page (`docs/index.html`) on a wide desktop window (1280 px or more) and
+     scroll to "Support the project".
+  2. Switch to Português (Brasil) with the language picker and look at the same card.
+  3. Narrow the window to a phone width (about 360 px) so the two buttons wrap onto two lines.
+  4. Scroll back to the top on the wide window and look at the download buttons.
+- **Expected:** In the support card, "Join r/OpenEmux" and "Star on GitHub" (and their
+  translations) sit horizontally centered under the centered text, in every language; when they
+  wrap, each line is centered with even spacing. The hero download buttons are unchanged:
+  left-aligned on a wide window, centered on a narrow one (issue 726).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      assert re.search(r"\.support \.cta\s*\{\s*justify-content:\s*center", html), page
+      shared = re.search(r"\n    \.cta \{([^}]*)\}", html).group(1)
+      assert "justify-content" not in shared, page
+      sup = re.search(r'<section id="support">(.*?)</section>', html, re.S).group(1)
+      assert re.search(r'class="support".*class="cta"', sup, re.S), page
+  print("RT-678 OK")
+  EOF
+  ```
+
 ### RT-612 — "Everything else" keeps every fact of the old sections
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
