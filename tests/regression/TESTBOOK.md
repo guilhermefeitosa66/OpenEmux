@@ -9961,8 +9961,11 @@ keyevent` comes from a virtual device and never changes the family. A release AP
 Choosing how a Nintendo DS game's two screens are shown, in the Android app
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`;
 issue 709). The pause sheet's "Screens" tile names the layout in use and opens a "Screens" page listing
-the layouts of the orientation shown; in game, the skin's screens key and **R3** (the right stick click)
-on a gamepad step to the next layout and a toast names it. R3 stands in for DeSmuME's own "Quick Screen
+the layouts of the orientation shown; in game, **R3** (the right stick click) on a gamepad, and the
+skin's screens key where the skin has one, step to the next layout and a toast names it. The bundled
+NDS skin (a package skin, drawn for the two screens one over the other) has no screens key on its own
+pages, in touch or in the gamepad layout: there, R3 and the pause sheet are the ways in. The drawn
+tabletop pages keep their layout key. R3 stands in for DeSmuME's own "Quick Screen
 Switch" (the core never sees it on the DS). The layouts: portrait "Top screen only", "Bottom screen
 only", "One above the other"; landscape the first two and "Side by side"; tabletop the first two and
 "One per half". Each orientation remembers its own, in `files/nds-layout`. `MANUAL`, like the other
@@ -10046,13 +10049,12 @@ pad is the reference for steps that need R3).
 ### RT-650 — The skin's screens key names the layout it lands on
 - **Area:** Android — NDS screen layouts
 - **Mode:** MANUAL
-- **Preconditions:** An NDS game; touch, no pad.
+- **Preconditions:** A foldable AVD (e.g. `openemux-fold`) half open, an NDS game; touch, no pad.
 - **Steps:**
-  1. In game, tap the screens key on the strip three times.
-  2. Turn the phone to landscape and back.
-  3. Tap the hide key, then the show key.
-- **Expected:** Step 1: each tap steps the layout and a toast names it. Steps 2 and 3: the layout
-  stays, and no toast appears.
+  1. Launch the NDS game half open and tap the layout key (the strip's fifth slot) three times.
+  2. Open the device flat, then half open again.
+- **Expected:** Step 1: each tap steps the layout and a toast names it ("Screens: Top screen only").
+  Step 2: the remembered layout comes back, and no toast appears just for the change of posture.
 - **Check:** human only.
 
 ### RT-651 — Other consoles: no Screens tile, R3 untouched
