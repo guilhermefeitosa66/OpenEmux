@@ -85,6 +85,8 @@ def main(out):
     subprocess.run(["devbox-seed", "--wipe"], check=True)
     subprocess.run([py, str(REPO / "tools" / "demo_library.py"),
                     str(Path.home() / "games" / "demo"), "--configure"], check=True)
+    # Put the screen back the way it was found, not to a guessed default.
+    before = run("xdotool", "getdisplaygeometry").split()
     subprocess.run(["devbox-res", SCREEN], check=True)
     try:
         for view_mode, shots in PHASES:
@@ -95,14 +97,21 @@ def main(out):
             capture(out, shots)
     finally:
         subprocess.run(["devbox-app", "stop"])
-        subprocess.run(["devbox-res", "1600x1100"])
+        subprocess.run(["devbox-res", "x".join(before)])
+        # The devbox is shared (the pipeline's QA runs use it too): hand it
+        # back on its synthetic library and default settings, not on the demo
+        # library in dark mode and the cover view this run left behind.
+        subprocess.run(["devbox-seed", "--wipe"])
 
 
 def capture(out, shots):
     subprocess.run(["devbox-app", "stop"], check=True)
     subprocess.run(["devbox-app", "start"], check=True, env={**os.environ, "GDK_SCALE": str(SCALE)})
     wid = window_id()
-    subprocess.run(["wmctrl", "-i", "-r", wid, "-b", "remove,maximized_vert,maximized_horz"])
+    # xdotool, not wmctrl: `wmctrl -i` wants a hex id and devbox-win hands out
+    # the decimal one, so it silently did nothing (see devbox/bin/devbox-res).
+    for state in ("MAXIMIZED_VERT", "MAXIMIZED_HORZ"):
+        subprocess.run(["xdotool", "windowstate", "--remove", state, wid])
     run("xdotool", "windowsize", wid, str(WINDOW[0] * SCALE), str(WINDOW[1] * SCALE))
     run("xdotool", "windowmove", wid, "40", "40")
     time.sleep(2)
@@ -117,7 +126,12 @@ def capture(out, shots):
         run("xdotool", "click", "1")
         time.sleep(SETTLE)
         point(1280, 850)  # park the pointer where nothing reacts to hover
-        print(f"{name}.png  {shot(wid, out / f'{name}.png')}")
+        size = shot(wid, out / f"{name}.png")
+        expected = f"{(WINDOW[0] - 2) * SCALE}x{(WINDOW[1] - 2) * SCALE}"
+        # The trim works on colour, so a dark edge of content can go with the
+        # window border: say so rather than hand over a short capture.
+        note = "" if size == expected else f"  (expected {expected}: retake it)"
+        print(f"{name}.png  {size}{note}")
 
 if __name__ == "__main__":  # pragma: no cover - a devbox tool, driven by hand
     if len(sys.argv) != 2:

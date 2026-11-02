@@ -265,6 +265,13 @@ class TheImagePipelineTests(unittest.TestCase):
         self.assertIn('width="2640" height="1756"', out)
         self.assertNotIn('width="9"', out)
 
+    def test_attributes_with_digits_and_underscores_are_kept(self):
+        manifest = {"shelf/a.png": _entry()}
+        out = build_site.picture('<img data-picture src="assets/shelf/a.png" data-x1="y" a_b="c" />',
+                                 "", manifest)
+        self.assertIn('data-x1="y"', out)
+        self.assertIn('a_b="c"', out)
+
     def test_an_image_without_widths_is_named(self):
         with self.assertRaisesRegex(KeyError, "assets/shelf/nope.png"):
             build_site.picture('<img data-picture src="assets/shelf/nope.png" />', "", {})
@@ -359,6 +366,14 @@ class TheImageCheckTests(unittest.TestCase):
         self.assertIn("run tools/build_site.py --images", out.getvalue())
         self.assertIn("shelf/a.png: changed", out.getvalue())
 
+    # Mocks the encoder, so it runs where Pillow is absent too.
+    def test_the_images_flag_encodes_then_writes_the_pages(self):
+        out = io.StringIO()
+        with mock.patch.object(build_site, "build_images", return_value=["desktop/a.png"]), \
+                mock.patch.object(build_site, "pages", return_value={}), redirect_stdout(out):
+            self.assertEqual(build_site.main(["--images"]), 0)
+        self.assertIn("encoded docs/assets/desktop/a.png", out.getvalue())
+
     def test_images_without_pillow_says_what_to_install(self):
         with mock.patch.dict("sys.modules", {"PIL": None}):
             with self.assertRaisesRegex(SystemExit, "Pillow"):
@@ -402,18 +417,22 @@ class TheImageEncoderTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in (self.assets / "desktop").iterdir()), [])
         self.assertEqual(json.loads(self.manifest_path.read_text()), {})
 
+    def test_a_source_retaken_at_another_size_drops_the_widths_it_lost(self):
+        from PIL import Image
+
+        build_site.build_images(self.assets, self.manifest_path)
+        Image.new("RGB", (1000, 500), (1, 2, 3)).save(self.assets / "desktop" / "a.png")
+        self.assertEqual(build_site.build_images(self.assets, self.manifest_path), ["desktop/a.png"])
+        self.assertEqual(sorted(p.name for p in (self.assets / "desktop").iterdir()), [
+            "a-1000.avif", "a-1000.webp", "a-640.avif", "a-640.webp", "a.png"])
+        manifest = json.loads(self.manifest_path.read_text())
+        self.assertEqual(build_site.check_images(self.assets, manifest), [])
+
     def test_a_deleted_variant_is_encoded_again(self):
         build_site.build_images(self.assets, self.manifest_path)
         (self.assets / "desktop" / "a-1280.webp").unlink()
         self.assertEqual(build_site.build_images(self.assets, self.manifest_path), ["desktop/a.png"])
         self.assertTrue((self.assets / "desktop" / "a-1280.webp").is_file())
-
-    def test_the_images_flag_encodes_then_writes_the_pages(self):
-        out = io.StringIO()
-        with mock.patch.object(build_site, "build_images", return_value=["desktop/a.png"]), \
-                mock.patch.object(build_site, "pages", return_value={}), redirect_stdout(out):
-            self.assertEqual(build_site.main(["--images"]), 0)
-        self.assertIn("encoded docs/assets/desktop/a.png", out.getvalue())
 
 
 class TheBuildScriptTests(unittest.TestCase):
