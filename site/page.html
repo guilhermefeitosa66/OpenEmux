@@ -53,8 +53,11 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* height:auto keeps the aspect ratio of an <img> that carries width and
+       height attributes (set so the page does not shift while it loads). */
     img {
       max-width: 100%;
+      height: auto;
       display: block
     }
 
@@ -78,7 +81,6 @@
        drags the whole document past the viewport. */
     .grid>*,
     .steps>*,
-    .split>*,
     .gallery>*,
     .carousel-track>* {
       min-width: 0
@@ -270,28 +272,6 @@
       text-align: center
     }
 
-    /* Announcement pill above the headline — carries whatever is new this
-       release without touching the h1. */
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 18px 7px 9px;
-      margin: 0 0 22px;
-      border-radius: 999px;
-      background: rgba(139, 92, 246, .13);
-      border: 1px solid rgba(139, 92, 246, .42);
-      color: var(--text);
-      font-size: .88rem;
-      font-weight: 600;
-    }
-
-    .hero-pill:hover {
-      text-decoration: none;
-      background: rgba(139, 92, 246, .22);
-      border-color: rgba(139, 92, 246, .7);
-    }
-
     .beta {
       flex: none;
       font-size: .68rem;
@@ -304,21 +284,6 @@
       border-radius: 999px;
       padding: 4px 10px;
       line-height: 1;
-    }
-
-    .hero-logo {
-      width: 118px;
-      height: 118px;
-      margin: 0 auto 12px;
-      filter: drop-shadow(0 18px 40px rgba(139, 92, 246, .55))
-    }
-
-    .hero-name {
-      margin: 0 0 24px;
-      font-size: 1.7rem;
-      font-weight: 800;
-      letter-spacing: -.02em;
-      color: var(--text)
     }
 
     .hero h1 {
@@ -354,149 +319,130 @@
       color: var(--muted)
     }
 
-    .shot {
-      margin: 64px auto -110px;
+    .hero-links {
+      margin: 20px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 22px;
+      font-weight: 600
+    }
+
+    /* Opening: the desktop window, with the phone set over its lower right
+       corner so both read as one product. Frames are CSS, not baked into the
+       screenshots. The phone stays inside the stage box at any width. */
+    .stage-devices {
+      position: relative;
       max-width: 1000px;
+      margin: 64px auto 0;
+      padding: 0 0 48px;
+    }
+
+    /* The capture is the app's own window (libadwaita header bar and
+       buttons included): rounded corners and a shadow, never a fake title
+       bar around it. */
+    .device-desktop {
+      width: 86%;
       border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, .14);
       box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
     }
 
-    .shot-video {
-      position: relative;
-      aspect-ratio: 16 / 9;
-      background: #08060f;
-    }
-
-    .shot-video video {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .video-controls {
+    /* Phone body: the same border on all four sides and the screenshot at
+       its own 720x1560 ratio, so the screen sits centred; the inner corner
+       is radius - border, concentric with the outer one. */
+    .device-phone {
       position: absolute;
-      right: 16px;
-      bottom: 16px;
-      display: flex;
-      gap: 10px;
+      right: 0;
+      bottom: 0;
+      width: 24%;
+      border-radius: 26px;
+      border: 6px solid var(--panel);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
     }
 
-    .video-controls[hidden] {
-      display: none
-    }
-
-    .vbtn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-width: 44px;
-      height: 44px;
-      padding: 0 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, .22);
-      background: rgba(8, 6, 15, .72);
-      backdrop-filter: blur(8px);
-      color: var(--text);
-      font: inherit;
-      font-size: .9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s ease, border-color .15s ease;
-    }
-
-    .vbtn:hover {
-      background: rgba(139, 92, 246, .35);
-      border-color: rgba(139, 92, 246, .8)
-    }
-
-    .vbtn:focus-visible {
-      outline: 2px solid var(--gold);
-      outline-offset: 2px
-    }
-
-    .vbtn svg {
-      width: 20px;
-      height: 20px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round
-    }
-
-    .vbtn .i-play {
-      fill: currentColor
-    }
-
-    /* The sound button is the one people are invited to press: gold, with
-       its label, until the sound is on. */
-    .vbtn-sound {
-      padding: 0 18px 0 14px;
-      background: var(--gold);
-      border-color: var(--gold);
-      color: #1a1300
-    }
-
-    .vbtn-sound:hover {
-      background: #ffe066;
-      border-color: #ffe066
-    }
-
-    .vbtn-sound[aria-pressed="true"] {
-      background: rgba(8, 6, 15, .72);
-      border-color: rgba(255, 255, 255, .22);
-      color: var(--text)
-    }
-
-    #promoPlay .i-play,
-    #promoPlay.paused .i-pause,
-    .vbtn-sound .i-sound,
-    .vbtn-sound[aria-pressed="true"] .i-muted {
-      display: none
-    }
-
-    #promoPlay.paused .i-play,
-    .vbtn-sound[aria-pressed="true"] .i-sound {
-      display: block
-    }
-
-    /* On a phone the video is too short to carry buttons over it: they move
-       to a strip of their own underneath. */
     @media(max-width:560px) {
-      .shot-video {
-        aspect-ratio: auto
+      .device-desktop {
+        width: 92%
       }
 
-      .shot-video video {
-        height: auto;
-        aspect-ratio: 16 / 9
-      }
-
-      .video-controls {
-        position: static;
-        justify-content: flex-end;
-        padding: 10px;
-        border-top: 1px solid rgba(255, 255, 255, .1)
-      }
-
-      .vbtn-sound span {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0)
-      }
-
-      .vbtn-sound {
-        padding: 0 12px
+      .device-phone {
+        width: 30%;
+        border-width: 4px;
+        border-radius: 16px
       }
     }
 
-    .hero-pad {
-      height: 130px
+    /* ---------- moments ---------- */
+    .moment h2 {
+      font-size: clamp(1.9rem, 4vw, 2.8rem)
+    }
+
+    /* Share nearby: the four steps, until the scroll-driven sequence. */
+    .share-steps {
+      list-style: none;
+      padding: 0;
+      margin: 44px 0 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      text-align: left;
+      counter-reset: step
+    }
+
+    .share-steps>li {
+      min-width: 0;
+      counter-increment: step
+    }
+
+    .share-steps>li::before {
+      content: counter(step);
+      display: block;
+      color: var(--gold);
+      font-weight: 800;
+      margin-bottom: 6px
+    }
+
+    @media(max-width:900px) {
+      .share-steps {
+        grid-template-columns: 1fr 1fr
+      }
+    }
+
+    @media(max-width:520px) {
+      .share-steps {
+        grid-template-columns: 1fr
+      }
+    }
+
+    /* Everything else: the facts of the old sections, compact. */
+    #more .grid {
+      text-align: left
+    }
+
+    #more .card.wide {
+      grid-column: 1 / -1
+    }
+
+    #more .card .lede {
+      font-size: .98rem;
+      max-width: none
+    }
+
+    #more .systems {
+      justify-content: flex-start;
+      margin-top: 18px
+    }
+
+    /* The promo video, only when asked for: nothing is fetched before the
+       click, and closing it stops the sound. */
+    .watch-box video {
+      max-width: min(1100px, 100%);
+      max-height: 86vh;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      background: #000
     }
 
     /* ---------- feature grid ---------- */
@@ -536,40 +482,6 @@
       color: var(--muted);
       font-size: .94rem;
       margin: 0
-    }
-
-    .ico {
-      width: 42px;
-      height: 42px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      background: rgba(139, 92, 246, .16);
-      border: 1px solid rgba(139, 92, 246, .32);
-      margin-bottom: 16px;
-      font-size: 1.25rem;
-    }
-
-    /* ---------- split ---------- */
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 56px;
-      align-items: center
-    }
-
-    @media(max-width:860px) {
-      .split {
-        grid-template-columns: 1fr;
-        gap: 36px
-      }
-    }
-
-    .split img,
-    .frame {
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, .55);
     }
 
     ul.checks {
@@ -642,29 +554,27 @@
       box-shadow: 0 24px 60px rgba(0, 0, 0, .5)
     }
 
-    .gallery.thirds {
-      grid-template-columns: repeat(3, 1fr)
+    /* Android: one phone in portrait beside two in landscape. */
+    .gallery.skins {
+      grid-template-columns: 1fr 2fr;
+      align-items: end
+    }
+
+    .gallery.skins .landscapes {
+      display: grid;
+      gap: 18px
+    }
+
+    .gallery.skins .portrait img {
+      max-width: 300px;
+      margin: 0 auto;
+      border-radius: 22px
     }
 
     @media(max-width:700px) {
-      .gallery.thirds {
+      .gallery.skins {
         grid-template-columns: 1fr
       }
-    }
-
-    /* Android: phone screens, four to a row (two on a phone) */
-    .gallery.phones {
-      grid-template-columns: repeat(4, 1fr)
-    }
-
-    @media(max-width:700px) {
-      .gallery.phones {
-        grid-template-columns: 1fr 1fr
-      }
-    }
-
-    .gallery.phones img {
-      border-radius: 22px
     }
 
     figure {
@@ -917,9 +827,8 @@
     }
 
     /* Zoomable screenshots -> lightbox */
-    .shot img,
+    .stage-devices img,
     .gallery img,
-    .split img,
     .carousel-track img {
       cursor: zoom-in;
       transition: transform .15s ease
@@ -1250,10 +1159,11 @@
     <div class="wrap nav">
       <a class="brand" href="#top"><img src="{{root}}assets/logo.png" alt="" /> OpenEmux</a>
       <nav class="nav-links">
-        {{nav.features}}
-        {{nav.systems}}
-        {{nav.screenshots}}
+        {{nav.share}}
+        {{nav.consoles}}
+        {{nav.android}}
         {{nav.install}}
+        {{nav.more}}
         <a href="manual/">{{nav.manual}}</a>
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
         {{nav.community}}
@@ -1263,155 +1173,53 @@
     </div>
   </header>
 
-  <!-- HERO -->
+  <main>
+  <!-- OPENING: the desktop library, the phone in front of it -->
   <section class="hero" id="top">
     <div class="stars"></div>
     <div class="wrap hero-inner">
-      <img class="hero-logo" src="{{root}}assets/logo.png" {{hero.logo_alt}}
-      <p class="hero-name">OpenEmux</p>
-      <a class="hero-pill" href="#android">{{hero.pill}}
       {{hero.title}}
       {{hero.lede}}
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_linux}}
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">{{hero.download_windows}}
         <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">{{hero.download_android}}
-        <a class="btn btn-ghost" href="https://github.com/guilhermefeitosa66/OpenEmux">{{hero.github}}
       </div>
+      <p class="hero-links">
+        <a href="#install">{{hero.install_link}}</a>
+        <!-- The promo video, on demand only: without JavaScript the link is
+             the file itself; with it, a dialog that loads nothing before the
+             click. -->
+        <a id="watchVideo" href="{{root}}assets/openemux-promo.mp4">{{hero.watch}}</a>
+      </p>
       {{hero.note}}
       {{hero.relation}}
-      <!-- Promo video: plays muted on its own (browsers refuse sound without a
-           click), loops while it is on screen, and stays still for people who
-           asked for reduced motion. The native controls are the no-JS fallback. -->
-      <div class="shot shot-video" id="promo">
-        <video id="promoVideo" controls muted loop playsinline preload="metadata"
-          poster="{{root}}assets/openemux-promo-poster.jpg" width="1920" height="1080"
-          aria-label="{{hero.video_label}}">
-          <source src="{{root}}assets/openemux-promo.mp4" type="video/mp4" />
-        </video>
-        <div class="video-controls" hidden>
-          <button type="button" class="vbtn" id="promoPlay" aria-label="{{hero.video_pause}}"
-            data-play="{{hero.video_play}}" data-pause="{{hero.video_pause}}">
-            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
-          </button>
-          <button type="button" class="vbtn vbtn-sound" id="promoSound" aria-pressed="false"
-            data-on="{{hero.video_sound_on}}" data-off="{{hero.video_sound_off}}">
-            <svg class="i-muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6" /></svg>
-            <svg class="i-sound" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" /></svg>
-            <span>{{hero.video_sound_on}}</span>
-          </button>
-        </div>
+      <div class="stage-devices">
+        <img class="device-desktop" src="{{root}}assets/openemux-library-snes.png" width="1320" height="878"
+          fetchpriority="high" alt="{{hero.shot_desktop}}" />
+        <img class="device-phone" src="{{root}}assets/openemux-mobile-shelf.png" width="720" height="1560"
+          decoding="async" alt="{{hero.shot_phone}}" />
       </div>
     </div>
-    <div class="hero-pad"></div>
   </section>
 
-  <!-- FEATURES -->
-  <section id="features">
+  <!-- SHARE NEARBY -->
+  <section class="moment" id="share">
     <div class="wrap center">
-      {{features.eyebrow}}
-      {{features.title}}
-      {{features.lede}}
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🎨</div>
-          {{features.shelf}}
-        </div>
-        <div class="card">
-          <div class="ico">✨</div>
-          {{features.first_boot}}
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          {{features.controls}}
-        </div>
-        <div class="card">
-          <div class="ico">📺</div>
-          {{features.shaders}}
-        </div>
-        <div class="card">
-          <div class="ico">🐧</div>
-          {{features.native}}
-        </div>
-        <div class="card">
-          <div class="ico">🔍</div>
-          {{features.bios}}
-        </div>
-      </div>
+      {{share.eyebrow}}
+      {{share.title}}
+      {{share.lede}}
+      <ol class="share-steps">
+        <li class="card">{{share.step_pick}}</li>
+        <li class="card">{{share.step_device}}</li>
+        <li class="card">{{share.step_code}}</li>
+        <li class="card">{{share.step_play}}</li>
+      </ol>
     </div>
   </section>
 
-  <!-- PHILOSOPHY -->
-  <section id="philosophy">
-    <div class="wrap split">
-      <div>
-        {{philosophy.eyebrow}}
-        {{philosophy.title}}
-        {{philosophy.lede}}
-        <ul class="checks">
-          {{philosophy.own}}
-          {{philosophy.piracy}}
-          {{philosophy.history}}
-        </ul>
-      </div>
-      <div>
-        {{philosophy.shot_alt}}
-
-  <!-- SYSTEMS -->
-  <section id="systems">
-    <div class="wrap center">
-      {{systems.eyebrow}}
-      {{systems.title}}
-      {{systems.lede}}
-      <div class="systems">
-        <span class="chip">Nintendo (NES)</span>
-        <span class="chip">Famicom Disk System</span>
-        <span class="chip">Super Nintendo</span>
-        <span class="chip">Nintendo 64</span>
-        <span class="chip">GameCube</span>
-        <span class="chip">Game Boy</span>
-        <span class="chip">Game Boy Color</span>
-        <span class="chip">Game Boy Advance</span>
-        <span class="chip">Nintendo DS</span>
-        <span class="chip">Virtual Boy</span>
-        <span class="chip">Mega Drive</span>
-        <span class="chip">Sega Master System</span>
-        <span class="chip">Mega CD</span>
-        <span class="chip">Sega 32X</span>
-        <span class="chip">Sega Saturn</span>
-        <span class="chip">Game Gear</span>
-        <span class="chip">SG-1000</span>
-        <span class="chip">Sony PlayStation</span>
-        <span class="chip">Sony PSP</span>
-        <span class="chip">PC Engine</span>
-        <span class="chip">PC Engine CD</span>
-        <span class="chip">NeoGeo Pocket</span>
-        <span class="chip">WonderSwan</span>
-        <span class="chip">Atari 2600</span>
-        <span class="chip">Atari 5200</span>
-        <span class="chip">Atari 7800</span>
-        <span class="chip">Atari Lynx</span>
-        <span class="chip">ColecoVision</span>
-        <span class="chip">Intellivision</span>
-        <span class="chip">Odyssey²</span>
-        <span class="chip">Vectrex</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- CARTRIDGES -->
-  <section id="cartridges" aria-labelledby="cartridges-title">
-    <div class="wrap center">
-      {{cart.eyebrow}}
-      {{cart.title}}
-      {{cart.lede}}
-    </div>
-    <div class="cart-wall" id="cartWall" data-base="{{root}}assets/carts/" role="img" {{cart.wall_label}}</div>
-  </section>
-
-  <!-- SCREENSHOTS -->
-  <section id="screenshots">
+  <!-- CARTRIDGES ON THE DESKTOP -->
+  <section class="moment" id="consoles">
     <div class="wrap center">
       {{shots.eyebrow}}
       {{shots.title}}
@@ -1421,25 +1229,25 @@
           <button class="carousel-btn carousel-prev" type="button" {{shots.prev}}
           <div class="carousel-viewport">
             <div class="carousel-track">
-              <figure><img src="{{root}}assets/shelf/sfc.png" alt="OpenEmux — Super Nintendo library" />
+              <figure><img src="{{root}}assets/shelf/sfc.png" alt="{{shots.alt}}: Super Nintendo" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Super Nintendo</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/gba.png" alt="OpenEmux — Game Boy Advance library" />
+              <figure><img src="{{root}}assets/shelf/gba.png" alt="{{shots.alt}}: Game Boy Advance" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Game Boy Advance</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/n64.png" alt="OpenEmux — Nintendo 64 library" />
+              <figure><img src="{{root}}assets/shelf/n64.png" alt="{{shots.alt}}: Nintendo 64" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Nintendo 64</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/md.png" alt="OpenEmux — Mega Drive library" />
+              <figure><img src="{{root}}assets/shelf/md.png" alt="{{shots.alt}}: Mega Drive" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Mega Drive</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/sms.png" alt="OpenEmux — Sega Master System library" />
+              <figure><img src="{{root}}assets/shelf/sms.png" alt="{{shots.alt}}: Sega Master System" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>Sega Master System</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/ps.png" alt="OpenEmux — PlayStation library" />
+              <figure><img src="{{root}}assets/shelf/ps.png" alt="{{shots.alt}}: PlayStation" width="1200" height="800" loading="lazy" decoding="async" />
                 <figcaption>PlayStation</figcaption>
               </figure>
-              <figure><img src="{{root}}assets/shelf/favorites.png" {{shots.favorites}}
+              <figure><img src="{{root}}assets/shelf/favorites.png" width="1200" height="800" loading="lazy" decoding="async" {{shots.favorites}}
             </div>
           </div>
           <button class="carousel-btn carousel-next" type="button" {{shots.next}}
@@ -1451,57 +1259,34 @@
     </div>
   </section>
 
-  <!-- ANDROID -->
-  <section id="android">
+  <!-- SKINS ON THE PHONE -->
+  <section class="moment" id="android">
     <div class="wrap center">
       {{android.eyebrow}}
       {{android.title}}
       {{android.lede}}
-      <div class="gallery phones">
-        <figure><img src="{{root}}assets/openemux-mobile-shelf.png" {{android.shot_shelf}}
-        <figure><img src="{{root}}assets/openemux-mobile-roms-gba.png" {{android.shot_roms}}
-        <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba.png" {{android.shot_game}}
-        <figure><img src="{{root}}assets/openemux-mobile-shelf-light.png" {{android.shot_light}}
-      </div>
-      <div class="gallery">
-        <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba-landscape.png" {{android.shot_landscape}}
-        <figure><img src="{{root}}assets/openemux-mobile-nds-landscape.png" {{android.shot_nds}}
+      <div class="gallery skins">
+        <figure class="portrait"><img src="{{root}}assets/openemux-mobile-gameplay-gba.png" width="720" height="1560" loading="lazy" decoding="async" {{android.shot_game}}
+        <div class="landscapes">
+          <figure><img src="{{root}}assets/openemux-mobile-gameplay-gba-landscape.png" width="1280" height="618" loading="lazy" decoding="async" {{android.shot_landscape}}
+          <figure><img src="{{root}}assets/openemux-mobile-nds-landscape.png" width="1280" height="618" loading="lazy" decoding="async" {{android.shot_nds}}
+        </div>
       </div>
       {{android.notice}}
-      <div class="grid">
-        <div class="card">
-          <div class="ico">🕹️</div>
-          {{android.skins}}
-        </div>
-        <div class="card">
-          <div class="ico">📼</div>
-          {{android.carts}}
-        </div>
-        <div class="card">
-          <div class="ico">⬇️</div>
-          {{android.setup}}
-        </div>
-        <div class="card">
-          <div class="ico">🎮</div>
-          {{android.gamepad}}
-        </div>
-        <div class="card">
-          <div class="ico">🌗</div>
-          {{android.themes}}
-        </div>
-        <div class="card">
-          <div class="ico">🌐</div>
-          {{android.languages}}
-        </div>
-        <div class="card">
-          <div class="ico">🏆</div>
-          {{android.achievements}}
-        </div>
-      </div>
       <p style="margin-top:44px"><a class="btn btn-primary"
           href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">{{android.download}}
       {{android.source}}
     </div>
+  </section>
+
+  <!-- CARTRIDGES -->
+  <section id="cartridges" aria-labelledby="cartridges-title">
+    <div class="wrap center">
+      {{cart.eyebrow}}
+      {{cart.title}}
+      {{cart.lede}}
+    </div>
+    <div class="cart-wall" id="cartWall" data-base="{{root}}assets/carts/" role="img" {{cart.wall_label}}</div>
   </section>
 
   <!-- INSTALL -->
@@ -1590,6 +1375,105 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     </div>
   </section>
 
+  <!-- EVERYTHING ELSE: what the old features, philosophy and systems
+       sections said, folded into one grid. -->
+  <section id="more">
+    <div class="wrap center">
+      {{more.eyebrow}}
+      {{more.title}}
+      <div class="grid">
+        <div class="card">
+          {{more.retroarch}}
+        </div>
+        <div class="card">
+          {{features.shelf}}
+        </div>
+        <div class="card">
+          {{features.first_boot}}
+        </div>
+        <div class="card">
+          {{features.controls}}
+        </div>
+        <div class="card">
+          {{features.shaders}}
+        </div>
+        <div class="card">
+          {{features.bios}}
+        </div>
+        <div class="card">
+          {{features.native}}
+        </div>
+        <div class="card">
+          {{android.skins}}
+        </div>
+        <div class="card">
+          {{android.carts}}
+        </div>
+        <div class="card">
+          {{android.setup}}
+        </div>
+        <div class="card">
+          {{android.gamepad}}
+        </div>
+        <div class="card">
+          {{android.themes}}
+        </div>
+        <div class="card">
+          {{android.languages}}
+        </div>
+        <div class="card">
+          {{android.achievements}}
+        </div>
+        <div class="card wide">
+          {{philosophy.title}}
+          {{philosophy.lede}}
+          <ul class="checks">
+            {{philosophy.own}}
+            {{philosophy.piracy}}
+            {{philosophy.history}}
+          </ul>
+        </div>
+        <div class="card wide">
+          {{more.systems}}
+          {{systems.lede}}
+          <div class="systems">
+            <span class="chip">Nintendo (NES)</span>
+            <span class="chip">Famicom Disk System</span>
+            <span class="chip">Super Nintendo</span>
+            <span class="chip">Nintendo 64</span>
+            <span class="chip">GameCube</span>
+            <span class="chip">Game Boy</span>
+            <span class="chip">Game Boy Color</span>
+            <span class="chip">Game Boy Advance</span>
+            <span class="chip">Nintendo DS</span>
+            <span class="chip">Virtual Boy</span>
+            <span class="chip">Mega Drive</span>
+            <span class="chip">Sega Master System</span>
+            <span class="chip">Mega CD</span>
+            <span class="chip">Sega 32X</span>
+            <span class="chip">Sega Saturn</span>
+            <span class="chip">Game Gear</span>
+            <span class="chip">SG-1000</span>
+            <span class="chip">Sony PlayStation</span>
+            <span class="chip">Sony PSP</span>
+            <span class="chip">PC Engine</span>
+            <span class="chip">PC Engine CD</span>
+            <span class="chip">NeoGeo Pocket</span>
+            <span class="chip">WonderSwan</span>
+            <span class="chip">Atari 2600</span>
+            <span class="chip">Atari 5200</span>
+            <span class="chip">Atari 7800</span>
+            <span class="chip">Atari Lynx</span>
+            <span class="chip">ColecoVision</span>
+            <span class="chip">Intellivision</span>
+            <span class="chip">Odyssey²</span>
+            <span class="chip">Vectrex</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CREDIT -->
   <section id="thanks">
     <div class="wrap center">
@@ -1613,6 +1497,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       </div>
     </div>
   </section>
+
+  </main>
 
   <footer>
     <div class="wrap">
@@ -1638,6 +1524,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <img id="lightboxImg" src="" alt="" />
     <div class="lightbox-cap" id="lightboxCap"></div>
   </div>
+  <div class="lightbox watch-box" id="watchBox" role="dialog" aria-modal="true" aria-label="{{hero.video_label}}">
+    <button class="lightbox-close" id="watchClose" {{lightbox.close}}
+    <video id="promoVideo" controls playsinline preload="none" width="1920" height="1080"
+      data-src="{{root}}assets/openemux-promo.mp4" data-poster="{{root}}assets/openemux-promo-poster.jpg"></video>
+  </div>
   <script>
     (function () {
       var box = document.getElementById('lightbox');
@@ -1658,7 +1549,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         img.src = '';
       }
 
-      document.querySelectorAll('.shot img, .gallery img, .split img, .carousel-track img').forEach(function (el) {
+      document.querySelectorAll('.stage-devices img, .gallery img, .carousel-track img').forEach(function (el) {
         el.addEventListener('click', function () {
           var fig = el.closest('figure');
           var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
@@ -1673,68 +1564,55 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       });
     })();
 
-    // Promo video in the hero. Browsers only autoplay muted video, so it starts
-    // silent and the gold button turns the sound on -- from the top, so the
-    // music starts with the intro. It plays only while on screen, and never on
-    // its own for reduced motion or Save-Data.
+    // Promo video, on demand: the link opens a dialog and only then gives the
+    // <video> its source. It starts on that click, except under Save-Data,
+    // where it waits for the play button. Closing stops it and drops the
+    // source, so nothing keeps downloading.
     (function () {
+      var link = document.getElementById('watchVideo');
+      var box = document.getElementById('watchBox');
       var video = document.getElementById('promoVideo');
-      if (!video) return;
-      var controls = video.parentNode.querySelector('.video-controls');
-      var playBtn = document.getElementById('promoPlay');
-      var soundBtn = document.getElementById('promoSound');
-      var soundLabel = soundBtn.querySelector('span');
+      if (!link || !box || !video) return;
+      var closeBtn = document.getElementById('watchClose');
       var conn = navigator.connection || {};
-      var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches || conn.saveData;
-      var userPaused = still;
-      var visible = false;
 
-      video.removeAttribute('controls');
-      controls.hidden = false;
-
-      function sync() {
-        var paused = video.paused;
-        playBtn.classList.toggle('paused', paused);
-        playBtn.setAttribute('aria-label', paused ? playBtn.dataset.play : playBtn.dataset.pause);
-        soundBtn.setAttribute('aria-pressed', video.muted ? 'false' : 'true');
-        soundLabel.textContent = video.muted ? soundBtn.dataset.on : soundBtn.dataset.off;
-      }
-
-      function play() {
-        var p = video.play();
-        if (p && p.catch) p.catch(sync);
-      }
-
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(function (entries) {
-          visible = entries[0].isIntersecting;
-          if (visible && !userPaused) play();
-          else if (!visible && !video.paused) video.pause();
-        }, { threshold: .35 }).observe(video);
-      } else if (!userPaused) {
-        play();
-      }
-
-      playBtn.addEventListener('click', function () {
-        if (video.paused) { userPaused = false; play(); }
-        else { userPaused = true; video.pause(); }
-      });
-
-      soundBtn.addEventListener('click', function () {
-        if (video.muted) {
-          video.muted = false;
-          video.currentTime = 0;
-          userPaused = false;
-          play();
-        } else {
-          video.muted = true;
+      function open(e) {
+        // Ctrl/Cmd/Shift-click still opens the file in a new tab or window.
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button) return;
+        e.preventDefault();
+        video.poster = video.dataset.poster;
+        video.src = video.dataset.src;
+        box.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+        if (!conn.saveData) {
+          var p = video.play();
+          if (p && p.catch) p.catch(function () {});
         }
-        sync();
-      });
+      }
+      function close() {
+        if (!box.classList.contains('open')) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        box.classList.remove('open');
+        document.body.style.overflow = '';
+        link.focus();
+      }
 
-      video.addEventListener('play', sync);
-      video.addEventListener('pause', sync);
-      sync();
+      link.addEventListener('click', open);
+      closeBtn.addEventListener('click', close);
+      box.addEventListener('click', function (e) { if (e.target === box) close(); });
+      document.addEventListener('keydown', function (e) {
+        if (!box.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
+        // aria-modal: Tab cycles between the close button and the video and
+        // never reaches the page under the backdrop.
+        else if (e.key === 'Tab') {
+          e.preventDefault();
+          (document.activeElement === closeBtn ? video : closeBtn).focus();
+        }
+      });
     })();
 
     // Shelf carousel: 3 shots per slide (1 on mobile), dots, and wrap-around arrows.

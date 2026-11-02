@@ -107,6 +107,84 @@ class ThePublishedPagesTests(unittest.TestCase):
         self.assertNotIn('src="assets/', text)
 
 
+class TheNarrativeTests(unittest.TestCase):
+    """The page tells the story of the issue 680 redesign, in order (issue 685)."""
+
+    ORDER = ("top", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support")
+    MOMENTS = ("share", "shots", "android")
+
+    def test_every_page_follows_the_narrative_order(self):
+        for locale in build_site.ORDER:
+            ids = re.findall(r'<section[^>]* id="([a-z]+)"', build_site.render(locale))
+            with self.subTest(locale=locale):
+                self.assertEqual(tuple(ids), self.ORDER)
+
+    def test_each_moment_is_a_short_headline_and_at_most_two_sentences(self):
+        english = build_site.load_strings("en")
+        for moment in self.MOMENTS:
+            with self.subTest(moment=moment):
+                headline = re.sub(r"<[^>]+>", "", english[f"{moment}.title"])
+                self.assertTrue(2 <= len(headline.split()) <= 6, headline)
+                lede = re.sub(r"<[^>]+>", "", english[f"{moment}.lede"])
+                self.assertLessEqual(len(re.findall(r"[.!?](\s|$)", lede)), 2, lede)
+        self.assertTrue(2 <= len(re.sub(r"<[^>]+>", " ", english["hero.title"]).split()) <= 6)
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            for key in ("hero.title", "hero.lede") + tuple(
+                    k for k in strings if k.split(".")[0] in self.MOMENTS and k.split(".")[1] in ("title", "lede")
+                    or k.startswith("share.step_")):
+                with self.subTest(locale=locale, key=key):
+                    self.assertNotIn("!", strings[key])
+                    self.assertNotIn("！", strings[key])
+
+    def test_nothing_of_the_folded_sections_is_lost(self):
+        # Features, philosophy and systems became the "Everything else" grid.
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            more = re.search(r'<section id="more">(.*?)</section>', build_site.render(locale), re.S).group(1)
+            with self.subTest(locale=locale):
+                self.assertEqual(len(re.findall(r'<span class="chip">', more)), 31)
+                for key in ("features.shelf", "features.first_boot", "features.controls", "features.shaders",
+                            "features.native", "features.bios", "more.retroarch", "philosophy.lede",
+                            "philosophy.own", "philosophy.piracy", "philosophy.history", "systems.lede",
+                            "android.skins", "android.carts", "android.setup", "android.gamepad",
+                            "android.themes", "android.languages", "android.achievements"):
+                    self.assertIn(strings[key], more)
+
+    def test_every_image_has_alt_text_in_every_language(self):
+        def alts(text):
+            return re.findall(r'<img\s[^>]*\balt="([^"]+)"', text.split("</header>", 1)[1])
+
+        english = set(alts(build_site.render("en")))
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            # The logo beside the "OpenEmux" name in the header is decorative;
+            # the wall's cartridges are built by the script and labelled as a whole.
+            images = re.findall(r"<img\s[^>]*>", text.split("</header>", 1)[1])
+            with self.subTest(locale=locale):
+                self.assertGreater(len(images), 10)
+                for tag in images:
+                    if 'id="lightboxImg"' in tag:
+                        continue
+                    alt = re.search(r'alt="([^"]*)"', tag)
+                    self.assertTrue(alt and alt.group(1).strip(), tag)
+                    if locale != "en":
+                        self.assertNotIn(alt.group(1), english, "alt text left in English")
+
+    def test_the_promo_video_loads_only_on_demand(self):
+        for locale in build_site.ORDER:
+            text = build_site.render(locale)
+            videos = re.findall(r"<video\s[^>]*>", text)
+            with self.subTest(locale=locale):
+                self.assertEqual(len(videos), 1)
+                self.assertNotIn("autoplay", videos[0])
+                self.assertIn('preload="none"', videos[0])
+                self.assertNotRegex(videos[0], r'\ssrc=|\sposter=')
+                hero = re.search(r'<section class="hero" id="top">(.*?)</section>', text, re.S).group(1)
+                self.assertIn('id="watchVideo" href="', hero)
+                self.assertIn("assets/openemux-promo.mp4", hero)
+
+
 def _app_strings(locale):
     return importlib.import_module(f"openemux.i18n.locales.{locale}").TRANSLATIONS
 
