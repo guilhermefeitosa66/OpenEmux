@@ -273,17 +273,22 @@ def bios_files(roms_dir, console):
     return sorted(found.items())
 
 
-def _bios_entries(roms_dir, console, room):
-    """``[((kind, path, extra), stat)]`` of the console's BIOS, or ``None`` when they cannot go now.
+def _bios_entries(roms_dir, console):
+    """``[((kind, path, extra), stat)]`` of the console's BIOS, or ``None`` when one cannot be read.
 
-    ``None`` when one cannot be read or they need more than ``room`` items.
+    Each file is opened here: the hashing that follows the build is not
+    guarded, so a BIOS it could not read would fail the whole send.
     """
+    entries = []
     try:
-        entries = [((KIND_BIOS, path, {"name": name}), path.stat()) for name, path in bios_files(roms_dir, console)]
+        for name, path in bios_files(roms_dir, console):
+            with open(path, "rb"):
+                pass
+            entries.append(((KIND_BIOS, path, {"name": name}), path.stat()))
     except OSError as exc:
         logger.warning("share manifest: %s BIOS left for a later game: %s", console, exc)
         return None
-    return entries if len(entries) <= room else None
+    return entries
 
 
 def _sendable_name(name):
@@ -342,13 +347,15 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
             built.excluded.append({"rom": rom, "reason": SkipReason.TOO_MANY_ITEMS})
             continue
         if console not in carried:
-            # The BIOS never cost the game its place: one that cannot be read,
-            # or that would not fit, is left for the next game of the console.
-            bios = _bios_entries(roms_dir, console, MAX_ITEMS - count - len(files))
+            # The BIOS never cost the game its place: one that cannot be read
+            # is left for the next game of the console, and ones that do not
+            # fit stay out -- the room left only shrinks from game to game.
+            bios = _bios_entries(roms_dir, console)
             if bios is not None:
-                files += [entry for entry, _ in bios]
-                stats += [stat for _, stat in bios]
                 carried.add(console)
+                if len(bios) <= MAX_ITEMS - count - len(files):
+                    files += [entry for entry, _ in bios]
+                    stats += [stat for _, stat in bios]
         count += len(files)
 
         game_id = f"g{len(built.manifest['games']) + 1}"

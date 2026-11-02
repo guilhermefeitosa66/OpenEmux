@@ -377,11 +377,30 @@ class BiosTests(ManifestTestCase):
         self.lib.file("roms/PS/bios/scph1001.bin", b"other")
         first = self.lib.rom("PS", "First.chd")
         second = self.lib.rom("PS", "Second.chd")
-        with mock.patch.object(manifest_module, "MAX_ITEMS", 2):
+        real = manifest_module.bios_files
+        with mock.patch.object(manifest_module, "MAX_ITEMS", 2), \
+                mock.patch.object(manifest_module, "bios_files", side_effect=real) as listing:
             built = self.build([first, second])
         self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
         self.assertEqual(self.names(built, 1), [("rom", "Second.chd")])
         self.assertEqual(built.excluded, [])
+        # The room only shrinks: the folder is not read again for each game.
+        self.assertEqual(listing.call_count, 1)
+
+    def test_a_bios_that_cannot_be_opened_never_fails_the_build(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        first = self.lib.rom("PS", "First.chd")
+        real_open = open
+        bios = str(self.lib.roms / "PS" / "bios" / "scph5501.bin")
+
+        def guarded(path, *args, **kwargs):
+            if str(path) == bios:
+                raise PermissionError(13, "Permission denied", bios)
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=guarded):
+            built = self.build([first])
+        self.assertEqual(self.names(built, 0), [("rom", "First.chd")])
 
     def test_an_unreadable_bios_never_leaves_its_game_out(self):
         self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
