@@ -453,6 +453,70 @@ class NotSentTests(_DialogCase):
         self.assertTrue(rows[0].get_subtitle().endswith(" · Can't be sent: a track file is outside the game's folder or missing"))
 
 
+@needs_display
+class BiosSendTests(_DialogCase):
+    """A console's BIOS on "What to Send" and on the result (issue 677)."""
+
+    library = {"FDS": ["Disk One.fds", "Disk Two.fds"]}
+
+    def setUp(self):
+        super().setUp()
+        bios = self.home.console_dir("FDS") / "bios"
+        bios.mkdir()
+        (bios / "disksys.rom").write_bytes(b"fds")
+        (bios / "readme.txt").write_bytes(b"not a bios")
+        self.dialog = self.open([self.rom("FDS", 0), self.rom("FDS", 1)])
+        self.dialog._push_what()
+        self.first, self.second = self.rom("FDS", 0)["path"], self.rom("FDS", 1)["path"]
+
+    def test_the_first_game_lists_the_bios_group(self):
+        _parent, children = self.dialog._game_checks[self.first]
+        self.assertEqual(list(children), ["game", "bios"])
+        self.assertEqual(children["bios"][0].get_title(), "BIOS Files")
+        self.assertEqual(children["bios"][0].get_subtitle(), "disksys.rom · 3 B")
+        self.assertEqual(list(self.dialog._game_checks[self.second][1]), ["game"])
+
+    def test_unchecking_the_bios_holds_for_the_console(self):
+        parent, children = self.dialog._game_checks[self.first]
+        children["bios"][1].set_active(False)
+        self.assertEqual(self.dialog.unchecked, {("bios:FDS", "bios")})
+        self.assertTrue(parent.get_inconsistent())
+        self.assertEqual(self.dialog.what_row.get_subtitle().split(" · ")[-1], "2 files")
+
+    def test_the_bios_choice_stays_open_when_its_game_is_left_out(self):
+        parent, children = self.dialog._game_checks[self.first]
+        parent.set_active(False)
+        self.assertTrue(children["bios"][0].get_sensitive())
+        self.assertTrue(children["bios"][1].get_active())
+        # The BIOS now go with the second game: still counted.
+        self.assertEqual(self.dialog.what_row.get_subtitle().split(" · ")[-1], "2 files")
+
+    def test_the_result_names_the_bios_sent(self):
+        self.peers(peer("Phone"))
+        self.dialog._peer_rows[0].emit("activated")
+        _peer, built, callbacks = self.service.sent
+        ids = [item["id"] for game in built.manifest["games"] for item in game["items"]]
+        callbacks["on_done"]({"status": "done", "sent": ids, "skipped": []})
+        self.assertIn("\nBIOS files sent: disksys.rom", _status(self.dialog).get_description())
+
+    def test_the_bios_line_never_splits_a_colon_from_its_list(self):
+        # The games were already there, only the BIOS went (QA round 1, BUG-1).
+        self.peers(peer("Phone"))
+        self.dialog._peer_rows[0].emit("activated")
+        _peer, built, callbacks = self.service.sent
+        items = [item for game in built.manifest["games"] for item in game["items"]]
+        callbacks["on_done"]({
+            "status": "done",
+            "sent": [item["id"] for item in items if item["kind"] == "bios"],
+            "skipped": [{"item_id": item["id"], "reason": "user_unchecked"} for item in items if item["kind"] != "bios"],
+        })
+        status = _status(self.dialog)
+        self.assertEqual(status.get_title(), "No Games Sent")
+        self.assertEqual(status.get_description().split("\n"),
+                         ["BIOS files sent: disksys.rom", "Phone didn't take any of them:"])
+        self.assertEqual(len(_action_rows(self.dialog.result.missing_group)), 2)
+
+
 def _action_rows(widget):
     found = []
     child = widget.get_first_child()

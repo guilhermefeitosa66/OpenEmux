@@ -96,7 +96,10 @@ KIND_BATTERY_SAVE = "battery_save"
 KIND_STATE = "state"
 KIND_COVER = "cover"
 KIND_LABEL = "label"
-ITEM_KINDS = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL)
+#: A BIOS file of the game's console (issue 677); carried by the first game of
+#: each console only.
+KIND_BIOS = "bios"
+ITEM_KINDS = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL, KIND_BIOS)
 PART_ROLES = ("cue", "bin", "m3u", "disc", "main")
 #: The roles that carry the unit's name; the others are referenced by it.
 MAIN_ROLES = ("cue", "m3u", "main")

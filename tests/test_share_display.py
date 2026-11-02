@@ -149,5 +149,26 @@ class ConflictRowsTests(unittest.TestCase):
         self.assertEqual(display.conflict_rows(probe, m), [])
 
 
+
+class BiosDisplayTests(unittest.TestCase):
+    def setUp(self):
+        self.lib = temp_library(self)
+        self.catalog = make_catalog(self.lib.root / "cores", {})
+
+    def test_bios_words(self):
+        self.assertEqual(display.item_kind_label("bios", t), "BIOS")
+        self.assertEqual(display.item_kind_label("bios", t, name="scph5501.bin"), "BIOS scph5501.bin")
+        self.assertEqual(display.item_kind_label("cover", t, name="Game.png"), "Cover")
+
+    def test_a_different_bios_is_a_skip_or_replace_row(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"mine", mtime=1000)
+        m = manifest(game([item("r", "rom", "Game.chd"), item("b", "bios", "scph5501.bin", b"theirs")],
+                          console="PS"))
+        plan = plan_receive(m, roms_dir=self.lib.roms, states_dir=self.lib.states, catalog=self.catalog,
+                            policies=display.PROBE_POLICIES)
+        [row] = display.conflict_rows(plan, m)
+        self.assertEqual((row["item_id"], row["name"], row["policies"]), ("b", "scph5501.bin", ("skip", "overwrite")))
+
+
 if __name__ == "__main__":
     unittest.main()

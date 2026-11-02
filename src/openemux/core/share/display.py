@@ -19,6 +19,7 @@ from openemux.core.share.manifest import AUTO_SLOT, is_main_rom
 from openemux.core.share.placement import ACTION_SEND
 from openemux.core.share.protocol import (
     KIND_BATTERY_SAVE,
+    KIND_BIOS,
     KIND_COVER,
     KIND_LABEL,
     KIND_ROM,
@@ -100,6 +101,7 @@ _KINDS = {
     KIND_BATTERY_SAVE: "share.kind.battery_save",
     KIND_COVER: "share.kind.cover",
     KIND_LABEL: "share.kind.label",
+    KIND_BIOS: "share.kind.bios",
 }
 
 #: Every policy, in the order a conflict row lists them.
@@ -110,13 +112,15 @@ POLICY_KEYS = {
     ON_COLLISION_OVERWRITE: "share.policy.replace",
     ON_COLLISION_SKIP: "share.policy.skip",
 }
-#: Keeping two copies of a cover means nothing: the library shows one.
+#: Keeping two copies of a cover means nothing: the library shows one. Nor of
+#: a BIOS: a core opens it by name.
 _ART_POLICIES = (ON_COLLISION_SKIP, ON_COLLISION_OVERWRITE)
+_SINGLE_COPY_KINDS = (KIND_COVER, KIND_LABEL, KIND_BIOS)
 #: The plan that finds every conflict: with "replace" everywhere, each item
 #: that meets an existing file says which one.
 PROBE_POLICIES = {
     kind: ON_COLLISION_OVERWRITE
-    for kind in (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL)
+    for kind in (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL, KIND_BIOS)
 }
 
 
@@ -167,7 +171,10 @@ def excluded_reason_key(reason):
     return _EXCLUDED.get(reason, "share.excluded.invalid_item")
 
 
-def item_kind_label(kind, t, slot=None):
+def item_kind_label(kind, t, slot=None, name=None):
+    """What an item is, in words; a BIOS with its ``name`` says which one."""
+    if kind == KIND_BIOS and name:
+        return t("share.kind.bios_file", name=name)
     if kind == KIND_STATE:
         if slot == AUTO_SLOT:
             return t("share.kind.state_auto")
@@ -220,9 +227,10 @@ def conflict_rows(probe, manifest):
             "game": game.get("title", ""),
             "kind": decision.kind,
             "slot": (item.get("state") or {}).get("slot"),
+            "name": item.get("name", ""),
             "yours": yours,
             "incoming": item["mtime"],
             "newer": item["mtime"] > yours,
-            "policies": _ART_POLICIES if decision.kind in (KIND_COVER, KIND_LABEL) else POLICIES,
+            "policies": _ART_POLICIES if decision.kind in _SINGLE_COPY_KINDS else POLICIES,
         })
     return rows
