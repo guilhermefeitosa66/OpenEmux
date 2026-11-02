@@ -516,6 +516,12 @@
         justify-content: center
       }
 
+      /* The lede is a 60ch box: centre the box, not only its lines. */
+      .hero p.lede {
+        margin-left: auto;
+        margin-right: auto
+      }
+
       .stage-devices {
         display: flex;
         flex-direction: column;
@@ -1412,11 +1418,11 @@
         </div>
         <div class="stage-devices">
           <div class="device-desktop" data-stage-layer>
-            <img data-picture="eager" data-sizes="(max-width: 899px) calc(100vw - 32px), 50vw"
+            <img data-picture="eager" data-sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)"
               src="{{root}}assets/desktop/grid-sfc.png" alt="{{hero.shot_desktop}}" />
           </div>
           <div class="device-phone" data-stage-layer>
-            <img data-picture="eager" data-sizes="(max-width: 899px) 34vw, 13vw"
+            <img data-picture="eager" data-sizes="(max-width: 899px) 34vw, min(13vw, 160px)"
               src="{{root}}assets/android/library-snes.png" alt="{{hero.shot_phone}}" />
           </div>
         </div>
@@ -2015,9 +2021,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
       var visible = [];
       var ticking = false;
+      var js = false;
+      var header = document.querySelector("header");
 
       function navHeight() {
-        var header = document.querySelector("header");
         return header ? header.getBoundingClientRect().height : 0;
       }
 
@@ -2037,11 +2044,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       }
 
       function request() {
-        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+        if (js && !ticking) { ticking = true; requestAnimationFrame(update); }
       }
 
       function apply() {
-        var js = motion.matches && !native;
+        js = motion.matches && !native;
         stages.forEach(function (stage) { stage.classList.toggle("stage-js", js); });
         if (js) update();
       }

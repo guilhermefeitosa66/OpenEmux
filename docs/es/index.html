@@ -524,6 +524,12 @@
         justify-content: center
       }
 
+      /* The lede is a 60ch box: centre the box, not only its lines. */
+      .hero p.lede {
+        margin-left: auto;
+        margin-right: auto
+      }
+
       .stage-devices {
         display: flex;
         flex-direction: column;
@@ -1370,7 +1376,7 @@
     }
   </style>
   <script src="../lang.js"></script>
-  <link rel="preload" as="image" type="image/avif" imagesrcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), 50vw" fetchpriority="high" />
+  <link rel="preload" as="image" type="image/avif" imagesrcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" fetchpriority="high" />
 </head>
 
 <body>
@@ -1438,10 +1444,10 @@
         </div>
         <div class="stage-devices">
           <div class="device-desktop" data-stage-layer>
-            <picture><source type="image/avif" srcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), 50vw" /><source type="image/webp" srcset="../assets/desktop/grid-sfc-640.webp 640w, ../assets/desktop/grid-sfc-1280.webp 1280w, ../assets/desktop/grid-sfc-1920.webp 1920w, ../assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), 50vw" /><img src="../assets/desktop/grid-sfc.png" alt="OpenEmux en el ordenador, la biblioteca de Super Nintendo con sus portadas" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="../assets/desktop/grid-sfc-2640.webp" /></picture>
+            <picture><source type="image/avif" srcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><source type="image/webp" srcset="../assets/desktop/grid-sfc-640.webp 640w, ../assets/desktop/grid-sfc-1280.webp 1280w, ../assets/desktop/grid-sfc-1920.webp 1920w, ../assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><img src="../assets/desktop/grid-sfc.png" alt="OpenEmux en el ordenador, la biblioteca de Super Nintendo con sus portadas" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="../assets/desktop/grid-sfc-2640.webp" /></picture>
           </div>
           <div class="device-phone" data-stage-layer>
-            <picture><source type="image/avif" srcset="../assets/android/library-snes-640.avif 640w, ../assets/android/library-snes-1280.avif 1280w, ../assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, 13vw" /><source type="image/webp" srcset="../assets/android/library-snes-640.webp 640w, ../assets/android/library-snes-1280.webp 1280w, ../assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, 13vw" /><img src="../assets/android/library-snes.png" alt="OpenEmux en Android, la biblioteca de Super Nintendo" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="../assets/android/library-snes-1440.webp" /></picture>
+            <picture><source type="image/avif" srcset="../assets/android/library-snes-640.avif 640w, ../assets/android/library-snes-1280.avif 1280w, ../assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><source type="image/webp" srcset="../assets/android/library-snes-640.webp 640w, ../assets/android/library-snes-1280.webp 1280w, ../assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><img src="../assets/android/library-snes.png" alt="OpenEmux en Android, la biblioteca de Super Nintendo" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="../assets/android/library-snes-1440.webp" /></picture>
           </div>
         </div>
       </div>
@@ -2083,9 +2089,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
       var visible = [];
       var ticking = false;
+      var js = false;
+      var header = document.querySelector("header");
 
       function navHeight() {
-        var header = document.querySelector("header");
         return header ? header.getBoundingClientRect().height : 0;
       }
 
@@ -2105,11 +2112,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       }
 
       function request() {
-        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+        if (js && !ticking) { ticking = true; requestAnimationFrame(update); }
       }
 
       function apply() {
-        var js = motion.matches && !native;
+        js = motion.matches && !native;
         stages.forEach(function (stage) { stage.classList.toggle("stage-js", js); });
         if (js) update();
       }

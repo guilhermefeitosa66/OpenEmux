@@ -41,7 +41,8 @@ def _rounded(image, radius):
     from PIL import Image, ImageDraw
 
     mask = Image.new("L", image.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, *image.size), radius, fill=255)
+    # Pillow boxes are inclusive: the last pixel is size - 1.
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, image.width - 1, image.height - 1), radius, fill=255)
     out = image.convert("RGBA")
     out.putalpha(mask)
     return out
@@ -100,7 +101,8 @@ def og_image(desktop_path, phone_path, size=OG_SIZE):
         shot = shot.convert("RGB")
         inner_h = phone_h - 2 * bezel
         inner_w = round(shot.width * inner_h / shot.height)
-        shot = _rounded(shot.resize((inner_w, inner_h), Image.LANCZOS), 16)
+        # Concentric with the body: its radius minus the 1 px outline and the bezel.
+        shot = _rounded(shot.resize((inner_w, inner_h), Image.LANCZOS), 22 - 1 - bezel)
     phone = Image.new("RGBA", (inner_w + 2 * bezel, phone_h), (0, 0, 0, 0))
     ImageDraw.Draw(phone).rounded_rectangle((0, 0, phone.width - 1, phone_h - 1), 22, fill=PANEL,
                                             outline=(52, 46, 72), width=1)
