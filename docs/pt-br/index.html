@@ -2525,7 +2525,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var label = section.getAttribute("data-copy");
       var copied = section.getAttribute("data-copied");
       var manual = section.getAttribute("data-copy-manual");
-      if (/Mac|iPhone|iPad/.test(navigator.platform || "")) manual = manual.replace("Ctrl+C", "⌘C");
+      if (/Mac|iPhone|iPad/.test(navigator.platform || "")) manual = manual.replace(/(Ctrl|Strg)\+C/, "⌘C");
       var copyIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
       var doneIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>';
 

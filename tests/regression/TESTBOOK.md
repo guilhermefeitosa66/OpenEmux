@@ -8010,6 +8010,91 @@ or into an environment that cannot run the tests.
   EOF
   ```
 
+### RT-630 — The site's install section opens on the visitor's platform, as keyboard tabs
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** `docs/index.html` built from this checkout, opened in Chrome or Firefox.
+- **Steps:**
+  1. On a Linux desktop, open the page and go to "Installing".
+  2. With DevTools, override the user agent to a Windows one and reload; then an Android one and
+     reload; then a Firefox-on-Ubuntu one (`… X11; Ubuntu; Linux x86_64 …`) and reload.
+  3. Press Tab until the focus reaches the platform tabs; press Right, Right, Right, Home, End.
+- **Expected:** Step 1: "Linux" and "Flatpak" are selected, one panel shows. Step 2: "Windows"
+  (with "Installer") for the Windows agent, "Android" for the Android one, "Linux" with ".deb"
+  for Ubuntu. Step 3: the selection follows the arrows and wraps from "Android" to "Linux"; Home
+  selects "Linux", End selects "Android"; a gold focus ring is visible on the focused tab and Tab
+  then moves into the panel, not to the other tabs (issue 689).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheInstallSectionTests`).
+
+### RT-631 — Every package has one download button that fetches that file of the latest release
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none for the probe; network to check the buttons by hand.
+- **Steps:** As a QA person: on the site's "Installing" section, open each of "Flatpak",
+  "AppImage", ".deb", ".rpm", "Windows" → "Installer" and "Portable", and "Android"; hover the
+  purple download button in each, then click it.
+- **Expected:** Each package has exactly one purple download button. A second after the page
+  loads, each points at the matching file of the latest release (`…/releases/download/v<X.Y.Z>/…`;
+  the APK at `…/releases/latest/download/OpenEmux-mobile.apk`) and the browser downloads that
+  file. Offline or without JavaScript, each still leads to the Releases page (issue 689).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import html, re
+  from pathlib import Path
+  names = ["OpenEmux-1.18.10.flatpak", "OpenEmux-1.18.10-aarch64.flatpak",
+           "OpenEmux-1.18.10-x86_64.AppImage", "openemux_1.18.10_amd64.deb",
+           "openemux-1.18.10-1.fc40.x86_64.rpm", "OpenEmux-1.18.10-setup.exe",
+           "OpenEmux-1.18.10-windows-x86_64.zip", "OpenEmux-mobile.apk", "SHA256SUMS"]
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      sec = re.search(r'<section id="install".*?</section>', page.read_text(encoding="utf-8"), re.S).group(0)
+      pats = re.findall(r'data-asset="([^"]+)"', sec)
+      assert len(pats) == 6, (page, pats)
+      for pat in pats:
+          assert len([n for n in names if re.search(html.unescape(pat), n)]) == 1, (page, pat)
+      hrefs = re.findall(r'class="btn btn-primary"[^>]*href="([^"]+)"', sec, re.S)
+      assert len(hrefs) == 7 and all("/OpenEmux/releases/latest" in h for h in hrefs), (page, hrefs)
+  print("RT-631 OK")
+  EOF
+  ```
+
+### RT-632 — A copy button copies each install command, or selects it when it cannot
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served over https (the published page) or opened from `docs/`.
+- **Steps:**
+  1. In "Installing", click "Copy" beside the RetroArch command under "Flatpak" and paste into a
+     terminal.
+  2. Do the same in "Verify your download" for the `sha256sum` line.
+  3. In a browser where the Clipboard API is refused (for example an `http://` copy of the page on
+     another machine), click "Copy" again.
+- **Expected:** Steps 1–2: the button turns mint and reads "Copied" for about two seconds; the
+  paste is exactly the command, multi-line commands included. Step 3: the command text is
+  selected and the button reads "Press Ctrl+C" ("⌘C" on a Mac) for a few seconds. Every command
+  in the section has its own button; the button never covers the command text (issue 689).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheInstallSectionTests`).
+
+### RT-633 — The install section folds the checksum check, fits a phone and works without JavaScript
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** `docs/index.html` built from this checkout.
+- **Steps:**
+  1. Open the page at 1280 px wide and look below the install card.
+  2. Narrow the window to 360 px (DevTools device toolbar) and open every platform and package
+     tab, then "Verify your download"; repeat in Deutsch and தமிழ்.
+  3. Disable JavaScript and reload.
+- **Expected:** Step 1: "Verify your download" is a closed row with a shield icon; clicking it
+  shows the `SHA256SUMS` explanation and both commands. Step 2: no horizontal page scroll in any
+  tab or language; long commands and paths wrap inside their own box. Step 3: no tabs and no copy
+  buttons; Linux, Windows and Android are stacked with every package under its gold tag, and every
+  download button leads to the Releases page — the same information as before the redesign
+  (issue 689).
+- **Check:** human only. Unit-level: `tests/test_site.py`
+  (`test_without_javascript_every_panel_is_shown`, `test_checksum_verification_is_folded_away`).
+
 ### RT-370 — `make test` on a desktop runs on a private display
 - **Area:** Developer tooling
 - **Mode:** AUTO-PROBE
