@@ -451,5 +451,26 @@ class HousekeepingTests(ReceiveTestCase):
         self.assertFalse(is_battery_save(self.lib.roms / "SFC" / ".Game.srm.def.tmp", "SFC"))
 
 
+
+class BiosReceiveTests(ReceiveTestCase):
+    def test_a_received_bios_shows_as_present(self):
+        from openemux.core.bios_manager import scan_console_bios_status
+
+        m = manifest(game([
+            item("r", "rom", "Game.chd", DATA["r"]),
+            item("b", "bios", "scph5501.bin", b"bios bytes", mtime=1900),
+        ], console="PS"))
+        transfer = self.transfer(m)
+        self.put(transfer, "r")
+        self.put(transfer, "b", b"bios bytes")
+        self.assertEqual(self.done[0]["status"], "done")
+        bios = self.lib.roms / "PS" / "bios" / "scph5501.bin"
+        self.assertEqual((bios.read_bytes(), os.stat(bios).st_mtime), (b"bios bytes", 1900))
+        config = mock.Mock()
+        config.get_console_bios_dir.return_value = self.lib.roms / "PS" / "bios"
+        [entry] = scan_console_bios_status(config, "PS")["required"]
+        self.assertTrue(entry["present"])
+
+
 if __name__ == "__main__":
     unittest.main()

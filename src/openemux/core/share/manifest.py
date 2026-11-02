@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from openemux.core.bios_importer import canonical_bios_names
 from openemux.core.save_backup import is_battery_save
 from openemux.core.save_states import list_states
 from openemux.core.scanner import _CUE_FILE_RE
@@ -22,6 +23,7 @@ from openemux.core.scraper import COVER_ART, LABEL_ART, find_local_art
 from openemux.core.share.protocol import (
     ITEM_KINDS,
     KIND_BATTERY_SAVE,
+    KIND_BIOS,
     KIND_COVER,
     KIND_LABEL,
     KIND_ROM,
@@ -246,6 +248,49 @@ def _game_files(rom, unit, console, roms_dir, states_dir, catalog, resolve_core)
     return files
 
 
+def bios_files(roms_dir, console):
+    """``[(name, path)]``: the catalog BIOS of ``console`` this device has.
+
+    Read from ``<roms>/<console>/bios/`` -- the folder
+    ``ConfigManager.get_console_bios_dir`` names -- and matched against the
+    console's catalog without regard to case; ``name`` is the catalog's
+    spelling, which is what a core opens. A file with the exact spelling wins
+    over a case variant. Nothing else in the folder is ever offered.
+    """
+    expected = canonical_bios_names(console)
+    directory = Path(roms_dir) / console / "bios"
+    found = {}
+    try:
+        entries = sorted(directory.iterdir())
+    except OSError:
+        return []
+    for entry in entries:
+        canonical = expected.get(entry.name.lower())
+        if canonical is None or not entry.is_file():
+            continue
+        if canonical not in found or entry.name == canonical:
+            found[canonical] = entry
+    return sorted(found.items())
+
+
+def _bios_entries(roms_dir, console):
+    """``[((kind, path, extra), stat)]`` of the console's BIOS, or ``None`` when one cannot be read.
+
+    Each file is opened here: the hashing that follows the build is not
+    guarded, so a BIOS it could not read would fail the whole send.
+    """
+    entries = []
+    try:
+        for name, path in bios_files(roms_dir, console):
+            with open(path, "rb"):
+                pass
+            entries.append(((KIND_BIOS, path, {"name": name}), path.stat()))
+    except OSError as exc:
+        logger.warning("share manifest: %s BIOS left for a later game: %s", console, exc)
+        return None
+    return entries
+
+
 def _sendable_name(name):
     return is_safe_file_name(name) and not name.startswith(".")
 
@@ -277,6 +322,8 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
     built = BuiltManifest({"games": [], "total_size": 0, "file_count": 0})
     count = 0
     pending = []
+    #: Consoles whose BIOS a game already carries: they travel once.
+    carried = set()
     for rom in roms:
         console = resolve_system_id(rom.get("console", ""))
         if console not in SYSTEM_IDS:
@@ -299,6 +346,16 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
         if count + len(files) > MAX_ITEMS:
             built.excluded.append({"rom": rom, "reason": SkipReason.TOO_MANY_ITEMS})
             continue
+        if console not in carried:
+            # The BIOS never cost the game its place: one that cannot be read
+            # is left for the next game of the console, and ones that do not
+            # fit stay out -- the room left only shrinks from game to game.
+            bios = _bios_entries(roms_dir, console)
+            if bios is not None:
+                carried.add(console)
+                if len(bios) <= MAX_ITEMS - count - len(files):
+                    files += [entry for entry, _ in bios]
+                    stats += [stat for _, stat in bios]
         count += len(files)
 
         game_id = f"g{len(built.manifest['games']) + 1}"
@@ -307,7 +364,7 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
         if metadata:
             game["metadata"] = metadata
         for index, ((kind, path, extra), stat) in enumerate(zip(files, stats), start=1):
-            item = {"id": f"{game_id}i{index}", "kind": kind, "name": path.name,
+            item = {"id": f"{game_id}i{index}", "kind": kind, "name": extra.get("name", path.name),
                     "size": stat.st_size, "mtime": int(stat.st_mtime)}
             if kind == KIND_ROM and unit.multi:
                 item["part"] = {"unit": game_id, "role": extra["role"]}

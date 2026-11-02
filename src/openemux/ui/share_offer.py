@@ -25,7 +25,7 @@ from openemux.core.share.display import (
 )
 from openemux.core.share.placement import DEFAULT_POLICIES
 from openemux.core.share.protocol import KIND_STATE, OFFER_TTL, ErrorCode, ShareError, SkipReason
-from openemux.core.share.report import game_delivered, receive_report
+from openemux.core.share.report import game_actions, game_delivered, receive_report
 from openemux.core.systems import get_system_display_name
 from openemux.ui.share_pages import confirm_cancel, ProgressPage, code_label, label, page, result_page, show_page
 
@@ -237,7 +237,7 @@ class IncomingOfferDialog(Adw.Dialog):
 
     def _conflict_row(self, row):
         t = self.t
-        title = f"{row['game']} · {item_kind_label(row['kind'], t, slot=row['slot'])}"
+        title = f"{row['game']} · {item_kind_label(row['kind'], t, slot=row['slot'], name=row['name'])}"
         key = "share.conflicts.dates_newer" if row["newer"] else "share.conflicts.dates"
         combo = Adw.ComboRow(title=title, subtitle=t(
             key, yours=format_date(row["yours"]), incoming=format_date(row["incoming"])))
@@ -263,7 +263,8 @@ class IncomingOfferDialog(Adw.Dialog):
                 continue
             game, item = self.items.get(decision.item_id, ({}, {}))
             state = item.get("state") or {}
-            title = f"{game.get('title', '')} · {item_kind_label(decision.kind, t, slot=state.get('slot'))}"
+            kind = item_kind_label(decision.kind, t, slot=state.get("slot"), name=item.get("name"))
+            title = f"{game.get('title', '')} · {kind}"
             if decision.reason == SkipReason.INCOMPATIBLE_STATE and state.get("core"):
                 subtitle = t("share.reason.incompatible_state_core", core=state["core"],
                              version=state.get("core_version", ""))
@@ -356,7 +357,7 @@ class IncomingOfferDialog(Adw.Dialog):
     def _received_games(self):
         return [
             game for game in self.plan.games
-            if game_delivered(game.rom_status, {d.action for d in game.decisions})
+            if game_delivered(game.rom_status, game_actions(game.decisions))
         ]
 
     def _show_result(self, result):
