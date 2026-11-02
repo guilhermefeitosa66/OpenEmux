@@ -337,7 +337,7 @@ class ArtTests(PlacementTestCase):
 
 class GameLevelTests(PlacementTestCase):
     def test_unsupported_console(self):
-        m = manifest(game([item("r", "rom", "Game.adf"), item("x", "bios", "x")], console="AMIGA"))
+        m = manifest(game([item("r", "rom", "Game.adf"), item("x", "hologram", "x")], console="AMIGA"))
         self.assertEqual(self.answers(self.plan(m)), {"x": "invalid_item", "r": "unsupported_console"})
 
     def test_console_aliases(self):
@@ -443,6 +443,65 @@ class SpaceTests(PlacementTestCase):
                                   item("t", "state", "Game.state1", state={**SNES9X, "slot": 1}),
                                   item("s", "battery_save", "Game.srm")))
         self.assertEqual([d.item_id for d in plan.to_send()], ["r", "s", "t", "c"])
+
+
+
+class BiosTests(PlacementTestCase):
+    """A console's BIOS lands in its BIOS folder (issue 677)."""
+
+    def ps(self, *extra, rom=b"rom"):
+        return manifest(game([item("r", "rom", "Game.chd", rom)] + list(extra), console="PS"))
+
+    def test_a_new_bios_goes_to_the_bios_folder_under_the_catalog_spelling(self):
+        plan = self.plan(self.ps(item("b", "bios", "SCPH5501.BIN", b"bios")))
+        self.assertEqual(self.target(plan, "b"), "roms/PS/bios/scph5501.bin")
+        self.assertEqual(plan.to_send()[-1].item_id, "b")
+        self.assertEqual(placement.DEFAULT_POLICIES["bios"], "skip")
+
+    def test_a_name_the_console_does_not_expect_is_refused(self):
+        for name in ("notes.txt", "bios7.bin"):
+            plan = self.plan(self.ps(item("b", "bios", name, b"bios")))
+            self.assertEqual(self.answers(plan)["b"], "invalid_item", name)
+
+    def test_the_same_bios_is_skipped_without_a_conflict(self):
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios", mtime=1)
+        plan = self.plan(self.ps(item("b", "bios", "scph5501.bin", b"bios")), policies={"bios": "overwrite"})
+        self.assertEqual(self.answers(plan)["b"], "exists_skip")
+        self.assertIsNone(self.decisions(plan)["b"].replaces)
+
+    def test_a_different_bios_is_kept_unless_replaced(self):
+        existing = self.lib.file("roms/PS/bios/scph5501.bin", b"mine", mtime=1)
+        m = self.ps(item("b", "bios", "scph5501.bin", b"theirs"))
+        self.assertEqual(self.answers(self.plan(m))["b"], "exists_skip")
+        replaced = self.decisions(self.plan(m, overrides={"b": "overwrite"}))["b"]
+        self.assertEqual((replaced.action, replaced.replaces), ("send", existing))
+        # Keeping both means nothing: a core opens one name.
+        self.assertEqual(self.answers(self.plan(m, overrides={"b": "keep_both"}))["b"], "exists_skip")
+
+    def test_a_folder_under_the_bios_name_is_refused(self):
+        (self.lib.roms / "PS" / "bios" / "scph5501.bin").mkdir(parents=True)
+        plan = self.plan(self.ps(item("b", "bios", "scph5501.bin", b"bios")))
+        self.assertEqual(self.answers(plan)["b"], "invalid_item")
+
+    def test_the_same_bios_twice_in_one_offer_goes_once(self):
+        m = manifest(
+            game([item("r", "rom", "One.chd"), item("b", "bios", "scph5501.bin", b"bios")], console="PS"),
+            game([item("r2", "rom", "Two.chd"), item("b2", "bios", "scph5501.bin", b"bios")],
+                 game_id="g2", console="PS"),
+        )
+        self.assertEqual({k: v for k, v in self.answers(self.plan(m)).items() if k.startswith("b")},
+                         {"b": "send", "b2": "exists_skip"})
+
+    def test_bios_go_whatever_became_of_the_rom(self):
+        self.lib.file("roms/PS/Game.chd", b"rom")
+        plan = self.plan(self.ps(item("b", "bios", "scph5501.bin", b"bios")))
+        self.assertEqual(plan.games[0].rom_status, ROM_EXISTING)
+        self.assertEqual(self.answers(plan), {"r": "exists_skip", "b": "send"})
+
+    def test_unchecked_bios_and_unchecked_games_are_skipped(self):
+        m = self.ps(item("b", "bios", "scph5501.bin", b"bios"))
+        self.assertEqual(self.answers(self.plan(m, unchecked={"b"}))["b"], "user_unchecked")
+        self.assertEqual(self.answers(self.plan(m, unchecked={"g1"}))["b"], "user_unchecked")
 
 
 if __name__ == "__main__":

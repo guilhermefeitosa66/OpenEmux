@@ -41,7 +41,7 @@ class SelectionTests(unittest.TestCase):
         games, excluded = selection.inventory(built)
         full, bare = games
         self.assertEqual(full["key"], self.full["path"])
-        self.assertEqual(list(full["groups"]), list(selection.CATEGORIES))
+        self.assertEqual(list(full["groups"]), [c for c in selection.CATEGORIES if c != selection.BIOS])
         self.assertEqual(full["groups"]["battery"]["count"], 2)
         self.assertEqual(full["groups"]["battery"]["mtime"], 4000)
         self.assertEqual(full["groups"]["states"]["count"], 2)
@@ -79,6 +79,60 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(selection.kept_roms(built, roms, {(self.full["path"], "game")}), [self.bare])
         # A group unchecked keeps its game: apply_selection drops the group.
         self.assertEqual(selection.kept_roms(built, roms, {(self.bare["path"], "states")}), [self.full, self.bare])
+
+
+
+class BiosSelectionTests(unittest.TestCase):
+    """The BIOS group is the console's, whichever game carries it (issue 677)."""
+
+    def setUp(self):
+        self.lib = temp_library(self)
+        self.catalog = make_catalog(self.lib.root / "cores", {})
+        self.lib.file("roms/PS/bios/scph5501.bin", b"bios")
+        self.lib.file("roms/PS/bios/scph1001.bin", b"bios two")
+        self.first = self.lib.rom("PS", "First.chd")
+        self.second = self.lib.rom("PS", "Second.chd")
+        self.roms = [self.first, self.second]
+
+    def build(self, roms):
+        return build_manifest(
+            roms, roms_dir=self.lib.roms, states_dir=self.lib.states, catalog=self.catalog,
+            resolve_core=lambda console, path: None, config=FakeConfig(),
+        )
+
+    def kinds(self, picked):
+        return [[(i["kind"], i["name"]) for i in g["items"]] for g in picked.manifest["games"]]
+
+    def test_the_carrier_lists_a_bios_group(self):
+        games, _ = selection.inventory(self.build(self.roms))
+        first, second = games
+        self.assertEqual(list(first["groups"]), ["game", "bios"])
+        self.assertEqual((first["groups"]["bios"]["count"], first["groups"]["bios"]["size"]), (2, 12))
+        self.assertEqual(list(second["groups"]), ["game"])
+        self.assertEqual(selection.group_key(first, "bios"), ("bios:PS", "bios"))
+        self.assertEqual(selection.group_key(first, "game"), (self.first["path"], "game"))
+
+    def test_unchecking_bios_holds_for_the_console(self):
+        built = self.build(self.roms)
+        picked = selection.apply_selection(built, {(selection.bios_key("PS"), "bios")})
+        self.assertEqual(self.kinds(picked), [[("rom", "First.chd")], [("rom", "Second.chd")]])
+        self.assertEqual(picked.manifest["file_count"], 2)
+
+    def test_a_carrier_left_out_hands_its_bios_on(self):
+        built = self.build(self.roms)
+        picked = selection.apply_selection(built, {(self.first["path"], "game")})
+        self.assertEqual(self.kinds(picked), [[
+            ("rom", "Second.chd"), ("bios", "scph1001.bin"), ("bios", "scph5501.bin"),
+        ]])
+        self.assertEqual(set(picked.sources), {i["id"] for g in picked.manifest["games"] for i in g["items"]})
+        # The send rebuilds from the kept games alone: the same files go.
+        rebuilt = self.build(selection.kept_roms(built, self.roms, {(self.first["path"], "game")}))
+        self.assertEqual(selection.summarize(rebuilt)["files"], selection.summarize(picked)["files"])
+
+    def test_a_carrier_left_out_with_bios_unchecked_sends_none(self):
+        built = self.build(self.roms)
+        unchecked = {(self.first["path"], "game"), (selection.bios_key("PS"), "bios")}
+        self.assertEqual(self.kinds(selection.apply_selection(built, unchecked)), [[("rom", "Second.chd")]])
 
 
 if __name__ == "__main__":

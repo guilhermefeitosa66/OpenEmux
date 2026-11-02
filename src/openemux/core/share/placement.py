@@ -13,7 +13,10 @@ Defaults, per kind (the caller overrides any of them, per kind or per item):
   same name and other content is kept beside it under a free name;
 * battery saves and save states keep the newest -- strictly newer, so a tie
   keeps the local file and an older save never replaces a newer one;
-* a cover or label the library already has is skipped: the user's own art wins.
+* a cover or label the library already has is skipped: the user's own art wins;
+* a BIOS file goes to the console's BIOS folder under the receiver's catalog
+  spelling; the same file already there is skipped, and a different one is
+  kept -- the local BIOS wins unless the user picks "Replace" (issue 677).
 """
 
 import hashlib
@@ -25,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from openemux.core.archives import ARCHIVE_EXTENSIONS
+from openemux.core.bios_importer import console_bios_names
 from openemux.core.save_backup import (
     ON_COLLISION_KEEP_BOTH,
     ON_COLLISION_NEWEST,
@@ -44,6 +48,7 @@ from openemux.core.share.manifest import (
 )
 from openemux.core.share.protocol import (
     KIND_BATTERY_SAVE,
+    KIND_BIOS,
     KIND_COVER,
     KIND_LABEL,
     KIND_ROM,
@@ -64,6 +69,7 @@ DEFAULT_POLICIES = {
     KIND_STATE: ON_COLLISION_NEWEST,
     KIND_COVER: ON_COLLISION_SKIP,
     KIND_LABEL: ON_COLLISION_SKIP,
+    KIND_BIOS: ON_COLLISION_SKIP,
 }
 #: Kept free on every filesystem after the transfer.
 SPACE_RESERVE = 64 * 1024 * 1024
@@ -72,7 +78,7 @@ _RESERVED_DIRS = {"covers", "labels", "bios"}
 _ART_SUFFIXES = {f".{ext}" for ext in SUPPORTED_COVER_EXTS}
 _ART_DIRS = {KIND_COVER: COVER_ART, KIND_LABEL: LABEL_ART}
 #: The order a commit places things in; the receive side relies on it.
-COMMIT_ORDER = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL)
+COMMIT_ORDER = (KIND_ROM, KIND_BATTERY_SAVE, KIND_STATE, KIND_COVER, KIND_LABEL, KIND_BIOS)
 STATE_KEEP_BOTH_SLOTS = range(1, 10)
 #: What a target name leaves free of the 255 bytes a file name may take: the
 #: stage's temporary name (``.<name>.XXXXXXXX.tmp``) adds 14 bytes to it, and
@@ -274,6 +280,10 @@ class _Planner:
                 continue
             if item["id"] in self.unchecked:
                 self.skip(plan, item, SkipReason.USER_UNCHECKED)
+            elif item["kind"] == KIND_BIOS:
+                # A console's BIOS is no part of the game: it goes whatever
+                # became of the ROM.
+                self.plan_bios(plan, console, item)
             elif plan.rom_status == ROM_ABSENT:
                 self.skip(plan, item, plan.absent_reason)
             elif item["kind"] == KIND_BATTERY_SAVE:
@@ -470,6 +480,23 @@ class _Planner:
         target = base / f"{title}{suffix}"
         existing = target if target.exists() else find_local_art(self.roms_dir, console, title, art_kind)
         # Keeping both copies of a cover means nothing: the library shows one.
+        self.resolve_conflict(plan, item, target, base, existing, lambda: None)
+
+
+    def plan_bios(self, plan, console, item):
+        canonical = {name.lower(): name for name in console_bios_names(console)}.get(item["name"].lower())
+        if canonical is None:
+            return self.skip(plan, item, SkipReason.INVALID_ITEM)
+        base = self.roms_dir / console / "bios"
+        target = base / canonical
+        if target in self.taken or _same_content(target, item):
+            # The same BIOS is already there (or already coming): nothing to
+            # ask about, and nothing to upload.
+            return self.skip(plan, item, SkipReason.EXISTS_SKIP)
+        if os.path.lexists(target) and not target.is_file():
+            return self.skip(plan, item, SkipReason.INVALID_ITEM)
+        existing = target if target.exists() else None
+        # A core opens its BIOS by name: a second copy beside it is useless.
         self.resolve_conflict(plan, item, target, base, existing, lambda: None)
 
 

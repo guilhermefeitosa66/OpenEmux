@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from openemux.core.bios_importer import console_bios_names
 from openemux.core.save_backup import is_battery_save
 from openemux.core.save_states import list_states
 from openemux.core.scanner import _CUE_FILE_RE
@@ -22,6 +23,7 @@ from openemux.core.scraper import COVER_ART, LABEL_ART, find_local_art
 from openemux.core.share.protocol import (
     ITEM_KINDS,
     KIND_BATTERY_SAVE,
+    KIND_BIOS,
     KIND_COVER,
     KIND_LABEL,
     KIND_ROM,
@@ -246,6 +248,31 @@ def _game_files(rom, unit, console, roms_dir, states_dir, catalog, resolve_core)
     return files
 
 
+def bios_files(roms_dir, console):
+    """``[(name, path)]``: the catalog BIOS of ``console`` this device has.
+
+    Read from ``<roms>/<console>/bios/`` -- the folder
+    ``ConfigManager.get_console_bios_dir`` names -- and matched against the
+    console's catalog without regard to case; ``name`` is the catalog's
+    spelling, which is what a core opens. A file with the exact spelling wins
+    over a case variant. Nothing else in the folder is ever offered.
+    """
+    expected = {name.lower(): name for name in console_bios_names(console)}
+    directory = Path(roms_dir) / console / "bios"
+    found = {}
+    try:
+        entries = sorted(directory.iterdir())
+    except OSError:
+        return []
+    for entry in entries:
+        canonical = expected.get(entry.name.lower())
+        if canonical is None or not entry.is_file():
+            continue
+        if canonical not in found or entry.name == canonical:
+            found[canonical] = entry
+    return sorted(found.items())
+
+
 def _sendable_name(name):
     return is_safe_file_name(name) and not name.startswith(".")
 
@@ -277,6 +304,8 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
     built = BuiltManifest({"games": [], "total_size": 0, "file_count": 0})
     count = 0
     pending = []
+    #: Consoles whose BIOS a game already carries: they travel once.
+    carried = set()
     for rom in roms:
         console = resolve_system_id(rom.get("console", ""))
         if console not in SYSTEM_IDS:
@@ -288,6 +317,8 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
             continue
         try:
             files = _game_files(rom, unit, console, roms_dir, states_dir, catalog, resolve_core)
+            if console not in carried:
+                files += [(KIND_BIOS, path, {"name": name}) for name, path in bios_files(roms_dir, console)]
             stats = [path.stat() for _, path, _ in files]
         except OSError as exc:
             logger.warning("share manifest: %s left out: %s", rom.get("path"), exc)
@@ -300,6 +331,7 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
             built.excluded.append({"rom": rom, "reason": SkipReason.TOO_MANY_ITEMS})
             continue
         count += len(files)
+        carried.add(console)
 
         game_id = f"g{len(built.manifest['games']) + 1}"
         game = {"id": game_id, "console": console, "title": rom.get("name") or unit.main.stem, "items": []}
@@ -307,7 +339,7 @@ def build_manifest(roms, *, roms_dir, states_dir, catalog, resolve_core, config,
         if metadata:
             game["metadata"] = metadata
         for index, ((kind, path, extra), stat) in enumerate(zip(files, stats), start=1):
-            item = {"id": f"{game_id}i{index}", "kind": kind, "name": path.name,
+            item = {"id": f"{game_id}i{index}", "kind": kind, "name": extra.get("name", path.name),
                     "size": stat.st_size, "mtime": int(stat.st_mtime)}
             if kind == KIND_ROM and unit.multi:
                 item["part"] = {"unit": game_id, "role": extra["role"]}

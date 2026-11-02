@@ -230,6 +230,9 @@ def result_page(t, result, device, receiving, report=None, summary="", on_close=
         icon, title, description = _done_text(t, report, device, receiving)
         page_box.set_icon_name(icon)
         page_box.set_title(title)
+        if report.bios:
+            key = "share.result.bios_received" if receiving else "share.result.bios_sent"
+            description = f"{description}\n{t(key, names=', '.join(report.bios))}"
         if summary:
             description = f"{description}\n{summary}"
         if not report.complete:

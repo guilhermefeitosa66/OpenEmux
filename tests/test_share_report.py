@@ -15,7 +15,7 @@ from openemux.core.share.placement import (
     GamePlan,
     ReceivePlan,
 )
-from openemux.core.share.protocol import KIND_BATTERY_SAVE, KIND_COVER, KIND_ROM, SkipReason
+from openemux.core.share.protocol import KIND_BATTERY_SAVE, KIND_BIOS, KIND_COVER, KIND_ROM, SkipReason
 
 
 def item(item_id, kind=KIND_ROM, role=None):
@@ -168,6 +168,35 @@ class ReceiveReportTests(unittest.TestCase):
         ])
         got = report.receive_report(plan, unchecked={"dropped"})
         self.assertEqual((got.delivered, got.total, got.missing), (1, 1, []))
+
+
+
+class BiosReportTests(unittest.TestCase):
+    """BIOS are reported by name and never make a game delivered (issue 677)."""
+
+    def test_the_sender_lists_the_bios_sent(self):
+        bios = {"id": "b", "kind": KIND_BIOS, "name": "scph5501.bin", "size": 1, "mtime": 0}
+        unsent = {**bios, "id": "b2", "name": "scph1001.bin"}
+        got = report.send_report(
+            built(game("A", item("a"), bios, unsent, console="PS")),
+            {"status": "done", "sent": ["b"], "skipped": [skip("a", SkipReason.EXISTS_SKIP), skip("b2", None)]},
+        )
+        self.assertEqual(got.bios, ["scph5501.bin"])
+        self.assertEqual((got.delivered, got.total), (0, 1))
+
+    def test_the_receiver_lists_the_bios_placed(self):
+        from pathlib import Path
+
+        decisions = [
+            Decision("r", KIND_ROM, ACTION_SKIP, SkipReason.EXISTS_SKIP),
+            Decision("b", KIND_BIOS, ACTION_SEND, target=Path("/x/PS/bios/scph5501.bin"), name="SCPH5501.BIN"),
+            Decision("b2", KIND_BIOS, ACTION_SKIP, SkipReason.EXISTS_SKIP, name="scph1001.bin"),
+        ]
+        plan = ReceivePlan([GamePlan("g1", "PS", "A", {}, rom_status=ROM_EXISTING, decisions=decisions)])
+        got = report.receive_report(plan)
+        self.assertEqual(got.bios, ["scph5501.bin"])
+        self.assertEqual(got.delivered, 0)
+        self.assertEqual(report.game_actions(decisions), {ACTION_SKIP})
 
 
 if __name__ == "__main__":
