@@ -8379,6 +8379,7 @@ or into an environment that cannot run the tests.
   print("RT-678 OK")
   EOF
   ```
+  Unit-level: `tests/test_site.py` (`SupportButtonsTests`).
 
 ### RT-612 — "Everything else" keeps every fact of the old sections
 - **Area:** Developer tooling & docs
