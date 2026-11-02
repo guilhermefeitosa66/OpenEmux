@@ -1660,8 +1660,8 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Open the Nintendo 64 page in the cartridge view and look at a cartridge at rest (pointer away
      from the grid).
   2. Do the same on the NES and Game Boy pages.
-  3. Switch to the light theme ("Preferences" ▸ appearance, or `ADW_DEBUG_COLOR_SCHEME=prefer-light`)
-     and repeat step 1.
+  3. Switch to the light theme with the header bar's theme button ("Switch to the light theme")
+     and repeat step 1; switch back afterwards.
   4. Open "All" and choose "Cartridge Grid".
   5. Hover a cartridge; switch to the cover view.
 - **Expected:** No rectangle (fill, border or shadow) shows around any cartridge, on either theme:
@@ -1673,7 +1673,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** a `make devbox-shot OUT=$SCRATCH/rt679-<step>.png WIN=1` per step, zoomed in on the
   corners; suite file `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`,
   `TheCartridgeShadowRuleTests`).
-- **Restore:** return the theme and the view mode to what they were.
+- **Restore:** return the theme (step 3) and the view mode to what they were.
 
 ### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout
