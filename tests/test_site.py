@@ -429,7 +429,10 @@ class TheOpeningStageTests(unittest.TestCase):
         self.assertIn("(prefers-reduced-motion: no-preference) and (min-height: 640px) {", self.css)
 
     def test_scrolling_is_never_taken_over(self):
-        self.assertNotIn("scroll-snap", self.css)
+        # The page never snaps; the only snap is the galleries' own sideways
+        # track (issue 688), which moves the gallery, not the page.
+        self.assertEqual(re.findall(r"scroll-snap-type:[^;}]*", self.css), ["scroll-snap-type: x mandatory"])
+        self.assertIn("scroll-snap-type: x mandatory", _blocks(self.css, ".gal-track {")[0])
         engine = re.search(r"<!-- Scroll stages: the fallback driver.*?</script>", self.en, re.S).group(0)
         for needle in ("wheel", "touchmove", "touchstart", "keydown", "preventDefault", "scrollTo(",
                        "scrollBy(", "scrollIntoView"):
@@ -610,11 +613,18 @@ class TheShareSequenceTests(unittest.TestCase):
         self.assertNotIn(".share-window::after", self.css)
 
     def test_scrolling_is_never_taken_over(self):
-        self.assertNotIn("scroll-snap", self.css)
-        # The engine's one driver moves it: no script of its own.
+        # The page never snaps; the only snap is the galleries' own sideways
+        # track (issue 688), which moves the gallery, not the page.
+        self.assertEqual(re.findall(r"scroll-snap-type:[^;}]*", self.css), ["scroll-snap-type: x mandatory"])
+        self.assertIn("scroll-snap-type: x mandatory", _blocks(self.css, ".gal-track {")[0])
+        # The engine's one driver moves it: no script of its own. The only
+        # wheel listener is the galleries' passive one on their own track
+        # (issue 688), which can never hold the page.
         scripts = "".join(re.findall(r"<script>(.*?)</script>", self.en, re.S))
-        for needle in ("share", "wheel", "touchmove"):
-            self.assertNotIn(needle, scripts)
+        self.assertNotIn("share", scripts)
+        self.assertNotIn("touchmove", scripts)
+        self.assertEqual(re.findall(r"addEventListener\('wheel'[^)]*\)", scripts),
+                         ["addEventListener('wheel', release, { passive: true })"])
 
 
 @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is a dev-only dependency")

@@ -262,7 +262,7 @@
        stage, so its own timing lives in the stops, and one set of keyframes
        serves both drivers: CSS scroll-driven animations where the browser has
        them, the script at the end of the page (which writes `--p`) elsewhere.
-       Scrolling itself is never touched: no snap, no wheel or touch handler.
+       Scrolling itself is never touched: no page snap, no wheel or touch handler.
        Without a driver the CSS below IS the final composition, which is what
        reduced motion, no JavaScript, older browsers and screens too short for
        the stage get, at the section's natural height. Only transform and opacity animate. */
