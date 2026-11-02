@@ -6097,13 +6097,14 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   2. Press RIGHT one game at a time to the last one, then LEFT back to the first.
   3. With the last game focused, press RIGHT once more.
   4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
-  5. Press UP into the header (back link, search, sort, view toggle).
+  5. Press UP into the header (search, sort, view toggle).
 - **Expected:** The first games take focus without the row scrolling, and the first one rests at the
   row's left padding with nothing empty before it. From there on the focused game stays in the
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
   the last game rests at the right padding. The focused game's title is bold and the others are
-  dimmed. Headers never take focus. RIGHT past the last game leaves focus on it, it never jumps up
-  to the header. In the header the ring and its halo are whole, not cut by the top of the screen.
+  dimmed. Headers never take focus, and neither does the back link (B goes back). RIGHT past the last
+  game leaves focus on it, it never jumps up to the header. In the header the ring and its halo are
+  whole, not cut by the top of the screen.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
 ### RT-435 — No focus ring is cut or covered, on any screen
@@ -6170,6 +6171,69 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   game and the label above the row names its console.
 - **Check:** human only.
 - **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-645 — A screen opened with the gamepad focuses its game or Play, never the back arrow
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As the section's header; a gamepad connected (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. On the shelf, focus a console and press A.
+  2. Press A again.
+  3. Press B.
+  4. Rotate to landscape (`adb shell settings put system accelerometer_rotation 0`,
+     `adb shell settings put system user_rotation 1`) and repeat 1 to 3.
+  5. Press START, focus "BIOS" (then "Backup", then "About") and press A; press B.
+  6. In a console's list, press R1, then L1.
+  7. Open a game's detail by touch, then press a D-pad key.
+- **Expected:** 1: the console's first game holds the focus ring (or, coming back, the game that was
+  opened), and the hint bar's "A: Details" is true. 2: the game's detail opens with "Play" (or
+  "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
+  the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
+  on the back link, and B goes back to the row that opened it. 6: R1 and L1 land on the new page's
+  first game, never on search, a chip or the back link. 7: focus lands on "Play". Each placement
+  holds: one second later the focus is still on the game or "Play". At no point does A go back.
+- **Check:** human only.
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-646 — Controls with their own pad button are for the finger; the pad uses the button
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-645's library; a gamepad connected.
+- **Steps:**
+  1. In a console's list, portrait and landscape, press UP, LEFT and RIGHT around the header until
+     focus stops moving.
+  2. On a game's detail, portrait and landscape, press UP and LEFT from "Play" until focus stops moving.
+  3. On the sort button and the view toggle, read the hint bar.
+  4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
+     arrow, star and "More options" with a finger.
+  5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
+- **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
+  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: focus stays
+  on "Play"; the back arrow, the star (X) and "More options" (Y) never take it. 3: the bar says
+  "A: Choose", and A sorts or switches the view; on a game it says "A: Details", on "Play" "A: Play"
+  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens the
+  menu from any focused item.
+- **Check:** human only; the focus parts also by
+  `adb shell am instrument -w -e class com.openemux.mobile.ui.GamepadFocusInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
+  (after `./gradlew installDebug installDebugAndroidTest`, on a device past the first-run setup).
+
+### RT-647 — Y in the game list opens the focused game's options, never its detail
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-645's library; a gamepad connected; a game you can remove (a copy).
+- **Steps:**
+  1. In a console's list, focus a game and press Y.
+  2. Press B.
+  3. Press Y, focus "Remove from library", press A, then press B (Cancel).
+  4. Press Y, choose "Share Nearby".
+  5. Back in the list, press Y on the copy, "Remove from library", then "Remove".
+  6. On a tablet in the list + detail layout, repeat 1.
+- **Expected:** 1: a sheet over the list with the game's title and console, "Share Nearby" and
+  "Remove from library"; the detail does not open. 2: the sheet closes and the same game keeps the
+  focus. 3: "Remove <title>?" asks first; Cancel keeps the game. 4: Share nearby opens with that game.
+  5: the game leaves the list and the next one takes the focus. 6: the same sheet; A still opens the
+  side pane and A on the picked game the full detail. The hint bar says "Y: Options" throughout.
+- **Check:** human only.
 
 ## Android — Multi-select and bulk remove
 
