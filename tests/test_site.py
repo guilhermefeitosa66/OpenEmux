@@ -206,6 +206,27 @@ class TheNarrativeTests(unittest.TestCase):
                 self.assertIn('id="watchVideo" href="', hero)
                 self.assertIn("assets/openemux-promo.mp4", hero)
 
+    @staticmethod
+    def _promo_seconds():
+        """The promo's length, from the ``mvhd`` box of the published MP4."""
+        data = (REPO / "docs" / "assets" / "openemux-promo.mp4").read_bytes()
+        box = data.index(b"mvhd") + 4
+        if data[box] == 1:
+            timescale = int.from_bytes(data[box + 20:box + 24], "big")
+            duration = int.from_bytes(data[box + 24:box + 32], "big")
+        else:
+            timescale = int.from_bytes(data[box + 12:box + 16], "big")
+            duration = int.from_bytes(data[box + 16:box + 20], "big")
+        return round(duration / timescale)
+
+    def test_the_watch_link_and_label_state_the_video_s_real_length(self):
+        seconds = str(self._promo_seconds())
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            with self.subTest(locale=locale):
+                for key in ("hero.watch", "hero.video_label"):
+                    self.assertEqual(re.findall(r"\d+", strings[key])[:1], [seconds], key)
+
 
 class TheGalleriesTests(unittest.TestCase):
     """The cartridge and controller-skin galleries (issue 688)."""

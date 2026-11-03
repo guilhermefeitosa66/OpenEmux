@@ -1040,7 +1040,7 @@ the pull request, not renamed or dropped. "Widths" are the AVIF/WebP variants
 | `docs/assets/og-opening.png` | `og:image` | `tools/site_art.py` | 1200×630 | — |
 | `docs/assets/logo-128.png` | header, favicon | `tools/site_art.py` | 128×128 | — |
 | `docs/assets/logo.png` | README, manual, promo video (the app ships its own copy, `src/openemux/ui/assets/images/logo.png`) | original art, not re-made | 735×776 | — |
-| `docs/assets/openemux-promo.mp4`, `openemux-promo-poster.jpg` | the opening's video | `openemux-video` (Remotion; its README) | 1920×1080 | — |
+| `docs/assets/openemux-promo.mp4`, `openemux-promo-poster.jpg` | the opening's video | `openemux-video` (Remotion; its README) | 1920×1080, 30 fps, 44 s (the 66 s render sped up 1.5x with ffmpeg); poster = frame 495 of the render | — |
 | `docs/manual/img/*.webp` (64) | the manual (`site/manual.html`); `overview.webp` is also its `og:image` | devbox crops of a 1880×1280 window, lossless WebP (issue 524) | as in `site/manual.html` | — |
 | `docs/assets/openemux-{roms-nes,roms-snes,settings}.png` | AppStream `<screenshots>` (pinned to a commit) | devbox, 1320×878 window | 1320×878 | — |
 | `docs/assets/openemux-gameplay-gba.png` | AppStream `<screenshots>` (pinned) | devbox: a `demo_gameplay.py` frame in RetroArch over the library | 1300×860 | — |

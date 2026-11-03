@@ -8510,7 +8510,7 @@ or into an environment that cannot run the tests.
 - **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
 - **Steps:**
   1. Load the home page and scroll through it.
-  2. Click "Watch the video (45 s)" under the download buttons.
+  2. Click "Watch the video (44 s)" under the download buttons.
   3. Press Escape.
   4. With JavaScript disabled, click the same link.
 - **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
@@ -8518,7 +8518,8 @@ or into an environment that cannot run the tests.
   the dialog closes, the sound stops and the focus returns to the link. 4: the browser opens the
   video file itself. With Save-Data on, step 2 opens the dialog without starting playback
   (issue 685).
-- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`;
+  `test_the_watch_link_and_label_state_the_video_s_real_length` ties the seconds in the link to the MP4).
 
 ### RT-620 — The cartridge gallery shows each console's cartridge view, by mouse
 - **Area:** Developer tooling & docs
