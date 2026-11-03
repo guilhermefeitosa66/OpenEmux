@@ -13,6 +13,7 @@ only one whose focus, parent and popover are real.
 
 import copy
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
@@ -136,6 +137,36 @@ class TheCoverArrivingTests(_CardCase):
     def test_a_full_resolution_composite_becomes_a_texture(self):
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
         self.assertIsNotNone(self.card.cover_image.get_paintable())
+
+    def test_a_cartridge_composite_casts_its_shadow_from_its_outline(self):
+        # issue 725: `.rom-cover` is a box shadow plus rounded corners, which
+        # drew a rectangle around every cartridge.
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.assertTrue(self.card.cover_image.has_css_class("rom-cartridge"))
+        self.assertFalse(self.card.cover_image.has_css_class("rom-cover"))
+
+    def test_a_cover_on_a_card_that_showed_a_cartridge_gets_its_box_back(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), False)
+        self.assertTrue(self.card.cover_image.has_css_class("rom-cover"))
+        self.assertFalse(self.card.cover_image.has_css_class("rom-cartridge"))
+
+    def test_hovering_a_cartridge_draws_no_dark_layer_over_its_box(self):
+        # issue 725: the dark play overlay filled the image's whole box.
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.assertTrue(self.card.play_overlay.has_css_class("cartridge"))
+
+    def test_a_cover_on_a_card_that_showed_a_cartridge_gets_its_dark_overlay_back(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), False)
+        self.assertFalse(self.card.play_overlay.has_css_class("cartridge"))
+
+    def test_a_placeholder_on_a_card_that_showed_a_cartridge_gets_its_dark_overlay_back(self):
+        # A recycled card whose next game has no art shows the placeholder,
+        # a box, which keeps the dark overlay.
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.card.bind(RomEntry(self.win.playlist_manager.load_playlist("FC")[0]))
+        self.assertFalse(self.card.play_overlay.has_css_class("cartridge"))
 
     def test_a_cover_for_a_game_the_card_has_left_is_dropped(self):
         stale = self.card._generation
@@ -821,6 +852,41 @@ class EntryMatchingTests(unittest.TestCase):
         entry = self._entry()
         entry.has_artwork = None
         self.assertFalse(entry_matches(entry, only_missing_artwork=True))
+
+
+class TheCartridgeShadowRuleTests(unittest.TestCase):
+    """The stylesheet side of issue 725, readable without a display."""
+
+    @staticmethod
+    def rule(selector):
+        css = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "openemux" / "ui" / "style.css"
+        ).read_text(encoding="utf-8")
+        start = css.index(selector + " {")
+        return css[start:css.index("}", start)]
+
+    def test_the_cartridge_shadow_follows_the_alpha_not_the_box(self):
+        rule = self.rule(".rom-cartridge")
+        self.assertIn("filter: drop-shadow(", rule)
+        self.assertNotIn("box-shadow", rule)
+        self.assertNotIn("border-radius", rule)
+
+    def test_covers_keep_their_box_shadow(self):
+        self.assertIn("box-shadow", self.rule(".rom-cover"))
+
+    def test_the_play_overlay_over_a_cartridge_is_transparent(self):
+        self.assertIn(
+            "background-color: transparent", self.rule(".play-overlay.cartridge")
+        )
+
+    def test_the_play_icon_over_a_cartridge_keeps_a_shadow_of_its_own(self):
+        self.assertIn(
+            "-gtk-icon-shadow", self.rule(".play-overlay.cartridge .play-icon")
+        )
+
+    def test_covers_keep_their_dark_play_overlay(self):
+        self.assertIn("alpha(black", self.rule(".play-overlay"))
 
 
 if __name__ == "__main__":

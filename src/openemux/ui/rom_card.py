@@ -482,6 +482,9 @@ class RomItem(Gtk.Box):
         # Any hover/focus affordance belongs to the card that just left.
         self.remove_css_class("rom-card-hover")
         self.play_overlay.set_visible(False)
+        # Until a cartridge arrives, the card shows the placeholder, a box:
+        # a recycled card whose next game has no art keeps the dark overlay.
+        self.play_overlay.remove_css_class("cartridge")
         self.menu_button.set_visible(False)
         self.set_opacity(1.0)
         self._fade_next_apply = False
@@ -501,6 +504,9 @@ class RomItem(Gtk.Box):
         self.set_selected(False)
         self.remove_css_class("rom-card-hover")
         self.play_overlay.set_visible(False)
+        # Until a cartridge arrives, the card shows the placeholder, a box:
+        # a recycled card whose next game has no art keeps the dark overlay.
+        self.play_overlay.remove_css_class("cartridge")
         self.menu_button.set_visible(False)
         self._show_placeholder()
 
@@ -686,6 +692,11 @@ class RomItem(Gtk.Box):
                 if self._backdrop is not None:
                     self._fit_cover_to(pixbuf)
                 self.cover_image.set_pixbuf(pixbuf)
+            # Set on every apply, either way: the grid recycles cards, and one
+            # that last showed a cartridge must not hand its look to a cover.
+            # Only once the art is attached, so a failed attach leaves the
+            # previous art with its own look.
+            self._set_cartridge_look(full_resolution)
             self._show_cover_image()
             if self._fade_next_apply:
                 self._fade_next_apply = False
@@ -693,6 +704,26 @@ class RomItem(Gtk.Box):
         except Exception:
             logger.exception("cover: could not attach art to the card")
         return False  # Don't repeat idle callback
+
+    def _set_cartridge_look(self, cartridge):
+        """Shadow the cartridge's outline, or the cover's box.
+
+        Only a cartridge composite arrives at full resolution. Its picture
+        drops ``rom-cover`` (a box shadow and rounded corners, which drew a
+        rectangle around the cartridge) for ``rom-cartridge``, whose shadow
+        follows the composite's alpha (issue 725). The play overlay drops its
+        dark layer over a cartridge for the same reason: it fills the image's
+        whole box.
+        """
+        add, drop = (
+            ("rom-cartridge", "rom-cover") if cartridge else ("rom-cover", "rom-cartridge")
+        )
+        self.cover_image.remove_css_class(drop)
+        self.cover_image.add_css_class(add)
+        if cartridge:
+            self.play_overlay.add_css_class("cartridge")
+        else:
+            self.play_overlay.remove_css_class("cartridge")
 
     def _fit_cover_to(self, pixbuf):
         """Fill the card with this cover, or show it whole on the backdrop.

@@ -8,6 +8,7 @@ here is imported by the app, and nothing here ships in a package.
 | `generate_name_db.py` | Regenerates the game-name database the cover lookup reads | `make name-db` |
 | `icon_browser.py` | Browse the symbolic icons the UI is allowed to use | `make icons` |
 | `gen_cartridge_colors.py` | Generate the per-colour copies of every cartridge frame | see below |
+| `import_cartridge_frames.py` | Put the Android relief cartridge frames into the desktop SVGs | see below |
 | `selection_input_harness.py` | Drive the real grid with synthesized input on a nested X server | see below |
 | `grid_virtualization_probe.py` | Assert the grid still builds only a screenful of cards | see below |
 | `phone_shots.py` | The site's Android in-game shots: a bundled skin over a demo gameplay frame | see `docs/DEVELOPMENT.md` (Android and Share nearby captures) |
@@ -121,6 +122,36 @@ shell (MD, SMS) multiplied by any colour stays black; the ramp normalises each
 console's own plastic to the same light-grey band first — measured from the
 embedded artwork — which is what makes one colour read the same across every
 console.
+
+Relief frames (art embedded as WebP, see below) are skipped: their colours come
+already baked from the Android generator.
+
+## `import_cartridge_frames.py` — the relief cartridge frames
+
+Twenty-three consoles (all but SFC) have relief frames: real height, cast
+shadows, embossed lettering. They are rendered by the Android app's generator,
+`pkg/android/openemux/tools/render-cartridge-frames.py` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+which is their only source: change a frame there, then import it here.
+
+```bash
+.venv/bin/python tools/import_cartridge_frames.py            # every relief frame
+.venv/bin/python tools/import_cartridge_frames.py GB FC      # only these
+.venv/bin/python tools/import_cartridge_frames.py --from DIR # drawables elsewhere
+```
+
+It reads `cart_<console>[_<colour>].webp` from the Android checkout's
+`src/main/res/drawable-nodpi` (next to this repository by default) and embeds
+each one, as is, in the matching `<CONSOLE>[-<colour>].svg`, dropping the
+colour variant's "Colorize" filter: the WebP is already coloured, and coloured
+better than the filter could (the label window's shadow and the metal contacts
+keep their own colour). The `label-clip` marker and the rest of the file stay as
+they were, and a raster whose shape is not the frame's is refused. Stdlib only.
+
+The art is WebP because PNG would make the frames three times heavier; librsvg
+2.58 and later decode it on their own (`tests/test_cartridge_render.py` fails if
+the shells come out blank). The Android `bake-frames.py` goes the other way for
+SFC, which stays hand-drawn.
 
 ## `selection_input_harness.py` — grid input, on a real display
 

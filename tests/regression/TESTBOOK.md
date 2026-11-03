@@ -1605,7 +1605,97 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
           assert cr.cartridge_frame(c, color=color) is not None, (c, color)
   print('RT-339 OK')"
   ```
-  The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`).
+  The label placement is in `tests/test_cartridge_render.py` (`EveryShippedFrameTests`); since
+  issue #703 the frames' look is RT-678.
+
+### RT-678 — Desktop relief frames match Android, in every shell colour
+- **Area:** View modes & layout
+- **Mode:** MANUAL
+- **Preconditions:** games with real labels for each relief console: NES, Game Boy, Game Boy Color,
+  Master System, Game Gear, SG-1000, 32X, PC Engine, Atari 2600, 5200 and 7800, ColecoVision,
+  Intellivision, Lynx, Neo Geo Pocket, Odyssey², Virtual Boy, Vectrex, WonderSwan, Nintendo 64,
+  Game Boy Advance, Mega Drive and Nintendo DS (issue 724); one Super Nintendo game. An existing
+  cartridge cache from an earlier version is fine (and is part of the test).
+- **Steps:** As a QA person:
+  1. Open each of those consoles in the cartridge view.
+  2. Zoom to the largest size; then run the app at 2× scale (`GDK_SCALE=2`) and look again.
+  3. On a few of them, PC Engine and WonderSwan included, pick "Cartridge color" ▸ "Black", then
+     "White", then "Clear", then "Red".
+  4. Open the Super Nintendo game in the cartridge view.
+- **Expected:** Every frame in step 1 is the Android app's relief frame: lit from the top left,
+  with embossed lettering ("Nintendo GAME BOY", "VIRTUAL BOY", "SEGA", "WonderSwan"...), grooves,
+  ribs and arrows casting shadows — no old flat art left, even for games whose cartridge was drawn
+  before the update. The label fills its window exactly as before, with a soft shadow along its
+  top and left edges. Step 2 stays sharp. In step 3 each colour reads as that colour with the
+  relief still visible, the label is never tinted, and the PC Engine's contacts stay gold and the
+  WonderSwan's copper. The Nintendo DS card shows its side notches, the large rounded
+  bottom-left corner and the chamfered label corner in relief, the same card as on Android; like
+  today's card it has no lettering and no contacts (a real card's front is all label). Step 4 looks
+  exactly as before.
+- **Check:** human only (a screenshot per console and colour). The art itself:
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  from openemux.core import cartridge_render as cr
+  relief = 'FC GB GBC SMS GG SG1000 S32X PCE A2600 A5200 A7800 CV INTV LYNX NGP O2 VB VECTREX WS N64 GBA MD NDS'.split()
+  for c in cr.consoles_with_frames():
+      kind = 'webp' if c in relief else 'png'
+      for color in cr.frame_colors_for(c):
+          text = cr.frame_asset_for(c, color=color).read_text()
+          assert 'data:image/' + kind + ';base64,' in text, (c, color)
+          if c in relief or color == 'default':
+              assert 'colorize-' not in text, (c, color)
+          else:
+              assert 'colorize-' in text, (c, color)
+  assert cr.FRAME_CACHE_VERSION >= 3
+  print('RT-678 OK')"
+  ```
+  The rendering is in `tests/test_cartridge_render.py` (`ReliefFrameTests`).
+
+### RT-679 — A cartridge's shadow follows its outline, never a rectangle
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with Nintendo 64, NES and Game Boy games, plus a
+  disc-console game (PlayStation).
+- **Steps:**
+  1. Open the Nintendo 64 page in the cartridge view and look at a cartridge at rest (pointer away
+     from the grid).
+  2. Do the same on the NES and Game Boy pages.
+  3. Switch to the light theme with the header bar's theme button ("Switch to the light theme")
+     and repeat step 1; switch back afterwards.
+  4. Open "All" and choose "Cartridge Grid".
+  5. Hover a cartridge (RT-685 checks the hover itself); switch to the cover view.
+- **Expected:** No rectangle (fill, border or shadow) shows around any cartridge, on either theme:
+  only a soft shadow under the cartridge's own outline, which follows the N64's rounded top and
+  stepped shoulders, the NES's notched bottom corners and the Game Boy's cut corner (issue 725).
+  Step 4 looks the same for every cartridge group, while the PlayStation group keeps its box art
+  with the usual rectangular shadow. Step 5: the hover lift and tint work as before, and covers in
+  the cover view keep their rounded rectangular shadow.
+- **Check:** a `make devbox-shot OUT=$SCRATCH/rt679-<step>.png WIN=1` per step, zoomed in on the
+  corners; suite file `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`,
+  `TheCartridgeShadowRuleTests`).
+- **Restore:** return the theme (step 3) and the view mode to what they were.
+
+### RT-685 — Hovering a cartridge shows the play icon with no dark rectangle
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with Nintendo 64, NES and Game Boy games, plus a
+  disc-console game (PlayStation).
+- **Steps:**
+  1. Open the Nintendo 64 page in the cartridge view and hover a cartridge.
+  2. Do the same on the NES and Game Boy pages, including a cartridge with a light label.
+  3. Move the pointer away, then focus a cartridge with the arrow keys.
+  4. Switch to the light theme with the header bar's theme button ("Switch to the light theme")
+     and repeat step 1; switch back afterwards.
+  5. Switch to the cover view and hover a cover; then do the same in the list view.
+- **Expected:** Steps 1–4: no dark block over or around the cartridge, only the card's lighter
+  hover tint (the same tone behind the name) and the white play icon over the cartridge, with a
+  soft shadow under the glyph that keeps it readable over light and dark labels; the favorite star
+  and the menu button appear as before; the keyboard focus outline is unchanged (issue 725).
+  Step 5: covers and rows keep the darkened overlay behind the play icon.
+- **Check:** a `make devbox-shot OUT=$SCRATCH/rt685-<step>.png WIN=1` per step with the pointer
+  moved there by `make devbox-xdo CMD='mousemove <x> <y>'`; suite file
+  `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`, `TheCartridgeShadowRuleTests`).
+- **Restore:** return the theme (step 4) and the view mode to what they were.
 
 ### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout
@@ -5879,9 +5969,10 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   it, both the same size; the fold falls in the gap between them. The bottom screen sits between
   the d-pad and the face buttons with the strip under it; L and the menu key are at the top left,
   R and "NINTENDO DS" at the top right. The tap registers in the game. The layout key goes "One
-  per half" → "Top screen only" → "Bottom screen only" → "One per half". Going flat brings back the
-  packaged Nintendo DS skin with its two screens one over the other and no gap between them; half
-  open again opens on "Top screen only".
+  per half" → "Top screen only" → "Bottom screen only" → "One per half", a toast naming each one
+  ("Screens: Top screen only"; issue 709). Going flat brings back the
+  packaged Nintendo DS skin on the layout remembered for that orientation (issue 709), with no gap
+  between the screens; half open again opens on "Top screen only".
 - **Check:** human only (a screenshot per layout, compared with the DobFoldNDS board).
 
 ### RT-449 — Pause in tabletop: the menu on the bottom half, the game visible above
@@ -6048,6 +6139,56 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
+## Android — Relief cartridge frames
+
+The Android app's cartridge frames re-rendered with relief by
+`pkg/android/openemux/tools/render-cartridge-frames.py` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android) (issue 702, done in parts:
+issue 704 covers Game Boy, Game Boy Color, NES and Virtual Boy; issue 705 the Master System, Game
+Gear, SG-1000 and 32X; issue 706 the Atari 2600, 5200, 7800 and Lynx; issue 707 the PC Engine, ColecoVision, Intellivision,
+Neo Geo Pocket, Odyssey 2, Vectrex and WonderSwan; issue 714 the Nintendo 64, Game Boy Advance and
+Mega Drive; issue 724 the Nintendo DS). Each later part adds its consoles to
+RT-645's list. The runner has no Android device, so this is `MANUAL`: a person runs it on a phone and
+a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, with `adb`).
+
+### RT-645 — Relief frames show their depth, seat the label and keep every color right
+- **Area:** Android — Relief cartridge frames
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, games with real labels for
+  each redone console: Game Boy, Game Boy Color, NES, Virtual Boy, Master System, Game Gear,
+  SG-1000, 32X, Atari 2600, Atari 5200, Atari 7800, Lynx, PC Engine, ColecoVision, Intellivision,
+  Neo Geo Pocket, Odyssey 2, Vectrex, WonderSwan, Nintendo 64, Game Boy Advance, Mega Drive,
+  Nintendo DS.
+- **Steps:**
+  1. Open each console's library in the cartridge view, phone in portrait.
+  2. Look at one cartridge of each console up close (open the game's detail screen).
+  3. Turn the phone to landscape; then repeat step 1 on a tablet-sized screen.
+  4. In "Settings", set each of those consoles' "Cartridge color" to Black, then White, then Clear,
+     then one saturated color (Red), looking at the cartridge view after each.
+  5. Open the console that was not redone (Super Nintendo) in the cartridge view.
+- **Expected:** Every redone frame is sharp (no pixelation in landscape or on the tablet), lit from
+  the top left: embossed lettering is legible ("Nintendo GAME BOY" on Game Boy and Game Boy Color,
+  "VIRTUAL BOY" on the Virtual Boy's dark band, "SEGA" on the Game Gear's plate), and the grooves,
+  ribs, arrows, grip tabs and slots cast shadows (the Master System's three grooves under the label,
+  the Game Gear's arch and top vents, the SG-1000's side grips, the 32X's bezel, side sweeps and
+  bottom slots, the Atari 2600 and 7800's bevelled rim, the Atari 5200's side teeth and its
+  embossed Atari symbol and "ATARI" on the lower plate, the Lynx's top grip ridge and its row of
+  contacts along the bottom, the PC Engine's black top panel and ribbed bottom tab, the
+  ColecoVision's side grips, "INSERT TO" / "THIS LINE" and the side slots on the Intellivision, the
+  Neo Geo Pocket's ribbed top with "SNK", its arrow and "NEOGEO POCKET", the Odyssey 2's handle with
+  its see-through hole, the Vectrex's up arrow and "INSERT TO THIS LINE", "WonderSwan" on its plate
+  and the WonderSwan's row of holes, the Nintendo 64's arched top, its two vertical grooves and the
+  stepped lower shoulders, "GAME BOY ADVANCE" embossed under the Game Boy Advance's top arch and its
+  arrow at the bottom, the Mega Drive's two big side columns, the Nintendo DS card's side notches,
+  large rounded bottom-left corner and chamfered label corner, with no lettering or contacts, as
+  today's card). The
+  label sits in a recess with a soft shadow along its top and left edges, filling the window with no
+  gap and without covering the shell. Each color reads as that color with the relief still visible,
+  including Black, White and Clear. The PC Engine's contacts stay gold and the WonderSwan's stay
+  copper in every color. The console in step 5 looks exactly as before.
+- **Check:** human only (a screenshot of each console and color:
+  `adb exec-out screencap -p > rt645-<console>-<color>.png`).
+
 ## Android — Gamepad navigation
 
 The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
@@ -6066,13 +6207,14 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   2. Press RIGHT one game at a time to the last one, then LEFT back to the first.
   3. With the last game focused, press RIGHT once more.
   4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
-  5. Press UP into the header (back link, search, sort, view toggle).
+  5. Press UP into the header (search, sort, view toggle).
 - **Expected:** The first games take focus without the row scrolling, and the first one rests at the
   row's left padding with nothing empty before it. From there on the focused game stays in the
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
   the last game rests at the right padding. The focused game's title is bold and the others are
-  dimmed. Headers never take focus. RIGHT past the last game leaves focus on it, it never jumps up
-  to the header. In the header the ring and its halo are whole, not cut by the top of the screen.
+  dimmed. Headers never take focus, and neither does the back link (B goes back). RIGHT past the last
+  game leaves focus on it, it never jumps up to the header. In the header the ring and its halo are
+  whole, not cut by the top of the screen.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
 ### RT-435 — No focus ring is cut or covered, on any screen
@@ -6139,6 +6281,69 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   game and the label above the row names its console.
 - **Check:** human only.
 - **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-645 — A screen opened with the gamepad focuses its game or Play, never the back arrow
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As the section's header; a gamepad connected (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. On the shelf, focus a console and press A.
+  2. Press A again.
+  3. Press B.
+  4. Rotate to landscape (`adb shell settings put system accelerometer_rotation 0`,
+     `adb shell settings put system user_rotation 1`) and repeat 1 to 3.
+  5. Press START, focus "BIOS" (then "Backup", then "About") and press A; press B.
+  6. In a console's list, press R1, then L1.
+  7. Open a game's detail by touch, then press a D-pad key.
+- **Expected:** 1: the console's first game holds the focus ring (or, coming back, the game that was
+  opened), and the hint bar's "A: Details" is true. 2: the game's detail opens with "Play" (or
+  "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
+  the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
+  on the back link, and B goes back to the row that opened it. 6: R1 and L1 land on the new page's
+  first game, never on search, a chip or the back link. 7: focus lands on "Play". Each placement
+  holds: one second later the focus is still on the game or "Play". At no point does A go back.
+- **Check:** human only.
+- **Restore:** `adb shell settings put system user_rotation 0`.
+
+### RT-646 — Controls with their own pad button are for the finger; the pad uses the button
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-645's library; a gamepad connected.
+- **Steps:**
+  1. In a console's list, portrait and landscape, press UP, LEFT and RIGHT around the header until
+     focus stops moving.
+  2. On a game's detail, portrait and landscape, press UP and LEFT from "Play" until focus stops moving.
+  3. On the sort button and the view toggle, read the hint bar.
+  4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
+     arrow, star and "More options" with a finger.
+  5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
+- **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
+  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: focus stays
+  on "Play"; the back arrow, the star (X) and "More options" (Y) never take it. 3: the bar says
+  "A: Choose", and A sorts or switches the view; on a game it says "A: Details", on "Play" "A: Play"
+  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens the
+  menu from any focused item.
+- **Check:** human only; the focus parts also by
+  `adb shell am instrument -w -e class com.openemux.mobile.ui.GamepadFocusInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
+  (after `./gradlew installDebug installDebugAndroidTest`, on a device past the first-run setup).
+
+### RT-647 — Y in the game list opens the focused game's options, never its detail
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-645's library; a gamepad connected; a game you can remove (a copy).
+- **Steps:**
+  1. In a console's list, focus a game and press Y.
+  2. Press B.
+  3. Press Y, focus "Remove from library", press A, then press B (Cancel).
+  4. Press Y, choose "Share Nearby".
+  5. Back in the list, press Y on the copy, "Remove from library", then "Remove".
+  6. On a tablet in the list + detail layout, repeat 1.
+- **Expected:** 1: a sheet over the list with the game's title and console, "Share Nearby" and
+  "Remove from library"; the detail does not open. 2: the sheet closes and the same game keeps the
+  focus. 3: "Remove <title>?" asks first; Cancel keeps the game. 4: Share nearby opens with that game.
+  5: the game leaves the list and the next one takes the focus. 6: the same sheet; A still opens the
+  side pane and A on the picked game the full detail. The hint bar says "Y: Options" throughout.
+- **Check:** human only.
 
 ## Android — Multi-select and bulk remove
 
@@ -6327,6 +6532,156 @@ or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`.
 - **Check:**
   ```bash
   adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep input_libretro_device_p1   # "769"
+  ```
+
+## Android — Dark controller skins
+
+Every console the Android app ships a skin for (FC, SFC, N64, GB, GBC, GBA, NDS, GC, MD, SMS, PS,
+PSP) has a second one, **Dark**: the same layout painted black, with dark grey controls and muted grey
+labels, for playing with the lights off. The choice is per console, in the console's settings (a
+"Default skin" section with two cards, below "Default shader") and from a game's detail screen (the
+"Controller skin" row opens the same choice), saved in `files/meta.json` as `consoles.<id>.skin` (`console` or `dark`; missing =
+`console`). The packages are built by `tools/skins/build.py` into `src/main/assets/skins/` and
+`src/main/assets/skins/dark/` ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). The runner has no Android device, so these are `MANUAL`: a person runs them
+on a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; a game's generated
+files are in `files/launch/current/`.
+
+### RT-670 — "Default skin" offers Console colors and Dark, Console colors by default
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install of the Android app (or one that never changed a console's skin)
+  with a SNES game in the library.
+- **Steps:**
+  1. Open Settings, then the SNES console.
+  2. Look at the "Default skin" section, below "Default shader".
+  3. Launch the SNES game, phone in portrait.
+- **Expected:** The section is titled "Default skin" with "Console colors" on its right, says "The
+  virtual controller every SNES game uses." and shows two cards right there, without opening anything:
+  "Console colors" (selected) and "Dark". A console the app has no Dark skin for (Atari 2600, for
+  example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
+  The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consoles",{}).get("SFC",{}).get("skin","console"))'   # console
+  ```
+
+### RT-671 — Picking Dark gives every game of that console the Dark skin, in every orientation
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** Two SNES games and one GBA game in the library.
+- **Steps:**
+  1. Settings → SNES → tap the "Dark" card under "Default skin".
+  2. Launch the first SNES game in portrait, then turn the phone to landscape.
+  3. Quit and launch the second SNES game.
+  4. Quit and launch the GBA game.
+- **Expected:** After step 1 the "Dark" card is selected and the section title reads "Dark" on its right. Both SNES games open on a black skin with dark
+  grey buttons and muted grey labels; every key sits exactly where it does on the Console colors
+  skin, in portrait and in landscape, and the game picture is the brightest thing on screen. The GBA
+  game still opens in its own purple colors.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark
+  adb shell run-as $PKG ls cache/skins/dark   # SFC.deltaskin, copied when the SNES game launched
+  ```
+
+### RT-672 — The Dark choice survives closing the game, restarting the app and updating it
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-671 done (SNES set to Dark).
+- **Steps:**
+  1. Force-stop the app (`adb shell am force-stop $PKG`) and open it again.
+  2. Open Settings → SNES, then launch a SNES game.
+  3. Install a newer build over this one (`adb install -r <apk>`), open the app and launch a SNES
+     game again.
+- **Expected:** The row still reads "Dark" and the games open on the Dark skin after the restart and
+  after the update. Consoles never changed keep their own colors.
+- **Check:** the `skin` key is still `dark` after each step (same command as RT-671).
+
+### RT-673 — Every control works and stays readable on the Dark skin
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** Dark picked for N64, PS and SNES; a game of each.
+- **Steps:**
+  1. In the SNES game, drag over the D-pad and press every face, shoulder, SELECT and START key.
+  2. Tap the turbo key, then fast forward, in the chin under the picture; tap them again.
+  3. Quick save, then quick load, from the chin.
+  4. In the N64 and PS games, move the analog stick(s) all the way round.
+  5. Open the menu key.
+- **Expected:** Every key reaches the game. The D-pad's circle and each stick's knob follow the thumb
+  and are visible on the black art. Turbo and fast forward show their on state clearly and go back
+  off. Save and load work. Labels and glyphs are readable without glowing.
+- **Check:** none beyond the steps (the touch frames come from the same `info.json` layout as the
+  Console colors skin: `BundledSkinsTest` in the app's unit tests compares them).
+
+### RT-674 — Nintendo DS on Dark: every screen layout gets the Dark art
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A Nintendo DS game; NDS set to Dark; the DeSmuME core.
+- **Steps:**
+  1. Launch the game in portrait and press the Screens key in the chin until it has gone through
+     every layout.
+  2. Turn to landscape and repeat.
+  3. Connect a gamepad (or on a foldable, half-open it) and look at the skin, then disconnect /
+     open flat.
+- **Expected:** Every layout (both screens, top only, bottom only, side by side) shows black art
+  with dark grey keys, the picture filling the room the layout needs, in both orientations. The
+  gamepad and tabletop layouts still appear and go away as they do with Console colors.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG ls cache/skins/dark   # NDS.deltaskin
+  ```
+
+### RT-675 — An imported skin still wins over both bundled ones
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** A `.deltaskin` for the SNES that is not one of the app's (any third-party Delta
+  skin); SNES set to Dark.
+- **Steps:**
+  1. Put it in the app's external files folder:
+     `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
+  2. Settings → SNES → the "Default skin" section.
+  3. Launch a SNES game. Quit, pick "Console colors", launch again.
+  4. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
+     and launch once more.
+- **Expected:** The section reads "Imported skin" on its right and shows "A skin you imported for SNES
+  is used instead." under the cards. Both launches in step 3
+  use the imported skin. After step 4 the game opens on the Console colors skin (the choice made in
+  step 3), and the section no longer shows the note.
+- **Check:** none beyond the steps.
+
+### RT-676 — Switching back to Console colors restores the original skin
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** SNES set to Dark; a tablet or an emulator with a tablet-sized screen for step 3.
+- **Steps:**
+  1. Settings → SNES → the "Console colors" card under "Default skin".
+  2. Launch a SNES game.
+  3. On the tablet, set SNES to Dark again and launch the game in portrait and in landscape.
+- **Expected:** Step 2 shows the usual light grey SNES skin. Step 3 shows the Dark tablet art in both
+  orientations, laid out as the Console colors tablet skin.
+- **Check:** the `skin` key is `console` after step 1 and `dark` after step 3.
+
+### RT-677 — The skin can be picked from a game's detail screen and by gamepad
+- **Area:** Android — Dark controller skins
+- **Mode:** MANUAL
+- **Preconditions:** SNES set to Console colors; a SNES game in the library; a gamepad connected for
+  steps 4 and 5 (or `adb shell input gamepad keyevent ...`).
+- **Steps:**
+  1. Open the SNES game's detail screen and look at the "Controller skin" row.
+  2. Tap the row, then "Dark" in the sheet. Close the sheet.
+  3. Launch the game, quit, force-stop the app and open the game's detail screen again.
+  4. With the gamepad only: Settings (RB) → SNES (A) → D-pad down to the "Console colors" card → A.
+  5. Launch the game.
+- **Expected:** Step 1 reads "Console colors" (never a fixed "OpenEmux SNES"). The sheet in step 2 is
+  titled "Default skin" with the same two cards as the console's settings, and the row then reads
+  "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
+  focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
+  Step 5 opens the usual light grey SNES skin.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark after step 2, console after step 4
   ```
 
 ## Android — Update check
@@ -6570,7 +6925,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
   and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
   sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
-  into two rows of three, each tile full size with its full label. In step 3 the D-pad reaches all
+  into two rows of three, each tile full size with its full label; "Screens" has the layout in use under
+  its label (at most two lines, as narrow as the tile; issue 709). In step 3 the D-pad reaches all
   six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
@@ -8084,6 +8440,40 @@ or into an environment that cannot run the tests.
   ```
   Unit-level: `tests/test_site.py` (`TheNarrativeTests`).
 
+### RT-678 — The "Support the project" buttons are centered under its text
+- **Area:** Developer tooling & docs
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Open the site's home page (`docs/index.html`) on a wide desktop window (1280 px or more) and
+     scroll to "Support the project".
+  2. Switch to Português (Brasil) with the language picker and look at the same card.
+  3. Narrow the window to a phone width (about 360 px) so the two buttons wrap onto two lines.
+  4. Scroll back to the top on the wide window and look at the download buttons.
+- **Expected:** In the support card, "Join r/OpenEmux" and "Star on GitHub" (and their
+  translations) sit horizontally centered under the centered text, in every language; when they
+  wrap, each line is centered with even spacing. The hero download buttons are unchanged:
+  left-aligned on a wide window, centered on a narrow one (issue 726).
+- **Check:**
+  ```bash
+  python3 - <<'EOF'
+  import re
+  from pathlib import Path
+  pages = [Path("docs/index.html")] + sorted(Path("docs").glob("*/index.html"))
+  pages = [p for p in pages if p.parent.name not in ("manual", "assets")]
+  assert len(pages) == 8, pages
+  for page in pages:
+      html = page.read_text(encoding="utf-8")
+      assert re.search(r"\.support \.cta\s*\{\s*justify-content:\s*center", html), page
+      shared = re.search(r"\n    \.cta \{([^}]*)\}", html).group(1)
+      assert "justify-content" not in shared, page
+      sup = re.search(r'<section id="support">(.*?)</section>', html, re.S).group(1)
+      assert re.search(r'class="support".*class="cta"', sup, re.S), page
+  print("RT-678 OK")
+  EOF
+  ```
+  Unit-level: `tests/test_site.py` (`SupportButtonsTests`).
+
 ### RT-612 — "Everything else" keeps every fact of the old sections
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
@@ -8120,7 +8510,7 @@ or into an environment that cannot run the tests.
 - **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
 - **Steps:**
   1. Load the home page and scroll through it.
-  2. Click "Watch the video (45 s)" under the download buttons.
+  2. Click "Watch the video (44 s)" under the download buttons.
   3. Press Escape.
   4. With JavaScript disabled, click the same link.
 - **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
@@ -8128,7 +8518,8 @@ or into an environment that cannot run the tests.
   the dialog closes, the sound stops and the focus returns to the link. 4: the browser opens the
   video file itself. With Save-Data on, step 2 opens the dialog without starting playback
   (issue 685).
-- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`test_the_promo_video_loads_only_on_demand`;
+  `test_the_watch_link_and_label_state_the_video_s_real_length` ties the seconds in the link to the MP4).
 
 ### RT-620 — The cartridge gallery shows each console's cartridge view, by mouse
 - **Area:** Developer tooling & docs
@@ -8258,31 +8649,44 @@ or into an environment that cannot run the tests.
   ```
   Passes when the last line is `OK`.
 
-### RT-640 — Share nearby plays as you scroll: one transfer, step by step, on both screens
+### RT-640 — Share nearby plays by itself: one transfer, animated, on both screens, on a loop
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
   Chrome and Firefox (Safari too when one is at hand), window about 1280×800.
 - **Steps:**
-  1. Scroll from the opening into "Share nearby" with the mouse wheel, slowly, to the next section.
-  2. Scroll back up through it.
-  3. Do it again with Space / Page Down / the arrow keys and by dragging the scrollbar.
-  4. Repeat 1–2 in Firefox.
-  5. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
+  1. Scroll from the opening into "Share nearby" until the phone and the computer are on screen,
+     then stop touching the mouse and the keyboard for about 40 seconds.
+  2. Scroll through the section and on to the next one, once fast and once slowly, with the
+     mouse wheel, Space / Page Down and by dragging the scrollbar.
+  3. Mid-animation (say on the progress bars), scroll away from the section and come back.
+  4. Mid-animation, switch to another tab for 10 seconds and back.
+  5. Repeat 1–4 in Firefox.
+  6. In DevTools, inspect the phone frame and its screen at 1280 and at 390 px wide.
 - **Expected:** 1: under the heading, the phone on the left, three gold dots, the computer's
   window on the right (the capture is the window itself: rounded corners and a shadow, no extra
-  title bar). They hold still while the page scrolls and step through four screens, each with its
-  caption and a four-part indicator under it: "Pick a game on your phone." (Robot Man X selected,
-  Linux Desktop listed; the computer ready to receive); "The same code shows on both screens."
-  (506 807 on both); "The game goes straight over your Wi-Fi." (the phone's progress bar); "It is
-  in your library now." (1 game sent on the phone; the computer's "1 Game Received", then its
-  Super Nintendo library with Robot Man X). Only one caption at a time. 2: it plays in reverse.
-  3: the page scrolls at its normal pace; nothing snaps, holds or jumps. 4: the same (Firefox runs
-  the script fallback). 5: the screen sits in the middle of the phone body, the same bezel on all
-  four sides, corners concentric (issue 687).
+  title bar). With no scrolling, it plays six moments at a steady pace (about 5 seconds each),
+  each with its caption and a six-part indicator under it: "Select games on your phone." (a gold
+  ring taps the checkbox and Robot Man X gets ticked, then a tap on "Done"; the computer dimmed,
+  its Super Nintendo library without Robot Man X, its title included); "Open Share Nearby." (the
+  device list empty); "Open Receive on the computer." (the computer's "Ready to Receive" comes
+  forward and "Linux Desktop" appears in the phone's list, outlined in gold, then a tap on it);
+  "The same code shows on both screens." (657 970 on both, both codes outlined in gold together,
+  then a tap on "Accept"); "The games go straight over your Wi-Fi." (both progress bars, purple
+  on the phone and orange on the computer, fill from empty to full); "They are in your library
+  now." (1 game sent on the phone; the computer's "1 Game Received", then its library, where
+  Robot Man X appears in the empty place with a gold outline). It holds a few seconds on the
+  library, fades back to the first moment and plays again. Every ring, outline and bar sits
+  exactly on the element of the capture it belongs to. Only one caption at a time, and the
+  indicator always on the moment shown. 2: the page scrolls through the section at its normal
+  pace, like any other section; nothing sticks, snaps, holds or jumps, and the animation's pace
+  does not change with the scrolling. 3: back on screen, it starts again from "Select games on
+  your phone.". 4: back on the tab, it goes on from where it was. 5: the same in Firefox.
+  6: the screen sits in the middle of the phone body, the same bezel on all four sides, corners
+  concentric (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheShareSequenceTests`).
 
-### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is four cards
+### RT-641 — With reduced motion, without JavaScript and on short screens Share nearby is six cards
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** as RT-640.
@@ -8291,10 +8695,12 @@ or into an environment that cannot run the tests.
      "Share nearby".
   2. Firefox with JavaScript disabled, reload, scroll through it.
   3. DevTools device mode at 360×600 (shorter than 640 px), reload, scroll through it.
-- **Expected:** "Share nearby" is a list of four numbered cards (four across on a wide window, two
+- **Expected:** "Share nearby" is a list of six numbered cards (three across on a wide window, two
   under 900 px, one under 520 px), each with the computer's capture and the phone's over its lower
-  left corner and both caption lines; every card fully visible, nothing faded, no tall empty
-  scroll, no sticky stage (issue 687).
+  left corner and both caption lines; each card matches its caption with nothing moving (1: the
+  game ticked; 2: the phone's device list empty; 3: Linux Desktop listed; 5: both bars part way;
+  6: Robot Man X in the library), no gold rings or outlines; every card fully visible, nothing
+  faded, nothing playing by itself, no tall empty scroll (issues 687, 737).
 - **Check:** human only. Unit-level: `tests/test_site.py`
   (`test_without_a_driver_it_is_a_strip_of_cards`).
 
@@ -8306,19 +8712,20 @@ or into an environment that cannot run the tests.
   1. Set 390×844, reload, scroll through "Share nearby".
   2. Set 360×740, reload, scroll through it; try to scroll sideways.
 - **Expected:** the computer's window on top at the full width, the phone under it, then the
-  caption and the indicator, all inside the screen while they hold; the steps change as on a wide
-  window, over a shorter stretch of scroll. No horizontal scroll caused by this section (issue 687).
+  caption and the indicator, all inside the screen at once; once on screen the six moments play
+  by themselves as on a wide window, and loop. No horizontal scroll caused by this section
+  (issues 687, 737).
 - **Check:** human only.
 
 ### RT-643 — Share nearby's captions and image descriptions are translated
 - **Area:** Developer tooling & docs
 - **Mode:** AUTO-PROBE
 - **Preconditions:** none (reads `site/strings/`).
-- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the four captions
+- **Steps:** As a QA person: switch the site to Português and to 日本語 and read the six captions
   of "Share nearby"; with a screen reader (or the Accessibility panel), read the images' names.
 - **Expected:** each caption is a short headline and one sentence, in the page's language, with no
   exclamation mark; every capture has a description in that language naming the screen, and the
-  ones of the second step mention the code 506 807 (issue 687).
+  ones of the code moment mention the code 657 970 (issues 687, 737).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheShareSequenceTests -v 2>&1 | tail -3
@@ -9695,7 +10102,8 @@ release APK needs a real controller (USB or Bluetooth).
   4. Launch a game on the tablet in landscape.
 - **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
   Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
-  stays in the gamepad layout. Step 4: the rails of RT-564, scaled to the tablet.
+  stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
+  RT-564, scaled to the tablet.
 - **Check:** human only.
 
 
@@ -9844,10 +10252,572 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   cross on the purple one.
 - **Check:** human only (`adb exec-out screencap -p`).
 
+## Android — NDS screen layouts
+
+How a Nintendo DS game's two screens are shown, in the Android app
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`;
+issue 709). The layouts are "Top screen only", "Bottom screen only", "One above the other" and "Side by
+side", in every orientation; half open (tabletop) "One per half" takes the place of "One above the
+other". The pause sheet's "Screens" tile names the layout in use and opens a "Screens" page with every
+layout; each orientation remembers its own, in `files/nds-layout`. The bundled DS skin has one art per
+layout, so the picture always takes the room the layout needs, and a **Screens key** in its quick
+actions: the fifth key of the bar under the screens (virtual buttons) and a key on the right rail after
+fast forward (gamepad layout). The key steps through the layouts that fit right now, and a toast names
+the new one ("Screens: Side by side"). The quick cycles: portrait, and landscape on a phone with the
+virtual buttons, "Top screen only" → "Bottom screen only" → "One above the other"; landscape with a
+gamepad, or on a tablet, also "Side by side"; tabletop "Top screen only" → "Bottom screen only" → "One
+per half". A layout outside the cycle (picked from the list) steps to the cycle's first. **R3** (the
+right stick click) on a pad steps the gamepad cycle too, in place of DeSmuME's own "Quick Screen
+Switch". `MANUAL`, like the other Android sections: a phone or a headless emulator with `adb`, an NDS
+game on DeSmuME. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad with `adb shell am
+broadcast -a $PKG.DEBUG_GAMEPAD --ez connected true`; R3 is `adb shell input keyevent
+KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may arrive as a keyboard).
+
+### RT-652 — The Screens list has every layout in every orientation
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game in the library; phone; touch (no pad); a fresh install.
+- **Steps:**
+  1. Launch the NDS game in portrait and open the pause sheet.
+  2. Tap "Screens".
+  3. Go back to the game, turn the phone to landscape, open the pause sheet and "Screens".
+- **Expected:** Step 1: the "Screens" tile has, under its label, "One above the other". Steps 2 and 3:
+  a "Screens" page, subtitle "Remembered for portrait" (then "Remembered for landscape"), listing "Top
+  screen only", "Bottom screen only", "One above the other" and "Side by side" in both orientations,
+  each with a small drawing of the layout; the one in use is checked, tinted and tagged "Current".
+- **Check:** human only (a screenshot of each step).
+
+### RT-653 — A picked layout applies at once and each orientation remembers its own
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** As RT-652, portrait, on the "Screens" page; a second NDS game.
+- **Steps:**
+  1. Tap "Side by side", then "Back to game".
+  2. Turn to landscape, pick "Top screen only" in "Screens", go back to the game, turn back to portrait.
+  3. Quit, launch the second NDS game in portrait, then turn to landscape.
+  4. `adb shell am force-stop $PKG`, launch the app and an NDS game again, in both orientations.
+- **Expected:** Step 1: the sheet is back on its main page with the banner "Screens: Side by side", the
+  tile reads "Side by side", and the game shows the two screens in a row across the full width, clear
+  of the controls. Step 2: portrait is still "Side by side"; turning shows no toast. Steps 3 and 4:
+  portrait opens on "Side by side" and landscape on "Top screen only", with no other layout flashing
+  first. `adb shell run-as $PKG cat files/nds-layout` lists `portrait=side` and `landscape=top`.
+- **Check:** human only.
+
+### RT-654 — Touch, landscape: the picture takes the room its layout needs
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; phone in landscape; touch (no pad).
+- **Steps:**
+  1. Pick each layout in turn from "Screens" and look at the game after each.
+- **Expected:** "Top screen only" and "Bottom screen only": one 4:3 screen at nearly the full height
+  (about twice the size of one screen in "One above the other"), SELECT under the D-pad and START under
+  the face buttons, at the foot of the side columns. "One above the other": the two screens stacked in
+  the middle, as before. "Side by side": the two screens in a row in the middle, no key covered. In
+  every layout the bar under the screens has save, load, turbo, slow motion, fast forward and the
+  Screens key (two stacked rectangles), nothing clipped.
+- **Check:** human only (a screenshot per layout).
+
+### RT-655 — Touch, portrait: the picture takes the room its layout needs
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; phone in portrait; touch (no pad).
+- **Steps:**
+  1. Pick each layout in turn from "Screens" and look at the game after each.
+- **Expected:** "Top screen only" and "Bottom screen only": one screen across the full width, larger
+  than each screen of "One above the other", the controls moved up under it. "One above the other": as
+  before. "Side by side": both screens in a row across the full width. The bar under the screens has its
+  six keys in every layout, and no control overlaps the picture.
+- **Check:** human only (a screenshot per layout).
+
+### RT-656 — The Screens key in the bar steps through the touch cycle
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; phone; touch (no pad).
+- **Steps:**
+  1. In landscape, on "Top screen only", tap the Screens key in the bar under the screens four times.
+  2. Pick "Side by side" in "Screens", go back to the game and tap the Screens key once.
+  3. In portrait, tap the Screens key four times.
+- **Expected:** Step 1: "Bottom screen only" → "One above the other" → "Top screen only" → "Bottom
+  screen only", never "Side by side"; a toast names each one ("Screens: Bottom screen only") and the
+  picture resizes with it. Step 2: the tap goes to "Top screen only". Step 3: the same three-step cycle
+  as step 1, with its toasts. The layout the key lands on is the one the pause sheet then marks.
+- **Check:** human only.
+
+### RT-657 — Gamepad layout: the Screens key on the rail and the picture between the rails
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; a gamepad connected (or the debug broadcast); phone in landscape.
+- **Steps:**
+  1. On "Top screen only", tap the Screens key on the right rail (after fast forward) four times.
+  2. Turn to portrait and tap the Screens key (in the strip at the foot) three times.
+- **Expected:** Step 1: "Bottom screen only" → "One above the other" → "Side by side" → "Top screen
+  only", a toast naming each one. One screen is 4:3 at the full height between the rails; "One above the
+  other" fills the height; "Side by side" spans the full width between the rails. No large black margins
+  beyond the picture's own aspect. Step 2: "Top screen only" → "Bottom screen only" → "One above the
+  other" (side by side is not in the portrait cycle), the picture filling the room above the strip.
+- **Check:** human only (a screenshot per layout).
+
+### RT-658 — Connecting or removing the pad switches the variant and keeps the layout
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; phone in landscape; touch; a gamepad at hand (or the debug broadcast).
+- **Steps:**
+  1. On "Top screen only", connect the pad.
+  2. Disconnect it.
+  3. Pick "Side by side", connect the pad, disconnect it.
+- **Expected:** Step 1: the virtual buttons go, the rails appear and the screen grows to the full
+  height, still "Top screen only". Step 2: the virtual buttons come back with the one-screen art. Step
+  3: side by side in both variants, resized each time. No toast for any of these switches.
+- **Check:** human only.
+
+### RT-659 — Touching the bottom screen lands where it is tapped, in every layout
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game with a touch menu on the bottom screen; touch and then a pad.
+- **Steps:**
+  1. In "Bottom screen only", "One above the other" and "Side by side", portrait and landscape, tap a
+     corner item and the centre of the bottom screen; repeat with the gamepad layout.
+- **Expected:** Each tap reaches the item under the finger, in every layout and variant.
+- **Check:** human only.
+
+### RT-660 — The Screens page with a gamepad
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; a gamepad connected (or the debug broadcast).
+- **Steps:**
+  1. Open the pause sheet with the pad and look at the hint bar.
+  2. Move to "Screens" with the D-pad and press A.
+  3. Move with the D-pad, press B.
+  4. Open "Screens" again, move to another layout and press A.
+- **Expected:** Step 1: the hint bar reads A "Choose", B "Back", R3 "Next layout" (RS on an Xbox
+  pad), START "Back to game". Step 2: focus lands on the layout in use, among all four; the hint bar
+  has A, B and START only. Step 3: focus moves between the cards; B returns to the main page without
+  changing the layout. Step 4: the layout is applied, the main page shows its banner, the tile its name.
+- **Check:** human only.
+
+### RT-661 — R3 steps the gamepad cycle in game and on the sheet
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** An NDS game; a real gamepad connected.
+- **Steps:**
+  1. In game, landscape, press R3 four times, a second apart.
+  2. Turn to portrait and press R3 three times.
+  3. Open the pause sheet and press R3.
+- **Expected:** Step 1: the gamepad cycle of RT-657, a toast naming each layout; the game itself never
+  reacts to R3. Holding R3 steps once. Step 2: the portrait cycle. Step 3: the layout steps, the
+  sheet's banner names it, the "Screens" tile shows the new name; no toast over the sheet.
+- **Check:** human only.
+
+### RT-662 — Tabletop: the layout key, the list and back to flat
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** A foldable AVD (e.g. `openemux-fold`) half open, an NDS game; touch, no pad.
+- **Steps:**
+  1. Tap the layout key (the strip's fifth slot) three times.
+  2. Open "Screens" in the pause sheet.
+  3. Pick "Side by side" and go back to the game.
+  4. Open the device flat, then half open again.
+- **Expected:** Step 1: "One per half" → "Top screen only" → "Bottom screen only" → "One per half", a
+  toast naming each one. Step 2: subtitle "Remembered for tabletop"; "Top screen only", "Bottom screen
+  only", "One per half" and "Side by side". Step 3: the two screens in a row in the top half. Step 4:
+  flat comes back on the layout remembered for the orientation shown; half open again on "Side by side";
+  no toast for the change of posture.
+- **Check:** human only.
+
+### RT-663 — Other consoles: skin, bar and sheet unchanged
+- **Area:** Android — NDS screen layouts
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game; touch, then a gamepad connected.
+- **Steps:**
+  1. Launch the GBA game, look at its skin and bar, press R3, open the pause sheet.
+- **Expected:** The skin and its bar are as before (no Screens key); R3 shows no toast and changes
+  nothing; the sheet has no "Screens" tile and the hint bar has no R3 entry.
+- **Check:** human only.
+
+### RT-664 — A shader picked in game is remembered for that game only
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** Two ROMs of the same console (e.g. two GBA games); neither has a shader set on
+  its detail screen; the console's default shader known (Settings → the console's row).
+- **Steps:**
+  1. Launch the first game, open the pause sheet and tap "Shader".
+  2. Pick a shader other than the selected one, then go back to the game.
+  3. Close the game and launch the same ROM again; open the pause sheet → "Shader".
+  4. Close it and launch the second ROM; open the pause sheet → "Shader".
+- **Expected:** Step 1: the page subtitle reads "Saved for this game" (never "Only for this
+  session"). Step 2: the shader applies at once and a toast names it. Step 3: the game starts with
+  the shader picked in step 2, which is the one selected on the page. Step 4: the second ROM starts
+  with the console's default shader, selected on its page.
+- **Check:** human only.
+
+### RT-665 — The detail screen shows the in-game pick, and the last change wins
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** RT-664 done: the first ROM has a shader picked in game.
+- **Steps:**
+  1. Open the first ROM's detail screen and read the "Shader" row.
+  2. Tap "Shader" and pick a third shader; launch the ROM and open pause → "Shader".
+  3. Pick a fourth shader there, close the game and launch it again.
+  4. In game, pick the shader that is the console's default; close the game and open the ROM's
+     detail screen.
+- **Expected:** Step 1: the row names the shader picked in game, not "Console default". Step 2:
+  the game starts with the third shader. Step 3: it starts with the fourth one, and the detail
+  screen's row names it. Step 4: the row reads "Console default"; changing the console's default
+  shader in Settings is now followed by this ROM on its next launch.
+- **Check:** human only.
+
+### RT-666 — The in-game shader pick survives an app restart
+- **Area:** Android — in-game shader
+- **Mode:** MANUAL
+- **Preconditions:** Any ROM.
+- **Steps:**
+  1. Launch it, pick a different shader in pause → "Shader" and close the game.
+  2. Force stop the app (Android Settings → Apps → OpenEmux → "Force stop"), open it again and
+     launch the same ROM.
+  3. Switch the app's language to Português and open pause → "Shader" again.
+- **Expected:** Step 2: the game starts with the shader picked in step 1. Step 3: the subtitle is
+  translated ("Fica salvo para este jogo").
+- **Check:** human only.
+
+
+## Android — Artwork manager
+
+The Android app's per-game artwork manager (openemux-android, `pkg/android/openemux`,
+`ui/ArtworkScreen.kt`, `data/Artwork.kt`, `data/ArtSources.kt`; issue 746, part of the epic in
+issue 744), the Android counterpart of RT-365 to RT-369. RT-680 to RT-687 cover the "Current" view
+(issue 746); RT-688 to RT-699 cover the "Cover", "Label" and "Import" tabs (search, suggestions,
+the editor) and Settings › "Artwork providers" (issue 753, `ui/ArtworkSearch.kt`,
+`ui/ArtworkEditor.kt`, `ui/ArtworkProviders.kt`, `data/ArtSearch.kt`, `data/ScreenScraper.kt`). The runner has no Android device, so these
+are `MANUAL`: a person runs them on a phone, a tablet or an emulator with `adb`, with network unless
+a step says otherwise. On Android a synced cover is served from the OpenEmux mirror and has no file
+on the device; a cover kept on the device is one received through "Share nearby".
+
+### RT-680 — The artwork manager opens on the current art and says where it came from
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy game whose cover the mirror has and whose label the sync fetched
+  (the artwork pill on the shelf gone).
+- **Steps:**
+  1. Open the game and look at its settings list.
+  2. Tap the "Artwork" row.
+- **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
+  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
+  lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
+  art, titled with the game and console, with the tabs "Current", "Search", "Edit" and "Import".
+  "Current" shows a "Cover" card that says "Automatic", "Synced <date>",
+  "WEBP · <width> × <height>" and "From the OpenEmux mirror", and a "Label" card that shows the
+  label's picture and says "Automatic", "Synced <date>" (or "From the artwork sync" for a label
+  fetched before this version), "PNG · <width> × <height>" and "From ScreenScraper". Each card has
+  exactly three buttons, "Search", "Adjust" and "Remove"; there is no "Pick another match", "Sync
+  now", "Reset" or import button. The cover's "Remove" is dimmed (a mirror cover has no file on the
+  device); the label's is not.
+- **Check:** human only (`adb exec-out screencap -p > rt-680.png`).
+
+### RT-681 — A console without a cartridge frame shows the cover only
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A PlayStation (or other disc) game in the library.
+- **Steps:**
+  1. Open the game and tap the "Artwork" row.
+  2. Open the "Search", "Edit" and "Import" tabs.
+- **Expected:** Only the "Cover" card is shown; there is no "Label" card. "Search", "Edit" and
+  "Import" have no "Cover" / "Label" row: they work on the cover directly.
+- **Check:** human only.
+
+### RT-682 — Removing a label shows at once, and a search brings it back
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; ScreenScraper credentials (a build that has them, or RT-697);
+  network.
+- **Steps:**
+  1. In "Artwork", press "Remove" on the "Label" card.
+  2. Go back to the game and to its console's list.
+  3. Tap the "Artwork" row again, press "Search" on the label card, pick a result and tap
+     "Save as label".
+- **Expected:** After step 1 the label card says "Missing", "No label yet", its "Adjust" and
+  "Remove" dimmed. In step 2 the cartridge shows its blank label on the detail screen and in the
+  list without a restart, the detail screen shows "Search artwork…" under it and its "Artwork" row
+  reads "Missing". In step 3 the "Search" tab opens on "Label" with a search running; after saving,
+  a green "Saved" shows for a moment, the card says "Manual", and the label is back everywhere.
+- **Check:** human only.
+### RT-686 — A game with no art offers "Search artwork…"
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A disc game whose file name the mirror does not know (a homebrew name).
+- **Steps:**
+  1. Open the game.
+  2. Press "Search artwork…" under the box.
+- **Expected:** The button shows under the empty box. It opens "Artwork" on the "Search" tab with
+  a search by name for the cover already running; when it finds nothing, suggestions appear.
+- **Check:** human only.
+
+### RT-687 — The artwork manager fits every window and works with a gamepad
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a tablet (or an emulator with `adb shell wm size 1280x800`) and
+  a gamepad; light and dark themes.
+- **Steps:**
+  1. On the phone in portrait and in landscape, then on the tablet in landscape: find the
+     "Artwork" row on the detail screen and open it.
+  2. With the gamepad on the detail screen: move down the settings list from "Shader", then
+     "A" on "Artwork"; move through every button; "B".
+  3. Turn TalkBack on and swipe through the screen.
+- **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
+  and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
+  Tablet: the cover and label cards sit side by side, the tabs in the header. Each card's
+  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus ring and "A"
+  presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
+  pill text and each button. Both themes are legible.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`.
+
+### RT-688 — A wrong cover is fixed by a search by name and shows at once
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's Game Boy game; network.
+- **Steps:**
+  1. Open the game, tap the "Artwork" row, then "Search" on the "Cover" card.
+  2. Watch the "Search" tab until the search ends.
+  3. Pick the second result and tap "Save as cover".
+  4. Go back to the detail screen and to the library; close the app from the recents and open it
+     again; let the library sync run.
+- **Expected:** Step 1 opens the "Search" tab with "Cover" selected under it, "Name" holding the
+  game's name next to "Search by name" on the same row, "Hash" next to "Search by hash", and a
+  search already running ("Searching… N images found", "Cancel search"). Results fill in one by one, each
+  with its provider ("OpenEmux mirror", "libretro thumbnails", "ScreenScraper"), no two alike, at
+  most four per provider; the first is selected with a check. Step 3 returns to "Current" with a
+  green "Saved" at the bottom for a moment; the cover card says "Manual", "Saved <today>", "Chosen by you · <provider>". In step 4 the detail
+  screen and the library show the new cover at once, and it is still there after the restart and
+  the sync.
+- **Check:** human only.
+
+### RT-689 — Search by hash finds the game on ScreenScraper
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game (a real dump); a build with ScreenScraper credentials, or an
+  account added as in RT-697; network.
+- **Steps:**
+  1. Open the "Search" tab on "Cover" and wait for "Hash".
+  2. Tap "Search by hash".
+- **Expected:** "Hash" reads "computing…", then eight hex digits; "Search by hash" waits for it.
+  The results include "ScreenScraper" ones.
+- **Check:** human only.
+
+### RT-690 — Cancel search stops the search
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game; network.
+- **Steps:**
+  1. Tap "Search by name" and at once "Cancel search".
+- **Expected:** The spinner stops and the status says "Search cancelled"; what arrived stays, no
+  more results arrive.
+- **Check:** human only.
+
+### RT-691 — Offline, refused and missing credentials are said in plain words
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game.
+- **Steps:**
+  1. Airplane mode on; "Search" tab › "Cover" → "Search by name". Airplane mode off.
+  2. Settings › "Artwork providers" › "Developer account (advanced)": a made-up ID and password,
+     "Save and check"; then "Search" › "Label" → "Search by name". Then "Remove developer account".
+  3. On a build without ScreenScraper credentials and no account: "Search" › "Label" → "Search by name".
+- **Expected:** Step 1: a red banner "No connection. Check the network and search again." Step 2:
+  the check says "ScreenScraper refused the request. The account details may be wrong.", and so
+  does the search. Step 3: "ScreenScraper needs an account, and this build has none. Add one in
+  Settings › Artwork providers." No toast; the art in "Current" never changes.
+- **Check:** human only. (Over quota is not reproducible on demand; JVM tests cover it.)
+
+### RT-692 — A missing label is found by hash and saved, a "none" game included
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game whose label the sync marked as missing
+  (`files/labels/<console>/<name>.none` exists, check with `adb shell run-as com.openemux.mobile ls files/labels/GB`);
+  ScreenScraper credentials; network.
+- **Steps:**
+  1. Open the game's detail screen and tap "Search artwork…".
+  2. Pick a result and tap "Save as label".
+- **Expected:** Step 1 opens the "Search" tab on "Label" with a search running (labels come from ScreenScraper
+  only). After step 2 the "Label" card says "Manual"; the cartridge on the detail screen and in
+  the library shows the label at once; the `.none` file is gone.
+- **Check:** human only.
+
+### RT-693 — An empty box-art search offers suggestions
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy ROM renamed to nonsense close to a real title (for example
+  "Tetrys Dx.gb"); network.
+- **Steps:**
+  1. Open its "Search" tab on "Cover" and tap "Search by name".
+  2. Pick a suggestion and tap "Save as cover".
+  3. Airplane mode on, search again; then airplane mode off.
+- **Expected:** Step 1: "No images found", and under "SUGGESTIONS" names from the game-name
+  database appear by themselves, each with its mirror preview; when no word matched as typed the
+  line says "N approximate matches, ranked by similarity" and each tile says "Approximate". Step
+  2: the cover shows at once in the library and on the detail screen ("Chosen by you · OpenEmux
+  mirror"). Step 3: the names still list, each preview says "Preview unavailable" and cannot be
+  chosen.
+- **Check:** human only.
+
+### RT-694 — An imported image is cropped, rotated, flipped and saved; the picked file is untouched
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game; a photo in the device's gallery or Downloads.
+- **Steps:**
+  1. The "Import" tab, "Cover" under it → "Choose an image"; pick the photo.
+  2. Tap the crop tool; drag a corner, drag inside the box; "Apply crop". Rotate left, rotate
+     right, flip both ways, "Reset", crop again.
+  3. Tap "Save".
+  4. Repeat on "Import" › "Label".
+- **Expected:** The "Import" tab shows the photo upright with a crop box, its corners marked and the
+  outside dimmed; dragging near the screen's left edge moves the corner, it does not go back. Each
+  tool changes the image at once; "Apply crop" is dimmed, with no spinner, until the crop tool
+  is on; "Reset" has its own undo arrow, unlike "Rotate left", and brings back the photo as picked.
+  After "Save" a green "Saved" shows for a moment and the card says "Manual", "PNG · <the cropped size>", and the library shows it. The photo in the gallery is
+  unchanged.
+- **Check:** human only.
+
+### RT-695 — Adjust edits the current art and a non-image is refused
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a PDF or text file in Downloads.
+- **Steps:**
+  1. "Current" → "Adjust" on the "Cover" card; "Rotate left"; "Save".
+  2. "Import" › "Cover" → "Choose an image"; in the picker's "Browse" pick the PDF.
+- **Expected:** Step 1: the "Edit" tab opens on "Cover" with the current cover in the editor; after saving, the card says
+  "Manual" and its size is the rotated one (width and height swapped). Step 2: "That file is not a
+  PNG, JPEG or WebP image." in the manager; nothing changes.
+- **Check:** human only.
+
+### RT-696 — Provider order and switches change the search and the sync
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** Network; a Game Boy game the sync has not given a cover yet.
+- **Steps:**
+  1. Settings › "Artwork providers": switch "OpenEmux mirror" off; move "libretro thumbnails" up
+     to the top.
+  2. A game's "Search" tab › "Cover" → "Search by name".
+  3. Import the new game and open its "Current" cover card.
+  4. Turn ScreenScraper's "Labels" chip off; import a cartridge game.
+  5. Put everything back as it was.
+- **Expected:** Step 2: no "OpenEmux mirror" results; "libretro thumbnails" ones come first. Step
+  3: the cover says "From libretro thumbnails". Step 4: the label sync does not run and "Search" ›
+  "Label" finds nothing. Step 5 restores the mirror covers.
+- **Check:** human only.
+
+### RT-697 — A ScreenScraper account is added, checked and removed
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A ScreenScraper user account; network.
+- **Steps:**
+  1. Settings › "Artwork providers": type the user name and password, "Save and check".
+  2. Change the password to a wrong one, "Save and check".
+  3. "Remove account"; then search a label.
+- **Expected:** Step 1: "Signed in. <used> of <max> requests used today." Step 2: "ScreenScraper
+  refused the request. The account details may be wrong." Step 3: the fields empty, the search
+  still works with the app's shared account (on a build that has one).
+- **Check:** human only.
+
+### RT-698 — The ScreenScraper account never leaves the device
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-697's account added.
+- **Steps:**
+  1. Search a label, then run `adb logcat -d | grep -i '<the password>'`.
+  2. Settings › "Backup": export a backup and list it with `unzip -l` / search it for the user name.
+- **Expected:** Neither the log nor the backup holds the password or the user name.
+- **Check:** human only.
+
+### RT-699 — The new tabs and settings work with a gamepad, TalkBack and every window
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad; TalkBack; a tablet (or `adb shell wm size 1280x800`); light and
+  dark themes.
+- **Steps:**
+  1. In the manager, "L1"/"R1" through "Current", "Search", "Edit" and "Import"; on each, move
+     through the "Cover" / "Label" row and every field, button and result with the D-pad.
+  2. In "Edit" with the crop on: focus the image, "A" repeatedly, D-pad each time.
+  3. TalkBack through a search's results, the editor's tools and the crop area; Settings ›
+     "Artwork providers".
+  4. Tablet landscape and phone landscape, both themes.
+- **Expected:** Every control takes the focus ring; "A" on the image cycles "Moving the crop box",
+  then each corner, then back to moving focus, and the D-pad moves what it says. TalkBack reads
+  "Result 2 from ScreenScraper" with its selected state, each tool by name, the crop area's
+  actions ("Move crop left", "Grow crop"…), "Move OpenEmux mirror up" and the switches. On the
+  tablet the tabs sit in the header; nothing is cut anywhere.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`.
+
+### RT-700 — Remove in the editor removes the art on Save, never opens Import
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game with a label on the device (RT-680's game).
+- **Steps:**
+  1. "Current" → "Adjust" on the "Label" card.
+  2. Tap "Remove this image".
+  3. Tap "Undo".
+  4. Tap "Remove this image" again, then "Save".
+  5. With a label back (as in RT-682), repeat steps 1–2 and tap "Cancel".
+- **Expected:** Step 1 opens "Edit" on "Label" with the label in the editor. Step 2 stays on
+  "Edit": the editor says "The label will be removed when you save." with "Undo"; the "Import"
+  tab never opens. Step 3 brings the label back into the editor. Step 4 returns to "Current" with
+  a green "Saved"; the label card says "Missing" and the cartridge shows its blank label on the
+  detail screen and in the library at once. In step 5 "Cancel" returns to "Current" and the label
+  is untouched.
+- **Check:** human only.
+
+### RT-701 — Edit and Import save with a green "Saved", Cancel discards
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a photo on the device.
+- **Steps:**
+  1. "Edit" tab on "Label": "Flip horizontal", then "Cancel".
+  2. "Edit" again: "Rotate right", then "Save".
+  3. "Import" › "Cover" → "Choose an image", pick the photo, "Save".
+  4. On a game with no cover, open "Edit" on "Cover".
+- **Expected:** Step 1 returns to "Current" with the label unchanged and no "Saved". Step 2
+  returns to "Current" with a green "Saved" pill at the bottom for about two seconds, read out by
+  TalkBack, and the label rotated in the card, on the detail screen and in the library. Step 3
+  does the same for the cover, saved as the cover (there is no "Save as" choice: the sub-tab
+  decides). Step 4 says "No cover yet", "Search for one, or import an image." with "Search" and
+  "Import" buttons.
+- **Check:** human only.
+
+### RT-702 — The Current tab previews the label a cartridge game shows
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** Cartridge games with a label: one synced, one saved by hand (RT-692), one
+  whose file name has spaces, accents and brackets (for example
+  "Pokémon - Red Version (USA, Europe) [!].gb").
+- **Steps:**
+  1. For each, open the game, then the "Artwork" row.
+  2. Empty one label file
+     (`adb shell run-as com.openemux.mobile sh -c ': > "files/labels/GB/<name>.png"'`) and open its
+     "Artwork" row.
+- **Expected:** Step 1: the "Label" card shows the same picture the cartridge shows, next to its
+  facts. Step 2: the card's frame shows a warning sign and "The file could not be read" instead of
+  an empty box.
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-683 — Sync now offline says so and changes nothing
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** "Sync now" was taken out of the artwork manager in the QA of issue 753: each art kind
+  keeps only "Search", "Adjust" and "Remove", and the library sync still fetches missing art.
+
+### RT-684 — Reset to the synced cover replaces a kept cover, after asking
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** "Reset to synced cover" was taken out of the artwork manager in the QA of issue 753:
+  each art kind keeps only "Search", "Adjust" and "Remove".
+
+### RT-685 — Reset is refused while a library sync runs
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** The reset it guarded was taken out of the artwork manager in the QA of issue 753 (see
+  RT-684). This is the Android RT-685; the desktop scenario that also carries the id stays.
 
 ### RT-207 — The native packages require FUSE rather than suggesting it
 - **Retired:** 2026-08-27 (issue #328).

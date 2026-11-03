@@ -113,6 +113,22 @@ class ThePublishedPagesTests(unittest.TestCase):
         self.assertNotIn('src="assets/', text)
 
 
+class SupportButtonsTests(unittest.TestCase):
+    """The support card centres its buttons, not the shared .cta row (issue 726)."""
+
+    def test_the_support_buttons_are_centred_and_the_hero_row_is_not(self):
+        for locale in build_site.ORDER:
+            page = build_site.render(locale)
+            with self.subTest(locale=locale):
+                self.assertRegex(page, r"\.support \.cta\s*\{\s*justify-content:\s*center")
+                shared = re.search(r"\n    \.cta \{([^}]*)\}", page)
+                self.assertIsNotNone(shared)
+                self.assertNotIn("justify-content", shared.group(1))
+                support = re.search(r'<section id="support">(.*?)</section>', page, re.S)
+                self.assertIsNotNone(support)
+                self.assertRegex(support.group(1), r'(?s)class="support".*class="cta"')
+
+
 class TheNarrativeTests(unittest.TestCase):
     """The page tells the story of the issue 680 redesign, in order (issue 685)."""
 
@@ -189,6 +205,27 @@ class TheNarrativeTests(unittest.TestCase):
                 hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', text, re.S).group(1)
                 self.assertIn('id="watchVideo" href="', hero)
                 self.assertIn("assets/openemux-promo.mp4", hero)
+
+    @staticmethod
+    def _promo_seconds():
+        """The promo's length, from the ``mvhd`` box of the published MP4."""
+        data = (REPO / "docs" / "assets" / "openemux-promo.mp4").read_bytes()
+        box = data.index(b"mvhd") + 4
+        if data[box] == 1:
+            timescale = int.from_bytes(data[box + 20:box + 24], "big")
+            duration = int.from_bytes(data[box + 24:box + 32], "big")
+        else:
+            timescale = int.from_bytes(data[box + 12:box + 16], "big")
+            duration = int.from_bytes(data[box + 16:box + 20], "big")
+        return round(duration / timescale)
+
+    def test_the_watch_link_and_label_state_the_video_s_real_length(self):
+        seconds = str(self._promo_seconds())
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            with self.subTest(locale=locale):
+                for key in ("hero.watch", "hero.video_label"):
+                    self.assertEqual(re.findall(r"\d+", strings[key])[:1], [seconds], key)
 
 
 class TheGalleriesTests(unittest.TestCase):
@@ -498,10 +535,14 @@ class TheOpeningStageTests(unittest.TestCase):
 
 
 class TheShareSequenceTests(unittest.TestCase):
-    """Share nearby as a scroll stage: one transfer on both screens (issue 687)."""
+    """Share nearby: one transfer on both screens (issue 687), animated in six
+    moments over the real captures, playing by itself on a loop (issue 737)."""
 
-    PHONE = ["phone-1-pick", "phone-2-code", "phone-3-progress", "phone-4-sent"]
-    WINDOW = ["desktop-1-ready", "desktop-2-offer", "desktop-3-progress", "desktop-4-received", "desktop-4-library"]
+    PHONE = ["phone-1-what", "phone-1-pick", "phone-1-pick", "phone-2-code", "phone-3-progress", "phone-4-sent"]
+    WINDOW = ["desktop-4-library", "desktop-4-library", "desktop-1-ready", "desktop-2-offer", "desktop-3-progress",
+              "desktop-4-received", "desktop-4-library"]
+    OVERLAYS = ["share-tick", "share-tap-check", "share-tap-done", "share-row-out", "share-row-glow", "share-tap-row",
+                "share-code-glow", "share-tap-accept", "share-fill", "share-slot-out", "share-cart-glow"]
     STAGE_MEDIA = "@media (prefers-reduced-motion: no-preference) and (min-height: 640px)"
 
     def setUp(self):
@@ -509,41 +550,45 @@ class TheShareSequenceTests(unittest.TestCase):
         self.css = _css(self.en)
 
     def _section(self, text):
-        found = re.search(r'<section class="moment share" id="share" data-stage>(.*?)</section>', text, re.S)
+        found = re.search(r'<section class="moment share" id="share">(.*?)</section>', text, re.S)
         self.assertIsNotNone(found)
         return found.group(1)
 
-    def test_one_stage_with_four_steps_of_real_captures_in_order(self):
+    def test_one_stage_with_six_moments_of_real_captures_in_order(self):
         for locale in build_site.ORDER:
             share = self._section(build_site.render(locale))
             with self.subTest(locale=locale):
-                self.assertEqual(share.count('class="stage-sticky share-stage"'), 1)
-                self.assertEqual(share.count('<li class="share-step">'), 4)
+                self.assertEqual(share.count('<div class="share-stage">'), 1)
+                self.assertNotIn("stage-sticky", share)
+                self.assertNotIn("data-stage", share)
+                self.assertEqual(share.count('<li class="share-step">'), 6)
                 phones = re.findall(r'<div class="share-phone[^"]*"[^>]*>\s*<picture>.*?assets/share/([a-z0-9-]+)\.png',
                                     share, re.S)
                 self.assertEqual(phones, self.PHONE)
                 windows = re.findall(r'<img [^>]*\bsrc="[^"]*assets/share/(desktop-[a-z0-9-]+)\.png"', share)
                 self.assertEqual(windows, self.WINDOW)
                 images = re.findall(r"<img\s[^>]*>", share)
-                self.assertEqual(len(images), 9)
+                self.assertEqual(len(images), 13)
                 for tag in images:
                     self.assertIn('loading="lazy"', tag)
                     self.assertNotIn("fetchpriority", tag)
-                self.assertEqual(share.count("<picture>"), 9)
+                    self.assertNotIn('alt=""', tag)
+                self.assertEqual(share.count("<picture>"), 13)
 
-    def test_the_second_step_shows_the_same_code_on_both_screens(self):
+    def test_the_code_moment_shows_the_same_code_on_both_screens(self):
         for locale in build_site.ORDER:
             strings = build_site.load_strings(locale)
             with self.subTest(locale=locale):
-                self.assertIn("506 807", strings["share.alt_phone2"])
-                self.assertIn("506 807", strings["share.alt_desk2"])
+                self.assertIn("657 970", strings["share.alt_phone2"])
+                self.assertIn("657 970", strings["share.alt_desk2"])
 
-    def test_four_captions_a_headline_and_one_sentence_each(self):
+    def test_six_captions_a_headline_and_one_sentence_each(self):
         english = build_site.load_strings("en")
         for locale in build_site.ORDER:
             strings = build_site.load_strings(locale)
             self.assertFalse([k for k in strings if k.startswith("share.step_")])
-            for n in range(1, 5):
+            self.assertFalse([k for k in strings if k.startswith("share.cap") and k[-1] not in "123456"])
+            for n in range(1, 7):
                 key = f"share.cap{n}"
                 with self.subTest(locale=locale, key=key):
                     parts = re.fullmatch(r"<h3>([^<]+)</h3>\s*<p>([^<]+)</p>", strings[key])
@@ -554,6 +599,11 @@ class TheShareSequenceTests(unittest.TestCase):
                     if locale != "en":
                         self.assertNotEqual(strings[key], english[key])
             self.assertTrue(strings["share.steps_label"].strip())
+            for key in ("share.alt_phone_select", "share.alt_phone_search", "share.alt_desk_before"):
+                with self.subTest(locale=locale, key=key):
+                    self.assertTrue(strings[key].strip())
+                    if locale != "en":
+                        self.assertNotEqual(strings[key], english[key])
 
     def test_the_captions_are_an_ordered_list_never_hidden(self):
         share = self._section(self.en)
@@ -564,35 +614,36 @@ class TheShareSequenceTests(unittest.TestCase):
 
     def test_only_transform_and_opacity_animate_and_every_name_has_its_keyframes(self):
         frames = re.findall(r"@keyframes (share-[a-z0-9-]+)", self.css)
-        self.assertEqual(len(frames), 13)
+        self.assertEqual(len(frames), 30)
+        self.assertEqual(len(set(frames)), 30)
         for name in frames:
             body = _blocks(self.css, f"@keyframes {name} ")[0]
             with self.subTest(keyframes=name):
                 self.assertLessEqual(set(re.findall(r"([a-z-]+)\s*:", body)), {"transform", "opacity"})
                 self.assertIn(f".{name} {{ animation-name: {name} }}", self.css)
-                self.assertRegex(self._section(self.en), rf'class="[^"]*\b{name}\b[^"]*" data-stage-layer')
+                self.assertRegex(self._section(self.en), rf'class="[^"]*\b{name}\b[^"]*" data-share-layer')
 
     def test_without_a_driver_it_is_a_strip_of_cards(self):
-        # The stage layout lives only under the motion query, for both
-        # drivers; outside it the list is a grid of four cards.
-        inside = "".join(_blocks(self.css, self.STAGE_MEDIA + " {")
-                         + _blocks(self.css, self.STAGE_MEDIA + " and (max-width: 899px) {"))
-        self.assertIn("@supports (animation-timeline: view())", inside)
+        # The animated layout lives only under the motion query and the
+        # script's .share-play; outside it the list is a grid of six cards.
+        # The query leaves out reduced motion and screens under 640px, and
+        # without JavaScript nothing sets the class.
+        blocks = _blocks(self.css, self.STAGE_MEDIA + " {") + _blocks(
+            self.css, self.STAGE_MEDIA + " and (max-width: 899px) {")
+        self.assertEqual(len(blocks), 2)
+        inside = "".join(blocks)
         outside = self.css
-        for block in _blocks(self.css, self.STAGE_MEDIA + " {") + _blocks(
-                self.css, self.STAGE_MEDIA + " and (max-width: 899px) {"):
+        for block in blocks:
             outside = outside.replace(block, "")
-        for driver in ("#share[data-stage] .share", "#share.stage-js .share"):
-            with self.subTest(driver=driver):
-                self.assertIn(driver + "-step {", inside)
-                self.assertIn(driver + "-shots {", inside)
-                self.assertNotIn(driver, outside)
-        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", _blocks(self.css, ".share-seq {")[0])
-        # Too short for the window, the phone and the caption: the cards, still.
-        short = _blocks(self.css, "@media (max-height: 639px) {")[0]
-        self.assertIn("#share [data-stage-layer] {\n        animation: none", short)
-        self.assertIn("min-height: 0", short)
+        self.assertIn("#share.share-play .share-step {", inside)
+        self.assertIn("#share.share-play .share-shots {", inside)
+        self.assertNotIn("#share.share-play", outside)
+        self.assertNotIn("#share[data-stage]", self.css)
+        self.assertNotIn("#share.stage-js", self.css)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", _blocks(self.css, ".share-seq {")[0])
         self.assertNotIn("prefers-reduced-motion: reduce", inside)
+        self.assertIn('window.matchMedia("(prefers-reduced-motion: no-preference) and (min-height: 640px)")',
+                      self._script())
 
     def test_the_phone_screen_is_centred_with_concentric_corners(self):
         body = _blocks(self.css, ".share-phone {")[0]
@@ -606,6 +657,120 @@ class TheShareSequenceTests(unittest.TestCase):
             with self.subTest(block=block):
                 self.assertNotRegex(block, r"(padding|border-radius|border|box-sizing)\s*:")
 
+    def test_the_overlays_play_the_transfer_hidden_from_assistive_tech(self):
+        share = self._section(self.en)
+        for name in self.OVERLAYS:
+            with self.subTest(overlay=name):
+                self.assertRegex(share, rf'<i class="[^"]*\b{name}\b[^"]*" data-share-layer>')
+                self.assertIn(f"@keyframes {name} ", self.css)
+        # Every overlay sits in a box the screen reader skips.
+        boxes = re.findall(r'<span class="share-scr"([^>]*)>(.*?)</span>', share, re.S)
+        self.assertEqual(len(boxes), 10)
+        for attrs, body in boxes:
+            self.assertIn('aria-hidden="true"', attrs)
+        self.assertEqual(share.count('class="share-ov'), sum(body.count('class="share-ov') for _, body in boxes))
+        # Four taps: the checkbox, Done, the computer in the list, Accept.
+        self.assertEqual(len(re.findall(r'class="share-ov share-tap ', share)), 4)
+        # Both bars fill from their left end, in step.
+        self.assertEqual(share.count('share-fill share-fill-'), 2)
+        fill = _blocks(self.css, "@keyframes share-fill ")[0]
+        self.assertIn("scaleX(0)", fill)
+        self.assertIn("scaleX(1)", fill)
+        self.assertIn("transform-origin: 0 50%", _blocks(self.css, ".share-fill {")[0])
+
+    def test_a_still_card_shows_each_moment_as_its_caption_says(self):
+        # Without motion the overlays keep their base style: the game ticked,
+        # the list empty while searching, the computer listed after Receive,
+        # the bars part way, the cartridge in the library; no taps, no glow.
+        for name in (".share-tick {", ".share-tap {", ".share-glow {"):
+            with self.subTest(rule=name):
+                self.assertIn("opacity: 0", _blocks(self.css, name)[0])
+        self.assertIn("opacity: 0", _blocks(self.css, ".share-row-out,\n    .share-slot-out {")[0])
+        self.assertIn("transform: scaleX(.6)", _blocks(self.css, ".share-fill {")[0])
+        steps = re.findall(r'<li class="share-step">(.*?)</li>', self._section(self.en), re.S)
+        self.assertIn('class="share-ov share-at-row share-cover"></i>', steps[1])
+        self.assertIn("share-cover share-row-out", steps[2])
+        # The computer of the first two moments is the library before the
+        # game arrives; on the stage the second copy stays out of sight so
+        # the dimmed window does not stack.
+        self.assertEqual(steps[0].count('class="share-ov share-slot"'), 1)
+        self.assertIn("share-window share-idle share-same", steps[1])
+        self.assertIn("#share.share-play .share-same {", self.css)
+        self.assertIn("#share.share-play .share-idle {", self.css)
+
+    def test_on_a_still_card_the_phone_sits_over_the_window(self):
+        # The window is positioned (its overlays need it), so the phone needs
+        # a z-index to stay over its corner, kept inside each moment's shots.
+        self.assertIn("z-index: 1", _blocks(self.css, ".share-phone {")[0])
+        self.assertIn("isolation: isolate", _blocks(self.css, ".share-shots {")[0])
+
+    def _script(self):
+        found = re.search(r"<!-- Share nearby: the switch.*?<script>(.*?)</script>", self.en, re.S)
+        self.assertIsNotNone(found)
+        return found.group(1)
+
+    def test_it_plays_on_a_clock_not_on_the_scroll(self):
+        # No stage: no tall section, no sticky box, natural height.
+        self.assertNotIn("--stage-len", "".join(_blocks(self.css, "#share {")))
+        self.assertNotIn("sticky", "".join(b for b in _blocks(self.css, self.STAGE_MEDIA + " {")))
+        self.assertIn("--share-loop: 32s", _blocks(self.css, "#share {")[0])
+        loop = _blocks(self.css, "#share.share-play [data-share-layer] {")[0]
+        for rule in ("animation-duration: var(--share-loop)", "animation-timing-function: linear",
+                     "animation-iteration-count: infinite", "animation-fill-mode: both",
+                     "animation-play-state: paused"):
+            self.assertIn(rule, loop)
+        running = _blocks(self.css, "#share.share-play.is-playing [data-share-layer] {")[0]
+        self.assertIn("animation-play-state: running", running)
+        self.assertIn("will-change: transform, opacity", running)
+        self.assertIn("animation-name: none", _blocks(self.css, "#share.share-reset [data-share-layer] {")[0])
+        # The scroll engine's rules never reach these layers.
+        self.assertNotIn("data-stage-layer", self._section(self.en))
+
+    def test_the_indicator_has_six_parts(self):
+        self.assertIn("width: calc(100% / 6);\n      background: var(--gold)", self.css)
+
+    def test_the_loop_holds_on_the_library_then_comes_back_to_the_first_moment(self):
+        # Moments 2-6 stay until 97% and fade out by 100%, uncovering the
+        # first one, whose caption, tick and indicator are back by then.
+        for n in range(2, 7):
+            with self.subTest(moment=n):
+                body = _blocks(self.css, f"@keyframes share-in-{n} ")[0]
+                self.assertRegex(body, r"\d+%, 97% \{ opacity: 1 \}\s*(97\.01%, )?100% \{ opacity: 0 \}")
+                # Under the sixth, the earlier moments leave in one step, so
+                # the fade back never blends their screens together.
+                if n < 6:
+                    self.assertIn("97.01%, 100% { opacity: 0 }", body)
+        self.assertIn("100% { opacity: 1 }", _blocks(self.css, "@keyframes share-cap-1 ")[0])
+        # The last caption is gone by 97%, when the first starts back: one
+        # caption at a time, the loop included.
+        self.assertIn("97%, 100% { opacity: 0; transform: translateY(0) }", _blocks(self.css, "@keyframes share-cap-6 ")[0])
+        self.assertIn("15%, 97% { opacity: 0 }", _blocks(self.css, "@keyframes share-cap-1 ")[0])
+        self.assertIn("97%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-tick ")[0])
+        self.assertIn("97.01%, 100% { transform: scaleX(0) }", _blocks(self.css, "@keyframes share-done ")[0])
+        self.assertIn("97.01%, 100% { transform: translateX(0) }", _blocks(self.css, "@keyframes share-now ")[0])
+        # The library arrives at 84%: the last ~13% of the loop is the hold.
+        self.assertIn("84%, 100% { opacity: 1 }", _blocks(self.css, "@keyframes share-lib-in ")[0])
+        # Six moments, 15% of the loop each.
+        starts = [re.search(r"0%, (\d+)% \{ opacity: 0 \}", _blocks(self.css, f"@keyframes share-in-{n} ")[0]).group(1)
+                  for n in range(2, 7)]
+        self.assertEqual(starts, ["15", "30", "45", "60", "75"])
+
+    def test_the_switch_plays_in_view_pauses_away_and_starts_over(self):
+        script = self._script()
+        self.assertIn('"IntersectionObserver" in window', script)
+        self.assertIn("threshold: [0, 0.35]", script)
+        self.assertIn('classList.toggle("share-play", motion.matches)', script)
+        self.assertIn('classList.toggle("is-playing", motion.matches && inView && !document.hidden)', script)
+        self.assertIn('addEventListener("visibilitychange", sync)', script)
+        self.assertIn('motion.addEventListener("change", function () { restart(); sync(); })', script)
+        self.assertIn("if (inView && away) restart();", script)
+        self.assertIn("if (!entry.isIntersecting) away = true;", script)
+        self.assertIn('share.classList.add("share-reset");\n        void share.offsetWidth;', script)
+        # It decides when, never where: nothing about the scroll.
+        for needle in ("scroll", "wheel", "touch", "preventDefault", "requestAnimationFrame"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, script)
+
     def test_the_window_is_the_capture_itself(self):
         share = self._section(self.en)
         self.assertNotIn("window-bar", share)
@@ -617,11 +782,10 @@ class TheShareSequenceTests(unittest.TestCase):
         # track (issue 688), which moves the gallery, not the page.
         self.assertEqual(re.findall(r"scroll-snap-type:[^;}]*", self.css), ["scroll-snap-type: x mandatory"])
         self.assertIn("scroll-snap-type: x mandatory", _blocks(self.css, ".gal-track {")[0])
-        # The engine's one driver moves it: no script of its own. The only
-        # wheel listener is the galleries' passive one on their own track
-        # (issue 688), which can never hold the page.
+        # The section leaves the scroll engine and its switch never listens
+        # to the scroll. The only wheel listener is the galleries' passive
+        # one on their own track (issue 688), which can never hold the page.
         scripts = "".join(re.findall(r"<script>(.*?)</script>", self.en, re.S))
-        self.assertNotIn("share", scripts)
         self.assertNotIn("touchmove", scripts)
         self.assertEqual(re.findall(r"addEventListener\('wheel'[^)]*\)", scripts),
                          ["addEventListener('wheel', release, { passive: true })"])
