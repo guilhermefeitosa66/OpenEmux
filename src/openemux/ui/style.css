@@ -155,6 +155,17 @@ flowboxchild:focus-visible {
     opacity: 0.95;
 }
 
+/* Over a cartridge the dark layer is the rectangle issue 725 removed: it is
+   drawn over the image's whole box, not the cartridge's outline. Only the
+   icon shows there, its shadow keeping it readable over light labels. */
+.play-overlay.cartridge {
+    background-color: transparent;
+}
+
+.play-overlay.cartridge .play-icon {
+    -gtk-icon-shadow: 0 1px 6px alpha(black, 0.8), 0 0 2px alpha(black, 0.6);
+}
+
 .favorite-badge {
     color: #f6c90e;
     background-color: alpha(black, 0.45);

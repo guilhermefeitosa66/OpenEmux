@@ -1663,7 +1663,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   3. Switch to the light theme with the header bar's theme button ("Switch to the light theme")
      and repeat step 1; switch back afterwards.
   4. Open "All" and choose "Cartridge Grid".
-  5. Hover a cartridge; switch to the cover view.
+  5. Hover a cartridge (RT-685 checks the hover itself); switch to the cover view.
 - **Expected:** No rectangle (fill, border or shadow) shows around any cartridge, on either theme:
   only a soft shadow under the cartridge's own outline, which follows the N64's rounded top and
   stepped shoulders, the NES's notched bottom corners and the Game Boy's cut corner (issue 725).
@@ -1674,6 +1674,28 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   corners; suite file `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`,
   `TheCartridgeShadowRuleTests`).
 - **Restore:** return the theme (step 3) and the view mode to what they were.
+
+### RT-685 — Hovering a cartridge shows the play icon with no dark rectangle
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app on a library with Nintendo 64, NES and Game Boy games, plus a
+  disc-console game (PlayStation).
+- **Steps:**
+  1. Open the Nintendo 64 page in the cartridge view and hover a cartridge.
+  2. Do the same on the NES and Game Boy pages, including a cartridge with a light label.
+  3. Move the pointer away, then focus a cartridge with the arrow keys.
+  4. Switch to the light theme with the header bar's theme button ("Switch to the light theme")
+     and repeat step 1; switch back afterwards.
+  5. Switch to the cover view and hover a cover; then do the same in the list view.
+- **Expected:** Steps 1–4: no dark block over or around the cartridge, only the card's lighter
+  hover tint (the same tone behind the name) and the white play icon over the cartridge, with a
+  soft shadow under the glyph that keeps it readable over light and dark labels; the favorite star
+  and the menu button appear as before; the keyboard focus outline is unchanged (issue 725).
+  Step 5: covers and rows keep the darkened overlay behind the play icon.
+- **Check:** a `make devbox-shot OUT=$SCRATCH/rt685-<step>.png WIN=1` per step with the pointer
+  moved there by `make devbox-xdo CMD='mousemove <x> <y>'`; suite file
+  `tests/test_rom_card_widget.py` (`TheCoverArrivingTests`, `TheCartridgeShadowRuleTests`).
+- **Restore:** return the theme (step 4) and the view mode to what they were.
 
 ### RT-361 — A zipped Game Boy ROM gets its cartridge label from ScreenScraper
 - **Area:** View modes & layout
