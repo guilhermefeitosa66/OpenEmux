@@ -10484,8 +10484,10 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
 
 The Android app's per-game artwork manager (openemux-android, `pkg/android/openemux`,
 `ui/ArtworkScreen.kt`, `data/Artwork.kt`, `data/ArtSources.kt`; issue 746, part of the epic in
-issue 744), the Android counterpart of RT-365 to RT-369. This first part has the "Current" view
-only: search, import and the editor come in later parts. The runner has no Android device, so these
+issue 744), the Android counterpart of RT-365 to RT-369. RT-680 to RT-687 cover the "Current" view
+(issue 746); RT-688 to RT-699 cover the "Cover", "Label" and "Import" tabs (search, suggestions,
+the editor) and Settings › "Artwork providers" (issue 753, `ui/ArtworkSearch.kt`,
+`ui/ArtworkEditor.kt`, `ui/ArtworkProviders.kt`, `data/ArtSearch.kt`, `data/ScreenScraper.kt`). The runner has no Android device, so these
 are `MANUAL`: a person runs them on a phone, a tablet or an emulator with `adb`, with network unless
 a step says otherwise. On Android a synced cover is served from the OpenEmux mirror and has no file
 on the device; a cover kept on the device is one received through "Share nearby".
@@ -10501,11 +10503,14 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
   in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
   lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
-  art, titled with the game and console. A "Cover" card says "Automatic",
-  "Synced <date>", "WEBP · <width> × <height>" and "From the OpenEmux mirror", with no reset and no
-  remove button. A "Label" card says "Automatic", "Synced <date>" (or "From the artwork sync" for a
-  label fetched before this version), "PNG · <width> × <height>", "From ScreenScraper", and offers
-  "Remove label" but not "Reset to synced label".
+  art, titled with the game and console, with the tabs "Current", "Search", "Edit" and "Import".
+  "Current" shows a "Cover" card that says "Automatic", "Synced <date>",
+  "WEBP · <width> × <height>" and "From the OpenEmux mirror", and a "Label" card that shows the
+  label's picture and says "Automatic", "Synced <date>" (or "From the artwork sync" for a label
+  fetched before this version), "PNG · <width> × <height>" and "From ScreenScraper". Each card has
+  exactly three buttons, "Search", "Adjust" and "Remove"; there is no "Pick another match", "Sync
+  now", "Reset" or import button. The cover's "Remove" is dimmed (a mirror cover has no file on the
+  device); the label's is not.
 - **Check:** human only (`adb exec-out screencap -p > rt-680.png`).
 
 ### RT-681 — A console without a cartridge frame shows the cover only
@@ -10514,64 +10519,27 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** A PlayStation (or other disc) game in the library.
 - **Steps:**
   1. Open the game and tap the "Artwork" row.
-- **Expected:** Only the "Cover" card is shown; there is no "Label" card.
+  2. Open the "Search", "Edit" and "Import" tabs.
+- **Expected:** Only the "Cover" card is shown; there is no "Label" card. "Search", "Edit" and
+  "Import" have no "Cover" / "Label" row: they work on the cover directly.
 - **Check:** human only.
 
-### RT-682 — Removing a label shows at once, and Sync now brings it back
+### RT-682 — Removing a label shows at once, and a search brings it back
 - **Area:** Android — Artwork manager
 - **Mode:** MANUAL
-- **Preconditions:** RT-680's game.
+- **Preconditions:** RT-680's game; ScreenScraper credentials (a build that has them, or RT-697);
+  network.
 - **Steps:**
-  1. In "Artwork", press "Remove label".
+  1. In "Artwork", press "Remove" on the "Label" card.
   2. Go back to the game and to its console's list.
-  3. Tap the "Artwork" row again and press "Sync now" on the label.
-- **Expected:** After step 1 the label card says "Missing", "No label yet", with "Sync now". In
-  step 2 the cartridge shows its blank label on the detail screen and in the list without a
-  restart, the detail screen shows "Search artwork…" under it and its "Artwork" row reads
-  "Missing". In step 3 the button reads
-  "Syncing…", then the card says "Automatic" with today's date, and the label is back everywhere.
+  3. Tap the "Artwork" row again, press "Search" on the label card, pick a result and tap
+     "Save as label".
+- **Expected:** After step 1 the label card says "Missing", "No label yet", its "Adjust" and
+  "Remove" dimmed. In step 2 the cartridge shows its blank label on the detail screen and in the
+  list without a restart, the detail screen shows "Search artwork…" under it and its "Artwork" row
+  reads "Missing". In step 3 the "Search" tab opens on "Label" with a search running; after saving,
+  a green "Saved" shows for a moment, the card says "Manual", and the label is back everywhere.
 - **Check:** human only.
-
-### RT-683 — Sync now offline says so and changes nothing
-- **Area:** Android — Artwork manager
-- **Mode:** MANUAL
-- **Preconditions:** A cartridge game with no label (RT-682 step 1).
-- **Steps:**
-  1. Turn airplane mode on.
-  2. The "Artwork" row → "Sync now" on the label.
-- **Expected:** A banner inside the manager says "The artwork service could not be reached.
-  Nothing was changed."; the card stays "Missing". No toast appears.
-- **Check:** human only.
-- **Restore:** Turn airplane mode off.
-
-### RT-684 — Reset to the synced cover replaces a kept cover, after asking
-- **Area:** Android — Artwork manager
-- **Mode:** MANUAL
-- **Preconditions:** A game whose cover was received through "Share nearby" and that the mirror
-  also has.
-- **Steps:**
-  1. The "Artwork" row: the cover card.
-  2. "Reset to synced cover" → "Cancel".
-  3. "Reset to synced cover" → "Reset".
-  4. Repeat steps 2–3 in airplane mode on another game with a received cover.
-- **Expected:** Step 1 shows "Local file", "Found on the device", "Reset to synced cover" and
-  "Remove cover". "Cancel" changes nothing. "Reset" turns the button into "Syncing…", then the card
-  shows the mirror cover as "Automatic" with today's date, the reset and remove buttons are gone,
-  and the library card shows the new cover at once. Offline, the banner says the artwork service
-  could not be reached and the received cover stays.
-- **Check:** human only.
-
-### RT-685 — Reset is refused while a library sync runs
-- **Area:** Android — Artwork manager
-- **Mode:** MANUAL
-- **Preconditions:** A game with a received cover; enough games without labels that the label sync
-  runs for a while (the shelf shows "Fetching labels").
-- **Steps:**
-  1. While the pill shows progress, the "Artwork" row → "Reset to synced cover" → "Reset".
-- **Expected:** The banner says "A library sync is running. Try again when it finishes." and the
-  cover is unchanged.
-- **Check:** human only.
-
 ### RT-686 — A game with no art offers "Search artwork…"
 - **Area:** Android — Artwork manager
 - **Mode:** MANUAL
@@ -10579,9 +10547,8 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Steps:**
   1. Open the game.
   2. Press "Search artwork…" under the box.
-  3. Press "Sync now".
-- **Expected:** The button shows under the empty box. It opens "Artwork" with the cover "Missing".
-  "Sync now" ends with the banner "No cover was found for <name>."
+- **Expected:** The button shows under the empty box. It opens "Artwork" on the "Search" tab with
+  a search by name for the cover already running; when it finds nothing, suggestions appear.
 - **Check:** human only.
 
 ### RT-687 — The artwork manager fits every window and works with a gamepad
@@ -10597,16 +10564,260 @@ on the device; a cover kept on the device is one received through "Share nearby"
   3. Turn TalkBack on and swipe through the screen.
 - **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
   and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
-  Tablet: the cover and label cards sit side by side. Every button gets the focus ring and "A"
+  Tablet: the cover and label cards sit side by side, the tabs in the header. Each card's
+  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus ring and "A"
   presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
   pill text and each button. Both themes are legible.
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`.
 
+### RT-688 — A wrong cover is fixed by a search by name and shows at once
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's Game Boy game; network.
+- **Steps:**
+  1. Open the game, tap the "Artwork" row, then "Search" on the "Cover" card.
+  2. Watch the "Search" tab until the search ends.
+  3. Pick the second result and tap "Save as cover".
+  4. Go back to the detail screen and to the library; close the app from the recents and open it
+     again; let the library sync run.
+- **Expected:** Step 1 opens the "Search" tab with "Cover" selected under it, "Name" holding the
+  game's name next to "Search by name" on the same row, "Hash" next to "Search by hash", and a
+  search already running ("Searching… N images found", "Cancel search"). Results fill in one by one, each
+  with its provider ("OpenEmux mirror", "libretro thumbnails", "ScreenScraper"), no two alike, at
+  most four per provider; the first is selected with a check. Step 3 returns to "Current" with a
+  green "Saved" at the bottom for a moment; the cover card says "Manual", "Saved <today>", "Chosen by you · <provider>". In step 4 the detail
+  screen and the library show the new cover at once, and it is still there after the restart and
+  the sync.
+- **Check:** human only.
+
+### RT-689 — Search by hash finds the game on ScreenScraper
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game (a real dump); a build with ScreenScraper credentials, or an
+  account added as in RT-697; network.
+- **Steps:**
+  1. Open the "Search" tab on "Cover" and wait for "Hash".
+  2. Tap "Search by hash".
+- **Expected:** "Hash" reads "computing…", then eight hex digits; "Search by hash" waits for it.
+  The results include "ScreenScraper" ones.
+- **Check:** human only.
+
+### RT-690 — Cancel search stops the search
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game; network.
+- **Steps:**
+  1. Tap "Search by name" and at once "Cancel search".
+- **Expected:** The spinner stops and the status says "Search cancelled"; what arrived stays, no
+  more results arrive.
+- **Check:** human only.
+
+### RT-691 — Offline, refused and missing credentials are said in plain words
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game.
+- **Steps:**
+  1. Airplane mode on; "Search" tab › "Cover" → "Search by name". Airplane mode off.
+  2. Settings › "Artwork providers" › "Developer account (advanced)": a made-up ID and password,
+     "Save and check"; then "Search" › "Label" → "Search by name". Then "Remove developer account".
+  3. On a build without ScreenScraper credentials and no account: "Search" › "Label" → "Search by name".
+- **Expected:** Step 1: a red banner "No connection. Check the network and search again." Step 2:
+  the check says "ScreenScraper refused the request. The account details may be wrong.", and so
+  does the search. Step 3: "ScreenScraper needs an account, and this build has none. Add one in
+  Settings › Artwork providers." No toast; the art in "Current" never changes.
+- **Check:** human only. (Over quota is not reproducible on demand; JVM tests cover it.)
+
+### RT-692 — A missing label is found by hash and saved, a "none" game included
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game whose label the sync marked as missing
+  (`files/labels/<console>/<name>.none` exists, check with `adb shell run-as com.openemux.mobile ls files/labels/GB`);
+  ScreenScraper credentials; network.
+- **Steps:**
+  1. Open the game's detail screen and tap "Search artwork…".
+  2. Pick a result and tap "Save as label".
+- **Expected:** Step 1 opens the "Search" tab on "Label" with a search running (labels come from ScreenScraper
+  only). After step 2 the "Label" card says "Manual"; the cartridge on the detail screen and in
+  the library shows the label at once; the `.none` file is gone.
+- **Check:** human only.
+
+### RT-693 — An empty box-art search offers suggestions
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy ROM renamed to nonsense close to a real title (for example
+  "Tetrys Dx.gb"); network.
+- **Steps:**
+  1. Open its "Search" tab on "Cover" and tap "Search by name".
+  2. Pick a suggestion and tap "Save as cover".
+  3. Airplane mode on, search again; then airplane mode off.
+- **Expected:** Step 1: "No images found", and under "SUGGESTIONS" names from the game-name
+  database appear by themselves, each with its mirror preview; when no word matched as typed the
+  line says "N approximate matches, ranked by similarity" and each tile says "Approximate". Step
+  2: the cover shows at once in the library and on the detail screen ("Chosen by you · OpenEmux
+  mirror"). Step 3: the names still list, each preview says "Preview unavailable" and cannot be
+  chosen.
+- **Check:** human only.
+
+### RT-694 — An imported image is cropped, rotated, flipped and saved; the picked file is untouched
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game; a photo in the device's gallery or Downloads.
+- **Steps:**
+  1. The "Import" tab, "Cover" under it → "Choose an image"; pick the photo.
+  2. Tap the crop tool; drag a corner, drag inside the box; "Apply crop". Rotate left, rotate
+     right, flip both ways, "Reset", crop again.
+  3. Tap "Save".
+  4. Repeat on "Import" › "Label".
+- **Expected:** The "Import" tab shows the photo upright with a crop box, its corners marked and the
+  outside dimmed; dragging near the screen's left edge moves the corner, it does not go back. Each
+  tool changes the image at once; "Apply crop" is dimmed, with no spinner, until the crop tool
+  is on; "Reset" has its own undo arrow, unlike "Rotate left", and brings back the photo as picked.
+  After "Save" a green "Saved" shows for a moment and the card says "Manual", "PNG · <the cropped size>", and the library shows it. The photo in the gallery is
+  unchanged.
+- **Check:** human only.
+
+### RT-695 — Adjust edits the current art and a non-image is refused
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a PDF or text file in Downloads.
+- **Steps:**
+  1. "Current" → "Adjust" on the "Cover" card; "Rotate left"; "Save".
+  2. "Import" › "Cover" → "Choose an image"; in the picker's "Browse" pick the PDF.
+- **Expected:** Step 1: the "Edit" tab opens on "Cover" with the current cover in the editor; after saving, the card says
+  "Manual" and its size is the rotated one (width and height swapped). Step 2: "That file is not a
+  PNG, JPEG or WebP image." in the manager; nothing changes.
+- **Check:** human only.
+
+### RT-696 — Provider order and switches change the search and the sync
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** Network; a Game Boy game the sync has not given a cover yet.
+- **Steps:**
+  1. Settings › "Artwork providers": switch "OpenEmux mirror" off; move "libretro thumbnails" up
+     to the top.
+  2. A game's "Search" tab › "Cover" → "Search by name".
+  3. Import the new game and open its "Current" cover card.
+  4. Turn ScreenScraper's "Labels" chip off; import a cartridge game.
+  5. Put everything back as it was.
+- **Expected:** Step 2: no "OpenEmux mirror" results; "libretro thumbnails" ones come first. Step
+  3: the cover says "From libretro thumbnails". Step 4: the label sync does not run and "Search" ›
+  "Label" finds nothing. Step 5 restores the mirror covers.
+- **Check:** human only.
+
+### RT-697 — A ScreenScraper account is added, checked and removed
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A ScreenScraper user account; network.
+- **Steps:**
+  1. Settings › "Artwork providers": type the user name and password, "Save and check".
+  2. Change the password to a wrong one, "Save and check".
+  3. "Remove account"; then search a label.
+- **Expected:** Step 1: "Signed in. <used> of <max> requests used today." Step 2: "ScreenScraper
+  refused the request. The account details may be wrong." Step 3: the fields empty, the search
+  still works with the app's shared account (on a build that has one).
+- **Check:** human only.
+
+### RT-698 — The ScreenScraper account never leaves the device
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-697's account added.
+- **Steps:**
+  1. Search a label, then run `adb logcat -d | grep -i '<the password>'`.
+  2. Settings › "Backup": export a backup and list it with `unzip -l` / search it for the user name.
+- **Expected:** Neither the log nor the backup holds the password or the user name.
+- **Check:** human only.
+
+### RT-699 — The new tabs and settings work with a gamepad, TalkBack and every window
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad; TalkBack; a tablet (or `adb shell wm size 1280x800`); light and
+  dark themes.
+- **Steps:**
+  1. In the manager, "L1"/"R1" through "Current", "Search", "Edit" and "Import"; on each, move
+     through the "Cover" / "Label" row and every field, button and result with the D-pad.
+  2. In "Edit" with the crop on: focus the image, "A" repeatedly, D-pad each time.
+  3. TalkBack through a search's results, the editor's tools and the crop area; Settings ›
+     "Artwork providers".
+  4. Tablet landscape and phone landscape, both themes.
+- **Expected:** Every control takes the focus ring; "A" on the image cycles "Moving the crop box",
+  then each corner, then back to moving focus, and the D-pad moves what it says. TalkBack reads
+  "Result 2 from ScreenScraper" with its selected state, each tool by name, the crop area's
+  actions ("Move crop left", "Grow crop"…), "Move OpenEmux mirror up" and the switches. On the
+  tablet the tabs sit in the header; nothing is cut anywhere.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`.
+
+### RT-700 — Remove in the editor removes the art on Save, never opens Import
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game with a label on the device (RT-680's game).
+- **Steps:**
+  1. "Current" → "Adjust" on the "Label" card.
+  2. Tap "Remove this image".
+  3. Tap "Undo".
+  4. Tap "Remove this image" again, then "Save".
+  5. With a label back (as in RT-682), repeat steps 1–2 and tap "Cancel".
+- **Expected:** Step 1 opens "Edit" on "Label" with the label in the editor. Step 2 stays on
+  "Edit": the editor says "The label will be removed when you save." with "Undo"; the "Import"
+  tab never opens. Step 3 brings the label back into the editor. Step 4 returns to "Current" with
+  a green "Saved"; the label card says "Missing" and the cartridge shows its blank label on the
+  detail screen and in the library at once. In step 5 "Cancel" returns to "Current" and the label
+  is untouched.
+- **Check:** human only.
+
+### RT-701 — Edit and Import save with a green "Saved", Cancel discards
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a photo on the device.
+- **Steps:**
+  1. "Edit" tab on "Label": "Flip horizontal", then "Cancel".
+  2. "Edit" again: "Rotate right", then "Save".
+  3. "Import" › "Cover" → "Choose an image", pick the photo, "Save".
+  4. On a game with no cover, open "Edit" on "Cover".
+- **Expected:** Step 1 returns to "Current" with the label unchanged and no "Saved". Step 2
+  returns to "Current" with a green "Saved" pill at the bottom for about two seconds, read out by
+  TalkBack, and the label rotated in the card, on the detail screen and in the library. Step 3
+  does the same for the cover, saved as the cover (there is no "Save as" choice: the sub-tab
+  decides). Step 4 says "No cover yet", "Search for one, or import an image." with "Search" and
+  "Import" buttons.
+- **Check:** human only.
+
+### RT-702 — The Current tab previews the label a cartridge game shows
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** Cartridge games with a label: one synced, one saved by hand (RT-692), one
+  whose file name has spaces, accents and brackets (for example
+  "Pokémon - Red Version (USA, Europe) [!].gb").
+- **Steps:**
+  1. For each, open the game, then the "Artwork" row.
+  2. Empty one label file
+     (`adb shell run-as com.openemux.mobile sh -c ': > "files/labels/GB/<name>.png"'`) and open its
+     "Artwork" row.
+- **Expected:** Step 1: the "Label" card shows the same picture the cartridge shows, next to its
+  facts. Step 2: the card's frame shows a warning sign and "The file could not be read" instead of
+  an empty box.
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-683 — Sync now offline says so and changes nothing
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** "Sync now" was taken out of the artwork manager in the QA of issue 753: each art kind
+  keeps only "Search", "Adjust" and "Remove", and the library sync still fetches missing art.
+
+### RT-684 — Reset to the synced cover replaces a kept cover, after asking
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** "Reset to synced cover" was taken out of the artwork manager in the QA of issue 753:
+  each art kind keeps only "Search", "Adjust" and "Remove".
+
+### RT-685 — Reset is refused while a library sync runs
+- **Retired:** 2026-11-03 (issue 753).
+- **Reason:** The reset it guarded was taken out of the artwork manager in the QA of issue 753 (see
+  RT-684). This is the Android RT-685; the desktop scenario that also carries the id stays.
 
 ### RT-207 — The native packages require FUSE rather than suggesting it
 - **Retired:** 2026-08-27 (issue #328).
