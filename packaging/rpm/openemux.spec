@@ -186,6 +186,12 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Mon Nov 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.20.0-1
+- Cartridge frames re-rendered with real relief and shadows, NDS card included
+- Cartridge view: the shadow follows the cartridge, no box on hover
+- Android: per-game artwork manager (search, import, crop, rotate, providers)
+- Android: Dark and official-color controller skins, NDS layouts, per-ROM shader
+
 * Sun Nov 01 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.19.0-1
 - Share nearby sends the console's BIOS files along with the game
 - Import BIOS files per console from a file picker, checked by name
