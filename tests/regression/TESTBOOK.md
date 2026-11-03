@@ -10466,9 +10466,12 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** A Game Boy game whose cover the mirror has and whose label the sync fetched
   (the artwork pill on the shelf gone).
 - **Steps:**
-  1. Open the game, tap "⋮" and choose "Artwork…".
-- **Expected:** The menu lists "Share", "Artwork…" and "Remove from library", in that order. The
-  "Artwork" screen opens, titled with the game and console. A "Cover" card says "Automatic",
+  1. Open the game and look at its settings list.
+  2. Tap the "Artwork" row.
+- **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
+  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
+  lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
+  art, titled with the game and console. A "Cover" card says "Automatic",
   "Synced <date>", "WEBP · <width> × <height>" and "From the OpenEmux mirror", with no reset and no
   remove button. A "Label" card says "Automatic", "Synced <date>" (or "From the artwork sync" for a
   label fetched before this version), "PNG · <width> × <height>", "From ScreenScraper", and offers
@@ -10480,7 +10483,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Mode:** MANUAL
 - **Preconditions:** A PlayStation (or other disc) game in the library.
 - **Steps:**
-  1. Open the game, "⋮" → "Artwork…".
+  1. Open the game and tap the "Artwork" row.
 - **Expected:** Only the "Cover" card is shown; there is no "Label" card.
 - **Check:** human only.
 
@@ -10491,10 +10494,11 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Steps:**
   1. In "Artwork", press "Remove label".
   2. Go back to the game and to its console's list.
-  3. Open "Artwork…" again and press "Sync now" on the label.
+  3. Tap the "Artwork" row again and press "Sync now" on the label.
 - **Expected:** After step 1 the label card says "Missing", "No label yet", with "Sync now". In
   step 2 the cartridge shows its blank label on the detail screen and in the list without a
-  restart, and the detail screen shows "Search artwork…" under it. In step 3 the button reads
+  restart, the detail screen shows "Search artwork…" under it and its "Artwork" row reads
+  "Missing". In step 3 the button reads
   "Syncing…", then the card says "Automatic" with today's date, and the label is back everywhere.
 - **Check:** human only.
 
@@ -10504,7 +10508,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** A cartridge game with no label (RT-682 step 1).
 - **Steps:**
   1. Turn airplane mode on.
-  2. "Artwork…" → "Sync now" on the label.
+  2. The "Artwork" row → "Sync now" on the label.
 - **Expected:** A banner inside the manager says "The artwork service could not be reached.
   Nothing was changed."; the card stays "Missing". No toast appears.
 - **Check:** human only.
@@ -10516,7 +10520,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** A game whose cover was received through "Share nearby" and that the mirror
   also has.
 - **Steps:**
-  1. "Artwork…": the cover card.
+  1. The "Artwork" row: the cover card.
   2. "Reset to synced cover" → "Cancel".
   3. "Reset to synced cover" → "Reset".
   4. Repeat steps 2–3 in airplane mode on another game with a received cover.
@@ -10533,7 +10537,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** A game with a received cover; enough games without labels that the label sync
   runs for a while (the shelf shows "Fetching labels").
 - **Steps:**
-  1. While the pill shows progress, "Artwork…" → "Reset to synced cover" → "Reset".
+  1. While the pill shows progress, the "Artwork" row → "Reset to synced cover" → "Reset".
 - **Expected:** The banner says "A library sync is running. Try again when it finishes." and the
   cover is unchanged.
 - **Check:** human only.
@@ -10556,13 +10560,15 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Preconditions:** RT-680's game; a tablet (or an emulator with `adb shell wm size 1280x800`) and
   a gamepad; light and dark themes.
 - **Steps:**
-  1. Open "Artwork…" on the phone in portrait and in landscape, then on the tablet in landscape.
-  2. With the gamepad: "Y" on the detail screen, move to "Artwork…", "A"; move through every
-     button; "B".
+  1. On the phone in portrait and in landscape, then on the tablet in landscape: find the
+     "Artwork" row on the detail screen and open it.
+  2. With the gamepad on the detail screen: move down the settings list from "Shader", then
+     "A" on "Artwork"; move through every button; "B".
   3. Turn TalkBack on and swipe through the screen.
-- **Expected:** Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
+- **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
+  and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
   Tablet: the cover and label cards sit side by side. Every button gets the focus ring and "A"
-  presses it; "B" goes back to the game. TalkBack reads "Cover of <name>", "Label of <name>", the
+  presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
   pill text and each button. Both themes are legible.
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`.
