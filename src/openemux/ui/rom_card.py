@@ -482,6 +482,9 @@ class RomItem(Gtk.Box):
         # Any hover/focus affordance belongs to the card that just left.
         self.remove_css_class("rom-card-hover")
         self.play_overlay.set_visible(False)
+        # Until a cartridge arrives, the card shows the placeholder, a box:
+        # a recycled card whose next game has no art keeps the dark overlay.
+        self.play_overlay.remove_css_class("cartridge")
         self.menu_button.set_visible(False)
         self.set_opacity(1.0)
         self._fade_next_apply = False
@@ -501,6 +504,9 @@ class RomItem(Gtk.Box):
         self.set_selected(False)
         self.remove_css_class("rom-card-hover")
         self.play_overlay.set_visible(False)
+        # Until a cartridge arrives, the card shows the placeholder, a box:
+        # a recycled card whose next game has no art keeps the dark overlay.
+        self.play_overlay.remove_css_class("cartridge")
         self.menu_button.set_visible(False)
         self._show_placeholder()
 

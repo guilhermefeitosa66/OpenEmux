@@ -161,6 +161,13 @@ class TheCoverArrivingTests(_CardCase):
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), False)
         self.assertFalse(self.card.play_overlay.has_css_class("cartridge"))
 
+    def test_a_placeholder_on_a_card_that_showed_a_cartridge_gets_its_dark_overlay_back(self):
+        # A recycled card whose next game has no art shows the placeholder,
+        # a box, which keeps the dark overlay.
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
+        self.card.bind(RomEntry(self.win.playlist_manager.load_playlist("FC")[0]))
+        self.assertFalse(self.card.play_overlay.has_css_class("cartridge"))
+
     def test_a_cover_for_a_game_the_card_has_left_is_dropped(self):
         stale = self.card._generation
         self.card._generation += 1
