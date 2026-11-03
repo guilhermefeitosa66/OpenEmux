@@ -10484,8 +10484,10 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
 
 The Android app's per-game artwork manager (openemux-android, `pkg/android/openemux`,
 `ui/ArtworkScreen.kt`, `data/Artwork.kt`, `data/ArtSources.kt`; issue 746, part of the epic in
-issue 744), the Android counterpart of RT-365 to RT-369. This first part has the "Current" view
-only: search, import and the editor come in later parts. The runner has no Android device, so these
+issue 744), the Android counterpart of RT-365 to RT-369. RT-680 to RT-687 cover the "Current" view
+(issue 746); RT-688 to RT-699 cover the "Cover", "Label" and "Import" tabs (search, suggestions,
+the editor) and Settings › "Artwork providers" (issue 753, `ui/ArtworkSearch.kt`,
+`ui/ArtworkEditor.kt`, `ui/ArtworkProviders.kt`, `data/ArtSearch.kt`, `data/ScreenScraper.kt`). The runner has no Android device, so these
 are `MANUAL`: a person runs them on a phone, a tablet or an emulator with `adb`, with network unless
 a step says otherwise. On Android a synced cover is served from the OpenEmux mirror and has no file
 on the device; a cover kept on the device is one received through "Share nearby".
@@ -10600,6 +10602,181 @@ on the device; a cover kept on the device is one received through "Share nearby"
   Tablet: the cover and label cards sit side by side. Every button gets the focus ring and "A"
   presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
   pill text and each button. Both themes are legible.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`.
+
+### RT-688 — A wrong cover is fixed by a search by name and shows at once
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's Game Boy game; network.
+- **Steps:**
+  1. Open the game, tap the "Artwork" row, then "Pick another match" on the "Cover" card.
+  2. Watch the "Cover" tab until the search ends.
+  3. Pick the second result and tap "Save as cover".
+  4. Go back to the detail screen and to the library; close the app from the recents and open it
+     again; let the library sync run.
+- **Expected:** Step 1 opens the "Cover" tab with "Name" holding the game's name and a search
+  already running ("Searching… N images found", "Cancel search"). Results fill in one by one, each
+  with its provider ("OpenEmux mirror", "libretro thumbnails", "ScreenScraper"), no two alike, at
+  most four per provider; the first is selected with a check. Step 3 returns to "Current": the
+  cover card says "Manual", "Saved <today>", "Chosen by you · <provider>". In step 4 the detail
+  screen and the library show the new cover at once, and it is still there after the restart and
+  the sync.
+- **Check:** human only.
+
+### RT-689 — Search by hash finds the game on ScreenScraper
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game (a real dump); a build with ScreenScraper credentials, or an
+  account added as in RT-697; network.
+- **Steps:**
+  1. Open the "Cover" tab and wait for "Hash".
+  2. Tap "Search by hash".
+- **Expected:** "Hash" reads "computing…", then eight hex digits; "Search by hash" waits for it.
+  The results include "ScreenScraper" ones.
+- **Check:** human only.
+
+### RT-690 — Cancel search stops the search
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game; network.
+- **Steps:**
+  1. Tap "Search by name" and at once "Cancel search".
+- **Expected:** The spinner stops and the status says "Search cancelled"; what arrived stays, no
+  more results arrive.
+- **Check:** human only.
+
+### RT-691 — Offline, refused and missing credentials are said in plain words
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-688's game.
+- **Steps:**
+  1. Airplane mode on; "Cover" tab → "Search by name". Airplane mode off.
+  2. Settings › "Artwork providers" › "Developer account (advanced)": a made-up ID and password,
+     "Save and check"; then the "Label" tab → "Search by name". Then "Remove developer account".
+  3. On a build without ScreenScraper credentials and no account: the "Label" tab → "Search by name".
+- **Expected:** Step 1: a red banner "No connection. Check the network and search again." Step 2:
+  the check says "ScreenScraper refused the request. The account details may be wrong.", and so
+  does the search. Step 3: "ScreenScraper needs an account, and this build has none. Add one in
+  Settings › Artwork providers." No toast; the art in "Current" never changes.
+- **Check:** human only. (Over quota is not reproducible on demand; JVM tests cover it.)
+
+### RT-692 — A missing label is found by hash and saved, a "none" game included
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game whose label the sync marked as missing
+  (`files/labels/<console>/<name>.none` exists, check with `adb shell run-as com.openemux.mobile ls files/labels/GB`);
+  ScreenScraper credentials; network.
+- **Steps:**
+  1. Open the game's detail screen and tap "Search artwork…".
+  2. Pick a result and tap "Save as label".
+- **Expected:** Step 1 opens the "Label" tab with a search running (labels come from ScreenScraper
+  only). After step 2 the "Label" card says "Manual"; the cartridge on the detail screen and in
+  the library shows the label at once; the `.none` file is gone.
+- **Check:** human only.
+
+### RT-693 — An empty box-art search offers suggestions
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy ROM renamed to nonsense close to a real title (for example
+  "Tetrys Dx.gb"); network.
+- **Steps:**
+  1. Open its "Cover" tab and tap "Search by name".
+  2. Pick a suggestion and tap "Save as cover".
+  3. Airplane mode on, search again; then airplane mode off.
+- **Expected:** Step 1: "No images found", and under "SUGGESTIONS" names from the game-name
+  database appear by themselves, each with its mirror preview; when no word matched as typed the
+  line says "N approximate matches, ranked by similarity" and each tile says "Approximate". Step
+  2: the cover shows at once in the library and on the detail screen ("Chosen by you · OpenEmux
+  mirror"). Step 3: the names still list, each preview says "Preview unavailable" and cannot be
+  chosen.
+- **Check:** human only.
+
+### RT-694 — An imported image is cropped, rotated, flipped and saved; the picked file is untouched
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game; a photo in the device's gallery or Downloads.
+- **Steps:**
+  1. "Current" → "Import from file" (or "Replace from file") on the "Cover" card; pick the photo.
+  2. Tap the crop tool; drag a corner, drag inside the box; "Apply crop". Rotate left, rotate
+     right, flip both ways, "Reset", crop again.
+  3. Tap "Save".
+  4. Repeat from the "Label" card, saving as "Label".
+- **Expected:** The "Import" tab shows the photo upright with a crop box, its corners marked and the
+  outside dimmed; dragging near the screen's left edge moves the corner, it does not go back. Each
+  tool changes the image at once; "Reset" brings back the photo as picked. After "Save" the card
+  says "Manual", "PNG · <the cropped size>", and the library shows it. The photo in the gallery is
+  unchanged.
+- **Check:** human only.
+
+### RT-695 — Adjust edits the current art and a non-image is refused
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a PDF or text file in Downloads.
+- **Steps:**
+  1. "Current" → "Adjust" on the "Cover" card; "Rotate left"; "Save".
+  2. "Import from file"; in the picker's "Browse" pick the PDF.
+- **Expected:** Step 1: the editor opens on the current cover; after saving, the card says
+  "Manual" and its size is the rotated one (width and height swapped). Step 2: "That file is not a
+  PNG, JPEG or WebP image." in the manager; nothing changes.
+- **Check:** human only.
+
+### RT-696 — Provider order and switches change the search and the sync
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** Network; a Game Boy game the sync has not given a cover yet.
+- **Steps:**
+  1. Settings › "Artwork providers": switch "OpenEmux mirror" off; move "libretro thumbnails" up
+     to the top.
+  2. A game's "Cover" tab → "Search by name".
+  3. Import the new game and open its "Current" cover card.
+  4. Turn ScreenScraper's "Labels" chip off; import a cartridge game.
+  5. Put everything back as it was.
+- **Expected:** Step 2: no "OpenEmux mirror" results; "libretro thumbnails" ones come first. Step
+  3: the cover says "From libretro thumbnails". Step 4: the label sync does not run and the "Label"
+  tab finds nothing. Step 5 restores the mirror covers.
+- **Check:** human only.
+
+### RT-697 — A ScreenScraper account is added, checked and removed
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A ScreenScraper user account; network.
+- **Steps:**
+  1. Settings › "Artwork providers": type the user name and password, "Save and check".
+  2. Change the password to a wrong one, "Save and check".
+  3. "Remove account"; then search a label.
+- **Expected:** Step 1: "Signed in. <used> of <max> requests used today." Step 2: "ScreenScraper
+  refused the request. The account details may be wrong." Step 3: the fields empty, the search
+  still works with the app's shared account (on a build that has one).
+- **Check:** human only.
+
+### RT-698 — The ScreenScraper account never leaves the device
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-697's account added.
+- **Steps:**
+  1. Search a label, then run `adb logcat -d | grep -i '<the password>'`.
+  2. Settings › "Backup": export a backup and list it with `unzip -l` / search it for the user name.
+- **Expected:** Neither the log nor the backup holds the password or the user name.
+- **Check:** human only.
+
+### RT-699 — The new tabs and settings work with a gamepad, TalkBack and every window
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad; TalkBack; a tablet (or `adb shell wm size 1280x800`); light and
+  dark themes.
+- **Steps:**
+  1. In the manager, "L1"/"R1" through the tabs; on each, move through every field, button and
+     result with the D-pad.
+  2. In "Import" with the crop on: focus the image, "A" repeatedly, D-pad each time.
+  3. TalkBack through a search's results, the editor's tools and the crop area; Settings ›
+     "Artwork providers".
+  4. Tablet landscape and phone landscape, both themes.
+- **Expected:** Every control takes the focus ring; "A" on the image cycles "Moving the crop box",
+  then each corner, then back to moving focus, and the D-pad moves what it says. TalkBack reads
+  "Result 2 from ScreenScraper" with its selected state, each tool by name, the crop area's
+  actions ("Move crop left", "Grow crop"…), "Move OpenEmux mirror up" and the switches. On the
+  tablet the tabs sit in the header; nothing is cut anywhere.
 - **Check:** human only.
 - **Restore:** `adb shell wm size reset`.
 
