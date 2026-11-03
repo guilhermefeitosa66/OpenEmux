@@ -10480,6 +10480,129 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
 - **Check:** human only.
 
 
+## Android — Artwork manager
+
+The Android app's per-game artwork manager (openemux-android, `pkg/android/openemux`,
+`ui/ArtworkScreen.kt`, `data/Artwork.kt`, `data/ArtSources.kt`; issue 746, part of the epic in
+issue 744), the Android counterpart of RT-365 to RT-369. This first part has the "Current" view
+only: search, import and the editor come in later parts. The runner has no Android device, so these
+are `MANUAL`: a person runs them on a phone, a tablet or an emulator with `adb`, with network unless
+a step says otherwise. On Android a synced cover is served from the OpenEmux mirror and has no file
+on the device; a cover kept on the device is one received through "Share nearby".
+
+### RT-680 — The artwork manager opens on the current art and says where it came from
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy game whose cover the mirror has and whose label the sync fetched
+  (the artwork pill on the shelf gone).
+- **Steps:**
+  1. Open the game and look at its settings list.
+  2. Tap the "Artwork" row.
+- **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
+  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
+  lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
+  art, titled with the game and console. A "Cover" card says "Automatic",
+  "Synced <date>", "WEBP · <width> × <height>" and "From the OpenEmux mirror", with no reset and no
+  remove button. A "Label" card says "Automatic", "Synced <date>" (or "From the artwork sync" for a
+  label fetched before this version), "PNG · <width> × <height>", "From ScreenScraper", and offers
+  "Remove label" but not "Reset to synced label".
+- **Check:** human only (`adb exec-out screencap -p > rt-680.png`).
+
+### RT-681 — A console without a cartridge frame shows the cover only
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A PlayStation (or other disc) game in the library.
+- **Steps:**
+  1. Open the game and tap the "Artwork" row.
+- **Expected:** Only the "Cover" card is shown; there is no "Label" card.
+- **Check:** human only.
+
+### RT-682 — Removing a label shows at once, and Sync now brings it back
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game.
+- **Steps:**
+  1. In "Artwork", press "Remove label".
+  2. Go back to the game and to its console's list.
+  3. Tap the "Artwork" row again and press "Sync now" on the label.
+- **Expected:** After step 1 the label card says "Missing", "No label yet", with "Sync now". In
+  step 2 the cartridge shows its blank label on the detail screen and in the list without a
+  restart, the detail screen shows "Search artwork…" under it and its "Artwork" row reads
+  "Missing". In step 3 the button reads
+  "Syncing…", then the card says "Automatic" with today's date, and the label is back everywhere.
+- **Check:** human only.
+
+### RT-683 — Sync now offline says so and changes nothing
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A cartridge game with no label (RT-682 step 1).
+- **Steps:**
+  1. Turn airplane mode on.
+  2. The "Artwork" row → "Sync now" on the label.
+- **Expected:** A banner inside the manager says "The artwork service could not be reached.
+  Nothing was changed."; the card stays "Missing". No toast appears.
+- **Check:** human only.
+- **Restore:** Turn airplane mode off.
+
+### RT-684 — Reset to the synced cover replaces a kept cover, after asking
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A game whose cover was received through "Share nearby" and that the mirror
+  also has.
+- **Steps:**
+  1. The "Artwork" row: the cover card.
+  2. "Reset to synced cover" → "Cancel".
+  3. "Reset to synced cover" → "Reset".
+  4. Repeat steps 2–3 in airplane mode on another game with a received cover.
+- **Expected:** Step 1 shows "Local file", "Found on the device", "Reset to synced cover" and
+  "Remove cover". "Cancel" changes nothing. "Reset" turns the button into "Syncing…", then the card
+  shows the mirror cover as "Automatic" with today's date, the reset and remove buttons are gone,
+  and the library card shows the new cover at once. Offline, the banner says the artwork service
+  could not be reached and the received cover stays.
+- **Check:** human only.
+
+### RT-685 — Reset is refused while a library sync runs
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A game with a received cover; enough games without labels that the label sync
+  runs for a while (the shelf shows "Fetching labels").
+- **Steps:**
+  1. While the pill shows progress, the "Artwork" row → "Reset to synced cover" → "Reset".
+- **Expected:** The banner says "A library sync is running. Try again when it finishes." and the
+  cover is unchanged.
+- **Check:** human only.
+
+### RT-686 — A game with no art offers "Search artwork…"
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** A disc game whose file name the mirror does not know (a homebrew name).
+- **Steps:**
+  1. Open the game.
+  2. Press "Search artwork…" under the box.
+  3. Press "Sync now".
+- **Expected:** The button shows under the empty box. It opens "Artwork" with the cover "Missing".
+  "Sync now" ends with the banner "No cover was found for <name>."
+- **Check:** human only.
+
+### RT-687 — The artwork manager fits every window and works with a gamepad
+- **Area:** Android — Artwork manager
+- **Mode:** MANUAL
+- **Preconditions:** RT-680's game; a tablet (or an emulator with `adb shell wm size 1280x800`) and
+  a gamepad; light and dark themes.
+- **Steps:**
+  1. On the phone in portrait and in landscape, then on the tablet in landscape: find the
+     "Artwork" row on the detail screen and open it.
+  2. With the gamepad on the detail screen: move down the settings list from "Shader", then
+     "A" on "Artwork"; move through every button; "B".
+  3. Turn TalkBack on and swipe through the screen.
+- **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
+  and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
+  Tablet: the cover and label cards sit side by side. Every button gets the focus ring and "A"
+  presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
+  pill text and each button. Both themes are legible.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
