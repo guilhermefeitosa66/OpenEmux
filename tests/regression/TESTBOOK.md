@@ -8488,7 +8488,7 @@ or into an environment that cannot run the tests.
 - **Preconditions:** the site served or opened from `docs/`; browser DevTools open on Network.
 - **Steps:**
   1. Load the home page and scroll through it.
-  2. Click "Watch the video (66 s)" under the download buttons.
+  2. Click "Watch the video (44 s)" under the download buttons.
   3. Press Escape.
   4. With JavaScript disabled, click the same link.
 - **Expected:** 1: no request for `openemux-promo.mp4` or its poster, and no video anywhere on the
