@@ -152,14 +152,32 @@ fi
 echo "==> phase 6: portable zip"
 ZIP="OpenEmux-${VERSION}-windows-x86_64.zip"
 rm -f "dist/$ZIP"
+# The marker is what makes the zip portable: with it beside OpenEmux.exe, every
+# data root lands in OpenEmux\data\ instead of the user profile (issue #766,
+# core/paths.portable_root). It goes into the bundle only for as long as the
+# zip takes; the installer reads the same tree and must never carry it.
+cp packaging/windows/portable.txt "$BUNDLE/portable.txt"
 # -r from inside build/win so the archive contains a single OpenEmux/ directory
 # instead of spilling several hundred files into whatever the user unzips into.
 ( cd "$BUILD_DIR" && zip -q -r -9 "../../dist/$ZIP" "OpenEmux" )
+rm -f "$BUNDLE/portable.txt"
+# Collected into a variable, then tested -- never `| grep -q` under pipefail.
+ZIP_LISTING="$(python3 -m zipfile -l "dist/$ZIP")"
+if ! grep -q '^OpenEmux/portable\.txt ' <<< "$ZIP_LISTING"; then
+  echo "!! dist/$ZIP has no OpenEmux/portable.txt: it would not run portable" >&2
+  exit 1
+fi
 echo "==> built: dist/$ZIP"
 
 echo "==> phase 7: installer"
 SETUP="OpenEmux-${VERSION}-setup.exe"
 rm -f "dist/$SETUP"
+# An installed copy that found the marker would keep the user's library inside
+# its install directory, where the uninstaller deletes it.
+if [ -e "$BUNDLE/portable.txt" ]; then
+  echo "!! the installer bundle carries portable.txt; it must not" >&2
+  exit 1
+fi
 makensis -V2 \
   "-DVERSION=${VERSION}" \
   "-DBUNDLE_DIR=$PWD/$BUNDLE" \

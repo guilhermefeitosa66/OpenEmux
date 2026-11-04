@@ -192,5 +192,33 @@ class ThePortableEnvironmentTests(_PortableCase):
         self.assertEqual(env, {"TEMP": "C:/profile/Temp"})
 
 
+class TheZipAloneCarriesTheMarkerTests(unittest.TestCase):
+    """``build.sh`` puts the marker in the zip and keeps it out of the installer."""
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def setUp(self):
+        self.script = (self.REPO / "packaging" / "windows" / "build.sh").read_text(
+            encoding="utf-8"
+        )
+
+    def test_the_marker_ships_with_the_packaging(self):
+        marker = self.REPO / "packaging" / "windows" / paths.PORTABLE_MARKER
+        self.assertIn("portable", marker.read_text(encoding="utf-8"))
+
+    def test_it_is_added_for_the_zip_and_removed_before_the_installer(self):
+        add = self.script.index('cp packaging/windows/portable.txt "$BUNDLE/portable.txt"')
+        zip_ = self.script.index('zip -q -r -9 "../../dist/$ZIP"')
+        remove = self.script.index('rm -f "$BUNDLE/portable.txt"')
+        installer = self.script.index("makensis")
+        self.assertLess(add, zip_)
+        self.assertLess(zip_, remove)
+        self.assertLess(remove, installer)
+
+    def test_the_build_fails_when_either_artifact_is_wrong(self):
+        self.assertIn("has no OpenEmux/portable.txt", self.script)
+        self.assertIn("the installer bundle carries portable.txt", self.script)
+
+
 if __name__ == "__main__":
     unittest.main()

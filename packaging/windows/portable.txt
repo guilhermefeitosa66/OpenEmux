@@ -1,0 +1,6 @@
+This file makes OpenEmux portable.
+
+While it sits beside OpenEmux.exe, OpenEmux keeps everything it writes (settings,
+library, saves, states, BIOS, cover art, caches) in the "data" folder next to it,
+and nothing in your Windows user profile. Delete this file to have OpenEmux use
+your user profile instead, the way the installer does.
