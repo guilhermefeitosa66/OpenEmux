@@ -34,7 +34,9 @@ def artwork_temp_root():
     base = portable_data_dir("cache")
     if base is None:
         cache_home = os.environ.get("XDG_CACHE_HOME") or ""
-        base = Path(cache_home) if Path(cache_home).is_absolute() else Path.home() / ".cache"
+        # A rooted path ("/...") as before, or a Windows one with its drive.
+        absolute = cache_home.startswith("/") or Path(cache_home).is_absolute()
+        base = Path(cache_home) if absolute else Path.home() / ".cache"
     return base / "openemux" / "artwork-manager"
 
 
