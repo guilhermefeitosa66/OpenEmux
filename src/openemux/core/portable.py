@@ -57,7 +57,9 @@ def apply_portable_environment(environ=None):
 
     Returns the portable root, or ``None`` when this is not a portable install
     or its folder cannot be written -- in which case the environment is left
-    exactly as it was, and the app starts the way it always has.
+    exactly as it was. OpenEmux's own roots (``core.paths``) still follow the
+    marker, so the config dir and the ROM folder stay under ``data\\`` and
+    fail to be created there; nothing is quietly moved into the profile.
     """
     root = portable_root()
     if root is None:
