@@ -1,3 +1,4 @@
+import functools
 import os
 import shutil
 from pathlib import Path
@@ -66,15 +67,68 @@ STORE_FILENAMES = {
 }
 
 
+#: The file the Windows portable ``.zip`` ships beside ``OpenEmux.exe`` and the
+#: installer never does (issue #766). Its presence is the whole question.
+PORTABLE_MARKER = "portable.txt"
+
+#: The folder, beside the marker, that holds everything a portable install
+#: writes. One name so a user can see -- and back up, or wipe -- all of it.
+PORTABLE_DATA_DIR = "data"
+
+
+def portable_root():
+    """The folder of a portable Windows install, or ``None``.
+
+    Portable means the ``.zip``: :data:`PORTABLE_MARKER` sits in the project
+    root, which the launcher exports as the folder holding ``OpenEmux.exe``.
+    Without it -- the installer, a source checkout under MSYS2 -- the app keeps
+    the user-profile paths it always had. Linux never asks the disk at all.
+    """
+    if not IS_WINDOWS:
+        return None
+    return _portable_root_at(str(get_project_root()))
+
+
+@functools.lru_cache(maxsize=None)
+def _portable_root_at(root):
+    """Looked up once per process: the marker does not come and go mid-run."""
+    root = Path(root)
+    return root if (root / PORTABLE_MARKER).is_file() else None
+
+
+def portable_data_dir(name):
+    """``<portable root>/data/<name>``, or ``None`` off a portable install."""
+    root = portable_root()
+    if root is None:
+        return None
+    return root / PORTABLE_DATA_DIR / name
+
+
 def default_config_dir():
     """Where the app keeps its own data.
 
     The one place that answers it. ``XDG_CONFIG_HOME`` and ``XDG_DATA_HOME``
     are deliberately *not* consulted yet -- moving an existing install's data
     is a migration, not a rename -- but when they are, this is the single site
-    that changes, and ``migrate_legacy_config_dir`` above is the pattern.
+    that changes, and ``migrate_legacy_config_dir`` above is the pattern. A
+    portable Windows install keeps it inside its own folder (issue #766).
     """
+    portable = portable_data_dir("openemux")
+    if portable is not None:
+        return portable
     return Path.home() / CONFIG_DIR_NAME
+
+
+def default_roms_path():
+    """The ROM folder a fresh config starts with.
+
+    ``~/games/roms`` in the *real* home (a Flatpak's ``$HOME`` is its sandbox),
+    or the portable folder's own ``data/roms``.
+    """
+    portable = portable_data_dir("roms")
+    if portable is not None:
+        return portable
+    return get_real_home() / "games" / "roms"
 
 
 def store_path(name, config_dir=None):
@@ -98,13 +152,24 @@ def bytecode_cache_dir():
     --delete-data`` takes it away with everything else the app left behind,
     and no bytecode of a sandboxed install is left sitting in the real home.
     """
+    return user_cache_dir() / "openemux" / "bytecode"
+
+
+def user_cache_dir():
+    """The per-user cache root: ``%LOCALAPPDATA%``, ``$XDG_CACHE_HOME`` or ``~/.cache``.
+
+    A portable install's is ``data/cache`` inside its folder, which is also
+    what ``main.prepare_process`` points ``XDG_CACHE_HOME`` at, so GLib's
+    answer and this one agree.
+    """
+    portable = portable_data_dir("cache")
+    if portable is not None:
+        return portable
     if IS_WINDOWS:
         base = os.environ.get("LOCALAPPDATA")
-        root = Path(base) if base else Path.home() / "AppData" / "Local"
-    else:
-        base = os.environ.get("XDG_CACHE_HOME")
-        root = Path(base) if base else Path.home() / ".cache"
-    return root / "openemux" / "bytecode"
+        return Path(base) if base else Path.home() / "AppData" / "Local"
+    base = os.environ.get("XDG_CACHE_HOME")
+    return Path(base) if base else Path.home() / ".cache"
 
 
 def migrate_legacy_config_dir():
@@ -119,7 +184,12 @@ def migrate_legacy_config_dir():
     (2) repair absolute paths baked into ``config.yaml`` that still point at the
     legacy dir (e.g. ``library.playlists_dir``), so a moved install resolves its
     data under the new location instead of recreating an empty legacy dir.
+
+    Not for a portable install: its data was never in the profile, and moving
+    a folder there is exactly what it promises not to do (issue #766).
     """
+    if portable_root() is not None:
+        return
     home = Path.home()
     legacy = home / LEGACY_CONFIG_DIR_NAME
     current = home / CONFIG_DIR_NAME

@@ -32,7 +32,7 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import default_config_dir, get_real_home, store_path, is_running_in_flatpak
+from openemux.core.paths import default_config_dir, default_roms_path, store_path, is_running_in_flatpak
 from openemux.core.console_order import normalize_console_order
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
@@ -78,12 +78,13 @@ def _try_mkdir(directory, failures):
         failures.append(directory)
         return False
 
-# Private app data lives under ~/.openemux; the ROM library under ~/games/roms.
+# Private app data lives under ~/.openemux; the ROM library under ~/games/roms
+# (both inside the folder of a portable Windows install, issue #766).
 # Derived from paths.store_path, which is the one place that knows where the
 # config directory is -- see the note there (issue #239).
 DEFAULT_CONFIG_DIR = default_config_dir()
 DEFAULT_CONFIG_FILE = store_path("config")
-DEFAULT_ROMS_PATH = get_real_home() / "games" / "roms"
+DEFAULT_ROMS_PATH = default_roms_path()
 DEFAULT_PLAYLISTS_DIR = store_path("playlists")
 DEFAULT_INPUT_DIR = store_path("input")
 DEFAULT_RUNTIME_DIR = store_path("runtime")

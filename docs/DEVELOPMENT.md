@@ -604,6 +604,35 @@ libretro cores into its own directory on first boot, and under `Program Files`
 that write would fail for a standard user -- the app would install cleanly and
 then be unable to launch a game.
 
+#### Portable mode
+
+The two artifacts carry the same tree but one file: the `.zip` has
+`portable.txt` beside `OpenEmux.exe` (copied from `packaging/windows/`, removed
+again before NSIS runs; `build.sh` fails if the zip lacks it or the installer
+bundle has it). When the app finds the marker at start
+(`core/paths.portable_root()`), everything it writes stays in the unzipped
+folder and nothing reaches `%USERPROFILE%`, `%APPDATA%` or `%LOCALAPPDATA%`:
+
+```
+OpenEmux\
+  OpenEmux.exe
+  portable.txt
+  data\
+    openemux\   the config dir: settings, library, playlists, input, saves, states, BIOS
+    roms\       the default ROM folder (covers under roms\covers\)
+    cache\      XDG_CACHE_HOME: bytecode, artwork-manager scratch, fontconfig, pixbuf loaders
+    config\     XDG_CONFIG_HOME   share\  XDG_DATA_HOME   state\  XDG_STATE_HOME
+    tmp\        TEMP and TMP
+```
+
+OpenEmux's own roots follow `core/paths.py`; `core/portable.py` sets the XDG
+variables, `TEMP`/`TMP` and a fontconfig wrapper (MSYS2's `fonts.conf` names
+`%LOCALAPPDATA%\fontconfig\cache` first) from `main.prepare_process()`, before
+GTK is imported. Without the marker, the installer keeps `%USERPROFILE%\.openemux`
+and `%USERPROFILE%\games\roms` exactly as before. The bundled RetroArch already
+runs portable on both. Paths in `config.yaml` are still absolute, so a folder that
+moves to another drive letter needs its ROM folder picked again and a rescan.
+
 #### The pinned MSYS2 runtime
 
 `packaging/windows/packages.lock` names every MSYS2 package the bundle ships,

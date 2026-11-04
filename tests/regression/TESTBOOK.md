@@ -10799,6 +10799,40 @@ on the device; a cover kept on the device is one received through "Share nearby"
   an empty box.
 - **Check:** human only.
 
+### RT-703 — The Windows portable zip writes nothing to the user profile
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) where OpenEmux was never run: no
+  `%USERPROFILE%\.openemux`, no `%USERPROFILE%\games`. `OpenEmux-*-windows-x86_64.zip` from the
+  release under test.
+- **Steps:**
+  1. Unzip it to a USB stick or any folder, check that `OpenEmux\portable.txt` sits beside
+     `OpenEmux.exe`, and run `OpenEmux.exe`.
+  2. Let the first boot finish, put a ROM into `OpenEmux\data\roms\<console>\`, scan, launch the
+     game and quit it, then change any setting in "Preferences".
+  3. In PowerShell, list what changed in the profile during the test:
+     `Get-ChildItem $env:USERPROFILE,$env:APPDATA,$env:LOCALAPPDATA -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-1) -and $_.FullName -match 'openemux|fontconfig|gtk|recently-used' }`
+  4. Delete `portable.txt` and run `OpenEmux.exe` again.
+- **Expected:** Steps 1-2: `OpenEmux\data\` holds `openemux\` (config, library, playlists,
+  states), `roms\`, `cache\`, `config\`, `share\`, `state\` and `tmp\`. Step 3 lists nothing.
+  Step 4: the app starts as a fresh install under `%USERPROFILE%\.openemux`, the way the installer
+  does.
+- **Check:** human only.
+- **Restore:** delete `%USERPROFILE%\.openemux` created by step 4.
+
+### RT-704 — Without the portable marker, every path is the one it always was
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable-mode suite.
+- **Expected:** With the marker, the config dir, the default ROM folder, the caches, the four XDG
+  variables, `TEMP`/`TMP` and the fontconfig cache resolve under `data\`; without it (the
+  installer) and on Linux, they are the paths of the previous release; `build.sh` puts the marker
+  in the zip only.
+- **Check:** suite files `tests/test_portable.py`, `tests/test_paths.py`,
+  `tests/test_pixbuf_loaders.py`, `tests/test_startup_preparation.py`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and

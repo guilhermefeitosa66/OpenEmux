@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>O jeito de sempre</h3>",
   "install.installer_note": "<p>Instala só para o seu usuário, então não pede permissão de administrador. As versões ainda não são assinadas digitalmente: o SmartScreen vai avisar, e <em>Mais informações → Executar assim mesmo</em> resolve.</p>",
   "install.portable_title": "<h3>Nada para instalar</h3>",
-  "install.portable_note": "<p>Descompacte onde quiser e rode o <code>OpenEmux.exe</code> da pasta <code>OpenEmux\\</code> que vem dentro. Ótimo para um pendrive ou para um computador onde você não pode instalar programas.</p>",
+  "install.portable_note": "<p>Descompacte onde quiser e rode o <code>OpenEmux.exe</code> da pasta <code>OpenEmux\\</code> que vem dentro. Configurações, biblioteca, saves e capas ficam na pasta <code>data\\</code> dela e nada vai para o seu perfil de usuário, então funciona direto de um pendrive. Se a pasta for parar em outra letra de unidade, escolha a pasta de ROMs de novo e reescaneie.</p>",
   "install.verify_title": "<h3>Verifique o seu download</h3>",
   "install.verify_lede": "<p>Toda release vem com um arquivo <code>SHA256SUMS</code>. Coloque-o ao lado do arquivo que você baixou e rode:</p>",
   "install.verify_ok": "<p><code>OK</code> significa que o arquivo é exatamente o que foi publicado. Qualquer outra coisa significa que ele está corrompido ou foi adulterado — não execute.</p>",
