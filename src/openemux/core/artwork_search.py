@@ -17,6 +17,7 @@ from threading import Thread
 
 from openemux.core import cover_sync, screenscraper
 from openemux.core.atomic_write import atomic_write_bytes
+from openemux.core.paths import portable_data_dir
 from openemux.core.scraper import image_format, is_image
 from openemux.core.systems import get_thumbnail_system, resolve_system_id
 
@@ -27,10 +28,13 @@ def artwork_temp_root():
 
     ``$XDG_CACHE_HOME/openemux/artwork-manager``, the same path
     ``GLib.get_user_cache_dir()`` resolves to, worked out here so the sweep in
-    ``core.housekeeping`` can find it without a GTK import (issue #221).
+    ``core.housekeeping`` can find it without a GTK import (issue #221). A
+    portable install's sits in its own folder (issue #766).
     """
-    cache_home = os.environ.get("XDG_CACHE_HOME") or ""
-    base = Path(cache_home) if cache_home.startswith("/") else Path.home() / ".cache"
+    base = portable_data_dir("cache")
+    if base is None:
+        cache_home = os.environ.get("XDG_CACHE_HOME") or ""
+        base = Path(cache_home) if Path(cache_home).is_absolute() else Path.home() / ".cache"
     return base / "openemux" / "artwork-manager"
 
 

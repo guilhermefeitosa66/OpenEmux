@@ -216,6 +216,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
     def setUp(self):
         self.calls = []
         for name in (
+            "apply_portable_environment",
             "_redirect_bytecode_cache",
             "_configure_gtk_renderer",
             "migrate_legacy_config_dir",
@@ -238,6 +239,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         self.assertEqual(
             self.calls,
             [
+                "apply_portable_environment",
                 "_redirect_bytecode_cache",
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
@@ -253,7 +255,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         # swap the root handlers out from under the running app.
         main_module.prepare_process()
         main_module.prepare_process()
-        self.assertEqual(len(self.calls), 7)
+        self.assertEqual(len(self.calls), 8)
 
     def test_the_application_is_built_only_after_the_preparation(self):
         # Importing gi.repository.Gtk runs Gtk.init(), which opens the

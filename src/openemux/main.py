@@ -14,6 +14,7 @@ from openemux.core.paths import (
     migrate_legacy_config_dir,
 )
 from openemux.core.platform import IS_WINDOWS
+from openemux.core.portable import apply_portable_environment
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -178,7 +179,11 @@ def prepare_process():
     if _prepared:
         return
     _prepared = True
-    # First: everything below this line imports, and each import that lands
+    # Before anything resolves a per-user directory: a portable Windows install
+    # keeps GLib's, fontconfig's and tempfile's writes in its own folder
+    # (issue #766). A no-op everywhere else.
+    apply_portable_environment()
+    # Next: everything below this line imports, and each import that lands
     # before the redirect is one more module the packaged install recompiles
     # on every launch.
     _redirect_bytecode_cache()
