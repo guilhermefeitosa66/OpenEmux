@@ -3815,6 +3815,86 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   in the console row — not the one the library was showing.
 - **Check:** screenshot of the Input page; the console row must name the console from step 1.
 
+### RT-705 — A remapped control reaches the game as OpenEmux's, not RetroArch's
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "Input", remap "A" for a console to `g`, then launch
+  one of its games.
+- **Expected:** The launch's runtime override (`~/.openemux/runtime/runtime_<console>_*.cfg`)
+  carries `input_player1_a = "g"`, and no value for that key can come from the user's own
+  `retroarch.cfg`: every launch starts from RetroArch's stock default for every input key, players
+  1-16, with OpenEmux's values on top (issue #759).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_openemux_bindings_win_and_the_rest_is_retroarch_stock`),
+  `tests/test_input_baseline.py`.
+
+### RT-706 — A cleared control stays cleared in game
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: clear "B" for a console in "Settings" → "Input", then launch one of
+  its games and press RetroArch's stock key for B (`z`).
+- **Expected:** Nothing happens: the override carries `input_player1_b = "nul"`, which wins over
+  RetroArch's stock `z` from the baseline (issue #759; issue #281 stays fixed).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_openemux_bindings_win_and_the_rest_is_retroarch_stock`).
+
+### RT-707 — After "Reset defaults", hotkeys OpenEmux does not expose keep RetroArch's keys
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: press "Reset defaults" on a console's input page, launch one of its
+  games, press `Escape`.
+- **Expected:** The game closes: RetroArch's stock hotkeys that no OpenEmux binding claims stay on
+  their stock keys (`escape` quits, `f1` opens the menu, `h` resets), while one whose key an
+  OpenEmux binding took is unbound (issue #146).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_a_reset_profile_keeps_the_unexposed_stock_hotkeys`).
+
+### RT-708 — A customised retroarch.cfg no longer mixes into a launch, and is left unchanged
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`) on its synthetic library; no
+  `~/.local/share/openemux-devbox/home/.config/retroarch/retroarch.cfg` of the test's own yet (if
+  one exists, copy it to `$SCRATCH/rt708-orig.cfg` first).
+- **Steps:**
+  1. Write the devbox's `~/.config/retroarch/retroarch.cfg` with exactly these lines:
+     `input_player1_a = "t"`, `input_exit_emulator = "q"`, `input_player2_a = "k"`,
+     `input_menu_toggle_gamepad_combo = "2"`, and record its sha256.
+  2. Launch any game from the grid (select it, `Return`), wait 10 s, close it.
+  3. Read the newest `~/.openemux/runtime/runtime_*.cfg` and `retroarch_*.log` in the devbox home.
+- **Expected:** The override has `input_exit_emulator = "escape"`, `input_player2_a = "nul"`,
+  `input_menu_toggle_gamepad_combo = "0"`, `auto_remaps_enable = "false"`, and
+  `input_player1_a` set to the console's OpenEmux binding (not `t`). The launch log's first lines
+  include `[openemux] input overrides from …/retroarch.cfg:` naming those four keys (only names,
+  no values). The file's sha256 is the same as in step 1.
+- **Check:**
+  ```bash
+  H=~/.local/share/openemux-devbox/home
+  O=$(ls -t $H/.openemux/runtime/runtime_*.cfg | head -1)
+  L=$(ls -t $H/.openemux/runtime/retroarch_*.log | head -1)
+  grep -qx 'input_exit_emulator = "escape"' "$O" && grep -qx 'input_player2_a = "nul"' "$O" \
+    && grep -qx 'input_menu_toggle_gamepad_combo = "0"' "$O" \
+    && grep -qx 'auto_remaps_enable = "false"' "$O" && ! grep -qx 'input_player1_a = "t"' "$O" \
+    && grep -q 'input overrides from .*retroarch.cfg: input_exit_emulator, input_menu_toggle_gamepad_combo, input_player1_a, input_player2_a$' "$L" \
+    && echo "RT-708 OK"
+  ```
+  plus `sha256sum` of the file equal to step 1's.
+- **Restore:** Delete the test's `retroarch.cfg` (or put `$SCRATCH/rt708-orig.cfg` back).
+
+### RT-709 — Without a retroarch.cfg the launch log says nothing was overridden
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: with no `~/.config/retroarch/retroarch.cfg`, launch a game and open
+  its launch log.
+- **Expected:** The game starts, and the log carries
+  `[openemux] input overrides from …/retroarch.cfg: none`.
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_without_a_users_file_the_log_says_none`,
+  `TheUsersRetroArchConfigTests`).
+
 ## Shaders
 
 ### RT-080 — Shader selection round-trips through the store

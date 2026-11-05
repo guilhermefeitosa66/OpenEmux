@@ -1988,6 +1988,30 @@ class TheInputBaselineTests(unittest.TestCase):
         ), note[0])
         self.assertTrue(any("4 input keys" in line for line in logs))
 
+    def test_a_reset_profile_keeps_the_unexposed_stock_hotkeys(self):
+        from openemux.core.input_actions import RETROARCH_STOCK_KEYBOARD_HOTKEYS
+        from openemux.core.input_profiles import InputProfileManager
+
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            cfg.input_profile = InputProfileManager(base / "input").default_profile("SFC")
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("SFC")
+            written = dict(
+                line.split(" = ", 1)
+                for line in Path(path).read_text(encoding="utf-8").splitlines()
+            )
+        keyboard = cfg.input_profile["devices"]["keyboard"]["bindings"]
+        claimed = {value for value in keyboard.values() if value}
+        # The default profile's own keys reach the game...
+        self.assertEqual(written["input_player1_a"], f'"{keyboard["a"]}"')
+        # ...and every stock hotkey it does not claim keeps RetroArch's key.
+        for key, stock in RETROARCH_STOCK_KEYBOARD_HOTKEYS.items():
+            if stock not in claimed and key not in launcher._input_overrides("SFC"):
+                self.assertEqual(written[key], f'"{stock}"', key)
+        self.assertEqual(written["input_exit_emulator"], '"escape"')
+
     def test_without_a_users_file_the_log_says_none(self):
         _lines, log_text, logs, _before, _after = self._launch(None)
         self.assertIn("retroarch.cfg: none", log_text)
