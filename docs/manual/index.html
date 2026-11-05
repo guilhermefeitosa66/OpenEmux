@@ -931,7 +931,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <li><strong>Installer</strong>, <code>OpenEmux-*-setup.exe</code>: installs for your user only, so it does
               not ask for administrator rights. The builds are not code-signed yet, so SmartScreen warns about them;
               <span class="ui">More info → Run anyway</span> gets past it.</li>
-            <li><strong>Portable</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: unzip it anywhere and run <code>OpenEmux.exe</code> from the <code>OpenEmux\</code> folder inside. Everything it writes (settings, library, saves, states, BIOS, covers, caches) stays in the <code>data\</code> folder beside it, never in your user profile, so it works from a USB stick. Paths are still stored in full: if the folder ends up on another drive letter, pick the ROM folder again and rescan.</li>
+            <li><strong>Portable</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: unzip it anywhere and run <code>OpenEmux.exe</code> from the <code>OpenEmux\</code> folder inside. Everything it writes (settings, library, saves, states, BIOS, covers, caches) stays in the <code>data\</code> folder beside it, never in your user profile, so it works from a USB stick. Paths inside the folder are stored relative to it: move it to another drive letter or place and the library, favorites, collections and settings come along, with no rescan.</li>
           </ul>
           <p>The Windows build is new. If something misbehaves, please
             <a href="https://github.com/guilhermefeitosa66/OpenEmux/issues">open an issue</a>.</p>

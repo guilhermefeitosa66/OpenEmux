@@ -150,7 +150,7 @@
   "install-windows.h31": "Windows（ベータ版）",
   "install-windows.p1": "Windows 版はどちらも GTK 4、Python ランタイム、RetroArch 本体を同梱しているため、ほかに何もインストールする必要はありません。64 ビット版の Windows 10 または 11 が必要です。",
   "install-windows.li1": "<strong>インストーラー</strong>、<code>OpenEmux-*-setup.exe</code>：現在のユーザーだけにインストールするため、管理者権限は求められません。まだコード署名されていないので SmartScreen の警告が出ますが、<span class=\"ui\">詳細情報 → 実行</span>で進めます。",
-  "install-windows.li2": "<strong>ポータブル版</strong>、<code>OpenEmux-*-windows-x86_64.zip</code>：好きな場所に展開し、中の <code>OpenEmux\\</code> フォルダーにある <code>OpenEmux.exe</code> を実行します。書き込むもの（設定、ライブラリー、セーブ、ステート、BIOS、カバー画像、キャッシュ）はすべて隣の <code>data\\</code> フォルダーに保存され、ユーザープロファイルには入らないので、USB メモリーで使えます。パスはまだ絶対パスで保存されるため、ドライブ文字が変わったら ROM フォルダーを選び直して再スキャンしてください。",
+  "install-windows.li2": "<strong>ポータブル版</strong>、<code>OpenEmux-*-windows-x86_64.zip</code>：好きな場所に展開し、中の <code>OpenEmux\\</code> フォルダーにある <code>OpenEmux.exe</code> を実行します。書き込むもの（設定、ライブラリー、セーブ、ステート、BIOS、カバー画像、キャッシュ）はすべて隣の <code>data\\</code> フォルダーに保存され、ユーザープロファイルには入らないので、USB メモリーで使えます。フォルダー内のパスはそのフォルダーからの相対パスで保存されるので、別のドライブ文字や場所に移しても、ライブラリー、お気に入り、コレクション、設定は再スキャンなしでそのまま使えます。",
   "install-windows.p2": "Windows 版はまだ新しいものです。おかしな動作があれば、<a href=\"https://github.com/guilhermefeitosa66/OpenEmux/issues\">issue を作成</a>してください。",
   "install-verify.h31": "ダウンロードの検証",
   "install-verify.p1": "各リリースには <code>SHA256SUMS</code> ファイルがあります。ダウンロードしたファイルと同じ場所に置いて、次を実行してください。",

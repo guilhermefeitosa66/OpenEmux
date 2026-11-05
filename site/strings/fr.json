@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>La méthode classique</h3>",
   "install.installer_note": "<p>S’installe pour votre utilisateur uniquement, donc sans demande d’administrateur. Les versions ne sont pas encore signées : SmartScreen affichera un avertissement, et <em>Informations complémentaires → Exécuter quand même</em> permet de passer outre.</p>",
   "install.portable_title": "<h3>Rien à installer</h3>",
-  "install.portable_note": "<p>Décompressez-le où vous voulez et lancez <code>OpenEmux.exe</code> depuis le dossier <code>OpenEmux\\</code> qu’il contient. Réglages, bibliothèque, sauvegardes et jaquettes restent dans son dossier <code>data\\</code>, et rien ne va dans votre profil utilisateur : il fonctionne depuis une clé USB. Si le dossier se retrouve sur une autre lettre de lecteur, choisissez à nouveau le dossier des ROM et relancez l’analyse.</p>",
+  "install.portable_note": "<p>Décompressez-le où vous voulez et lancez <code>OpenEmux.exe</code> depuis le dossier <code>OpenEmux\\</code> qu’il contient. Réglages, bibliothèque, sauvegardes et jaquettes restent dans son dossier <code>data\\</code>, et rien ne va dans votre profil utilisateur : il fonctionne depuis une clé USB. Déplacé sur une autre lettre de lecteur ou ailleurs, le dossier garde tout.</p>",
   "install.verify_title": "<h3>Vérifiez votre téléchargement</h3>",
   "install.verify_lede": "<p>Chaque version est livrée avec un fichier <code>SHA256SUMS</code>. Placez-le à côté du fichier téléchargé et lancez :</p>",
   "install.verify_ok": "<p><code>OK</code> signifie que le fichier est exactement celui qui a été publié. Tout autre résultat signifie qu’il est corrompu ou a été modifié : ne l’exécutez pas.</p>",
