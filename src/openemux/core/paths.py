@@ -237,7 +237,21 @@ def default_config_dir():
     portable = portable_data_dir("openemux")
     if portable is not None:
         return portable
+    return profile_config_dir()
+
+
+def profile_config_dir():
+    """The config dir in the user profile, where the installer keeps it.
+
+    What :func:`default_config_dir` answers off a portable install. A portable
+    one asks for it to offer bringing that data along (issue #768).
+    """
     return Path.home() / CONFIG_DIR_NAME
+
+
+def profile_roms_dir():
+    """The default ROM folder in the user profile, portable install or not."""
+    return get_real_home() / "games" / "roms"
 
 
 def default_roms_path():
@@ -249,7 +263,7 @@ def default_roms_path():
     portable = portable_data_dir("roms")
     if portable is not None:
         return portable
-    return get_real_home() / "games" / "roms"
+    return profile_roms_dir()
 
 
 def store_path(name, config_dir=None):

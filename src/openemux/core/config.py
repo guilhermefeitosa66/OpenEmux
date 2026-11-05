@@ -891,6 +891,22 @@ class ConfigManager:
             "timeout_seconds": timeout,
         }
 
+    def get_portable_import_dismissed(self):
+        """Whether the first-start offer to import the profile was declined.
+
+        Off ``DEFAULT_CONFIG`` on purpose: only a portable install that was
+        asked ever has the section (issue #768).
+        """
+        portable = self.config.get("portable")
+        return isinstance(portable, dict) and bool(portable.get("import_offer_dismissed"))
+
+    def set_portable_import_dismissed(self, dismissed=True):
+        portable = self.config.get("portable")
+        if not isinstance(portable, dict):
+            portable = self.config["portable"] = {}
+        portable["import_offer_dismissed"] = bool(dismissed)
+        self.save_config()
+
     def get_view_mode(self):
         return normalize_view_mode(self.config.get("ui", {}).get("view_mode"))
 

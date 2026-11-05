@@ -55,6 +55,7 @@ from openemux.core.share.identity import default_device_name
 from openemux.core.theme import THEMES
 from openemux.ui import theming
 from openemux.ui.console_icons import console_icon
+from openemux.ui.portable_import_dialog import PortableImportGroup
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_importer import (
     REASON_ERROR,
@@ -2068,6 +2069,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         import_row.connect("activated", self._on_import_saves)
         saves_group.add(import_row)
         page.add(saves_group)
+
+        # Only a portable Windows install has a profile to import (issue #768).
+        portable_group = PortableImportGroup.build(self.win.locale, self._toast)
+        if portable_group is not None:
+            page.add(portable_group)
 
         page.add(self._build_share_group())
 

@@ -15,6 +15,7 @@ from openemux.core.paths import (
 )
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.portable import apply_portable_environment
+from openemux.core.portable_import import apply_pending_import
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -183,6 +184,10 @@ def prepare_process():
     # keeps GLib's, fontconfig's and tempfile's writes in its own folder
     # (issue #766). A no-op everywhere else.
     apply_portable_environment()
+    # Before anything opens the config dir, the start-up log included: an
+    # import from the profile staged by the last run is swapped in now, while
+    # no file in the folder is open (issue #768).
+    import_result = _apply_pending_portable_import()
     # Next: everything below this line imports, and each import that lands
     # before the redirect is one more module the packaged install recompiles
     # on every launch.
@@ -192,9 +197,22 @@ def prepare_process():
     # one may still be on its way to.
     migrate_legacy_config_dir()
     configure_startup_logging()
+    if import_result is not None:
+        logging.info("portable import at start-up: %s", import_result)
     _declare_windows_app_id()
     _ensure_gtk_typelibs()
     _ensure_pixbuf_loaders()
+
+
+def _apply_pending_portable_import():
+    """:func:`apply_pending_import`, never fatal: the old folder stays in use."""
+    try:
+        return apply_pending_import()
+    except Exception:
+        append_startup_error(
+            "Could not apply the staged portable import", exc_text=traceback.format_exc()
+        )
+        return "error"
 
 
 def _declare_windows_app_id():
