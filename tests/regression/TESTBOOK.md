@@ -5988,8 +5988,8 @@ so these are `MANUAL`: a person runs them on a Pixel Fold emulator (`avdmanager 
 user_rotation 1`, and set the hinge with `adb emu sensor set hinge-angle0 <deg>` (180 = flat,
 90 = half open). The game logs the fold it sees: `adb logcat -s OpenEmuxGame:D`. The library needs
 a Game Boy Advance game and a Nintendo DS game (both open flat on their packaged skin, the drawn
-art from `assets/skins`) and a Game Gear game (a console that keeps the skin the app draws). The
-packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
+art from `assets/skins`) and a Game Gear game (its bundled skin in OpenEmux's own format since
+issue 770, with fold layouts of its own). The packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
 opening flat brings each one's own skin back. Every scenario ends with `hinge-angle0 180` and
 `user_rotation 0`.
 
@@ -6028,7 +6028,7 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   7. `adb emu unfold`, `adb shell settings put system user_rotation 1` and
      `adb emu sensor set hinge-angle0 90`; wait two seconds.
 - **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
-  drawn Game Gear skin); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
+  bundled Game Gear skin's fold layout); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
   and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
   middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
   Folded, the outer screen shows the phone skin, and nothing sits where the fold was; unfolded
@@ -11009,6 +11009,91 @@ scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `co
   each of the 31 consoles; the rebuild leaves `git status` clean.
 - **Check:** suite files `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
   `src/test/java/com/openemux/mobile/launch/SkinAssetPlanTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Bundled skins for the Sega, NEC and Disk System consoles
+
+Eight consoles that used the drawn skin ship a bundled skin (issue 770): Game Gear (`GG`),
+SG-1000 (`SG1000`), 32X (`S32X`), Mega-CD (`MCD`), Saturn (`SATURN`), PC Engine (`PCE`), PC Engine
+CD (`PCECD`) and Famicom Disk System (`FDS`). They are in OpenEmux's own skin format
+(`assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android)), with phone, tablet and
+fold layouts. The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone or a
+headless emulator with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-732 — Each of the eight consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with one game of each of GG, SG1000, S32X, MCD,
+  SATURN, PCE, PCECD and FDS (with its BIOS where the core needs one); nothing in
+  `files/skins/<console>/`; "Default skin" left on "Console colours".
+- **Steps:**
+  1. Start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
+  3. On a foldable unfolded flat, start one of them again.
+- **Expected:** Each game shows a skin with drawn art in the console's colours (Game Gear black
+  with a blue "START", PC Engine white with "II" and "I", Saturn grey with "A" to "Z", "L" and "R",
+  Disk System deep red and gold with "SELECT", "START" and "DISK"), not the app's plain drawn skin;
+  the landscape layout puts the controls on both sides of the picture; the tablet and the
+  unfolded foldable get their own layouts, the picture never covered.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
+  shows `drawing OpenEmux <console name>` and no fallback line.
+
+### RT-733 — Console colours and Dark for each of the eight
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's games.
+- **Steps:**
+  1. Open Settings › "Controller skin" › "Default skin" for each of the eight consoles.
+  2. Pick "Dark" for PCE and start the PC Engine game.
+- **Expected:** Each console lists exactly "Console colours" and "Dark"; the PC Engine game opens
+  with the black and dark grey skin, every control in the same place as the console colours one.
+- **Check:** `MANUAL`: screenshot the list and the game; pick "Console colours" again afterwards.
+
+### RT-734 — Every control presses what the drawn skin pressed
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's games; RetroArch's input test, or games where each button does
+  something visible.
+- **Steps:**
+  1. On each console press the D-pad's four directions and every button on the skin.
+  2. On the Disk System press "DISK" in a two-sided disk game.
+  3. On the Saturn press "L" and "R"; on the 32X and Mega-CD press "MODE".
+- **Expected:** Each control reaches the core as the drawn skin's did: Saturn's "L"/"R" on the
+  RetroPad's L2/R2, "MODE" on Select, PC Engine's "II"/"I" and "RUN", Game Gear's and SG-1000's "1",
+  "2" and "START"/"PAUSE"; "DISK" turns the disk over (the core reads it on L).
+- **Check:** `MANUAL`; the binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-735 — Quick actions and an imported skin on the new consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's PC Engine game; any `.deltaskin` package.
+- **Steps:**
+  1. On the PC Engine skin use "save", "load", "turbo" and "fast-forward" on the frame, and the
+     menu key.
+  2. Push the package: `adb push <file>.deltaskin /sdcard/Android/data/$PKG/files/skins/PCE/` and
+     start the game again.
+  3. Remove it (`adb shell rm /sdcard/Android/data/$PKG/files/skins/PCE/<file>.deltaskin`) and start
+     the game again.
+- **Expected:** Step 1: each quick action works and lights while on (turbo, fast forward); the
+  menu opens. Step 2: the imported package is drawn instead of the bundled skin. Step 3: the bundled
+  skin is back.
+- **Check:** `MANUAL`: screenshot after steps 2 and 3.
+
+### RT-736 — The bundled packages are valid and match the drawn skins
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the bundled skins suite.
+- **Expected:** The eight consoles ship a `.zip` in console colours and Dark; each is read by the
+  app's skin reader with the six layouts, every image at its element's size, the Dark one with the
+  same layout, every control pressing the bind the drawn skin uses for that console, and the
+  quick actions and the menu present; the templates for the eight match the packages' layouts.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinBindsTest.kt` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
 ## Retired
