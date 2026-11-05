@@ -218,6 +218,17 @@ class TheCrashHandlersTests(unittest.TestCase):
             self.assertIsNone(startup_logging._crash_log_handle)
             self.assertTrue(faulthandler.is_enabled())
 
+    def test_closing_the_log_under_pythonw_with_no_stderr_does_not_raise(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "openemux_startup.log"
+            startup_logging.install_crash_handlers(log_path)
+            crash_log = startup_logging._crash_log_handle
+            with mock.patch.object(sys, "__stderr__", None):
+                startup_logging.close_startup_log()
+            self.assertFalse(faulthandler.is_enabled())
+            self.assertTrue(crash_log.closed)
+            self.assertIsNone(startup_logging._crash_log_handle)
+
     def test_with_no_log_file_the_traces_still_go_to_the_terminal(self):
         startup_logging.install_crash_handlers()
         self.assertTrue(faulthandler.is_enabled())

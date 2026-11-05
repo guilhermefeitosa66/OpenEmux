@@ -104,7 +104,13 @@ def close_startup_log():
         if isinstance(handler, logging.FileHandler):
             root.removeHandler(handler)
             handler.close()
-    faulthandler.enable(file=sys.__stderr__, all_threads=True)
+    # pythonw.exe -- how the Windows bundle runs -- has no stderr at all, and
+    # faulthandler refuses ``None``: crash traces then go nowhere until the
+    # log is configured again.
+    if sys.__stderr__ is None:
+        faulthandler.disable()
+    else:
+        faulthandler.enable(file=sys.__stderr__, all_threads=True)
     _release_crash_log()
 
 

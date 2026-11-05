@@ -425,12 +425,15 @@ def _swap_one(data, staging, name):
     """``data/<name>`` → backup, staged copy → ``data/<name>``; undone on failure."""
     target = data / name
     backup = data / (name + BACKUP_SUFFIX)
-    if backup.exists():
-        shutil.rmtree(backup)
     moved_old = False
     if target.exists():
+        if backup.exists():
+            shutil.rmtree(backup)
         target.rename(backup)
         moved_old = True
+    # No target but a backup: a swap whose way back was refused, so the backup
+    # is the only copy of the old folder. It stays, and goes one start after
+    # the import like any other backup.
     try:
         (staging / name).rename(target)
     except OSError:

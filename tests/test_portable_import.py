@@ -431,6 +431,17 @@ class ApplyTests(_ImportCase):
         self.assertIn("rollback refused", "\n".join(logs.output))
         self.assertTrue((pi.staging_dir() / pi.MANIFEST).is_file())
 
+    def test_a_backup_left_by_a_refused_rollback_survives_the_retry(self):
+        # The way back moved the import out but could not put the old folder
+        # back: the backup is then its only copy, and the retry must keep it.
+        self.stage()
+        backup = self.data / ("openemux" + pi.BACKUP_SUFFIX)
+        backup.mkdir(parents=True)
+        (backup / "config.yaml").write_text("old: true\n")
+        self.assertEqual(pi.apply_pending_import(), "applied")
+        self.assertEqual((backup / "config.yaml").read_text(), "old: true\n")
+        self.assertIn("dark", (self.target / "config.yaml").read_text())
+
     def test_a_refused_first_rename_with_no_folder_yet_changes_nothing(self):
         self.stage()
         with patch.object(Path, "rename", side_effect=PermissionError("in use")):
