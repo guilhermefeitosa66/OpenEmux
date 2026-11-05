@@ -11,6 +11,7 @@ so the bootstrap never downloads a core and nothing is written to the
 developer's own `~/.openemux`.
 """
 
+import logging
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -489,6 +490,86 @@ class ClosingTheFirstBootWindowTests(_ApplicationCase):
             self.window._on_close_response(None, "quit")
         self.assertTrue(self.window._close_confirmed)
         close.assert_called_once()
+
+
+
+@needs_display
+class ThePortableImportOfferTests(_ApplicationCase):
+    """The first start of a portable folder with a profile to import (issue #768)."""
+
+    def setUp(self):
+        super().setUp()
+        housekeeping = mock.patch.object(app_module, "run_startup_housekeeping")
+        housekeeping.start()
+        self.addCleanup(housekeeping.stop)
+
+    def test_the_offer_comes_before_the_first_boot(self):
+        with mock.patch.object(app_module, "should_offer_on_first_start", return_value=True), \
+                mock.patch.object(OpenEmuxApplication, "_offer_portable_import") as offer, \
+                mock.patch.object(OpenEmuxApplication, "_continue_startup") as cont:
+            self.app.do_activate()
+        offer.assert_called_once()
+        cont.assert_not_called()
+
+    def test_the_offer_window_counts_as_the_bootstrap_one(self):
+        with mock.patch("openemux.ui.portable_import_dialog.run_first_start_offer") as run:
+            self.app._offer_portable_import()
+        window = self.app._bootstrap_window
+        self.addCleanup(window.destroy)
+        self.assertIsInstance(window, FirstBootWindow)
+        self.assertTrue(self.app._bootstrap_running)
+        on_finished = run.call_args.args[2]
+        with mock.patch.object(OpenEmuxApplication, "_finish_portable_import_offer") as finish:
+            on_finished("declined")
+        finish.assert_called_once_with("declined", window)
+
+    def finish(self, outcome):
+        window = mock.Mock()
+        with mock.patch.object(OpenEmuxApplication, "_continue_startup") as cont, \
+                mock.patch.object(OpenEmuxApplication, "_swap_portable_import_in") as swap:
+            self.app._bootstrap_running = True
+            self.app._finish_portable_import_offer(outcome, window)
+        cont.assert_called_once()
+        window.finish.assert_called_once()
+        window.destroy.assert_called_once()
+        self.assertFalse(self.app._bootstrap_running)
+        self.assertIsNone(self.app._bootstrap_window)
+        return swap
+
+    def test_declining_is_remembered(self):
+        swap = self.finish("declined")
+        swap.assert_not_called()
+        self.assertTrue(self.config.get_portable_import_dismissed())
+
+    def test_an_import_is_swapped_in(self):
+        self.finish("imported").assert_called_once()
+        self.assertFalse(self.config.get_portable_import_dismissed())
+
+    def test_a_failure_goes_on_and_asks_again_next_time(self):
+        self.finish("failed").assert_not_called()
+        self.assertFalse(self.config.get_portable_import_dismissed())
+
+    def swap(self, **apply):
+        root = logging.getLogger()
+        handler = logging.FileHandler(Path(self.home.root) / "log.txt", delay=True)
+        root.addHandler(handler)
+        self.addCleanup(root.removeHandler, handler)
+        with mock.patch.object(app_module, "apply_pending_import", **apply), \
+                mock.patch.object(app_module, "configure_startup_logging") as configure, \
+                mock.patch.object(app_module, "append_startup_error") as record, \
+                mock.patch("openemux.ui.theming.apply_theme") as theme:
+            self.app._swap_portable_import_in()
+        self.assertNotIn(handler, root.handlers)
+        configure.assert_called_once()
+        theme.assert_called_once()
+        self.assertTrue(self.config.get_portable_import_dismissed())
+        return record
+
+    def test_the_swap_closes_the_log_around_it_and_reloads_the_config(self):
+        self.swap(return_value="applied").assert_not_called()
+
+    def test_a_swap_that_raises_is_recorded_and_not_fatal(self):
+        self.swap(side_effect=RuntimeError("boom")).assert_called_once()
 
 
 if __name__ == "__main__":

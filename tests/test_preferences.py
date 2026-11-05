@@ -154,6 +154,13 @@ class TheDialogOpensOnEverythingItOwnsTests(_PreferencesCase):
         self.assertIsNone(self.prefs._gamepad_reader)
         self.assertFalse(self.win.capture_active)
 
+    def test_a_portable_install_gets_the_import_group_on_the_system_page(self):
+        # Issue #768. Off a portable install (this run) there is none.
+        group = Adw.PreferencesGroup(title="Portable")
+        with mock.patch.object(prefs_module.PortableImportGroup, "build", return_value=group):
+            prefs = OpenEmuxPreferences(self.win)
+        self.assertIs(group.get_ancestor(Adw.PreferencesPage), prefs._pages["system"])
+
     def test_a_toast_reaches_the_dialog(self):
         # The dialog carries its own toast overlay, so this is the one place
         # a message does not go through the window.
