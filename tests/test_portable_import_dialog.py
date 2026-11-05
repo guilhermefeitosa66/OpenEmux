@@ -107,6 +107,31 @@ class RunningTheCopyTests(unittest.TestCase):
         self.assertEqual(seen["done"], 1)
         self.assertIsNone(seen["error"])
 
+    def test_the_callbacks_arrive_while_a_redraw_is_always_pending(self):
+        # A spinning spinner keeps a redraw ready above the idle priority: a
+        # plain idle_add would never run, and the row stayed at 0%.
+        redraw = GLib.idle_add(lambda: True, priority=GLib.PRIORITY_HIGH_IDLE + 20)
+        self.addCleanup(GLib.source_remove, redraw)
+        seen = {"progress": [], "done": 0}
+
+        def run(_plan, progress):
+            progress(100, 100)
+
+        with mock.patch.object(dialogs.portable_import, "plan_import", return_value=object()), \
+                mock.patch.object(dialogs.portable_import, "run_import", run):
+            thread = dialogs.start_import(
+                False,
+                seen["progress"].append,
+                lambda: seen.__setitem__("done", seen["done"] + 1),
+                print,
+            )
+            thread.join(5)
+        context = GLib.MainContext.default()
+        for _ in range(50):
+            context.iteration(False)
+        self.assertEqual(seen["progress"], [1.0])
+        self.assertEqual(seen["done"], 1)
+
     def test_a_second_copy_is_refused_while_one_runs(self):
         dialogs._RUNNING.set()
         self.addCleanup(dialogs._RUNNING.clear)

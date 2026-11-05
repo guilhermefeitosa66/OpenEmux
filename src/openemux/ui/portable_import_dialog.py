@@ -79,6 +79,17 @@ def import_running():
     return _RUNNING.is_set()
 
 
+def _main_loop(func, *args):
+    """Run ``func(*args)`` on the main loop, at the default priority.
+
+    Not ``GLib.idle_add``'s own idle priority: the Preferences row shows a
+    spinner while it copies, and a spinner on screen keeps a redraw pending at
+    a higher priority, so the progress and the restart toast never arrived
+    (the same starvation as #589).
+    """
+    return GLib.idle_add(func, *args, priority=GLib.PRIORITY_DEFAULT)
+
+
 def start_import(include_roms, on_progress, on_done, on_error):
     """Plan and copy on a worker thread; the callbacks run on the main loop.
 
@@ -95,7 +106,7 @@ def start_import(include_roms, on_progress, on_done, on_error):
         percent = int(copied * 100 / total) if total else 100
         if percent != last[0]:
             last[0] = percent
-            GLib.idle_add(on_progress, percent / 100)
+            _main_loop(on_progress, percent / 100)
 
     def worker():
         try:
@@ -105,10 +116,10 @@ def start_import(include_roms, on_progress, on_done, on_error):
             portable_import.run_import(plan, progress)
         except Exception as exc:
             _RUNNING.clear()
-            GLib.idle_add(on_error, exc)
+            _main_loop(on_error, exc)
             return
         _RUNNING.clear()
-        GLib.idle_add(on_done)
+        _main_loop(on_done)
 
     thread = Thread(target=worker, daemon=True)
     thread.start()
