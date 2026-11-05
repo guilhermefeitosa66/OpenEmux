@@ -26,11 +26,13 @@ def build_import_dialog(locale, source, roms_dir, roms_bytes, replace=False):
     its own, and the import replaces it. Responses: ``fresh``/``copy`` on the
     first start, ``cancel``/``import`` from Preferences.
     """
-    prefix = "portable_import.replace" if replace else "portable_import.offer"
-    dialog = Adw.AlertDialog(
-        heading=tr(locale, f"{prefix}.heading"),
-        body=tr(locale, f"{prefix}.body", path=display_text(source)),
-    )
+    if replace:
+        heading = tr(locale, "portable_import.replace.heading")
+        body = tr(locale, "portable_import.replace.body", path=display_text(source))
+    else:
+        heading = tr(locale, "portable_import.offer.heading")
+        body = tr(locale, "portable_import.offer.body", path=display_text(source))
+    dialog = Adw.AlertDialog(heading=heading, body=body)
     if replace:
         dialog.add_response("cancel", tr(locale, "portable_import.replace.cancel"))
         dialog.add_response("import", tr(locale, "portable_import.replace.import"))

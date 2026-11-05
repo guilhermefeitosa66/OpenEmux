@@ -217,6 +217,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         self.calls = []
         for name in (
             "apply_portable_environment",
+            "_apply_pending_portable_import",
             "_redirect_bytecode_cache",
             "_configure_gtk_renderer",
             "migrate_legacy_config_dir",
@@ -240,6 +241,7 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
             self.calls,
             [
                 "apply_portable_environment",
+                "_apply_pending_portable_import",
                 "_redirect_bytecode_cache",
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
@@ -255,7 +257,14 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         # swap the root handlers out from under the running app.
         main_module.prepare_process()
         main_module.prepare_process()
-        self.assertEqual(len(self.calls), 8)
+        self.assertEqual(len(self.calls), 9)
+
+    def test_an_import_swapped_in_at_start_up_is_logged(self):
+        with mock.patch.object(
+            main_module, "_apply_pending_portable_import", return_value="applied"
+        ), self.assertLogs(level="INFO") as logs:
+            main_module.prepare_process()
+        self.assertIn("portable import at start-up: applied", "\n".join(logs.output))
 
     def test_the_application_is_built_only_after_the_preparation(self):
         # Importing gi.repository.Gtk runs Gtk.init(), which opens the
@@ -269,6 +278,22 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
         ):
             self.assertIs(main_module.build_application(), application)
         self.assertEqual(self.calls, ["prepare"])
+
+
+class ThePendingPortableImportTests(unittest.TestCase):
+    """Issue #768: a staged import is swapped in before anything opens the folder."""
+
+    def test_the_result_is_passed_on(self):
+        with mock.patch.object(main_module, "apply_pending_import", return_value="applied"):
+            self.assertEqual(main_module._apply_pending_portable_import(), "applied")
+
+    def test_a_failure_is_written_to_the_start_up_log_and_is_not_fatal(self):
+        with mock.patch.object(
+            main_module, "apply_pending_import", side_effect=RuntimeError("boom")
+        ), mock.patch.object(main_module, "append_startup_error") as record:
+            self.assertEqual(main_module._apply_pending_portable_import(), "error")
+        record.assert_called_once()
+        self.assertIn("boom", record.call_args.kwargs["exc_text"])
 
 
 @posix_only("freedesktop .desktop entries and ~/.local/share")
