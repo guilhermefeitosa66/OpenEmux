@@ -155,6 +155,16 @@ class RelocationTests(_MovableCase):
             self.rom()
             self.assertEqual(paths.from_stored_path(str(old)), str(old))
 
+    def test_a_copy_made_with_the_original_still_plugged_in_follows_the_copy(self):
+        with TemporaryDirectory() as other:
+            original = Path(other) / "OpenEmux"
+            old = original / "data" / "roms" / "SFC" / "game.sfc"
+            old.parent.mkdir(parents=True)
+            old.write_bytes(b"rom")
+            (original / paths.PORTABLE_MARKER).write_text("portable\n", encoding="utf-8")
+            rom = self.rom()
+            self.assertEqual(paths.from_stored_path(str(old)), str(rom))
+
     def test_a_file_missing_from_the_current_folder_stays_where_it_was(self):
         stale = str(self.root.parent / "gone-drive" / "OpenEmux" / "data" / "roms" / "nothing.sfc")
         self.assertEqual(paths.from_stored_path(stale), stale)

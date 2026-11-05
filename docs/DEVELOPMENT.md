@@ -643,7 +643,8 @@ stores keyed by ROM path (`cores.config`, `shaders.config`,
 absolute, so lookups against the scanner's paths are unchanged. A path outside
 the folder (a ROM folder on another disk) stays absolute; an absolute path left
 by an older portable config is moved under the current folder when its old
-location is gone. Without the marker both helpers are the identity, so the
+location is gone or is another portable folder (a copy made with the original
+still plugged in). Without the marker both helpers are the identity, so the
 installer and Linux write exactly what they always did. The RetroArch overrides
 written at launch still get absolute paths, computed from the current folder.
 

@@ -146,9 +146,10 @@ def from_stored_path(value):
     The other half of :func:`to_stored_path`: a relative value resolves against
     the current portable root. An absolute one written before paths were
     stored relative still points at the folder's old location; when that
-    location is gone and the same ``data/...`` tail exists under the current
-    root, the current one is returned, so a config written by the first
-    portable release survives the move too. Outside portable mode the value
+    location is gone (or is another portable folder this one was copied from)
+    and the same ``data/...`` tail exists under the current root, the current
+    one is returned, so a config written by the first portable release
+    survives the move too. Outside portable mode the value
     comes back untouched.
     """
     return _from_stored(value, portable_root())
@@ -174,9 +175,11 @@ def _relocated(path, root):
 
     Split at a ``data`` component: what is before it is where the portable
     folder used to be, what follows is where the file sits inside it. Only
-    when the old folder no longer exists and the file is there under the
-    current one -- a ROM folder that merely has ``data`` in its name, on a
-    disk that is still there, is left alone.
+    when the file is there under the current folder and the old one is gone,
+    or is itself a portable folder -- a copy made while the old stick was
+    still plugged in follows the copy, not the original. A ROM folder that
+    merely has ``data`` in its name, on a disk that is still there, is left
+    alone.
     """
     parts = path.parts
     for index in range(1, len(parts)):
@@ -184,7 +187,9 @@ def _relocated(path, root):
             continue
         old_root = Path(*parts[:index])
         moved = root.joinpath(*parts[index:])
-        if not old_root.exists() and moved.exists():
+        if not moved.exists():
+            continue
+        if not old_root.exists() or (old_root / PORTABLE_MARKER).is_file():
             return str(moved)
     return None
 
