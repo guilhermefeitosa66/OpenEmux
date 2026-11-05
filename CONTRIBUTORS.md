@@ -164,7 +164,10 @@ portable mode: the `.zip` now keeps settings, library, saves, covers and caches 
 folder and writes nothing to the user profile, so it really does run from a USB stick
 ([#766](https://github.com/guilhermefeitosa66/OpenEmux/issues/766)), and stores the paths inside
 that folder relative to it, so the stick can come back on another drive letter with everything in
-place ([#767](https://github.com/guilhermefeitosa66/OpenEmux/issues/767)).
+place ([#767](https://github.com/guilhermefeitosa66/OpenEmux/issues/767)). Someone moving from the
+installer can bring everything along too: the portable copy offers to copy the profile's settings,
+library and saves into its folder, without touching the original
+([#768](https://github.com/guilhermefeitosa66/OpenEmux/issues/768)).
 
 ## How contributions are credited
 

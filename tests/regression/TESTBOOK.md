@@ -11011,6 +11011,78 @@ scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `co
   `src/test/java/com/openemux/mobile/launch/SkinAssetPlanTest.kt` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
+### RT-728 — The first start of a portable folder offers to bring the installed data
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) where the installer of OpenEmux ran before:
+  `%USERPROFILE%\.openemux` holds a library with a favorite, a collection, a save state and a
+  changed setting, and `%USERPROFILE%\games\roms` holds the ROMs with their covers.
+  `OpenEmux-*-windows-x86_64.zip` from the release under test, unzipped to a new folder.
+- **Steps:**
+  1. In PowerShell, record the profile:
+     `Get-ChildItem $env:USERPROFILE\.openemux -Recurse -File | Get-FileHash | Out-File $env:TEMP\before.txt`
+  2. Run `OpenEmux.exe` from the portable folder.
+  3. Tick "Also copy the ROM folder (…)" and click "Copy".
+  4. Repeat step 1's command into `after.txt` and compare:
+     `Compare-Object (Get-Content $env:TEMP\before.txt) (Get-Content $env:TEMP\after.txt)`
+  5. Quit, open `OpenEmux\data\openemux\config.yaml` and
+     `OpenEmux\data\openemux\playlists\FAVORITES.list` in Notepad.
+  6. Move the portable folder to another drive letter and run `OpenEmux.exe` again.
+- **Expected:** Step 2 opens "Bring your existing data?" naming the profile folder, with "Start
+  Fresh" and "Copy". Step 3 shows "Copying your data…" with a progress bar, then the library with
+  the profile's games, favorite, collection, setting and save state; there is no first-boot download.
+  Step 4 lists nothing. Step 5: `roms_path: data/roms`, the favorite reads `data/roms/<console>/<game>`
+  and no line names `.openemux` in the profile. Step 6: everything is still there, without a rescan.
+- **Check:** human only.
+
+### RT-729 — Start Fresh is remembered; Preferences can still import
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** RT-728's machine, and a newly unzipped portable folder.
+- **Steps:**
+  1. Run `OpenEmux.exe`, click "Start Fresh" and let the first boot finish.
+  2. Quit and run it again.
+  3. Open "Preferences" › "System" and find the "Portable" group.
+  4. Click "Import…" on "Import data from this computer", leave the ROM folder unticked, click
+     "Import", wait for the toast, quit and run `OpenEmux.exe` again.
+  5. Quit and run it once more.
+- **Expected:** Step 1 runs the normal first boot. Step 2 asks nothing. Step 3 shows "Import data
+  from this computer" naming the profile folder. Step 4 asks "Replace this portable copy's data?",
+  the row shows "Copying… N%", then the toast "Import ready. Restart OpenEmux to finish."; after the
+  restart the profile's library and settings are there, ROMs still launch from
+  `%USERPROFILE%\games\roms`, and `OpenEmux\data\openemux.before-import\` holds the old portable
+  data. Step 5: `openemux.before-import` is gone.
+- **Check:** human only.
+
+### RT-730 — A failed or interrupted import leaves the portable folder as it was
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** RT-729's portable folder after step 1 (its own library), with a ROM folder big
+  enough that the copy takes a few seconds.
+- **Steps:**
+  1. "Preferences" › "System" › "Import…", tick "Also copy the ROM folder", click "Import" and end
+     `pythonw.exe` in Task Manager while the row says "Copying…".
+  2. Run `OpenEmux.exe` again and list `OpenEmux\data\`.
+- **Expected:** Step 2 shows the portable folder's own library and settings, unchanged, and
+  `data\` holds no `openemux.import-staging` folder.
+- **Check:** human only.
+
+### RT-731 — The portable import copies, rewrites and swaps safely, and never runs off portable mode
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable import suite.
+- **Expected:** The import is offered only in portable mode with a profile `config.yaml`, before the
+  first boot and until declined; the profile is never changed; transient folders and symlinks are
+  not copied; free space is checked; paths into the profile (and into the ROM folder, when it is
+  copied) become relative to the portable folder while others stay absolute; a copy without its
+  manifest is thrown away, a refused rename is undone and retried on the next start, and the old
+  folder is kept one start as `*.before-import`. The dialogs, the Preferences group and the
+  first-start flow answer as RT-728 and RT-729 describe.
+- **Check:** suite files `tests/test_portable_import.py`, `tests/test_portable_import_dialog.py`,
+  `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
