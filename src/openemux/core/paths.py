@@ -115,8 +115,17 @@ def to_stored_path(path):
     ``str(path)``, so the installer and Linux write exactly what they always
     wrote.
     """
+    return _to_stored(path, portable_root())
+
+
+def _to_stored(path, root):
+    """:func:`to_stored_path` against an already looked-up ``root``.
+
+    The batch helpers below look the root up once per file: it is
+    ``get_project_root()`` underneath, a ``resolve()`` per call, and a
+    playlist holds one path per ROM.
+    """
     text = str(path)
-    root = portable_root()
     if root is None or not text:
         return text
     candidate = Path(text)
@@ -142,7 +151,11 @@ def from_stored_path(value):
     portable release survives the move too. Outside portable mode the value
     comes back untouched.
     """
-    root = portable_root()
+    return _from_stored(value, portable_root())
+
+
+def _from_stored(value, root):
+    """:func:`from_stored_path` against an already looked-up ``root``."""
     if root is None or not value:
         return value
     text = str(value)
@@ -183,7 +196,8 @@ def with_stored_keys(mapping):
     colours, play history): in memory the keys stay the scanner's absolute
     paths, on disk they go through :func:`to_stored_path`.
     """
-    return {to_stored_path(key): value for key, value in mapping.items()}
+    root = portable_root()
+    return {_to_stored(key, root): value for key, value in mapping.items()}
 
 
 def read_path_lines(list_file):
@@ -192,14 +206,17 @@ def read_path_lines(list_file):
     Blank lines are skipped and order and duplicates are kept: each caller
     decides what a duplicate means. Raises ``OSError`` like ``open`` does.
     """
+    root = portable_root()
     with open(list_file, "r", encoding="utf-8", errors=PATH_ERRORS) as handle:
-        return [from_stored_path(line.strip()) for line in handle if line.strip()]
+        lines = [line.strip() for line in handle]
+    return [_from_stored(line, root) for line in lines if line]
 
 
 def write_path_lines(list_file, paths):
     """Write ``paths`` to a ``.list`` file in their stored form, atomically."""
+    root = portable_root()
     atomic_write_lines(
-        list_file, [to_stored_path(path) for path in paths], errors=PATH_ERRORS
+        list_file, [_to_stored(path, root) for path in paths], errors=PATH_ERRORS
     )
 
 
