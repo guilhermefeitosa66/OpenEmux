@@ -6627,18 +6627,20 @@ labels, for playing with the lights off. The choice is per console, in the conso
 on a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; a game's generated
 files are in `files/launch/current/`.
 
-### RT-670 — "Default skin" offers Console colors and Dark, Console colors by default
+### RT-670 — "Controller skins" offers Console colors and Dark, Console colors by default
 - **Area:** Android — Dark controller skins
 - **Mode:** MANUAL
 - **Preconditions:** A fresh install of the Android app (or one that never changed a console's skin)
   with a SNES game in the library.
 - **Steps:**
   1. Open Settings, then the SNES console.
-  2. Look at the "Default skin" section, below "Default shader".
+  2. Look at the "Controller skins" section, below "Default shader".
   3. Launch the SNES game, phone in portrait.
-- **Expected:** The section is titled "Default skin" with "Console colors" on its right, says "The
-  virtual controller every SNES game uses." and shows two cards right there, without opening anything:
-  "Console colors" (selected) and "Dark". A console the app has no Dark skin for (Atari 2600, for
+- **Expected:** The section is titled "Controller skins" with "Console colors" on its right, says "Tap
+  a skin to use it in game. Each one says which screens it was made for. Bundled skins never change."
+  and shows, under "BUNDLED" (with a lock), two cards right there, without opening anything:
+  "Console colors" (ringed, "In use") and "Dark", each with lit "Phone", "Tablet" and "Fold" badges
+  (issue 782). A console the app has no Dark skin for (Atari 2600, for
   example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
@@ -6651,7 +6653,7 @@ files are in `files/launch/current/`.
 - **Mode:** MANUAL
 - **Preconditions:** Two SNES games and one GBA game in the library.
 - **Steps:**
-  1. Settings → SNES → tap the "Dark" card under "Default skin".
+  1. Settings → SNES → tap the "Dark" card under "Bundled" in "Controller skins".
   2. Launch the first SNES game in portrait, then turn the phone to landscape.
   3. Quit and launch the second SNES game.
   4. Quit and launch the GBA game.
@@ -6712,31 +6714,12 @@ files are in `files/launch/current/`.
   adb shell run-as $PKG ls cache/skins/dark   # NDS.deltaskin
   ```
 
-### RT-675 — An imported skin still wins over both bundled ones
-- **Area:** Android — Dark controller skins
-- **Mode:** MANUAL
-- **Preconditions:** A `.deltaskin` for the SNES that is not one of the app's (any third-party Delta
-  skin); SNES set to Dark.
-- **Steps:**
-  1. Put it in the app's external files folder:
-     `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
-     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
-  2. Settings → SNES → the "Default skin" section.
-  3. Launch a SNES game. Quit, pick "Console colors", launch again.
-  4. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
-     and launch once more.
-- **Expected:** The section reads "Imported skin" on its right and shows "A skin you imported for SNES
-  is used instead." under the cards. Both launches in step 3
-  use the imported skin. After step 4 the game opens on the Console colors skin (the choice made in
-  step 3), and the section no longer shows the note.
-- **Check:** none beyond the steps.
-
 ### RT-676 — Switching back to Console colors restores the original skin
 - **Area:** Android — Dark controller skins
 - **Mode:** MANUAL
 - **Preconditions:** SNES set to Dark; a tablet or an emulator with a tablet-sized screen for step 3.
 - **Steps:**
-  1. Settings → SNES → the "Console colors" card under "Default skin".
+  1. Settings → SNES → the "Console colors" card under "Bundled" in "Controller skins".
   2. Launch a SNES game.
   3. On the tablet, set SNES to Dark again and launch the game in portrait and in landscape.
 - **Expected:** Step 2 shows the usual light grey SNES skin. Step 3 shows the Dark tablet art in both
@@ -6755,7 +6738,7 @@ files are in `files/launch/current/`.
   4. With the gamepad only: Settings (RB) → SNES (A) → D-pad down to the "Console colors" card → A.
   5. Launch the game.
 - **Expected:** Step 1 reads "Console colors" (never a fixed "OpenEmux SNES"). The sheet in step 2 is
-  titled "Default skin" with the same two cards as the console's settings, and the row then reads
+  titled "Controller skins" with the same groups and cards as the console's settings, and the row then reads
   "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
   focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
   Step 5 opens the usual light grey SNES skin.
@@ -11169,10 +11152,130 @@ headless emulator with `adb`. `$PKG` is `com.openemux.mobile`.
   `src/test/java/com/openemux/mobile/launch/SkinBindsTest.kt` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
+## Android — Skin library per console
+
+Each console's "Controller skins" section (Settings → a console, and the "Controller skin" row of a
+game's detail screen) lists three groups (issue 782): "Your skins" (folders in OpenEmux's skin
+format under `files/skins/<console>/<id>/`), "Bundled" (read-only, with a lock) and "Imported"
+(`.deltaskin`/`.manicskin` packages). The runner has no Android device, so the in-game scenarios
+are `MANUAL`: a phone (or a phone-sized headless emulator) with `adb`. `$PKG` is
+`com.openemux.mobile`; `$SKINS` is `/sdcard/Android/data/$PKG/files/skins`. A skin of your own for the
+SNES is the SNES template unzipped (`SFC-template.zip`, RT-725), its folder renamed to `mine`; a
+tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entries removed from
+`skin.json` (folder `big`).
+
+### RT-737 — The list shows the three groups with their form badges
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** On a phone: `mine` and `big` pushed to `$SKINS/SFC/`, and a third-party SNES
+  `.deltaskin` with iPhone art only pushed there too.
+- **Steps:**
+  1. Settings → SNES → scroll to "Controller skins".
+- **Expected:** "YOUR SKINS" (count 2) with the cards "SFC template" (or the name in its
+  `skin.json`) and the tablet-only one; "BUNDLED" with a lock and "Console colors", "Dark"; "IMPORTED"
+  with the package. Badges: `mine` Phone/Tablet/Fold lit; `big` Tablet and Fold lit, Phone grey with a
+  dashed border; the package Phone lit, Tablet and Fold grey; the bundled ones all lit. The `big`
+  card is faded and reads "Not made for phones".
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > list.png`).
+
+### RT-738 — Tapping a skin uses it in game, and a bundled pick keeps it for later
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins; SNES on "Console colors"; a SNES game.
+- **Steps:**
+  1. Tap the `mine` card, then launch the SNES game, upright and sideways.
+  2. Back in Settings → SNES, tap "Dark"; launch the game.
+  3. Tap the `mine` card again; launch the game.
+  4. Tap the imported package; launch the game.
+  5. Tap the `big` card.
+- **Expected:** Step 1: `mine` gets the ring and "In use", the section's right reads its name, and
+  the game shows the template's placeholder skin in both orientations. Step 2: the game shows the Dark
+  skin, `mine` stays in the list. Step 3: the template skin is back, unchanged. Step 4: the package is
+  drawn. Step 5: nothing changes (the package stays in use).
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["SFC"]; print(c["skin"], c.get("custom"))'
+  # step 1: console own:mine · step 2: dark None · step 3: dark own:mine · step 4: dark pkg:<file>
+  ```
+
+### RT-739 — Rename and duplicate a skin of your own
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** `mine` in `$SKINS/SFC/`.
+- **Steps:**
+  1. On the `mine` card, tap its "⋮" button: a sheet opens with "Use it" (or nothing, if it is in use),
+     "Rename", "Duplicate", "Delete".
+  2. "Rename" → type "Mine" → "Save".
+  3. Open the sheet again → "Duplicate".
+  4. Leave Settings and open SNES again.
+- **Expected:** The card reads "Mine" after step 2; a second card "Mine (copy)" appears after step 3;
+  both are still there after step 4. An empty name cannot be saved.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC        # mine  mine-copy  (the folder keeps its name on rename)
+  adb shell grep -h '"name"' $SKINS/SFC/mine/skin.json $SKINS/SFC/mine-copy/skin.json   # "Mine" / "Mine (copy)"
+  ```
+
+### RT-740 — Deleting the skin in use goes back to the bundled one picked before
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** SNES on "Dark", then `mine-copy` (RT-739) picked; a SNES game.
+- **Steps:**
+  1. `mine-copy`'s "⋮" → "Delete" (its line reads "The console goes back to Dark") → "Delete" in the
+     confirmation.
+  2. Launch the SNES game.
+- **Expected:** The card is gone, "Dark" has the ring and "In use", the game shows the Dark skin.
+  "Cancel" in the confirmation keeps everything.
+- **Check:** `adb shell ls $SKINS/SFC` no longer lists `mine-copy`; `custom` is gone from the SNES
+  entry of `meta.json` (RT-738's command prints `dark None`).
+
+### RT-741 — Bundled skins only offer "Use it as it is"
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** Any console with a bundled skin.
+- **Steps:**
+  1. On the "Dark" card, tap "⋮".
+  2. Tap "Use it as it is".
+- **Expected:** The sheet shows the name, the three lit badges, a lock with "Bundled skins never
+  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark.
+- **Check:** `MANUAL`.
+
+### RT-742 — The list works with a gamepad
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins; a gamepad connected.
+- **Steps:**
+  1. Settings (RB) → SNES (A) → D-pad down to "Controller skins", across the cards and their "⋮"
+     buttons.
+  2. A on a card; A on a "⋮"; D-pad in the sheet; B.
+- **Expected:** The focus ring lands on each card and each "⋮" in turn; A on a card picks it, A on
+  "⋮" opens its sheet, whose rows take the focus; B closes it with the focus back on the "⋮".
+- **Check:** `MANUAL`.
+
+### RT-743 — An update keeps the skin an install was playing with
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** A build from before issue 782 with a `.deltaskin` in `$SKINS/SFC/` (it was the one
+  in game).
+- **Steps:**
+  1. Install this build over it (`adb install -r <apk>`) and open the app.
+  2. Launch a SNES game; open Settings → SNES.
+- **Expected:** The game still shows the package; in the list it is under "Imported" with "In use".
+  Consoles with nothing in `skins/` keep their bundled skin.
+- **Check:** `meta.json` has `"skinsMigrated": true` and the SNES entry's `custom` is
+  `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-675 — An imported skin still wins over both bundled ones
+- **Retired:** 2026-11-05 (issue 782).
+- **Reason:** An imported package no longer wins by being there: each console saves the skin in
+  use, and a package is picked from the "Imported" group like any other skin. An install that
+  already had one keeps it (RT-743); picking it is RT-738.
 
 ### RT-683 — Sync now offline says so and changes nothing
 - **Retired:** 2026-11-03 (issue 753).

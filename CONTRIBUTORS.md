@@ -52,6 +52,12 @@ own the whole controller configuration. That became
 now starts from RetroArch's stock input defaults with OpenEmux's bindings on
 top, so nothing from a user's `retroarch.cfg` mixes in.
 
+For the Android skin editor, asked that going back to a bundled skin never
+throw a custom layout away. In
+[#782](https://github.com/guilhermefeitosa66/OpenEmux/issues/782) each console
+keeps the player's skins in a list of their own, so a custom skin is still
+there, unchanged, after playing a while with a bundled one.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
