@@ -91,6 +91,29 @@ def _release_crash_log():
         pass
 
 
+def close_startup_log():
+    """Let go of every handle on the start-up log until it is configured again.
+
+    The file handlers and faulthandler's descriptor both keep the log open, and
+    Windows refuses to rename a folder with a file open in it -- which is what
+    the first-start portable import does to the config dir (issue #768).
+    Crash traces go to the terminal meanwhile.
+    """
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if isinstance(handler, logging.FileHandler):
+            root.removeHandler(handler)
+            handler.close()
+    # pythonw.exe -- how the Windows bundle runs -- has no stderr at all, and
+    # faulthandler refuses ``None``: crash traces then go nowhere until the
+    # log is configured again.
+    if sys.__stderr__ is None:
+        faulthandler.disable()
+    else:
+        faulthandler.enable(file=sys.__stderr__, all_threads=True)
+    _release_crash_log()
+
+
 def install_crash_handlers(log_path=None):
     """Leave a trace behind when the process dies instead of just vanishing.
 

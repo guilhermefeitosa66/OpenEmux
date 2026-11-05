@@ -45,6 +45,8 @@ from openemux.ui.first_boot_window import FirstBootWindow
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
+from openemux.core.portable_import import apply_pending_import, should_offer_on_first_start
+from openemux.core.startup_logging import close_startup_log, configure_startup_logging
 from openemux.core import win32_shell
 
 
@@ -93,12 +95,74 @@ class OpenEmuxApplication(Adw.Application):
             self._housekeeping_done = True
             run_startup_housekeeping(self.config_manager)
 
+        # A portable folder starting for the first time, with an installed
+        # OpenEmux's data in the profile: offer to bring it (issue #768).
+        if should_offer_on_first_start(self.config_manager):
+            self._offer_portable_import()
+            return
+
+        self._continue_startup()
+
+    def _continue_startup(self):
         bootstrapper = FirstBootBootstrapper(self.config_manager)
         if bootstrapper.needs_bootstrap():
             self._start_bootstrap_flow(initial_boot=True, parent=None)
             return
 
         self._present_main_window()
+
+    def _offer_portable_import(self):
+        from openemux.ui.portable_import_dialog import run_first_start_offer
+
+        # The first-boot window carries the question and then the copy's
+        # progress; it counts as the bootstrap's, so activating again only
+        # brings it forward.
+        window = FirstBootWindow(application=self, locale=self.config_manager.get_locale())
+        self._bootstrap_running = True
+        self._bootstrap_window = window
+        window.present()
+        run_first_start_offer(
+            window,
+            self.config_manager.get_locale(),
+            lambda outcome: self._finish_portable_import_offer(outcome, window),
+        )
+
+    def _finish_portable_import_offer(self, outcome, window):
+        if outcome == "declined":
+            self.config_manager.set_portable_import_dismissed(True)
+        elif outcome == "imported":
+            self._swap_portable_import_in()
+        self._bootstrap_running = False
+        self._bootstrap_window = None
+        # The next window first, so the app never runs out of windows.
+        self._continue_startup()
+        window.finish()
+        window.destroy()
+
+    def _swap_portable_import_in(self):
+        """Swap the staged import in now, as the next start would.
+
+        Nothing in the folder is open yet but the start-up log, and Windows
+        refuses to rename a folder with an open file in it: the log is closed
+        around the swap and opened again in the new folder. A refused swap is
+        left staged, and the next start applies it.
+        """
+        close_startup_log()
+        try:
+            result = apply_pending_import()
+        except Exception:
+            result = "error"
+            append_startup_error(
+                "Could not apply the portable import", exc_text=traceback.format_exc()
+            )
+        configure_startup_logging()
+        logging.info("portable import on first start: %s", result)
+        self.config_manager = ConfigManager()
+        # The profile's own settings: its theme, and no second offer even if
+        # its first boot never finished.
+        from openemux.ui.theming import apply_theme
+        apply_theme(self.config_manager.get_ui_settings()["theme"])
+        self.config_manager.set_portable_import_dismissed(True)
 
     def do_shutdown(self):
         # Last line of defence against a game outliving the app. Closing the
