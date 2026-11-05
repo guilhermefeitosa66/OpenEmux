@@ -13738,6 +13738,155 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
 - **Expected:** The BIOS screen comes back with no sheet and no change; its "Import" buttons still
   work.
 - **Check:** human only.
+## Android — OpenEmux-format skins
+
+Skins in OpenEmux's own format (a folder with `skin.json`, issue 775) drawn in game (issue 776).
+Screenshots of a running game can come out black on an emulator; then check the page images the
+launch wrote (`adb exec-out run-as com.openemux.mobile tar cf - files/launch/current/skin`) and
+logcat's `OpenEmuxSkin` lines.
+
+### RT-707 — An OpenEmux-format skin is drawn from its images, upright and sideways
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Start the Game Boy Advance game upright.
+  2. Turn to landscape (`adb shell settings put system user_rotation 1`).
+- **Expected:** Upright, the portrait layout scaled to the screen keeping its proportions and
+  centred: the background image behind everything, the frame in its colour, the game's picture in
+  the layout's screen, B and the D-pad ball from their images. Sideways, the landscape layout, the
+  game in its own screen. logcat says `OpenEmuxSkin: drawing <name> (phone-portrait, phone-landscape)`.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin: drawing'`; human (screenshots or the page images).
+- **Restore:** `user_rotation 0`; delete the skin folder.
+
+### RT-708 — An element with no image is drawn in its colours
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Start the game; look at A (no `a.png`) and B (`b.png`).
+  2. Replace `b.png` with a file that is not a picture; start the game again.
+- **Expected:** A is drawn as its `shape` in its `button` colour with its `label` in its `letter`
+  colour; B shows its image. After step 2, B is drawn in its colours too, the game starts, and
+  logcat warns that the file is not an image.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin.*drawn in its colours'`; human (screenshot).
+- **Restore:** delete the skin folder.
+
+### RT-709 — Every control of an OpenEmux-format skin responds, ball and knob follow the thumb
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. For the stick, a PlayStation skin with an `analogStick` element.
+- **Steps:**
+  1. In game, press A, B, L, R, Start and Select; drag the D-pad in all eight directions and let go.
+  2. In the PlayStation game, drag the stick around and let go.
+  3. Tap "save" (quickSave), then turbo and fast forward twice each, and menu.
+- **Expected:** Every input reaches the game. The D-pad's ball and the stick's knob move with the
+  thumb and go back to the centre on release. Quick save saves a state; turbo and fast forward
+  light in the frame's `active` colour while on and go back when off; menu opens the pause menu.
+- **Check:** human only.
+- **Restore:** delete the skin folders.
+
+### RT-710 — A skin without the form's two layouts is not used
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Remove the `phone-landscape` entry from `skin.json`; start the game.
+  2. Put it back and run the game on a tablet AVD (`adb shell wm size 1600x2560`, density 320),
+     the skin having no `tablet-*` layouts.
+- **Expected:** In both cases the console's bundled skin is drawn, and logcat says which layout is
+  missing (`has no phone-landscape layout`, `has no tablet-portrait layout`).
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin.*has no'`.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`; delete the skin folder.
+
+### RT-711 — A broken OpenEmux-format skin falls back without crashing the game
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Replace `skin.json` with `{bad`; start the game.
+- **Expected:** The game starts with the bundled skin; logcat has `OpenEmuxSkin: <folder> not
+  drawn: falling back to the bundled skin` with the read error; no crash.
+- **Check:** `adb logcat -d | grep -E 'OpenEmuxSkin.*not drawn|FATAL EXCEPTION'` (the first only).
+- **Restore:** delete the skin folder.
+
+### RT-712 — Tablet and foldable use their own layouts
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. The skin also has `tablet-*` and `fold-*` layouts (in different colours, to tell them apart).
+- **Steps:**
+  1. On a tablet AVD, start the game upright and sideways.
+  2. On the foldable AVD unfolded (`openemux-fold`), start the game upright and sideways.
+- **Expected:** The tablet draws the `tablet-*` layouts, the unfolded foldable the `fold-*` ones,
+  in both orientations; a phone (or the foldable folded) the `phone-*` ones.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin: drawing'` names the form's layouts.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`; delete the skin folder.
+
+### RT-713 — NDS: both screens go where the skin puts them
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. An NDS skin instead, with two screens one over the other in each layout.
+- **Steps:**
+  1. Start the Nintendo DS game upright and sideways; tap the lower screen.
+- **Expected:** Both screens show inside the box the two screen rects make, one over the other, and
+  the tap reaches the game.
+- **Check:** human only.
+- **Restore:** delete the skin folder.
+
+### RT-714 — Delta/Manic packages and the bundled skins are unchanged
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game; no skin folder.
+- **Steps:**
+  1. Start the game with nothing in `files/skins/GBA/`.
+  2. Put a `.deltaskin` there and start it again; then add an OpenEmux skin folder named after it
+     alphabetically (`z-skin/`) and start it again.
+- **Expected:** Step 1 draws the bundled skin, step 2 the `.deltaskin`, both exactly as before;
+  with both present, the first by name (the `.deltaskin`) is used.
+- **Check:** human only.
+- **Restore:** empty `files/skins/GBA/`.
 
 ## Retired
 
