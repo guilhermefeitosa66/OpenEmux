@@ -3,7 +3,7 @@ import os
 import shutil
 from pathlib import Path
 
-from openemux.core.atomic_write import atomic_write_text
+from openemux.core.atomic_write import atomic_write_lines, atomic_write_text
 from openemux.core.platform import IS_WINDOWS
 
 #: How the ``.list`` files encode a ROM path.
@@ -102,6 +102,105 @@ def portable_data_dir(name):
     if root is None:
         return None
     return root / PORTABLE_DATA_DIR / name
+
+
+def to_stored_path(path):
+    """``path`` the way a store writes it to disk.
+
+    A USB stick gets whatever drive letter Windows hands it, so a portable
+    install writes a path inside its own folder relative to it, with forward
+    slashes -- ``data/roms/SFC/game.sfc`` -- and :func:`from_stored_path` puts
+    it back under wherever the folder is today (issue #767). A path outside the
+    folder (ROMs on another disk) stays absolute. Everywhere else this is
+    ``str(path)``, so the installer and Linux write exactly what they always
+    wrote.
+    """
+    text = str(path)
+    root = portable_root()
+    if root is None or not text:
+        return text
+    candidate = Path(text)
+    if not candidate.is_absolute():
+        return text
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError:
+        return text
+    if ".." in relative.parts:
+        return text
+    return relative.as_posix()
+
+
+def from_stored_path(value):
+    """A path read from a store, as the absolute path the app works with.
+
+    The other half of :func:`to_stored_path`: a relative value resolves against
+    the current portable root. An absolute one written before paths were
+    stored relative still points at the folder's old location; when that
+    location is gone and the same ``data/...`` tail exists under the current
+    root, the current one is returned, so a config written by the first
+    portable release survives the move too. Outside portable mode the value
+    comes back untouched.
+    """
+    root = portable_root()
+    if root is None or not value:
+        return value
+    text = str(value)
+    candidate = Path(text)
+    if not candidate.is_absolute():
+        return str(root / candidate)
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return _relocated(candidate, root) or text
+    return text
+
+
+def _relocated(path, root):
+    """``path`` moved under ``root``, if it lived in a portable folder now gone.
+
+    Split at a ``data`` component: what is before it is where the portable
+    folder used to be, what follows is where the file sits inside it. Only
+    when the old folder no longer exists and the file is there under the
+    current one -- a ROM folder that merely has ``data`` in its name, on a
+    disk that is still there, is left alone.
+    """
+    parts = path.parts
+    for index in range(1, len(parts)):
+        if parts[index].casefold() != PORTABLE_DATA_DIR:
+            continue
+        old_root = Path(*parts[:index])
+        moved = root.joinpath(*parts[index:])
+        if not old_root.exists() and moved.exists():
+            return str(moved)
+    return None
+
+
+def with_stored_keys(mapping):
+    """A copy of ``mapping`` whose keys -- ROM paths -- are in stored form.
+
+    For the stores keyed by ROM path (per-game cores, shaders, cartridge
+    colours, play history): in memory the keys stay the scanner's absolute
+    paths, on disk they go through :func:`to_stored_path`.
+    """
+    return {to_stored_path(key): value for key, value in mapping.items()}
+
+
+def read_path_lines(list_file):
+    """The paths in a ``.list`` file, one per line, as absolute paths.
+
+    Blank lines are skipped and order and duplicates are kept: each caller
+    decides what a duplicate means. Raises ``OSError`` like ``open`` does.
+    """
+    with open(list_file, "r", encoding="utf-8", errors=PATH_ERRORS) as handle:
+        return [from_stored_path(line.strip()) for line in handle if line.strip()]
+
+
+def write_path_lines(list_file, paths):
+    """Write ``paths`` to a ``.list`` file in their stored form, atomically."""
+    atomic_write_lines(
+        list_file, [to_stored_path(path) for path in paths], errors=PATH_ERRORS
+    )
 
 
 def default_config_dir():

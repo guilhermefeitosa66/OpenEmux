@@ -16,8 +16,8 @@ from pathlib import Path
 
 import yaml
 
-from openemux.core.atomic_write import atomic_write_lines, atomic_write_text
-from openemux.core.paths import PATH_ERRORS
+from openemux.core.atomic_write import atomic_write_text
+from openemux.core.paths import read_path_lines, write_path_lines
 from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
@@ -137,15 +137,13 @@ class CollectionManager:
         list_file = self._list_file(slug)
         if not list_file.exists():
             return []
-        with open(list_file, "r", encoding="utf-8", errors=PATH_ERRORS) as handle:
-            out = []
-            seen = set()
-            for line in handle:
-                value = line.strip()
-                if value and value not in seen:
-                    seen.add(value)
-                    out.append(value)
-            return out
+        out = []
+        seen = set()
+        for value in read_path_lines(list_file):
+            if value not in seen:
+                seen.add(value)
+                out.append(value)
+        return out
 
     def contains(self, slug, rom_path):
         return str(Path(rom_path)) in set(self.paths(slug))
@@ -210,8 +208,9 @@ class CollectionManager:
 
     def _write_paths(self, slug, paths):
         # A collection is a bag of ROM paths, so it needs the same
-        # surrogate-safe encoding the playlists use (issue #214).
-        atomic_write_lines(self._list_file(slug), paths, errors=PATH_ERRORS)
+        # surrogate-safe encoding the playlists use (issue #214), and the same
+        # relative form inside a portable folder (issue #767).
+        write_path_lines(self._list_file(slug), paths)
 
     def add(self, slug, rom_paths):
         """Add ROM paths, skipping duplicates. Returns how many were new."""
