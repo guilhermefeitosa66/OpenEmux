@@ -113,7 +113,8 @@ class NotPortableTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_paths_are_written_and_read_exactly_as_before(self):
-        self.assertEqual(paths.to_stored_path(Path("/roms/SFC/a.sfc")), "/roms/SFC/a.sfc")
+        rom = Path("/roms/SFC/a.sfc")
+        self.assertEqual(paths.to_stored_path(rom), str(rom))
         self.assertEqual(paths.from_stored_path("relative/a.sfc"), "relative/a.sfc")
         self.assertEqual(paths.with_stored_keys({"/roms/a.sfc": 1}), {"/roms/a.sfc": 1})
 
@@ -155,12 +156,13 @@ class RelocationTests(_MovableCase):
             self.assertEqual(paths.from_stored_path(str(old)), str(old))
 
     def test_a_file_missing_from_the_current_folder_stays_where_it_was(self):
-        stale = "/gone-drive/OpenEmux/data/roms/SFC/nothing.sfc"
+        stale = str(self.root.parent / "gone-drive" / "OpenEmux" / "data" / "roms" / "nothing.sfc")
         self.assertEqual(paths.from_stored_path(stale), stale)
 
     def test_a_path_with_no_data_folder_is_never_relocated(self):
+        elsewhere = str(self.root.parent / "mnt" / "roms" / "a.sfc")
         with patch.object(Path, "exists") as exists:
-            self.assertEqual(paths.from_stored_path("/mnt/roms/a.sfc"), "/mnt/roms/a.sfc")
+            self.assertEqual(paths.from_stored_path(elsewhere), elsewhere)
         exists.assert_not_called()
 
 
@@ -168,10 +170,10 @@ class ListFileTests(_MovableCase):
     def test_lines_are_stored_relative_and_read_back_absolute(self):
         list_file = self.config_dir / "SFC.list"
         inside = str(self.roms / "SFC" / "a.sfc")
-        outside = "/mnt/roms/SFC/b.sfc"
+        outside = str(self.root.parent / "mnt" / "roms" / "SFC" / "b.sfc")
         paths.write_path_lines(list_file, [inside, outside])
         self.assertEqual(
-            list_file.read_text(encoding="utf-8"), "data/roms/SFC/a.sfc\n/mnt/roms/SFC/b.sfc\n"
+            list_file.read_text(encoding="utf-8"), f"data/roms/SFC/a.sfc\n{outside}\n"
         )
         list_file.write_text(list_file.read_text(encoding="utf-8") + "\n  \n", encoding="utf-8")
         self.assertEqual(paths.read_path_lines(list_file), [inside, outside])
