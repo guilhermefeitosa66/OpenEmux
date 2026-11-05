@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>Der übliche Weg</h3>",
   "install.installer_note": "<p>Installiert nur für deinen Benutzer, also ohne Administrator-Abfrage. Die Builds sind noch nicht code-signiert: SmartScreen wird warnen, und mit <em>Weitere Informationen → Trotzdem ausführen</em> kommst du daran vorbei.</p>",
   "install.portable_title": "<h3>Nichts wird installiert</h3>",
-  "install.portable_note": "<p>Entpacke es irgendwohin und starte <code>OpenEmux.exe</code> aus dem Ordner <code>OpenEmux\\</code> darin. Einstellungen, Bibliothek, Spielstände und Cover bleiben in dessen Ordner <code>data\\</code>, nichts landet in deinem Benutzerprofil – so läuft es direkt vom USB-Stick. Hat der Ordner danach einen anderen Laufwerksbuchstaben, wähle den ROM-Ordner neu und scanne erneut.</p>",
+  "install.portable_note": "<p>Entpacke es irgendwohin und starte <code>OpenEmux.exe</code> aus dem Ordner <code>OpenEmux\\</code> darin. Einstellungen, Bibliothek, Spielstände und Cover bleiben in dessen Ordner <code>data\\</code>, nichts landet in deinem Benutzerprofil – so läuft es direkt vom USB-Stick. Bekommt der Ordner einen anderen Laufwerksbuchstaben oder einen anderen Platz, bleibt alles erhalten.</p>",
   "install.verify_title": "<h3>Prüfe deinen Download</h3>",
   "install.verify_lede": "<p>Jedes Release enthält eine Datei <code>SHA256SUMS</code>. Leg sie neben die heruntergeladene Datei und führe aus:</p>",
   "install.verify_ok": "<p><code>OK</code> heißt, die Datei ist genau die, die veröffentlicht wurde. Alles andere heißt, sie ist beschädigt oder manipuliert — führe sie nicht aus.</p>",

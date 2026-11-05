@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 from openemux.core.atomic_write import atomic_write_text
-from openemux.core.paths import store_path
+from openemux.core.paths import from_stored_path, store_path, with_stored_keys
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
@@ -148,7 +148,7 @@ class CartridgeColorStore:
                     continue
                 color = normalize_color_id(value)
                 if color != DEFAULT_COLOR_ID:
-                    overrides[str(key)] = color
+                    overrides[from_stored_path(str(key))] = color
             data["rom_overrides"] = overrides
             return data
         except Exception as exc:
@@ -168,7 +168,8 @@ class CartridgeColorStore:
             for key, color in ((settings or {}).get("rom_overrides") or {}).items()
             if key and normalize_color_id(color) != DEFAULT_COLOR_ID
         }
-        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
+        stored = dict(payload, rom_overrides=with_stored_keys(payload["rom_overrides"]))
+        atomic_write_text(self.config_file, yaml.safe_dump(stored, sort_keys=True))
         # Our own writes are the one case the stamp cannot be trusted for: a
         # rewrite of the same length inside one filesystem clock tick.
         self._cache = (None, None)

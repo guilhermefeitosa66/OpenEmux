@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>常规方式</h3>",
   "install.installer_note": "<p>仅为当前用户安装，因此不会弹出管理员权限提示。 目前版本尚未进行代码签名：SmartScreen 会发出警告，点击<em>更多信息 → 仍要运行</em>即可 继续。</p>",
   "install.portable_title": "<h3>无需安装</h3>",
-  "install.portable_note": "<p>解压到任意位置，然后运行 <code>OpenEmux.exe</code>（位于其中的 <code>OpenEmux\\</code> 文件夹）。设置、游戏库、存档和封面都保存在它的 <code>data\\</code> 文件夹里，不会写入你的用户配置文件，所以可以直接在 U 盘上使用。如果文件夹换了盘符，请重新选择 ROM 文件夹并重新扫描。</p>",
+  "install.portable_note": "<p>解压到任意位置，然后运行 <code>OpenEmux.exe</code>（位于其中的 <code>OpenEmux\\</code> 文件夹）。设置、游戏库、存档和封面都保存在它的 <code>data\\</code> 文件夹里，不会写入你的用户配置文件，所以可以直接在 U 盘上使用。把文件夹移到其他盘符或位置，一切照常保留。</p>",
   "install.verify_title": "<h3>校验你的下载</h3>",
   "install.verify_lede": "<p>每个版本都附带一个 <code>SHA256SUMS</code> 文件。把它放在你下载的文件旁边， 然后运行：</p>",
   "install.verify_ok": "<p><code>OK</code> 表示文件与发布的版本完全一致。 其他任何结果都说明文件已损坏或被篡改——请不要运行它。</p>",

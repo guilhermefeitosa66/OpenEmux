@@ -32,7 +32,14 @@ from openemux.core.library_view import (
     view_mode_from_legacy,
 )
 from openemux.core.input_profiles import InputProfileManager
-from openemux.core.paths import default_config_dir, default_roms_path, store_path, is_running_in_flatpak
+from openemux.core.paths import (
+    default_config_dir,
+    default_roms_path,
+    from_stored_path,
+    is_running_in_flatpak,
+    store_path,
+    to_stored_path,
+)
 from openemux.core.console_order import normalize_console_order
 from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
@@ -307,6 +314,48 @@ def normalize_cover_source(value):
 def normalize_cover_art_type(value):
     return value if value in COVER_ART_TYPES else DEFAULT_COVER_ART_TYPE
 
+#: The settings that hold a path. A portable Windows install writes the ones
+#: inside its folder relative to it, so the folder can move to another drive
+#: letter (issue #767); see ``paths.to_stored_path``. Everywhere else the
+#: conversion is the identity and ``config.yaml`` reads as it always did.
+PATH_SETTINGS = (
+    ("roms_path",),
+    ("library", "playlists_dir"),
+    ("covers", "dir"),
+    ("runtime", "retroarch", "updater", "core_dir"),
+)
+
+
+def _convert_path_settings(config, convert):
+    """A deep copy of ``config`` with every :data:`PATH_SETTINGS` value converted.
+
+    A missing section or an empty value is left as it is: the defaults fill
+    the first in, and ``None`` is how ``core_dir`` says "the default".
+    """
+    converted = copy.deepcopy(config)
+    for keys in PATH_SETTINGS:
+        section = converted
+        for key in keys[:-1]:
+            section = section.get(key)
+            if not isinstance(section, dict):
+                break
+        else:
+            value = section.get(keys[-1])
+            if isinstance(value, str) and value:
+                section[keys[-1]] = convert(value)
+    return converted
+
+
+def stored_config(config):
+    """``config`` the way ``config.yaml`` holds it."""
+    return _convert_path_settings(config, to_stored_path)
+
+
+def loaded_config(config):
+    """``config`` read from ``config.yaml``, with every path absolute again."""
+    return _convert_path_settings(config, from_stored_path)
+
+
 #: Settings that belonged to the game window, dropped from a config on load:
 #: the window that captured RetroArch's is gone, and so is its volume slider
 #: -- the controls are RetroArch's own now (issue #469).
@@ -516,9 +565,12 @@ class ConfigManager:
                 # A scalar or a list: _merge_defaults would raise on it, and
                 # there is nothing here to merge. Corrupt, not empty.
                 raise ValueError(f"config.yaml is not a mapping: {type(raw).__name__}")
-            config = _merge_defaults(DEFAULT_CONFIG, raw)
+            config = _merge_defaults(DEFAULT_CONFIG, loaded_config(raw))
             config = self._migrate_runtime_config(config)
-            if config != raw:
+            # Compared in the form the file holds: a portable install keeps
+            # relative paths on disk and absolute ones in memory, and comparing
+            # those would rewrite the file on every start.
+            if stored_config(config) != raw:
                 self.save_config(config)
             return config
         except Exception as e:
@@ -724,7 +776,7 @@ class ConfigManager:
         with self._save_lock:
             if config:
                 self.config = config
-            snapshot = copy.deepcopy(self.config)
+            snapshot = stored_config(self.config)
             try:
                 atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
             except Exception as e:

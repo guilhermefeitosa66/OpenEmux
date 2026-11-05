@@ -23,7 +23,7 @@ import yaml
 
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
-from openemux.core.paths import get_real_home, store_path
+from openemux.core.paths import from_stored_path, get_real_home, store_path, with_stored_keys
 from openemux.core.platform import (
     CORE_SUFFIX,
     bundled_core_dir,
@@ -257,7 +257,7 @@ class CoreConfigStore:
             overrides = {}
             for key, value in (raw.get("rom_overrides") or {}).items():
                 if key and value:
-                    overrides[str(key)] = str(value)
+                    overrides[from_stored_path(str(key))] = str(value)
             data["rom_overrides"] = overrides
             return data
         except Exception as exc:
@@ -275,7 +275,8 @@ class CoreConfigStore:
             if key and value:
                 overrides[str(key)] = str(value)
         payload["rom_overrides"] = overrides
-        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
+        stored = dict(payload, rom_overrides=with_stored_keys(overrides))
+        atomic_write_text(self.config_file, yaml.safe_dump(stored, sort_keys=True))
         return payload
 
     def get_rom_core(self, rom_path):

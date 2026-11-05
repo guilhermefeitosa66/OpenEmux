@@ -155,7 +155,9 @@ Asked for the user data to live in the executable's folder in
 [#757](https://github.com/guilhermefeitosa66/OpenEmux/issues/757). That request became the Windows
 portable mode: the `.zip` now keeps settings, library, saves, covers and caches in its own `data\`
 folder and writes nothing to the user profile, so it really does run from a USB stick
-([#766](https://github.com/guilhermefeitosa66/OpenEmux/issues/766)).
+([#766](https://github.com/guilhermefeitosa66/OpenEmux/issues/766)), and stores the paths inside
+that folder relative to it, so the stick can come back on another drive letter with everything in
+place ([#767](https://github.com/guilhermefeitosa66/OpenEmux/issues/767)).
 
 ## How contributions are credited
 

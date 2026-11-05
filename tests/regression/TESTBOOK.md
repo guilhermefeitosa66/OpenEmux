@@ -10833,6 +10833,45 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Check:** suite files `tests/test_portable.py`, `tests/test_paths.py`,
   `tests/test_pixbuf_loaders.py`, `tests/test_startup_preparation.py`.
 
+### RT-705 — A portable folder moved to another drive letter keeps the library
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) with two drives or a USB stick, and
+  `OpenEmux-*-windows-x86_64.zip` from the release under test unzipped to it (for example
+  `E:\OpenEmux`). A second ROM folder outside the portable folder, for example `C:\roms-outside\SFC`
+  with one ROM.
+- **Steps:**
+  1. Run `OpenEmux.exe`, let the first boot finish, put two ROMs into `OpenEmux\data\roms\SFC\`
+     and scan.
+  2. Star one game as a favorite, create a collection "Moved" with the other, pick a different core
+     and a shader for one game in its context menu, play one game for a few seconds, and change a
+     setting in "Preferences".
+  3. Quit the app and open `OpenEmux\data\openemux\config.yaml` and
+     `OpenEmux\data\openemux\playlists\FAVORITES.list` in Notepad.
+  4. Move the whole `OpenEmux` folder to another drive letter (or eject the stick and plug it into a
+     port that gets another letter) and run `OpenEmux.exe` from there.
+  5. In "Preferences", point the ROM folder at `C:\roms-outside`, scan, quit and open `config.yaml`
+     again.
+- **Expected:** Step 3: `roms_path: data/roms`, and the favorite line reads
+  `data/roms/SFC/<game>`, with no drive letter. Step 4: the two games are in the library without a
+  rescan, the favorite is starred, "Moved" holds its game, the per-game core and shader are still
+  picked, the played game is first under recently played and the setting kept its value. Step 5:
+  `roms_path` is the absolute `C:\roms-outside`, and its game launches.
+- **Check:** human only.
+
+### RT-706 — Portable paths are stored relative, and nothing changes off portable mode
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable paths suite.
+- **Expected:** With the marker, `config.yaml` path keys, console playlists, favorites,
+  collections, per-game cores, shaders and cartridge colors and play history are written relative
+  to the portable folder and read back under its new location after a move; absolute paths from an
+  older portable config are relocated; paths outside the folder stay absolute. Without the marker,
+  the files are byte for byte what they were.
+- **Check:** suite files `tests/test_portable_paths.py`, `tests/test_portable.py`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and

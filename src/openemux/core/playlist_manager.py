@@ -3,9 +3,8 @@ import logging
 import threading
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
-from openemux.core.atomic_write import atomic_write_lines
 from openemux.core.dir_walk import relative_to_base
-from openemux.core.paths import PATH_ERRORS
+from openemux.core.paths import read_path_lines, write_path_lines
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
@@ -50,18 +49,14 @@ class PlaylistManager:
         entries = []
         logger.info("playlist load started: console=%s path=%s", system_id, playlist_path)
         extensions = get_supported_extensions(system_id)
-        with open(playlist_path, "r", encoding="utf-8", errors=PATH_ERRORS) as f:
-            for line in f:
-                path_str = line.strip()
-                if not path_str:
-                    continue
-                path = Path(path_str)
-                if not path.exists():
-                    continue
-                display_name = self._playlist_entry_name(path, system_id, extensions)
-                if display_name is None:
-                    continue
-                entries.append(self._rom_entry(path, system_id, name=display_name))
+        for path_str in read_path_lines(playlist_path):
+            path = Path(path_str)
+            if not path.exists():
+                continue
+            display_name = self._playlist_entry_name(path, system_id, extensions)
+            if display_name is None:
+                continue
+            entries.append(self._rom_entry(path, system_id, name=display_name))
 
         sorted_entries = sorted(entries, key=lambda x: x["name"])
         logger.info("playlist load finished: console=%s total=%d", system_id, len(sorted_entries))
@@ -100,9 +95,7 @@ class PlaylistManager:
         playlist_path = self.get_favorites_playlist_path()
         if not playlist_path.exists():
             return []
-        with open(playlist_path, "r", encoding="utf-8", errors=PATH_ERRORS) as f:
-            lines = [line.strip() for line in f]
-        return self.entries_for_paths(lines)
+        return self.entries_for_paths(read_path_lines(playlist_path))
 
     def _favorite_paths(self):
         """The favorite paths as written, parsed at most once per file write.
@@ -126,10 +119,7 @@ class PlaylistManager:
         cached_stamp, cached = self._favorites_cache
         if cached_stamp == stamp:
             return cached
-        with open(playlist_path, "r", encoding="utf-8", errors=PATH_ERRORS) as f:
-            paths = frozenset(
-                str(Path(line.strip())) for line in f if line.strip()
-            )
+        paths = frozenset(str(Path(line)) for line in read_path_lines(playlist_path))
         self._favorites_cache = (stamp, paths)
         return paths
 
@@ -171,7 +161,7 @@ class PlaylistManager:
             else:
                 current.discard(rom_path)
 
-            atomic_write_lines(playlist_path, sorted(current), errors=PATH_ERRORS)
+            write_path_lines(playlist_path, sorted(current))
             self._drop_favorites_cache()
         return is_now_favorite
 
@@ -193,15 +183,14 @@ class PlaylistManager:
         with self._write_lock:
             if not playlist_path.exists():
                 return 0
-            with open(playlist_path, "r", encoding="utf-8", errors=PATH_ERRORS) as f:
-                original = [line.strip() for line in f if line.strip()]
+            original = read_path_lines(playlist_path)
             kept = [path for path in original if not self._rom_is_deleted(path)]
             removed = len(original) - len(kept)
             unreachable = sum(
                 1 for path in kept if not Path(path).exists()
             )
             if removed > 0:
-                atomic_write_lines(playlist_path, sorted(set(kept)), errors=PATH_ERRORS)
+                write_path_lines(playlist_path, sorted(set(kept)))
                 self._drop_favorites_cache()
         if removed or unreachable:
             logger.info(
@@ -253,8 +242,7 @@ class PlaylistManager:
             ):
                 if not playlist_path.exists():
                     continue
-                with open(playlist_path, "r", encoding="utf-8", errors=PATH_ERRORS) as f:
-                    lines = [line.strip() for line in f if line.strip()]
+                lines = read_path_lines(playlist_path)
                 if old_line not in lines:
                     continue
                 updated = []
@@ -263,7 +251,7 @@ class PlaylistManager:
                         updated.append(line)
                     elif new_line:
                         updated.append(new_line)
-                atomic_write_lines(playlist_path, updated, errors=PATH_ERRORS)
+                write_path_lines(playlist_path, updated)
                 self._drop_favorites_cache()
                 changed += 1
         logger.info(
@@ -295,7 +283,7 @@ class PlaylistManager:
         # Written whole, so the main thread reading this playlist while the
         # rescan worker rebuilds it sees the old list or the new one -- never
         # the half a truncate-and-append left exposed (issue #208).
-        atomic_write_lines(playlist_path, [rom["path"] for rom in roms], errors=PATH_ERRORS)
+        write_path_lines(playlist_path, [rom["path"] for rom in roms])
 
         logger.info("playlist rebuild finished: console=%s total=%d path=%s", system_id, len(roms), playlist_path)
         return roms
