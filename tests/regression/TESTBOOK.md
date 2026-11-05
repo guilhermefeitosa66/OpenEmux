@@ -11234,12 +11234,14 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 ### RT-741 — Bundled skins only offer "Use it as it is"
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
-- **Preconditions:** Any console with a bundled skin.
+- **Preconditions:** A console whose bundled skin is a Delta/Manic package (SNES) or the drawn skin.
 - **Steps:**
   1. On the "Dark" card, tap "⋮".
   2. Tap "Use it as it is".
 - **Expected:** The sheet shows the name, the three lit badges, a lock with "Bundled skins never
-  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark.
+  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
+  consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
+  RT-760.)
 - **Check:** `MANUAL`.
 
 ### RT-742 — The list works with a gamepad
@@ -11270,6 +11272,99 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Check:** `meta.json` has `"skinsMigrated": true` and the SNES entry's `custom` is
   `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Copy of a bundled skin
+
+"Create copy and edit" makes a named skin of your own out of a bundled one (issue 796, part 1 of
+issue 783). For now it is offered only where the bundled skin ships in OpenEmux's own format: Game
+Gear, SG-1000, 32X, Mega-CD, Saturn, PC Engine, PC Engine CD and Famicom Disk System, in "Console
+colors" and "Dark". Same setup as the skin library section: a phone (or a phone-sized headless
+emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`.
+
+### RT-760 — A bundled skin in OpenEmux's format offers "Create copy and edit"
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A Game Gear game in the library; no skin of your own for Game Gear.
+- **Steps:**
+  1. Settings → Game Gear → "Controller skins" → on the "Console colors" card, tap "⋮".
+  2. Do the same on the "Dark" card.
+- **Expected:** Both sheets show the lock line "Bundled skins never change.", then "Create copy and
+  edit" (pencil icon) above "Use it as it is".
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`).
+
+### RT-761 — The copy is named, listed under Your skins and used
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-760.
+- **Steps:**
+  1. On "Console colors", tap "⋮" → "Create copy and edit".
+  2. Look at the sheet, then tap "Create copy" without changing the name.
+  3. Tap "⋮" on "Console colors" again → "Create copy and edit" → "Create copy" once more.
+- **Expected:** Step 2's sheet is titled "Name your copy", reads "Bundled skins stay as they are. The
+  copy keeps every layout, and you can rename it later." and has the name "Console colors copy"
+  filled in, with "Cancel" and "Create copy". After it, "YOUR SKINS" (count 1) shows "Console colors
+  copy" ringed with "In use", its Phone, Tablet and Fold badges lit like the bundled card's, and the
+  "Console colors" card is no longer in use. Step 3 adds a second "Console colors copy" (count 2), the
+  new one in use.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GG                      # console-colors-copy  console-colors-copy-2
+  adb shell ls $SKINS/GG/console-colors-copy  # skin.json and the six layout folders
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GG"].get("custom"))'
+  # own:console-colors-copy-2
+  ```
+
+### RT-762 — The copy looks and plays like the bundled skin, which stays as it was
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-761 (a copy in use); a Game Gear game.
+- **Steps:**
+  1. Launch the game upright, then sideways; press every control.
+  2. Quit; pick "Console colors" under "Bundled"; launch the game again, both ways.
+  3. From the "Dark" card, make a copy ("Dark copy") and launch the game.
+- **Expected:** Steps 1 and 2 look the same (same art, same positions) and every control presses the
+  same button. Step 3 shows the dark art. The bundled skins still read "Bundled skins never change."
+  and are not listed under "Your skins".
+- **Check:** JVM suite `SkinConversionTest` (every own-format bundled package copies with the same
+  layouts, elements and files, and its source untouched) in openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`.
+
+### RT-763 — A blank name or Cancel creates nothing
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-760.
+- **Steps:**
+  1. "⋮" on "Dark" → "Create copy and edit"; clear the name.
+  2. Tap "Cancel".
+- **Expected:** With the name empty the field shows an error and "Create copy" is disabled. After
+  Cancel the list is unchanged and nothing new is in `$SKINS/GG`.
+- **Check:** `adb shell ls $SKINS/GG` lists the same folders as before (no hidden `.*.tmp` either:
+  `adb shell ls -a $SKINS/GG`).
+
+### RT-764 — Consoles whose bundled skin cannot be copied yet do not offer it
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game (Delta package) and an Atari 2600 game (drawn skin) in the library.
+- **Steps:**
+  1. Settings → SNES → "⋮" on "Console colors" and on "Dark".
+  2. Open the Atari 2600's skin section (or row).
+- **Expected:** The SNES sheets show only "Use it as it is" (RT-741). The Atari 2600 offers no copy
+  either.
+- **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForTheEightOwnFormatConsolesOnly`.
+
+### RT-765 — Copying works from a game's detail screen and with a gamepad
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A Game Gear game; a gamepad connected.
+- **Steps:**
+  1. With the gamepad only: open the game's detail screen → the "Controller skin" row (A) → D-pad to
+     the "⋮" of "Console colors" (A) → D-pad to "Create copy and edit" (A).
+  2. In the name sheet, D-pad to "Create copy" (A).
+- **Expected:** The focus ring lands on the row, the name field and both buttons in turn; the copy is
+  made and the sheet's list shows it under "Your skins" with "In use". The detail screen's skin row
+  then reads "Console colors copy".
+- **Check:** `MANUAL`.
 
 ## Retired
 
