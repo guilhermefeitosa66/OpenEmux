@@ -10833,6 +10833,87 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Check:** suite files `tests/test_portable.py`, `tests/test_paths.py`,
   `tests/test_pixbuf_loaders.py`, `tests/test_startup_preparation.py`.
 
+## Android — Skin templates
+
+The templates for skin creators (issue 665): one zip per console with a bundled skin package, in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android) under
+`pkg/android/openemux/tools/skins/templates/`, with the guide in that folder's `README.md`. A
+template is a working Delta/Manic package with placeholder art (each control a white outlined shape
+with its input name), an editable SVG per image under `sources/` and a `README.md` with the
+console's asset plan. The runner has no Android device, so these are `MANUAL`: run them on a phone or
+a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; `$T` is the templates folder of an
+openemux-android checkout.
+
+### RT-705 — A template installed unchanged plays, every control responds
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a Game Boy Advance game in the library, phone in portrait,
+  no file in `files/skins/GBA/`, no gamepad connected.
+- **Steps:**
+  1. `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/GBA` then
+     `adb push $T/GBA-template.zip /sdcard/Android/data/$PKG/files/skins/GBA/GBA.deltaskin`.
+  2. Start the GBA game and look at the controller.
+  3. Press the D-pad in each direction, "a", "b", "l", "r", "start", "select", then "menu"; close
+     the menu; tap "quickSave", "quickLoad", "turbo" and "toggleFastForward".
+  4. Turn the phone to landscape and repeat step 3.
+- **Expected:** The controller is the template's placeholder art: a light grey body, white outlined
+  controls, each labelled with its input name, the game in the screen's hole. Every control does its
+  action in the game (the D-pad moves, the buttons act, the menu opens, the quick keys save, load,
+  arm turbo and speed up), in both orientations.
+- **Check:** human only (a screenshot per orientation; `adb logcat -s ImportedSkin` shows no
+  "not mapped" line).
+- **Restore:** `adb shell rm /sdcard/Android/data/$PKG/files/skins/GBA/GBA.deltaskin`.
+
+### RT-706 — A template's analog sticks and shoulders work (PlayStation)
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** As RT-705, with a PlayStation game that uses both analog sticks.
+- **Steps:**
+  1. `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/PS` then
+     `adb push $T/PS-template.zip /sdcard/Android/data/$PKG/files/skins/PS/PS.manicskin`.
+  2. Start the game; drag each stick around its well; press "l1", "l2", "r1", "r2", the four face
+     buttons and "select".
+- **Expected:** Each stick's white knob follows the thumb inside its grey well and moves the game;
+  the shoulders, face buttons and select each do their own action.
+- **Check:** human only.
+- **Restore:** `adb shell rm /sdcard/Android/data/$PKG/files/skins/PS/PS.manicskin`.
+
+### RT-707 — A template fills the tablet layouts too
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** A tablet (or a tablet AVD, smallest width 600 dp or more) with the app and a
+  GBA game; the template installed as in RT-705 step 1.
+- **Steps:**
+  1. Start the game in portrait, then turn to landscape.
+- **Expected:** In each orientation the template's tablet art fills the screen, the game sits in its
+  hole, and the controls respond where they are drawn.
+- **Check:** human only (a screenshot per orientation).
+- **Restore:** as RT-705.
+
+### RT-708 — A template with an image replaced shows the new image
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** As RT-705, ImageMagick and `zip` on the computer.
+- **Steps:**
+  1. In an empty folder: `unzip $T/GBA-template.zip`, then
+     `convert phone_portrait.png -channel RGB -negate phone_portrait.png`.
+  2. `zip -r GBA.deltaskin .` (so `info.json` is at the zip's root) and push it as in RT-705 step 1.
+  3. Start the GBA game in portrait.
+- **Expected:** The controller is the edited art (a dark body with dark controls and light outlines),
+  the game in its hole, and every control still responds as in RT-705.
+- **Check:** human only (a screenshot).
+- **Restore:** as RT-705.
+
+### RT-709 — Deleting a template brings the bundled skin back
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** RT-705 run, its template still installed.
+- **Steps:**
+  1. `adb shell rm /sdcard/Android/data/$PKG/files/skins/GBA/GBA.deltaskin`.
+  2. Start the GBA game again.
+- **Expected:** The bundled GBA skin (the one picked in "Default skin") is back, not the template.
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
