@@ -199,6 +199,25 @@ class TheCrashHandlersTests(unittest.TestCase):
         self.addCleanup(faulthandler.enable, sys.__stderr__, True)
         self.addCleanup(startup_logging._release_crash_log)
 
+    def test_closing_the_log_lets_go_of_every_handle_on_it(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "openemux_startup.log"
+            root = logging.getLogger()
+            handler = logging.FileHandler(log_path)
+            console = logging.StreamHandler(io.StringIO())
+            root.addHandler(handler)
+            root.addHandler(console)
+            self.addCleanup(root.removeHandler, console)
+            startup_logging.install_crash_handlers(log_path)
+            crash_log = startup_logging._crash_log_handle
+            startup_logging.close_startup_log()
+            self.assertNotIn(handler, root.handlers)
+            self.assertIn(console, root.handlers)
+            self.assertIsNone(handler.stream)
+            self.assertTrue(crash_log.closed)
+            self.assertIsNone(startup_logging._crash_log_handle)
+            self.assertTrue(faulthandler.is_enabled())
+
     def test_with_no_log_file_the_traces_still_go_to_the_terminal(self):
         startup_logging.install_crash_handlers()
         self.assertTrue(faulthandler.is_enabled())

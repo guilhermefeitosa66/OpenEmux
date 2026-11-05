@@ -63,6 +63,9 @@ SPACE_MARGIN = 64 * 1024 * 1024
 #: The stores keyed by ROM path, under ``rom_overrides`` (YAML).
 ROM_KEYED_YAML = ("cores", "shaders", "cartridge_colors")
 
+#: First-boot steps an import owes again: they set up the profile's RetroArch.
+REOPENED_BOOTSTRAP_STEPS = ("retroarch_environment", "retroarch_download_all_cores")
+
 
 class PortableImportError(Exception):
     """An import that did not happen, and why.
@@ -312,7 +315,35 @@ def _rewrite_config(path, mapping):
         else:
             if keys[-1] in section:
                 section[keys[-1]] = remap_path(section[keys[-1]], mapping)
+    _reopen_retroarch_bootstrap(config)
+    # Its first boot is pending again, which alone would ask to import once more.
+    portable = config.get("portable")
+    if not isinstance(portable, dict):
+        portable = config["portable"] = {}
+    portable["import_offer_dismissed"] = True
     atomic_write_text(path, yaml.safe_dump(config))
+
+
+def _reopen_retroarch_bootstrap(config):
+    """Owe the first-boot steps that wrote outside the copied folder again.
+
+    The profile's first boot set up *its* RetroArch: the installer's cores
+    directory and ``runtime\\``, neither of which is copied. The zip ships its
+    RetroArch with an empty ``cores\\``, so an import that kept "done" would
+    open a library where nothing launches. The other steps stay done; the
+    cores step only fetches what is missing.
+    """
+    setup = config.get("setup")
+    bootstrap = setup.get("bootstrap") if isinstance(setup, dict) else None
+    if not isinstance(bootstrap, dict):
+        return
+    completed = bootstrap.get("completed_steps")
+    if isinstance(completed, list):
+        bootstrap["completed_steps"] = [
+            step for step in completed if step not in REOPENED_BOOTSTRAP_STEPS
+        ]
+    bootstrap["status"] = "pending"
+    bootstrap["retry_requested"] = False
 
 
 def _rewrite_list(path, mapping):

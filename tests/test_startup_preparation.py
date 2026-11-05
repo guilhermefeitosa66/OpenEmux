@@ -241,8 +241,8 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
             self.calls,
             [
                 "apply_portable_environment",
-                "_apply_pending_portable_import",
                 "_redirect_bytecode_cache",
+                "_apply_pending_portable_import",
                 "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
                 "configure_startup_logging",
@@ -283,15 +283,26 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
 class ThePendingPortableImportTests(unittest.TestCase):
     """Issue #768: a staged import is swapped in before anything opens the folder."""
 
+    def apply(self, **behaviour):
+        with mock.patch.object(main_module, "portable_root", return_value=Path("/p")), \
+                mock.patch(
+                    "openemux.core.portable_import.apply_pending_import", **behaviour
+                ) as apply:
+            return main_module._apply_pending_portable_import(), apply
+
     def test_the_result_is_passed_on(self):
-        with mock.patch.object(main_module, "apply_pending_import", return_value="applied"):
-            self.assertEqual(main_module._apply_pending_portable_import(), "applied")
+        self.assertEqual(self.apply(return_value="applied")[0], "applied")
+
+    def test_off_a_portable_install_nothing_is_even_imported(self):
+        with mock.patch.object(main_module, "portable_root", return_value=None), \
+                mock.patch("openemux.core.portable_import.apply_pending_import") as apply:
+            self.assertIsNone(main_module._apply_pending_portable_import())
+        apply.assert_not_called()
 
     def test_a_failure_is_written_to_the_start_up_log_and_is_not_fatal(self):
-        with mock.patch.object(
-            main_module, "apply_pending_import", side_effect=RuntimeError("boom")
-        ), mock.patch.object(main_module, "append_startup_error") as record:
-            self.assertEqual(main_module._apply_pending_portable_import(), "error")
+        with mock.patch.object(main_module, "append_startup_error") as record:
+            result, _apply = self.apply(side_effect=RuntimeError("boom"))
+        self.assertEqual(result, "error")
         record.assert_called_once()
         self.assertIn("boom", record.call_args.kwargs["exc_text"])
 

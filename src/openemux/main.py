@@ -12,10 +12,10 @@ from openemux.core.paths import (
     is_running_in_appimage,
     is_running_in_flatpak,
     migrate_legacy_config_dir,
+    portable_root,
 )
 from openemux.core.platform import IS_WINDOWS
 from openemux.core.portable import apply_portable_environment
-from openemux.core.portable_import import apply_pending_import
 from openemux.core.startup_logging import append_startup_error, configure_startup_logging
 
 
@@ -184,14 +184,15 @@ def prepare_process():
     # keeps GLib's, fontconfig's and tempfile's writes in its own folder
     # (issue #766). A no-op everywhere else.
     apply_portable_environment()
-    # Before anything opens the config dir, the start-up log included: an
-    # import from the profile staged by the last run is swapped in now, while
-    # no file in the folder is open (issue #768).
-    import_result = _apply_pending_portable_import()
     # Next: everything below this line imports, and each import that lands
     # before the redirect is one more module the packaged install recompiles
     # on every launch.
     _redirect_bytecode_cache()
+    # Before anything opens the config dir, the start-up log included: an
+    # import from the profile staged by the last run is swapped in now, while
+    # no file in the folder is open (issue #768). The bytecode cache is under
+    # data/cache, outside the folders the swap renames.
+    import_result = _apply_pending_portable_import()
     _configure_gtk_renderer()
     # Before logging: the start-up log lives in the config dir, which a legacy
     # one may still be on its way to.
@@ -205,8 +206,16 @@ def prepare_process():
 
 
 def _apply_pending_portable_import():
-    """:func:`apply_pending_import`, never fatal: the old folder stays in use."""
+    """:func:`apply_pending_import`, never fatal: the old folder stays in use.
+
+    Imported here, not at the top: it brings PyYAML in, which a launch with
+    nothing staged -- every launch off a portable install -- never needs.
+    """
+    if portable_root() is None:
+        return None
     try:
+        from openemux.core.portable_import import apply_pending_import
+
         return apply_pending_import()
     except Exception:
         append_startup_error(

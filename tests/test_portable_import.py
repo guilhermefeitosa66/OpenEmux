@@ -277,9 +277,48 @@ class RewriteTests(_ImportCase):
     def test_a_config_missing_a_section_keeps_the_rest(self):
         folder = self.home / "partial"
         folder.mkdir()
-        (folder / "config.yaml").write_text(yaml.safe_dump({"library": "flat"}))
+        (folder / "config.yaml").write_text(
+            yaml.safe_dump({"library": "flat", "setup": "odd", "portable": "odd"})
+        )
         pi.rewrite_paths(folder, [(self.profile, self.target)])
-        self.assertEqual(yaml.safe_load((folder / "config.yaml").read_text()), {"library": "flat"})
+        self.assertEqual(
+            yaml.safe_load((folder / "config.yaml").read_text()),
+            {"library": "flat", "setup": "odd", "portable": {"import_offer_dismissed": True}},
+        )
+
+    def write_bootstrap(self, folder, bootstrap):
+        folder.mkdir()
+        (folder / "config.yaml").write_text(
+            yaml.safe_dump({"setup": {"bootstrap": bootstrap}})
+        )
+        pi.rewrite_paths(folder, [(self.profile, self.target)])
+        return yaml.safe_load((folder / "config.yaml").read_text())
+
+    def test_the_first_boot_owes_the_retroarch_steps_again(self):
+        # The zip's RetroArch ships with no cores: "done" would open a library
+        # where nothing launches.
+        config = self.write_bootstrap(
+            self.home / "done",
+            {
+                "status": "done",
+                "completed_steps": [
+                    "openemux_config_files",
+                    "retroarch_environment",
+                    "retroarch_download_all_cores",
+                ],
+            },
+        )
+        bootstrap = config["setup"]["bootstrap"]
+        self.assertEqual(bootstrap["status"], "pending")
+        self.assertEqual(bootstrap["completed_steps"], ["openemux_config_files"])
+        self.assertFalse(bootstrap["retry_requested"])
+        # Pending again, but the copy never asks to import a second time.
+        self.assertTrue(config["portable"]["import_offer_dismissed"])
+
+    def test_a_bootstrap_with_no_step_list_is_still_reopened(self):
+        config = self.write_bootstrap(self.home / "bare", {"status": "done"})
+        self.assertEqual(config["setup"]["bootstrap"]["status"], "pending")
+        self.assertNotIn("completed_steps", config["setup"]["bootstrap"])
 
 
 class ApplyTests(_ImportCase):

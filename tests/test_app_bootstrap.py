@@ -11,7 +11,6 @@ so the bootstrap never downloads a core and nothing is written to the
 developer's own `~/.openemux`.
 """
 
-import logging
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -550,17 +549,26 @@ class ThePortableImportOfferTests(_ApplicationCase):
         self.assertFalse(self.config.get_portable_import_dismissed())
 
     def swap(self, **apply):
-        root = logging.getLogger()
-        handler = logging.FileHandler(Path(self.home.root) / "log.txt", delay=True)
-        root.addHandler(handler)
-        self.addCleanup(root.removeHandler, handler)
-        with mock.patch.object(app_module, "apply_pending_import", **apply), \
+        order = []
+        with mock.patch.object(app_module, "apply_pending_import", **apply) as swap_in, \
+                mock.patch.object(app_module, "close_startup_log") as close, \
                 mock.patch.object(app_module, "configure_startup_logging") as configure, \
                 mock.patch.object(app_module, "append_startup_error") as record, \
                 mock.patch("openemux.ui.theming.apply_theme") as theme:
+            close.side_effect = lambda: order.append("close")
+            configure.side_effect = lambda: order.append("configure")
+            effect = swap_in.side_effect
+
+            def apply_once():
+                order.append("apply")
+                if effect is not None:
+                    raise effect
+                return swap_in.return_value
+
+            swap_in.side_effect = apply_once
             self.app._swap_portable_import_in()
-        self.assertNotIn(handler, root.handlers)
-        configure.assert_called_once()
+        # The log lets go of the folder before the swap, and comes back after.
+        self.assertEqual(order, ["close", "apply", "configure"])
         theme.assert_called_once()
         self.assertTrue(self.config.get_portable_import_dismissed())
         return record

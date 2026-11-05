@@ -46,7 +46,7 @@ from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
 from openemux.core.portable_import import apply_pending_import, should_offer_on_first_start
-from openemux.core.startup_logging import configure_startup_logging
+from openemux.core.startup_logging import close_startup_log, configure_startup_logging
 from openemux.core import win32_shell
 
 
@@ -147,11 +147,7 @@ class OpenEmuxApplication(Adw.Application):
         around the swap and opened again in the new folder. A refused swap is
         left staged, and the next start applies it.
         """
-        root = logging.getLogger()
-        for handler in list(root.handlers):
-            if isinstance(handler, logging.FileHandler):
-                root.removeHandler(handler)
-                handler.close()
+        close_startup_log()
         try:
             result = apply_pending_import()
         except Exception:
