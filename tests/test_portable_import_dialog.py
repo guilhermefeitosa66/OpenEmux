@@ -288,11 +288,35 @@ class ThePreferencesGroupTests(unittest.TestCase):
         self.assertTrue(self.group.spinner.get_visible())
         self.assertFalse(self.group.button.get_visible())
         self.assertEqual(self.group.row.get_subtitle(), "Copying… 0%")
-        self.group._on_progress(0.5)
+        _include, on_progress, on_done, _on_error = self.start_import.call_args.args
+        on_progress(0.5)
         self.assertEqual(self.group.row.get_subtitle(), "Copying… 50%")
-        self.group._on_done()
+        on_done()
         self.assertTrue(self.group.button.get_visible())
         self.assertEqual(self.toasts, [("Import ready. Restart OpenEmux to finish.", 0)])
+
+    def test_reopened_mid_copy_the_new_window_gets_the_progress_and_the_end(self):
+        self.open_dialog().emit("response", "import")
+        _include, on_progress, on_done, on_error = self.start_import.call_args.args
+        dialogs._RUNNING.set()
+        self.addCleanup(dialogs._RUNNING.clear)
+        reopened_toasts = []
+        reopened = dialogs.PortableImportGroup(
+            "en", lambda text, timeout=3: reopened_toasts.append(text)
+        )
+        self.assertTrue(reopened.spinner.get_visible())
+        self.assertFalse(reopened.button.get_visible())
+        self.assertFalse(reopened.row.get_sensitive())
+        on_progress(0.3)
+        self.assertEqual(reopened.row.get_subtitle(), "Copying… 30%")
+        dialogs._RUNNING.clear()
+        on_done()
+        self.assertTrue(reopened.row.get_sensitive())
+        self.assertTrue(reopened.button.get_visible())
+        self.assertEqual(reopened_toasts, ["Import ready. Restart OpenEmux to finish."])
+        self.assertEqual(self.toasts, [])
+        on_error(OSError("denied"))
+        self.assertIn("denied", reopened_toasts[-1])
 
     def test_import_without_a_rom_folder_and_a_failure_toast(self):
         self.open_dialog().emit("response", "import")

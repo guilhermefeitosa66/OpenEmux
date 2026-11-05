@@ -172,6 +172,10 @@ def run_first_start_offer(window, locale, on_finished):
 class PortableImportGroup(Adw.PreferencesGroup):
     """Preferences → System → "Portable": import the profile from here too."""
 
+    #: The group built last. Preferences can be closed and opened again
+    #: mid-copy; the copy's progress and its end go to the one on screen.
+    latest = None
+
     def __init__(self, locale, toast):
         super().__init__(title=tr(locale, "prefs.group.portable"))
         self.locale = locale
@@ -188,7 +192,11 @@ class PortableImportGroup(Adw.PreferencesGroup):
         self.row.add_suffix(self.spinner)
         self.row.add_suffix(self.button)
         self.add(self.row)
+        PortableImportGroup.latest = self
         self.refresh()
+        if import_running():
+            # Started from an earlier Preferences window, still copying.
+            self._set_busy(True)
 
     @classmethod
     def build(cls, locale, toast):
@@ -201,7 +209,6 @@ class PortableImportGroup(Adw.PreferencesGroup):
         source = portable_import.importable_profile()
         path = display_text(profile_config_dir())
         if import_running():
-            # Started from an earlier Preferences window, still copying.
             self.row.set_sensitive(False)
         elif source is None:
             self.row.set_subtitle(tr(self.locale, "portable_import.row.missing", path=path))
@@ -230,9 +237,9 @@ class PortableImportGroup(Adw.PreferencesGroup):
         self._on_progress(0.0)
         start_import(
             self._check is not None and self._check.get_active(),
-            self._on_progress,
-            self._on_done,
-            self._on_error,
+            lambda fraction: PortableImportGroup.latest._on_progress(fraction),
+            lambda: PortableImportGroup.latest._on_done(),
+            lambda exc: PortableImportGroup.latest._on_error(exc),
         )
 
     def _set_busy(self, busy):
