@@ -5,8 +5,6 @@ portable root with its marker, and a fake profile under a fake home.
 """
 
 import json
-import os
-import shutil
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
