@@ -11287,7 +11287,7 @@ Android device, so the in-game scenarios are `MANUAL`: a phone or a headless emu
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with one game of each of A2600, A7800, LYNX, NGP,
   WS, VECTREX and VB (with its BIOS where the core needs one); nothing in `files/skins/<console>/`;
-  "Default skin" left on "Console colours".
+  each console's "Controller skins" left on "Console colors".
 - **Steps:**
   1. Start each game upright, then turn the phone sideways.
   2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
@@ -11309,11 +11309,18 @@ Android device, so the in-game scenarios are `MANUAL`: a phone or a headless emu
 - **Mode:** MANUAL
 - **Preconditions:** RT-744's games.
 - **Steps:**
-  1. Open Settings › "Controller skin" › "Default skin" for each of the seven consoles.
-  2. Pick "Dark" for VB and start the Virtual Boy game.
-- **Expected:** Each console lists exactly "Console colours" and "Dark"; the Virtual Boy game opens
-  with the black and dark grey skin, every control in the same place as the console colours one.
-- **Check:** `MANUAL`: screenshot the list and the game; pick "Console colours" again afterwards.
+  1. Open Settings → each of the seven consoles → scroll to "Controller skins".
+  2. In Settings → Virtual Boy, tap the "Dark" card and start the Virtual Boy game.
+  3. Tap "Console colors" again.
+- **Expected:** Each console's "BUNDLED" group lists exactly "Console colors" (with "In use") and
+  "Dark"; after step 2 "Dark" has the ring and "In use", and the Virtual Boy game opens with the
+  black and dark grey skin, every control in the same place as the console colors one. After step 3
+  "Console colors" is in use again.
+- **Check:** `MANUAL`: screenshot the list and the game, plus
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["VB"]; print(c["skin"])'
+  # step 2: dark · step 3: console
+  ```
 
 ### RT-746 — Every control presses what the drawn skin pressed, the Virtual Boy's right pad included
 - **Area:** Android — Bundled skins
@@ -11345,12 +11352,19 @@ Android device, so the in-game scenarios are `MANUAL`: a phone or a headless emu
   1. On the Lynx skin use "save", "load", "turbo" and "fast-forward" on the frame, and the menu key.
   2. Push the package: `adb push <file>.deltaskin /sdcard/Android/data/$PKG/files/skins/LYNX/` and
      start the game again.
-  3. Remove it (`adb shell rm /sdcard/Android/data/$PKG/files/skins/LYNX/<file>.deltaskin`) and
+  3. Settings → Lynx → "Controller skins": tap the package's card in the "IMPORTED" group, then
      start the game again.
+  4. Tap "Console colors" in the "BUNDLED" group and start the game again.
 - **Expected:** Step 1: each quick action works and lights while on (turbo, fast forward); the
-  menu opens. Step 2: the imported package is drawn instead of the bundled skin. Step 3: the bundled
-  skin is back.
-- **Check:** `MANUAL`: screenshot after steps 2 and 3.
+  menu opens. Step 2: the bundled Lynx skin is still drawn (a package does not win by being in the
+  folder, RT-738). Step 3: the package has "In use" and is drawn instead of the bundled skin.
+  Step 4: the bundled skin is back.
+- **Check:** `MANUAL`: screenshot after steps 2, 3 and 4; logcat tag `OpenEmuxSkin` reads
+  `drawing OpenEmux Lynx` after steps 2 and 4, and
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["LYNX"]; print(c["skin"], c.get("custom"))'
+  # step 3: console pkg:<file> · step 4: console None
+  ```
 
 ### RT-748 — The seven packages are valid, match the drawn skins and read a second D-pad
 - **Area:** Android — Bundled skins
