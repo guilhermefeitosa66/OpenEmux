@@ -1,4 +1,5 @@
 from copy import deepcopy
+from openemux.core.input_baseline import stock_keyboard_hotkeys
 from openemux.core.systems import resolve_system_id
 
 ACTION_ORDER = [
@@ -519,42 +520,13 @@ RETROARCH_KEY_NAMES = {
 
 #: RetroArch's own stock keyboard hotkeys and the key each one takes.
 #:
-#: The runtime override is *appended* to RetroArch's config, so a stock hotkey
-#: sitting on a key we also bind still fires alongside ours: pressing `m` would
-#: mute *and* cycle the shader (issue #146). Anything here that collides with an
-#: OpenEmux binding is explicitly unbound.
-RETROARCH_STOCK_KEYBOARD_HOTKEYS = {
-    "input_rewind": "r",
-    "input_shader_next": "m",
-    "input_shader_prev": "n",
-    "input_shader_toggle": "comma",
-    "input_cheat_index_minus": "t",
-    "input_cheat_index_plus": "y",
-    "input_cheat_toggle": "u",
-    "input_hold_slowmotion": "e",
-    "input_hold_fast_forward": "l",
-    "input_frame_advance": "k",
-    "input_pause_toggle": "p",
-    "input_screenshot": "f8",
-    "input_fps_toggle": "f3",
-    "input_desktop_menu_toggle": "f5",
-    "input_grab_mouse_toggle": "f11",
-    "input_game_focus_toggle": "scroll_lock",
-    "input_netplay_game_watch": "i",
-    "input_netplay_player_chat": "tilde",
-    "input_exit_emulator": "escape",
-    "input_volume_up": "add",
-    "input_volume_down": "subtract",
-    "input_state_slot_increase": "f7",
-    "input_state_slot_decrease": "f6",
-    "input_reset": "h",
-    "input_audio_mute": "f9",
-    "input_menu_toggle": "f1",
-    "input_save_state": "f2",
-    "input_load_state": "f4",
-    "input_toggle_fast_forward": "f6",
-    "input_toggle_fullscreen": "f",
-}
+#: Every launch starts from RetroArch's stock input defaults (issue #759), so a
+#: stock hotkey sitting on a key we also bind would still fire alongside ours:
+#: pressing `m` would mute *and* cycle the shader (issue #146). Anything here
+#: that collides with an OpenEmux binding is explicitly unbound. Read from the
+#: same generated table as the baseline rather than typed: the typed copy had
+#: fast-forward on `f6`, which is slot-decrease, and missed its real `space`.
+RETROARCH_STOCK_KEYBOARD_HOTKEYS = stock_keyboard_hotkeys()
 
 
 def conflicting_stock_hotkeys(overrides):

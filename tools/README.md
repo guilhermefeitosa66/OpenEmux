@@ -7,6 +7,7 @@ here is imported by the app, and nothing here ships in a package.
 | --- | --- | --- |
 | `generate_name_db.py` | Regenerates the game-name database the cover lookup reads | `make name-db` |
 | `icon_browser.py` | Browse the symbolic icons the UI is allowed to use | `make icons` |
+| `gen_retroarch_input_defaults.py` | Regenerate RetroArch's default input table every launch starts from (issue #759), after a RetroArch bump | see the script's docstring |
 | `gen_cartridge_colors.py` | Generate the per-colour copies of every cartridge frame | see below |
 | `import_cartridge_frames.py` | Put the Android relief cartridge frames into the desktop SVGs | see below |
 | `selection_input_harness.py` | Drive the real grid with synthesized input on a nested X server | see below |

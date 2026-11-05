@@ -45,6 +45,13 @@ After trying the in-game control bar, suggested an option to make it
 semi-transparent for people who keep it on screen, which became
 [#477](https://github.com/guilhermefeitosa66/OpenEmux/issues/477).
 
+After testing input remapping again, pointed out that the bindings in game were
+still a mix of OpenEmux's and RetroArch's own defaults, and suggested OpenEmux
+own the whole controller configuration. That became
+[#759](https://github.com/guilhermefeitosa66/OpenEmux/issues/759): every launch
+now starts from RetroArch's stock input defaults with OpenEmux's bindings on
+top, so nothing from a user's `retroarch.cfg` mixes in.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no

@@ -12,7 +12,7 @@ from openemux.core.audio_driver import resolve_audio_driver
 from openemux.core.bios_catalog import get_required_for_core
 from openemux.core.bios_manager import find_missing_required_for_core
 from openemux.core.cores import CoreCatalog, core_search_dirs
-from openemux.core import input_tuning
+from openemux.core import input_baseline, input_tuning
 from openemux.core.input_actions import (
     conflicting_stock_hotkeys,
     to_retroarch_overrides,
@@ -163,6 +163,9 @@ class RetroArchLauncher:
         #: so the UI can say it out loud instead of leaving the only trace in a
         #: log file (issue #366).
         self.last_shader_notice = None
+        #: The whole ``--appendconfig`` of the last launch, so its log can name
+        #: the user's input keys it overrode (issue #759).
+        self.last_runtime_overrides = {}
 
     def _launch_prefix(self, force_extract=False):
         """Return (argv_prefix, error).
@@ -461,7 +464,10 @@ class RetroArchLauncher:
         states_dir = self.config_manager.get_console_states_dir(console)
         states_dir.mkdir(parents=True, exist_ok=True)
 
-        overrides = {}
+        # RetroArch's own default for every input key comes first, so nothing
+        # input-related is left for the user's retroarch.cfg to fill in, and
+        # every layer below wins over it (issue #759).
+        overrides = input_baseline.baseline_overrides()
         overrides.update(self._input_overrides(console))
         overrides.update(self._joypad_driver_overrides())
         overrides.update(self._desktop_ui_overrides())
@@ -505,6 +511,8 @@ class RetroArchLauncher:
 
         lines = [f"{key} = {value}" for key, value in sorted(overrides.items())]
         override_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # Kept so the launch can say which of the user's keys this overrode.
+        self.last_runtime_overrides = overrides
         return str(override_path)
 
     # ----- the pieces of the override file --------------------------------
@@ -798,6 +806,52 @@ class RetroArchLauncher:
         return key, {"shader": label, "driver": video_driver}
 
     @staticmethod
+    def _user_retroarch_cfg(launch_prefix, extra_flags=None):
+        """The ``retroarch.cfg`` the launched RetroArch appends our file to.
+
+        Read only, to name what the input baseline overrode (issue #759):
+        a ``--config`` among the user's extra flags names it outright, the
+        RetroArch Flatpak keeps its own under ``~/.var/app``, the Windows
+        build is portable and reads the one beside ``retroarch.exe``, and any
+        other RetroArch reads the XDG one.
+        """
+        flags = list(extra_flags or [])
+        for index, flag in enumerate(flags):
+            if flag.startswith("--config="):
+                return Path(flag.split("=", 1)[1]).expanduser()
+            if flag in ("--config", "-c") and index + 1 < len(flags):
+                return Path(flags[index + 1]).expanduser()
+        prefix = list(launch_prefix or [])
+        if RETROARCH_FLATPAK_ID in prefix:
+            return (
+                Path.home() / ".var" / "app" / RETROARCH_FLATPAK_ID
+                / "config" / "retroarch" / "retroarch.cfg"
+            )
+        if IS_WINDOWS and prefix:
+            return Path(prefix[0]).parent / "retroarch.cfg"
+        config_home = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        return Path(config_home) / "retroarch" / "retroarch.cfg"
+
+    def _input_override_note(self, launch_prefix, extra_flags=None):
+        """The launch-log line naming the user's input keys this launch overrode.
+
+        Names only, never values: the line exists so a "my pad stopped being
+        player 1" report can be answered from the log a user attaches.
+        """
+        user_cfg = self._user_retroarch_cfg(launch_prefix, extra_flags)
+        names = input_baseline.overridden_user_keys(
+            input_baseline.read_cfg_values(user_cfg),
+            self.last_runtime_overrides,
+        )
+        if names:
+            logger.info(
+                "input baseline: %d input keys from %s overridden: %s",
+                len(names), user_cfg, ", ".join(names),
+            )
+        listed = ", ".join(names) if names else "none"
+        return f"[openemux] input overrides from {cfg_path(user_cfg)}: {listed}\n"
+
+    @staticmethod
     def _log_header(console, video_driver, shader_id, shader_path):
         """The line OpenEmux writes at the top of a launch log."""
         if shader_id == "disabled":
@@ -1083,6 +1137,7 @@ class RetroArchLauncher:
             log_handle.write(
                 self._log_header(system_id, video_driver, shader_id, console_preset)
             )
+            log_handle.write(self._input_override_note(launch_prefix, extra_flags))
             log_handle.flush()
             # The session's environment, not this process's. Running from an
             # AppImage, everything started under $APPDIR -- and the vendored
