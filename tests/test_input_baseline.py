@@ -25,7 +25,7 @@ class TheBaselineTests(unittest.TestCase):
         self.assertNotIn("input_player17_a", self.baseline)
         self.assertEqual(
             len(self.baseline),
-            len(GLOBAL_DEFAULTS) + PLAYERS * (len(PLAYER_DEFAULTS) + 2) + 1,
+            len(GLOBAL_DEFAULTS) + PLAYERS * (len(PLAYER_DEFAULTS) + 3) + 1,
         )
 
     def test_known_defaults_of_retroarch_1_22_2(self):
@@ -45,6 +45,8 @@ class TheBaselineTests(unittest.TestCase):
             "input_menu_toggle_gamepad_combo": '"0"',
             "input_autodetect_enable": '"true"',
             "input_max_users": '"8"',
+            "input_libretro_device_p1": '"1"',
+            "input_libretro_device_p16": '"1"',
         }
         for key, value in expected.items():
             self.assertEqual(self.baseline[key], value, key)

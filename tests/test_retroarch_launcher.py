@@ -2045,6 +2045,24 @@ class TheUsersRetroArchConfigTests(unittest.TestCase):
                 Path("/x/retroarch/retroarch.cfg"),
             )
 
+    def test_a_config_among_the_extra_flags_wins(self):
+        for flags in (["--verbose", "--config", "/c/ra.cfg"], ["-c", "/c/ra.cfg"],
+                      ["--config=/c/ra.cfg"]):
+            self.assertEqual(
+                RetroArchLauncher._user_retroarch_cfg(["/usr/bin/retroarch"], flags),
+                Path("/c/ra.cfg"),
+                flags,
+            )
+
+    def test_a_dangling_config_flag_is_ignored(self):
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False), patch.dict(
+            "openemux.core.retroarch_launcher.os.environ", {"XDG_CONFIG_HOME": "/x"}
+        ):
+            self.assertEqual(
+                RetroArchLauncher._user_retroarch_cfg(["/usr/bin/retroarch"], ["--config"]),
+                Path("/x/retroarch/retroarch.cfg"),
+            )
+
     def test_without_xdg_config_home_it_is_dot_config(self):
         with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False), patch.dict(
             "openemux.core.retroarch_launcher.os.environ", {}, clear=True

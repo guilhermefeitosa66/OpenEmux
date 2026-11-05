@@ -163,6 +163,9 @@ class RetroArchLauncher:
         #: so the UI can say it out loud instead of leaving the only trace in a
         #: log file (issue #366).
         self.last_shader_notice = None
+        #: The whole ``--appendconfig`` of the last launch, so its log can name
+        #: the user's input keys it overrode (issue #759).
+        self.last_runtime_overrides = {}
 
     def _launch_prefix(self, force_extract=False):
         """Return (argv_prefix, error).
@@ -803,14 +806,21 @@ class RetroArchLauncher:
         return key, {"shader": label, "driver": video_driver}
 
     @staticmethod
-    def _user_retroarch_cfg(launch_prefix):
+    def _user_retroarch_cfg(launch_prefix, extra_flags=None):
         """The ``retroarch.cfg`` the launched RetroArch appends our file to.
 
         Read only, to name what the input baseline overrode (issue #759):
-        the RetroArch Flatpak keeps its own under ``~/.var/app``, the Windows
+        a ``--config`` among the user's extra flags names it outright, the
+        RetroArch Flatpak keeps its own under ``~/.var/app``, the Windows
         build is portable and reads the one beside ``retroarch.exe``, and any
         other RetroArch reads the XDG one.
         """
+        flags = list(extra_flags or [])
+        for index, flag in enumerate(flags):
+            if flag.startswith("--config="):
+                return Path(flag.split("=", 1)[1]).expanduser()
+            if flag in ("--config", "-c") and index + 1 < len(flags):
+                return Path(flags[index + 1]).expanduser()
         prefix = list(launch_prefix or [])
         if RETROARCH_FLATPAK_ID in prefix:
             return (
@@ -822,16 +832,16 @@ class RetroArchLauncher:
         config_home = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
         return Path(config_home) / "retroarch" / "retroarch.cfg"
 
-    def _input_override_note(self, launch_prefix):
+    def _input_override_note(self, launch_prefix, extra_flags=None):
         """The launch-log line naming the user's input keys this launch overrode.
 
         Names only, never values: the line exists so a "my pad stopped being
         player 1" report can be answered from the log a user attaches.
         """
-        user_cfg = self._user_retroarch_cfg(launch_prefix)
+        user_cfg = self._user_retroarch_cfg(launch_prefix, extra_flags)
         names = input_baseline.overridden_user_keys(
             input_baseline.read_cfg_values(user_cfg),
-            getattr(self, "last_runtime_overrides", None) or {},
+            self.last_runtime_overrides,
         )
         if names:
             logger.info(
@@ -1127,7 +1137,7 @@ class RetroArchLauncher:
             log_handle.write(
                 self._log_header(system_id, video_driver, shader_id, console_preset)
             )
-            log_handle.write(self._input_override_note(launch_prefix))
+            log_handle.write(self._input_override_note(launch_prefix, extra_flags))
             log_handle.flush()
             # The session's environment, not this process's. Running from an
             # AppImage, everything started under $APPDIR -- and the vendored

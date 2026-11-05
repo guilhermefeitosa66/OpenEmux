@@ -86,7 +86,7 @@ def split(values):
             global_defaults[key] = value
     if sorted(players) != list(range(1, PLAYERS + 1)):
         raise SystemExit(f"expected players 1-{PLAYERS}, found {sorted(players)}")
-    template = dict(players[2])
+    template = None
     for number in range(2, PLAYERS + 1):
         found = dict(players[number])
         for suffix in INDEX_SUFFIXES:

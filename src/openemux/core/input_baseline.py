@@ -38,6 +38,14 @@ REMAP_OVERRIDES = {"auto_remaps_enable": '"false"'}
 #: A hotkey whose stock value is this has no key at all.
 UNBOUND = "nul"
 
+#: ``input_libretro_device_p<N>`` -- the device type the core is told is in
+#: each port. RetroArch reads it from ``retroarch.cfg`` but does not save it
+#: there, so the generated table cannot carry it; its default is
+#: ``RETRO_DEVICE_JOYPAD``. Without it a device type set in the user's file
+#: (a DualShock, a mouse) still reached every launch whose console has no
+#: controller type of its own in OpenEmux.
+LIBRETRO_DEVICE_DEFAULT = "1"
+
 
 def _player_values(player):
     values = dict(PLAYER_DEFAULTS)
@@ -49,12 +57,15 @@ def _player_values(player):
 
 
 @lru_cache(maxsize=1)
-def _baseline():
+def _quoted_baseline():
     values = dict(GLOBAL_DEFAULTS)
     for player in range(1, PLAYERS + 1):
         for suffix, value in _player_values(player).items():
             values[f"input_player{player}_{suffix}"] = value
-    return values
+        values[f"input_libretro_device_p{player}"] = LIBRETRO_DEVICE_DEFAULT
+    overrides = {key: f'"{value}"' for key, value in values.items()}
+    overrides.update(REMAP_OVERRIDES)
+    return overrides
 
 
 def baseline_overrides():
@@ -62,9 +73,7 @@ def baseline_overrides():
 
     A fresh dict per call: the caller layers the launch's own values onto it.
     """
-    overrides = {key: f'"{value}"' for key, value in _baseline().items()}
-    overrides.update(REMAP_OVERRIDES)
-    return overrides
+    return dict(_quoted_baseline())
 
 
 def stock_keyboard_hotkeys():
