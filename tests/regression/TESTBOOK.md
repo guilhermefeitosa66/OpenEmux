@@ -6395,14 +6395,15 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   2. On a game's detail, portrait and landscape, press UP and LEFT from "Play" until focus stops moving.
   3. On the sort button and the view toggle, read the hint bar.
   4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
-     arrow, star and "More options" with a finger.
+     arrow, star and share button with a finger.
   5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
 - **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
-  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: focus stays
-  on "Play"; the back arrow, the star (X) and "More options" (Y) never take it. 3: the bar says
+  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: from "Play"
+  focus reaches the pencil after the game's name (and "Search artwork…" when the game has no art);
+  the back arrow, the star (X) and the share button (Y) never take it. 3: the bar says
   "A: Choose", and A sorts or switches the view; on a game it says "A: Details", on "Play" "A: Play"
-  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens the
-  menu from any focused item.
+  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens Share
+  Nearby from any focused item on the detail.
 - **Check:** human only; the focus parts also by
   `adb shell am instrument -w -e class com.openemux.mobile.ui.GamepadFocusInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
   (after `./gradlew installDebug installDebugAndroidTest`, on a device past the first-run setup).
@@ -6530,7 +6531,7 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
 - **Mode:** MANUAL
 - **Preconditions:** RT-491's library.
 - **Steps:**
-  1. Open a game's detail, open its menu and pick "Remove from library"; confirm.
+  1. Open a game's detail, scroll to the end and tap "Remove from library"; confirm.
   2. Switch the app language to Português (Brasil) and enter selection mode; open the remove dialog.
 - **Expected:** After 1 the screen goes back to the library without that game, its file is gone and
   its saves stay, as before. After 2 the bar, the hints and the dialog are in Portuguese
@@ -9493,7 +9494,7 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
 - **Mode:** MANUAL
 - **Preconditions:** The app with at least two consoles and three games, first-run setup done.
 - **Steps:**
-  1. Open a game's detail, press "⋯" (or Y on a gamepad) and pick "Share Nearby".
+  1. Open a game's detail and tap the round share button at the top right (or press Y on a gamepad).
   2. Back in a console's library, long-press a game, select three, and press the share button in the
      selection bar; repeat with Select on a gamepad.
   3. On the "Shelf", long-press a console and pick "Share All Games Nearby".
@@ -9770,7 +9771,7 @@ NAT, so discovery itself is checked only on hardware.
 - **Steps:**
   1. On the computer, right-click a game and choose "Share Nearby…".
   2. On the phone, open the "Import" tab and tap "Receive games".
-  3. Close both, then do the reverse: share a game from the phone's detail "⋯" menu and open
+  3. Close both, then do the reverse: share a game from the phone's detail share button and open
      "Receive Games…" from the arrow beside the Import button on the computer.
 - **Expected:** Within a few seconds the computer lists the phone under "Devices on This Network"
   with a phone icon, its name and "Phone · found by mDNS and beacon" (or one of the two). In step 3
@@ -9800,8 +9801,8 @@ NAT, so discovery itself is checked only on hardware.
 - **Mode:** MANUAL (pipeline variant by address)
 - **Preconditions:** The test library's SFC game on the phone; the computer does not have it.
 - **Steps:**
-  1. On the computer, open "Receive Games…". On the phone, share the game from its detail "⋯"
-     menu and tap the computer.
+  1. On the computer, open "Receive Games…". On the phone, share the game from its detail share
+     button and tap the computer.
   2. Compare the codes, then press "Accept" in the computer's "Incoming Games" dialog.
   3. Press "Show in Library" and start the game.
 - **Expected:** The same code on both screens. The phone ends on "1 Game Sent" ("<computer> has
@@ -10564,8 +10565,8 @@ on the device; a cover kept on the device is one received through "Share nearby"
   1. Open the game and look at its settings list.
   2. Tap the "Artwork" row.
 - **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
-  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
-  lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
+  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; below the list
+  comes only the "Remove from library" card. In step 2 the "Artwork" screen opens on the current
   art, titled with the game and console, with the tabs "Current", "Search", "Edit" and "Import".
   "Current" shows a "Cover" card that says "Automatic", "Synced <date>",
   "WEBP · <width> × <height>" and "From the OpenEmux mirror", and a "Label" card that shows the
@@ -11270,6 +11271,106 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Check:** `meta.json` has `"skinsMigrated": true` and the SNES entry's `custom` is
   `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Renaming a game
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) renames a game from its detail screen (issue 790): the pencil at the end of
+the game's name opens a sheet with the file name selected and its extension fixed after the field. The file
+moves on disk and everything the app keeps under the old name follows it: favorite, per-game core,
+shader and colour, last played, save states (the auto state included) with their thumbnails,
+battery saves, playtime, covers and labels. The runner has no Android device, so the in-app
+scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`;
+the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
+`states/<console>/`, `saves/<console>/`, `playtime/`).
+
+### RT-744 — Renaming a game keeps its states, saves, artwork and settings
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a Super Nintendo game in the
+  library named with tags (e.g. "Super Mario World (USA).sfc") that has a cover, is a favorite, has
+  its own shader picked on the detail screen, a manual save state, an auto state (played, then left
+  with Home) and some playtime; RetroAchievements hardcore off.
+- **Steps:**
+  1. Open the game's detail screen and tap the pencil at the end of the game's name.
+  2. Check the sheet: the name without ".sfc" is selected, ".sfc" is shown after the field.
+  3. Type "Mario World" and tap "Rename".
+  4. Go back to the library and find the game; open it again.
+  5. Tap "Continue".
+- **Expected:** Step 2 shows "Rename game", the "File name" field with the old name selected and
+  ".sfc" fixed. After step 3 the detail screen shows "Mario World" with the same cover, the star
+  filled, the same shader, the same playtime and the same save states. In step 4 the game sits in its
+  new alphabetical place in the library. Step 5 resumes the game where the auto state left it.
+- **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/" "/sdcard/Android/data/$PKG/files/states/SFC/" "/sdcard/Android/data/$PKG/files/playtime/"`
+  lists "Mario World.sfc", "Mario World.state*" and "SFC_Mario World.txt", and none of the old names.
+
+### RT-745 — A name that cannot be used is refused and nothing changes
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with two Super Nintendo games, "Alpha.sfc" and
+  "Beta.sfc".
+- **Steps:**
+  1. Open "Alpha", tap the pencil after its name, and type "beta".
+  2. Clear the field.
+  3. Type "Al:pha".
+  4. Type ".alpha".
+  5. Tap "Cancel".
+- **Expected:** Step 1 shows "Another Super Nintendo game already has this name." in red and
+  "Rename" is disabled; step 2 shows "Type a name."; step 3 the message about the characters a name
+  cannot use; step 4 "A name cannot start with a dot.". After step 5 the game is still "Alpha" and
+  its file is unchanged.
+- **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/"` still lists "Alpha.sfc" and
+  "Beta.sfc".
+
+### RT-746 — Renaming a game with the gamepad only
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a gamepad connected and one game in the library;
+  a phone (or emulator) with an on-screen keyboard that the D-pad can drive, or a hardware keyboard.
+- **Steps:**
+  1. With the gamepad, open the game's detail screen and press UP from "Play" until the pencil
+     after the game's name has the focus ring; press A.
+  2. Type a new name and move down to "Rename" with the D-pad; press A.
+  3. Focus the pencil again, press A, then press B.
+- **Expected:** In step 1 the pencil takes the focus right above "Play" and A opens the sheet; the
+  D-pad leaves the field for the buttons and A on "Rename" renames the game, the screen showing the
+  new title. In step 3 B closes the sheet and nothing changes.
+- **Check:** human only.
+
+### RT-747 — The rename moves every file and undoes a failure half-way
+- **Area:** Android — Renaming a game
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the rename suite.
+- **Expected:** A rename moves the ROM, every state and thumbnail (slots, auto, scratch), the battery
+  saves of that game only, playtime, covers and labels with their records, and moves the metadata and
+  the library index entry; a change of case goes through a temporary name; a mirror cover the new
+  name would lose is kept as a synced file; empty, forbidden-character, dot-leading, too long,
+  clashing names and leftovers under the new name are refused; a move that fails at any step, or
+  metadata that cannot be written, leaves every file, the list and the metadata as they were.
+- **Check:** suite file `src/test/java/com/openemux/mobile/data/RomRenameTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+### RT-748 — The detail screen shows its actions instead of a "⋯" menu
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a game you can remove (a copy); a gamepad for
+  step 5.
+- **Steps:**
+  1. Open the game's detail screen, in portrait, landscape and (on a tablet) the list + detail pane.
+  2. Tap the round share button at the top right.
+  3. Scroll to the end of the screen and tap "Remove from library", then "Cancel".
+  4. Tap "Remove from library" again, then "Remove".
+  5. With the gamepad, open another game, read the hint bar, press Y, then press DOWN from "Play"
+     until the focus stops.
+- **Expected:** 1: no "⋯" button anywhere; the top right holds the star and a round share icon, the
+  game's name ends with a pencil, and the last item, after "Cheats — Coming soon", is a card with a
+  bin icon and "Remove from library" in red. 2: "Share Nearby" opens with that game. 3: "Remove
+  <title>?" asks first; Cancel keeps the game. 4: the screen goes back to the library without the
+  game. 5: the bar says "Y: Share Nearby" and Y opens "Share Nearby"; DOWN ends on "Remove from
+  library" with a focus ring.
+- **Check:** human only.
 
 ## Retired
 

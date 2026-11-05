@@ -175,6 +175,13 @@ installer can bring everything along too: the portable copy offers to copy the p
 library and saves into its folder, without touching the original
 ([#768](https://github.com/guilhermefeitosa66/OpenEmux/issues/768)).
 
+### JuamPiX84 (Reddit)
+
+Asked on Reddit for a way to rename a game inside the Android app. That request became
+[#790](https://github.com/guilhermefeitosa66/OpenEmux/issues/790): "Rename…" on a game's detail
+screen renames its file and carries its save states, battery saves, playtime, artwork and per-game
+settings along, so the game resumes where it was under its new name.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
