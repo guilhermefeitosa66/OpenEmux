@@ -274,6 +274,14 @@ class RewriteTests(_ImportCase):
         pi.rewrite_paths(folder, [(self.profile, self.target)])
         self.assertEqual((folder / "play_history.json").read_text(), "[1]")
 
+    def test_a_portable_section_already_there_is_kept_and_dismissed(self):
+        folder = self.home / "had-one"
+        folder.mkdir()
+        (folder / "config.yaml").write_text(yaml.safe_dump({"portable": {"other": 1}}))
+        pi.rewrite_paths(folder, [(self.profile, self.target)])
+        portable = yaml.safe_load((folder / "config.yaml").read_text())["portable"]
+        self.assertEqual(portable, {"other": 1, "import_offer_dismissed": True})
+
     def test_a_config_missing_a_section_keeps_the_rest(self):
         folder = self.home / "partial"
         folder.mkdir()
@@ -405,6 +413,23 @@ class ApplyTests(_ImportCase):
             self.assertEqual(pi.apply_pending_import(), "failed")
         self.assertFalse(self.target.exists())
         self.assertTrue((pi.staging_dir() / "openemux" / "config.yaml").is_file())
+
+    def test_a_refused_rollback_keeps_the_manifest_for_the_next_start(self):
+        self.target.mkdir(parents=True)
+        self.stage(include_roms=True)
+        real_rename = Path.rename
+        staged_roms = pi.staging_dir() / "roms"
+
+        def rename(path, target):
+            back_to_staging = Path(path) == self.target and Path(target).parent == pi.staging_dir()
+            if Path(path) == staged_roms or back_to_staging:
+                raise PermissionError("in use")
+            return real_rename(path, target)
+
+        with patch.object(Path, "rename", rename), self.assertLogs(pi.logger, "WARNING") as logs:
+            self.assertEqual(pi.apply_pending_import(), "failed")
+        self.assertIn("rollback refused", "\n".join(logs.output))
+        self.assertTrue((pi.staging_dir() / pi.MANIFEST).is_file())
 
     def test_a_refused_first_rename_with_no_folder_yet_changes_nothing(self):
         self.stage()

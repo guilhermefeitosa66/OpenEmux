@@ -11030,7 +11030,8 @@ scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `co
   6. Move the portable folder to another drive letter and run `OpenEmux.exe` again.
 - **Expected:** Step 2 opens "Bring your existing data?" naming the profile folder, with "Start
   Fresh" and "Copy". Step 3 shows "Copying your data…" with a progress bar, then the library with
-  the profile's games, favorite, collection, setting and save state; there is no first-boot download.
+  the profile's games, favorite, collection, setting and save state, after a short first boot that
+  fetches the cores the portable RetroArch is missing.
   Step 4 lists nothing. Step 5: `roms_path: data/roms`, the favorite reads `data/roms/<console>/<game>`
   and no line names `.openemux` in the profile. Step 6: everything is still there, without a rescan.
 - **Check:** human only.

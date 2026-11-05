@@ -107,6 +107,18 @@ class RunningTheCopyTests(unittest.TestCase):
         self.assertEqual(seen["done"], 1)
         self.assertIsNone(seen["error"])
 
+    def test_a_second_copy_is_refused_while_one_runs(self):
+        dialogs._RUNNING.set()
+        self.addCleanup(dialogs._RUNNING.clear)
+        self.assertTrue(dialogs.import_running())
+        self.assertIsNone(dialogs.start_import(False, print, print, print))
+
+    def test_the_guard_is_released_after_a_copy_either_way(self):
+        self.run_import()
+        self.assertFalse(dialogs.import_running())
+        self.run_import(plan=None)
+        self.assertFalse(dialogs.import_running())
+
     def test_nothing_left_to_import_is_an_error(self):
         seen = self.run_import(plan=None)
         self.assertEqual(seen["done"], 0)
@@ -223,6 +235,21 @@ class ThePreferencesGroupTests(unittest.TestCase):
         with mock.patch.object(Adw.AlertDialog, "present"):
             self.group._on_clicked(self.group.button)
         return self.group._dialog
+
+    def test_a_copy_from_an_earlier_window_keeps_the_row_off(self):
+        dialogs._RUNNING.set()
+        self.addCleanup(dialogs._RUNNING.clear)
+        self.group.refresh()
+        self.assertFalse(self.group.row.get_sensitive())
+        self.group._on_clicked(self.group.button)
+        self.assertIsNone(self.group._dialog)
+
+    def test_a_copy_started_while_the_question_was_open_wins(self):
+        dialog = self.open_dialog()
+        dialogs._RUNNING.set()
+        self.addCleanup(dialogs._RUNNING.clear)
+        dialog.emit("response", "import")
+        self.start_import.assert_not_called()
 
     def test_cancel_changes_nothing(self):
         self.open_dialog().emit("response", "cancel")

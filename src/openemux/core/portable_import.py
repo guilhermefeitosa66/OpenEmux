@@ -405,8 +405,14 @@ def apply_pending_import():
             _swap_one(data, staging, name)
             done.append(name)
     except OSError as exc:
-        for name in reversed(done):
-            _unswap_one(data, staging, name)
+        try:
+            for name in reversed(done):
+                _unswap_one(data, staging, name)
+        except OSError as undo_exc:
+            # Half swapped, and the way back refused too. The manifest stays
+            # in staging, so the next start finishes the swap from here: the
+            # folders already moved are complete copies, never partial ones.
+            logger.warning("portable import rollback refused: %s", undo_exc)
         logger.warning("portable import not applied yet: %s", exc)
         return "failed"
     atomic_write_text(data / CONFIG_NAME / DONE_MARKER, "")

@@ -6,7 +6,7 @@ first start of an empty portable folder, over the first-boot window, and the
 "Portable" group of Preferences → System.
 """
 
-from threading import Thread
+from threading import Event, Thread
 
 import gi
 
@@ -70,12 +70,25 @@ def error_message(locale, exc):
     return tr(locale, "portable_import.error.generic", error=str(exc))
 
 
+#: Set while a copy runs. Both ways in write the same staging directory, and
+#: Preferences can be closed and opened again mid-copy.
+_RUNNING = Event()
+
+
+def import_running():
+    return _RUNNING.is_set()
+
+
 def start_import(include_roms, on_progress, on_done, on_error):
     """Plan and copy on a worker thread; the callbacks run on the main loop.
 
     ``on_progress(fraction)`` comes once per whole percent, not once per file:
-    a ROM folder holds thousands of them.
+    a ROM folder holds thousands of them. Returns ``None``, starting nothing,
+    while another copy is still running.
     """
+    if _RUNNING.is_set():
+        return None
+    _RUNNING.set()
     last = [-1]
 
     def progress(copied, total):
@@ -91,8 +104,10 @@ def start_import(include_roms, on_progress, on_done, on_error):
                 raise portable_import.PortableImportError("failed", "no data to import")
             portable_import.run_import(plan, progress)
         except Exception as exc:
+            _RUNNING.clear()
             GLib.idle_add(on_error, exc)
             return
+        _RUNNING.clear()
         GLib.idle_add(on_done)
 
     thread = Thread(target=worker, daemon=True)
@@ -174,7 +189,10 @@ class PortableImportGroup(Adw.PreferencesGroup):
     def refresh(self):
         source = portable_import.importable_profile()
         path = display_text(profile_config_dir())
-        if source is None:
+        if import_running():
+            # Started from an earlier Preferences window, still copying.
+            self.row.set_sensitive(False)
+        elif source is None:
             self.row.set_subtitle(tr(self.locale, "portable_import.row.missing", path=path))
             self.row.set_sensitive(False)
         else:
@@ -183,7 +201,7 @@ class PortableImportGroup(Adw.PreferencesGroup):
 
     def _on_clicked(self, _button):
         source = portable_import.importable_profile()
-        if source is None:
+        if source is None or import_running():
             self.refresh()
             return
         roms = portable_import.profile_roms_folder()
@@ -195,7 +213,7 @@ class PortableImportGroup(Adw.PreferencesGroup):
         self._dialog.present(self)
 
     def _on_response(self, _dialog, response):
-        if response != "import":
+        if response != "import" or import_running():
             return
         self._set_busy(True)
         self._on_progress(0.0)
