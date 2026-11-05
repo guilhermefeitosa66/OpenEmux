@@ -11271,6 +11271,110 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
+## Android — Skin template zip
+
+A skin of your own can be downloaded as a template zip and imported back (issue 787): "Download as
+template" in its "⋮" sheet, and "Import .zip" under the console's skin list. Same setup as "Android —
+Skin library per console": `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`, and `mine` is the SNES template unzipped into `$SKINS/SFC/mine`
+(RT-737). The runner has no Android device: every scenario is `MANUAL` on a phone with `adb`, and the
+zip edits happen on a computer.
+
+### RT-744 — "Download as template" saves every layout, one image per element at its size
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** `mine` in `$SKINS/SFC/`, on a phone.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → the `mine` card's "⋮" → "Download as template" (under
+     "Duplicate", with "A .zip with every layout: phone, tablet, fold").
+  2. Read the sheet; tap "Save .zip" and save it to Downloads.
+  3. `adb pull` the zip and unzip it on the computer.
+- **Expected:** The sheet reads "Download as template", the skin's name in its lead line, three numbered
+  steps (Save the .zip, Edit the images, Import it back) and the note about file names and folders.
+  Saving shows "Saving…" on the button, then the toast "Template saved" and the sheet closes. The zip
+  holds one folder named after the skin with `skin.json`, `README.txt` and the six layout folders
+  (also `tablet-*` and `fold-*`, which a phone cannot edit). Every PNG has the size `README.txt` lists
+  for it, and every element of every layout has its image(s).
+- **Check:** `MANUAL`:
+  ```bash
+  unzip -l <skin>.zip | grep -c '\.png'          # one per element, background and frame, six layouts
+  python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(24); print(struct.unpack(">II", d[16:24]))' <skin>/phone-portrait/a.png
+  # equals the "a.png" line of README.txt
+  ```
+
+### RT-745 — A repainted template imports as a new skin
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's zip, unzipped. On the computer: repaint `phone-portrait/a.png` (keep its
+  size), delete `phone-portrait/b.png`, zip the folder again, `adb push` it to `/sdcard/Download/`.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "Import .zip" (under the groups) → pick the zip.
+  2. Keep "A new skin", name it "Repainted" → "Import".
+  3. Tap the "Repainted" card; launch a SNES game upright and sideways.
+- **Expected:** Step 1 opens "Import skin" with the file name, "Super Nintendo", the Phone/Tablet/Fold
+  badges and a green "Ready to import"; "Save it as" offers "A new skin" (name field filled with the
+  skin's name) and "Replace one of your skins", and the lock note says bundled skins are not listed.
+  Step 2: toast "Skin imported", a "Repainted" card in "Your skins". Step 3: A shows the new art, B is
+  drawn in its colours (a plain circle with its letter), every control sits where it was.
+- **Check:** `adb shell run-as $PKG ls files/skins/SFC/repainted/phone-portrait` lists `a.png` and no
+  `b.png`; no `.tmp` folder in `files/skins/SFC/`.
+
+### RT-746 — Replacing one of your skins keeps its name, its place and its selection
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-745's zip; `mine` in use for the SNES.
+- **Steps:**
+  1. "Import .zip" → pick the zip → "Replace one of your skins" → tap the `mine` chip → "Import".
+  2. Launch a SNES game.
+  3. Unzip it again, delete both `fold-*` folders, zip, push, and import it once more over `mine`.
+- **Expected:** "Import" stays disabled until a chip is picked. Bundled skins are never among the chips.
+  After step 1 the `mine` card keeps its name and "In use"; the game shows the repainted A, and B keeps
+  the image `mine` had before. After step 3 its Fold badge is grey with a dashed border.
+- **Check:** `adb shell run-as $PKG cat files/meta.json` still has `"custom": "own:mine"` for SFC;
+  `skin.json` in `files/skins/SFC/mine` has no `fold-portrait`/`fold-landscape` after step 3.
+
+### RT-747 — A Delta or Manic EMU package imports under Imported
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** A third-party SNES `.deltaskin` in `/sdcard/Download/`.
+- **Steps:**
+  1. "Import .zip" → pick the package.
+  2. "Import".
+- **Expected:** The sheet shows the package's name, "Super Nintendo", its badges and "A Delta or Manic
+  EMU skin: it goes under Imported, as it is." with no new/replace choice. After step 2 it is listed
+  under "Imported" and can be used in game.
+- **Check:** `adb shell run-as $PKG ls files/skins/SFC` shows a new `*.deltaskin`.
+
+### RT-748 — A zip that is not a skin for this console is refused and leaves nothing
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** In `/sdcard/Download/`: the GBA template zip (`GBA-template.zip`), a `.txt` file, a
+  zip of a few photos, a copy of RT-744's zip with `skin.json` cut in half, and a zip made with
+  `zip evil.zip ../outside.png skin.json` (an entry that climbs out).
+- **Steps:**
+  1. In the SNES list, "Import .zip" each file in turn; read the sheet and tap "Close".
+- **Expected:** GBA template: "This skin is for Game Boy Advance. Open Game Boy Advance's skins to
+  import it." The `.txt` and the photos: "This file is not a skin." The cut `skin.json`: "This skin
+  can't be read (BAD_JSON)." The climbing zip: "This zip has files outside its folder, so it was not
+  imported." None offers "Import"; the list is unchanged after each.
+- **Check:** `adb shell run-as $PKG ls -a files/skins/SFC` is the same before and after (no new
+  folder, no `.tmp`/`.old`); `adb shell run-as $PKG ls cache/skin-import` is empty after closing.
+
+### RT-749 — Template and import work with a gamepad and in every language
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-745's zip; a gamepad connected.
+- **Steps:**
+  1. With the pad only: open `mine`'s "⋮" → "Download as template" → "Save .zip" (the system file
+     picker may need touch).
+  2. With the pad only: "Import .zip" → pick the zip → move between "A new skin", the name field,
+     "Replace one of your skins", the chips, "Cancel" and "Import"; import over `mine`.
+  3. Switch the app to Português (Brasil) and open both sheets again.
+- **Expected:** The focus ring reaches every control of both sheets, A activates it, B closes the sheet
+  with the focus back where it was. In Portuguese every text of both sheets and the "Importar .zip"
+  button is translated.
+- **Check:** `MANUAL`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
