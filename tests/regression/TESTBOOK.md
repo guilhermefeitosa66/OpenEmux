@@ -11175,7 +11175,9 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   `skin.json`) and the tablet-only one; "BUNDLED" with a lock and "Console colors", "Dark"; "IMPORTED"
   with the package. Badges: `mine` Phone/Tablet/Fold lit; `big` Tablet and Fold lit, Phone grey with a
   dashed border; the package Phone lit, Tablet and Fold grey; the bundled ones all lit. The `big`
-  card is faded and reads "Not made for phones".
+  card is faded and reads "Not made for phones". On every card the badges sit on their own line under
+  the name, each word whole and readable (also in Portuguese, where "Dobrável" is the longest); if
+  the three do not fit, the last one wraps to a second line instead of shrinking.
 - **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > list.png`).
 
 ### RT-738 — Tapping a skin uses it in game, and a bundled pick keeps it for later
@@ -11247,9 +11249,12 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Steps:**
   1. Settings (RB) → SNES (A) → D-pad down to "Controller skins", across the cards and their "⋮"
      buttons.
-  2. A on a card; A on a "⋮"; D-pad in the sheet; B.
-- **Expected:** The focus ring lands on each card and each "⋮" in turn; A on a card picks it, A on
-  "⋮" opens its sheet, whose rows take the focus; B closes it with the focus back on the "⋮".
+  2. On a card you can use: D-pad right, then left.
+  3. A on a card; A on a "⋮"; D-pad in the sheet; B.
+- **Expected:** The focus ring lands on each card and each "⋮" in turn. In step 2, right moves the
+  focus from the card to its own "⋮" (right again goes on to the next card) and left brings it back
+  to the card. A on a card picks it, A on "⋮" opens its sheet, whose rows take the focus; B closes it
+  with the focus back on the "⋮".
 - **Check:** `MANUAL`.
 
 ### RT-743 — An update keeps the skin an install was playing with
