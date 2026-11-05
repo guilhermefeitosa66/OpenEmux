@@ -702,7 +702,10 @@ class RetroArchLauncherTests(unittest.TestCase):
 
     def test_override_has_no_turbo_binding_when_none_is_bound(self):
         lines = self._override_lines(None)
-        self.assertFalse(any("input_player1_turbo" in line for line in lines))
+        # Only RetroArch's own unbound defaults from the baseline (issue #759).
+        turbo = [line for line in lines if "input_player1_turbo" in line]
+        self.assertTrue(turbo)
+        self.assertTrue(all(line.endswith('= "nul"') for line in turbo), turbo)
         # ...but the timing keys still restate the defaults.
         self.assertIn('input_turbo_period = "6"', lines)
 
@@ -886,10 +889,12 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn('input_player1_a_btn = "0"', lines)
         self.assertIn('input_player2_a_btn = "1"', lines)
         self.assertIn('input_player4_a_btn = "3"', lines)
-        # Port 3 stayed off.
-        self.assertFalse([line for line in lines if line.startswith("input_player3_")])
+        # Port 3 stayed off: RetroArch's defaults for it, none of its bindings.
+        self.assertIn('input_player3_a_btn = "nul"', lines)
+        self.assertIn('input_player3_joypad_index = "2"', lines)
+        self.assertNotIn('input_player3_a_btn = "2"', lines)
         # Hotkeys are global: exactly one set, written by port 1.
-        self.assertEqual(len([l for l in lines if l.startswith("input_enable_hotkey")]), 1)
+        self.assertEqual(len([l for l in lines if l.startswith("input_enable_hotkey_btn")]), 1)
         self.assertFalse([l for l in lines if "player2_enable_hotkey" in l])
 
 
@@ -1897,3 +1902,130 @@ class TheLastResortLookupsTests(_ResolutionCase):
                 proc, error = self.launcher._launch_process("/roms/SFC/a.sfc", "SFC")
         self.assertIsNone(proc)
         self.assertIn("ENOEXEC", error)
+
+
+class TheInputBaselineTests(unittest.TestCase):
+    """OpenEmux owns the whole input configuration in its launches (issue #759).
+
+    A user's retroarch.cfg with a remapped player-1 button, a rebound stock
+    hotkey, keyboard binds for port 2 and a gamepad menu combo: none of it may
+    reach the game, the file must come out byte-identical, and the launch log
+    has to name the keys that were overridden.
+    """
+
+    USER_CFG = (
+        'input_player1_a = "t"\n'
+        'input_exit_emulator = "q"\n'
+        'input_player2_a = "k"\n'
+        'input_menu_toggle_gamepad_combo = "2"\n'
+        'input_menu_toggle = "f1"\n'
+        'video_driver = "vulkan"\n'
+    )
+
+    def _launch(self, user_cfg=None):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mgba_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core)
+            # "A" remapped to g, "B" released.
+            cfg.input_profile = {
+                "active_device": "keyboard",
+                "devices": {
+                    "keyboard": {"type": "keyboard", "bindings": {"a": "g", "b": ""}},
+                },
+            }
+            user_path = base / "xdg" / "retroarch" / "retroarch.cfg"
+            if user_cfg is not None:
+                user_path.parent.mkdir(parents=True)
+                user_path.write_text(user_cfg, encoding="utf-8")
+            before = user_path.read_bytes() if user_cfg is not None else None
+            launcher = RetroArchLauncher(base, cfg)
+            with patch.dict(
+                "openemux.core.retroarch_launcher.os.environ",
+                {"XDG_CONFIG_HOME": str(base / "xdg")},
+            ), patch("openemux.core.retroarch_launcher.IS_WINDOWS", False), patch(
+                "openemux.core.retroarch_launcher.is_running_in_flatpak", return_value=False
+            ), patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                with self.assertLogs("openemux.core.retroarch_launcher", level="INFO") as logs:
+                    proc, error = launcher.launch_process("/tmp/game.gba", "GBA")
+                _close_log(proc)
+            self.assertIsNone(error)
+            cmd = popen_mock.call_args.args[0]
+            override = Path(cmd[cmd.index("--appendconfig") + 1])
+            lines = override.read_text(encoding="utf-8").splitlines()
+            log_text = Path(proc._openemux_log_path).read_text(encoding="utf-8")
+            after = user_path.read_bytes() if user_cfg is not None else None
+            return lines, log_text, logs.output, before, after
+
+    def test_openemux_bindings_win_and_the_rest_is_retroarch_stock(self):
+        lines, _log, _logs, _before, _after = self._launch(self.USER_CFG)
+        self.assertIn('input_player1_a = "g"', lines)
+        # Cleared stays cleared, though RetroArch's stock key for B is z.
+        self.assertIn('input_player1_b = "nul"', lines)
+        # A hotkey OpenEmux does not expose keeps RetroArch's stock key.
+        self.assertIn('input_exit_emulator = "escape"', lines)
+        self.assertIn('input_menu_toggle = "f1"', lines)
+        # A port OpenEmux does not enable gets RetroArch's defaults.
+        self.assertIn('input_player2_a = "nul"', lines)
+        self.assertIn('input_menu_toggle_gamepad_combo = "0"', lines)
+        self.assertIn('auto_remaps_enable = "false"', lines)
+        # Every key once: the baseline never duplicates a layer's key.
+        keys = [line.split(" = ", 1)[0] for line in lines]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_the_log_names_the_overridden_keys_and_the_file_is_untouched(self):
+        _lines, log_text, logs, before, after = self._launch(self.USER_CFG)
+        self.assertEqual(before, after)
+        note = [line for line in log_text.splitlines() if "input overrides from" in line]
+        self.assertEqual(len(note), 1)
+        self.assertTrue(note[0].endswith(
+            "retroarch.cfg: input_exit_emulator, input_menu_toggle_gamepad_combo, "
+            "input_player1_a, input_player2_a"
+        ), note[0])
+        self.assertTrue(any("4 input keys" in line for line in logs))
+
+    def test_without_a_users_file_the_log_says_none(self):
+        _lines, log_text, logs, _before, _after = self._launch(None)
+        self.assertIn("retroarch.cfg: none", log_text)
+        self.assertFalse(any("input baseline" in line for line in logs))
+
+
+class TheUsersRetroArchConfigTests(unittest.TestCase):
+    """Which retroarch.cfg the launched RetroArch reads (issue #759)."""
+
+    def test_the_retroarch_flatpak_keeps_its_own(self):
+        with patch("openemux.core.retroarch_launcher.Path.home", return_value=Path("/home/u")):
+            path = RetroArchLauncher._user_retroarch_cfg(
+                ["flatpak", "run", "--die-with-parent", "org.libretro.RetroArch"]
+            )
+        self.assertEqual(
+            path,
+            Path("/home/u/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg"),
+        )
+
+    def test_windows_reads_the_portable_one(self):
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", True):
+            path = RetroArchLauncher._user_retroarch_cfg(["/opt/ra/retroarch.exe"])
+        self.assertEqual(path, Path("/opt/ra/retroarch.cfg"))
+
+    def test_linux_reads_the_xdg_one(self):
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False), patch.dict(
+            "openemux.core.retroarch_launcher.os.environ", {"XDG_CONFIG_HOME": "/x"}
+        ):
+            self.assertEqual(
+                RetroArchLauncher._user_retroarch_cfg(["/usr/bin/retroarch"]),
+                Path("/x/retroarch/retroarch.cfg"),
+            )
+
+    def test_without_xdg_config_home_it_is_dot_config(self):
+        with patch("openemux.core.retroarch_launcher.IS_WINDOWS", False), patch.dict(
+            "openemux.core.retroarch_launcher.os.environ", {}, clear=True
+        ), patch("openemux.core.retroarch_launcher.Path.home", return_value=Path("/home/u")):
+            self.assertEqual(
+                RetroArchLauncher._user_retroarch_cfg(None),
+                Path("/home/u/.config/retroarch/retroarch.cfg"),
+            )
