@@ -10952,6 +10952,65 @@ on the device; a cover kept on the device is one received through "Share nearby"
   the files are byte for byte what they were.
 - **Check:** suite files `tests/test_portable_paths.py`, `tests/test_portable.py`.
 
+## Android — Skin templates for creators
+
+The templates skin creators start from
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux/tools/skins/templates/`): one zip per console with a bundled skin, in OpenEmux's
+own skin format (`docs/skin-format.md`), with placeholder art at the exact sizes, the guide
+(`README.md`) and the asset plan of every console (`ASSET-PLAN.md`). Playing a template needs the
+app to draw OpenEmux-format skins in game (issue 776). The runner has no Android device, so the in-game
+scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-725 — A template installed unchanged works in game
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a Game Boy Advance game; `GBA-template.zip`
+  from `tools/skins/templates/` in the openemux-android repository.
+- **Steps:**
+  1. Unzip `GBA-template.zip`: it gives one folder, `GBA-template/`.
+  2. Copy it to the device:
+     `adb push GBA-template /sdcard/Android/data/$PKG/files/skins/GBA/`.
+  3. Start the GBA game, upright, then turn the phone sideways.
+  4. Press every control: the D-pad's four directions, "A", "B", "L", "R", "START", "SELECT", the
+     menu key, and the quick actions "save", "load", "turbo", "fast-forward" on the frame.
+- **Expected:** The placeholder skin is drawn (light grey shapes, each with its name) in both
+  orientations, the game picture in its screen; every control does what its name says; the
+  D-pad's ball follows the thumb.
+- **Check:** `MANUAL`: screenshot each orientation with `adb exec-out screencap -p`; afterwards
+  `adb shell rm -r /sdcard/Android/data/$PKG/files/skins/GBA/GBA-template` brings back the bundled skin.
+
+### RT-726 — A template with one image replaced shows the new image
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** RT-725's template installed.
+- **Steps:**
+  1. Read the size of `phone-portrait/a.png` in the template's `README.txt`.
+  2. Make any PNG of that size (for instance a solid red circle) and save it over
+     `GBA-template/phone-portrait/a.png`.
+  3. Push the folder again and start the GBA game upright.
+  4. Delete `phone-portrait/b.png` from the folder, push again (remove the folder on the device
+     first) and start the game.
+- **Expected:** Step 3: the new image is drawn on A, the rest unchanged, and A still presses A.
+  Step 4: B is drawn from its colours, shape and label in `skin.json` (the bundled skin's colours),
+  and still presses B.
+- **Check:** `MANUAL`: screenshot after steps 3 and 4.
+
+### RT-727 — The templates are valid and generated deterministically
+- **Area:** Android — Skin templates
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout with Node and Pillow.
+- **Steps:**
+  1. Run the templates suite.
+  2. Rebuild one template: `python3 tools/skins/build.py --templates GBA` in `pkg/android/openemux`.
+- **Expected:** Every template is read by the app's skin reader, has the six layouts, every image
+  at the size `skin.json` gives, every control bound to an input the app presses, and phone and
+  tablet layouts equal to the bundled skin's; `ASSET-PLAN.md` is up to date and has a section for
+  each of the 31 consoles; the rebuild leaves `git status` clean.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinAssetPlanTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
