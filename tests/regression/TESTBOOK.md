@@ -6640,8 +6640,8 @@ files are in `files/launch/current/`.
   a skin to use it in game. Each one says which screens it was made for. Bundled skins never change."
   and shows, under "BUNDLED" (with a lock), two cards right there, without opening anything:
   "Console colors" (ringed, "In use") and "Dark", each with lit "Phone", "Tablet" and "Fold" badges
-  (issue 782). A console the app has no Dark skin for (Atari 2600, for
-  example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
+  (issue 782). A console the app has no Dark skin for (Atari 5200, for
+  example) shows no section, only a "Default skin" row reading "OpenEmux 5200" that opens nothing.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -6875,11 +6875,11 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 ### RT-376 — Turbo on the strip shows whether it is on
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
+- **Preconditions:** The Android app installed with an Atari 5200 game in the library (a console that keeps
   the drawn skin; the package skins are RT-462); no gamepad connected (with one, the gamepad layout
   shows: RT-564 to RT-571).
 - **Steps:**
-  1. Launch the Atari 2600 game, phone in portrait.
+  1. Launch the Atari 5200 game, phone in portrait.
   2. Tap the bolt (turbo) on the strip under the picture.
   3. Tap it again.
   4. Repeat steps 2-3 on a console with a light-bodied skin, on the red skin, and
@@ -6943,7 +6943,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 ### RT-572 — Slow motion on the strip shows its pill and slows the game
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** RT-376's game running (Atari 2600 or SNES, drawn skin), every toggle off.
+- **Preconditions:** RT-376's game running (Atari 5200, drawn skin, or SNES), every toggle off.
 - **Steps:**
   1. Phone in portrait: tap slow motion, the fourth button on the strip (a play triangle in a dashed
      ring, between turbo's bolt and fast forward's double arrow).
@@ -6997,7 +6997,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with a GBA game and a game of a console that keeps the
-  drawn skin (e.g. Atari 2600) in the library; no skin in `files/skins/`; no gamepad connected.
+  drawn skin (e.g. Atari 5200) in the library; no skin in `files/skins/`; no gamepad connected.
 - **Steps:**
   1. Launch the GBA game, phone in portrait. Its skin is the bundled package: the quick actions sit
      in the bezel's chin, right under the picture.
@@ -7191,7 +7191,7 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   drawn skin alike) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
   D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
   `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
-  one side than the other. On a console with a drawn skin (e.g. the Virtual Boy) `_reach_x` and
+  one side than the other. On a console with a drawn skin (e.g. the ColecoVision) `_reach_x` and
   `_reach_y` are both `1.4182`.
 
 ### RT-409 — Sliding off the D-pad keeps steering
@@ -7255,8 +7255,8 @@ game's movement. `$PKG` is `com.openemux.mobile`.
 - **Mode:** MANUAL
 - **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
   Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
-  The first six of those and the NDS use the shipped skin packages; the Virtual Boy, the PC Engine
-  and the keypad console use the drawn skins.
+  The first six of those and the NDS use the shipped Delta and Manic packages, the Virtual Boy and the
+  PC Engine their OpenEmux-format packages (issues 770 and 771), and the keypad console the drawn skin.
 - **Steps:**
   1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
   2. On the Virtual Boy, repeat them on the right-hand pad.
@@ -7429,8 +7429,10 @@ a smallest width of 600dp; anything narrower keeps the phone skins.
 
 Two kinds of skin meet a tablet. The twelve consoles that ship a skin package (FC, SFC, N64, GC,
 GB, GBC, GBA, NDS, MD, SMS, PS, PSP) keep the package and use its tablet (`ipad`) art. Every other
-console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a
-Virtual Boy game (a drawn skin with L and R), a Game Boy Advance game and a Nintendo DS game.
+console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The consoles bundled in
+OpenEmux's own format (issues 770 and 771, the Virtual Boy among them) use that package's tablet
+layouts instead (RT-732, RT-744). The library needs a ColecoVision game (a console that keeps the
+drawn skin), a Game Boy Advance game and a Nintendo DS game.
 Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
 `user_rotation 0`.
 
@@ -7440,18 +7442,17 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
   (1280×800dp), which is landscape at `user_rotation 0`.
 - **Steps:**
-  1. Start the Virtual Boy game.
+  1. Start the ColecoVision game.
   2. Tap the strip's turbo and fast-forward keys, then each of them again.
 - **Expected:** The picture is large and centred, keeping its aspect, between two columns of
   controls of equal width. Right under the picture, at its width, the strip shows save, load,
-  turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
-  console name at the top of the right column, the D-pad in the middle of the left column, A and B
-  in the right column, Select and Start lower down in each column, under the lowest button of their
-  column. The Virtual Boy's second D-pad sits in the right column above A and B. No control covers
-  the picture or another control: B stays clear of Start.
+  turbo and fast forward, in that order. The menu key is at the top of the left column, the
+  console name at the top of the right column, the D-pad in the middle of the left column, the two
+  fire buttons in the right column, the keypad key lower down, under the lowest button of its
+  column. No control covers the picture or another control.
   Turbo and fast forward light up while on and go dark on the second tap.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
-  board of the plan on #559: the same placement, in the Virtual Boy's colours).
+  board of the plan on #559: the same placement, in the ColecoVision's colours).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-429 — Tablet portrait puts the picture on top and the controls in the lower half
@@ -7460,12 +7461,11 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
   (800×1280dp), portrait.
 - **Steps:**
-  1. Start the Virtual Boy game.
+  1. Start the ColecoVision game.
   2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
 - **Expected:** In portrait the picture spans the full width at the top with the strip under it,
-  then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
-  left, the second D-pad and then A and B lower right, Select and Start between them and the
-  console name at the bottom.
+  then the menu key, the D-pad lower left, the two fire buttons lower right, the keypad key
+  between them and the console name at the bottom.
   Turning switches to the RT-428 layout and back, without restarting the game.
 - **Check:** human only (a screenshot of each orientation, compared with TabJogoRetrato).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
@@ -7645,10 +7645,10 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
 ### RT-490 — A console with the drawn skin is redrawn with the drawn skin
 - **Area:** Android — Window size changes in game
 - **Mode:** MANUAL
-- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+- **Preconditions:** As RT-450, with a ColecoVision game in the library (a console with no bundled
   skin package).
 - **Steps:**
-  1. Start the PC Engine game, folded.
+  1. Start the ColecoVision game, folded.
   2. Run `adb emu unfold`, then `adb emu fold`.
 - **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
   skin package: on the inner screen, in landscape, its tablet shape (the picture between two side
@@ -11269,6 +11269,121 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   Consoles with nothing in `skins/` keep their bundled skin.
 - **Check:** `meta.json` has `"skinsMigrated": true` and the SNES entry's `custom` is
   `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Bundled skins for the Atari, Lynx, Neo Geo Pocket, WonderSwan, Vectrex and Virtual Boy
+
+Seven more consoles that used the drawn skin ship a bundled skin (issue 771), in OpenEmux's own
+skin format like the eight of issue 770: Atari 2600 (`A2600`), Atari 7800 (`A7800`), Lynx (`LYNX`),
+Neo Geo Pocket (`NGP`), WonderSwan (`WS`), Vectrex (`VECTREX`) and Virtual Boy (`VB`), in
+`assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), with phone, tablet and
+fold layouts. The Virtual Boy's right pad is the format's second D-pad (`dpad2`). The runner has no
+Android device, so the in-game scenarios are `MANUAL`: a phone or a headless emulator with `adb`.
+`$PKG` is `com.openemux.mobile`.
+
+### RT-744 — Each of the seven consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with one game of each of A2600, A7800, LYNX, NGP,
+  WS, VECTREX and VB (with its BIOS where the core needs one); nothing in `files/skins/<console>/`;
+  each console's "Controller skins" left on "Console colors".
+- **Steps:**
+  1. Start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
+  3. On a foldable unfolded flat, start one of them again.
+- **Expected:** Each game shows a skin with drawn art in the console's colours, not the app's plain
+  drawn skin: the 2600 brown with one red "FIRE" button and "SELECT", "RESET"; the 7800 black with
+  red "1" and "2" and "SELECT", "PAUSE", "RESET"; the Lynx with "B", "A" and "OPTION 1",
+  "OPTION 2", "PAUSE"; the Neo Geo Pocket with "A" on the left, "B" on the right and "OPTION"; the
+  WonderSwan light grey with "B", "A" and "START"; the Vectrex with "1" to "4" in a row and no keys
+  below, its picture upright; the Virtual Boy black and red with two D-pads side by side, "B" and
+  "A" under the right one, "L", "R", "SELECT" and "START". The landscape layout puts the controls on
+  both sides of the picture; the tablet and the unfolded foldable get their own layouts, the picture
+  never covered.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
+  shows `drawing OpenEmux <console name>` and no fallback line.
+
+### RT-745 — Console colours and Dark for each of the seven
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's games.
+- **Steps:**
+  1. Open Settings → each of the seven consoles → scroll to "Controller skins".
+  2. In Settings → Virtual Boy, tap the "Dark" card and start the Virtual Boy game.
+  3. Tap "Console colors" again.
+- **Expected:** Each console's "BUNDLED" group lists exactly "Console colors" (with "In use") and
+  "Dark"; after step 2 "Dark" has the ring and "In use", and the Virtual Boy game opens with the
+  black and dark grey skin, every control in the same place as the console colors one. After step 3
+  "Console colors" is in use again.
+- **Check:** `MANUAL`: screenshot the list and the game, plus
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["VB"]; print(c["skin"])'
+  # step 2: dark · step 3: console
+  ```
+
+### RT-746 — Every control presses what the drawn skin pressed, the Virtual Boy's right pad included
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's games; RetroArch's input test, or games where each button does
+  something visible.
+- **Steps:**
+  1. On each console press the D-pad's four directions and every button and key on the skin.
+  2. On the Virtual Boy slide on the right D-pad in each direction.
+  3. On the Atari 7800, read the two face buttons upright and sideways (RT-458).
+- **Expected:** Each control reaches the core as the drawn skin's did: the 2600's "FIRE" on B and
+  "RESET" on Start; the 7800's "1" (lower left) on B, "2" (upper right) on A, "PAUSE" on Start and
+  "RESET" on X; the Lynx's "OPTION 1" on R and "OPTION 2" on L; the Neo Geo Pocket's "A" on B and
+  "B" on A; the Vectrex's "1" to "4" on A, B, X and Y; the Virtual Boy's right pad up on L2, down on
+  L3, left on R2 and right on R3, steering like the left one (one circle following the thumb).
+- **Check:** `MANUAL`, plus for the Virtual Boy:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E '_(up|down|left|right) = '
+  ```
+  The right pad's `dpad_area` desc carries `_up = "l2"`, `_down = "l3"`, `_left = "r2"`,
+  `_right = "r3"`; the left pad's carries none. The binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-747 — Quick actions and an imported skin on the new consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's Lynx game; any `.deltaskin` package.
+- **Steps:**
+  1. On the Lynx skin use "save", "load", "turbo" and "fast-forward" on the frame, and the menu key.
+  2. Push the package: `adb push <file>.deltaskin /sdcard/Android/data/$PKG/files/skins/LYNX/` and
+     start the game again.
+  3. Settings → Lynx → "Controller skins": tap the package's card in the "IMPORTED" group, then
+     start the game again.
+  4. Tap "Console colors" in the "BUNDLED" group and start the game again.
+- **Expected:** Step 1: each quick action works and lights while on (turbo, fast forward); the
+  menu opens. Step 2: the bundled Lynx skin is still drawn (a package does not win by being in the
+  folder, RT-738). Step 3: the package has "In use" and is drawn instead of the bundled skin.
+  Step 4: the bundled skin is back.
+- **Check:** `MANUAL`: screenshot after steps 2, 3 and 4; logcat tag `OpenEmuxSkin` reads
+  `drawing OpenEmux Lynx` after steps 2 and 4, and
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["LYNX"]; print(c["skin"], c.get("custom"))'
+  # step 3: console pkg:<file> · step 4: console None
+  ```
+
+### RT-748 — The seven packages are valid, match the drawn skins and read a second D-pad
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the bundled skins and skin format suites.
+- **Expected:** The seven consoles ship a `.zip` in console colours and Dark; each is read by the
+  app's skin reader with the six layouts, every image at its element's size, the Dark one with the
+  same layout, every control pressing the bind the drawn skin uses for that console (the Virtual
+  Boy's right pad as a `dpad2` element on L2, L3, R2, R3; the 7800's "1" lower left on B), and the
+  quick actions and the menu present; the templates for the seven match the packages' layouts. A
+  `dpad2` element reads and writes back with its bind, and on a console with one D-pad it is drawn
+  and presses nothing.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinBindsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/OpenEmuxSkinLayoutsTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
 ## Retired
