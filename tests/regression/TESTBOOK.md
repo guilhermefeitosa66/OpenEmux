@@ -11320,7 +11320,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Preconditions:** `mine` in `$SKINS/SFC/`.
 - **Steps:**
   1. On the `mine` card, tap its "⋮" button: a sheet opens with "Use it" (or nothing, if it is in use),
-     "Rename", "Duplicate", "Delete".
+     "Edit" (issue 784: RT-781), "Rename", "Duplicate", "Download as template", "Delete".
   2. "Rename" → type "Mine" → "Save".
   3. Open the sheet again → "Duplicate".
   4. Leave Settings and open SNES again.
@@ -11736,7 +11736,8 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   filled in, with "Cancel" and "Create copy". After it, "YOUR SKINS" (count 1) shows "Console colors
   copy" ringed with "In use", its Phone, Tablet and Fold badges lit like the bundled card's, and the
   "Console colors" card is no longer in use. Step 3 adds a second "Console colors copy" (count 2), the
-  new one in use.
+  new one in use. Since issue 784 each copy then opens in the skin editor (RT-781): close it to see
+  the list.
 - **Check:**
   ```bash
   adb shell ls $SKINS/GG                      # console-colors-copy  console-colors-copy-2
@@ -11885,6 +11886,154 @@ as the copy of a bundled skin above.
 - **Expected:** On both cores "L" and "R" fire the left and right buttons and keypad "1" picks the
   first level: the copy follows the core, as the drawn skin does.
 - **Check:** `MANUAL`; JVM suite `OpenEmuxSkinLayoutsTest.buttonsAndKeysPressWhatTheCoreReadsThemAs`.
+
+## Android — Skin editor
+
+"Edit" opens a skin of your own in a full-screen editor on the layout for this device and rotation
+(issue 784, part 3 of issue 666). Same setup as the copy section: a phone (or a phone-sized headless
+emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`. "Mine" below is a copy of the Game Gear's "Console colors"
+made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
+
+### RT-781 — Edit, and Create copy and edit, open the editor
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** "Mine" under "Your skins" for Game Gear.
+- **Steps:**
+  1. Settings → Game Gear → "Controller skins" → "⋮" on "Mine".
+  2. Tap "Edit".
+  3. Close the editor; on the bundled "Dark" card tap "⋮" → "Create copy and edit" → "Create copy".
+- **Expected:** Step 1's sheet lists "Edit" (pencil) first. Step 2 opens the editor full screen: the
+  skin drawn as in game, a dotted grid over all of it, a toolbar over the game screen with "Close
+  editor", "Mine" over "Phone · Upright", Undo and Redo (greyed), "Save" (greyed), and a bar with
+  "Snap" (on) and "⋯"; the screen area reads "Tap a control to change it." / "Drag to move · pinch to
+  resize.". Step 3 opens the editor on "Dark copy", already in use.
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > editor.png`).
+
+### RT-782 — First tap selects the group, the second one control
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, editor open on "Mine".
+- **Steps:**
+  1. Tap the "1" button once; tap it again; tap the D-pad; tap an empty spot.
+- **Expected:** The first tap frames both face buttons with the label "Face buttons · tap again for
+  one" and a round handle at the corner; the second frames only "1". The bottom bar becomes "Size"
+  (100%), "Nudge", "Reset". The D-pad is framed alone ("D-pad"). The empty tap clears the selection
+  and brings back "Snap" and "⋯".
+- **Check:** JVM suite `SkinEditTest.theFirstTapTakesTheGroupTheSecondOneControl` in openemux-android.
+
+### RT-783 — Dragging snaps to the grid, other controls and the mirror, with a guide
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Drag the face buttons slowly up and down past the D-pad's height.
+  2. Drag them sideways towards where the D-pad would be mirrored on the right.
+  3. Drag "Start" across the middle of the screen.
+- **Expected:** The controls move in grid steps; at the D-pad's centre line a line crosses the screen
+  with "Lined up with D-pad", at the mirror spot "Mirrors D-pad", at the middle "Centre of the
+  screen", each with a light buzz. "Save" and Undo light up after the first drag.
+- **Check:** JVM suite `SkinEditTest` (`snapsTo*`, `theNearestTargetWins`).
+
+### RT-784 — Snap off, or a second finger, moves freely
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "Snap" (it turns grey), drag a control across the D-pad's height.
+  2. Turn "Snap" back on; drag a control while a second finger rests on the screen.
+- **Expected:** In both cases the control follows the finger exactly, with no guide line and no buzz.
+- **Check:** `MANUAL`; JVM suite `SkinEditTest.aFreeDragDoesNotSnap`.
+
+### RT-785 — Resizing by pinch, handle and the Size tool
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-782 (one control selected).
+- **Steps:**
+  1. Pinch outwards on the selection; pinch inwards.
+  2. Drag the corner handle away from the control.
+  3. "Size" → "Larger" until it stops; "Smaller" until it stops; "Done".
+  4. Select the face buttons group and pinch.
+- **Expected:** While resizing a white pill shows the size in 5 % steps; it never goes past 200 % or
+  below 50 %, where the matching button greys out. The group grows about its centre, both buttons
+  together. A control at the screen's edge is pushed back inside.
+- **Check:** JVM suite `SkinEditTest` (`resize*`, `theSizeToolStepsAndStopsAtTheLimits`).
+
+### RT-786 — Nudge, Reset, Reset layout, Undo and Redo
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-782.
+- **Steps:**
+  1. "Nudge" → tap each arrow once → "Done".
+  2. "Reset".
+  3. Move two controls; "⋯" → "Reset layout".
+  4. Tap Undo until it greys out; then Redo until it greys out.
+- **Expected:** Each arrow moves the selection one grid step. "Reset" puts it back where the skin has
+  it, at 100 %. "Reset layout" puts every control back. Undo walks back through every change, Redo
+  forward again.
+- **Check:** JVM suite `SkinEditTest.nudgeResetAndResetLayout`, `aDragIsOneUndoStepWithItsGuides`.
+
+### RT-787 — Save updates the skin and the game shows it
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
+- **Steps:**
+  1. Move the face buttons and make the D-pad 120 %; tap "Save".
+  2. Launch the game; press every control.
+- **Expected:** "Skin saved"; the editor stays open with Undo and "Save" greyed. In game the controls
+  are where they were put, at their new size, and each one presses its button.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json   # the moved elements' x, y, width, height changed; binds as before
+  ```
+
+### RT-788 — Leaving with changes: Save, Save as a new skin, Discard
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control; tap "Close editor" (or Back).
+  2. Tap "Save as a new skin…"; keep the name "Mine copy"; "Save".
+  3. Edit "Mine" again, move a control, "Close editor" → "Discard changes".
+- **Expected:** Step 1 shows "Save changes to Mine?", "Your changes to this skin are not saved yet.",
+  "Save", "Save as a new skin…", "Discard changes" and the draft note. Step 2 adds "Mine copy"
+  with the change, in use, and "Mine" stays as it was. Step 3 leaves "Mine" as it was. Closing with no
+  changes closes at once.
+- **Check:** `adb shell ls -a $SKINS/GG` lists `mine-copy` and no `.*.draft.json`.
+
+### RT-789 — A draft survives the app being closed
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control; without saving, `adb shell am force-stop com.openemux.mobile`.
+  2. Open the app, the same skin's "⋮" → "Edit".
+- **Expected:** "Your unsaved changes are back." The control is where it was left and "Save" is lit.
+- **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json`.
+
+### RT-790 — The other rotation, and a layout the skin does not have
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control upright; turn the phone sideways; move a control; turn back.
+  2. Open a skin of your own made only for tablets (or delete its `phone-landscape` layout) and turn sideways.
+- **Expected:** Sideways the editor shows "Phone · Sideways" and its own layout; back upright the
+  first change is still there. A skin without the layout shows "This skin has no Phone · Sideways
+  layout yet. Turn the device to edit another one." with "Close editor".
+- **Check:** `MANUAL`.
+
+### RT-791 — The editor with a gamepad, and in every language
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a gamepad connected.
+- **Steps:**
+  1. L1/R1 to pick controls, X to switch group ↔ one, D-pad to nudge, Y to toggle Snap, Select to
+     undo, Start to save, B to clear the selection and then to leave.
+  2. Switch the app to Português (Brasil) and open the editor again.
+- **Expected:** Each button does what it says, the hint bar shows them, and B with changes opens the
+  leave dialog. In Portuguese every text of the editor is translated ("Ímã", "Salvar", "Desfazer").
+- **Check:** JVM suite `SkinEditorTextTest.everyLocaleHasEveryStringWithItsArguments`.
 
 ## Retired
 
