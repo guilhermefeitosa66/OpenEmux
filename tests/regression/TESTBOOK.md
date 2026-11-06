@@ -13745,7 +13745,7 @@ Screenshots of a running game can come out black on an emulator; then check the 
 launch wrote (`adb exec-out run-as com.openemux.mobile tar cf - files/launch/current/skin`) and
 logcat's `OpenEmuxSkin` lines.
 
-### RT-707 — An OpenEmux-format skin is drawn from its images, upright and sideways
+### RT-871 — An OpenEmux-format skin is drawn from its images, upright and sideways
 - **Area:** Android — OpenEmux-format skins
 - **Mode:** MANUAL
 - **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
@@ -13765,7 +13765,7 @@ logcat's `OpenEmuxSkin` lines.
 - **Check:** `adb logcat -d | grep 'OpenEmuxSkin: drawing'`; human (screenshots or the page images).
 - **Restore:** `user_rotation 0`; delete the skin folder.
 
-### RT-708 — An element with no image is drawn in its colours
+### RT-872 — An element with no image is drawn in its colours
 - **Area:** Android — OpenEmux-format skins
 - **Mode:** MANUAL
 - **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
@@ -13784,7 +13784,7 @@ logcat's `OpenEmuxSkin` lines.
 - **Check:** `adb logcat -d | grep 'OpenEmuxSkin.*drawn in its colours'`; human (screenshot).
 - **Restore:** delete the skin folder.
 
-### RT-709 — Every control of an OpenEmux-format skin responds, ball and knob follow the thumb
+### RT-873 — Every control of an OpenEmux-format skin responds, ball and knob follow the thumb
 - **Area:** Android — OpenEmux-format skins
 - **Mode:** MANUAL
 - **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
