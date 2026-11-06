@@ -6465,7 +6465,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   2. Start a game and open the pause sheet.
 - **Expected:** The tabs move to a rail on the left side. In the cartridge and cover views the
   library has a single top row (back, the filter pager, search, sort, view toggle; no console chips
-  row, RT-599) and one row of games that scrolls sideways. On "All" the games of every console
+  row, RT-857) and one row of games that scrolls sideways. On "All" the games of every console
   follow one another in that row, with no header slot between consoles, and a small console label
   sits above the row (RT-590). The pause sheet shows its main page in two columns.
 - **Check:** human only (a screenshot of each).
@@ -6563,7 +6563,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-599 — Phone landscape has a single top row with a filter pager
+### RT-857 — Phone landscape has a single top row with a filter pager
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
 - **Preconditions:** As RT-381 (phone, landscape), touch only (no pad), a library with games in at
@@ -6584,10 +6584,10 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of each; `adb shell uiautomator dump`).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-600 — Previous/next and the filter menu cycle the same filters in the same order
+### RT-858 — Previous/next and the filter menu cycle the same filters in the same order
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
-- **Preconditions:** As RT-599, at 800×360dp, on "All games".
+- **Preconditions:** As RT-857, at 800×360dp, on "All games".
 - **Steps:**
   1. Tap "next" until it dims, then "previous" until it dims; tap each dimmed one once more.
   2. Tap the filter name.
@@ -6600,10 +6600,10 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Check:** human only (a screenshot of the menu and of the two ends).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-601 — With a gamepad the pager shows the shoulder labels and the shoulders switch the filter
+### RT-859 — With a gamepad the pager shows the shoulder labels and the shoulders switch the filter
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
-- **Preconditions:** As RT-599, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
+- **Preconditions:** As RT-857, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
 - **Steps:**
   1. Set Settings → "Button labels" to "Xbox", open "All games" and press
      `KEYCODE_BUTTON_R1` twice, then `KEYCODE_BUTTON_L1` once.
@@ -6619,10 +6619,10 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Restore:** "Button labels" back to "Automatic"; `adb shell wm size reset`,
   `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-602 — Search opens in the same row and closing it brings the pager back
+### RT-860 — Search opens in the same row and closing it brings the pager back
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
-- **Preconditions:** As RT-599, at 800×360dp.
+- **Preconditions:** As RT-857, at 800×360dp.
 - **Steps:**
   1. On "All games" tap search, then type part of a title that exists.
   2. Tap × (close search).
@@ -6637,7 +6637,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 ### RT-603 — Landscape tiles are taller than before, with and without the hint bar
 - **Area:** Android — Responsive layout
 - **Mode:** MANUAL
-- **Preconditions:** As RT-599, at 800×360dp; an APK from before issue 669 to compare with.
+- **Preconditions:** As RT-857, at 800×360dp; an APK from before issue 669 to compare with.
 - **Steps:**
   1. On a console's page in the "Cartridges" view, take a screenshot with each APK.
   2. Repeat with a pad in use, so the hint bar shows.
@@ -10917,7 +10917,7 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
 - **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
   of the console chips read LB and RB (portrait; in landscape the chips row is gone and the filter
-  pager's previous/next show the same faces, RT-601). Step 2, with no restart, shows B (purple), X, − and L R, and the
+  pager's previous/next show the same faces, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the
   pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
   SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
