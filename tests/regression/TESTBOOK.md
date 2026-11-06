@@ -11068,6 +11068,118 @@ scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `co
 - **Check:** suite files `tests/test_portable_import.py`, `tests/test_portable_import_dialog.py`,
   `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
 
+## Android — Import from "Open with" and "Share"
+
+ROM files open or shared from a file manager are imported into the library
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `ImportActivity`,
+`data/RomIntake.kt`, `ui/ImportFlow.kt`): the same import as Settings › Import, never a game launch.
+A file whose name is already in that console's folder is skipped and reported as "already in your
+library", on every import path. The runner has no Android device, so these are `MANUAL` (a phone
+with Files by Google, or a headless emulator with `adb`). `$PKG` is `com.openemux.mobile`; the ROM
+folders are under `/sdcard/Android/data/$PKG/files/`. The extension and duplicate rules are
+unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersTest`.
+
+### RT-754 — "Open with" imports a ROM into its console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** The app installed; a Game Boy Advance ROM `game.gba` not yet in the library,
+  in `Download`.
+- **Steps:**
+  1. In Files by Google, open `Download`, long-press `game.gba`, open the "⋮" menu, "Open with".
+  2. Choose "Import to OpenEmux".
+- **Expected:** OpenEmux is in the list; the library comes up on the Game Boy Advance shelf with
+  the game in it, and a toast reads "1 game imported." No game starts.
+- **Check:** `MANUAL`: `adb shell ls /sdcard/Android/data/$PKG/files/` and find `game.gba` in the
+  GBA ROM folder.
+
+### RT-755 — Sharing several ROMs imports each into its console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `a.nes` and `b.sfc`, neither in the library, in `Download`.
+- **Steps:**
+  1. In Files by Google select both, tap "Share", choose "Import to OpenEmux".
+- **Expected:** A toast reads "2 games imported."; the NES and the Super Nintendo shelves each
+  show their game.
+- **Check:** `MANUAL`: both files are in their consoles' ROM folders.
+
+### RT-756 — A zip and a cue sheet with its track import as in Settings
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `game.zip` holding one `.gb` ROM; a PlayStation `disc.cue` with the
+  `disc.bin` it names. None of them in the library.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.zip`.
+  2. Select `disc.cue` and `disc.bin` together, "Share" › "Import to OpenEmux".
+- **Expected:** Step 1: the `.gb` is extracted into the Game Boy folder, toast "1 game imported.".
+  Step 2: both files land in the PlayStation folder and the toast counts one game, not two.
+- **Check:** `MANUAL`: the folders hold `*.gb`, `disc.cue` and `disc.bin`; the library lists one
+  PlayStation game.
+
+### RT-757 — An extension several consoles take asks for the console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A `game.iso` not in the library.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.iso`.
+  2. In the ".iso files" sheet, choose a console.
+  3. Repeat with another `.iso`, and close the sheet without choosing.
+- **Expected:** Step 2: the game goes to the chosen console. Step 3: nothing is copied and no
+  toast reports an import.
+- **Check:** `MANUAL`: only the first `.iso` is in a ROM folder.
+
+### RT-758 — A game already in the library is not copied twice, and the batch goes on
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** RT-754 done (`game.gba` is in the library); a second ROM `new.gba` not in it.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.gba` again.
+  2. Select `game.gba` and `new.gba`, "Share" › "Import to OpenEmux".
+- **Expected:** Step 1: toast "1 game is already in your library."; the shelf still shows a single
+  entry. Step 2: toast "1 game imported. 1 game is already in your library."; `new.gba` is added.
+- **Check:** `MANUAL`: the GBA folder holds one `game.gba` (same size as before) and `new.gba`.
+
+### RT-759 — Settings › Import reports a game already in the library
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `game.gba` in the library.
+- **Steps:**
+  1. Settings › Import › "Choose files", pick `game.gba`.
+- **Expected:** The result line reads "1 game is already in your library."; the file is not
+  overwritten (it was before this change).
+- **Check:** `MANUAL`: the file's modification time in the GBA folder is unchanged.
+
+### RT-760 — A file no console plays is refused and nothing is copied
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A file `notes.xyz` (any content) in `Download`.
+- **Steps:**
+  1. Select it, "Share" › "Import to OpenEmux" (if the file manager offers it).
+- **Expected:** A toast reads "OpenEmux can't import notes.xyz: no console plays .xyz files.";
+  nothing is added to any ROM folder.
+- **Check:** `MANUAL`: `adb shell find /sdcard/Android/data/$PKG/files -name 'notes*'` finds nothing.
+
+### RT-761 — Works from a cold start and over a running game
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** Two ROMs not in the library, `c.nes` and `d.nes`.
+- **Steps:**
+  1. `adb shell am force-stop $PKG`, then "Open with" › "Import to OpenEmux" on `c.nes`.
+  2. Start any game, switch to Files by Google and "Open with" › "Import to OpenEmux" on `d.nes`.
+  3. Go back to the game from Recents.
+- **Expected:** Step 1: the app starts and imports `c.nes`. Step 2: the library comes up with
+  "1 game imported."; the game was paused, not closed. Step 3: the game is where it was left.
+- **Check:** `MANUAL`: both files are in the NES folder; the game's progress is intact.
+
+### RT-762 — OpenEmux is not offered for images, documents or APKs
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A photo, a PDF, a `README.md` and an APK on the device.
+- **Steps:**
+  1. "Open with" on each of them.
+- **Expected:** "Import to OpenEmux" is not in any of the lists.
+- **Check:** `MANUAL`: also `adb shell cmd package query-activities -a android.intent.action.VIEW -t application/pdf`
+  does not list `$PKG/com.openemux.mobile.ImportActivity`.
+
 ## Android — Bundled skins for the Sega, NEC and Disk System consoles
 
 Eight consoles that used the drawn skin ship a bundled skin (issue 770): Game Gear (`GG`),
