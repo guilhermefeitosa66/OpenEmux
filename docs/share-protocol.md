@@ -378,7 +378,7 @@ builds on these rules.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string, required | Unique within the manifest; used in `/file`. |
-| `kind` | string, required | `rom`, `battery_save`, `state`, `cover`, `label` or `bios`. An unknown kind MUST be answered `skip`. |
+| `kind` | string, required | `rom`, `battery_save`, `state`, `cover`, `label`, `bios` or `skin`. An unknown kind MUST be answered `skip`. |
 | `name` | string, required | A **bare file name**, at most 255 bytes of UTF-8. |
 | `size` | integer, required | Bytes, non-negative. |
 | `mtime` | number, required | Unix seconds. |
@@ -424,6 +424,26 @@ unknown kind `skip`, and the game itself still goes).
   unless its user chooses to replace it. A BIOS is placed whatever happens to
   the game's ROM (new, already there, kept beside), unless the user left the
   game or the item out.
+
+**Controller skins.** An item of kind `skin` is a controller skin of the
+Android app (added to protocol v1 without a version bump, as `bios` was). Only
+the Android app has such skins: the desktop app neither sends nor takes one.
+
+- A skin travels as an entry of `games` that is no game: `console` is the
+  console the skin is for, `title` its name, and `items` holds that one item.
+  `name` is `<name>.zip`, and the content a zip of the skin in OpenEmux's own
+  skin format (`pkg/android/openemux/docs/skin-format.md` in the
+  `openemux-android` repository): its `skin.json` and the images its layouts
+  have, at the zip's root. It carries a `sha256`.
+- A sender offers a skin only to a peer whose platform is not the desktop's
+  (`/info`). A receiver that does not know the kind (the desktop app, an
+  Android app from before it) answers `skip` / `invalid_item`, and the offer
+  ends with nothing taken, never in an error.
+- The receiver checks the upload before placing it: a zip that is not a skin
+  for `console` fails the item (`400 bad_request`) and leaves nothing behind.
+- A received skin is always a **new** skin of the user's own for that console,
+  never written over one that is there and never put in use; when a skin there
+  already shows the same name, the new one is named `name (2)`.
 
 **Console ids:**
 
