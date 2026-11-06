@@ -10363,7 +10363,7 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
 `StringsShareTest`); what a transfer delivered and why the rest did not, on both ends, by
 `DeliveryReportTest` and `PlacementTest`.
 `StringsShareTest`). One of the player's own controller skins goes to another Android device the
-same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
+same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
 `/sdcard/Android/data/$PKG/files/skins`.
 
 ### RT-524 — Every entry point opens Share Nearby with the right games
@@ -10618,7 +10618,7 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
-### RT-829 — "Share" on a skin of your own opens Share Nearby with that one skin
+### RT-908 — "Share" on a skin of your own opens Share Nearby with that one skin
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** A phone with a skin of your own for the SNES (`mine`, RT-737), a broken one (a
@@ -10635,7 +10635,7 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
   games (RT-524). 3: none of the three sheets has "Share": only a readable skin of your own is sent.
 - **Check:** human only (a screenshot of the sheet and one of the screen).
 
-### RT-830 — A shared skin arrives under "Your skins" on the other Android device, not in use
+### RT-909 — A shared skin arrives under "Your skins" on the other Android device, not in use
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** Two Android devices with the app on the same Wi-Fi (as RT-537); on the sender,
@@ -10660,10 +10660,10 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
   layout folders) and no `shared-*.zip`, and RT-738's command prints `dark None` after step 3. JVM
   suite `ShareSkinTest`, `ShareTransferLoopbackTest` (openemux-android).
 
-### RT-831 — A received skin whose name is taken becomes "Name (2)"
+### RT-910 — A received skin whose name is taken becomes "Name (2)"
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
-- **Preconditions:** RT-830 done: the receiver already has the skin under the sender's name for it.
+- **Preconditions:** RT-909 done: the receiver already has the skin under the sender's name for it.
 - **Steps:**
   1. Share the same skin with the receiver again and accept it there.
   2. Open the receiver's SNES "Controller skins".
@@ -10674,7 +10674,7 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
   and `"<name> (2)"`. JVM suite `SkinStoreShareTest.aNameThatIsTakenGetsTheNextNumber` and
   `ShareSkinTest` (openemux-android).
 
-### RT-832 — A computer is listed but cannot be picked for a skin
+### RT-911 — A computer is listed but cannot be picked for a skin
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** A phone with `mine` for the SNES and a game; a desktop OpenEmux with Share
@@ -10690,7 +10690,7 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
 - **Check:** human only (screenshots of both lists). JVM suite `ShareCoordinatorTest`,
   `ShareSkinTest` (openemux-android).
 
-### RT-833 — An Android from before skin sharing answers that it cannot take the skin
+### RT-912 — An Android from before skin sharing answers that it cannot take the skin
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** A phone with `mine` for the SNES; a second Android device with a build of
@@ -10705,7 +10705,7 @@ same way, from "Share" in the skin's sheet (RT-829 to RT-834); `$SKINS` there is
   `adb shell ls $SKINS/SFC` is the same before and after. JVM suite `ShareTransferLoopbackTest`,
   `ShareCoordinatorTest` (openemux-android).
 
-### RT-834 — A skin's zip, its offer and its import on the other device are checked by the unit suite
+### RT-913 — A skin's zip, its offer and its import on the other device are checked by the unit suite
 - **Area:** Android — Share nearby
 - **Mode:** AUTO-SUITE
 - **Preconditions:** An openemux-android checkout.
@@ -12362,8 +12362,8 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Preconditions:** `mine` in `$SKINS/SFC/`.
 - **Steps:**
   1. On the `mine` card, tap its "⋮" button: a sheet opens with "Use it" (also when it is in use,
-     RT-838), "Edit" (issue 784: RT-781), "Rename", "Duplicate", "Download as template", "Share"
-     (RT-829), "Delete".
+     RT-917), "Edit" (issue 784: RT-781), "Rename", "Duplicate", "Download as template", "Share"
+     (RT-908), "Delete".
   2. "Rename" → type "Mine" → "Save".
   3. Open the sheet again → "Duplicate".
   4. Leave Settings and open SNES again.
@@ -12403,12 +12403,12 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
   RT-769; so do the four keypad consoles since issue 772: RT-881.)
   2. Tap "Use it".
-- **Expected:** The sheet shows the skin's miniature (RT-835), the name, the three lit badges, a
+- **Expected:** The sheet shows the skin's miniature (RT-914), the name, the three lit badges, a
   lock with "Bundled skins never change." and, under it, "Edit and Duplicate make a copy of your
   own.", then the rows "Use it", "Edit", "Duplicate" and "Download as template": no "Rename", no
   "Delete" and no "Share", and neither "Create copy and edit" nor "Use it as it is", which older
-  builds had. Step 2 picks Dark. ("Edit" and "Duplicate" are RT-770 and RT-840, on every bundled
-  skin: RT-769, RT-775; "Download as template" is RT-839; the SNES's zip is copied as it is since
+  builds had. Step 2 picks Dark. ("Edit" and "Duplicate" are RT-770 and RT-919, on every bundled
+  skin: RT-769, RT-775; "Download as template" is RT-918; the SNES's zip is copied as it is since
   issue 806, RT-819.)
 - **Check:** `MANUAL`.
 
@@ -12441,7 +12441,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
-### RT-835 — Each skin card shows a miniature of the skin for this device, the way it is held
+### RT-914 — Each skin card shows a miniature of the skin for this device, the way it is held
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
 - **Preconditions:** RT-737's skins on a phone (`mine`, `big` and the package in `$SKINS/SFC/`); a
@@ -12462,10 +12462,10 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Check:** `MANUAL`: a screenshot each way (`adb exec-out screencap -p > cards.png`);
   `adb shell run-as $PKG ls cache/skin-thumbs` lists one PNG per skin and orientation drawn so far.
 
-### RT-836 — Saving an edit changes the skin's miniature
+### RT-915 — Saving an edit changes the skin's miniature
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
-- **Preconditions:** RT-835; `mine` in `$SKINS/SFC/`.
+- **Preconditions:** RT-914; `mine` in `$SKINS/SFC/`.
 - **Steps:**
   1. Look at `mine`'s miniature. "⋮" → "Edit"; drag the face buttons well away from where they
      are; "Close editor" → "Discard changes".
@@ -12476,7 +12476,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   `adb shell run-as $PKG ls cache/skin-thumbs` has one file under a new name (its old one gone)
   and every other file as before.
 
-### RT-837 — A package, a broken skin and a card still loading keep the small controller drawing
+### RT-916 — A package, a broken skin and a card still loading keep the small controller drawing
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
 - **Preconditions:** RT-737's `.deltaskin` in `$SKINS/SFC/`; a skin of your own that cannot be read:
@@ -12492,7 +12492,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 - **Check:** `MANUAL`: screenshot.
 - **Restore:** `adb shell rm -r $SKINS/SFC/broken`.
 
-### RT-838 — "Use it" is always in the sheet of a skin that fits this device
+### RT-917 — "Use it" is always in the sheet of a skin that fits this device
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
 - **Preconditions:** RT-737's skins on a phone; `mine` in use for the SNES.
@@ -12727,7 +12727,7 @@ template" in its "⋮" sheet, and "Import .zip" under the console's skin list. S
 Skin library per console": `$PKG` is `com.openemux.mobile`, `$SKINS` is
 `/sdcard/Android/data/$PKG/files/skins`, and `mine` is the SNES template unzipped into `$SKINS/SFC/mine`
 (RT-737). The runner has no Android device: every scenario is `MANUAL` on a phone with `adb`, and the
-zip edits happen on a computer. A bundled skin's sheet has "Download as template" too (RT-839).
+zip edits happen on a computer. A bundled skin's sheet has "Download as template" too (RT-918).
 
 ### RT-763 — "Download as template" saves every layout, one image per element at its size
 - **Area:** Android — Skin template zip
@@ -12823,7 +12823,7 @@ zip edits happen on a computer. A bundled skin's sheet has "Download as template
   with the focus back where it was. In Portuguese every text of both sheets and the "Importar .zip"
   button is translated.
 
-### RT-839 — A bundled skin downloads as a template too
+### RT-918 — A bundled skin downloads as a template too
 - **Area:** Android — Skin template zip
 - **Mode:** MANUAL
 - **Preconditions:** A phone; the SNES with its bundled skins.
@@ -12894,7 +12894,7 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   # own:console-colors-edited-2
   ```
 
-### RT-840 — "Duplicate" on a bundled skin makes "<name> (copy)" under Your skins, not in use
+### RT-919 — "Duplicate" on a bundled skin makes "<name> (copy)" under Your skins, not in use
 - **Area:** Android — Copy of a bundled skin
 - **Mode:** MANUAL
 - **Preconditions:** RT-769, with "Dark" picked for Game Gear.
@@ -13114,7 +13114,7 @@ as the copy of a bundled skin above.
 (issue 784, part 3 of issue 666). Same setup as the copy section: a phone (or a phone-sized headless
 emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 `/sdcard/Android/data/$PKG/files/skins`. "Mine" below is a copy of the Game Gear's "Console colors"
-made with "Duplicate" (RT-840) and renamed "Mine" (its folder `console-colors-copy`).
+made with "Duplicate" (RT-919) and renamed "Mine" (its folder `console-colors-copy`).
 
 ### RT-781 — Edit opens the editor, on a skin of your own and on a bundled skin's copy
 - **Area:** Android — Skin editor
@@ -13144,9 +13144,9 @@ made with "Duplicate" (RT-840) and renamed "Mine" (its folder `console-colors-co
   "Texture" (issue 786), "Size" (100%), "Nudge", "Reset". The D-pad is framed alone ("D-pad"). The empty tap clears the selection
   and brings back "Snap" and "⋯".
   one" and a round handle at the corner; the second frames only "1", labelled "1 · tap again for
-  its label" (the third tap is RT-841). The bottom bar becomes "Colour", "Texture", "Size" (100%),
+  its label" (the third tap is RT-920). The bottom bar becomes "Colour", "Texture", "Size" (100%),
   "Nudge", "Reset". The D-pad is framed alone ("D-pad"). The empty tap lets go of the selection
-  and brings back "Grid", "Try" and "⋯" (a tap there with nothing selected is RT-847).
+  and brings back "Grid", "Try" and "⋯" (a tap there with nothing selected is RT-926).
 - **Check:** JVM suite `SkinEditTest.theFirstTapTakesTheGroupTheSecondOneControl` in openemux-android.
 
 ### RT-783 — Dragging snaps to the grid, other controls and the mirror, with a guide
@@ -13528,7 +13528,7 @@ in the library.
      (right) and open it again.
 - **Expected:** Upright with the face buttons selected, the actions bar sits over the game screen;
   with a control over the game screen it moves to the bottom, clear of the selection. With the
-  screen's frame or the body selected (RT-845, RT-847) it stays over the game screen: neither is in
+  screen's frame or the body selected (RT-924, RT-926) it stays over the game screen: neither is in
   its way. Sideways the Layouts panel opens on the right when the D-pad is selected and on the left
   when the face buttons are: it never covers the selection.
 - **Check:** JVM suite `SkinLayoutsEditTest.panelsOpenAwayFromTheSelection`; `MANUAL`.
@@ -13684,7 +13684,7 @@ on the side away from the selection sideways.
   nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
   "Pintar", "Paletas", "Remover textura, voltar para a cor".
 - **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
-### RT-841 — A third tap selects the control's label, and one more starts over
+### RT-920 — A third tap selects the control's label, and one more starts over
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, editor open on "Mine", nothing selected.
@@ -13697,13 +13697,13 @@ on the side away from the selection sideways.
   corner handle of its own ("1 · Label"); the fourth tap starts over at the group. "START", a
   control with no group, goes straight to itself ("START · tap again for its label"), then to its
   label ("START · Label"), then back to itself. The D-pad has no label to select (its arrows are
-  painted with it, RT-849): both taps select the D-pad ("D-pad").
+  painted with it, RT-928): both taps select the D-pad ("D-pad").
 - **Check:** `MANUAL`: a screenshot after each tap (`adb exec-out screencap -p > tap.png`).
 
-### RT-842 — A selected label moves, grows and is painted on its own, and is saved with the skin
+### RT-921 — A selected label moves, grows and is painted on its own, and is saved with the skin
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
-- **Preconditions:** RT-841, with the label of "1" selected ("1 · Label"); a Game Gear game; "Mine"
+- **Preconditions:** RT-920, with the label of "1" selected ("1 · Label"); a Game Gear game; "Mine"
   in use.
 - **Steps:**
   1. Drag the label to the right, off its button; tap "Reset".
@@ -13717,14 +13717,14 @@ on the side away from the selection sideways.
   "Label", with no "Texture" tab, and the "1" turns yellow. Step 4: "Skin saved"; in game the "1"
   is beside its button, larger and yellow, and the button still presses "1". A button whose image
   held its label is drawn from its colours once the label leaves it, with the same shape, relief
-  and shading (RT-851). Selecting the button itself and dragging it takes the moved label along.
+  and shading (RT-930). Selecting the button itself and dragging it takes the moved label along.
 - **Check:**
   ```bash
   adb shell cat $SKINS/GG/console-colors-copy/skin.json
   # the element labelled "1" has a "labelOffset", a larger "labelSize" and "letter": "#FACC15" in its "colors"
   ```
 
-### RT-843 — The words under the centre keys are labels: they can be moved and painted
+### RT-922 — The words under the centre keys are labels: they can be moved and painted
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
@@ -13744,7 +13744,7 @@ on the side away from the selection sideways.
   # the "start" element has "label": "START", a "labelOffset" whose y is below 0 and "letter": "#22C55E" in its "colors"
   ```
 
-### RT-844 — Moving a control leaves nothing of it behind
+### RT-923 — Moving a control leaves nothing of it behind
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a Game Gear game; "Mine" in use; the APK under test on the computer.
@@ -13763,7 +13763,7 @@ on the side away from the selection sideways.
   # background.png shows the console's body with no button, no D-pad and no "START"
   ```
 
-### RT-845 — Quick actions stay on the frame, and tapping one or the frame selects "Screen frame"
+### RT-924 — Quick actions stay on the frame, and tapping one or the frame selects "Screen frame"
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, nothing selected.
@@ -13781,7 +13781,7 @@ on the side away from the selection sideways.
 - **Check:** `MANUAL`: screenshot; in `adb shell cat $SKINS/GG/console-colors-copy/skin.json` the
   `action` elements and the `frame` keep their `x`, `y`, `width` and `height`.
 
-### RT-846 — The screen frame takes "Frame", "Icons" and "Active" colours and keeps its rounded corners
+### RT-925 — The screen frame takes "Frame", "Icons" and "Active" colours and keeps its rounded corners
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, the phone upright; a Game Gear game; "Mine" in use.
@@ -13803,7 +13803,7 @@ on the side away from the selection sideways.
   # after step 3 phone-portrait's "frame" keeps its "radius" and has "colors": {"frame": "#3B82F6", "icons": "#FACC15", "active": "#F472B6", ...}
   ```
 
-### RT-847 — Tapping an empty part of the console selects "Body"
+### RT-926 — Tapping an empty part of the console selects "Body"
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, nothing selected.
@@ -13820,7 +13820,7 @@ on the side away from the selection sideways.
   "Colour" | "Texture" and "Editing Body".
 - **Check:** `MANUAL`: a screenshot of steps 1 and 4.
 
-### RT-848 — The paint panel paints what is selected, all of it
+### RT-927 — The paint panel paints what is selected, all of it
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
@@ -13839,7 +13839,7 @@ on the side away from the selection sideways.
   # "button": "#3B82F6" on the element labelled "1", "button": "#EF4444" on the one labelled "2"
   ```
 
-### RT-849 — The part toggles follow the kind of control, with "Relief" and "Label" among them
+### RT-928 — The part toggles follow the kind of control, with "Relief" and "Label" among them
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; the Nintendo 64 with its bundled skins, for the stick.
@@ -13855,7 +13855,7 @@ on the side away from the selection sideways.
 - **Restore:** Step 3 made "Console colors - edited" for the Nintendo 64 and put it in use: tap the
   bundled "Console colors" card again and delete the copy ("⋮" → "Delete").
 
-### RT-850 — A relief left alone follows its button's colour; one picked keeps its colour
+### RT-929 — A relief left alone follows its button's colour; one picked keeps its colour
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -13872,11 +13872,11 @@ on the side away from the selection sideways.
   # the element labelled "1" has "button": "#22C55E" and "relief": "#3B82F6" in its "colors"
   ```
 
-### RT-851 — A control repainted keeps its relief and shading
+### RT-930 — A control repainted keeps its relief and shading
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** A copy of the Game Gear's "Console colors" whose buttons were never painted (a
-  new one from "Duplicate", RT-840), in use and open in the editor; a Game Gear game.
+  new one from "Duplicate", RT-919), in use and open in the editor; a Game Gear game.
 - **Steps:**
   1. Select "1" alone → "Colour" → "Button" → the orange circle → the check.
   2. Compare "1" with "2" on the stage.
@@ -13887,7 +13887,7 @@ on the side away from the selection sideways.
   not a flat disc. The game shows the same, and "1" still presses "1".
 - **Check:** `MANUAL`: a screenshot of the stage and one in game.
 
-### RT-853 — The menu key is painted like any button: "Button", "Relief", "Label"
+### RT-932 — The menu key is painted like any button: "Button", "Relief", "Label"
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a Game Gear game.
@@ -13907,11 +13907,11 @@ on the side away from the selection sideways.
   # "letter": "#FACC15" in its "colors", and a "depth" above 0
   ```
 
-### RT-854 — The D-pad's ball keeps its size when it is painted
+### RT-933 — The D-pad's ball keeps its size when it is painted
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** A copy of the Game Gear's "Console colors" whose D-pad was never painted (a
-  new one from "Duplicate", RT-840), open in the editor.
+  new one from "Duplicate", RT-919), open in the editor.
 - **Steps:**
   1. Take a screenshot of the stage.
   2. Tap the D-pad → "Colour" → "Ball" → the green circle → the check.
@@ -13921,7 +13921,7 @@ on the side away from the selection sideways.
   colours.
 - **Check:** `MANUAL`: the two screenshots; the ball is as wide in the second as in the first.
 
-### RT-855 — A colour goes to every layout of the skin
+### RT-934 — A colour goes to every layout of the skin
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, the phone held upright; a Game Gear game.
@@ -13944,11 +13944,11 @@ on the side away from the selection sideways.
   # "button": "#EF4444"
   ```
 
-### RT-856 — A place, a size and a texture stay with the layout they were made in
+### RT-935 — A place, a size and a texture stay with the layout they were made in
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** A copy of the Game Gear's "Console colors" never edited (a new one from
-  "Duplicate", RT-840), open in the editor, the phone held upright; a picture on the device.
+  "Duplicate", RT-919), open in the editor, the phone held upright; a picture on the device.
 - **Steps:**
   1. Drag "2" somewhere else, and resize the D-pad to 120%.
   2. Select "1" alone → "Texture" → "Choose image" → the picture → the check.
@@ -13961,7 +13961,7 @@ on the side away from the selection sideways.
   purple), "2" is where step 1 left it and the D-pad is at 120%.
 - **Check:** `MANUAL`: a screenshot of each layout after step 5.
 
-### RT-857 — The palette row names the palette and opens "Palettes"
+### RT-936 — The palette row names the palette and opens "Palettes"
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -14040,7 +14040,7 @@ packages of the twelve consoles that moved (`NDS.deltaskin` included).
   2. Tap "Duplicate".
   3. Use the copy and launch the GBA game.
 - **Expected:** The sheet shows the lock line "Imported skins stay as they are. Duplicate makes a copy
-  of your own.", "Use it" (also when it is in use, RT-838) and "Duplicate". After "Making the
+  of your own.", "Use it" (also when it is in use, RT-917) and "Duplicate". After "Making the
   copy…", "YOUR SKINS" lists "<package name> (copy)" with the package's badges; the package stays
   under "Imported". In game the copy looks and plays like the package.
 - **Check:** `adb shell ls $SKINS/GBA` lists the package file unchanged (same size as before) and the
@@ -14198,9 +14198,9 @@ issue 806.
   and at the same size, the picture in the same spot and never covered; the tablet gets its own
   layouts, not the phone's stretched. Nothing falls back to the app's plain drawn skin. One thing
   differs from the old screenshots: the soft drop shadow around each control is gone, and what
-  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-844).
+  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-923).
   The words under the centre keys ("START", "SELECT") are where they were, now drawn by the app
-  (RT-843).
+  (RT-922).
 - **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p > <console>-<form>-<orientation>.png`
   and compare with the old ones; logcat tag `OpenEmuxSkin` shows `drawing OpenEmux <console name>`
   with `(phone-portrait, phone-landscape)` on the phone and `(tablet-portrait, tablet-landscape)` on
@@ -14396,7 +14396,7 @@ issue 806.
   adb shell ls $SKINS/SFC/webp-import/phone-portrait   # a.webp, and no a.png
   ```
 
-### RT-852 — A copy of a WebP colour variant takes a colour or a texture where it had an image
+### RT-931 — A copy of a WebP colour variant takes a colour or a texture where it had an image
 - **Area:** Android — Bundled skins
 - **Mode:** MANUAL
 - **Preconditions:** RT-819's "Purple - edited" in use (a copy of the SNES's "Purple", whose images
@@ -14477,7 +14477,7 @@ APK of the release before issue 808; an NDS game in the library played on DeSmuM
   tablet gets its own layouts. Step 3 shows a fold layout of its own, not the phone's stretched.
   Every control does what it did. Nothing falls back to the app's plain drawn skin. One thing
   differs from the old screenshots: the soft drop shadow around each control is gone, and what
-  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-844).
+  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-923).
 - **Check:** `MANUAL`: screenshots (`adb exec-out screencap -p > nds-<form>-<orientation>.png`);
   `adb logcat -s OpenEmuxSkin` shows `drawing` the DS skin with `(phone-portrait, phone-landscape)`
   on the phone, `(tablet-portrait, tablet-landscape)` on the tablet, and no `falling back` line.
@@ -14833,18 +14833,18 @@ logcat's `OpenEmuxSkin` lines.
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
 
-### RT-772 — A blank name or Cancel creates nothing
+### RT-906 — A blank name or Cancel creates nothing
 - **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
 - **Reason:** The "Name your copy" sheet went away with "Create copy and edit": "Edit" and
   "Duplicate" on a bundled skin ask for no name, so there is no blank name to refuse and no
-  "Cancel" (RT-770, RT-840). A copy is named afterwards with "Rename", which still refuses an empty
+  "Cancel" (RT-770, RT-919). A copy is named afterwards with "Rename", which still refuses an empty
   name (RT-739).
 
-### RT-811 — Moving the screen area moves where the game is drawn
+### RT-907 — Moving the screen area moves where the game is drawn
 - **Retired:** 2026-11-06 (skin editor: body, screen frame and labels, no issue).
 - **Reason:** "Screen area" was taken out of the editor's "⋯" menu: the game screen can no longer
   be moved or resized. The frame around it and the quick actions on it are painted, never moved
-  (RT-845, RT-846).
+  (RT-924, RT-925).
 
 ### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
 - **Retired:** 2026-11-06 (issue 808).
