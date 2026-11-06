@@ -7365,6 +7365,10 @@ files are in `files/launch/current/`.
   (issue 782). A console the app draws its own skin for (Atari 5200, for example) shows the section
   too, with its one "Console colors" card, so its "Create copy and edit" can be reached (issue 798,
   RT-775); no "Default skin" row.
+- **Expected:** The section is titled "Default skin" with "Console colors" on its right, says "The
+  virtual controller every SNES game uses." and shows its cards right there, without opening anything:
+  "Console colors" (selected), "Dark" and "Purple" (issue 720), each with a small color swatch. A console the app has no Dark skin for (Atari 2600, for
+  example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -7463,12 +7467,143 @@ files are in `files/launch/current/`.
   5. Launch the game.
 - **Expected:** Step 1 reads "Console colors" (never a fixed "OpenEmux SNES"). The sheet in step 2 is
   titled "Controller skins" with the same groups and cards as the console's settings, and the row then reads
+  titled "Default skin" with the same cards as the console's settings, and the row then reads
   "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
   focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
   Step 5 opens the usual light grey SNES skin.
 - **Check:**
   ```bash
   adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark after step 2, console after step 4
+  ```
+
+## Android — Controller skins in official colors
+
+Besides Console colors and Dark, nine of the bundled consoles also come in the official retail colors
+they (or, for home consoles, the controller the skin depicts) were sold in (issue 720): FC (Red), SFC
+(Purple), N64 (Grey, Black, Red, Blue, Green, Yellow, Gold), GB (Red, Yellow, Green, Blue, Black, White,
+Clear), GBC (Red, Purple, Green, Yellow, Teal), GBA (White, Black, Clear blue, Clear pink, Silver,
+Orange), NDS (Blue, Black, White, Turquoise, Pink), GC (Black, Silver, Orange) and PSP (White, Silver,
+Blue). PS, MD and SMS have none. Each is the console's layout in other colors, chosen in the same
+"Default skin" choice as Dark and saved in the same `consoles.<id>.skin` key of `files/meta.json` (the
+color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/build.py` into
+`src/main/assets/skins/<color>/`, listed for the picker in `src/main/assets/skins/variants.json`
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+`MANUAL`, like the Dark skin's section: `$PKG` is `com.openemux.mobile`.
+
+### RT-864 — Each console lists its official colors, each with a swatch
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a GBA and a PlayStation game in the library.
+- **Steps:**
+  1. Open Settings, then the GBA console, and look at the "Default skin" section.
+  2. Go back and open the PlayStation console.
+- **Expected:** GBA lists, in order: "Console colors", "Dark", "White", "Black", "Clear blue", "Clear
+  pink", "Silver" and "Orange". Every card has a small rounded square on the left of its name in that
+  skin's shell color, with a dot of its button color in the corner (purple with a light grey dot for
+  Console colors, black for Dark, white, black, light blue, pink, silver, orange). The color cards show
+  only the name. The PlayStation lists only "Console colors" and "Dark".
+- **Check:**
+  ```bash
+  adb pull "$(adb shell pm path $PKG | head -1 | cut -d: -f2 | tr -d '\r')" /tmp/oe.apk
+  unzip -p /tmp/oe.apk assets/skins/variants.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print([v["id"] for v in d["GBA"]], [v["id"] for v in d["PS"]])'
+  # ['console', 'dark', 'white', 'black', 'clear-blue', 'clear-pink', 'silver', 'orange'] ['console', 'dark']
+  ```
+
+### RT-865 — Picking a color gives every game of the console that skin, same layout
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** Two GBA games and one SNES game in the library; GBA on Console colors.
+- **Steps:**
+  1. Settings → GBA → tap "Clear blue".
+  2. Launch the first GBA game in portrait, then turn the phone to landscape.
+  3. Quit and launch the second GBA game.
+  4. Quit and launch the SNES game.
+- **Expected:** After step 1 the "Clear blue" card is selected and the section reads "Clear blue" on
+  its right. Both GBA games open on a light blue skin with the faint diagonal sheen of a translucent
+  shell. Every key, the screen and the chin's quick actions sit exactly where they do on Console colors,
+  in portrait and landscape. The SNES game keeps its own skin.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GBA"]["skin"])'   # clear-blue
+  adb shell run-as $PKG ls cache/skins/clear-blue   # GBA.deltaskin, copied when the GBA game launched
+  ```
+
+### RT-866 — A color choice survives closing the game, restarting the app and updating it
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** RT-865 done (GBA set to Clear blue).
+- **Steps:**
+  1. Force-stop the app (`adb shell am force-stop $PKG`) and open it again.
+  2. Open Settings → GBA, then launch a GBA game.
+  3. Install a newer build over this one (`adb install -r <apk>`), open the app and launch a GBA game
+     again.
+- **Expected:** The section still reads "Clear blue" and the games open on the Clear blue skin after
+  the restart and after the update.
+- **Check:** the `skin` key is still `clear-blue` after each step (same command as RT-865).
+
+### RT-867 — Every control works on the color skins of the controllers and the DS
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** N64 set to "Gold", NDS to "Pink", PSP to "White", GameCube to "Orange"; a game of
+  each (the NDS one on the DeSmuME core).
+- **Steps:**
+  1. In the N64 game, move the analog stick all the way round and press A, B, Z, every C button, L, R
+     and START.
+  2. In the NDS game, press the Screens key in the chin until it has gone through every layout, in
+     portrait and in landscape.
+  3. In the PSP game, press every face key and the shoulders.
+  4. In the GameCube game, move both sticks and press A, B, X, Y, Z, L and R.
+- **Expected:** Every key reaches the game. The N64 skin is gold with its stick, D-pad, Z and shoulders
+  in a deeper gold; A blue, B green, the C buttons yellow and START red stay as on the real
+  controller. Every NDS layout shows pink art with the picture filling the room the layout needs. The
+  PSP glyphs (triangle, circle, cross, square) read clearly on white. The GameCube skin is orange with
+  the yellow C stick. Knobs follow the thumb and are visible on each skin.
+- **Check:** none beyond the steps (the frames come from the same layout as Console colors:
+  `BundledSkinsTest` in the app's unit tests compares every color package with the console's).
+
+### RT-868 — An imported skin still wins over a color
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** A third-party `.deltaskin` for the SNES; SNES set to "Purple".
+- **Steps:**
+  1. `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
+  2. Settings → SNES → the "Default skin" section, then launch a SNES game.
+  3. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
+     and launch again.
+- **Expected:** Step 2 reads "Imported skin" on the section's right, shows "A skin you imported for
+  SNES is used instead." and the game uses the imported skin. After step 3 the game opens on the
+  North American colors: light grey with purple A and B and lavender X and Y.
+- **Check:** none beyond the steps.
+
+### RT-869 — Color names are plain words in every language
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** The app's language set to Português (Brasil) (Settings → Language, or the
+  phone's language).
+- **Steps:**
+  1. Open Settings → GBA, then GBC, then N64, and read the cards.
+- **Expected:** GBA: "Branco", "Preto", "Azul transparente", "Rosa transparente", "Prata",
+  "Laranja". GBC: "Vermelho", "Roxo", "Verde", "Amarelo", "Azul-petróleo". N64: "Cinza", "Preto",
+  "Vermelho", "Azul", "Verde", "Amarelo", "Dourado". No marketing name ("Glacier", "Grape", "Kiwi",
+  "Dandelion", "Fuchsia", "Arctic") appears in any language.
+- **Check:** none beyond the steps (`StringsSkinVariantTest` checks every locale has every name).
+
+### RT-870 — The color list from a game's detail screen, by gamepad
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy game in the library; GB on Console colors; a gamepad connected.
+- **Steps:**
+  1. Open the Game Boy game's detail screen and open the "Controller skin" row.
+  2. With the gamepad only, move down through the sheet to the last card, "Clear", and press A.
+  3. Close the sheet and launch the game.
+- **Expected:** The sheet lists "Console colors", "Dark", "Red", "Yellow", "Green", "Blue", "Black",
+  "White" and "Clear", each with its swatch; the focus ring reaches every card and the sheet scrolls to
+  keep it in view. The row then reads "Clear" and the game opens on a pale, translucent-looking grey
+  shell with the Game Boy's layout.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GB"]["skin"])'   # clear
   ```
 
 ## Android — Update check
