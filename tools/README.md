@@ -170,7 +170,7 @@ in openemux-android). Change a skin there, then export it here.
 
 It reads the default `<CONSOLE>.zip` of each console from the Android checkout
 (next to this repository by default; put it on `origin/openemux-mobile`
-first), takes the `phone-portrait` layout, crops it 8 px below the screens and
+first), takes the `phone-portrait` layout, crops it 16 px below the screens and
 the frame and scales it to half size. It writes
 `src/openemux/ui/assets/controllers/<CONSOLE>/`: `background.png`, each
 control's image (a D-pad's pad, a stick's base and knob) and a `layout.json`

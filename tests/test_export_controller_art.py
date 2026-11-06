@@ -98,12 +98,12 @@ class ExportControllerArtTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         folder = self.out / "N64"
         layout = json.loads((folder / "layout.json").read_text())
-        # Crop at frame bottom (140) + 8; the layout is 400 high, scaled by 0.5.
-        self.assertEqual(layout["size"], {"width": 100, "height": 200 - 74})
+        # Crop at frame bottom (140) + 16; the layout is 400 high, scaled by 0.5.
+        self.assertEqual(layout["size"], {"width": 100, "height": 200 - 78})
         self.assertEqual(layout["console"], "N64")
         self.assertEqual([e["id"] for e in layout["elements"]], ["dpad", "a", "stick", "start"])
         dpad, a, stick, start = layout["elements"]
-        self.assertEqual((dpad["x"], dpad["y"], dpad["width"], dpad["height"]), (5, 26, 30, 30))
+        self.assertEqual((dpad["x"], dpad["y"], dpad["width"], dpad["height"]), (5, 22, 30, 30))
         self.assertEqual(dpad["bind"], "dpad")
         self.assertEqual(dpad["images"], {"pad": "dpad.png"})
         self.assertEqual(a["images"], {"button": "a.png"})
@@ -114,7 +114,7 @@ class ExportControllerArtTests(unittest.TestCase):
         ])
         with Image.open(folder / "background.png") as background:
             self.assertEqual(background.mode, "RGBA")
-            self.assertEqual(background.size, (100, 126))
+            self.assertEqual(background.size, (100, 122))
         with Image.open(folder / "stick-knob.png") as knob:
             self.assertEqual(knob.size, (15, 15))
         with Image.open(folder / "a.png") as button:
@@ -139,8 +139,8 @@ class ExportControllerArtTests(unittest.TestCase):
         code, _, err = self.run_tool()
         self.assertEqual(code, 0, err)
         layout = json.loads((self.out / "N64" / "layout.json").read_text())
-        # Crop at the screen bottom (120) + 8.
-        self.assertEqual(layout["size"]["height"], 200 - 64)
+        # Crop at the screen bottom (120) + 16.
+        self.assertEqual(layout["size"]["height"], 200 - 68)
 
     def test_crop_never_passes_a_control(self):
         skin = skin_json()

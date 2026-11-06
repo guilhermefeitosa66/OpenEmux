@@ -12,7 +12,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "dpad",
@@ -24,7 +24,7 @@
       "type": "dpad",
       "width": 210,
       "x": 30,
-      "y": 180
+      "y": 176
     },
     {
       "bind": "b",
@@ -36,7 +36,7 @@
       "type": "button",
       "width": 126,
       "x": 333,
-      "y": 222
+      "y": 218
     },
     {
       "bind": "select",
@@ -48,7 +48,7 @@
       "type": "button",
       "width": 82,
       "x": 160,
-      "y": 574
+      "y": 570
     },
     {
       "bind": "start",
@@ -60,13 +60,13 @@
       "type": "button",
       "width": 82,
       "x": 298,
-      "y": 574
+      "y": 570
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 674,
+    "height": 670,
     "width": 540
   },
   "source": "phone-portrait"

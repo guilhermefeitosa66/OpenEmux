@@ -12,7 +12,7 @@
       "type": "button",
       "width": 93,
       "x": 18,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "l1",
@@ -24,7 +24,7 @@
       "type": "button",
       "width": 93,
       "x": 123,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "r1",
@@ -36,7 +36,7 @@
       "type": "button",
       "width": 93,
       "x": 324,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "r2",
@@ -48,7 +48,7 @@
       "type": "button",
       "width": 93,
       "x": 429,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "menu",
@@ -60,7 +60,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "dpad",
@@ -72,7 +72,7 @@
       "type": "dpad",
       "width": 210,
       "x": 30,
-      "y": 152
+      "y": 148
     },
     {
       "bind": "x",
@@ -84,7 +84,7 @@
       "type": "button",
       "width": 68,
       "x": 362,
-      "y": 152
+      "y": 148
     },
     {
       "bind": "y",
@@ -96,7 +96,7 @@
       "type": "button",
       "width": 69,
       "x": 291,
-      "y": 222
+      "y": 218
     },
     {
       "bind": "a",
@@ -108,7 +108,7 @@
       "type": "button",
       "width": 69,
       "x": 432,
-      "y": 222
+      "y": 218
     },
     {
       "bind": "b",
@@ -120,7 +120,7 @@
       "type": "button",
       "width": 68,
       "x": 362,
-      "y": 292
+      "y": 288
     },
     {
       "bind": "analogStick",
@@ -133,7 +133,7 @@
       "type": "stick",
       "width": 138,
       "x": 66,
-      "y": 402
+      "y": 398
     },
     {
       "bind": "rightAnalogStick",
@@ -146,7 +146,7 @@
       "type": "stick",
       "width": 138,
       "x": 327,
-      "y": 402
+      "y": 398
     },
     {
       "bind": "select",
@@ -158,7 +158,7 @@
       "type": "button",
       "width": 82,
       "x": 160,
-      "y": 574
+      "y": 570
     },
     {
       "bind": "start",
@@ -170,13 +170,13 @@
       "type": "button",
       "width": 82,
       "x": 298,
-      "y": 574
+      "y": 570
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 674,
+    "height": 670,
     "width": 540
   },
   "source": "phone-portrait"

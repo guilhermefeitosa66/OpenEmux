@@ -54,7 +54,7 @@ SCALE = 0.5
 
 #: Layout pixels skipped below the screens and frame, so the edge of the
 #: screen's shadow does not show as a line at the top. Never past a control.
-CROP_MARGIN = 8
+CROP_MARGIN = 16
 
 #: The element types that are part of the controller (not a quick action).
 CONTROL_TYPES = ("button", "keypad", "dpad", "stick")

@@ -12,7 +12,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "analogStick",
@@ -25,7 +25,7 @@
       "type": "stick",
       "width": 168,
       "x": 51,
-      "y": 200
+      "y": 196
     },
     {
       "bind": "a",
@@ -37,7 +37,7 @@
       "type": "button",
       "width": 92,
       "x": 296,
-      "y": 265
+      "y": 261
     },
     {
       "bind": "b",
@@ -49,7 +49,7 @@
       "type": "button",
       "width": 92,
       "x": 404,
-      "y": 211
+      "y": 207
     },
     {
       "bind": "start",
@@ -61,7 +61,7 @@
       "type": "button",
       "width": 80,
       "x": 92,
-      "y": 574
+      "y": 570
     },
     {
       "bind": "select",
@@ -73,7 +73,7 @@
       "type": "button",
       "width": 80,
       "x": 230,
-      "y": 574
+      "y": 570
     },
     {
       "bind": "keypadToggle",
@@ -85,13 +85,13 @@
       "type": "button",
       "width": 80,
       "x": 368,
-      "y": 574
+      "y": 570
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 674,
+    "height": 670,
     "width": 540
   },
   "source": "phone-portrait"

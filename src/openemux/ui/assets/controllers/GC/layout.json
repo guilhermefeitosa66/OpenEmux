@@ -12,7 +12,7 @@
       "type": "button",
       "width": 186,
       "x": 18,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "z",
@@ -24,7 +24,7 @@
       "type": "button",
       "width": 93,
       "x": 324,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "r",
@@ -36,7 +36,7 @@
       "type": "button",
       "width": 93,
       "x": 429,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "menu",
@@ -48,7 +48,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "analogStick",
@@ -61,7 +61,7 @@
       "type": "stick",
       "width": 168,
       "x": 51,
-      "y": 172
+      "y": 168
     },
     {
       "bind": "a",
@@ -73,7 +73,7 @@
       "type": "button",
       "width": 111,
       "x": 333,
-      "y": 220
+      "y": 216
     },
     {
       "bind": "b",
@@ -85,7 +85,7 @@
       "type": "button",
       "width": 63,
       "x": 264,
-      "y": 302
+      "y": 298
     },
     {
       "bind": "x",
@@ -97,7 +97,7 @@
       "type": "button",
       "width": 51,
       "x": 456,
-      "y": 200
+      "y": 196
     },
     {
       "bind": "y",
@@ -109,7 +109,7 @@
       "type": "button",
       "width": 93,
       "x": 321,
-      "y": 148
+      "y": 144
     },
     {
       "bind": "dpad",
@@ -121,7 +121,7 @@
       "type": "dpad",
       "width": 150,
       "x": 60,
-      "y": 396
+      "y": 392
     },
     {
       "bind": "rightAnalogStick",
@@ -134,7 +134,7 @@
       "type": "stick",
       "width": 120,
       "x": 336,
-      "y": 410
+      "y": 406
     },
     {
       "bind": "start",
@@ -146,13 +146,13 @@
       "type": "button",
       "width": 80,
       "x": 230,
-      "y": 574
+      "y": 570
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 674,
+    "height": 670,
     "width": 540
   },
   "source": "phone-portrait"

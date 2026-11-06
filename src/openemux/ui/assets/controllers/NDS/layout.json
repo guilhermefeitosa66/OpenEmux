@@ -12,7 +12,7 @@
       "type": "button",
       "width": 186,
       "x": 18,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "r",
@@ -24,7 +24,7 @@
       "type": "button",
       "width": 186,
       "x": 336,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "menu",
@@ -36,7 +36,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "dpad",
@@ -48,7 +48,7 @@
       "type": "dpad",
       "width": 178,
       "x": 46,
-      "y": 91
+      "y": 87
     },
     {
       "bind": "x",
@@ -60,7 +60,7 @@
       "type": "button",
       "width": 59,
       "x": 367,
-      "y": 91
+      "y": 87
     },
     {
       "bind": "y",
@@ -72,7 +72,7 @@
       "type": "button",
       "width": 59,
       "x": 307,
-      "y": 150
+      "y": 146
     },
     {
       "bind": "a",
@@ -84,7 +84,7 @@
       "type": "button",
       "width": 59,
       "x": 426,
-      "y": 150
+      "y": 146
     },
     {
       "bind": "b",
@@ -96,7 +96,7 @@
       "type": "button",
       "width": 59,
       "x": 367,
-      "y": 210
+      "y": 206
     },
     {
       "bind": "select",
@@ -108,7 +108,7 @@
       "type": "button",
       "width": 82,
       "x": 160,
-      "y": 325
+      "y": 321
     },
     {
       "bind": "start",
@@ -120,13 +120,13 @@
       "type": "button",
       "width": 82,
       "x": 298,
-      "y": 325
+      "y": 321
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 425,
+    "height": 421,
     "width": 540
   },
   "source": "phone-portrait"

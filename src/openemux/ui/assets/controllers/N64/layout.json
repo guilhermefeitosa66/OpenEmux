@@ -12,7 +12,7 @@
       "type": "button",
       "width": 186,
       "x": 18,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "r",
@@ -24,7 +24,7 @@
       "type": "button",
       "width": 186,
       "x": 336,
-      "y": 11
+      "y": 7
     },
     {
       "bind": "menu",
@@ -36,7 +36,7 @@
       "type": "button",
       "width": 78,
       "x": 231,
-      "y": 16
+      "y": 12
     },
     {
       "bind": "analogStick",
@@ -49,7 +49,7 @@
       "type": "stick",
       "width": 168,
       "x": 51,
-      "y": 172
+      "y": 168
     },
     {
       "bind": "cUp",
@@ -61,7 +61,7 @@
       "type": "button",
       "width": 49,
       "x": 427,
-      "y": 131
+      "y": 127
     },
     {
       "bind": "cLeft",
@@ -73,7 +73,7 @@
       "type": "button",
       "width": 48,
       "x": 376,
-      "y": 180
+      "y": 176
     },
     {
       "bind": "cRight",
@@ -85,7 +85,7 @@
       "type": "button",
       "width": 49,
       "x": 479,
-      "y": 180
+      "y": 176
     },
     {
       "bind": "cDown",
@@ -97,7 +97,7 @@
       "type": "button",
       "width": 49,
       "x": 427,
-      "y": 229
+      "y": 225
     },
     {
       "bind": "b",
@@ -109,7 +109,7 @@
       "type": "button",
       "width": 77,
       "x": 243,
-      "y": 218
+      "y": 214
     },
     {
       "bind": "a",
@@ -121,7 +121,7 @@
       "type": "button",
       "width": 83,
       "x": 324,
-      "y": 281
+      "y": 277
     },
     {
       "bind": "z",
@@ -133,7 +133,7 @@
       "type": "button",
       "width": 62,
       "x": 248,
-      "y": 314
+      "y": 310
     },
     {
       "bind": "dpad",
@@ -145,7 +145,7 @@
       "type": "dpad",
       "width": 150,
       "x": 60,
-      "y": 396
+      "y": 392
     },
     {
       "bind": "start",
@@ -157,13 +157,13 @@
       "type": "button",
       "width": 80,
       "x": 230,
-      "y": 574
+      "y": 570
     }
   ],
   "format": 1,
   "scale": 0.5,
   "size": {
-    "height": 674,
+    "height": 670,
     "width": 540
   },
   "source": "phone-portrait"
