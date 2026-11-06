@@ -10699,7 +10699,7 @@ NAT, so discovery itself is checked only on hardware.
   `manual/#share` and `manual/#share-trouble`.
 - **Check:** `PYTHONPATH=src:tools .venv/bin/python -c "import build_site, pathlib; pages = [build_site.manual_output_path(l).read_text(encoding='utf-8') for l in build_site.ORDER]; assert all('id=\"share-trouble\"' in p and 'href=\"#share\"' in p and '53319' in p and '53318' in p for p in pages); readme = pathlib.Path('README.md').read_text(encoding='utf-8'); assert 'manual/#share)' in readme and 'manual/#share-trouble' in readme; print('RT-563 OK')"`
 
-### RT-611 — A game shared to the phone brings its console's BIOS into the system folder
+### RT-861 — A game shared to the phone brings its console's BIOS into the system folder
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** A desktop OpenEmux with Share nearby, a PS game and `scph5501.bin` plus a
@@ -10717,7 +10717,7 @@ NAT, so discovery itself is checked only on hardware.
   `notes.txt`. Suite: `./gradlew testDebugUnitTest --no-daemon` (`ShareBiosTest`,
   `ShareTransferLoopbackTest`).
 
-### RT-612 — The phone sends its BIOS with the first game of the console, to a desktop or a phone
+### RT-862 — The phone sends its BIOS with the first game of the console, to a desktop or a phone
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** The phone with two PS games and `scph5501.bin` (any case) in
@@ -10734,10 +10734,10 @@ NAT, so discovery itself is checked only on hardware.
   `<roms>/PS/bios/scph5501.bin`, the second phone in its `files/system/`. The other file never goes.
 - **Check:** on the desktop, `ls <roms>/PS/bios/`. Suite: `ShareBiosTest`, `SendSelectionTest`.
 
-### RT-613 — A BIOS the phone already has is not sent again; a different one is kept unless replaced
+### RT-863 — A BIOS the phone already has is not sent again; a different one is kept unless replaced
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
-- **Preconditions:** RT-611 done.
+- **Preconditions:** RT-861 done.
 - **Steps:**
   1. Share the same game from the desktop again and accept.
   2. Replace the desktop's `<roms>/PS/bios/scph5501.bin` with a different file of the same name and
