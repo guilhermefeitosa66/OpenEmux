@@ -11995,8 +11995,8 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   1. Move a control; tap "Close editor" (or Back).
   2. Tap "Save as a new skin…"; keep the name "Mine copy"; "Save".
   3. Edit "Mine" again, move a control, "Close editor" → "Discard changes".
-- **Expected:** Step 1 shows "Save changes to Mine?", "Your changes to Phone · Upright are not saved
-  yet.", "Save", "Save as a new skin…", "Discard changes" and the draft note. Step 2 adds "Mine copy"
+- **Expected:** Step 1 shows "Save changes to Mine?", "Your changes to this skin are not saved yet.",
+  "Save", "Save as a new skin…", "Discard changes" and the draft note. Step 2 adds "Mine copy"
   with the change, in use, and "Mine" stays as it was. Step 3 leaves "Mine" as it was. Closing with no
   changes closes at once.
 - **Check:** `adb shell ls -a $SKINS/GG` lists `mine-copy` and no `.*.draft.json`.
