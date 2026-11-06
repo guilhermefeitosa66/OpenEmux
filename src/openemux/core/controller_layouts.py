@@ -194,10 +194,10 @@ def _parse(console, folder, data):
         where = f"elements[{index}]"
         element_id, element_type, bind = raw.get("id"), raw.get("type"), raw.get("bind")
         _require(isinstance(element_id, str) and element_id, f"{where}: no id")
-        _require(element_type in ELEMENT_TYPES, f"{where}: unknown type")
+        _require(isinstance(element_type, str) and element_type in ELEMENT_TYPES, f"{where}: unknown type")
         _require(isinstance(bind, str), f"{where}: no bind")
         rect = [raw.get(key) for key in ("x", "y", "width", "height")]
-        _require(all(_is_int(v) for v in rect), f"{where}: bad rect")
+        _require(all(_is_int(v) for v in rect) and rect[2] > 0 and rect[3] > 0, f"{where}: bad rect")
         images = raw.get("images")
         _require(isinstance(images, dict) and set(images) == IMAGE_ROLES[element_type], f"{where}: bad images")
         paths = {}

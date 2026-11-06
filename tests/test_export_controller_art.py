@@ -161,6 +161,30 @@ class ExportControllerArtTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertIn("N64.zip", err)
 
+    def test_failed_export_keeps_the_previous_art(self):
+        self.make_zip()
+        self.run_tool()
+        first = self.digest()
+        self.make_zip(images={k: v for k, v in default_images().items() if k != "pill.png"})
+        self.assertEqual(self.run_tool()[0], 1)
+        self.assertEqual(self.digest(), first)
+
+    def test_two_controls_writing_one_file(self):
+        for image in ("a", "background"):
+            with self.subTest(image=image):
+                skin = skin_json()
+                skin["layouts"]["phone-portrait"]["elements"][4]["image"] = image
+                images = default_images()
+                images["background.png"] = png((200, 400), (40, 40, 40, 255))
+                self.make_zip(skin=skin, images=images)
+                code, _, err = self.run_tool()
+                self.assertEqual(code, 1)
+                self.assertIn("would be written twice", err)
+
+    def test_crop_without_screens_or_frame(self):
+        layout = {"screens": [], "elements": [{"type": "button", "y": 50}]}
+        self.assertEqual(self.tool.crop_top(layout), 0)
+
     def test_bad_packages(self):
         (self.skins / "N64.zip").write_bytes(b"not a zip")
         self.assertIn("not a readable zip", self.run_tool()[2])

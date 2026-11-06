@@ -77,16 +77,23 @@ class SkinPackage:
             self._zip = zipfile.ZipFile(self.path)
         except (OSError, zipfile.BadZipFile) as error:
             raise ExportError(f"{self.path.name}: not a readable zip ({error})") from error
-        names = self._zip.namelist()
-        roots = [n[: -len("skin.json")] for n in names if n == "skin.json" or (n.endswith("/skin.json") and n.count("/") == 1)]
-        if not roots:
-            raise ExportError(f"{self.path.name}: no skin.json")
-        self.prefix = sorted(roots)[0]
-        self._names = set(names)
         try:
-            self.skin = json.loads(self._zip.read(self.prefix + "skin.json"))
-        except ValueError as error:
-            raise ExportError(f"{self.path.name}: skin.json is not JSON ({error})") from error
+            names = self._zip.namelist()
+            roots = [
+                n[: -len("skin.json")] for n in names
+                if n == "skin.json" or (n.endswith("/skin.json") and n.count("/") == 1)
+            ]
+            if not roots:
+                raise ExportError(f"{self.path.name}: no skin.json")
+            self.prefix = sorted(roots)[0]
+            self._names = set(names)
+            try:
+                self.skin = json.loads(self._zip.read(self.prefix + "skin.json"))
+            except ValueError as error:
+                raise ExportError(f"{self.path.name}: skin.json is not JSON ({error})") from error
+        except ExportError:
+            self._zip.close()
+            raise
 
     def close(self):
         self._zip.close()
@@ -108,7 +115,7 @@ def crop_top(layout):
     if frame:
         bottoms.append(frame["y"] + frame["height"])
     controls = [e["y"] for e in layout.get("elements", []) if e["type"] in CONTROL_TYPES]
-    return min([max(bottoms) + CROP_MARGIN] + controls)
+    return min([max(bottoms, default=-CROP_MARGIN) + CROP_MARGIN] + controls)
 
 
 def scaled_rect(element, top, scale=SCALE):
@@ -163,11 +170,9 @@ def export_console(package, out_dir, scale=SCALE):
     crop_size = (round(width * scale), round(height * scale) - round(top * scale))
     crop = crop.resize(crop_size, Image.LANCZOS)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for stale in list(out_dir.glob("*.png")) + list(out_dir.glob("layout.json")):
-        stale.unlink()
-    save_png(crop, out_dir / "background.png")
-
+    # Every image is rendered before anything is written, so a skin that
+    # fails halfway leaves the console's committed art as it was.
+    files = {"background.png": crop}
     elements = []
     for element in layout.get("elements", []):
         if element["type"] not in CONTROL_TYPES:
@@ -183,7 +188,11 @@ def export_console(package, out_dir, scale=SCALE):
             else:
                 image = image.resize((rect["width"], rect["height"]), Image.LANCZOS)
             file_name = f"{base}.png"
-            save_png(image, out_dir / file_name)
+            if file_name in files:
+                # Two controls sharing an image at different sizes, or one
+                # named like the background, would overwrite each other.
+                raise ExportError(f"{package.path.name}: {file_name} would be written twice")
+            files[file_name] = image
             images[role] = file_name
         bind = element.get("bind") or ("dpad" if element["type"] == "dpad" else "")
         elements.append({"id": element["id"], "type": element["type"], "bind": bind, **rect, "images": images})
@@ -197,6 +206,11 @@ def export_console(package, out_dir, scale=SCALE):
         "background": "background.png",
         "elements": elements,
     }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for stale in list(out_dir.glob("*.png")) + list(out_dir.glob("layout.json")):
+        stale.unlink()
+    for file_name, image in files.items():
+        save_png(image, out_dir / file_name)
     (out_dir / "layout.json").write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return console
 

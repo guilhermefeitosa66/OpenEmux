@@ -218,8 +218,11 @@ class BrokenLayoutTests(unittest.TestCase):
             lambda d: d["elements"].append("x"),
             element("id", ""),
             element("type", "action"),
+            element("type", ["button"]),
             element("bind", None),
             element("x", 1.5),
+            element("width", 0),
+            element("height", -4),
             element("images", {"wrong": "x.png"}),
             element("images", "x.png"),
         ]
