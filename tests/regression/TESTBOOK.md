@@ -11079,7 +11079,7 @@ with Files by Google, or a headless emulator with `adb`). `$PKG` is `com.openemu
 folders are under `/sdcard/Android/data/$PKG/files/`. The extension and duplicate rules are
 unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersTest`.
 
-### RT-744 — "Open with" imports a ROM into its console
+### RT-754 — "Open with" imports a ROM into its console
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** The app installed; a Game Boy Advance ROM `game.gba` not yet in the library,
@@ -11092,7 +11092,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
 - **Check:** `MANUAL`: `adb shell ls /sdcard/Android/data/$PKG/files/` and find `game.gba` in the
   GBA ROM folder.
 
-### RT-745 — Sharing several ROMs imports each into its console
+### RT-755 — Sharing several ROMs imports each into its console
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** `a.nes` and `b.sfc`, neither in the library, in `Download`.
@@ -11102,7 +11102,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   show their game.
 - **Check:** `MANUAL`: both files are in their consoles' ROM folders.
 
-### RT-746 — A zip and a cue sheet with its track import as in Settings
+### RT-756 — A zip and a cue sheet with its track import as in Settings
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** `game.zip` holding one `.gb` ROM; a PlayStation `disc.cue` with the
@@ -11115,7 +11115,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
 - **Check:** `MANUAL`: the folders hold `*.gb`, `disc.cue` and `disc.bin`; the library lists one
   PlayStation game.
 
-### RT-747 — An extension several consoles take asks for the console
+### RT-757 — An extension several consoles take asks for the console
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** A `game.iso` not in the library.
@@ -11127,10 +11127,10 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   toast reports an import.
 - **Check:** `MANUAL`: only the first `.iso` is in a ROM folder.
 
-### RT-748 — A game already in the library is not copied twice, and the batch goes on
+### RT-758 — A game already in the library is not copied twice, and the batch goes on
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
-- **Preconditions:** RT-744 done (`game.gba` is in the library); a second ROM `new.gba` not in it.
+- **Preconditions:** RT-754 done (`game.gba` is in the library); a second ROM `new.gba` not in it.
 - **Steps:**
   1. "Open with" › "Import to OpenEmux" on `game.gba` again.
   2. Select `game.gba` and `new.gba`, "Share" › "Import to OpenEmux".
@@ -11138,7 +11138,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   entry. Step 2: toast "1 game imported. 1 game is already in your library."; `new.gba` is added.
 - **Check:** `MANUAL`: the GBA folder holds one `game.gba` (same size as before) and `new.gba`.
 
-### RT-749 — Settings › Import reports a game already in the library
+### RT-759 — Settings › Import reports a game already in the library
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** `game.gba` in the library.
@@ -11148,7 +11148,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   overwritten (it was before this change).
 - **Check:** `MANUAL`: the file's modification time in the GBA folder is unchanged.
 
-### RT-750 — A file no console plays is refused and nothing is copied
+### RT-760 — A file no console plays is refused and nothing is copied
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** A file `notes.xyz` (any content) in `Download`.
@@ -11158,7 +11158,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   nothing is added to any ROM folder.
 - **Check:** `MANUAL`: `adb shell find /sdcard/Android/data/$PKG/files -name 'notes*'` finds nothing.
 
-### RT-751 — Works from a cold start and over a running game
+### RT-761 — Works from a cold start and over a running game
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** Two ROMs not in the library, `c.nes` and `d.nes`.
@@ -11170,7 +11170,7 @@ unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersT
   "1 game imported."; the game was paused, not closed. Step 3: the game is where it was left.
 - **Check:** `MANUAL`: both files are in the NES folder; the game's progress is intact.
 
-### RT-752 — OpenEmux is not offered for images, documents or APKs
+### RT-762 — OpenEmux is not offered for images, documents or APKs
 - **Area:** Android — Import from Open with and Share
 - **Mode:** MANUAL
 - **Preconditions:** A photo, a PDF, a `README.md` and an APK on the device.
