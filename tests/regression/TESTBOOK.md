@@ -7490,7 +7490,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
 `MANUAL`, like the Dark skin's section: `$PKG` is `com.openemux.mobile`.
 
-### RT-678 — Each console lists its official colors, each with a swatch
+### RT-864 — Each console lists its official colors, each with a swatch
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** The Android app with a GBA and a PlayStation game in the library.
@@ -7509,7 +7509,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   # ['console', 'dark', 'white', 'black', 'clear-blue', 'clear-pink', 'silver', 'orange'] ['console', 'dark']
   ```
 
-### RT-679 — Picking a color gives every game of the console that skin, same layout
+### RT-865 — Picking a color gives every game of the console that skin, same layout
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** Two GBA games and one SNES game in the library; GBA on Console colors.
@@ -7528,10 +7528,10 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   adb shell run-as $PKG ls cache/skins/clear-blue   # GBA.deltaskin, copied when the GBA game launched
   ```
 
-### RT-680 — A color choice survives closing the game, restarting the app and updating it
+### RT-866 — A color choice survives closing the game, restarting the app and updating it
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
-- **Preconditions:** RT-679 done (GBA set to Clear blue).
+- **Preconditions:** RT-865 done (GBA set to Clear blue).
 - **Steps:**
   1. Force-stop the app (`adb shell am force-stop $PKG`) and open it again.
   2. Open Settings → GBA, then launch a GBA game.
@@ -7539,9 +7539,9 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
      again.
 - **Expected:** The section still reads "Clear blue" and the games open on the Clear blue skin after
   the restart and after the update.
-- **Check:** the `skin` key is still `clear-blue` after each step (same command as RT-679).
+- **Check:** the `skin` key is still `clear-blue` after each step (same command as RT-865).
 
-### RT-681 — Every control works on the color skins of the controllers and the DS
+### RT-867 — Every control works on the color skins of the controllers and the DS
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** N64 set to "Gold", NDS to "Pink", PSP to "White", GameCube to "Orange"; a game of
@@ -7561,7 +7561,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
 - **Check:** none beyond the steps (the frames come from the same layout as Console colors:
   `BundledSkinsTest` in the app's unit tests compares every color package with the console's).
 
-### RT-682 — An imported skin still wins over a color
+### RT-868 — An imported skin still wins over a color
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** A third-party `.deltaskin` for the SNES; SNES set to "Purple".
@@ -7576,7 +7576,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   North American colors: light grey with purple A and B and lavender X and Y.
 - **Check:** none beyond the steps.
 
-### RT-683 — Color names are plain words in every language
+### RT-869 — Color names are plain words in every language
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** The app's language set to Português (Brasil) (Settings → Language, or the
@@ -7589,7 +7589,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   "Dandelion", "Fuchsia", "Arctic") appears in any language.
 - **Check:** none beyond the steps (`StringsSkinVariantTest` checks every locale has every name).
 
-### RT-684 — The color list from a game's detail screen, by gamepad
+### RT-870 — The color list from a game's detail screen, by gamepad
 - **Area:** Android — Controller skins in official colors
 - **Mode:** MANUAL
 - **Preconditions:** A Game Boy game in the library; GB on Console colors; a gamepad connected.
