@@ -12884,7 +12884,7 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   (RT-781) on "Console colors - edited". After step 2, "YOUR SKINS" (count 1) shows the card
   "Console colors - edited" ringed with "In use", its Phone, Tablet and Fold badges lit like the
   bundled card's, and the "Console colors" card is no longer in use. Step 3 adds a second copy,
-  "Console colors - edited 2" (count 2), the new one in use. The bundled card stays under
+  "Console colors - edited (2)" (count 2), the new one in use. The bundled card stays under
   "BUNDLED", unchanged.
 - **Check:**
   ```bash
@@ -12903,7 +12903,7 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   2. Do it once more.
 - **Expected:** Step 1 asks for no name and opens no editor: after a short "Making the copy…" the
   list shows "Console colors (copy)" under "YOUR SKINS" (count 1) with its Phone, Tablet and Fold
-  badges lit, not in use: "Dark" keeps its ring and "In use". Step 2 adds "Console colors (copy) 2"
+  badges lit, not in use: "Dark" keeps its ring and "In use". Step 2 adds "Console colors (copy) (2)"
   (count 2), not in use either. The bundled card stays under "BUNDLED", unchanged.
 - **Check:**
   ```bash
