@@ -13887,6 +13887,98 @@ on the side away from the selection sideways.
   not a flat disc. The game shows the same, and "1" still presses "1".
 - **Check:** `MANUAL`: a screenshot of the stage and one in game.
 
+### RT-853 — The menu key is painted like any button: "Button", "Relief", "Label"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game.
+- **Steps:**
+  1. Tap the menu key (the pill with three lines) → "Colour". Read the part toggles.
+  2. "Button" → the red circle.
+  3. "Relief" → the blue circle.
+  4. "Label" → the yellow circle; the check; "Save"; close the editor and launch the game.
+- **Expected:** The toggles are "Button", "Relief" and "Label". Step 2: the key stays a pill, now
+  red, with its three lines on it and a darker red layer under it: it does not vanish. Step 3: the
+  layer under it turns blue. Step 4: the three lines turn yellow. The game shows the key the same,
+  and tapping it opens the pause menu.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # the element with "bind": "menu" has "button": "#EF4444", "relief": "#3B82F6" and
+  # "letter": "#FACC15" in its "colors", and a "depth" above 0
+  ```
+
+### RT-854 — The D-pad's ball keeps its size when it is painted
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Game Gear's "Console colors" whose D-pad was never painted (a
+  new one from "Duplicate", RT-840), open in the editor.
+- **Steps:**
+  1. Take a screenshot of the stage.
+  2. Tap the D-pad → "Colour" → "Ball" → the green circle → the check.
+  3. Take a screenshot of the stage again.
+- **Expected:** The ball turns green, a disc ringed in the same green, centred on the pad as it
+  was and as large as it was: it does not grow. The pad, its relief and its arrows keep their
+  colours.
+- **Check:** `MANUAL`: the two screenshots; the ball is as wide in the second as in the first.
+
+### RT-855 — A colour goes to every layout of the skin
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, the phone held upright; a Game Gear game.
+- **Steps:**
+  1. Select "1" alone → "Colour" → "Button" → the red circle. Read the line under the picker. The
+     check.
+  2. Tap an empty part of the console → "Colour" → the blue circle → the check.
+  3. Tap the frame → "Colour" → "Frame" → the green circle → the check.
+  4. Tap the toolbar's "Switch upright and sideways".
+  5. "Save", close the editor, launch the game and turn the phone both ways.
+- **Expected:** The panel reads "A colour goes to every layout of this skin. Textures, places and
+  sizes stay with this one." After step 4 the sideways layout shows "1" in red, the body in blue
+  and the frame in green, every control where the sideways layout had it. The game shows the same
+  colours upright and sideways.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # in every layout of "layouts" (phone, tablet and fold, upright and sideways): "background" has
+  # "color": "#3B82F6", "frame"."colors" has "frame": "#22C55E", and the element labelled "1" has
+  # "button": "#EF4444"
+  ```
+
+### RT-856 — A place, a size and a texture stay with the layout they were made in
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Game Gear's "Console colors" never edited (a new one from
+  "Duplicate", RT-840), open in the editor, the phone held upright; a picture on the device.
+- **Steps:**
+  1. Drag "2" somewhere else, and resize the D-pad to 120%.
+  2. Select "1" alone → "Texture" → "Choose image" → the picture → the check.
+  3. Tap the toolbar's "Switch upright and sideways".
+  4. Sideways, select "1" alone → "Colour" → "Button" → the purple circle → the check.
+  5. Tap "Switch upright and sideways" again.
+- **Expected:** After step 3 the sideways layout is as the skin had it: "2" and the D-pad where
+  and as large as they were there, and "1" with no picture on it. After step 5, upright, "1" still
+  shows the picture of step 2 (the purple of step 4 is under it: its relief turned a darker
+  purple), "2" is where step 1 left it and the D-pad is at 120%.
+- **Check:** `MANUAL`: a screenshot of each layout after step 5.
+
+### RT-857 — The palette row names the palette and opens "Palettes"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Select a control → "Colour". Read the row above the colour circles.
+  2. Tap that row.
+  3. Tap "Dracula".
+  4. Tap the last, dashed circle of the colour row, then the back arrow.
+  5. Close the editor and open it again → select a control → "Colour".
+- **Expected:** Step 1: the row reads "Palette", "Basic" and, at its end, "Palettes" with a
+  chevron. Step 2 opens "Palettes" ("sets the colour row") with "Basic", "Dracula", "Pastel",
+  "Nord", "Gruvbox", "Neon", "Earth" and "Green screen", "Basic" marked "✓ In the colour row".
+  Step 3 goes back to the colour panel: the row reads "Dracula" and the seven circles are
+  Dracula's colours. Step 4: the dashed circle opens the same list. Step 5: the row still reads
+  "Dracula".
+- **Check:** `MANUAL`: a screenshot after steps 1, 2 and 3.
+
 ## Android — Copy of a Delta or Manic skin
 
 "Create copy and edit" also worked on the bundled skins that shipped as Delta/Manic packages (issue 797,
