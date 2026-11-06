@@ -6641,8 +6641,9 @@ files are in `files/launch/current/`.
   a skin to use it in game. Each one says which screens it was made for. Bundled skins never change."
   and shows, under "BUNDLED" (with a lock), two cards right there, without opening anything:
   "Console colors" (ringed, "In use") and "Dark", each with lit "Phone", "Tablet" and "Fold" badges
-  (issue 782). A console the app has no Dark skin for (Atari 5200, for
-  example) shows no section, only a "Default skin" row reading "OpenEmux 5200" that opens nothing.
+  (issue 782). A console the app draws its own skin for (Atari 5200, for example) shows the section
+  too, with its one "Console colors" card, so its "Create copy and edit" can be reached (issue 798,
+  RT-775); no "Default skin" row.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -11347,14 +11348,14 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 ### RT-741 — Bundled skins only offer "Use it as it is"
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
-- **Preconditions:** A console whose bundled skin is a Delta/Manic package (SNES) or the drawn skin.
+- **Preconditions:** A console whose bundled skin is a Delta/Manic package (SNES).
 - **Steps:**
   1. On the "Dark" card, tap "⋮".
   2. Tap "Use it as it is".
 - **Expected:** The sheet shows the name, the three lit badges, a lock with "Bundled skins never
   change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
   consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
-  RT-769.)
+  RT-769; so do the drawn-skin consoles, issue 798: RT-775.)
 - **Check:** `MANUAL`.
 
 ### RT-742 — The list works with a gamepad
@@ -11771,16 +11772,6 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 - **Check:** `adb shell ls $SKINS/GG` lists the same folders as before (no hidden `.*.tmp` either:
   `adb shell ls -a $SKINS/GG`).
 
-### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
-- **Area:** Android — Copy of a bundled skin
-- **Mode:** MANUAL
-- **Preconditions:** A ColecoVision game (drawn skin) in the library.
-- **Steps:**
-  1. Open the ColecoVision's skin section (or row).
-- **Expected:** The ColecoVision offers no copy: the drawn skin is not made into one yet (issue 798).
-  The Delta/Manic consoles (SNES, GBA and the rest) do offer it since issue 797: RT-790.
-- **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsoleWithAPackage`.
-
 ### RT-774 — Copying works from a game's detail screen and with a gamepad
 - **Area:** Android — Copy of a bundled skin
 - **Mode:** MANUAL
@@ -11793,6 +11784,98 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   made and the sheet's list shows it under "Your skins" with "In use". The detail screen's skin row
   then reads "Console colors copy".
 - **Check:** `MANUAL`.
+
+## Android — Copy of the drawn skin
+
+On the consoles the app ships no skin package for (Atari 5200, ColecoVision, Intellivision and
+Odyssey²), the game plays the app's drawn skin. "Create copy and edit" converts it into OpenEmux's
+own format (issue 798, part 3 of issue 783): Phone, Tablet and Fold layouts, upright and sideways,
+laid out as the game draws the skin, with its colours, labels and binds. The keypad, which the drawn
+skin opens over the face buttons with its "KEYPAD" key, has keys of its own in the copy. Same setup
+as the copy of a bundled skin above.
+
+### RT-775 — A drawn-skin console lists its skin and offers "Create copy and edit"
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** An Odyssey² game in the library; no skin of your own for Odyssey².
+- **Steps:**
+  1. Settings → Odyssey² → look below "Default shader".
+  2. On the "Console colors" card, tap "⋮".
+  3. Open the Odyssey² game's detail screen and tap the "Controller skin" row.
+- **Expected:** Step 1 shows the "Controller skins" section with one "Console colors" card under
+  "BUNDLED", in use, with its Phone, Tablet and Fold badges lit; there is no "Default skin" row
+  reading "OpenEmux O2". Step 2's sheet shows "Bundled skins never change.", "Create copy and edit"
+  and "Use it as it is". Step 3 opens the same list.
+- **Check:** `MANUAL`; JVM suite `SkinValueLabelTest.aBundledSkinToCopyIsEnoughToShowTheList`.
+
+### RT-776 — The copy is named, listed under Your skins with three forms and used
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-775.
+- **Steps:**
+  1. "⋮" on "Console colors" → "Create copy and edit" → type "My Odyssey" → "Create copy".
+- **Expected:** "YOUR SKINS" shows "My Odyssey" ringed with "In use", its Phone, Tablet and Fold
+  badges lit; "Console colors" stays under "BUNDLED", unchanged.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/O2/my-odyssey             # skin.json and the six layout folders
+  adb shell ls $SKINS/O2/my-odyssey/phone-portrait   # background.png dpad-ball.png dpad.png menu.png
+  ```
+
+### RT-777 — Upright on a phone the copy looks and plays like the drawn skin
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-776 (the copy in use); the Odyssey² game; a phone held upright.
+- **Steps:**
+  1. Launch the game. Compare with the "Console colors" skin (pick it, relaunch, then pick the copy
+     again).
+  2. Press the D-pad, "ACTION", each of the twelve keypad keys, save, load, turbo, slow motion, fast
+     forward and the menu key.
+- **Expected:** The same dark body, picture, strip with its five icons, round menu key, D-pad with its
+  arrow marks and red "ACTION" button in the same places; the console's name at the foot. Two rows of
+  six keypad keys ("1" to "6", then "7", "8", "9", "CLR", "0", "ENT") sit between the controls and the
+  bottom, always shown (no "KEYPAD" key, no hide key). Every key does what it does on the drawn skin:
+  the keypad types its digit, CLR and ENT clear and enter, the strip keys light while on.
+- **Check:** `MANUAL`; JVM suite `DrawnSkinCopyTest.everyControlPressesWhatTheDrawnSkinsDoes`.
+
+### RT-778 — Sideways the keypad goes under the face buttons
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Atari 5200's drawn skin in use (RT-776's steps on Atari 5200); a
+  5200 game.
+- **Steps:**
+  1. Launch the game with the phone sideways.
+  2. Move the stick; press "1", "2", "START", "PAUSE" and the keypad keys.
+- **Expected:** The picture is centred with the strip under it; the stick on the left, "START" and
+  "PAUSE" under it; on the right, the two orange buttons near the top and a three by four keypad
+  ("1 2 3", "4 5 6", "7 8 9", "* 0 #") under them. The stick moves its knob with the thumb and
+  every key presses.
+- **Check:** `MANUAL`; JVM suite `DrawnSkinCopyTest.sidewaysTheKeypadGoesUnderTheFaceButtonsAndThePillsLeft`.
+
+### RT-779 — On a tablet the keypad sits between the controls
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** A tablet (or an emulator 600 dp or more across) with a copy of the Intellivision's
+  drawn skin in use.
+- **Steps:**
+  1. Launch an Intellivision game upright, then turn the tablet sideways.
+- **Expected:** Upright, the D-pad on the left, the three gold buttons on the right and a three by
+  four keypad between them, "CLR" and "ENT" either side of "0". Sideways, the gold buttons go up on
+  the right with the keypad under them. Every control presses, as RT-777.
+- **Check:** `MANUAL`.
+
+### RT-780 — The ColecoVision copy presses the same on either core
+- **Area:** Android — Copy of the drawn skin
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the ColecoVision's drawn skin in use; a ColecoVision game that reads the
+  keypad at its title screen (most ask for a skill level there).
+- **Steps:**
+  1. With the "blueMSX" core, launch the game; press "L", "R" and keypad "1".
+  2. Settings → ColecoVision → core "Gearcoleco"; launch the game again and press the same keys.
+- **Expected:** On both cores "L" and "R" fire the left and right buttons and keypad "1" picks the
+  first level: the copy follows the core, as the drawn skin does.
+- **Check:** `MANUAL`; JVM suite `OpenEmuxSkinLayoutsTest.buttonsAndKeysPressWhatTheCoreReadsThemAs`.
+
 
 ## Android — Copy of a Delta or Manic skin
 
@@ -11814,7 +11897,7 @@ in the library.
 - **Expected:** Every sheet shows the lock line "Bundled skins never change.", then "Create copy and
   edit" (pencil icon) above "Use it as it is".
 - **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`); JVM suite
-  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsoleWithAPackage` (every variant of the twelve
+  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` (every variant of the twelve
   consoles is a package the conversion takes).
 
 ### RT-791 — The converted copy is named, listed under Your skins, used and has the source's layouts
@@ -11904,6 +11987,12 @@ in the library.
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
+- **Retired:** 2026-11-06 (issue 797).
+- **Reason:** Every console's bundled skin can be copied now: the OpenEmux-format packages (RT-769),
+  the drawn skin (issue 798, RT-775) and the Delta/Manic packages (issue 797, RT-790). The JVM suite
+  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` checks each console's kind of copy.
 
 ### RT-675 — An imported skin still wins over both bundled ones
 - **Retired:** 2026-11-05 (issue 782).
