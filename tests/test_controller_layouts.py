@@ -232,7 +232,7 @@ class BrokenLayoutTests(unittest.TestCase):
         role = next(iter(first["images"]))
         for name in ("", "missing.png", 3):
             with self.subTest(name=name):
-                self.assertBroken(self.mutated(lambda d: d["elements"][0]["images"].update({role: name})))
+                self.assertBroken(self.mutated(lambda d, name=name: d["elements"][0]["images"].update({role: name})))
 
 
 if __name__ == "__main__":
