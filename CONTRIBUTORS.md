@@ -65,7 +65,9 @@ Suggested remapping the desktop controls on a drawing of the console's
 controller, which became
 [#760](https://github.com/guilhermefeitosa66/OpenEmux/issues/760); its first
 part, [#814](https://github.com/guilhermefeitosa66/OpenEmux/issues/814), brings
-the Android skins' controller art to the desktop.
+the Android skins' controller art to the desktop, and the second,
+[#815](https://github.com/guilhermefeitosa66/OpenEmux/issues/815), draws that
+controller on the input page so a click on one of its buttons remaps it.
 
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
