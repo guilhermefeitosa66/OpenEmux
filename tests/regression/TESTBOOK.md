@@ -7370,7 +7370,7 @@ files are in `files/launch/current/`.
   "Console colors" (selected), "Dark" and "Purple" (issue 720), each with a small color swatch. A console the app has no Dark skin for (Atari 2600, for
   example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
   (issue 782). The Atari 5200, ColecoVision, Intellivision and Odyssey 2 show the same two cards
-  since issue 772 gave them bundled skins (RT-796); no "Default skin" row.
+  since issue 772 gave them bundled skins (RT-881); no "Default skin" row.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -12285,7 +12285,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   RT-792; issue 798, RT-775; the SNES's zip is copied as it is since issue 806, RT-819.)
   change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
   consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
-  RT-769; so do the four keypad consoles since issue 772: RT-796.)
+  RT-769; so do the four keypad consoles since issue 772: RT-881.)
 - **Check:** `MANUAL`.
 
 ### RT-742 — The list works with a gamepad
@@ -12703,14 +12703,14 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 - **Check:** `adb shell ls $SKINS/GG` lists the same folders as before (no hidden `.*.tmp` either:
   `adb shell ls -a $SKINS/GG`).
 
-### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
+### RT-874 — Consoles whose bundled skin cannot be copied yet do not offer it
 - **Area:** Android — Copy of a bundled skin
 - **Mode:** MANUAL
 - **Preconditions:** A SNES game (Delta package) in the library.
 - **Steps:**
   1. Settings → SNES → "⋮" on "Console colors" and on "Dark".
 - **Expected:** The SNES sheets show only "Use it as it is" (RT-741). (The four keypad consoles offer
-  the copy of their bundled skin since issue 772: RT-796.)
+  the copy of their bundled skin since issue 772: RT-881.)
 - **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForTheOwnFormatAndTheDrawnConsoles`.
 
 ### RT-774 — Copying works from a game's detail screen and with a gamepad
@@ -12737,7 +12737,7 @@ a "KEYPAD" key in the centre row opens it, and on it a "CONTROLS" key in the sam
 The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone or a headless
 emulator with `adb`. `$PKG` is `com.openemux.mobile`.
 
-### RT-796 — Each of the four consoles opens with its bundled skin
+### RT-881 — Each of the four consoles opens with its bundled skin
 - **Area:** Android — Bundled skins
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with one game of each of A5200, CV, INTV and O2 (with
@@ -12757,10 +12757,10 @@ emulator with `adb`. `$PKG` is `com.openemux.mobile`.
 - **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
   shows `drawing OpenEmux <console name> (…, keypad pages)` and no fallback line.
 
-### RT-797 — "KEYPAD" opens the keypad page and "CONTROLS" goes back, in both orientations
+### RT-882 — "KEYPAD" opens the keypad page and "CONTROLS" goes back, in both orientations
 - **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** RT-796's games.
+- **Preconditions:** RT-881's games.
 - **Steps:**
   1. On each console tap "KEYPAD".
   2. Turn the phone to the other orientation.
@@ -12782,7 +12782,7 @@ emulator with `adb`. `$PKG` is `com.openemux.mobile`.
 ### RT-798 — Every control and keypad key presses what the drawn skin pressed, Gearcoleco included
 - **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** RT-796's games; RetroArch's input test, or games that ask for a number on the
+- **Preconditions:** RT-881's games; RetroArch's input test, or games that ask for a number on the
   keypad (a game's skill level, a menu choice).
 - **Steps:**
   1. On each console press the D-pad (or move the stick), every button and, on the keypad page,
@@ -12802,7 +12802,7 @@ emulator with `adb`. `$PKG` is `com.openemux.mobile`.
 ### RT-799 — Dark, quick actions, an imported skin and a gamepad on the keypad consoles
 - **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** RT-796's games; any `.deltaskin` package; a gamepad (or the emulator's
+- **Preconditions:** RT-881's games; any `.deltaskin` package; a gamepad (or the emulator's
   keyboard as one).
 - **Steps:**
   1. Settings → ColecoVision → "Controller skins": tap "Dark" and start the game; open the keypad.
@@ -13948,47 +13948,47 @@ the date.
 - **Reason:** Every console's bundled skin can be copied now: the OpenEmux-format packages (RT-769),
   the drawn skin (issue 798, RT-775) and the Delta/Manic packages (issue 797, RT-792). The JVM suite
   `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` checks each console's kind of copy.
-### RT-775 — A drawn-skin console lists its skin and offers "Create copy and edit"
+### RT-875 — A drawn-skin console lists its skin and offers "Create copy and edit"
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
-### RT-776 — The copy is named, listed under Your skins with three forms and used
+### RT-876 — The copy is named, listed under Your skins with three forms and used
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
-### RT-777 — Upright on a phone the copy looks and plays like the drawn skin
+### RT-877 — Upright on a phone the copy looks and plays like the drawn skin
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
-### RT-778 — Sideways the keypad goes under the face buttons
+### RT-878 — Sideways the keypad goes under the face buttons
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
-### RT-779 — On a tablet the keypad sits between the controls
+### RT-879 — On a tablet the keypad sits between the controls
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
-### RT-780 — The ColecoVision copy presses the same on either core
+### RT-880 — The ColecoVision copy presses the same on either core
 - **Retired:** 2026-11-06 (issue 772).
 - **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
   5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
   their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
-  RT-796); no console is left on the drawn skin.
+  RT-881); no console is left on the drawn skin.
 
 ### RT-675 — An imported skin still wins over both bundled ones
 - **Retired:** 2026-11-05 (issue 782).
