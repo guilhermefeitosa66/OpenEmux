@@ -285,6 +285,39 @@ class TokenMapper:
 
         return None
 
+    def transitions_for_event(self, ev_type, code, value):
+        """What one event presses and releases: ``[(token, pressed), ...]``.
+
+        Where :meth:`token_for_event` only names a press, this is for whoever
+        has to know that a control is *still* held (issue 816): a key release,
+        an axis coming back inside the deadzone and a hat centring each report
+        the tokens they let go of. An axis or a hat swinging to the other side
+        releases the one it left.
+        """
+        if ev_type == EV_KEY:
+            index = self.button_index.get(code)
+            if index is None or value > 1:  # not ours, or the autorepeat sentinel
+                return []
+            return [(str(index), value == 1)]
+
+        if ev_type == EV_ABS:
+            if code in self.hat_map:
+                hat_number, is_vertical = self.hat_map[code]
+                negative, positive = ("up", "down") if is_vertical else ("left", "right")
+                return [
+                    (f"h{hat_number}{negative}", value < 0),
+                    (f"h{hat_number}{positive}", value > 0),
+                ]
+            index = self.axis_index.get(code)
+            if index is None:
+                return []
+            axis_min, axis_max = self._range_for(code)
+            threshold = axis_threshold(axis_min, axis_max)
+            past = threshold > 0 and abs(value) >= threshold
+            return [(f"-{index}", past and value < 0), (f"+{index}", past and value > 0)]
+
+        return []
+
 
 # ----- device discovery ------------------------------------------------------
 class GamepadDevice:
@@ -367,6 +400,7 @@ class GamepadCaptureReader:
     """
 
     POLL_INTERVAL = 0.2
+    THREAD_NAME = "gamepad-capture"
 
     def __init__(self, on_token, on_error=None, device=None):
         self._on_token = on_token
@@ -381,7 +415,7 @@ class GamepadCaptureReader:
         if self._thread is not None:
             return
         self._cancel.clear()
-        self._thread = threading.Thread(target=self._run, name="gamepad-capture", daemon=True)
+        self._thread = threading.Thread(target=self._run, name=self.THREAD_NAME, daemon=True)
         self._thread.start()
 
     def stop(self, join_timeout=1.0):
@@ -460,6 +494,25 @@ class GamepadCaptureReader:
                 return True
         return False
 
+    def _events(self, fd, fmt, size):
+        """The events `fd` delivers, unpacked, until cancelled or the pad is gone.
+
+        Whatever was already queued is dropped first, so a stale event is not
+        taken for something the user just did.
+        """
+        _drain(fd, size)
+        while self._wait_readable(fd):
+            try:
+                data = os.read(fd, size * 32)
+            except BlockingIOError:
+                continue
+            except OSError:
+                return
+            if not data:
+                return
+            for offset in range(0, len(data) - size + 1, size):
+                yield struct.unpack(fmt, data[offset:offset + size])
+
     def _read_evdev(self, device):
         fd = os.open(device.event_path, os.O_RDONLY | os.O_NONBLOCK)
         try:
@@ -468,49 +521,73 @@ class GamepadCaptureReader:
                 device.abs_codes,
                 axis_ranges=_read_axis_ranges(fd, device.abs_codes),
             )
-            # Drain whatever is already queued so a stale event is not reported
-            # as the user's press.
-            _drain(fd, INPUT_EVENT_SIZE)
-            while self._wait_readable(fd):
-                try:
-                    data = os.read(fd, INPUT_EVENT_SIZE * 32)
-                except BlockingIOError:
-                    continue
-                except OSError:
+            for _sec, _usec, ev_type, code, value in self._events(fd, INPUT_EVENT_FORMAT, INPUT_EVENT_SIZE):
+                if self._on_evdev_event(mapper, ev_type, code, value):
                     return
-                if not data:
-                    return
-                for offset in range(0, len(data) - INPUT_EVENT_SIZE + 1, INPUT_EVENT_SIZE):
-                    chunk = data[offset:offset + INPUT_EVENT_SIZE]
-                    _sec, _usec, ev_type, code, value = struct.unpack(INPUT_EVENT_FORMAT, chunk)
-                    token = mapper.token_for_event(ev_type, code, value)
-                    if token:
-                        self._emit_token(token)
-                        return
         finally:
             os.close(fd)
 
     def _read_joydev(self, device):
         fd = os.open(device.js_path, os.O_RDONLY | os.O_NONBLOCK)
         try:
-            _drain(fd, JS_EVENT_SIZE)
-            while self._wait_readable(fd):
-                try:
-                    data = os.read(fd, JS_EVENT_SIZE * 32)
-                except BlockingIOError:
-                    continue
-                except OSError:
+            for event in self._events(fd, JS_EVENT_FORMAT, JS_EVENT_SIZE):
+                if self._on_joydev_event(*event):
                     return
-                if not data:
-                    return
-                for offset in range(0, len(data) - JS_EVENT_SIZE + 1, JS_EVENT_SIZE):
-                    chunk = data[offset:offset + JS_EVENT_SIZE]
-                    token = joydev_token(*struct.unpack(JS_EVENT_FORMAT, chunk))
-                    if token:
-                        self._emit_token(token)
-                        return
         finally:
             os.close(fd)
+
+    def _on_evdev_event(self, mapper, ev_type, code, value):
+        """Take one evdev event; True ends the read. One press is all this reader wants."""
+        token = mapper.token_for_event(ev_type, code, value)
+        if token:
+            self._emit_token(token)
+        return bool(token)
+
+    def _on_joydev_event(self, time, value, ev_type, number):
+        token = joydev_token(time, value, ev_type, number)
+        if token:
+            self._emit_token(token)
+        return bool(token)
+
+
+class GamepadHeldReader(GamepadCaptureReader):
+    """Says which controls of a pad are held, for as long as it runs (issue 816).
+
+    The capture reader waits for one press and stops; the controller drawing
+    on the input page has to show a button lit for as long as it is down, so
+    this one keeps reading and reports every change: ``on_change(tokens)``
+    gets the frozen set of binding tokens held right now, from the reader
+    thread. ``on_error(reason)`` fires once instead when no pad can be read.
+
+    It only reads: the pad is not grabbed, so UI navigation and anything else
+    listening see the same events.
+    """
+
+    THREAD_NAME = "gamepad-held"
+
+    def __init__(self, on_change, on_error=None, device=None):
+        super().__init__(None, on_error=on_error, device=device)
+        self._on_change = on_change
+        self._held = set()
+
+    def _feed(self, transitions):
+        before = frozenset(self._held)
+        for token, pressed in transitions:
+            if pressed:
+                self._held.add(token)
+            else:
+                self._held.discard(token)
+        held = frozenset(self._held)
+        if held != before and not self._cancel.is_set():
+            self._on_change(held)
+
+    def _on_evdev_event(self, mapper, ev_type, code, value):
+        self._feed(mapper.transitions_for_event(ev_type, code, value))
+        return False
+
+    def _on_joydev_event(self, time, value, ev_type, number):
+        self._feed(joydev_transitions(time, value, ev_type, number))
+        return False
 
 
 def joydev_token(_time, value, ev_type, number):
@@ -526,6 +603,21 @@ def joydev_token(_time, value, ev_type, number):
             return None
         return f"{'+' if value > 0 else '-'}{number}"
     return None
+
+
+def joydev_transitions(_time, value, ev_type, number):
+    """What a legacy ``struct js_event`` presses and releases: ``[(token, pressed), ...]``.
+
+    The start-up events count here: they are the pad's state as it was opened,
+    which is exactly what a reader of held controls wants to begin from.
+    """
+    kind = ev_type & ~JS_EVENT_INIT
+    if kind == JS_EVENT_BUTTON:
+        return [(str(number), bool(value))]
+    if kind == JS_EVENT_AXIS:
+        past = abs(value) >= int(DEFAULT_AXIS_MAX * AXIS_DEADZONE_RATIO)
+        return [(f"-{number}", past and value < 0), (f"+{number}", past and value > 0)]
+    return []
 
 
 def _drain(fd, chunk_size):

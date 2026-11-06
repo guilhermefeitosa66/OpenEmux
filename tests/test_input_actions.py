@@ -420,6 +420,188 @@ class AnalogStickAxisTests(unittest.TestCase):
         self.assertNotIn("5", claimed)
 
 
+class EveryButtonACoreReadsHasItsActionTests(unittest.TestCase):
+    """Issue 816: a RetroPad button missing from its console's actions is dead.
+
+    The overrides write every RetroPad button a console does not name as
+    unbound (issue #281), so a console whose list is short of what its core
+    reads loses those buttons in game, on a keyboard and on a pad alike. The
+    controller drawings showed which ones: the Mega Drive's A and Y, the
+    Nintendo 64's Z, the PlayStation's L2 and R2, the PSP's triangle and square.
+    """
+
+    BUTTONS = {
+        "MD": {"a", "b", "x", "y", "l1", "r1"},
+        "MCD": {"a", "b", "x", "y", "l1", "r1"},
+        "S32X": {"a", "b", "x", "y", "l1", "r1"},
+        "PSP": {"a", "b", "x", "y", "l1", "r1"},
+        "N64": {"a", "b", "x", "y", "l1", "r1", "l2"},
+        "PS": {"a", "b", "x", "y", "l1", "r1", "l2", "r2"},
+        "SATURN": {"a", "b", "x", "y", "l1", "r1", "l2", "r2"},
+        "GC": {"a", "b", "x", "y", "l1", "r1", "l2", "r2"},
+        "VB": {"a", "b", "l1", "r1", "l2", "l3", "r2", "r3"},
+        "VECTREX": {"a", "b", "x", "y"},
+        "FDS": {"a", "b", "l1"},
+        "A7800": {"a", "b", "x"},
+        "INTV": {"a", "b", "y"},
+        # Untouched, as a control: two buttons, and two with shoulders.
+        "FC": {"a", "b"},
+        "GBA": {"a", "b", "l1", "r1"},
+    }
+    FACE = {"a", "b", "x", "y", "l1", "l2", "l3", "r1", "r2", "r3"}
+
+    def test_the_buttons_each_console_reads(self):
+        for console, buttons in self.BUTTONS.items():
+            with self.subTest(console=console):
+                actions = get_actions_for_console(console)
+                self.assertEqual(self.FACE & set(actions), buttons)
+                # The D-pad, Start and Select are everybody's.
+                for action in ("up", "down", "left", "right", "start", "select"):
+                    self.assertIn(action, actions)
+
+    def test_the_rows_keep_the_retropads_order(self):
+        actions = get_actions_for_console("VB")
+        self.assertEqual(
+            actions[:actions.index("turbo")],
+            ["up", "down", "left", "right", "a", "b", "l1", "l2", "l3", "r1", "r2", "r3", "start", "select"],
+        )
+
+    def test_they_are_written_bound_not_unbound(self):
+        keyboard = to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console="MD"), "keyboard", console="MD"
+        )
+        self.assertEqual(keyboard["input_player1_y"], '"c"')  # the pad's A
+        self.assertEqual(keyboard["input_player1_x"], '"s"')  # the pad's Y
+        pad = to_retroarch_overrides(
+            default_bindings_for_device("gamepad", console="PS"), "gamepad", console="PS"
+        )
+        self.assertEqual(pad["input_player1_l2_axis"], '"+2"')
+        self.assertEqual(pad["input_player1_r2_axis"], '"+5"')
+        n64 = to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console="N64"), "keyboard", console="N64"
+        )
+        self.assertEqual(n64["input_player1_l2"], '"e"')  # the Z trigger
+
+    def test_a_button_the_core_does_not_read_is_still_unbound(self):
+        md = to_retroarch_overrides(
+            default_bindings_for_device("gamepad", console="MD"), "gamepad", console="MD"
+        )
+        self.assertEqual(md["input_player1_l2_btn"], '"nul"')
+        n64 = to_retroarch_overrides(
+            default_bindings_for_device("keyboard", console="N64"), "keyboard", console="N64"
+        )
+        self.assertEqual(n64["input_player1_r2"], '"nul"')
+
+    def test_a_profile_saved_before_gains_them_from_the_defaults(self):
+        # A Mega Drive profile from a version that knew only B, C, X and Z.
+        saved = {"a": "z", "b": "x", "l1": "d", "r1": "a"}
+        bindings = normalize_bindings(saved, "keyboard", console="MD")
+        self.assertEqual(bindings["x"], "s")
+        self.assertEqual(bindings["y"], "c")
+        for action, key in saved.items():
+            self.assertEqual(bindings[action], key)
+
+    def test_a_pad_profile_saved_before_gains_them_although_a_hotkey_shares_the_button(self):
+        # The pad's X is button 2 and Select + X (save state) is button 2 too:
+        # that is what a modifier is, not a button already taken. Counting it
+        # as taken left the newcomer unbound, and unbound is dead in game.
+        saved = default_bindings_for_device("gamepad", console="MD")
+        for action in ("x", "y"):
+            saved.pop(action)
+        self.assertEqual(saved["save_state"], "2")
+        bindings = normalize_bindings(saved, "gamepad", console="MD")
+        self.assertEqual(bindings["x"], "2")
+        self.assertEqual(bindings["y"], "3")
+        overrides = to_retroarch_overrides(saved, "gamepad", console="MD")
+        self.assertEqual(overrides["input_player1_x_btn"], '"2"')
+        self.assertEqual(overrides["input_player1_y_btn"], '"3"')
+
+    def test_on_a_pad_a_button_another_gameplay_action_holds_is_not_handed_out_twice(self):
+        # Somebody put B on button 2: the new X stays unbound rather than
+        # pressing two things at once, and the hotkeys keep their combos.
+        saved = default_bindings_for_device("gamepad", console="MD")
+        for action in ("x", "y"):
+            saved.pop(action)
+        saved["b"] = "2"
+        bindings = normalize_bindings(saved, "gamepad", console="MD")
+        self.assertEqual(bindings["x"], "")
+        self.assertEqual(bindings["y"], "3")
+        self.assertEqual(bindings["save_state"], "2")
+
+    def test_on_a_keyboard_a_key_a_hotkey_holds_stays_taken(self):
+        # No modifier on a keyboard: "s" on a hotkey would fire with the X
+        # button, so X takes a fallback letter instead.
+        saved = {"a": "z", "b": "x", "audio_mute": "s"}
+        bindings = normalize_bindings(saved, "keyboard", console="MD")
+        self.assertEqual(bindings["audio_mute"], "s")
+        self.assertNotIn(bindings["x"], ("", "s"))
+
+    def test_a_missing_pad_hotkey_still_takes_its_combo_and_leaves_the_button_free(self):
+        # Nothing saved at all: the hotkeys are filled after the gameplay
+        # buttons and never take a button away from them.
+        bindings = normalize_bindings({"save_state": "2"}, "gamepad", console="MD")
+        self.assertEqual(bindings["x"], "2")
+        self.assertEqual(bindings["load_state"], "3")
+        self.assertEqual(bindings["y"], "3")
+
+    def test_a_default_the_profile_already_uses_gives_way_to_a_fallback_letter(self):
+        # "c" is the new Y's default and somebody had it on B already.
+        bindings = normalize_bindings({"a": "z", "b": "c"}, "keyboard", console="MD")
+        self.assertEqual(bindings["b"], "c")
+        self.assertNotIn(bindings["y"], ("", "c"))
+
+
+class KeyboardRightStickTests(unittest.TestCase):
+    """Issue 816: the right stick's four directions, bindable like the left one's.
+
+    Mupen64Plus reads the Nintendo 64's C buttons from the right stick, so
+    without these a keyboard could not press one at all.
+    """
+
+    ACTIONS = ("r_up", "r_down", "r_left", "r_right")
+
+    def test_the_rows_appear_only_where_a_right_stick_is_read(self):
+        for console in ("N64", "PS", "GC"):
+            actions = get_actions_for_console(console)
+            for action in self.ACTIONS:
+                self.assertIn(action, actions, console)
+            # Right after the left stick's.
+            self.assertEqual(actions.index("r_up"), actions.index("l_right") + 1)
+        # A left stick alone (PSP, Saturn) or none at all.
+        for console in ("PSP", "SATURN", "SFC", "MD", "FC"):
+            self.assertNotIn("r_up", get_actions_for_console(console), console)
+
+    def test_they_are_never_auto_filled(self):
+        # They came after the profiles that are out there: no default, and no
+        # fallback letter taken behind the user's back.
+        for device in ("keyboard", "gamepad"):
+            bindings = normalize_bindings({"a": "z"}, device, console="N64")
+            for action in self.ACTIONS:
+                self.assertEqual(bindings[action], "", (device, action))
+
+    def test_a_bound_key_reaches_retroarch_as_the_sticks_direction(self):
+        overrides = to_retroarch_overrides(
+            {"r_up": "8", "r_down": "kp_2", "r_left": "u", "r_right": "o"}, "keyboard", console="N64"
+        )
+        self.assertEqual(overrides["input_player1_r_y_minus"], '"num8"')
+        self.assertEqual(overrides["input_player1_r_y_plus"], '"keypad2"')
+        self.assertEqual(overrides["input_player1_r_x_minus"], '"u"')
+        self.assertEqual(overrides["input_player1_r_x_plus"], '"o"')
+
+    def test_unbound_it_writes_nothing_and_a_pad_keeps_its_axes(self):
+        keyboard = to_retroarch_overrides({}, "keyboard", console="N64")
+        self.assertNotIn("input_player1_r_y_minus", keyboard)
+        pad = to_retroarch_overrides({"r_up": "3"}, "gamepad", console="PS", player=2)
+        # The physical stick stays declared; a button bound to a direction
+        # rides along with it.
+        self.assertEqual(pad["input_player2_r_y_minus_axis"], '"-4"')
+        self.assertEqual(pad["input_player2_r_y_minus_btn"], '"3"')
+
+    def test_the_keys_are_per_player(self):
+        self.assertEqual(retroarch_key_for("r_left", player=1), "input_player1_r_x_minus")
+        self.assertEqual(retroarch_key_for("r_right", player=3), "input_player3_r_x_plus")
+
+
 class KeyboardAnalogStickTests(unittest.TestCase):
     """Issue #158: the left stick, playable from the keyboard.
 

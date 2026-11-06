@@ -1,4 +1,4 @@
-"""Which gamepad backend this machine uses, and the three things it provides.
+"""Which gamepad backend this machine uses, and the four things it provides.
 
 Two readers exist -- evdev (``gamepad_reader``, ``ui_gamepad``) and SDL2
 (``gamepad_sdl``) -- and the UI must not care which one it holds. Everything
@@ -73,6 +73,21 @@ def make_capture_reader(on_token, on_error=None, device=None):
     from openemux.core.gamepad_reader import GamepadCaptureReader
 
     return GamepadCaptureReader(on_token, on_error=on_error, device=device)
+
+
+def make_held_reader(on_change, on_error=None, device=None):
+    """A reader of which controls are held, for the controller drawing (issue 816).
+
+    ``on_change(tokens)`` fires on every press and release with the frozen set
+    of binding tokens held right now; ``on_error(reason)`` fires once instead
+    when no pad can be read. Both run on the reader's thread. It reads without
+    taking the pad from anything else.
+    """
+    if backend_name() == SDL2:
+        return _sdl().SdlHeldReader(on_change, on_error=on_error, device=device)
+    from openemux.core.gamepad_reader import GamepadHeldReader
+
+    return GamepadHeldReader(on_change, on_error=on_error, device=device)
 
 
 def make_navigator(on_action, on_connected=None, on_disconnected=None, should_suspend=None):

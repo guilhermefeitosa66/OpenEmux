@@ -27,7 +27,7 @@ from openemux.core import (
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.paths import is_running_in_flatpak
 from openemux.core.console_order import apply_console_order, move_console
-from openemux.core.gamepad_backend import list_gamepads, make_capture_reader
+from openemux.core.gamepad_backend import list_gamepads, make_capture_reader, make_held_reader
 from openemux.core.gamepad_reader import describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
@@ -50,6 +50,7 @@ from openemux.core.input_profiles import (
 )
 from openemux.core.controller_layouts import layout_for
 from openemux.core.input_capture import InputCaptureSession
+from openemux.core.input_held import HeldKeys, key_token, lit_actions
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.share.identity import default_device_name
@@ -107,15 +108,36 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._capture = InputCaptureSession()
         self._capture.load({}, ACTION_ORDER)
         self._gamepad_reader = None
+        # What is held down right now, to light it on the drawing (issue
+        # 816): the keys this dialog saw go down, and what the pad reader
+        # says, while the input page is the one in front of the user.
+        self._held_keys = HeldKeys()
+        self._held_pad = frozenset()
+        self._held_reader = None
+        self._held_reader_port = None
+        self._active_root = None
+        self._active_handler = 0
+        # Filled once the pages are built; the page signals can fire before.
+        self._pages = {}
 
         self._key_controller = Gtk.EventControllerKey()
         self._key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         self._key_controller.connect("key-pressed", self._on_key_pressed)
+        self._key_controller.connect("key-released", self._on_key_released)
         self.add_controller(self._key_controller)
+        # A key let go of somewhere else never reports its release here.
+        self._focus_controller = Gtk.EventControllerFocus()
+        self._focus_controller.connect("leave", lambda _c: self._forget_held_keys())
+        self.add_controller(self._focus_controller)
 
         # Never leave a reader thread behind -- nor the window stuck in
         # exclusive-capture mode -- when the dialog goes away.
         self.connect("closed", lambda _d: self._on_closed())
+        # The pad is read for the drawing only while the input page is what
+        # the user is looking at: every way in or out of that passes here.
+        self.connect("notify::visible-page", lambda *_a: self._sync_held_reader())
+        self.connect("map", lambda _d: self._on_mapped())
+        self.connect("unmap", lambda _d: self._on_unmapped())
 
         # Kept by name so a caller can open the dialog straight on one of
         # them -- the header's controller button lands on "input".
@@ -149,6 +171,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     # ----- shared helpers -------------------------------------------------
     def _on_closed(self):
         self._stop_gamepad_reader()
+        self._stop_held_reader()
         self._set_exclusive_input(False)
 
     def _toast(self, text, timeout=3):
@@ -1328,7 +1351,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._input_rows[action] = row
             self._input_buttons[action] = button
 
+        # Another console or another device. The keys seen so far belonged to
+        # the rows left behind; the pad reader moves only if the port did, and
+        # what it holds lights the new drawing by the new bindings.
+        self._held_keys.clear()
         self._rebuild_drawing(console_id)
+        self._sync_held_reader()
 
     # -- the controller drawing (issue 815) ---------------------------------
     def _controller_layout(self, console_id):
@@ -1390,7 +1418,169 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             else:
                 drawing.set_action_state(action, self.t("input.drawing.not_remappable"), False)
         drawing.set_current(self._capture.active_action if self._capture.capturing else None)
+        self._sync_lit()
         self._sync_drawing_caption()
+
+    # -- lighting what is pressed (issue 816) --------------------------------
+    def _lit_bindings(self):
+        """The bindings on screen, action -> token, as the held tokens are spelled."""
+        keyboard = self._current_device() == "keyboard"
+        bindings = {}
+        for action in self._input_buttons:
+            value = self._capture.binding_for(action)
+            bindings[action] = key_token(value) if keyboard else value
+        return bindings
+
+    def _sync_lit(self):
+        """Light the button being captured, or else the ones whose input is held."""
+        drawing = self._drawing
+        if drawing is None:
+            return
+        if self._capture.capturing:
+            drawing.set_lit({self._capture.active_action})
+            return
+        held = self._held_keys.tokens if self._current_device() == "keyboard" else self._held_pad
+        drawing.set_lit(lit_actions(self._lit_bindings(), held))
+
+    def _input_page_is_live(self):
+        """The input page is on screen, in a dialog the user is in.
+
+        Shown, on the input page, and in a window that has the focus: a pad
+        pressed while another application is in front is none of this
+        dialog's business.
+        """
+        if not self.get_mapped() or self.get_visible_page() is not self._pages.get("input"):
+            return False
+        root = self._active_root
+        return root is None or root.is_active()
+
+    def _lights_keys(self):
+        return (
+            self._current_device() == "keyboard"
+            and self.get_visible_page() is self._pages.get("input")
+        )
+
+    def _is_typing(self):
+        """The keyboard focus is in a text field: the keys are text, not buttons."""
+        return isinstance(self.get_focus(), Gtk.Editable)
+
+    def _lights_a_drawn_button(self, key_name):
+        """Would this key, held alone, light a button of the drawing?"""
+        drawing = self._drawing
+        if drawing is None:
+            return False
+        lit = lit_actions(self._lit_bindings(), {key_token(key_name)})
+        return any(action in drawing.buttons for action in lit)
+
+    @staticmethod
+    def _types_a_character(keyval, state):
+        """Is this the kind of key press the dialog's type-to-search would take?
+
+        A printable character with no Ctrl, Alt or Super held. Space is left
+        out: it activates the focused button, and that has to keep working.
+        """
+        if state & (
+            Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK
+        ):
+            return False
+        return Gdk.keyval_to_unicode(keyval) > 0x20 and Gdk.keyval_to_unicode(keyval) != 0x7F
+
+    def _light_key(self, keyval, keycode, state):
+        """A key went down with nothing being captured: light what it is bound to.
+
+        Answers whether the key is taken from the dialog. Almost never: an
+        arrow still moves the focus and Enter still activates, lit or not. The
+        exception is a key that both lights a drawn button and types a
+        character. Left alone, it would start the dialog's type-to-search,
+        which takes the page away from under the button it just lit; so here,
+        on the input page with the keyboard as the device, that key shows its
+        button instead. Its autorepeat is the same press over again and gets
+        the same answer. With the focus in a text field (the search itself,
+        once it is open) nothing is lit and nothing is taken: that is typing.
+        """
+        if not self._lights_keys() or self._is_typing():
+            return False
+        key_name = Gdk.keyval_name(keyval)
+        if self._held_keys.press(keycode, key_name):
+            self._sync_lit()
+        return self._types_a_character(keyval, state) and self._lights_a_drawn_button(key_name)
+
+    def _forget_held_keys(self):
+        if self._held_keys.clear():
+            self._sync_lit()
+
+    def _on_key_released(self, _controller, _keyval, keycode, _state):
+        if self._held_keys.release(keycode):
+            self._sync_lit()
+
+    def _on_mapped(self):
+        # The window the dialog is shown in: the pad stops being read while
+        # another window has the focus.
+        root = self.get_root()
+        if isinstance(root, Gtk.Window):
+            self._active_root = root
+            self._active_handler = root.connect(
+                "notify::is-active", lambda *_a: self._sync_held_reader()
+            )
+        self._sync_held_reader()
+
+    def _on_unmapped(self):
+        if self._active_root is not None:
+            self._active_root.disconnect(self._active_handler)
+            self._active_root = None
+            self._active_handler = 0
+        self._forget_held_keys()
+        self._stop_held_reader()
+
+    def _sync_held_reader(self):
+        """Read the pad for the drawing exactly while that is called for.
+
+        Wanted while the input page is live, a pad is the device being edited
+        and no capture owns it; stopped the moment any of that ends, so no
+        reader outlives the page, the dialog or the device it was started for.
+        It only reads: UI navigation keeps the pad.
+        """
+        wanted = (
+            self._drawing is not None
+            and self._current_device() != "keyboard"
+            and not self._capture.capturing
+            and self._input_page_is_live()
+        )
+        port = player_for_device(self._current_device()) if wanted else None
+        if self._held_reader is not None and port != self._held_reader_port:
+            self._stop_held_reader()
+        if not wanted or self._held_reader is not None:
+            return
+        device, error_key = self._device_for_port(port)
+        if error_key:
+            return  # no pad on that port: nothing to light, and nothing to say
+        self._held_reader_port = port
+        reader = make_held_reader(
+            on_change=lambda tokens: GLib.idle_add(self._on_pad_held, reader, tokens),
+            device=device,
+        )
+        self._held_reader = reader
+        reader.start()
+
+    def _stop_held_reader(self):
+        reader = self._held_reader
+        self._held_reader = None
+        self._held_reader_port = None
+        if reader is not None:
+            # Not waited for: its thread ends on its own within a poll, and a
+            # join here would stall the click that starts a capture.
+            reader.stop(join_timeout=0)
+        if self._held_pad:
+            self._held_pad = frozenset()
+            self._sync_lit()
+
+    def _on_pad_held(self, reader, tokens):
+        # From the reader's thread through the main loop: by now that reader
+        # may have been stopped, and what it saw is stale.
+        if reader is self._held_reader:
+            self._held_pad = frozenset(tokens)
+            self._sync_lit()
+        return False
 
     def _sync_drawing_caption(self):
         """The line under the drawing: the capture, else the hovered or focused target."""
@@ -1442,6 +1632,10 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # drive the interface, and they would close this dialog mid-capture.
         self._set_exclusive_input(True)
         self._capture.start(action, sequence_mode)
+        # The capture owns the input from here: nothing held is lit, and the
+        # pad is the capture reader's alone.
+        self._held_keys.clear()
+        self._stop_held_reader()
         self._set_active_row(action)
 
         is_gamepad = self._current_device() != "keyboard"
@@ -1541,6 +1735,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if hasattr(self, "_bindings_group"):
             self._set_capture_prompt(None)
         self._sync_drawing()
+        self._sync_held_reader()
         if show_toast and cancelled.was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
@@ -1610,9 +1805,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if outcome.finished:
             self._toast(self.t("input.capture.completed"))
 
-    def _on_key_pressed(self, _controller, keyval, _keycode, _state):
+    def _on_key_pressed(self, _controller, keyval, keycode, state):
         if not self._capture.capturing:
-            return False
+            return self._light_key(keyval, keycode, state)
         key_name = self._normalize_key(keyval)
         action = self._capture.active_action
 

@@ -19,6 +19,13 @@ that. What shows on either side is the controller's own body, carried on from
 the edges of the art (``controller_targets.body_stops``), so the card reads as
 the controller and not as a picture pasted on a card.
 
+A target can be *lit* (issue 816): the control's own image is drawn again,
+brightened, inside the target's shape, with a glow around it in the widget's
+``color`` -- which the stylesheet sets to the accent -- and the target takes
+the ``lit`` style class. The dialog lights the button being captured and,
+while nothing is, every button whose input is held down
+(:meth:`ControllerDrawing.set_lit`). Nothing is animated.
+
 The geometry lives in ``core/controller_targets.py``, plain Python, so the
 arithmetic is tested without a display.
 """
@@ -43,6 +50,20 @@ from openemux.core.controller_targets import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: How much brighter a lit control's own image is drawn: every channel scaled
+#: and then lifted, so a black D-pad lights as visibly as a white button.
+LIT_SCALE = 1.2
+LIT_LIFT = 0.16
+#: The corner radius of a lit target that is not round, as the stylesheet has it.
+LIT_RADIUS = 8
+#: The glow around a lit target: the target's shape grown by so many pixels
+#: and filled with the accent at that opacity, the widest and faintest first,
+#: so it fades outwards. Whole shapes, one under the other, rather than rings
+#: or a blurred shadow: both of those are drawn in slices, and around a fully
+#: round target the slices meet in visible lines at its four sides.
+LIT_GLOW = ((13, 0.2), (9, 0.4))
+
 
 def _load_texture(path):
     try:
@@ -96,6 +117,10 @@ class ControllerDrawing(Gtk.Widget):
         self._on_highlight = on_highlight or (lambda _action: None)
         self._not_remappable_text = not_remappable_text
         self._layers = []
+        #: element id -> its own layers, to draw a lit control again brightened.
+        self._element_layers = {}
+        #: The actions lit right now (see :meth:`set_lit`).
+        self._lit = frozenset()
         #: The body colour beside the art: (left stops, right stops), or None
         #: when the background did not load and there is no body to carry on.
         self._body = None
@@ -108,9 +133,9 @@ class ControllerDrawing(Gtk.Widget):
                 path = element.images.get(role)
                 texture = _load_texture(path) if path else None
                 if texture is not None:
-                    self._layers.append(
-                        (texture, element.x, element.y, element.width, element.height)
-                    )
+                    layer = (texture, element.x, element.y, element.width, element.height)
+                    self._layers.append(layer)
+                    self._element_layers.setdefault(element.id, []).append(layer)
 
         self.targets = targets_for(layout)
         self._children = []
@@ -192,6 +217,30 @@ class ControllerDrawing(Gtk.Widget):
                 else:
                     button.remove_css_class("current")
 
+    def set_lit(self, actions):
+        """Light the targets of `actions`, and only those (issue 816).
+
+        The control's own image is drawn brightened inside each lit target,
+        with a glow around it, and the target gets the ``lit`` style class. An
+        action the drawing has no target for is ignored.
+        """
+        lit = frozenset(action for action in actions if action in self.buttons)
+        if lit == self._lit:
+            return
+        self._lit = lit
+        for action, buttons in self.buttons.items():
+            for button in buttons:
+                if action in lit:
+                    button.add_css_class("lit")
+                else:
+                    button.remove_css_class("lit")
+        self.queue_draw()
+
+    @property
+    def lit(self):
+        """The actions lit right now."""
+        return self._lit
+
     # -- layout --------------------------------------------------------------
 
     def do_get_request_mode(self):
@@ -243,5 +292,38 @@ class ControllerDrawing(Gtk.Widget):
         for texture, x, y, w, h in self._layers:
             bounds = Graphene.Rect().init(offset_x + x * scale, y * scale, w * scale, h * scale)
             snapshot.append_scaled_texture(texture, Gsk.ScalingFilter.TRILINEAR, bounds)
+        if self._lit:
+            brighten = Graphene.Matrix().init_scale(LIT_SCALE, LIT_SCALE, LIT_SCALE)
+            lift = Graphene.Vec4().init(LIT_LIFT, LIT_LIFT, LIT_LIFT, 0)
+            accent = self.get_color()
+            for target, _child in self._children:
+                if target.action not in self._lit:
+                    continue
+                x, y, w, h = target_box(target, scale, offset_x, drawn_w, drawn_h)
+                radius = min(w, h) / 2 if target.round else LIT_RADIUS
+                # The glow: the accent around the target, fading outwards.
+                for grow, opacity in LIT_GLOW:
+                    bounds = Graphene.Rect().init(x - grow, y - grow, w + 2 * grow, h + 2 * grow)
+                    halo = Gsk.RoundedRect()
+                    halo.init_from_rect(bounds, radius + grow)
+                    color = Gdk.RGBA()
+                    color.red, color.green, color.blue = accent.red, accent.green, accent.blue
+                    color.alpha = opacity
+                    snapshot.push_rounded_clip(halo)
+                    snapshot.append_color(color, bounds)
+                    snapshot.pop()
+                # The control's own image again, brighter, and only inside the
+                # target: one arm of a pad lights, not the whole pad.
+                shape = Gsk.RoundedRect()
+                shape.init_from_rect(Graphene.Rect().init(x, y, w, h), radius)
+                snapshot.push_rounded_clip(shape)
+                snapshot.push_color_matrix(brighten, lift)
+                for texture, ex, ey, ew, eh in self._element_layers.get(target.element_id, ()):
+                    bounds = Graphene.Rect().init(
+                        offset_x + ex * scale, ey * scale, ew * scale, eh * scale
+                    )
+                    snapshot.append_scaled_texture(texture, Gsk.ScalingFilter.TRILINEAR, bounds)
+                snapshot.pop()
+                snapshot.pop()
         for _target, child in self._children:
             self.snapshot_child(child, snapshot)

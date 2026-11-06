@@ -1,9 +1,11 @@
 """The controller drawing widget (issue 815), built for real on the test display."""
 
+import re
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
@@ -15,6 +17,7 @@ if HAVE_DISPLAY:
     from gi.repository import Gsk, Gtk
 
     from openemux.core.controller_layouts import ControllerElement, ControllerLayout, layout_for
+    from openemux.core.controller_targets import target_box
     from openemux.ui.controller_drawing import ControllerDrawing
 
 
@@ -139,9 +142,101 @@ class ControllerDrawingTests(unittest.TestCase):
         self.assertEqual(round(right.get_bounds().get_width()), 300)
         self.assertEqual(round(left.get_bounds().get_height()), 447)
 
+    def test_lighting_marks_the_targets_and_only_those(self):
+        self.drawing.set_lit({"a", "up"})
+        self.assertEqual(self.drawing.lit, frozenset({"a", "up"}))
+        self.assertTrue(self.drawing.buttons["a"][0].has_css_class("lit"))
+        self.assertTrue(self.drawing.buttons["up"][0].has_css_class("lit"))
+        self.assertFalse(self.drawing.buttons["b"][0].has_css_class("lit"))
+        self.drawing.set_lit({"b"})
+        self.assertFalse(self.drawing.buttons["a"][0].has_css_class("lit"))
+        self.assertTrue(self.drawing.buttons["b"][0].has_css_class("lit"))
+        self.drawing.set_lit(())
+        self.assertEqual(self.drawing.lit, frozenset())
+        self.assertFalse(self.drawing.buttons["b"][0].has_css_class("lit"))
+
+    def test_an_action_with_no_target_is_not_lit_and_the_same_set_redraws_nothing(self):
+        self.drawing.set_lit({"turbo", "save_state"})
+        self.assertEqual(self.drawing.lit, frozenset())
+        self.drawing.set_lit({"a"})
+        with mock.patch.object(self.drawing, "queue_draw") as queue_draw:
+            self.drawing.set_lit({"a", "turbo"})
+            queue_draw.assert_not_called()
+            self.drawing.set_lit({"a", "b"})
+            queue_draw.assert_called_once()
+
+    def _clips(self, drawing, width, height):
+        """The rounded clips in the drawing's snapshot: what lighting adds to it.
+
+        Each as ``(child node, (x, y, width, height, radius))``. The shape is
+        read from the node's own serialization: reading ``GskRoundedRect``'s
+        ``corner`` array through PyGObject crashes the interpreter on the
+        versions the packages are built against.
+        """
+        if drawing.get_parent() is None:
+            window = Gtk.Window()
+            window.set_child(drawing)
+            self.addCleanup(window.destroy)
+        drawing.allocate(width, height, -1, None)
+        snapshot = Gtk.Snapshot()
+        drawing.do_snapshot(snapshot)
+        node = snapshot.to_node()
+        clips = []
+        for index in range(node.get_n_children()):
+            child = node.get_child(index)
+            if not isinstance(child, Gsk.RoundedClipNode):
+                continue
+            text = child.serialize().get_data().decode()
+            shape = re.search(r"clip: ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) / ([-\d.]+);", text)
+            clips.append((child.get_child(), tuple(round(float(v)) for v in shape.groups())))
+        return clips
+
+    def test_a_lit_control_is_drawn_again_brighter_inside_its_target(self):
+        self.assertEqual(self._clips(self.drawing, 360, 447), [])
+        self.drawing.set_lit({"a", "start", "up"})
+        clips = self._clips(self.drawing, 360, 447)
+        # The control's own image, through a colour matrix: one per lit target.
+        images = {shape[:2]: shape for child, shape in clips if isinstance(child, Gsk.ColorMatrixNode)}
+        self.assertEqual(len(images), 3)
+        scale = 360 / 540
+        boxes = {}
+        for action, radius in (("up", 8), ("start", 8), ("a", None)):
+            target = next(t for t in self.drawing.targets if t.action == action)
+            x, y, w, h = boxes[action] = target_box(target, scale, 0, 360, 447)
+            # Exactly the target (one arm of the D-pad, not the whole pad); a
+            # round button is clipped to a circle, the rest to rounded boxes.
+            self.assertEqual(images[(x, y)], (x, y, w, h, radius if radius else round(min(w, h) / 2)))
+        pad = next(e for e in layout_for("SFC").elements if e.type == "dpad")
+        self.assertLess(boxes["up"][2], pad.width * scale / 2)
+
+    def test_a_lit_control_glows_in_the_widgets_colour(self):
+        self.drawing.set_lit({"a"})
+        clips = self._clips(self.drawing, 360, 447)
+        halos = [(child, shape) for child, shape in clips if isinstance(child, Gsk.ColorNode)]
+        # Two shapes around the target, the wider one fainter, in the colour
+        # the stylesheet gives the drawing (the accent).
+        self.assertEqual(len(halos), 2)
+        target = next(t for t in self.drawing.targets if t.action == "a")
+        x, y, w, h = target_box(target, 360 / 540, 0, 360, 447)
+        radius = round(min(w, h) / 2)
+        self.assertEqual(
+            [shape for _child, shape in halos],
+            # Round like the button they are around, 13 and 9 px past it.
+            [(x - 13, y - 13, w + 26, h + 26, radius + 13), (x - 9, y - 9, w + 18, h + 18, radius + 9)],
+        )
+        alphas = [child.get_color().alpha for child, _shape in halos]
+        self.assertLess(alphas[0], alphas[1])
+        accent = self.drawing.get_color()
+        for child, _shape in halos:
+            color = child.get_color()
+            self.assertAlmostEqual(color.red, accent.red, places=3)
+            self.assertAlmostEqual(color.blue, accent.blue, places=3)
+
     def test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip(self):
         drawing = ControllerDrawing(
-            layout_for("FDS"), on_activate=lambda _a: None, not_remappable_text="not remappable"
+            # The keypad switch of the Android skin: the only kind of control
+            # left with nothing to remap on the desktop (issue 816).
+            layout_for("CV"), on_activate=lambda _a: None, not_remappable_text="not remappable"
         )
         inert = [c for c in _children(drawing) if c.has_css_class("controller-inert")]
         self.assertEqual(len(inert), 1)
@@ -232,6 +327,11 @@ class UnreadableArtTests(unittest.TestCase):
         drawing.do_snapshot(snapshot)
         node = snapshot.to_node()
         self.assertNotIsInstance(node, Gsk.LinearGradientNode)
+        # Lighting a control whose image did not load is harmless: the target
+        # still takes its glow, there is just no image to brighten under it.
+        drawing.set_lit({"b"})
+        self.assertTrue(drawing.buttons["b"][0].has_css_class("lit"))
+        drawing.do_snapshot(Gtk.Snapshot())
 
 
 def _children(widget):

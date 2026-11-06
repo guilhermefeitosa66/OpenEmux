@@ -3958,7 +3958,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Press K.
   3. Hover the "A" button again.
 - **Expected:** After step 1 the group's description reads "Press a key for A", the caption under
-  the drawing reads "A: Press key..." in the accent colour, the A button has an accent outline and
+  the drawing reads "A: Press key..." in the accent colour, the A button is lit (RT-838) and
   the "A" row in "Game Controls" reads "Press key..." with its row highlighted — the same capture
   the row's button starts. After step 2 the caption, the tooltip of the drawn A and the "A" row all
   read "k"; the description is back to "Click a button to remap it.". Pressing Escape during the
@@ -4004,14 +4004,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** RT-829.
 - **Steps:**
-  1. Console "FDS - Famicom Disk System": hover the disk button on the drawing.
+  1. Console "CV - ColecoVision": hover the "Keypad" button on the drawing.
   2. Console "SFC - Super Nintendo", device "Player 2 gamepad": hover the Menu button.
 - **Expected:** Both show the tooltip "Not remappable on the desktop", take no click and are skipped
   by Tab; the caption stays empty. On "Keyboard" or "Player 1 gamepad" the SNES Menu button is a
-  normal target ("RetroArch menu: f1").
+  normal target ("RetroArch menu: f1"). The "Keypad" button (also on the Atari 5200, the
+  Intellivision and the Odyssey²) opens the on-screen keypad of the Android skin and has nothing
+  behind it on the desktop; it is the only kind of control left not remappable (RT-836).
 - **Check:** screenshots of both tooltips; suite files `tests/test_controller_drawing.py`
-  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`) and `tests/test_preferences.py`
-  (`test_the_menu_button_is_not_remappable_on_a_later_port`).
+  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`), `tests/test_preferences.py`
+  (`test_the_menu_button_is_not_remappable_on_a_later_port`) and `tests/test_controller_layouts.py`
+  (`test_only_the_android_keypad_switch_is_left_with_no_action`).
 
 ### RT-834 — The drawing follows light and dark style and narrow widths
 - **Area:** Input
@@ -4030,6 +4033,163 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   scrollbar.
 - **Check:** the screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
 - **Restore:** the previous style, and `make devbox-res RES=1600x1000`.
+
+### RT-836 — Every button a console's core reads is listed, remappable and alive in game
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "MD - Mega Drive": read the "Game Controls" rows and hover
+     the drawn "A" and "Y" buttons.
+  2. The same on "N64 - Nintendo 64" (the "Z" button), "PS - PlayStation" ("L2", "R2"),
+     "PSP - PlayStation Portable" (triangle and square), "SATURN" and "GC" ("L", "R"),
+     "FDS" ("Disk"), "VB - Virtual Boy" ("L", "R" and the right D-pad), "VECTREX" ("3", "4"),
+     "A7800" ("Pause") and "INTV" (the top side button).
+- **Expected:** Each of those buttons is a normal target on the drawing, with a row in "Game
+  Controls": the Mega Drive, the 32X and the Mega-CD list X and Y next to A, B, L1 and R1 (the
+  six-button pad: A on Y, B on B, C on A, X on L1, Y on X, Z on R1); the Nintendo 64 lists L2 (Z);
+  the PlayStation, the Saturn and the GameCube list L2 and R2; the PSP lists X and Y; the Virtual
+  Boy lists L1, R1, L2, L3, R2 and R3. They used to be drawn as "Not remappable on the desktop" and,
+  worse, were written as unbound at every launch, so they did nothing in game on a keyboard and on
+  a pad alike. A profile saved by an earlier version gains them on load, on the keyboard and on
+  every pad, with nothing the user bound changed.
+- **Check:** suite files `tests/test_input_actions.py` (`EveryButtonACoreReadsHasItsActionTests`),
+  `tests/test_input_profiles.py` (`AProfileSavedBeforeItsConsoleGainedButtonsTests`) and
+  `tests/test_controller_layouts.py` (`ActionsTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core import controller_layouts as cl
+  from openemux.core.input_actions import default_bindings_for_device, to_retroarch_overrides
+  left = sorted(
+      (p.name, e.bind) for p in cl.CONTROLLERS_DIR.iterdir() if p.is_dir()
+      for e in cl.layout_for(p.name).elements
+      if len(e.actions) < (4 if e.type in ("dpad", "stick") else 1)
+  )
+  assert left == [(c, "keypadToggle") for c in ("A5200", "CV", "INTV", "O2")], left
+  for console, device, key in (("MD", "keyboard", "input_player1_y"), ("MD", "gamepad", "input_player1_x_btn"),
+                               ("N64", "keyboard", "input_player1_l2"), ("PS", "gamepad", "input_player1_r2_axis"),
+                               ("PSP", "gamepad", "input_player1_y_btn")):
+      overrides = to_retroarch_overrides(default_bindings_for_device(device, console), device, console)
+      assert overrides[key] != '"nul"', f"{console} {device}: {key} is written unbound"
+  print("RT-836 OK")
+  EOF
+  ```
+
+### RT-837 — The right stick's directions and the N64's C buttons can be bound to keys
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "N64 - Nintendo 64", "Device" on "Keyboard": find the rows
+     "Right stick up", "Right stick down", "Right stick left" and "Right stick right", under the
+     "Analog stick" ones.
+  2. Click the drawn C-up button, press 8; "Save"; launch an N64 game and press 8.
+  3. Look for the same rows on "PS - PlayStation" and "GC - GameCube" (and the drawn right stick,
+     four targets), and on "PSP" and "SFC".
+- **Expected:** The four rows exist on the Nintendo 64, the PlayStation and the GameCube, the
+  consoles whose core reads a right stick, and nowhere else. They start unbound, on a new install
+  and on an existing profile alike, and "Map all" does not ask for them. On the Nintendo 64 they
+  are the C buttons (Mupen64Plus reads them from the right stick), so the four drawn C buttons are
+  normal targets: after step 2 the row and the drawing read "8" and the key presses C-up in game.
+  A keyboard could not press a C button before.
+- **Check:** step 2's game session is for the human; suite file `tests/test_input_actions.py`
+  (`KeyboardRightStickTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.input_actions import get_actions_for_console, normalize_bindings, to_retroarch_overrides
+  for console in ("N64", "PS", "GC"):
+      assert "r_up" in get_actions_for_console(console), console
+  for console in ("PSP", "SATURN", "SFC", "MD"):
+      assert "r_up" not in get_actions_for_console(console), console
+  assert normalize_bindings({}, "keyboard", "N64")["r_up"] == ""
+  overrides = to_retroarch_overrides({"r_up": "8"}, "keyboard", "N64")
+  assert overrides["input_player1_r_y_minus"] == '"num8"', overrides.get("input_player1_r_y_minus")
+  print("RT-837 OK")
+  EOF
+  ```
+
+### RT-838 — The button being remapped is lit on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "B" button on the drawing and capture the screen while it waits for a key.
+  2. Press Escape, then click the D-pad's up arm and capture again; press Escape.
+  3. Switch to the dark style and repeat step 1.
+- **Expected:** While the capture waits, the drawn button is lit: its own image is visibly
+  brighter than its neighbours', with a ring and a soft glow in the accent colour around it. For
+  the D-pad only the arm being remapped lights, not the whole pad. The lit look is the same in the
+  light and in the dark style (only the accent differs between themes), and nothing is animated.
+  When the capture ends, by a key or by Escape, the button goes back to normal.
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests.test_the_button_being_captured_is_lit`) and
+  `tests/test_controller_drawing.py` (`test_a_lit_control_is_drawn_again_brighter_inside_its_target`,
+  `test_a_lit_control_glows_in_the_widgets_colour`).
+- **Restore:** "Reset defaults" for the SNES; the previous style.
+
+### RT-839 — Holding a mapped key lights its button on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard", default bindings
+  (A on Z, B on X).
+- **Steps:**
+  1. With nothing being captured, hold Z (`make devbox-xdo CMD='keydown z'`) and capture the
+     screen; release it (`CMD='keyup z'`) and capture again.
+  2. Hold Z and X together and capture; release both.
+  3. Hold a key bound to nothing (9) and capture.
+  4. Open the "Video" page, hold Z, come back to "Input".
+- **Expected:** While Z is down the drawn "A" button is lit (brighter image, accent ring and
+  glow) and nothing else is; it goes back to normal the moment the key comes up. Z and X together
+  light A and B together. A key bound to nothing lights nothing, and no binding changes. The
+  dialog's search does not open: a key that lights a drawn button and would type a character (Z)
+  shows its button instead of starting type-to-search, which would take the page away from under
+  it. Everything else is left to the dialog: the arrows still move the focus and Space and Enter
+  still activate while lighting the D-pad, Select and Start; a letter bound to nothing (V) still
+  starts the search; Ctrl and Alt shortcuts are untouched; and with the focus in a text field (the
+  search, once open) keys are text and light nothing. Keys pressed on another page light nothing.
+  Remapping A to another key on screen makes that key the one that lights it, even before "Save".
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests`, the keyboard tests) and `tests/test_input_held.py`.
+
+### RT-840 — Pressing a pad button lights its button on the drawing
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** A USB or Bluetooth gamepad connected; "Settings" → "Input", console
+  "SFC - Super Nintendo", "Device" on "Player 1 gamepad".
+- **Steps:**
+  1. With nothing being captured, press and hold each button of the pad in turn, then two at once.
+  2. Push the D-pad in each direction.
+  3. Press Start alone, then hold Select and press Start.
+  4. Set "Device" back to "Keyboard" and press the pad's buttons.
+  5. Click "A" on the drawing and press a pad button to bind it.
+- **Expected:** Each pad button lights the drawn button it is bound to for as long as it is held,
+  several at once when several are held, and an input bound to nothing lights nothing. The D-pad
+  lights the arm pushed. Start alone lights Start; Select + Start lights Select, Start and the
+  Menu button (the hotkey lights only with its modifier). The pad still navigates the dialog as
+  before: lighting never takes it away and never changes a binding. With "Keyboard" as the device
+  the pad lights nothing. During step 5 only the button being remapped is lit, and the pad lights
+  buttons again once the capture is over.
+- **Check:** human only (needs a physical pad); the rules are covered by `tests/test_input_held.py`
+  and `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`, the pad tests), the
+  readers by `tests/test_gamepad_held.py`.
+
+### RT-841 — No pad reader is left running once the input page is not in front
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. With a pad as the device on "Input", switch to another page and back.
+  2. Switch "Device" to "Keyboard", then to "Player 2 gamepad".
+  3. Start a capture and cancel it.
+  4. Close the dialog.
+- **Expected:** The pad is read for the drawing only while the input page is the page on screen, in
+  a dialog that is shown, in a window that has the focus, with a pad as the device and no capture
+  running. Leaving the page, picking the keyboard, starting a capture, hiding or closing the dialog
+  each stop the reader at once; coming back starts one again, and never a second one beside it.
+  Another port gets a reader on its own pad; a port with no pad plugged in is simply not read,
+  with no message. The reader only reads: it never grabs the pad.
+- **Check:** suite files `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`,
+  `WhetherTheInputPageIsLiveTests`) and `tests/test_gamepad_held.py`.
 
 ## Shaders
 
