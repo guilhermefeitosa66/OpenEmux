@@ -13007,7 +13007,7 @@ background and the screen frame take a colour or a picture from the device. Same
 editor section; "Mine" open in the editor (RT-781). The panel opens over the game screen upright and
 on the side away from the selection sideways.
 
-### RT-798 — A preset colour paints the selection live and in game
+### RT-884 — A preset colour paints the selection live and in game
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -13023,10 +13023,10 @@ on the side away from the selection sideways.
 - **Check:** `adb shell cat $SKINS/GG/console-colors-copy/skin.json` shows `"button": "#EF4444"` on
   the "1" element; JVM suite `SkinEditPaintTest.aColourIsLiveUntilItIsDoneThenOneUndoStep`.
 
-### RT-799 — Letter, hex, the picker and recent colours
+### RT-885 — Letter, hex, the picker and recent colours
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-798, the panel open on "1".
+- **Preconditions:** RT-884, the panel open on "1".
 - **Steps:**
   1. "Paint" → "Letter"; type `22C55E` in "Hex".
   2. Drag across the saturation square, then along the hue bar.
@@ -13036,10 +13036,10 @@ on the side away from the selection sideways.
   first, and is there for "2" too.
 - **Check:** JVM suite `SkinPaintTest` (`hexReadsSixDigitsWithOrWithoutTheHash`, `hsvRoundTripsEverySextant`, `recentColoursAreNewestFirstWithoutRepeats`).
 
-### RT-800 — A letter too close to its button warns
+### RT-886 — A letter too close to its button warns
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-798, the panel open on "1".
+- **Preconditions:** RT-884, the panel open on "1".
 - **Steps:**
   1. "Paint" → "Button", type `808080`; "Paint" → "Letter", type `8A8A8A`.
   2. Type `FFFFFF`.
@@ -13047,7 +13047,7 @@ on the side away from the selection sideways.
   removes it.
 - **Check:** JVM suite `SkinPaintTest.aLetterTooCloseToItsButtonIsFlagged`.
 
-### RT-801 — Apply to the group or to every button
+### RT-887 — Apply to the group or to every button
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -13059,10 +13059,10 @@ on the side away from the selection sideways.
   Step 3 has no "All" chip (one D-pad) and changes the ball only, not the pad.
 - **Check:** JVM suite `SkinPaintTest.applyToOffersOnlyScopesThatChangeMore`.
 
-### RT-802 — The last circle opens Palettes
+### RT-888 — The last circle opens Palettes
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-798, the panel open.
+- **Preconditions:** RT-884, the panel open.
 - **Steps:**
   1. Tap the dashed last circle of the preset row.
   2. Tap "Dracula".
@@ -13072,7 +13072,7 @@ on the side away from the selection sideways.
   Step 2 goes back to the colour tab with Dracula's colours in the preset row; step 3 still shows them.
 - **Check:** JVM suite `SkinPaintTest.palettesAreValidAndBasicIsTheFallback`.
 
-### RT-803 — Screen frame: frame, icons, and the active toggle in game
+### RT-889 — Screen frame: frame, icons, and the active toggle in game
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, with nothing selected.
@@ -13085,7 +13085,7 @@ on the side away from the selection sideways.
   blue and its icons yellow; turbo on shows a pink tile with a black bolt, off goes back to yellow.
 - **Check:** `skin.json` has `"frame": {..., "colors": {"frame": ..., "icons": "#FACC15", "active": "#F472B6", "activeIcon": "dark"}}`.
 
-### RT-804 — Background colour
+### RT-890 — Background colour
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, with nothing selected.
@@ -13096,7 +13096,7 @@ on the side away from the selection sideways.
   colour.
 - **Check:** JVM suite `SkinEditPaintTest.iconsDropTheQuickActionsImagesAndTheFramesColoursChange`.
 
-### RT-805 — A picture as a button's texture
+### RT-891 — A picture as a button's texture
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a photo on the device (`adb push photo.jpg /sdcard/Pictures/`).
@@ -13110,10 +13110,10 @@ on the side away from the selection sideways.
 - **Check:** `adb shell ls $SKINS/GG/console-colors-copy/phone-portrait/` lists the button's PNG;
   JVM suite `SkinPaintTest.stretchCoversTheBoxAndFitShowsTheWholePicture`.
 
-### RT-806 — Removing a texture brings the colour back; a colour replaces an image
+### RT-892 — Removing a texture brings the colour back; a colour replaces an image
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-805.
+- **Preconditions:** RT-891.
 - **Steps:**
   1. "1" → "Texture" → "Remove texture, back to colour".
   2. Select the D-pad (it has a drawn image) → "Colour" → "Pad" → a colour; then Undo.
@@ -13123,12 +13123,12 @@ on the side away from the selection sideways.
   Step 3 says "This part takes a colour only."
 - **Check:** JVM suite `SkinEditPaintTest.aTextureReplacesTheImageAndRemovingItBringsTheColourBack`.
 
-### RT-807 — Paint survives the app being closed, and Discard leaves the skin
+### RT-893 — Paint survives the app being closed, and Discard leaves the skin
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
 - **Steps:**
-  1. Paint "1" red and give "2" a texture (RT-805), without saving;
+  1. Paint "1" red and give "2" a texture (RT-891), without saving;
      `adb shell am force-stop com.openemux.mobile`.
   2. Open the app, "⋮" → "Edit" on the same skin.
   3. "Close editor" → "Discard"; open the editor again.
@@ -13137,7 +13137,7 @@ on the side away from the selection sideways.
 - **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json` and the
   folder `.console-colors-copy.draft` (`images.json` and a `t-….png`); after step 3 both are gone.
 
-### RT-808 — Colour and Texture with a gamepad, and in every language
+### RT-894 — Colour and Texture with a gamepad, and in every language
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a gamepad connected.
@@ -13162,7 +13162,7 @@ imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" 
 Same setup as the section above (`$PKG`, `$SKINS`); a SNES game (`Super Mario World`) and a GBA game
 in the library.
 
-### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
+### RT-883 — A bundled Delta or Manic skin offers "Create copy and edit"
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, the phone held upright, "Mine" has both phone layouts.
@@ -13276,7 +13276,7 @@ background and the screen frame take a colour or a picture from the device. Same
 editor section; "Mine" open in the editor (RT-781). The panel opens over the game screen upright and
 on the side away from the selection sideways.
 
-### RT-814 — A preset colour paints the selection live and in game
+### RT-895 — A preset colour paints the selection live and in game
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -13292,10 +13292,10 @@ on the side away from the selection sideways.
 - **Check:** `adb shell cat $SKINS/GG/console-colors-copy/skin.json` shows `"button": "#EF4444"` on
   the "1" element; JVM suite `SkinEditPaintTest.aColourIsLiveUntilItIsDoneThenOneUndoStep`.
 
-### RT-815 — Letter, hex, the picker and recent colours
+### RT-896 — Letter, hex, the picker and recent colours
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-814, the panel open on "1".
+- **Preconditions:** RT-895, the panel open on "1".
 - **Steps:**
   1. "Paint" → "Letter"; type `22C55E` in "Hex".
   2. Drag across the saturation square, then along the hue bar.
@@ -13305,10 +13305,10 @@ on the side away from the selection sideways.
   first, and is there for "2" too.
 - **Check:** JVM suite `SkinPaintTest` (`hexReadsSixDigitsWithOrWithoutTheHash`, `hsvRoundTripsEverySextant`, `recentColoursAreNewestFirstWithoutRepeats`).
 
-### RT-816 — A letter too close to its button warns
+### RT-897 — A letter too close to its button warns
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-814, the panel open on "1".
+- **Preconditions:** RT-895, the panel open on "1".
 - **Steps:**
   1. "Paint" → "Button", type `808080`; "Paint" → "Letter", type `8A8A8A`.
   2. Type `FFFFFF`.
@@ -13316,7 +13316,7 @@ on the side away from the selection sideways.
   removes it.
 - **Check:** JVM suite `SkinPaintTest.aLetterTooCloseToItsButtonIsFlagged`.
 
-### RT-817 — Apply to the group or to every button
+### RT-898 — Apply to the group or to every button
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -13328,10 +13328,10 @@ on the side away from the selection sideways.
   Step 3 has no "All" chip (one D-pad) and changes the ball only, not the pad.
 - **Check:** JVM suite `SkinPaintTest.applyToOffersOnlyScopesThatChangeMore`.
 
-### RT-818 — The last circle opens Palettes
+### RT-899 — The last circle opens Palettes
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-814, the panel open.
+- **Preconditions:** RT-895, the panel open.
 - **Steps:**
   1. Tap the dashed last circle of the preset row.
   2. Tap "Dracula".
@@ -13341,7 +13341,7 @@ on the side away from the selection sideways.
   Step 2 goes back to the colour tab with Dracula's colours in the preset row; step 3 still shows them.
 - **Check:** JVM suite `SkinPaintTest.palettesAreValidAndBasicIsTheFallback`.
 
-### RT-819 — Screen frame: frame, icons, and the active toggle in game
+### RT-900 — Screen frame: frame, icons, and the active toggle in game
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, with nothing selected.
@@ -13354,7 +13354,7 @@ on the side away from the selection sideways.
   blue and its icons yellow; turbo on shows a pink tile with a black bolt, off goes back to yellow.
 - **Check:** `skin.json` has `"frame": {..., "colors": {"frame": ..., "icons": "#FACC15", "active": "#F472B6", "activeIcon": "dark"}}`.
 
-### RT-820 — Background colour
+### RT-901 — Background colour
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, with nothing selected.
@@ -13365,7 +13365,7 @@ on the side away from the selection sideways.
   colour.
 - **Check:** JVM suite `SkinEditPaintTest.iconsDropTheQuickActionsImagesAndTheFramesColoursChange`.
 
-### RT-821 — A picture as a button's texture
+### RT-902 — A picture as a button's texture
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a photo on the device (`adb push photo.jpg /sdcard/Pictures/`).
@@ -13379,10 +13379,10 @@ on the side away from the selection sideways.
 - **Check:** `adb shell ls $SKINS/GG/console-colors-copy/phone-portrait/` lists the button's PNG;
   JVM suite `SkinPaintTest.stretchCoversTheBoxAndFitShowsTheWholePicture`.
 
-### RT-822 — Removing a texture brings the colour back; a colour replaces an image
+### RT-903 — Removing a texture brings the colour back; a colour replaces an image
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
-- **Preconditions:** RT-821.
+- **Preconditions:** RT-902.
 - **Steps:**
   1. "1" → "Texture" → "Remove texture, back to colour".
   2. Select the D-pad (it has a drawn image) → "Colour" → "Pad" → a colour; then Undo.
@@ -13392,12 +13392,12 @@ on the side away from the selection sideways.
   Step 3 says "This part takes a colour only."
 - **Check:** JVM suite `SkinEditPaintTest.aTextureReplacesTheImageAndRemovingItBringsTheColourBack`.
 
-### RT-823 — Paint survives the app being closed, and Discard leaves the skin
+### RT-904 — Paint survives the app being closed, and Discard leaves the skin
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
 - **Steps:**
-  1. Paint "1" red and give "2" a texture (RT-821), without saving;
+  1. Paint "1" red and give "2" a texture (RT-902), without saving;
      `adb shell am force-stop com.openemux.mobile`.
   2. Open the app, "⋮" → "Edit" on the same skin.
   3. "Close editor" → "Discard"; open the editor again.
@@ -13406,7 +13406,7 @@ on the side away from the selection sideways.
 - **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json` and the
   folder `.console-colors-copy.draft` (`images.json` and a `t-….png`); after step 3 both are gone.
 
-### RT-824 — Colour and Texture with a gamepad, and in every language
+### RT-905 — Colour and Texture with a gamepad, and in every language
 - **Area:** Android — Skin editor: colours, palettes and textures
 - **Mode:** MANUAL
 - **Preconditions:** RT-781; a gamepad connected.
