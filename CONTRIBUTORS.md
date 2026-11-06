@@ -52,6 +52,12 @@ own the whole controller configuration. That became
 now starts from RetroArch's stock input defaults with OpenEmux's bindings on
 top, so nothing from a user's `retroarch.cfg` mixes in.
 
+For the Android skin editor, asked that going back to a bundled skin never
+throw a custom layout away. In
+[#782](https://github.com/guilhermefeitosa66/OpenEmux/issues/782) each console
+keeps the player's skins in a list of their own, so a custom skin is still
+there, unchanged, after playing a while with a bundled one.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
@@ -168,6 +174,13 @@ place ([#767](https://github.com/guilhermefeitosa66/OpenEmux/issues/767)). Someo
 installer can bring everything along too: the portable copy offers to copy the profile's settings,
 library and saves into its folder, without touching the original
 ([#768](https://github.com/guilhermefeitosa66/OpenEmux/issues/768)).
+
+### JuamPiX84 (Reddit)
+
+Asked on Reddit for a way to rename a game inside the Android app. That request became
+[#790](https://github.com/guilhermefeitosa66/OpenEmux/issues/790): "Rename…" on a game's detail
+screen renames its file and carries its save states, battery saves, playtime, artwork and per-game
+settings along, so the game resumes where it was under its new name.
 
 ## How contributions are credited
 
