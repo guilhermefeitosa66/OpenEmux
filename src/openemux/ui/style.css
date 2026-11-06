@@ -263,6 +263,54 @@ flowboxchild:focus-visible {
     border-radius: 8px;
 }
 
+/* The controller drawing above the bindings (issue 815). The card is the
+   controller: the drawing fills it edge to edge and paints the console's body
+   beside the art, so the card has no padding and none of the theme's card
+   colour shows. The targets over the art are invisible until hovered, focused
+   or captured. */
+.controller-drawing-card {
+    padding: 0;
+}
+.controller-drawing-caption {
+    font-size: 14px;
+    min-height: 20px;
+    margin-top: 6px;
+}
+.controller-drawing-caption.accent {
+    color: @accent_color;
+}
+button.controller-target {
+    background: none;
+    box-shadow: none;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 8px;
+    outline: 3px solid transparent;
+    outline-offset: 0;
+}
+button.controller-target.round {
+    border-radius: 9999px;
+}
+/* The ring has to read on every body, from the SNES's light grey to the Mega
+   Drive's black, in whichever accent the theme has. So it is three lines: the
+   accent (3 px), a dark one outside it (2 px) and a light one inside it; one
+   of the two always contrasts with the body under it. */
+button.controller-target:hover,
+button.controller-target:focus-visible,
+button.controller-target.current {
+    outline-color: @accent_bg_color;
+    box-shadow: 0 0 0 5px alpha(black, 0.65), inset 0 0 0 1px alpha(white, 0.8);
+}
+button.controller-target:hover {
+    background-color: alpha(@accent_bg_color, 0.25);
+}
+button.controller-target.current {
+    background-color: alpha(@accent_bg_color, 0.4);
+    outline-width: 4px;
+    box-shadow: 0 0 0 6px alpha(black, 0.65), inset 0 0 0 1px alpha(white, 0.8);
+}
+
 /* ===== Status Bar Tips =====
    Colors come from Adwaita named colors so light/dark both follow the theme;
    the label itself carries .caption/.dim-label for size and muting. */

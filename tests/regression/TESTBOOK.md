@@ -1319,6 +1319,37 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print('RT-585 OK')"
   ```
 
+### RT-835 — The Game Boy Color has its own icon, not the Game Boy's
+- **Area:** Navigation & search
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Look at the "GB - Game Boy" and "GBC - Game Boy Color" rows of the sidebar, and at the same
+     two consoles in the "Console" dropdown of "Settings" → "Input".
+- **Expected:** The Game Boy row shows the grey Game Boy; the Game Boy Color row shows the same
+  pixel-art handheld in yellow (the Pikachu edition: yellow body, blue around the screen and blue
+  buttons, a dark screen), the icon the Android app shows for it. The two used to be one file, so
+  the rows looked alike at a glance. Every other console's icon is unchanged; the Famicom and its
+  Disk System still share theirs.
+- **Check:** suite file `tests/test_icon_assets.py` (`TheGameBoyColorHasItsOwnIconTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  text = Path("src/openemux/ui/console_icons.py").read_text()
+  icons = Path("src/openemux/ui/assets/icons/systems")
+  name = {c: re.search(rf'"{c}": "([^"]+)"', text).group(1) for c in ("GB", "GBC")}
+  assert name["GB"] != name["GBC"], "GB and GBC name the same icon again"
+  assert (icons / name["GBC"]).read_bytes() != (icons / name["GB"]).read_bytes()
+  from PIL import Image
+  raw = Image.open(icons / name["GBC"]).convert("RGBA").tobytes()
+  solid = [raw[i:i + 3] for i in range(0, len(raw), 4) if raw[i + 3] > 200]
+  yellow = [p for p in solid if p[0] > 180 and p[1] > 130 and p[2] < 120]
+  assert len(yellow) > len(solid) * 0.3, f"only {len(yellow)} of {len(solid)} pixels are yellow"
+  print("RT-835 OK")
+  EOF
+  ```
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
@@ -3894,6 +3925,111 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_retroarch_launcher.py`
   (`TheInputBaselineTests.test_without_a_users_file_the_log_says_none`,
   `TheUsersRetroArchConfigTests`).
+
+### RT-829 — The input page shows the console's controller drawing above the bindings
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`).
+- **Steps:**
+  1. Open "Settings" → "Input"; "Console" on "SFC - Super Nintendo", "Device" on "Keyboard".
+  2. Scroll down past "Turbo" and capture the screen.
+  3. Change "Console" to "GB - Game Boy" and capture again.
+- **Expected:** A "Controller drawing" group, described "Click a button to remap it.", sits right
+  above "Game Controls" and shows the console's controller (the SNES pad, then the Game Boy), no
+  wider than 360 px, centred in its card. The whole card has the colour of that controller's body
+  (light grey for the SNES, the Game Boy's grey), from edge to edge and corner to corner: the art
+  does not read as a rectangle pasted on a card of the theme's colour, and no seam shows where the
+  art ends. The caption line sits under the card. Every console the app lists has one (issue 814
+  ships the art for all 31); a console whose layout cannot be read shows no group, only the list.
+- **Check:** the two screenshots show the group above "Game Controls" with each console's art on a
+  card of the body's colour, no visible edge beside the art; suite files `tests/test_preferences.py`
+  (`TheControllerDrawingTests.test_a_console_with_art_shows_its_drawing`,
+  `test_the_card_is_the_controller_and_the_caption_sits_under_it`,
+  `test_a_console_without_art_shows_only_the_list`, `test_switching_console_swaps_the_drawing_and_layouts_are_read_once`),
+  `tests/test_controller_drawing.py` (`test_the_body_fills_the_width_the_art_leaves`) and
+  `tests/test_controller_targets.py` (`BodyStopsTests`).
+
+### RT-830 — Clicking a button on the drawing remaps that action
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "A" button on the drawing.
+  2. Press K.
+  3. Hover the "A" button again.
+- **Expected:** After step 1 the group's description reads "Press a key for A", the caption under
+  the drawing reads "A: Press key..." in the accent colour, the A button has an accent outline and
+  the "A" row in "Game Controls" reads "Press key..." with its row highlighted — the same capture
+  the row's button starts. After step 2 the caption, the tooltip of the drawn A and the "A" row all
+  read "k"; the description is back to "Click a button to remap it.". Pressing Escape during the
+  capture clears the binding, as it does from the row.
+- **Check:** a screenshot after each step; suite file `tests/test_preferences.py`
+  (`TheControllerDrawingTests.test_clicking_a_target_starts_the_rows_capture`,
+  `test_a_key_commits_and_the_drawing_follows`, `test_cancelling_clears_the_marking`).
+- **Restore:** "Reset defaults" for the SNES.
+
+### RT-831 — A binding made on the drawing works in game, keyboard and gamepad
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game in the library and a USB gamepad plugged in.
+- **Steps:**
+  1. "Settings" → "Input", "SFC - Super Nintendo", "Keyboard": click "A" on the drawing, press K,
+     "Save". Launch the game and press K.
+  2. Back in "Input", "Device" on "Player 1 gamepad": click "B" on the drawing, press a pad button
+     that is not B today, "Save". Launch the game and press that pad button.
+- **Expected:** K presses A in game; the chosen pad button presses B. During step 2 the caption
+  reads "B: Press button..." and the binding shows as "Button N" afterwards.
+- **Check:** human only.
+- **Restore:** "Reset defaults" for both devices.
+
+### RT-832 — Every target on the drawing works from the keyboard and has an accessible name
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "Turbo mode" row's title to put the focus near the drawing, then press Tab until the
+     focus reaches the drawing, and keep pressing Tab.
+  2. With the focus on the D-pad's up arm, press Enter, then press I.
+- **Expected:** The focus walks L → Menu → R → the D-pad's up, left, right, down → X → Y → A → B →
+  Select → Start, each with a solid accent outline, and then goes on into "Game Controls". The
+  caption names the focused target ("D-Pad Up: up"). Enter starts the capture for "D-Pad Up" and I
+  is stored for it. A screen reader announces each target as "<action>: <binding>".
+- **Check:** a screenshot per focus step; `accerciser` (or Orca) lists the targets' names; suite
+  files `tests/test_controller_targets.py` (`TargetsTests.test_targets_follow_reading_order_row_by_row`)
+  and `tests/test_controller_drawing.py` (`test_action_state_sets_tooltip_and_sensitivity`).
+- **Restore:** "Reset defaults" for the SNES.
+
+### RT-833 — A drawn control with no desktop action is shown but not remappable
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829.
+- **Steps:**
+  1. Console "FDS - Famicom Disk System": hover the disk button on the drawing.
+  2. Console "SFC - Super Nintendo", device "Player 2 gamepad": hover the Menu button.
+- **Expected:** Both show the tooltip "Not remappable on the desktop", take no click and are skipped
+  by Tab; the caption stays empty. On "Keyboard" or "Player 1 gamepad" the SNES Menu button is a
+  normal target ("RetroArch menu: f1").
+- **Check:** screenshots of both tooltips; suite files `tests/test_controller_drawing.py`
+  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`) and `tests/test_preferences.py`
+  (`test_the_menu_button_is_not_remappable_on_a_later_port`).
+
+### RT-834 — The drawing follows light and dark style and narrow widths
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829.
+- **Steps:**
+  1. Hover a button on the drawing in the light style, then switch to the dark style (the header
+     bar's style button) and hover it again.
+  2. Hover a button on a light body ("SFC - Super Nintendo") and on a dark one ("MD - Mega Drive").
+  3. `make devbox-res RES=520x900` and look at the drawing again.
+- **Expected:** The card is the same in both styles: the art on the console's body colour. The
+  hovered button gets a ring that is easy to see at a glance on the light body and on the dark one
+  alike: 3 px in the accent colour, with a dark line outside it and a light one inside it, over a
+  tint of the accent. Only the accent differs between themes. At 520 px the drawing shrinks with
+  the dialog, keeps its proportions, the body still fills the card, and the page has no horizontal
+  scrollbar.
+- **Check:** the screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
+- **Restore:** the previous style, and `make devbox-res RES=1600x1000`.
 
 ## Shaders
 
