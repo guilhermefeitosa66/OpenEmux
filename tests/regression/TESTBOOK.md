@@ -12132,6 +12132,106 @@ in the library.
   "Making the copy…" message are translated in every language.
 - **Check:** `MANUAL`.
 
+## Android — NDS screen-layout pages
+
+An NDS skin in OpenEmux's own format can carry one page per DS screen layout (issue 807, part 2 of
+issue 802): `screenLayouts` with `top`, `bottom` and `side` in each layout, each with its own art
+in `<layout>/<page>/`. The `screens` key steps through them and the core's screens follow, as with
+the bundled DS skin. Same setup as the sections above (`$PKG`, `$SKINS`); an NDS game in the library
+played on DeSmuME (the default NDS core), and the NDS template from the Android repository
+(`pkg/android/openemux/tools/skins/templates/NDS-template.zip`, which has the three pages in every
+layout) copied to the device: `adb push NDS-template.zip /sdcard/Download/`.
+
+### RT-801 — An NDS skin with screen-layout pages steps through them upright
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** Settings → NDS → "Controller skins" → "Import .zip" → `NDS-template.zip`, as a
+  new skin; it is in use.
+- **Steps:**
+  1. Launch the NDS game upright.
+  2. Tap the SCREENS key three times, pausing after each.
+- **Expected:** The game opens on the layout used last (both screens one over the other on a fresh
+  install), drawn with the template's placeholder art. Each tap moves to the next page: the top
+  screen only, the bottom screen only, both one over the other again. Each page has its own art and
+  controls, the game's picture fills that page's screen area, and a short message names the layout
+  ("Top screen only", "Bottom screen only", "One above the other").
+- **Check:** `MANUAL`: a screenshot per page (`adb exec-out screencap -p > page.png`); `adb logcat -d
+  -s OpenEmuxSkin` shows `drawing <the skin's name> (phone-portrait, phone-landscape, screen-layout pages)`.
+  JVM suite `OpenEmuxSkinLayoutsTest.anNdsSkinsPagesAreAPackagesWithOneArtPerLayout`.
+
+### RT-802 — Sideways and on a tablet the pages follow too
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801; the emulator at tablet size for step 3 (`adb shell wm size 1600x2560 &&
+  adb shell wm density 320`).
+- **Steps:**
+  1. In game, turn the phone sideways and tap SCREENS until it comes back to the first page.
+  2. Turn it upright again.
+  3. At tablet size, play again upright and sideways, stepping with SCREENS.
+- **Expected:** Sideways shows the landscape layout's pages (top only, bottom only, one over the
+  other); upright comes back on the upright layout used last. At tablet size the tablet layouts'
+  pages are drawn, and sideways the cycle also has both screens side by side.
+- **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
+
+### RT-803 — The pause menu's screen layout switches the page and is remembered
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801.
+- **Steps:**
+  1. Upright, pause the game and pick "Side by side" under the screens.
+  2. Resume; quit the game and launch it again.
+- **Expected:** The side page is drawn (its own art, the two screens side by side) and the core
+  shows the screens side by side in its two areas. The next launch opens on it.
+- **Check:** `MANUAL`; `adb shell run-as $PKG cat files/nds-layout` has `portrait=side`.
+
+### RT-804 — Download as template, import and the editor keep the pages
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801's imported skin.
+- **Steps:**
+  1. On its row, "⋮" → "Edit": look at the editor's top bar.
+  2. Move the A button a little and save.
+  3. "⋮" → "Download as template"; open the zip on a computer.
+  4. "⋮" → "Duplicate", and use the copy in game.
+- **Expected:** The top bar's subtitle reads "Phone · Portrait · One above the other": the editor
+  shows and edits the default page. After saving, the pages are still there and still step in game.
+  The downloaded zip has `phone-portrait/top/`, `bottom/` and `side/` with their images, and its
+  `skin.json` keeps `screenLayouts`. The duplicate steps through the pages too.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/NDS                      # the imported skin's folder, then:
+  adb shell ls $SKINS/NDS/<its folder>/phone-portrait/side
+  # a.png b.png background.png dpad-ball.png dpad.png fast-forward.png frame.png l.png load.png ...
+  ```
+  JVM suites `SkinEditTest.patchKeepsAnNdsSkinsScreenLayoutPages`,
+  `SkinImportTest.screenLayoutPagesImagesAreImported`,
+  `SkinTemplateTest.screenLayoutPagesAreInTheReadmeAndTheZipAndReadBack`.
+
+### RT-805 — A skin without pages, or on melonDS, plays as before
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801's skin; a copy of the template zip with `screenLayouts` removed from
+  every layout of its `skin.json`, imported as a second skin.
+- **Steps:**
+  1. Use the second skin and play upright: tap SCREENS.
+  2. Use the first skin again, set the NDS core to melonDS and play upright: tap SCREENS.
+- **Expected:** In both cases the skin draws the two screens one over the other and SCREENS is
+  drawn and changes nothing on screen, as before issue 807.
+- **Check:** `MANUAL`. JVM suite `OpenEmuxSkinLayoutsTest.screenLayoutPagesNeedTheNdsAndBothLayouts`.
+
+### RT-806 — A skin with broken screen-layout pages is refused
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** Three copies of the template zip, edited in their `skin.json`: one with `side`
+  removed from `phone-portrait`'s `screenLayouts`, one with a `stacked` page added, one with
+  `console` changed to `GBA` (and its two screens cut to one).
+- **Steps:**
+  1. Import each zip through NDS (the third through GBA) → "Import .zip".
+- **Expected:** Each one is refused with "This skin can't be read (…)" naming the error, and the skin list is
+  unchanged.
+- **Check:** `MANUAL`. JVM suite `SkinFormatTest.screenLayoutPagesAreChecked`
+  (`INCOMPLETE_SCREEN_LAYOUTS`, `UNKNOWN_SCREEN_LAYOUT`, `SCREEN_LAYOUTS_NOT_NDS`, `BAD_SCREENS`).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
