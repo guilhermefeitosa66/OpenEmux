@@ -4140,10 +4140,14 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   4. Open the "Video" page, hold Z, come back to "Input".
 - **Expected:** While Z is down the drawn "A" button is lit (brighter image, accent ring and
   glow) and nothing else is; it goes back to normal the moment the key comes up. Z and X together
-  light A and B together. A key bound to nothing lights nothing. The key still does whatever it
-  does in the dialog (it is not swallowed) and no binding changes. Keys pressed on another page
-  light nothing. Remapping A to another key on screen makes that key the one that lights it, even
-  before "Save".
+  light A and B together. A key bound to nothing lights nothing, and no binding changes. The
+  dialog's search does not open: a key that lights a drawn button and would type a character (Z)
+  shows its button instead of starting type-to-search, which would take the page away from under
+  it. Everything else is left to the dialog: the arrows still move the focus and Space and Enter
+  still activate while lighting the D-pad, Select and Start; a letter bound to nothing (V) still
+  starts the search; Ctrl and Alt shortcuts are untouched; and with the focus in a text field (the
+  search, once open) keys are text and light nothing. Keys pressed on another page light nothing.
+  Remapping A to another key on screen makes that key the one that lights it, even before "Save".
 - **Check:** the screenshots; suite files `tests/test_preferences.py`
   (`TheDrawingLightsWhatIsPressedTests`, the keyboard tests) and `tests/test_input_held.py`.
 

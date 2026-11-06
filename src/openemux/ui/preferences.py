@@ -1460,6 +1460,51 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             and self.get_visible_page() is self._pages.get("input")
         )
 
+    def _is_typing(self):
+        """The keyboard focus is in a text field: the keys are text, not buttons."""
+        return isinstance(self.get_focus(), Gtk.Editable)
+
+    def _lights_a_drawn_button(self, key_name):
+        """Would this key, held alone, light a button of the drawing?"""
+        drawing = self._drawing
+        if drawing is None:
+            return False
+        lit = lit_actions(self._lit_bindings(), {key_token(key_name)})
+        return any(action in drawing.buttons for action in lit)
+
+    @staticmethod
+    def _types_a_character(keyval, state):
+        """Is this the kind of key press the dialog's type-to-search would take?
+
+        A printable character with no Ctrl, Alt or Super held. Space is left
+        out: it activates the focused button, and that has to keep working.
+        """
+        if state & (
+            Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK
+        ):
+            return False
+        return Gdk.keyval_to_unicode(keyval) > 0x20 and Gdk.keyval_to_unicode(keyval) != 0x7F
+
+    def _light_key(self, keyval, keycode, state):
+        """A key went down with nothing being captured: light what it is bound to.
+
+        Answers whether the key is taken from the dialog. Almost never: an
+        arrow still moves the focus and Enter still activates, lit or not. The
+        exception is a key that both lights a drawn button and types a
+        character. Left alone, it would start the dialog's type-to-search,
+        which takes the page away from under the button it just lit; so here,
+        on the input page with the keyboard as the device, that key shows its
+        button instead. Its autorepeat is the same press over again and gets
+        the same answer. With the focus in a text field (the search itself,
+        once it is open) nothing is lit and nothing is taken: that is typing.
+        """
+        if not self._lights_keys() or self._is_typing():
+            return False
+        key_name = Gdk.keyval_name(keyval)
+        if self._held_keys.press(keycode, key_name):
+            self._sync_lit()
+        return self._types_a_character(keyval, state) and self._lights_a_drawn_button(key_name)
+
     def _forget_held_keys(self):
         if self._held_keys.clear():
             self._sync_lit()
@@ -1760,12 +1805,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if outcome.finished:
             self._toast(self.t("input.capture.completed"))
 
-    def _on_key_pressed(self, _controller, keyval, keycode, _state):
+    def _on_key_pressed(self, _controller, keyval, keycode, state):
         if not self._capture.capturing:
-            # Not consumed: the key still does whatever it does in the dialog.
-            if self._lights_keys() and self._held_keys.press(keycode, Gdk.keyval_name(keyval)):
-                self._sync_lit()
-            return False
+            return self._light_key(keyval, keycode, state)
         key_name = self._normalize_key(keyval)
         action = self._capture.active_action
 

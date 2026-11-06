@@ -1177,7 +1177,7 @@ class TheDrawingLightsWhatIsPressedTests(_PreferencesCase):
 
     # -- the keyboard --------------------------------------------------------
     def test_a_held_key_lights_its_button_until_it_is_let_go(self):
-        self.assertFalse(self.key_down(Gdk.KEY_z, self.Z))  # not consumed
+        self.key_down(Gdk.KEY_z, self.Z)
         self.assertEqual(self.lit(), {"a"})
         self.key_down(Gdk.KEY_x, self.X)
         self.assertEqual(self.lit(), {"a", "b"})
@@ -1185,6 +1185,52 @@ class TheDrawingLightsWhatIsPressedTests(_PreferencesCase):
         self.assertEqual(self.lit(), {"b"})
         self.key_up(Gdk.KEY_x, self.X)
         self.assertEqual(self.lit(), set())
+
+    def test_a_mapped_letter_is_kept_from_the_dialogs_search(self):
+        # Left to the dialog, "z" would start its type-to-search and take the
+        # page away from under the button it just lit.
+        self.assertTrue(self.key_down(Gdk.KEY_z, self.Z))
+        # Its autorepeat is the same press again: the same answer, no change.
+        self.assertTrue(self.key_down(Gdk.KEY_z, self.Z))
+        self.assertEqual(self.lit(), {"a"})
+
+    def test_a_letter_bound_to_nothing_is_left_to_the_search(self):
+        self.assertFalse(self.key_down(Gdk.KEY_v, 55))
+        self.assertEqual(self.lit(), set())
+
+    def test_a_letter_on_a_hotkey_with_no_drawn_button_is_left_to_the_search(self):
+        # "m" mutes: bound, but nothing on the drawing to show for it.
+        self.assertEqual(self.prefs._capture.binding_for("audio_mute"), "m")
+        self.assertFalse(self.key_down(Gdk.KEY_m, 58))
+
+    def test_a_key_that_moves_or_activates_still_does_lit_or_not(self):
+        # The arrows are the D-pad and Space is Select: each lights its
+        # button, and each still does its job in the dialog.
+        self.assertFalse(self.key_down(Gdk.KEY_Up, 111))
+        self.assertEqual(self.lit(), {"up"})
+        self.assertFalse(self.key_down(Gdk.KEY_space, 65))
+        self.assertEqual(self.lit(), {"up", "select"})
+        self.assertFalse(self.key_down(Gdk.KEY_Return, 36))
+        self.assertEqual(self.lit(), {"up", "select", "start"})
+
+    def test_a_shortcut_is_never_taken(self):
+        # Ctrl+Z is somebody's shortcut, not a way of typing "z".
+        taken = self.prefs._on_key_pressed(None, Gdk.KEY_z, self.Z, Gdk.ModifierType.CONTROL_MASK)
+        self.assertFalse(taken)
+        self.assertFalse(
+            self.prefs._on_key_pressed(None, Gdk.KEY_x, self.X, Gdk.ModifierType.ALT_MASK)
+        )
+
+    def test_typing_in_a_text_field_lights_nothing_and_takes_nothing(self):
+        # The search itself, once it is open: "z" there is a letter.
+        with mock.patch.object(self.prefs, "get_focus", return_value=Gtk.Text()):
+            self.assertFalse(self.key_down(Gdk.KEY_z, self.Z))
+        self.assertEqual(self.lit(), set())
+
+    def test_with_no_drawing_no_key_is_taken(self):
+        with mock.patch.object(prefs_module, "layout_for", return_value=None):
+            self.prefs.select_input_console("GB")
+        self.assertFalse(self.key_down(Gdk.KEY_z, self.Z))
 
     def test_a_key_bound_to_nothing_lights_nothing(self):
         self.key_down(Gdk.KEY_9, 18)
