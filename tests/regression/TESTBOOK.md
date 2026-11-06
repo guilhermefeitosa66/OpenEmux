@@ -3905,11 +3905,18 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   3. Change "Console" to "GB - Game Boy" and capture again.
 - **Expected:** A "Controller drawing" group, described "Click a button to remap it.", sits right
   above "Game Controls" and shows the console's controller (the SNES pad, then the Game Boy), no
-  wider than 360 px, centred in its card. Every console the app lists has one (issue 814 ships the
-  art for all 31); a console whose layout cannot be read shows no group, only the list.
-- **Check:** the two screenshots show the group above "Game Controls" with each console's art; suite
-  file `tests/test_preferences.py` (`TheControllerDrawingTests.test_a_console_with_art_shows_its_drawing`,
-  `test_a_console_without_art_shows_only_the_list`, `test_switching_console_swaps_the_drawing_and_layouts_are_read_once`).
+  wider than 360 px, centred in its card. The whole card has the colour of that controller's body
+  (light grey for the SNES, the Game Boy's grey), from edge to edge and corner to corner: the art
+  does not read as a rectangle pasted on a card of the theme's colour, and no seam shows where the
+  art ends. The caption line sits under the card. Every console the app lists has one (issue 814
+  ships the art for all 31); a console whose layout cannot be read shows no group, only the list.
+- **Check:** the two screenshots show the group above "Game Controls" with each console's art on a
+  card of the body's colour, no visible edge beside the art; suite files `tests/test_preferences.py`
+  (`TheControllerDrawingTests.test_a_console_with_art_shows_its_drawing`,
+  `test_the_card_is_the_controller_and_the_caption_sits_under_it`,
+  `test_a_console_without_art_shows_only_the_list`, `test_switching_console_swaps_the_drawing_and_layouts_are_read_once`),
+  `tests/test_controller_drawing.py` (`test_the_body_fills_the_width_the_art_leaves`) and
+  `tests/test_controller_targets.py` (`BodyStopsTests`).
 
 ### RT-830 — Clicking a button on the drawing remaps that action
 - **Area:** Input
@@ -3982,11 +3989,15 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Hover a button on the drawing in the light style, then switch to the dark style (the header
      bar's style button) and hover it again.
-  2. `make devbox-res RES=520x900` and look at the drawing again.
-- **Expected:** The art is the same in both styles; only the card and the outline (the accent
-  colour) change. At 520 px the drawing shrinks with the dialog, keeps its proportions, and the
-  page has no horizontal scrollbar.
-- **Check:** the three screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
+  2. Hover a button on a light body ("SFC - Super Nintendo") and on a dark one ("MD - Mega Drive").
+  3. `make devbox-res RES=520x900` and look at the drawing again.
+- **Expected:** The card is the same in both styles: the art on the console's body colour. The
+  hovered button gets a ring that is easy to see at a glance on the light body and on the dark one
+  alike: 3 px in the accent colour, with a dark line outside it and a light one inside it, over a
+  tint of the accent. Only the accent differs between themes. At 520 px the drawing shrinks with
+  the dialog, keeps its proportions, the body still fills the card, and the page has no horizontal
+  scrollbar.
+- **Check:** the screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
 - **Restore:** the previous style, and `make devbox-res RES=1600x1000`.
 
 ## Shaders

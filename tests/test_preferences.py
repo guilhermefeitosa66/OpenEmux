@@ -1216,6 +1216,21 @@ class TheControllerDrawingTests(_PreferencesCase):
         self.assertEqual(self.prefs._drawing_console, "SFC")
         self.assertIn("a", self.prefs._drawing.buttons)
 
+    def test_the_card_is_the_controller_and_the_caption_sits_under_it(self):
+        # The drawing fills its card edge to edge (it paints the console's
+        # body beside the art), the card clips it to its rounded corners, and
+        # the caption is on the page under the card, not on the body's colour.
+        card, drawing, caption = self.prefs._drawing_card, self.prefs._drawing, self.prefs._drawing_caption
+        self.assertIs(drawing.get_parent(), card)
+        self.assertIs(card.get_first_child(), drawing)
+        self.assertIs(card.get_last_child(), drawing)
+        self.assertEqual(drawing.get_halign(), Gtk.Align.FILL)
+        self.assertEqual(card.get_overflow(), Gtk.Overflow.HIDDEN)
+        self.assertTrue(card.has_css_class("card"))
+        self.assertIsNot(caption.get_parent(), card)
+        self.assertIs(caption.get_parent(), card.get_parent())
+        self.assertIs(card.get_next_sibling(), caption)
+
     def test_a_console_without_art_shows_only_the_list(self):
         # Every console ships art today; a layout that cannot be read is the
         # case left, and layout_for answers None for it.

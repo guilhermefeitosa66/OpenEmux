@@ -11,7 +11,8 @@ if HAVE_DISPLAY:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk
+    gi.require_version("Gsk", "4.0")
+    from gi.repository import Gsk, Gtk
 
     from openemux.core.controller_layouts import ControllerElement, ControllerLayout, layout_for
     from openemux.ui.controller_drawing import ControllerDrawing
@@ -102,6 +103,42 @@ class ControllerDrawingTests(unittest.TestCase):
         self.drawing.do_snapshot(snapshot)
         self.assertIsNotNone(snapshot.to_node())
 
+    def test_the_body_beside_the_art_is_read_from_the_arts_own_edges(self):
+        # The SNES pad: light grey, lighter at the top than at the bottom, and
+        # the same on both sides.
+        left, right = self.drawing._body
+        self.assertEqual(len(left), 16)
+        self.assertEqual(len(right), 16)
+        self.assertEqual(round(left[0].color.red * 255), 197)
+        self.assertEqual(round(left[-1].color.red * 255), 185)
+        self.assertEqual(left[0].color.alpha, 1.0)
+        self.assertLess(left[0].offset, left[-1].offset)
+        for ours, theirs in zip(left, right):
+            self.assertAlmostEqual(ours.color.red, theirs.color.red, delta=2 / 255)
+
+    def test_the_body_fills_the_width_the_art_leaves(self):
+        window = Gtk.Window()
+        window.set_child(self.drawing)
+        self.addCleanup(window.destroy)
+        self.drawing.allocate(600, 447, -1, None)
+        snapshot = Gtk.Snapshot()
+        self.drawing.do_snapshot(snapshot)
+        node = snapshot.to_node()
+        # Wider than the 360 px art: the body's gradients take it edge to edge.
+        self.assertEqual(round(node.get_bounds().get_x()), 0)
+        self.assertEqual(round(node.get_bounds().get_width()), 600)
+        gradients = [
+            node.get_child(i) for i in range(node.get_n_children())
+            if isinstance(node.get_child(i), Gsk.LinearGradientNode)
+        ]
+        self.assertEqual(len(gradients), 2)
+        left, right = gradients
+        # Each side's shade runs to the middle of the art, where they meet.
+        self.assertEqual(round(left.get_bounds().get_width()), 300)
+        self.assertEqual(round(right.get_bounds().get_x()), 300)
+        self.assertEqual(round(right.get_bounds().get_width()), 300)
+        self.assertEqual(round(left.get_bounds().get_height()), 447)
+
     def test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip(self):
         drawing = ControllerDrawing(
             layout_for("FDS"), on_activate=lambda _a: None, not_remappable_text="not remappable"
@@ -184,6 +221,17 @@ class UnreadableArtTests(unittest.TestCase):
         self.assertEqual(len(logs.output), 2)
         self.assertEqual(len(drawing._layers), 1)
         self.assertEqual(set(drawing.buttons), {"a", "b"})
+        # No background, no body to carry on beside it: the card's own colour
+        # shows there, and drawing it is still harmless.
+        self.assertIsNone(drawing._body)
+        window = Gtk.Window()
+        window.set_child(drawing)
+        self.addCleanup(window.destroy)
+        drawing.allocate(300, 100, -1, None)
+        snapshot = Gtk.Snapshot()
+        drawing.do_snapshot(snapshot)
+        node = snapshot.to_node()
+        self.assertNotIsInstance(node, Gsk.LinearGradientNode)
 
 
 def _children(widget):

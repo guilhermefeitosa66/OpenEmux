@@ -100,5 +100,60 @@ class TargetBoxTests(unittest.TestCase):
         self.assertEqual(ct.target_box(target, 1.0, 0, 20, 12), (0, 0, 20, 12))
 
 
+def _rows(*rows, padding=0):
+    """RGBA rows as the bytes a texture download gives, `padding` spare bytes per row."""
+    width = len(rows[0])
+    data = bytearray()
+    for row in rows:
+        for red, green, blue in row:
+            data += bytes((red, green, blue, 255))
+        data += bytes(padding)
+    return bytes(data), width, len(rows), width * 4 + padding
+
+
+class BodyStopsTests(unittest.TestCase):
+    """The body colour down each side of the art, for the card around it."""
+
+    def test_each_slice_answers_its_average_at_its_centre(self):
+        # 32 rows in 16 slices of two: the first slice averages 4 and 8.
+        rows = [[(4 * (y + 1), 0, 200)] * 6 for y in range(32)]
+        pixels, width, height, stride = _rows(*rows)
+        stops = ct.body_stops(pixels, width, height, stride)
+        self.assertEqual(len(stops), ct.BODY_STOPS)
+        self.assertEqual(stops[0], (1 / 32, (6, 0, 200)))
+        self.assertEqual(stops[-1], (31 / 32, (126, 0, 200)))
+        self.assertEqual([offset for offset, _c in stops], sorted(offset for offset, _c in stops))
+
+    def test_the_left_and_the_right_edge_are_read_apart(self):
+        left, right, middle = (10, 20, 30), (200, 210, 220), (99, 99, 99)
+        rows = [[left, left, middle, middle, right, right]] * 16
+        pixels, width, height, stride = _rows(*rows)
+        self.assertEqual({c for _o, c in ct.body_stops(pixels, width, height, stride)}, {left})
+        self.assertEqual(
+            {c for _o, c in ct.body_stops(pixels, width, height, stride, right=True)}, {right}
+        )
+
+    def test_only_the_band_at_the_edge_counts(self):
+        # A control's shadow a few pixels in must not tint the body.
+        rows = [[(50, 50, 50)] * ct.BODY_BAND + [(0, 0, 0)] * 4] * 16
+        pixels, width, height, stride = _rows(*rows)
+        self.assertEqual({c for _o, c in ct.body_stops(pixels, width, height, stride)}, {(50, 50, 50)})
+
+    def test_rows_padded_past_their_pixels_are_read_by_stride(self):
+        rows = [[(1, 2, 3)] * 3, [(101, 102, 103)] * 3]
+        pixels, width, height, stride = _rows(*rows, padding=5)
+        self.assertEqual(
+            ct.body_stops(pixels, width, height, stride, right=True),
+            [(0.25, (1, 2, 3)), (0.75, (101, 102, 103))],
+        )
+
+    def test_art_shorter_than_the_stops_gets_one_per_row_and_a_pixel_wide_one_is_read(self):
+        pixels, width, height, stride = _rows([(7, 8, 9)], [(17, 18, 19)], [(27, 28, 29)])
+        self.assertEqual(
+            ct.body_stops(pixels, width, height, stride),
+            [(1 / 6, (7, 8, 9)), (0.5, (17, 18, 19)), (5 / 6, (27, 28, 29))],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

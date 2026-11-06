@@ -1029,16 +1029,21 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             title=self.t("prefs.group.controller_drawing"),
             description=self.t("prefs.group.controller_drawing.description"),
         )
-        self._drawing_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # The card is the controller: the drawing fills it edge to edge and
+        # paints the console's body beside the art, so nothing of the theme's
+        # own card colour is left around it. The caption sits under the card,
+        # on the page, where its colours do not depend on the body's.
+        self._drawing_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._drawing_card.add_css_class("card")
         self._drawing_card.add_css_class("controller-drawing-card")
+        self._drawing_card.set_overflow(Gtk.Overflow.HIDDEN)
+        self._drawing_group.add(self._drawing_card)
         self._drawing_caption = Gtk.Label()
         self._drawing_caption.add_css_class("dim-label")
         self._drawing_caption.add_css_class("controller-drawing-caption")
         self._drawing_caption.set_wrap(True)
         self._drawing_caption.set_justify(Gtk.Justification.CENTER)
-        self._drawing_card.append(self._drawing_caption)
-        self._drawing_group.add(self._drawing_card)
+        self._drawing_group.add(self._drawing_caption)
         page.add(self._drawing_group)
 
         page.add(self._bindings_group)
@@ -1358,12 +1363,11 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 on_highlight=self._on_drawing_highlight,
                 not_remappable_text=self.t("input.drawing.not_remappable"),
             )
-            self._drawing.set_halign(Gtk.Align.CENTER)
             self._drawing.update_property(
                 [Gtk.AccessibleProperty.LABEL],
                 [self.t("input.drawing.accessible_name", console=get_system_display_name(console_id))],
             )
-            self._drawing_card.prepend(self._drawing)
+            self._drawing_card.append(self._drawing)
         self._sync_drawing()
 
     def _drawing_target_text(self, action, binding_text=None):

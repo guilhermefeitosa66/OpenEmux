@@ -14,6 +14,11 @@ through :meth:`ControllerDrawing.set_action_state` and
 A control that remaps nothing on the desktop is drawn all the same and gets an
 inert, non-focusable area carrying a tooltip that says so.
 
+The widget takes the whole width of its card, and the art is narrower than
+that. What shows on either side is the controller's own body, carried on from
+the edges of the art (``controller_targets.body_stops``), so the card reads as
+the controller and not as a picture pasted on a card.
+
 The geometry lives in ``core/controller_targets.py``, plain Python, so the
 arithmetic is tested without a display.
 """
@@ -28,7 +33,14 @@ gi.require_version("Graphene", "1.0")
 gi.require_version("Gsk", "4.0")
 from gi.repository import Gdk, GLib, Graphene, Gsk, Gtk
 
-from openemux.core.controller_targets import MAX_WIDTH, MIN_WIDTH, drawn_size, target_box, targets_for
+from openemux.core.controller_targets import (
+    MAX_WIDTH,
+    MIN_WIDTH,
+    body_stops,
+    drawn_size,
+    target_box,
+    targets_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +50,30 @@ def _load_texture(path):
     except GLib.Error as error:
         logger.warning("Controller art %s could not be loaded: %s", path, error.message)
         return None
+
+
+def _body_gradients(texture):
+    """The body colour down the left and the right edge of the background.
+
+    Two lists of ``Gsk.ColorStop``, ready for a vertical gradient each.
+    """
+    downloader = Gdk.TextureDownloader.new(texture)
+    downloader.set_format(Gdk.MemoryFormat.R8G8B8A8)
+    data, stride = downloader.download_bytes()
+    pixels = data.get_data()
+    width, height = texture.get_width(), texture.get_height()
+    sides = []
+    for right in (False, True):
+        stops = []
+        for offset, (red, green, blue) in body_stops(pixels, width, height, stride, right=right):
+            stop = Gsk.ColorStop()
+            stop.offset = offset
+            color = Gdk.RGBA()
+            color.red, color.green, color.blue, color.alpha = red / 255, green / 255, blue / 255, 1.0
+            stop.color = color
+            stops.append(stop)
+        sides.append(stops)
+    return sides
 
 
 def _rect(x, y, width, height):
@@ -60,9 +96,13 @@ class ControllerDrawing(Gtk.Widget):
         self._on_highlight = on_highlight or (lambda _action: None)
         self._not_remappable_text = not_remappable_text
         self._layers = []
+        #: The body colour beside the art: (left stops, right stops), or None
+        #: when the background did not load and there is no body to carry on.
+        self._body = None
         background = _load_texture(layout.background)
         if background is not None:
             self._layers.append((background, 0, 0, layout.width, layout.height))
+            self._body = _body_gradients(background)
         for element in layout.elements:
             for role in ("base", "pad", "button", "knob"):
                 path = element.images.get(role)
@@ -179,8 +219,27 @@ class ControllerDrawing(Gtk.Widget):
             child.measure(Gtk.Orientation.VERTICAL, -1)
             child.size_allocate(_rect(*target_box(target, scale, offset_x, drawn_w, drawn_h)), -1)
 
+    def _snapshot_body(self, snapshot, stops, x, width, height):
+        """A stretch of the card in the body's colour: a top-to-bottom gradient."""
+        snapshot.append_linear_gradient(
+            Graphene.Rect().init(x, 0, width, height),
+            Graphene.Point().init(x, 0),
+            Graphene.Point().init(x, height),
+            stops,
+        )
+
     def do_snapshot(self, snapshot):
-        _drawn_w, _drawn_h, scale, offset_x = self._geometry(self.get_width())
+        width = self.get_width()
+        drawn_w, drawn_h, scale, offset_x = self._geometry(width)
+        if self._body is not None:
+            # The body across the whole width, each side's shade up to the
+            # middle of the art. Beside the art it is what shows; under it, it
+            # keeps the art's last row -- covered only in part when the scaled
+            # height is not a whole number -- from letting the card through.
+            left, right = self._body
+            middle = offset_x + drawn_w / 2
+            self._snapshot_body(snapshot, left, 0, middle, drawn_h)
+            self._snapshot_body(snapshot, right, middle, width - middle, drawn_h)
         for texture, x, y, w, h in self._layers:
             bounds = Graphene.Rect().init(offset_x + x * scale, y * scale, w * scale, h * scale)
             snapshot.append_scaled_texture(texture, Gsk.ScalingFilter.TRILINEAR, bounds)
