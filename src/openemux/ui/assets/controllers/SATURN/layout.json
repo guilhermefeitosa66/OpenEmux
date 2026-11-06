@@ -1,0 +1,145 @@
+{
+  "background": "background.png",
+  "console": "SATURN",
+  "elements": [
+    {
+      "bind": "l",
+      "height": 60,
+      "id": "l",
+      "images": {
+        "button": "l.png"
+      },
+      "type": "button",
+      "width": 186,
+      "x": 18,
+      "y": 11
+    },
+    {
+      "bind": "r",
+      "height": 60,
+      "id": "r",
+      "images": {
+        "button": "r.png"
+      },
+      "type": "button",
+      "width": 186,
+      "x": 336,
+      "y": 11
+    },
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 16
+    },
+    {
+      "bind": "dpad",
+      "height": 210,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 210,
+      "x": 30,
+      "y": 180
+    },
+    {
+      "bind": "x",
+      "height": 56,
+      "id": "x",
+      "images": {
+        "button": "x.png"
+      },
+      "type": "button",
+      "width": 58,
+      "x": 292,
+      "y": 228
+    },
+    {
+      "bind": "y",
+      "height": 58,
+      "id": "y",
+      "images": {
+        "button": "y.png"
+      },
+      "type": "button",
+      "width": 56,
+      "x": 368,
+      "y": 206
+    },
+    {
+      "bind": "z",
+      "height": 56,
+      "id": "z",
+      "images": {
+        "button": "z.png"
+      },
+      "type": "button",
+      "width": 58,
+      "x": 442,
+      "y": 186
+    },
+    {
+      "bind": "a",
+      "height": 78,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 270,
+      "y": 304
+    },
+    {
+      "bind": "b",
+      "height": 78,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 357,
+      "y": 283
+    },
+    {
+      "bind": "c",
+      "height": 78,
+      "id": "c",
+      "images": {
+        "button": "c.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 444,
+      "y": 262
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 230,
+      "y": 574
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 674,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

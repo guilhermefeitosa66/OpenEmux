@@ -1,0 +1,170 @@
+{
+  "background": "background.png",
+  "console": "N64",
+  "elements": [
+    {
+      "bind": "l",
+      "height": 60,
+      "id": "l",
+      "images": {
+        "button": "l.png"
+      },
+      "type": "button",
+      "width": 186,
+      "x": 18,
+      "y": 11
+    },
+    {
+      "bind": "r",
+      "height": 60,
+      "id": "r",
+      "images": {
+        "button": "r.png"
+      },
+      "type": "button",
+      "width": 186,
+      "x": 336,
+      "y": 11
+    },
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 16
+    },
+    {
+      "bind": "analogStick",
+      "height": 168,
+      "id": "stick",
+      "images": {
+        "base": "stick-base.png",
+        "knob": "stick-knob.png"
+      },
+      "type": "stick",
+      "width": 168,
+      "x": 51,
+      "y": 172
+    },
+    {
+      "bind": "cUp",
+      "height": 49,
+      "id": "c-up",
+      "images": {
+        "button": "c-up.png"
+      },
+      "type": "button",
+      "width": 49,
+      "x": 427,
+      "y": 131
+    },
+    {
+      "bind": "cLeft",
+      "height": 49,
+      "id": "c-left",
+      "images": {
+        "button": "c-left.png"
+      },
+      "type": "button",
+      "width": 48,
+      "x": 376,
+      "y": 180
+    },
+    {
+      "bind": "cRight",
+      "height": 49,
+      "id": "c-right",
+      "images": {
+        "button": "c-right.png"
+      },
+      "type": "button",
+      "width": 49,
+      "x": 479,
+      "y": 180
+    },
+    {
+      "bind": "cDown",
+      "height": 49,
+      "id": "c-down",
+      "images": {
+        "button": "c-down.png"
+      },
+      "type": "button",
+      "width": 49,
+      "x": 427,
+      "y": 229
+    },
+    {
+      "bind": "b",
+      "height": 78,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 77,
+      "x": 243,
+      "y": 218
+    },
+    {
+      "bind": "a",
+      "height": 83,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 83,
+      "x": 324,
+      "y": 281
+    },
+    {
+      "bind": "z",
+      "height": 64,
+      "id": "z",
+      "images": {
+        "button": "z.png"
+      },
+      "type": "button",
+      "width": 62,
+      "x": 248,
+      "y": 314
+    },
+    {
+      "bind": "dpad",
+      "height": 150,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 150,
+      "x": 60,
+      "y": 396
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 230,
+      "y": 574
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 674,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

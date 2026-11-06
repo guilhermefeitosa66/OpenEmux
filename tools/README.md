@@ -10,6 +10,7 @@ here is imported by the app, and nothing here ships in a package.
 | `gen_retroarch_input_defaults.py` | Regenerate RetroArch's default input table every launch starts from (issue #759), after a RetroArch bump | see the script's docstring |
 | `gen_cartridge_colors.py` | Generate the per-colour copies of every cartridge frame | see below |
 | `import_cartridge_frames.py` | Put the Android relief cartridge frames into the desktop SVGs | see below |
+| `export_controller_art.py` | Export the Android bundled skins' controller art for the desktop input page (issue 814) | see below |
 | `selection_input_harness.py` | Drive the real grid with synthesized input on a nested X server | see below |
 | `grid_virtualization_probe.py` | Assert the grid still builds only a screenful of cards | see below |
 | `phone_shots.py` | The site's Android in-game shots: a bundled skin over a demo gameplay frame | see `docs/DEVELOPMENT.md` (Android and Share nearby captures) |
@@ -153,6 +154,29 @@ The art is WebP because PNG would make the frames three times heavier; librsvg
 2.58 and later decode it on their own (`tests/test_cartridge_render.py` fails if
 the shells come out blank). The Android `bake-frames.py` goes the other way for
 SFC, which stays hand-drawn.
+
+## `export_controller_art.py` — the controller drawings
+
+The input page draws each console's controller from the Android app's bundled
+skins (OpenEmux's own skin format, `pkg/android/openemux/docs/skin-format.md`
+in openemux-android). Change a skin there, then export it here.
+
+```bash
+.venv/bin/python tools/export_controller_art.py               # every console
+.venv/bin/python tools/export_controller_art.py N64 PS        # only these
+.venv/bin/python tools/export_controller_art.py --android DIR # another checkout
+.venv/bin/python tools/export_controller_art.py --skins DIR   # a folder of <CONSOLE>.zip
+```
+
+It reads the default `<CONSOLE>.zip` of each console from the Android checkout
+(next to this repository by default; put it on `origin/openemux-mobile`
+first), takes the `phone-portrait` layout, crops it 8 px below the screens and
+the frame and scales it to half size. It writes
+`src/openemux/ui/assets/controllers/<CONSOLE>/`: `background.png`, each
+control's image (a D-pad's pad, a stick's base and knob) and a `layout.json`
+that `openemux.core.controller_layouts` reads. Quick actions, the frame and
+the screens are left out. Truecolor PNG, deterministic: a re-run with the same
+skins leaves no diff. Needs Pillow (`requirements-dev.txt`).
 
 ## `selection_input_harness.py` — grid input, on a real display
 

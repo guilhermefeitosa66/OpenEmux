@@ -1,0 +1,159 @@
+{
+  "background": "background.png",
+  "console": "GC",
+  "elements": [
+    {
+      "bind": "l",
+      "height": 60,
+      "id": "l",
+      "images": {
+        "button": "l.png"
+      },
+      "type": "button",
+      "width": 186,
+      "x": 18,
+      "y": 11
+    },
+    {
+      "bind": "z",
+      "height": 60,
+      "id": "z",
+      "images": {
+        "button": "z.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 324,
+      "y": 11
+    },
+    {
+      "bind": "r",
+      "height": 60,
+      "id": "r",
+      "images": {
+        "button": "r.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 429,
+      "y": 11
+    },
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 16
+    },
+    {
+      "bind": "analogStick",
+      "height": 168,
+      "id": "stick",
+      "images": {
+        "base": "stick-base.png",
+        "knob": "stick-knob.png"
+      },
+      "type": "stick",
+      "width": 168,
+      "x": 51,
+      "y": 172
+    },
+    {
+      "bind": "a",
+      "height": 112,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 111,
+      "x": 333,
+      "y": 220
+    },
+    {
+      "bind": "b",
+      "height": 62,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 63,
+      "x": 264,
+      "y": 302
+    },
+    {
+      "bind": "x",
+      "height": 92,
+      "id": "x",
+      "images": {
+        "button": "x.png"
+      },
+      "type": "button",
+      "width": 51,
+      "x": 456,
+      "y": 200
+    },
+    {
+      "bind": "y",
+      "height": 52,
+      "id": "y",
+      "images": {
+        "button": "y.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 321,
+      "y": 148
+    },
+    {
+      "bind": "dpad",
+      "height": 150,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 150,
+      "x": 60,
+      "y": 396
+    },
+    {
+      "bind": "rightAnalogStick",
+      "height": 120,
+      "id": "stick2",
+      "images": {
+        "base": "stick2-base.png",
+        "knob": "stick2-knob.png"
+      },
+      "type": "stick",
+      "width": 120,
+      "x": 336,
+      "y": 410
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 230,
+      "y": 574
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 674,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}
