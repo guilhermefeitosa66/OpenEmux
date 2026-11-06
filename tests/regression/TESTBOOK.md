@@ -6649,7 +6649,7 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
   moves.
 - **Check:** human only.
 
-### RT-564 — The first pad press after a touch acts
+### RT-844 — The first pad press after a touch acts
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** RT-434's library; landscape; a console's covers view open with a game focused
@@ -6664,10 +6664,10 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
   press does nothing, and focus never lands on the header or the console chips.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
 
-### RT-565 — A press with the focused item scrolled away lands on a visible one
+### RT-845 — A press with the focused item scrolled away lands on a visible one
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** As RT-564, on a console with 30 or more games.
+- **Preconditions:** As RT-844, on a console with 30 or more games.
 - **Steps:**
   1. Focus the third game from the pad.
   2. Swipe the row (or grid) with a finger until that game is well off screen.
@@ -6678,7 +6678,7 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
   only lands focus, the second opens that game's detail.
 - **Check:** human only.
 
-### RT-566 — Sheets, dialogs and the detail menu work with the pad
+### RT-846 — Sheets, dialogs and the detail menu work with the pad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** RT-434's library; landscape, then portrait.
@@ -6698,10 +6698,10 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
   it is open, and none of them reaches the screen behind it.
 - **Check:** human only.
 
-### RT-567 — Touch inside a sheet, then the pad
+### RT-847 — Touch inside a sheet, then the pad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** The shelf options sheet open from the pad (RT-566, step 1), its second row
+- **Preconditions:** The shelf options sheet open from the pad (RT-846, step 1), its second row
   focused.
 - **Steps:**
   1. Tap the sheet's title (not a row), then press DOWN, and DOWN again.
@@ -6710,7 +6710,7 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
   the third. 2: the sheet closes as before.
 - **Check:** human only.
 
-### RT-568 — Every screen can be entered, used and left with the pad alone
+### RT-848 — Every screen can be entered, used and left with the pad alone
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** First-run setup done; landscape.
