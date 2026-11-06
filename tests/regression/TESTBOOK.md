@@ -7369,6 +7369,8 @@ files are in `files/launch/current/`.
   virtual controller every SNES game uses." and shows its cards right there, without opening anything:
   "Console colors" (selected), "Dark" and "Purple" (issue 720), each with a small color swatch. A console the app has no Dark skin for (Atari 2600, for
   example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
+  (issue 782). The Atari 5200, ColecoVision, Intellivision and Odyssey 2 show the same two cards
+  since issue 772 gave them bundled skins (RT-881); no "Default skin" row.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -12281,6 +12283,9 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
   change." and only "Create copy and edit" and "Use it as it is": no rename, duplicate or delete.
   Step 2 picks Dark. ("Create copy and edit" is on every bundled skin: issue 796, RT-769; issue 797,
   RT-792; issue 798, RT-775; the SNES's zip is copied as it is since issue 806, RT-819.)
+  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
+  consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
+  RT-769; so do the four keypad consoles since issue 772: RT-881.)
 - **Check:** `MANUAL`.
 
 ### RT-742 — The list works with a gamepad
@@ -12698,6 +12703,16 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 - **Check:** `adb shell ls $SKINS/GG` lists the same folders as before (no hidden `.*.tmp` either:
   `adb shell ls -a $SKINS/GG`).
 
+### RT-874 — Consoles whose bundled skin cannot be copied yet do not offer it
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game (Delta package) in the library.
+- **Steps:**
+  1. Settings → SNES → "⋮" on "Console colors" and on "Dark".
+- **Expected:** The SNES sheets show only "Use it as it is" (RT-741). (The four keypad consoles offer
+  the copy of their bundled skin since issue 772: RT-881.)
+- **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForTheOwnFormatAndTheDrawnConsoles`.
+
 ### RT-774 — Copying works from a game's detail screen and with a gamepad
 - **Area:** Android — Copy of a bundled skin
 - **Mode:** MANUAL
@@ -12711,96 +12726,120 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   then reads "Console colors copy".
 - **Check:** `MANUAL`.
 
-## Android — Copy of the drawn skin
+## Android — Bundled skins with a keypad: Atari 5200, ColecoVision, Intellivision and Odyssey 2
 
-On the consoles the app ships no skin package for (Atari 5200, ColecoVision, Intellivision and
-Odyssey²), the game plays the app's drawn skin. "Create copy and edit" converts it into OpenEmux's
-own format (issue 798, part 3 of issue 783): Phone, Tablet and Fold layouts, upright and sideways,
-laid out as the game draws the skin, with its colours, labels and binds. The keypad, which the drawn
-skin opens over the face buttons with its "KEYPAD" key, has keys of its own in the copy. Same setup
-as the copy of a bundled skin above.
+Four more consoles that used the drawn skin ship a bundled skin (issue 772), in OpenEmux's own skin
+format like those of issues 770 and 771: Atari 5200 (`A5200`), ColecoVision (`CV`), Intellivision
+(`INTV`) and Odyssey 2 (`O2`), in `assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android). Their games need the
+controller's keypad, so each layout has a **keypad page** (the format's `keypad`, docs/skin-format.md):
+a "KEYPAD" key in the centre row opens it, and on it a "CONTROLS" key in the same place goes back.
+The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone or a headless
+emulator with `adb`. `$PKG` is `com.openemux.mobile`.
 
-### RT-775 — A drawn-skin console lists its skin and offers "Create copy and edit"
-- **Area:** Android — Copy of the drawn skin
+### RT-881 — Each of the four consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** An Odyssey² game in the library; no skin of your own for Odyssey².
+- **Preconditions:** The Android app installed with one game of each of A5200, CV, INTV and O2 (with
+  its BIOS where the core needs one); nothing in `files/skins/<console>/`; each console's
+  "Controller skins" left on "Console colors".
 - **Steps:**
-  1. Settings → Odyssey² → look below "Default shader".
-  2. On the "Console colors" card, tap "⋮".
-  3. Open the Odyssey² game's detail screen and tap the "Controller skin" row.
-- **Expected:** Step 1 shows the "Controller skins" section with one "Console colors" card under
-  "BUNDLED", in use, with its Phone, Tablet and Fold badges lit; there is no "Default skin" row
-  reading "OpenEmux O2". Step 2's sheet shows "Bundled skins never change.", "Create copy and edit"
-  and "Use it as it is". Step 3 opens the same list.
-- **Check:** `MANUAL`; JVM suite `SkinValueLabelTest.aBundledSkinToCopyIsEnoughToShowTheList`.
+  1. Start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
+  3. On a foldable unfolded flat, start one of them again.
+- **Expected:** Each game shows a skin with drawn art in the console's colours, not the app's plain
+  drawn skin: the 5200 black with an analog stick on the left, orange "2" and "1" and "START",
+  "PAUSE", "KEYPAD"; the ColecoVision black with a D-pad, orange "L" and "R" and "KEYPAD"; the
+  Intellivision brown and gold with a D-pad, "1", "2", "3" and "KEYPAD"; the Odyssey 2 black with a
+  D-pad, a red "ACTION" and "KEYPAD". The D-pad (or stick) and the fire buttons sit at the same
+  height, centred in the controls' area. The tablet and the unfolded foldable get their own layouts,
+  the picture never covered.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
+  shows `drawing OpenEmux <console name> (…, keypad pages)` and no fallback line.
 
-### RT-776 — The copy is named, listed under Your skins with three forms and used
-- **Area:** Android — Copy of the drawn skin
+### RT-882 — "KEYPAD" opens the keypad page and "CONTROLS" goes back, in both orientations
+- **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** RT-775.
+- **Preconditions:** RT-881's games.
 - **Steps:**
-  1. "⋮" on "Console colors" → "Create copy and edit" → type "My Odyssey" → "Create copy".
-- **Expected:** "YOUR SKINS" shows "My Odyssey" ringed with "In use", its Phone, Tablet and Fold
-  badges lit; "Console colors" stays under "BUNDLED", unchanged.
-- **Check:**
+  1. On each console tap "KEYPAD".
+  2. Turn the phone to the other orientation.
+  3. Tap "CONTROLS".
+  4. Repeat on a tablet layout for one console.
+- **Expected:** Step 1: the fire buttons give way to twelve keys in 4 rows of 3, "1" to "9" then
+  "*", "0", "#" (Intellivision and Odyssey 2: "CLR", "0", "ENT"), centred at the D-pad's height on
+  the right side; the D-pad or stick, the quick actions and the menu stay, and the picture does not
+  move; the key in the centre row now reads "CONTROLS". Step 2: the keypad page of the other
+  orientation shows. Step 3: the controls are back. Step 4: the keypad fits the tablet layout, keys
+  at least as large as the fire buttons.
+- **Check:** `MANUAL`: screenshot each step, plus
   ```bash
-  adb shell ls $SKINS/O2/my-odyssey             # skin.json and the six layout folders
-  adb shell ls $SKINS/O2/my-odyssey/phone-portrait   # background.png dpad-ball.png dpad.png menu.png
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E '_name = |next_target'
+  # overlays portrait, landscape, keypad-portrait, keypad-landscape; the toggle's next_target
+  # is keypad-portrait on portrait and portrait on keypad-portrait
   ```
 
-### RT-777 — Upright on a phone the copy looks and plays like the drawn skin
-- **Area:** Android — Copy of the drawn skin
+### RT-798 — Every control and keypad key presses what the drawn skin pressed, Gearcoleco included
+- **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** RT-776 (the copy in use); the Odyssey² game; a phone held upright.
+- **Preconditions:** RT-881's games; RetroArch's input test, or games that ask for a number on the
+  keypad (a game's skill level, a menu choice).
 - **Steps:**
-  1. Launch the game. Compare with the "Console colors" skin (pick it, relaunch, then pick the copy
-     again).
-  2. Press the D-pad, "ACTION", each of the twelve keypad keys, save, load, turbo, slow motion, fast
-     forward and the menu key.
-- **Expected:** The same dark body, picture, strip with its five icons, round menu key, D-pad with its
-  arrow marks and red "ACTION" button in the same places; the console's name at the foot. Two rows of
-  six keypad keys ("1" to "6", then "7", "8", "9", "CLR", "0", "ENT") sit between the controls and the
-  bottom, always shown (no "KEYPAD" key, no hide key). Every key does what it does on the drawn skin:
-  the keypad types its digit, CLR and ENT clear and enter, the strip keys light while on.
-- **Check:** `MANUAL`; JVM suite `DrawnSkinCopyTest.everyControlPressesWhatTheDrawnSkinsDoes`.
+  1. On each console press the D-pad (or move the stick), every button and, on the keypad page,
+     every key.
+  2. Switch the ColecoVision game's core to Gearcoleco and repeat step 1 on it.
+- **Expected:** Each control reaches the core as the drawn skin's did: the 5200's "2" on A, "1" on
+  B, "PAUSE" on Select, its keypad typed on the keyboard's number pad with "*" and "#"; the
+  ColecoVision's "L" on A, "R" on B, its keypad on the joypad (1 X, 2 Y, 3 R, 4 L, 5 R2, 6 L2,
+  7 R3, 8 L3, 9 and 0 on the right stick, "*" Select, "#" Start) with blueMSX, and the same keys
+  reaching the game on Gearcoleco; the Intellivision's "1" on Y, "2" on B, "3" on A, its keypad from
+  the keyboard with "CLR" and "ENT"; the Odyssey 2's "ACTION" on B, its keypad from the keyboard with
+  "CLR" (End) and "ENT" (Return).
+- **Check:** `MANUAL`; the binds are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android), per
+  core.
 
-### RT-778 — Sideways the keypad goes under the face buttons
-- **Area:** Android — Copy of the drawn skin
+### RT-799 — Dark, quick actions, an imported skin and a gamepad on the keypad consoles
+- **Area:** Android — Bundled skins
 - **Mode:** MANUAL
-- **Preconditions:** A copy of the Atari 5200's drawn skin in use (RT-776's steps on Atari 5200); a
-  5200 game.
+- **Preconditions:** RT-881's games; any `.deltaskin` package; a gamepad (or the emulator's
+  keyboard as one).
 - **Steps:**
-  1. Launch the game with the phone sideways.
-  2. Move the stick; press "1", "2", "START", "PAUSE" and the keypad keys.
-- **Expected:** The picture is centred with the strip under it; the stick on the left, "START" and
-  "PAUSE" under it; on the right, the two orange buttons near the top and a three by four keypad
-  ("1 2 3", "4 5 6", "7 8 9", "* 0 #") under them. The stick moves its knob with the thumb and
-  every key presses.
-- **Check:** `MANUAL`; JVM suite `DrawnSkinCopyTest.sidewaysTheKeypadGoesUnderTheFaceButtonsAndThePillsLeft`.
+  1. Settings → ColecoVision → "Controller skins": tap "Dark" and start the game; open the keypad.
+  2. On the skin use "save", "load", "turbo" and "fast-forward" on the frame and the menu key, on
+     both pages.
+  3. Push the package to `files/skins/CV/`, pick it in the "IMPORTED" group and start the game.
+  4. Pick "Console colors" again, start the game, connect the gamepad and tap the gamepad layout's
+     keypad key, then disconnect it.
+- **Expected:** Step 1: "BUNDLED" lists exactly "Console colors" and "Dark"; the Dark skin has every
+  control and key in the same place. Step 2: each quick action works and lights while on; the menu
+  opens. Step 3: the package is drawn instead of the bundled skin. Step 4: the gamepad layout's
+  keypad key opens the drawn keypad; disconnecting the gamepad shows the bundled skin's keypad page.
+- **Check:** `MANUAL`: screenshot each step, plus
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["CV"]; print(c["skin"], c.get("custom"))'
+  # step 1: dark None · step 3: … pkg:<file> · step 4: console None
+  ```
 
-### RT-779 — On a tablet the keypad sits between the controls
-- **Area:** Android — Copy of the drawn skin
-- **Mode:** MANUAL
-- **Preconditions:** A tablet (or an emulator 600 dp or more across) with a copy of the Intellivision's
-  drawn skin in use.
+### RT-800 — The four packages are valid, each layout has a keypad page, and the format reads it
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
 - **Steps:**
-  1. Launch an Intellivision game upright, then turn the tablet sideways.
-- **Expected:** Upright, the D-pad on the left, the three gold buttons on the right and a three by
-  four keypad between them, "CLR" and "ENT" either side of "0". Sideways, the gold buttons go up on
-  the right with the keypad under them. Every control presses, as RT-777.
-- **Check:** `MANUAL`.
-
-### RT-780 — The ColecoVision copy presses the same on either core
-- **Area:** Android — Copy of the drawn skin
-- **Mode:** MANUAL
-- **Preconditions:** A copy of the ColecoVision's drawn skin in use; a ColecoVision game that reads the
-  keypad at its title screen (most ask for a skill level there).
-- **Steps:**
-  1. With the "blueMSX" core, launch the game; press "L", "R" and keypad "1".
-  2. Settings → ColecoVision → core "Gearcoleco"; launch the game again and press the same keys.
-- **Expected:** On both cores "L" and "R" fire the left and right buttons and keypad "1" picks the
-  first level: the copy follows the core, as the drawn skin does.
-- **Check:** `MANUAL`; JVM suite `OpenEmuxSkinLayoutsTest.buttonsAndKeysPressWhatTheCoreReadsThemAs`.
+  1. Run the bundled skins and skin format suites.
+- **Expected:** The four consoles ship a `.zip` in console colours and Dark; each is read with the
+  six layouts, each layout with a keypad page (its own `keypad/background.png`, the twelve keys and
+  the `keypadToggle` key on both pages), every image at its element's size, the Dark one with the
+  same layout, every control and key pressing the bind the drawn skin uses (per core); the templates
+  match the packages, keypad pages included. A layout's `keypad` reads and writes back, is checked
+  like a layout, and its pages are only used when both layouts of a form have one with a toggle.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/OpenEmuxSkinLayoutsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinSpecsTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt`,
+  `src/test/java/com/openemux/mobile/game/TabletopTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
 
 ## Android — Skin editor
 
@@ -13909,6 +13948,47 @@ the date.
 - **Reason:** Every console's bundled skin can be copied now: the OpenEmux-format packages (RT-769),
   the drawn skin (issue 798, RT-775) and the Delta/Manic packages (issue 797, RT-792). The JVM suite
   `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` checks each console's kind of copy.
+### RT-875 — A drawn-skin console lists its skin and offers "Create copy and edit"
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-876 — The copy is named, listed under Your skins with three forms and used
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-877 — Upright on a phone the copy looks and plays like the drawn skin
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-878 — Sideways the keypad goes under the face buttons
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-879 — On a tablet the keypad sits between the controls
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-880 — The ColecoVision copy presses the same on either core
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
 
 ### RT-675 — An imported skin still wins over both bundled ones
 - **Retired:** 2026-11-05 (issue 782).
