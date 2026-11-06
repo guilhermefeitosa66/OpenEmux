@@ -56,7 +56,10 @@ For the Android skin editor, asked that going back to a bundled skin never
 throw a custom layout away. In
 [#782](https://github.com/guilhermefeitosa66/OpenEmux/issues/782) each console
 keeps the player's skins in a list of their own, so a custom skin is still
-there, unchanged, after playing a while with a bundled one.
+there, unchanged, after playing a while with a bundled one. Suggested
+dragging the controls anywhere on the screen, as paid emulator apps do, which
+became the editor's move, magnetic grid and resize in
+[#784](https://github.com/guilhermefeitosa66/OpenEmux/issues/784).
 
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
