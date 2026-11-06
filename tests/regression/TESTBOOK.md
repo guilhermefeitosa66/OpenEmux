@@ -11774,13 +11774,12 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 ### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
 - **Area:** Android — Copy of a bundled skin
 - **Mode:** MANUAL
-- **Preconditions:** A SNES game (Delta package) and an Atari 2600 game (drawn skin) in the library.
+- **Preconditions:** A ColecoVision game (drawn skin) in the library.
 - **Steps:**
-  1. Settings → SNES → "⋮" on "Console colors" and on "Dark".
-  2. Open the Atari 2600's skin section (or row).
-- **Expected:** The SNES sheets show only "Use it as it is" (RT-741). The Atari 2600 offers no copy
-  either.
-- **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForTheEightOwnFormatConsolesOnly`.
+  1. Open the ColecoVision's skin section (or row).
+- **Expected:** The ColecoVision offers no copy: the drawn skin is not made into one yet (issue 798).
+  The Delta/Manic consoles (SNES, GBA and the rest) do offer it since issue 797: RT-790.
+- **Check:** JVM suite `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsoleWithAPackage`.
 
 ### RT-774 — Copying works from a game's detail screen and with a gamepad
 - **Area:** Android — Copy of a bundled skin
@@ -11793,6 +11792,112 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 - **Expected:** The focus ring lands on the row, the name field and both buttons in turn; the copy is
   made and the sheet's list shows it under "Your skins" with "In use". The detail screen's skin row
   then reads "Console colors copy".
+- **Check:** `MANUAL`.
+
+## Android — Copy of a Delta or Manic skin
+
+"Create copy and edit" also works on the bundled skins that ship as Delta/Manic packages (issue 797,
+part 2 of issue 783): FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS and PSP, in every colour
+variant. The copy is converted into OpenEmux's own format: one layout per form and orientation the
+package has art for, the background with every control lifted off it and one image per control. An
+imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" on its row's menu.
+Same setup as the section above (`$PKG`, `$SKINS`); a SNES game (`Super Mario World`) and a GBA game
+in the library.
+
+### RT-790 — A bundled Delta or Manic skin offers "Create copy and edit"
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** No skin of your own for the SNES.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → on the "Console colors" card, tap "⋮".
+  2. Do the same on the "Dark" card, and on a GBA colour variant (say "Purple").
+- **Expected:** Every sheet shows the lock line "Bundled skins never change.", then "Create copy and
+  edit" (pencil icon) above "Use it as it is".
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`); JVM suite
+  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsoleWithAPackage` (every variant of the twelve
+  consoles is a package the conversion takes).
+
+### RT-791 — The converted copy is named, listed under Your skins, used and has the source's layouts
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-790.
+- **Steps:**
+  1. On the SNES "Console colors", tap "⋮" → "Create copy and edit" → "Create copy" with the name
+     filled in.
+  2. Wait for the list to refresh.
+- **Expected:** A short "Making the copy…" message shows; then "YOUR SKINS" lists "Console colors
+  copy" ringed with "In use", its Phone, Tablet and Fold badges lit (the package has iPhone and iPad
+  art), and the bundled card is no longer in use. The bundled card itself is unchanged.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC/console-colors-copy
+  # skin.json fold-landscape fold-portrait phone-landscape phone-portrait tablet-landscape tablet-portrait
+  adb shell ls $SKINS/SFC/console-colors-copy/phone-portrait
+  # background.png a.png b.png x.png y.png l.png r.png start.png select.png dpad.png dpad-ball.png
+  # save.png load.png turbo.png slow-motion.png fast-forward.png menu.png
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"].get("custom"))'
+  # own:console-colors-copy
+  ```
+
+### RT-792 — The copy looks and plays like its source, upright and sideways
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-791 (the SNES copy in use).
+- **Steps:**
+  1. Launch the SNES game upright; press every button, the D-pad (its ball follows the thumb),
+     save, load, turbo, slow motion, fast forward and the menu key.
+  2. Turn the phone sideways and do the same.
+  3. Quit; pick "Console colors" under "Bundled"; launch the game again, both ways, and compare.
+- **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
+  motion before fast forward. Every control presses what it does on the bundled skin; turbo, slow
+  motion and fast forward light (an accent tile behind the key) while on.
+- **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
+  `PackageConversionTest.everyBundledPackagePlansIntoASkinTheFormatAccepts` (every package plans into
+  a skin the format accepts, every item a control, slow motion and the D-pad in every layout).
+
+### RT-793 — Sticks, two screens and the tablet art come across too
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** An N64 or PS game, and an NDS game, in the library; a tablet, or the emulator
+  at tablet size (`adb shell wm size 1600x2560 && adb shell wm density 320`).
+- **Steps:**
+  1. Make a copy of the N64 (or PS) "Console colors" and play: move each stick.
+  2. Make a copy of the NDS "Console colors" and play upright and sideways.
+  3. At tablet size, play the SNES copy (RT-791) both ways.
+- **Expected:** The sticks' knobs move with the thumb and steer like the bundled skin's. The NDS copy
+  shows both screens one over the other; its screens key is drawn and does nothing (the format has
+  no page per NDS layout). At tablet size the copy draws the iPad art, as the bundled skin does.
+- **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
+
+### RT-794 — "Duplicate" on an imported Delta or Manic skin makes a copy of your own
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** A `.deltaskin` imported for the GBA through "Import .zip" (for instance the APK's
+  own: `unzip -p OpenEmuxMobile.apk assets/skins/GBA.deltaskin > GBA.deltaskin`), listed under
+  "Imported".
+- **Steps:**
+  1. On its row under "Imported", tap "⋮".
+  2. Tap "Duplicate".
+  3. Use the copy and launch the GBA game.
+- **Expected:** The sheet shows the lock line "Imported skins stay as they are. Duplicate makes a copy
+  of your own.", "Use" (when it is not in use) and "Duplicate". After "Making the copy…", "YOUR
+  SKINS" lists "<package name> (copy)" with the package's badges; the package stays under
+  "Imported". In game the copy looks and plays like the package.
+- **Check:** `adb shell ls $SKINS/GBA` lists the package file unchanged (same size as before) and the
+  new folder with its `skin.json`.
+
+### RT-795 — The copy and Duplicate work with a gamepad and in every language
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-794's imported package; a gamepad connected.
+- **Steps:**
+  1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
+     D-pad to "Duplicate", A.
+  2. With the gamepad only: "⋮" of a SNES bundled card → "Create copy and edit" → "Create copy".
+  3. Switch the app to each of German, Spanish, French, Japanese, Portuguese (Brazil), Tamil and
+     Chinese and open the imported sheet again.
+- **Expected:** Left from the "⋮" goes back to the row; both copies are made. The lock line and the
+  "Making the copy…" message are translated in every language.
 - **Check:** `MANUAL`.
 
 ## Retired
