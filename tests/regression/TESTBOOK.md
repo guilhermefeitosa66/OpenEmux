@@ -6023,7 +6023,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Steps:**
   1. Open the "Library" tab (the shelf).
 - **Expected:** First a row shared by two half-width cards, "All" (blue, grid icon) and
-  "Favorites" (purple, star), no taller than a console card (RT-844). Then one card per row. Each console card shows, from the left, the console's pixel icon, large (about two thirds of the card's height) and sitting straight on the
+  "Favorites" (purple, star), no taller than a console card (RT-849). Then one card per row. Each console card shows, from the left, the console's pixel icon, large (about two thirds of the card's height) and sitting straight on the
   card's own colour: no lighter or darker square behind it, no border, no shadow. Beside it the
   short tag ("NES", "SNES"), the console name (two lines at most, then "…") and "N games". No
   cartridges on any card. Nothing overlaps. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
@@ -6112,7 +6112,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
   name with no "…".
 - **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
 
-### RT-844 — Portrait shows "All" and "Favorites" side by side and each opens its view
+### RT-849 — Portrait shows "All" and "Favorites" side by side and each opens its view
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
 - **Preconditions:** RT-470's library (two favourite games); phone in portrait, dark theme.
@@ -6133,7 +6133,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 ### RT-587 — With no favourites "All games" stands alone; an empty library shows neither
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-844's shelf.
+- **Preconditions:** RT-849's shelf.
 - **Steps:**
   1. Unfavourite both favourite games and go back to the shelf.
   2. Favourite one game again and go back to the shelf.
@@ -6148,7 +6148,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 ### RT-588 — Landscape and tablet show "All games" and "Favorites" as two full cards
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-844's shelf.
+- **Preconditions:** RT-849's shelf.
 - **Steps:**
   1. Rotate the phone to landscape.
   2. On a tablet (or `adb shell wm size 1600x2560 && adb shell wm density 320`), open the shelf in
@@ -6160,7 +6160,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 ### RT-589 — The gamepad moves between "All" and "Favorites" and Y ignores them
 - **Area:** Android — Shelf
 - **Mode:** MANUAL
-- **Preconditions:** RT-844's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Preconditions:** RT-849's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
   1. Open the shelf: press DPAD_DOWN until a focus ring shows on "All".
   2. Press DPAD_RIGHT, then DPAD_LEFT, then DPAD_DOWN.
