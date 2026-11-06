@@ -9930,10 +9930,10 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   3. Send the large game.
 - **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
   "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace";
-  a disc game of several files: only "Replace · Skip", see RT-551), and the items skipped for other
+  a disc game of several files: only "Replace · Skip", see RT-842), and the items skipped for other
   reasons under "SKIPPED". After the transfer the save's mtime is unchanged and the result says
   "1 save kept (yours was newer)", with no "items skipped" count: a game that did not arrive is
-  listed by name instead (RT-551). 3: "Not enough space." with the needed, free and missing sizes;
+  listed by name instead (RT-842). 3: "Not enough space." with the needed, free and missing sizes;
   "Accept" is disabled.
 - **Check:** human only (screenshots and the two `stat` lines).
 
@@ -12971,7 +12971,7 @@ APK of the release before issue 808; an NDS game in the library played on DeSmuM
   adb shell ls $SKINS/NDS/console-colors-copy/phone-portrait
   # background.png frame.png ... and the bottom, side and top folders
   ```
-### RT-551 — A disc game that is already on the phone is never dropped silently
+### RT-842 — A disc game that is already on the phone is never dropped silently
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** On the phone, a PS game made of a `.cue` and its `.bin` (for example
@@ -12995,7 +12995,7 @@ APK of the release before issue 808; an NDS game in the library played on DeSmuM
 - **Check:** human only (screenshots and the `stat` lines); the plan and the count are covered by
   `PlacementTest`, `OfferModelTest` and `DeliveryReportTest`.
 
-### RT-552 — Android lists the games the receiver did not take, on the result and the notification
+### RT-843 — Android lists the games the receiver did not take, on the result and the notification
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** The phone and a desktop OpenEmux (or a second device) that can see each other;
