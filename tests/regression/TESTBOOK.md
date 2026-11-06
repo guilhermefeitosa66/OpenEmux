@@ -12158,68 +12158,36 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
 
 ## Android — Copy of a Delta or Manic skin
 
-"Create copy and edit" also works on the bundled skins that ship as Delta/Manic packages (issue 797,
-part 2 of issue 783). Since issue 806 only the NDS's are packages, in every colour variant: FC, SFC,
-N64, GC, GB, GBC, GBA, MD, SMS, PS and PSP ship in OpenEmux's own format and their copy is the zip as
-it is (RT-819). The copy is converted into OpenEmux's own format: one layout per form and orientation
-the package has art for, the background with every control lifted off it and one image per control.
-An imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" on its row's menu.
+"Create copy and edit" also worked on the bundled skins that shipped as Delta/Manic packages (issue 797,
+part 2 of issue 783). Since issue 808 no bundled skin is a package: every console, the NDS included,
+ships in OpenEmux's own format and its copy is the zip as it is (RT-819, RT-828). The conversion stays
+for the packages a player imports: "Duplicate" on an imported `.deltaskin`/`.manicskin` row's menu
+converts it into OpenEmux's own format, one layout per form and orientation the package has art for,
+the background with every control lifted off it and one image per control.
 Same setup as the section above (`$PKG`, `$SKINS`); an NDS game and a GBA game in the library.
-`$OLD_APK` is the APK of a release before issue 806, whose `assets/skins/` still holds the packages of
-the eleven consoles that moved.
-
-### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
-- **Area:** Android — Copy of a Delta or Manic skin
-- **Mode:** MANUAL
-- **Preconditions:** No skin of your own for the NDS.
-- **Steps:**
-  1. Settings → Nintendo DS → "Controller skins" → on the "Console colors" card, tap "⋮".
-  2. Do the same on the "Dark" card, and on an NDS colour variant (say "Pink").
-- **Expected:** Every sheet shows the lock line "Bundled skins never change.", then "Create copy and
-  edit" (pencil icon) above "Use it as it is".
-- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`); JVM suite
-  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` (every variant of the NDS is a
-  package the conversion takes; since issue 806 no other console's is).
-
-### RT-793 — The converted copy is named, listed under Your skins, used and has the source's layouts
-- **Area:** Android — Copy of a Delta or Manic skin
-- **Mode:** MANUAL
-- **Preconditions:** RT-792.
-- **Steps:**
-  1. On the NDS "Console colors", tap "⋮" → "Create copy and edit" → "Create copy" with the name
-     filled in.
-  2. Wait for the list to refresh.
-- **Expected:** A short "Making the copy…" message shows; then "YOUR SKINS" lists "Console colors
-  copy" ringed with "In use", its Phone, Tablet and Fold badges lit (the package has iPhone and iPad
-  art), and the bundled card is no longer in use. The bundled card itself is unchanged.
-- **Check:**
-  ```bash
-  adb shell ls $SKINS/NDS/console-colors-copy
-  # skin.json fold-landscape fold-portrait phone-landscape phone-portrait tablet-landscape tablet-portrait
-  adb shell ls $SKINS/NDS/console-colors-copy/phone-portrait
-  # background.png and one PNG per control: a.png b.png x.png y.png l.png r.png start.png select.png
-  # dpad.png dpad-ball.png save.png load.png turbo.png slow-motion.png fast-forward.png menu.png among them
-  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["NDS"].get("custom"))'
-  # own:console-colors-copy
-  ```
+`$OLD_APK` is the APK of a release before issue 806, whose `assets/skins/` still holds the Delta/Manic
+packages of the twelve consoles that moved (`NDS.deltaskin` included).
 
 ### RT-794 — The copy looks and plays like its source, upright and sideways
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
-- **Preconditions:** RT-793 (the NDS copy in use); the NDS screen layout on both screens one over
-  the other (the copy has no page per layout, RT-795).
+- **Preconditions:** `NDS.deltaskin` taken from `$OLD_APK`
+  (`unzip -p $OLD_APK assets/skins/NDS.deltaskin > NDS.deltaskin`), imported with "Import .zip",
+  then "Duplicate" on its row under "Imported" (RT-796) and the copy used ("the NDS copy"); the NDS
+  screen layout on both screens one over the other (the copy has no page per layout, RT-795).
 - **Steps:**
   1. Launch the NDS game upright; press every button, the D-pad (its ball follows the thumb),
      save, load, turbo, slow motion, fast forward and the menu key.
   2. Turn the phone sideways and do the same.
-  3. Quit; pick "Console colors" under "Bundled"; launch the game again, both ways, and compare.
+  3. Quit; use the imported package under "Imported"; launch the game again, both ways, and compare.
 - **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
-  motion before fast forward. Every control presses what it does on the bundled skin (the screens
+  motion before fast forward. Every control presses what it does on the package (the screens
   key aside, RT-795); turbo, slow motion and fast forward light (an accent tile behind the key) while
   on.
 - **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
-  `PackageConversionTest.everyBundledPackagePlansIntoASkinTheFormatAccepts` (every package plans into
-  a skin the format accepts, every item a control, slow motion and the D-pad in every layout).
+  `PackageConversionTest.everyBundledPackagePlansIntoASkinTheFormatAccepts` (every package the app
+  once shipped, kept as a test file, plans into a skin the format accepts, every item a control, slow
+  motion and the D-pad in every layout).
 
 ### RT-795 — Sticks, two screens and the tablet art come across too
 - **Area:** Android — Copy of a Delta or Manic skin
@@ -12231,11 +12199,11 @@ the eleven consoles that moved.
   (`adb shell wm size 1600x2560 && adb shell wm density 320`).
 - **Steps:**
   1. "Duplicate" the imported N64 (or PS) package, use the copy and play: move each stick.
-  2. Play the NDS copy (RT-793) upright and sideways.
+  2. Play the NDS copy (RT-794) upright and sideways.
   3. At tablet size, play the NDS copy both ways.
 - **Expected:** The sticks' knobs move with the thumb and steer like the package's. The NDS copy
   shows both screens one over the other; its screens key is drawn and does nothing (the format has
-  no page per NDS layout). At tablet size the copy draws the iPad art, as the bundled skin does.
+  no page per NDS layout). At tablet size the copy draws the iPad art, as the package does.
 - **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
 
 ### RT-796 — "Duplicate" on an imported Delta or Manic skin makes a copy of your own
@@ -12262,7 +12230,8 @@ the eleven consoles that moved.
 - **Steps:**
   1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
      D-pad to "Duplicate", A.
-  2. With the gamepad only: "⋮" of an NDS bundled card → "Create copy and edit" → "Create copy".
+  2. With the gamepad only: "⋮" of an NDS bundled card → "Create copy and edit" → "Create copy"
+     (since issue 808 a copy of the zip as it is, RT-828).
   3. Switch the app to each of German, Spanish, French, Japanese, Portuguese (Brazil), Tamil and
      Chinese and open the imported sheet again.
 - **Expected:** Left from the "⋮" goes back to the row; both copies are made. The lock line and the
@@ -12383,8 +12352,8 @@ clear blue, clear pink, silver, orange; N64 grey, black, red, blue, green, yello
 silver, orange; PSP white, silver, blue; MD, SMS and PS console colours and Dark only). Each has six
 layouts: phone and tablet as before, upright and sideways, plus fold, new for these consoles. The
 console colours and Dark images are PNG, the colour variants' WebP, which the format now accepts
-for any image (`<name>.webp` instead of `<name>.png`, never both). The NDS stays a Delta package
-until issue 808. The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone,
+for any image (`<name>.webp` instead of `<name>.png`, never both). Issue 808 moved
+the NDS too (RT-825 to RT-828). The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone,
 a tablet and a foldable (or headless emulators of each) with `adb`. `$PKG` is `com.openemux.mobile`,
 `$SKINS` is `/sdcard/Android/data/$PKG/files/skins`, and `$OLD_APK` is the APK of the release before
 issue 806.
@@ -12601,25 +12570,28 @@ issue 806.
   adb shell ls $SKINS/SFC/webp-import/phone-portrait   # a.webp, and no a.png
   ```
 
-### RT-824 — The thirty own-format consoles' zips are valid, complete and press the same binds
+### RT-824 — The thirty-one own-format consoles' zips are valid, complete and press the same binds
 - **Area:** Android — Bundled skins
 - **Mode:** AUTO-SUITE
 - **Preconditions:** An openemux-android checkout.
 - **Steps:**
   1. Run the unit suite (`./gradlew --no-daemon testDebugUnitTest` in `pkg/android/openemux`).
-- **Expected:** Thirty consoles ship in OpenEmux's own format, in console colours and Dark, and of
-  the Delta/Manic packages only `NDS.deltaskin` is left in any variant folder; every variant the
-  picker lists is a zip in its folder and no zip ships that it does not list, 93 own-format zips in
-  all (30 consoles twice, plus the 33 official colours of the eleven); each zip has the six layouts,
-  every image at its element's size (a D-pad's ball and a stick's knob included), PNG for console
-  colours and Dark and WebP for the colours; every variant has the console colours' layout (sizes,
-  screens, frame, every element's id, type, bind, rect and label); every control presses the bind
-  the drawn skin uses for that console, and the quick actions and the menu are there. The skin
-  format reads `<name>.webp` for `<name>.png` and refuses both at once (`DUPLICATE_ID`); an imported
-  zip keeps its WebP images. "Create copy and edit" copies every own-format bundled zip with every
-  layout, element and file, and only the NDS's bundled packages (with the eleven's former packages,
-  kept as test files) still go through the conversion, which still plans each into a skin the format
-  accepts. The templates match the bundled layouts.
+- **Expected:** Thirty-one consoles ship in OpenEmux's own format, in console colours and Dark, and
+  no Delta/Manic package is left in any variant folder (issue 808: the NDS's moved last); every
+  variant the picker lists is a zip in its folder and no zip ships that it does not list, 100
+  own-format zips in all (31 consoles twice, plus the 33 official colours of the eleven and the NDS's
+  five); each zip has the six layouts, every image at its element's size (a D-pad's ball and a
+  stick's knob included), PNG for console colours and Dark and WebP for the colours; the NDS's have
+  the `top`, `bottom` and `side` screen-layout pages in every layout and variant, each image there at
+  its size and SCREENS on every page; every variant has the console colours' layout (sizes, screens,
+  frame, every element's id, type, bind, rect and label, the NDS's pages included); every control
+  presses the bind the drawn skin uses for that console, and the quick actions and the menu are
+  there. The skin format reads `<name>.webp` for `<name>.png` and refuses both at once
+  (`DUPLICATE_ID`); an imported zip keeps its WebP images. "Create copy and edit" copies every
+  own-format bundled zip with every layout, element and file, and a bundled file that is not one is
+  offered no copy; the conversion of a Delta/Manic package still plans each package the app once
+  shipped (kept as test files, the NDS's included) into a skin the format accepts. The templates
+  match the bundled layouts.
 - **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
   `src/test/java/com/openemux/mobile/launch/BundledSkinsTest.kt`,
   `src/test/java/com/openemux/mobile/launch/SkinConversionTest.kt`,
@@ -12629,10 +12601,93 @@ issue 806.
   `src/test/java/com/openemux/mobile/data/SkinImportTest.kt` (openemux-android,
   `./gradlew --no-daemon testDebugUnitTest`).
 
+## Android — DS bundled skin in OpenEmux's format
+
+The Nintendo DS's bundled skin, in all seven variants (Console colors, Dark, Black, Blue, Pink,
+Turquoise, White), ships as `NDS.zip` in OpenEmux's own format instead of `NDS.deltaskin` (issue 808,
+part 3 of issue 802), with the screen-layout pages of issue 807 (`top`, `bottom`, `side`) in each of
+its six layouts. In game it must look and play as the package did. The runner has no Android device,
+so these are `MANUAL`: a phone, a tablet and a foldable (or headless emulators of each) with `adb`.
+`$PKG` is `com.openemux.mobile`, `$SKINS` is `/sdcard/Android/data/$PKG/files/skins`, `$OLD_APK` the
+APK of the release before issue 808; an NDS game in the library played on DeSmuME (the default core).
+
+### RT-825 — The DS opens with its bundled skin, looking as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** Nothing picked under "Your skins" or "Imported" for the NDS; its "Controller
+  skins" on "Console colors"; screenshots of the same game taken with `$OLD_APK` installed (phone
+  upright and sideways, tablet upright and sideways), the screen layout on both screens one over the
+  other.
+- **Steps:**
+  1. On a phone, start the game upright, then turn the phone sideways.
+  2. On a tablet (`adb shell wm size 1600x2560 && adb shell wm density 320`), do the same.
+  3. On a foldable's inner screen (or a Pixel Fold emulator unfolded), do the same.
+  4. Press every button, the D-pad, save, load, turbo, fast forward and the menu key.
+- **Expected:** Steps 1–2 show the same skin as the screenshots: the titanium DS art, every control
+  in the same place and at the same size, both screens in the same spot and never covered; the
+  tablet gets its own layouts. Step 3 shows a fold layout of its own, not the phone's stretched.
+  Every control does what it did. Nothing falls back to the app's plain drawn skin.
+- **Check:** `MANUAL`: screenshots (`adb exec-out screencap -p > nds-<form>-<orientation>.png`);
+  `adb logcat -s OpenEmuxSkin` shows `drawing` the DS skin with `(phone-portrait, phone-landscape)`
+  on the phone, `(tablet-portrait, tablet-landscape)` on the tablet, and no `falling back` line.
+- **Restore:** `adb shell wm size reset && adb shell wm density reset`.
+
+### RT-826 — SCREENS steps through the DS screen layouts, each with its own art
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-825.
+- **Steps:**
+  1. Upright on the phone, press SCREENS repeatedly until it comes back to the start.
+  2. Turn sideways and do the same; then on the tablet, both ways.
+- **Expected:** Each press goes to the next layout (both screens, top only, bottom only, side by
+  side, as the old package did), and each draws its own art: the picture takes the room the layout
+  needs, no control covers a screen and SCREENS is on every page. Touching the bottom screen lands
+  where it is tapped in every layout.
+- **Check:** `MANUAL`: a screenshot per layout, compared with `$OLD_APK`'s.
+
+### RT-827 — The DS colours draw the same layout, and an update keeps the one picked
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `$OLD_APK` installed, the NDS's "Controller skins" on "Blue".
+- **Steps:**
+  1. Install this build over it (`adb install -r`) and start the NDS game.
+  2. Pick in turn "Dark", "Black", "Pink", "Turquoise" and "White", starting the game each time.
+- **Expected:** Step 1 opens in Blue, as before the update. Each variant draws in its colours with the
+  same layout, pages and controls as "Console colors".
+- **Check:** `MANUAL`; `adb shell run-as $PKG cat files/meta.json` keeps `"skin": "blue"` for NDS
+  after step 1.
+
+### RT-828 — "Create copy and edit" on the DS copies the zip with its screen-layout pages
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** No skin of your own for the NDS.
+- **Steps:**
+  1. Settings → Nintendo DS → "Controller skins" → "⋮" on "Console colors" → "Create copy and edit" →
+     "Create copy".
+- **Expected:** The copy is made at once (no "Making the copy…" message: it is the zip as it is),
+  listed under "YOUR SKINS" in use with Phone, Tablet and Fold lit, and opens in the editor; in game
+  it plays like the bundled skin, SCREENS included.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/NDS/console-colors-copy/phone-portrait
+  # background.png frame.png ... and the bottom, side and top folders
+  ```
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
+- **Retired:** 2026-11-06 (issue 808).
+- **Reason:** No bundled skin is a Delta/Manic package any more: the NDS's, the last, ships in
+  OpenEmux's own format, and its "Create copy and edit" copies the zip (RT-828). The conversion is
+  reached through "Duplicate" on an imported package (RT-796, RT-794).
+
+### RT-793 — The converted copy is named, listed under Your skins, used and has the source's layouts
+- **Retired:** 2026-11-06 (issue 808).
+- **Reason:** It converted the bundled NDS package, which is now a zip copied as it is (RT-828). The
+  converted copy of a package is RT-796's "Duplicate", which RT-794 and RT-795 play.
 
 ### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
 - **Retired:** 2026-11-06 (issue 797).
