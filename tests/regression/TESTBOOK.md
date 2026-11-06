@@ -1319,6 +1319,37 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print('RT-585 OK')"
   ```
 
+### RT-835 — The Game Boy Color has its own icon, not the Game Boy's
+- **Area:** Navigation & search
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Look at the "GB - Game Boy" and "GBC - Game Boy Color" rows of the sidebar, and at the same
+     two consoles in the "Console" dropdown of "Settings" → "Input".
+- **Expected:** The Game Boy row shows the grey Game Boy; the Game Boy Color row shows the same
+  pixel-art handheld in yellow (the Pikachu edition: yellow body, blue around the screen and blue
+  buttons, a dark screen), the icon the Android app shows for it. The two used to be one file, so
+  the rows looked alike at a glance. Every other console's icon is unchanged; the Famicom and its
+  Disk System still share theirs.
+- **Check:** suite file `tests/test_icon_assets.py` (`TheGameBoyColorHasItsOwnIconTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  text = Path("src/openemux/ui/console_icons.py").read_text()
+  icons = Path("src/openemux/ui/assets/icons/systems")
+  name = {c: re.search(rf'"{c}": "([^"]+)"', text).group(1) for c in ("GB", "GBC")}
+  assert name["GB"] != name["GBC"], "GB and GBC name the same icon again"
+  assert (icons / name["GBC"]).read_bytes() != (icons / name["GB"]).read_bytes()
+  from PIL import Image
+  raw = Image.open(icons / name["GBC"]).convert("RGBA").tobytes()
+  solid = [raw[i:i + 3] for i in range(0, len(raw), 4) if raw[i + 3] > 200]
+  yellow = [p for p in solid if p[0] > 180 and p[1] > 130 and p[2] < 120]
+  assert len(yellow) > len(solid) * 0.3, f"only {len(yellow)} of {len(solid)} pixels are yellow"
+  print("RT-835 OK")
+  EOF
+  ```
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render

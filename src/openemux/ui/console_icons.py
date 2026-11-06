@@ -33,7 +33,10 @@ CONSOLE_ICON_FILES = {
     "FDS": "nintendo_fds__famicom_library@2x.png",
     "FC": "nintendo_fds__famicom_library@2x.png",
     "GB": "gameboy__gameboy_library@2x.png",
-    "GBC": "gameboy__gameboy_library@2x.png",
+    # OpenEmu has no Game Boy Color icon; this is its Game Boy recoloured to
+    # the yellow Pikachu edition, the one the Android app shows (see
+    # assets/icons/ATTRIBUTION.md), so the two rows do not look alike.
+    "GBC": "gameboy_color__gbc_library@2x.png",
     "GBA": "gameboy_advance__gba_library@2x.png",
     "GG": "gamegear__gamegear_library@2x.png",
     "INTV": "intellivision__intellivision_library@2x.png",
