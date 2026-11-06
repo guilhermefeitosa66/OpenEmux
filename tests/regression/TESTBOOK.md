@@ -12013,7 +12013,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   first change is still there. A skin without the layout shows "This skin has no Phone · Sideways
   layout yet. Turn the device to edit another one." with "Edit the Upright layout" (issue 785, when the
   skin has that one: it shows it without turning the phone) and "Close editor". The toolbar's switch
-  is RT-798.
+  is RT-807.
 - **Check:** `MANUAL`.
 
 ### RT-791 — The editor with a gamepad, and in every language
@@ -12034,7 +12034,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
 - **Check:** JVM suite `SkinEditorTextTest.everyLocaleHasEveryStringWithItsArguments`.
 
 
-### RT-798 — The toolbar switches between the upright and the sideways layout
+### RT-807 — The toolbar switches between the upright and the sideways layout
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, the phone held upright, "Mine" has both phone layouts.
@@ -12046,7 +12046,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   the phone again. A phone never shows a Tablet or Fold layout here.
 - **Check:** JVM suite `SkinLayoutsEditTest` in openemux-android; `MANUAL` screenshot.
 
-### RT-799 — The Layouts panel shows this phone's layouts and the other forms
+### RT-808 — The Layouts panel shows this phone's layouts and the other forms
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781 ("Mine" has phone, tablet and fold layouts, like the bundled skin it was
@@ -12063,10 +12063,10 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   the panel.
 - **Check:** `MANUAL` screenshot.
 
-### RT-800 — Switching a form off asks, removes its layouts on Save, and Undo brings them back
+### RT-809 — Switching a form off asks, removes its layouts on Save, and Undo brings them back
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
-- **Preconditions:** RT-799.
+- **Preconditions:** RT-808.
 - **Steps:**
   1. Layouts panel → switch "Offer on tablets" off; "Cancel".
   2. Switch it off again → "Remove"; close the panel; Undo; Redo.
@@ -12081,10 +12081,10 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   adb shell ls $SKINS/GG/console-colors-copy     # no tablet-portrait, no tablet-landscape
   ```
 
-### RT-801 — Switching a form on lights its badge and draws the skin there
+### RT-810 — Switching a form on lights its badge and draws the skin there
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
-- **Preconditions:** RT-800 (Tablet off and saved).
+- **Preconditions:** RT-809 (Tablet off and saved).
 - **Steps:**
   1. Edit "Mine" → Layouts panel → switch "Offer on tablets" on → close the panel → "Save".
   2. Make the emulator a tablet (`adb shell wm size 1600x2560`, `adb shell wm density 320`; `reset`
@@ -12098,7 +12098,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   adb shell cat $SKINS/GG/console-colors-copy/skin.json | grep -o '"tablet-[a-z]*"'   # tablet-portrait, tablet-landscape
   ```
 
-### RT-802 — Moving the screen area moves where the game is drawn
+### RT-811 — Moving the screen area moves where the game is drawn
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781, a Game Gear game in the library.
@@ -12113,7 +12113,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   frame, and every control still presses its button.
 - **Check:** JVM suite `SkinLayoutsEditTest.theScreenAreaMovesResizesAndResetsTogether`; `MANUAL`.
 
-### RT-803 — Try lights each control and says what it sends
+### RT-812 — Try lights each control and says what it sends
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
@@ -12128,7 +12128,7 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   with nothing selected.
 - **Check:** JVM suite `SkinLayoutsEditTest.tryNamesWhatAControlSends`; `MANUAL` screenshot.
 
-### RT-804 — Panels open away from what is being edited
+### RT-813 — Panels open away from what is being edited
 - **Area:** Android — Skin editor
 - **Mode:** MANUAL
 - **Preconditions:** RT-781.
