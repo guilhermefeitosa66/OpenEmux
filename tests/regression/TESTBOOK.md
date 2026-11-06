@@ -3958,7 +3958,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   2. Press K.
   3. Hover the "A" button again.
 - **Expected:** After step 1 the group's description reads "Press a key for A", the caption under
-  the drawing reads "A: Press key..." in the accent colour, the A button has an accent outline and
+  the drawing reads "A: Press key..." in the accent colour, the A button is lit (RT-838) and
   the "A" row in "Game Controls" reads "Press key..." with its row highlighted — the same capture
   the row's button starts. After step 2 the caption, the tooltip of the drawn A and the "A" row all
   read "k"; the description is back to "Click a button to remap it.". Pressing Escape during the
@@ -4107,6 +4107,85 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print("RT-837 OK")
   EOF
   ```
+
+### RT-838 — The button being remapped is lit on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "B" button on the drawing and capture the screen while it waits for a key.
+  2. Press Escape, then click the D-pad's up arm and capture again; press Escape.
+  3. Switch to the dark style and repeat step 1.
+- **Expected:** While the capture waits, the drawn button is lit: its own image is visibly
+  brighter than its neighbours', with a ring and a soft glow in the accent colour around it. For
+  the D-pad only the arm being remapped lights, not the whole pad. The lit look is the same in the
+  light and in the dark style (only the accent differs between themes), and nothing is animated.
+  When the capture ends, by a key or by Escape, the button goes back to normal.
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests.test_the_button_being_captured_is_lit`) and
+  `tests/test_controller_drawing.py` (`test_a_lit_control_is_drawn_again_brighter_inside_its_target`,
+  `test_a_lit_control_glows_in_the_widgets_colour`).
+- **Restore:** "Reset defaults" for the SNES; the previous style.
+
+### RT-839 — Holding a mapped key lights its button on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard", default bindings
+  (A on Z, B on X).
+- **Steps:**
+  1. With nothing being captured, hold Z (`make devbox-xdo CMD='keydown z'`) and capture the
+     screen; release it (`CMD='keyup z'`) and capture again.
+  2. Hold Z and X together and capture; release both.
+  3. Hold a key bound to nothing (9) and capture.
+  4. Open the "Video" page, hold Z, come back to "Input".
+- **Expected:** While Z is down the drawn "A" button is lit (brighter image, accent ring and
+  glow) and nothing else is; it goes back to normal the moment the key comes up. Z and X together
+  light A and B together. A key bound to nothing lights nothing. The key still does whatever it
+  does in the dialog (it is not swallowed) and no binding changes. Keys pressed on another page
+  light nothing. Remapping A to another key on screen makes that key the one that lights it, even
+  before "Save".
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests`, the keyboard tests) and `tests/test_input_held.py`.
+
+### RT-840 — Pressing a pad button lights its button on the drawing
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** A USB or Bluetooth gamepad connected; "Settings" → "Input", console
+  "SFC - Super Nintendo", "Device" on "Player 1 gamepad".
+- **Steps:**
+  1. With nothing being captured, press and hold each button of the pad in turn, then two at once.
+  2. Push the D-pad in each direction.
+  3. Press Start alone, then hold Select and press Start.
+  4. Set "Device" back to "Keyboard" and press the pad's buttons.
+  5. Click "A" on the drawing and press a pad button to bind it.
+- **Expected:** Each pad button lights the drawn button it is bound to for as long as it is held,
+  several at once when several are held, and an input bound to nothing lights nothing. The D-pad
+  lights the arm pushed. Start alone lights Start; Select + Start lights Select, Start and the
+  Menu button (the hotkey lights only with its modifier). The pad still navigates the dialog as
+  before: lighting never takes it away and never changes a binding. With "Keyboard" as the device
+  the pad lights nothing. During step 5 only the button being remapped is lit, and the pad lights
+  buttons again once the capture is over.
+- **Check:** human only (needs a physical pad); the rules are covered by `tests/test_input_held.py`
+  and `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`, the pad tests), the
+  readers by `tests/test_gamepad_held.py`.
+
+### RT-841 — No pad reader is left running once the input page is not in front
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. With a pad as the device on "Input", switch to another page and back.
+  2. Switch "Device" to "Keyboard", then to "Player 2 gamepad".
+  3. Start a capture and cancel it.
+  4. Close the dialog.
+- **Expected:** The pad is read for the drawing only while the input page is the page on screen, in
+  a dialog that is shown, in a window that has the focus, with a pad as the device and no capture
+  running. Leaving the page, picking the keyboard, starting a capture, hiding or closing the dialog
+  each stop the reader at once; coming back starts one again, and never a second one beside it.
+  Another port gets a reader on its own pad; a port with no pad plugged in is simply not read,
+  with no message. The reader only reads: it never grabs the pad.
+- **Check:** suite files `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`,
+  `WhetherTheInputPageIsLiveTests`) and `tests/test_gamepad_held.py`.
 
 ## Shaders
 

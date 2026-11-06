@@ -1118,6 +1118,302 @@ class MapAllTests(_PreferencesCase):
 
 
 @needs_display
+class TheDrawingLightsWhatIsPressedTests(_PreferencesCase):
+    """Issue 816: the button being captured is lit, and so is any held input's.
+
+    The dialog is not shown in these tests, so "the input page is live" is
+    answered for it; the question itself has its own tests further down.
+    """
+
+    Z, X = 52, 53  # hardware keycodes, as the key controller reports them
+
+    def setUp(self):
+        super().setUp()
+        self.setUpToastCapture()
+        self.prefs.show_page("input")
+        self.readers = []
+
+        def make(on_change, device=None):
+            reader = mock.Mock(on_change=on_change, device=device)
+            self.readers.append(reader)
+            return reader
+
+        patcher = mock.patch.object(prefs_module, "make_held_reader", side_effect=make)
+        self.make_held = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.live = True
+        live = mock.patch.object(self.prefs, "_input_page_is_live", side_effect=lambda: self.live)
+        live.start()
+        self.addCleanup(live.stop)
+
+    def lit(self):
+        return set(self.prefs._drawing.lit)
+
+    def key_down(self, keyval, keycode):
+        return self.prefs._on_key_pressed(None, keyval, keycode, 0)
+
+    def key_up(self, keyval, keycode):
+        return self.prefs._on_key_released(None, keyval, keycode, 0)
+
+    def use_pad(self, device_id="gamepad_p1"):
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index(device_id))
+
+    # -- while capturing ---------------------------------------------------
+    def test_the_button_being_captured_is_lit(self):
+        self.prefs._drawing.buttons["b"][0].emit("clicked")
+        self.assertEqual(self.lit(), {"b"})
+        self.assertTrue(self.prefs._drawing.buttons["b"][0].has_css_class("lit"))
+        self.key_down(Gdk.KEY_k, 45)
+        self.assertEqual(self.lit(), set())
+
+    def test_a_key_held_when_the_capture_starts_stops_lighting(self):
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), {"a"})
+        self.prefs._drawing.buttons["b"][0].emit("clicked")
+        self.assertEqual(self.lit(), {"b"})
+        # Its release arrives during the capture and changes nothing.
+        self.key_up(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), {"b"})
+
+    # -- the keyboard --------------------------------------------------------
+    def test_a_held_key_lights_its_button_until_it_is_let_go(self):
+        self.assertFalse(self.key_down(Gdk.KEY_z, self.Z))  # not consumed
+        self.assertEqual(self.lit(), {"a"})
+        self.key_down(Gdk.KEY_x, self.X)
+        self.assertEqual(self.lit(), {"a", "b"})
+        self.key_up(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), {"b"})
+        self.key_up(Gdk.KEY_x, self.X)
+        self.assertEqual(self.lit(), set())
+
+    def test_a_key_bound_to_nothing_lights_nothing(self):
+        self.key_down(Gdk.KEY_9, 18)
+        self.assertEqual(self.lit(), set())
+        self.key_up(Gdk.KEY_9, 18)
+        # And a release of a key that never went down here is ignored.
+        self.key_up(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), set())
+
+    def test_a_binding_spelled_the_gtk_way_still_matches_its_key(self):
+        # "1" as a default spells it, "num1" as a capture stores it.
+        self.prefs._set_binding("a", "1")
+        self.key_down(Gdk.KEY_1, 10)
+        self.assertEqual(self.lit(), {"a"})
+
+    def test_a_binding_changed_on_screen_lights_by_its_new_key(self):
+        self.prefs._set_binding("a", "q")
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), set())
+        self.key_down(Gdk.KEY_q, 24)
+        self.assertEqual(self.lit(), {"a"})
+
+    def test_on_another_page_keys_light_nothing(self):
+        self.prefs.show_page("video")
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), set())
+
+    def test_the_keyboard_lights_nothing_while_a_pad_is_the_device(self):
+        self.use_pad()
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.assertEqual(self.lit(), set())
+
+    def test_losing_the_keyboard_forgets_what_was_held(self):
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.prefs._forget_held_keys()
+        self.assertEqual(self.lit(), set())
+        self.prefs._forget_held_keys()  # nothing held: nothing to do
+        self.assertEqual(self.lit(), set())
+
+    def test_changing_console_forgets_what_was_held(self):
+        self.key_down(Gdk.KEY_z, self.Z)
+        self.prefs.select_input_console("FC")
+        self.assertEqual(self.lit(), set())
+
+    # -- the pad ---------------------------------------------------------------
+    def test_a_pad_as_the_device_is_read_and_lights_what_it_holds(self):
+        self.assertEqual(self.readers, [])  # the keyboard needs no reader
+        self.use_pad()
+        (reader,) = self.readers
+        reader.start.assert_called_once()
+        self.assertIsNone(reader.device)  # port 1: the reader picks the pad
+        self.prefs._on_pad_held(reader, frozenset({"0"}))
+        self.assertEqual(self.lit(), {"a"})
+        self.prefs._on_pad_held(reader, frozenset({"0", "h0up"}))
+        self.assertEqual(self.lit(), {"a", "up"})
+        self.prefs._on_pad_held(reader, frozenset())
+        self.assertEqual(self.lit(), set())
+
+    def test_the_readers_callback_comes_through_the_main_loop(self):
+        self.use_pad()
+        with mock.patch.object(prefs_module.GLib, "idle_add") as idle_add:
+            self.readers[0].on_change(frozenset({"0"}))
+        idle_add.assert_called_once_with(self.prefs._on_pad_held, self.readers[0], frozenset({"0"}))
+
+    def test_a_hotkey_lights_only_with_its_modifier(self):
+        self.use_pad()
+        (reader,) = self.readers
+        self.prefs._on_pad_held(reader, frozenset({"7"}))  # Start
+        self.assertEqual(self.lit(), {"start"})
+        self.prefs._on_pad_held(reader, frozenset({"6", "7"}))  # Select + Start
+        self.assertEqual(self.lit(), {"select", "start", "menu_toggle"})
+
+    def test_what_a_stopped_reader_saw_is_ignored(self):
+        self.use_pad()
+        (reader,) = self.readers
+        self.prefs._stop_held_reader()
+        self.assertFalse(self.prefs._on_pad_held(reader, frozenset({"0"})))
+        self.assertEqual(self.lit(), set())
+
+    def test_a_capture_takes_the_pad_and_gives_it_back(self):
+        self.use_pad()
+        (first,) = self.readers
+        self.prefs._on_pad_held(first, frozenset({"0"}))
+        with mock.patch.object(prefs_module, "make_capture_reader", return_value=mock.Mock()):
+            self.prefs._on_binding_clicked(None, "b")
+            # Not waited for, so the click does not stall on the reader's poll.
+            first.stop.assert_called_once_with(join_timeout=0)
+            self.assertIsNone(self.prefs._held_reader)
+            self.assertEqual(self.lit(), {"b"})
+            self.prefs._cancel_capture()
+        self.assertEqual(len(self.readers), 2)
+        self.readers[1].start.assert_called_once()
+        self.assertEqual(self.lit(), set())
+
+    def test_going_back_to_the_keyboard_stops_the_reader(self):
+        self.use_pad()
+        (reader,) = self.readers
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index("keyboard"))
+        reader.stop.assert_called_once()
+        self.assertIsNone(self.prefs._held_reader)
+        self.assertEqual(len(self.readers), 1)
+
+    def test_another_port_gets_a_reader_on_its_own_pad(self):
+        self.use_pad()
+        with mock.patch.object(prefs_module, "list_gamepads", return_value=["pad0", "pad1"]):
+            self.use_pad("gamepad_p2")
+        first, second = self.readers
+        first.stop.assert_called_once()
+        self.assertEqual(second.device, "pad1")
+        self.assertIs(self.prefs._held_reader, second)
+
+    def test_a_port_with_no_pad_is_simply_not_read(self):
+        with mock.patch.object(prefs_module, "list_gamepads", return_value=["pad0"]):
+            self.use_pad("gamepad_p2")
+        self.assertEqual(self.readers, [])
+        self.assertEqual(self.toasts(), [])
+
+    def test_changing_console_keeps_the_reader_and_lights_the_new_drawing(self):
+        # Same pad, same port: nothing to restart. What is held lights the
+        # other console's drawing by that console's bindings.
+        self.use_pad()
+        (reader,) = self.readers
+        self.prefs._on_pad_held(reader, frozenset({"2"}))  # the pad's X
+        self.assertEqual(self.lit(), {"x"})
+        self.prefs.select_input_console("FC")  # two buttons: no X to light
+        reader.stop.assert_not_called()
+        self.assertEqual(len(self.readers), 1)
+        self.assertEqual(self.lit(), set())
+        self.prefs._on_pad_held(reader, frozenset({"0"}))
+        self.assertEqual(self.lit(), {"a"})
+
+    def test_leaving_the_page_stops_the_reader_and_coming_back_restarts_it(self):
+        self.use_pad()
+        (first,) = self.readers
+        self.live = False
+        self.prefs.show_page("video")  # notify::visible-page
+        first.stop.assert_called_once()
+        self.assertIsNone(self.prefs._held_reader)
+        self.live = True
+        self.prefs.show_page("input")
+        self.assertEqual(len(self.readers), 2)
+        # Asking again while it runs starts no second one.
+        self.prefs._sync_held_reader()
+        self.assertEqual(len(self.readers), 2)
+
+    def test_closing_the_dialog_stops_the_reader(self):
+        self.use_pad()
+        (reader,) = self.readers
+        self.prefs._on_closed()
+        reader.stop.assert_called_once()
+        self.assertIsNone(self.prefs._held_reader)
+
+    def test_a_console_with_no_drawing_is_not_read_either(self):
+        with mock.patch.object(prefs_module, "layout_for", return_value=None):
+            self.prefs.select_input_console("GB")
+            self.use_pad()
+        self.assertEqual(self.readers, [])
+        # And with nothing to light, lighting is a no-op.
+        self.prefs._sync_lit()
+
+
+@needs_display
+class WhetherTheInputPageIsLiveTests(_PreferencesCase):
+    """The pad is read for the drawing only while the user is on the input page."""
+
+    def mapped(self, value=True):
+        patcher = mock.patch.object(self.prefs, "get_mapped", return_value=value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_dialog_that_is_not_shown_is_not_live(self):
+        self.prefs.show_page("input")
+        self.assertFalse(self.prefs._input_page_is_live())
+
+    def test_shown_on_the_input_page_it_is_live(self):
+        self.mapped()
+        self.prefs.show_page("input")
+        self.assertTrue(self.prefs._input_page_is_live())
+
+    def test_shown_on_another_page_it_is_not(self):
+        self.mapped()
+        self.prefs.show_page("video")
+        self.assertFalse(self.prefs._input_page_is_live())
+
+    def test_in_a_window_that_lost_the_focus_it_is_not(self):
+        self.mapped()
+        self.prefs.show_page("input")
+        window = Gtk.Window()
+        self.addCleanup(window.destroy)
+        with mock.patch.object(self.prefs, "get_root", return_value=window):
+            self.prefs._on_mapped()
+            self.assertIs(self.prefs._active_root, window)
+            with mock.patch.object(window, "is_active", return_value=False):
+                self.assertFalse(self.prefs._input_page_is_live())
+            with mock.patch.object(window, "is_active", return_value=True):
+                self.assertTrue(self.prefs._input_page_is_live())
+            # The window gaining or losing the focus re-asks the question.
+            with mock.patch.object(self.prefs, "_sync_held_reader") as sync:
+                window.notify("is-active")
+                sync.assert_called_once()
+            self.prefs._on_unmapped()
+        self.assertIsNone(self.prefs._active_root)
+        with mock.patch.object(self.prefs, "_sync_held_reader") as sync:
+            window.notify("is-active")
+            sync.assert_not_called()
+
+    def test_a_dialog_shown_outside_a_window_has_no_focus_to_follow(self):
+        with mock.patch.object(self.prefs, "get_root", return_value=None):
+            self.prefs._on_mapped()
+        self.assertIsNone(self.prefs._active_root)
+        self.prefs._on_unmapped()  # nothing to disconnect
+
+    def test_hiding_the_dialog_forgets_the_keys_and_stops_the_reader(self):
+        self.prefs.show_page("input")
+        self.prefs._on_key_pressed(None, Gdk.KEY_z, 52, 0)
+        self.assertEqual(set(self.prefs._drawing.lit), {"a"})
+        self.prefs._held_reader = reader = mock.Mock()
+        self.prefs._on_unmapped()
+        reader.stop.assert_called_once()
+        self.assertEqual(set(self.prefs._drawing.lit), set())
+
+    def test_the_focus_leaving_the_dialog_forgets_the_keys(self):
+        self.prefs.show_page("input")
+        self.prefs._on_key_pressed(None, Gdk.KEY_z, 52, 0)
+        self.prefs._focus_controller.emit("leave")
+        self.assertEqual(set(self.prefs._drawing.lit), set())
+
+
+@needs_display
 class TheGamepadReaderTests(_PreferencesCase):
     def setUp(self):
         super().setUp()

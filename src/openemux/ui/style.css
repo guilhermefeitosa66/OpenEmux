@@ -310,6 +310,25 @@ button.controller-target.current {
     outline-width: 4px;
     box-shadow: 0 0 0 6px alpha(black, 0.65), inset 0 0 0 1px alpha(white, 0.8);
 }
+/* Lit (issue 816): the button being captured, and any button whose input is
+   held down. The widget draws the control's own image brighter under the
+   target and a glow around it, in the colour set here on the drawing (the
+   accent); the target itself takes the ring. The glow is the widget's and
+   not a box-shadow because wide translucent shadows around a fully round
+   target draw stray lines at its four sides. Nothing moves, so there is
+   nothing for the reduce-motion setting to turn off. */
+.controller-drawing {
+    color: @accent_bg_color;
+}
+button.controller-target.lit {
+    outline-color: @accent_bg_color;
+    background-color: alpha(@accent_bg_color, 0.22);
+    box-shadow: 0 0 0 5px alpha(black, 0.65), inset 0 0 0 1px alpha(white, 0.8);
+}
+button.controller-target.current.lit {
+    background-color: alpha(@accent_bg_color, 0.4);
+    box-shadow: 0 0 0 6px alpha(black, 0.65), inset 0 0 0 1px alpha(white, 0.8);
+}
 
 /* ===== Status Bar Tips =====
    Colors come from Adwaita named colors so light/dark both follow the theme;
