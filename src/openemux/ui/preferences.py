@@ -48,6 +48,7 @@ from openemux.core.input_profiles import (
     device_type_for,
     player_for_device,
 )
+from openemux.core.controller_layouts import layout_for
 from openemux.core.input_capture import InputCaptureSession
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
@@ -55,6 +56,7 @@ from openemux.core.share.identity import default_device_name
 from openemux.core.theme import THEMES
 from openemux.ui import theming
 from openemux.ui.console_icons import console_icon
+from openemux.ui.controller_drawing import ControllerDrawing
 from openemux.ui.portable_import_dialog import PortableImportGroup
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name, resolve_system_id
 from openemux.core.bios_importer import (
@@ -91,6 +93,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # Input-capture state (self-contained; mirrors the old window logic).
         self._input_buttons = {}
         self._input_rows = {}
+        # The controller drawing above the list (issue 815): its group, the
+        # widget for the console on screen, and the layouts read so far.
+        self._drawing_group = None
+        self._drawing = None
+        self._drawing_console = None
+        self._drawing_highlight = None
+        self._controller_layouts = {}
         self._loaded_profile = None
         self._visible_actions = list(ACTION_ORDER)
         # The bindings being edited and which action is listening: a plain
@@ -1012,6 +1021,26 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         save_btn.connect("clicked", lambda _b: self._save_input())
         actions_box.append(save_btn)
         self._bindings_group.set_header_suffix(actions_box)
+
+        # The console's controller, drawn: click a button on it to remap it
+        # (issue 815). Right above the list, so Save is next to it; hidden
+        # for a console with no drawing.
+        self._drawing_group = Adw.PreferencesGroup(
+            title=self.t("prefs.group.controller_drawing"),
+            description=self.t("prefs.group.controller_drawing.description"),
+        )
+        self._drawing_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self._drawing_card.add_css_class("card")
+        self._drawing_card.add_css_class("controller-drawing-card")
+        self._drawing_caption = Gtk.Label()
+        self._drawing_caption.add_css_class("dim-label")
+        self._drawing_caption.add_css_class("controller-drawing-caption")
+        self._drawing_caption.set_wrap(True)
+        self._drawing_caption.set_justify(Gtk.Justification.CENTER)
+        self._drawing_card.append(self._drawing_caption)
+        self._drawing_group.add(self._drawing_card)
+        page.add(self._drawing_group)
+
         page.add(self._bindings_group)
         page.add(self._system_bindings_group)
 
@@ -1219,6 +1248,13 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         the System group keeps a standing one explaining what it is for.
         """
         system_default = self.t("prefs.group.bindings.system.description")
+        if self._drawing_group is not None:
+            on_drawing = (
+                prompt is not None and self._drawing is not None and action in self._drawing.buttons
+            )
+            self._drawing_group.set_description(
+                prompt if on_drawing else self.t("prefs.group.controller_drawing.description")
+            )
         if prompt is None or action is None:
             self._bindings_group.set_description(None)
             self._system_bindings_group.set_description(system_default)
@@ -1287,6 +1323,98 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             self._input_rows[action] = row
             self._input_buttons[action] = button
 
+        self._rebuild_drawing(console_id)
+
+    # -- the controller drawing (issue 815) ---------------------------------
+    def _controller_layout(self, console_id):
+        """The console's drawing, read once per dialog (None: it has none)."""
+        if console_id not in self._controller_layouts:
+            self._controller_layouts[console_id] = layout_for(console_id)
+        return self._controller_layouts[console_id]
+
+    def _rebuild_drawing(self, console_id):
+        """Put the console's drawing on the page, or hide the group.
+
+        Only a console change builds a new drawing; a device change keeps it
+        and refreshes what each target says and whether it can be used.
+        """
+        if self._drawing_group is None:
+            return
+        if self._drawing is None or self._drawing_console != console_id:
+            if self._drawing is not None:
+                self._drawing_card.remove(self._drawing)
+                self._drawing = None
+            self._drawing_highlight = None
+            self._drawing_console = console_id
+            layout = self._controller_layout(console_id)
+            self._drawing_group.set_visible(layout is not None)
+            if layout is None:
+                self._sync_drawing_caption()
+                return
+            self._drawing = ControllerDrawing(
+                layout,
+                on_activate=self._on_drawing_activated,
+                on_highlight=self._on_drawing_highlight,
+                not_remappable_text=self.t("input.drawing.not_remappable"),
+            )
+            self._drawing.set_halign(Gtk.Align.CENTER)
+            self._drawing.update_property(
+                [Gtk.AccessibleProperty.LABEL],
+                [self.t("input.drawing.accessible_name", console=get_system_display_name(console_id))],
+            )
+            self._drawing_card.prepend(self._drawing)
+        self._sync_drawing()
+
+    def _drawing_target_text(self, action, binding_text=None):
+        if binding_text is None:
+            binding_text = self._binding_display(self._capture.binding_for(action))
+        return self.t(
+            "input.drawing.target", action=self._input_action_label(action), binding=binding_text
+        )
+
+    def _sync_drawing(self):
+        """Bring every target in line with the bindings and the capture."""
+        drawing = self._drawing
+        if drawing is None:
+            return
+        for action in drawing.buttons:
+            # An action the device does not map (the hotkeys on ports 2-4)
+            # is drawn but, like a control with no action, not remappable.
+            if action in self._input_buttons:
+                drawing.set_action_state(action, self._drawing_target_text(action), True)
+            else:
+                drawing.set_action_state(action, self.t("input.drawing.not_remappable"), False)
+        drawing.set_current(self._capture.active_action if self._capture.capturing else None)
+        self._sync_drawing_caption()
+
+    def _sync_drawing_caption(self):
+        """The line under the drawing: the capture, else the hovered or focused target."""
+        caption = self._drawing_caption
+        drawing = self._drawing
+        action = self._capture.active_action if self._capture.capturing else None
+        if drawing is not None and action in drawing.buttons:
+            waiting_key = (
+                "input.capture.waiting" if self._current_device() == "keyboard"
+                else "input.capture.waiting_gamepad"
+            )
+            caption.set_text(self._drawing_target_text(action, self.t(waiting_key)))
+            caption.add_css_class("accent")
+            return
+        caption.remove_css_class("accent")
+        highlight = self._drawing_highlight
+        if drawing is not None and highlight in self._input_buttons:
+            caption.set_text(self._drawing_target_text(highlight))
+        else:
+            caption.set_text("")
+
+    def _on_drawing_highlight(self, action):
+        self._drawing_highlight = action
+        self._sync_drawing_caption()
+
+    def _on_drawing_activated(self, action):
+        # The row's own path: same prompt, exclusivity, reader and commit.
+        self._start_capture(action, sequence_mode=False)
+
     def _set_active_row(self, action=None):
         for row_action, row in self._input_rows.items():
             if row_action == action:
@@ -1318,6 +1446,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if is_gamepad:
             prompt = f"{prompt} — {self.t('input.capture.cancel_hint')}"
         self._set_capture_prompt(prompt, action)
+        self._sync_drawing()
 
         if is_gamepad:
             self._start_gamepad_reader()
@@ -1403,6 +1532,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._set_active_row(None)
         if hasattr(self, "_bindings_group"):
             self._set_capture_prompt(None)
+        self._sync_drawing()
         if show_toast and cancelled.was_sequence:
             self._toast(self.t("input.capture.cancelled"))
 
@@ -1427,6 +1557,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         value = self._capture.binding_for(action)
         if action in self._input_buttons:
             self._input_buttons[action].set_label(self._binding_display(value))
+        self._sync_drawing()
         # Say what was taken away. The row going blank on its own read as a
         # glitch, and the value came back on the next visit anyway; now it
         # really is released, so the message is the whole story. Not during

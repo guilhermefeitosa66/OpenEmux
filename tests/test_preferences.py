@@ -1198,6 +1198,127 @@ class TheGamepadReaderTests(_PreferencesCase):
 
 
 @needs_display
+class TheControllerDrawingTests(_PreferencesCase):
+    """The controller drawn above the bindings, as a way in to remapping (issue 815)."""
+
+    def setUp(self):
+        super().setUp()
+        self.setUpToastCapture()
+
+    def press(self, keyval):
+        return self.prefs._on_key_pressed(None, keyval, 0, 0)
+
+    def target(self, action):
+        return self.prefs._drawing.buttons[action][0]
+
+    def test_a_console_with_art_shows_its_drawing(self):
+        self.assertTrue(self.prefs._drawing_group.get_visible())
+        self.assertEqual(self.prefs._drawing_console, "SFC")
+        self.assertIn("a", self.prefs._drawing.buttons)
+
+    def test_a_console_without_art_shows_only_the_list(self):
+        # Every console ships art today; a layout that cannot be read is the
+        # case left, and layout_for answers None for it.
+        with mock.patch.object(prefs_module, "layout_for", return_value=None):
+            self.prefs.select_input_console("GB")
+        self.assertFalse(self.prefs._drawing_group.get_visible())
+        self.assertIsNone(self.prefs._drawing)
+        self.assertEqual(self.prefs._drawing_caption.get_text(), "")
+        # A device change on it keeps the group hidden.
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index("gamepad_p1"))
+        self.assertFalse(self.prefs._drawing_group.get_visible())
+
+    def test_switching_console_swaps_the_drawing_and_layouts_are_read_once(self):
+        first = self.prefs._drawing
+        self.prefs.select_input_console("GB")
+        self.assertIsNot(self.prefs._drawing, first)
+        self.assertIsNone(first.get_parent())
+        with mock.patch.object(prefs_module, "layout_for") as layout_for:
+            self.prefs.select_input_console("SFC")
+            self.prefs.select_input_console("GB")
+        # Both were read when first shown, so neither is read again.
+        layout_for.assert_not_called()
+
+    def test_a_device_change_keeps_the_drawing(self):
+        drawing = self.prefs._drawing
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index("gamepad_p1"))
+        self.assertIs(self.prefs._drawing, drawing)
+
+    def test_each_target_says_its_action_and_binding(self):
+        self.prefs._set_binding("a", "x")
+        self.assertEqual(self.target("a").get_tooltip_text(), "input.drawing.target")
+        with mock.patch.object(self.prefs, "t", side_effect=lambda key, **kw: f"{key}{kw}") as t:
+            self.prefs._sync_drawing()
+        t.assert_any_call("input.drawing.target", action="input.action.a{}", binding="x")
+
+    def test_clicking_a_target_starts_the_rows_capture(self):
+        self.target("b").emit("clicked")
+        self.assertTrue(self.prefs._capture.capturing)
+        self.assertEqual(self.prefs._capture.active_action, "b")
+        self.assertEqual(self.prefs._input_buttons["b"].get_label(), "input.capture.waiting")
+        self.assertTrue(self.win.capture_active)
+        self.assertTrue(self.target("b").has_css_class("current"))
+        self.assertTrue(self.prefs._input_rows["b"].has_css_class("input-mapping-current"))
+        self.assertEqual(self.prefs._drawing_group.get_description(), "input.capture.waiting_for")
+        self.assertTrue(self.prefs._drawing_caption.has_css_class("accent"))
+
+    def test_a_key_commits_and_the_drawing_follows(self):
+        self.target("a").emit("clicked")
+        self.press(Gdk.KEY_k)
+        self.assertEqual(self.prefs._capture.binding_for("a"), "k")
+        self.assertFalse(self.target("a").has_css_class("current"))
+        self.assertFalse(self.prefs._drawing_caption.has_css_class("accent"))
+        self.assertEqual(
+            self.prefs._drawing_group.get_description(), "prefs.group.controller_drawing.description"
+        )
+
+    def test_a_gamepad_capture_from_the_drawing_listens_on_the_pad(self):
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index("gamepad_p1"))
+        with mock.patch.object(self.prefs, "_start_gamepad_reader") as start_reader:
+            self.target("b").emit("clicked")
+        start_reader.assert_called_once()
+        self.assertEqual(self.prefs._drawing_caption.get_text(), "input.drawing.target")
+        self.prefs._on_gamepad_token("3")
+        self.assertEqual(self.prefs._capture.binding_for("b"), "3")
+
+    def test_cancelling_clears_the_marking(self):
+        self.target("a").emit("clicked")
+        self.prefs._cancel_capture()
+        self.assertFalse(self.target("a").has_css_class("current"))
+
+    def test_a_capture_started_from_the_list_for_a_hotkey_leaves_the_drawing_quiet(self):
+        self.prefs._on_binding_clicked(None, "save_state")
+        self.assertEqual(
+            self.prefs._drawing_group.get_description(), "prefs.group.controller_drawing.description"
+        )
+        self.assertFalse(self.prefs._drawing_caption.has_css_class("accent"))
+
+    def test_hovering_a_target_fills_the_caption(self):
+        self.prefs._on_drawing_highlight("a")
+        self.assertEqual(self.prefs._drawing_caption.get_text(), "input.drawing.target")
+        self.prefs._on_drawing_highlight(None)
+        self.assertEqual(self.prefs._drawing_caption.get_text(), "")
+
+    def test_the_menu_button_is_not_remappable_on_a_later_port(self):
+        self.assertTrue(self.target("menu_toggle").get_sensitive())
+        self.prefs._device_combo.set_selected(self.prefs._device_ids.index("gamepad_p2"))
+        menu = self.target("menu_toggle")
+        self.assertFalse(menu.get_sensitive())
+        self.assertEqual(menu.get_tooltip_text(), "input.drawing.not_remappable")
+        # Hovering it says nothing in the caption: it maps nothing here.
+        self.prefs._on_drawing_highlight("menu_toggle")
+        self.assertEqual(self.prefs._drawing_caption.get_text(), "")
+
+    def test_taking_a_key_from_another_action_refreshes_its_target(self):
+        self.prefs._set_binding("a", "z")
+        with mock.patch.object(self.prefs._drawing, "set_action_state") as set_state:
+            self.target("b").emit("clicked")
+            self.press(Gdk.KEY_z)
+        self.assertIn(mock.call("a", "input.drawing.target", True), set_state.call_args_list)
+        self.assertEqual(self.prefs._capture.binding_for("a"), "")
+
+
+@needs_display
 class SavingAndResettingInputTests(_PreferencesCase):
     def setUp(self):
         super().setUp()
