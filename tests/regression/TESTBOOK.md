@@ -13274,7 +13274,7 @@ not checked) are made with `head -c 2048 /dev/urandom > <name>` and pushed with
 `/sdcard/Android/data/$PKG/files/system/` (`adb shell ls` it). The matching
 logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.kt`.
 
-### RT-594 — Importing a console's BIOS by name, all files good
+### RT-850 — Importing a console's BIOS by name, all files good
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** `scph5501.bin` and `SCPH1001.BIN` in `/sdcard/Download/bios-qa/`; no
@@ -13291,7 +13291,7 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
 - **Check:** human only (a screenshot of the screen and of the sheet); the system folder has
   `scph5501.bin` and `scph1001.bin`, both lowercase, and no `.part` file.
 
-### RT-595 — A mixed batch imports the good files and explains the rest
+### RT-851 — A mixed batch imports the good files and explains the rest
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** `scph5500.bin`, `bios_CD_U.bin` and `psx bios (copy).bin` in
@@ -13303,7 +13303,7 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   expects" in amber. No error dialog, and nothing else is written to the system folder.
 - **Check:** human only (a screenshot of the sheet); the system folder has no `bios_CD_U.bin`.
 
-### RT-596 — A batch with no good file imports nothing
+### RT-852 — A batch with no good file imports nothing
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** `5200.rom` and `random.bin` in `/sdcard/Download/bios-qa/`; no Lynx BIOS.
@@ -13317,7 +13317,7 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   bytes it has no note.
 - **Check:** human only (a screenshot of each sheet).
 
-### RT-597 — The Settings BIOS tile and the console card see an import at once
+### RT-853 — The Settings BIOS tile and the console card see an import at once
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** A Lynx game in the library, no Lynx BIOS, `lynxboot.img` in
@@ -13331,7 +13331,7 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   "Found" with a green check.
 - **Check:** human only (a screenshot before and after).
 
-### RT-598 — Importing with a gamepad
+### RT-854 — Importing with a gamepad
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** A debug APK, a pad said to be connected (`adb shell am broadcast -a
@@ -13347,20 +13347,20 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   on "Done"; A closes it and the focus is back on the Sega CD "Import" button.
 - **Check:** human only (a screenshot with the focus ring on the button and on "Done").
 
-### RT-599 — Importing in the tablet list and detail layout
+### RT-855 — Importing in the tablet list and detail layout
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** Tablet size (`adb shell wm size 1600x2560`, `adb shell wm density 320`), the
-  files of RT-595.
+  files of RT-851.
 - **Steps:**
   1. Open Settings and tap the "BIOS" tile, which opens beside the list.
-  2. Repeat RT-595 in the detail pane.
-- **Expected:** The same result as RT-595; the sheet opens over the whole window and the list pane
+  2. Repeat RT-851 in the detail pane.
+- **Expected:** The same result as RT-851; the sheet opens over the whole window and the list pane
   still shows Settings. The BIOS tile in the list updates after the import.
 - **Check:** human only (a screenshot).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
 
-### RT-600 — Backing out of the picker changes nothing
+### RT-856 — Backing out of the picker changes nothing
 - **Area:** Android — BIOS import
 - **Mode:** MANUAL
 - **Preconditions:** None.
