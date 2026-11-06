@@ -5987,9 +5987,9 @@ so these are `MANUAL`: a person runs them on a Pixel Fold emulator (`avdmanager 
 `adb shell settings put system accelerometer_rotation 0` and `adb shell settings put system
 user_rotation 1`, and set the hinge with `adb emu sensor set hinge-angle0 <deg>` (180 = flat,
 90 = half open). The game logs the fold it sees: `adb logcat -s OpenEmuxGame:D`. The library needs
-a Game Boy Advance game and a Nintendo DS game (both open flat on their packaged skin, the drawn
-art from `assets/skins`) and a Game Gear game (its bundled skin in OpenEmux's own format since
-issue 770, with fold layouts of its own). The packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
+a Game Boy Advance game and a Game Gear game (both open flat on their bundled skin in OpenEmux's own
+format, since issue 806 and issue 770, with fold layouts of their own) and a Nintendo DS game (open
+flat on its packaged skin, the drawn art from `assets/skins`). The bundled skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
 opening flat brings each one's own skin back. Every scenario ends with `hinge-angle0 180` and
 `user_rotation 0`.
 
@@ -6027,8 +6027,8 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   6. With the Game Boy Advance game, `adb emu fold` (the outer screen); wait two seconds.
   7. `adb emu unfold`, `adb shell settings put system user_rotation 1` and
      `adb emu sensor set hinge-angle0 90`; wait two seconds.
-- **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
-  bundled Game Gear skin's fold layout); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
+- **Expected:** Flat shows the game's own portrait skin (the fold layout of the bundled Game Boy
+  Advance and Game Gear skins); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
   and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
   middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
   Folded, the outer screen shows the phone skin, and nothing sits where the fold was; unfolded
@@ -6622,8 +6622,9 @@ PSP) has a second one, **Dark**: the same layout painted black, with dark grey c
 labels, for playing with the lights off. The choice is per console, in the console's settings (a
 "Default skin" section with two cards, below "Default shader") and from a game's detail screen (the
 "Controller skin" row opens the same choice), saved in `files/meta.json` as `consoles.<id>.skin` (`console` or `dark`; missing =
-`console`). The packages are built by `tools/skins/build.py` into `src/main/assets/skins/` and
-`src/main/assets/skins/dark/` ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`console`). The skins are built by `tools/skins/build.py` into `src/main/assets/skins/` and
+`src/main/assets/skins/dark/` (`<console>.zip` in OpenEmux's own format since issue 806; the NDS still
+a `.deltaskin`) ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`). The runner has no Android device, so these are `MANUAL`: a person runs them
 on a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; a game's generated
 files are in `files/launch/current/`.
@@ -6666,7 +6667,7 @@ files are in `files/launch/current/`.
 - **Check:**
   ```bash
   adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark
-  adb shell run-as $PKG ls cache/skins/dark   # SFC.deltaskin, copied when the SNES game launched
+  adb shell run-as $PKG ls cache/skins/dark   # SFC.zip, copied when the SNES game launched (SFC.deltaskin before issue 806)
   ```
 
 ### RT-672 — The Dark choice survives closing the game, restarting the app and updating it
@@ -6695,8 +6696,9 @@ files are in `files/launch/current/`.
 - **Expected:** Every key reaches the game. The D-pad's circle and each stick's knob follow the thumb
   and are visible on the black art. Turbo and fast forward show their on state clearly and go back
   off. Save and load work. Labels and glyphs are readable without glowing.
-- **Check:** none beyond the steps (the touch frames come from the same `info.json` layout as the
-  Console colors skin: `BundledSkinsTest` in the app's unit tests compares them).
+- **Check:** none beyond the steps (every control sits where the Console colors skin has it:
+  `OwnFormatBundledSkinsTest.everyVariantHasTheSameLayout` in the app's unit tests compares the
+  layouts since issue 806, `BundledSkinsTest` the NDS package's).
 
 ### RT-674 — Nintendo DS on Dark: every screen layout gets the Dark art
 - **Area:** Android — Dark controller skins
@@ -6995,13 +6997,17 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
-### RT-462 — Turbo and fast forward light up on the bundled package skins
+### RT-462 — Turbo and fast forward light up on the package skins
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with a GBA game and a game of a console that keeps the
-  drawn skin (e.g. Atari 5200) in the library; no skin in `files/skins/`; no gamepad connected.
+  drawn skin (e.g. Atari 5200) in the library; for the GBA, a skin package in use: since issue 806
+  the GBA's bundled skin is in OpenEmux's own format (its quick actions are RT-818), so take the
+  `GBA.deltaskin` the app bundled before (`unzip -p <apk of an earlier release> assets/skins/GBA.deltaskin > GBA.deltaskin`),
+  import it with "Import .zip" and pick it under "Imported"; nothing else in `files/skins/`; no
+  gamepad connected.
 - **Steps:**
-  1. Launch the GBA game, phone in portrait. Its skin is the bundled package: the quick actions sit
+  1. Launch the GBA game, phone in portrait. Its skin is the package: the quick actions sit
      in the bezel's chin, right under the picture.
   2. Tap the bolt (turbo) in the chin, then the double arrow (fast forward).
   3. Tap both again.
@@ -7015,11 +7021,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 
-### RT-577 — Slow motion on the bundled package skins, right before fast forward
+### RT-577 — Slow motion on the package skins, right before fast forward
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; no skin in
-  `files/skins/`; no gamepad connected; RetroAchievements hardcore off.
+- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; for each,
+  the package the app bundled before issue 806 (`SFC.deltaskin`, `GBA.deltaskin` from an earlier
+  release's APK) imported and in use, as in RT-462; nothing else in `files/skins/`; no gamepad
+  connected; RetroAchievements hardcore off.
 - **Steps:**
   1. Launch the SNES game, phone in portrait, and look at the quick actions in the bezel's chin.
   2. Tap slow motion (the play triangle in a dashed ring, right before the double arrow).
@@ -7041,9 +7049,10 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
 that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
-is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
-(both sticks), Nintendo 64 and GameCube (main and C stick), where the knob is the item's
-`thumbstick` image, the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
+is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
+(both sticks), Nintendo 64 and GameCube (main and C stick), in OpenEmux's own format since issue 806,
+where the knob is the stick's `-knob` image (the item's `thumbstick` image in the packages they
+replaced), the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
 `.manicskin` whose stick has a `thumbstick` image. The runner has no Android
 device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
 (`emulator -avd <avd> -no-window -read-only`) with `adb`, in portrait and in landscape. Touches are
@@ -7080,10 +7089,11 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
 - **Check:** human only, plus the generated config:
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
-  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
-  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in openemux-android: *_knob<N>.png next to each representation's art
+  adb exec-out run-as $PKG ls files/launch/current/skin   # oe-portrait.png, oe-landscape.png and one oe-*-knob<N>.png per stick
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.zip | grep -- -knob   # in openemux-android: the stick's knob image in each of the six layouts
   ```
-  Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
+  Each `analog_left`/`analog_right` desc has `_overlay = "oe-<orientation>-knob<N>.png"`
+  (`<orientation>-knob<N>.png` on a Delta/Manic package),
   `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
   four `_reach_*` values between 1.0 and 2.0.
 
@@ -7161,9 +7171,9 @@ The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openem
 eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
 it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
 the thumb inside the D-pad. It applies to every skin with a D-pad, the Virtual Boy's second pad and
-the NDS layouts included, both to the skins the app draws and to the skin packages it ships for the
-twelve best-known consoles (FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS, PSP), whose circle is an
-image in the package. The runner has no Android device, so these are `MANUAL`: a person runs
+the NDS layouts included, both to the skins the app draws and to the skins it ships (in OpenEmux's
+own format for every console but the NDS since issue 806, the NDS's a Delta package), whose circle is
+an image in the skin. The runner has no Android device, so these are `MANUAL`: a person runs
 them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`, in
 portrait and in landscape. A held drag is driven with `adb shell input motionevent DOWN <x> <y>`,
 `MOVE <x> <y>` and `UP <x> <y>`; the pressed directions are read from RetroArch's input display or a
@@ -7185,13 +7195,15 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   `adb exec-out screencap -p > shot.png`), plus the generated config:
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_|desc[0-9]+_overlay'
-  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a circle image per D-pad
+  adb exec-out run-as $PKG ls files/launch/current/skin   # oe-portrait.png, oe-landscape.png and a circle image per D-pad (portrait.png, landscape.png on a package or the drawn skin)
   ```
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
   `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
-  `_overlay` naming the circle image (`<overlay>-knob<N>.png`, on a shipped skin package and on a
-  drawn skin alike) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
-  D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
+  `_overlay` naming the circle image (`<overlay>-knob<N>.png` on a package and on a drawn skin,
+  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. The NES ships in
+  OpenEmux's own format since issue 806, so `_reach_x` and `_reach_y` are both `1.3636` (the D-pad
+  over its ball's travel, 60/44). A Delta or Manic package (the NDS's, or an imported one) reaches as
+  far as its D-pad's touch area over the circle's travel: `_reach_x` and `_reach_y`, or
   `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
   one side than the other. On a console with a drawn skin (e.g. the ColecoVision) `_reach_x` and
   `_reach_y` are both `1.4182`.
@@ -7257,8 +7269,9 @@ game's movement. `$PKG` is `com.openemux.mobile`.
 - **Mode:** MANUAL
 - **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
   Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
-  The first six of those and the NDS use the shipped Delta and Manic packages, the Virtual Boy and the
-  PC Engine their OpenEmux-format packages (issues 770 and 771), and the keypad console the drawn skin.
+  The NDS uses the shipped Delta package; the first six of those (since issue 806), the Virtual Boy
+  and the PC Engine (issues 770 and 771) their OpenEmux-format packages; and the keypad console the
+  drawn skin.
 - **Steps:**
   1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
   2. On the Virtual Boy, repeat them on the right-hand pad.
@@ -7429,11 +7442,11 @@ headless emulator, sizes simulated with `wm size` and `wm density 320`, so dp = 
 drawn when the game starts, so set the size **before** opening the game. The tablet skin starts at
 a smallest width of 600dp; anything narrower keeps the phone skins.
 
-Two kinds of skin meet a tablet. The twelve consoles that ship a skin package (FC, SFC, N64, GC,
-GB, GBC, GBA, NDS, MD, SMS, PS, PSP) keep the package and use its tablet (`ipad`) art. Every other
-console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The consoles bundled in
-OpenEmux's own format (issues 770 and 771, the Virtual Boy among them) use that package's tablet
-layouts instead (RT-732, RT-744). The library needs a ColecoVision game (a console that keeps the
+Two kinds of skin meet a tablet. The NDS, which ships a Delta package, keeps the package and uses its
+tablet (`ipad`) art. The consoles bundled in OpenEmux's own format (issues 770 and 771, the Virtual
+Boy among them; since issue 806 also FC, SFC, N64, GC, GB, GBC, GBA, MD, SMS, PS and PSP, which
+shipped Delta/Manic packages before) use that skin's tablet layouts (RT-732, RT-744, RT-814). Every
+other console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a ColecoVision game (a console that keeps the
 drawn skin), a Game Boy Advance game and a Nintendo DS game.
 Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
 `user_rotation 0`.
@@ -7488,7 +7501,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Check:** human only (the screenshots side by side).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-431 — Consoles with a skin package use its tablet art on a tablet
+### RT-431 — Consoles with a bundled skin use its tablet art on a tablet
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
 - **Preconditions:** As RT-428 (1280×800dp, landscape).
@@ -7497,7 +7510,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
      (`user_rotation 0`).
   2. Quit, start the Nintendo DS game in landscape and tap something on the lower screen.
   3. Open the pause menu in each game.
-- **Expected:** Both games show their package skin's tablet art, not the drawn tablet skin of
+- **Expected:** Both games show their bundled skin's tablet art (the GBA's tablet layouts, in
+  OpenEmux's format since issue 806; the NDS package's `ipad` art), not the drawn tablet skin of
   RT-428 and not the phone art stretched: the picture large, the controls sized for a tablet, in
   both orientations. The Nintendo DS package draws its two screens one over the other, as the
   package does, and the tap on the lower screen reaches the game. The pause menu is the side panel
@@ -7561,8 +7575,9 @@ with `adb`: a **Pixel Fold** AVD (`adb emu fold` / `adb emu unfold`) and a **Res
 `adb shell am start --windowingMode 5 ...`). The reload is logged by the engine:
 `adb logcat -s RetroArch:* OpenEmuxSkin:*`. The skins live under the app's
 `files/launch/current/` directory (`adb shell run-as com.openemux.mobile ls files/launch/current`
-on a debug build). The twelve consoles with a bundled skin package (Game Boy Advance and Nintendo
-DS among them) are redrawn from that package; the other consoles from the drawn skin.
+on a debug build). The consoles with a bundled skin (the Game Boy Advance's in OpenEmux's format
+since issue 806, the Nintendo DS's a Delta package) are redrawn from it; the other consoles from the
+drawn skin.
 
 ### RT-450 — Unfolding a Fold during a game redraws the skin for the inner screen
 - **Area:** Android — Window size changes in game
@@ -7573,8 +7588,8 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   1. Start the GBA game and play for a few seconds, noting where the game is.
   2. Run `adb emu unfold`.
 - **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
-  bundled package skin (not the drawn one), now in its tablet art since the inner screen is 600dp
-  or more across, its buttons round, not stretched, and the picture well placed. The game goes on
+  bundled skin (not the drawn one), now in its fold layout (a window with a fold uses the `fold-*`
+  layouts since issue 806; the package before it drew its tablet art), its buttons round, not stretched, and the picture well placed. The game goes on
   from the same point (no restart, no state loaded) and the touch controls respond.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
   one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
@@ -10064,12 +10079,12 @@ release APK needs a real controller (USB or Bluetooth).
   (a real one, or "connect" once the game has opened).
 - **Steps:**
   1. Launch the Atari 2600 game, phone in landscape.
-  2. Repeat with the Mega Drive game (a bundled package skin).
+  2. Repeat with the Mega Drive game (a bundled skin, in OpenEmux's format since issue 806).
 - **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
   from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
   the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
   barely visible disc), not a grey band. The picture fits between the rails at full height. The
-  package skin shows the same drawn layout.
+  bundled skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
 
 ### RT-565 — Connecting and disconnecting the pad mid-game switches the layout without a restart
@@ -11348,14 +11363,14 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
 ### RT-741 — Bundled skins only offer "Use it as it is"
 - **Area:** Android — Skin library
 - **Mode:** MANUAL
-- **Preconditions:** A console whose bundled skin is a Delta/Manic package (SNES).
+- **Preconditions:** A console with a bundled skin (SNES).
 - **Steps:**
   1. On the "Dark" card, tap "⋮".
   2. Tap "Use it as it is".
 - **Expected:** The sheet shows the name, the three lit badges, a lock with "Bundled skins never
-  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
-  consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
-  RT-769; so do the drawn-skin consoles, issue 798: RT-775.)
+  change." and only "Create copy and edit" and "Use it as it is": no rename, duplicate or delete.
+  Step 2 picks Dark. ("Create copy and edit" is on every bundled skin: issue 796, RT-769; issue 797,
+  RT-792; issue 798, RT-775; the SNES's zip is copied as it is since issue 806, RT-819.)
 - **Check:** `MANUAL`.
 
 ### RT-742 — The list works with a gamepad
@@ -11706,9 +11721,9 @@ zip edits happen on a computer.
 ## Android — Copy of a bundled skin
 
 "Create copy and edit" makes a named skin of your own out of a bundled one (issue 796, part 1 of
-issue 783). For now it is offered only where the bundled skin ships in OpenEmux's own format: Game
-Gear, SG-1000, 32X, Mega-CD, Saturn, PC Engine, PC Engine CD and Famicom Disk System, in "Console
-colors" and "Dark". Same setup as the skin library section: a phone (or a phone-sized headless
+issue 783). Where the bundled skin ships in OpenEmux's own format it copies it as it is: Game Gear,
+SG-1000, 32X, Mega-CD, Saturn, PC Engine, PC Engine CD and Famicom Disk System, in "Console colors"
+and "Dark", and since issue 806 the eleven consoles of RT-819 in every variant. Same setup as the skin library section: a phone (or a phone-sized headless
 emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
 `/sdcard/Android/data/$PKG/files/skins`.
 
@@ -12144,32 +12159,34 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
 ## Android — Copy of a Delta or Manic skin
 
 "Create copy and edit" also works on the bundled skins that ship as Delta/Manic packages (issue 797,
-part 2 of issue 783): FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS and PSP, in every colour
-variant. The copy is converted into OpenEmux's own format: one layout per form and orientation the
-package has art for, the background with every control lifted off it and one image per control. An
-imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" on its row's menu.
-Same setup as the section above (`$PKG`, `$SKINS`); a SNES game (`Super Mario World`) and a GBA game
-in the library.
+part 2 of issue 783). Since issue 806 only the NDS's are packages, in every colour variant: FC, SFC,
+N64, GC, GB, GBC, GBA, MD, SMS, PS and PSP ship in OpenEmux's own format and their copy is the zip as
+it is (RT-819). The copy is converted into OpenEmux's own format: one layout per form and orientation
+the package has art for, the background with every control lifted off it and one image per control.
+An imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" on its row's menu.
+Same setup as the section above (`$PKG`, `$SKINS`); an NDS game and a GBA game in the library.
+`$OLD_APK` is the APK of a release before issue 806, whose `assets/skins/` still holds the packages of
+the eleven consoles that moved.
 
 ### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
-- **Preconditions:** No skin of your own for the SNES.
+- **Preconditions:** No skin of your own for the NDS.
 - **Steps:**
-  1. Settings → SNES → "Controller skins" → on the "Console colors" card, tap "⋮".
-  2. Do the same on the "Dark" card, and on a GBA colour variant (say "Purple").
+  1. Settings → Nintendo DS → "Controller skins" → on the "Console colors" card, tap "⋮".
+  2. Do the same on the "Dark" card, and on an NDS colour variant (say "Pink").
 - **Expected:** Every sheet shows the lock line "Bundled skins never change.", then "Create copy and
   edit" (pencil icon) above "Use it as it is".
 - **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`); JVM suite
-  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` (every variant of the twelve
-  consoles is a package the conversion takes).
+  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` (every variant of the NDS is a
+  package the conversion takes; since issue 806 no other console's is).
 
 ### RT-793 — The converted copy is named, listed under Your skins, used and has the source's layouts
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
 - **Preconditions:** RT-792.
 - **Steps:**
-  1. On the SNES "Console colors", tap "⋮" → "Create copy and edit" → "Create copy" with the name
+  1. On the NDS "Console colors", tap "⋮" → "Create copy and edit" → "Create copy" with the name
      filled in.
   2. Wait for the list to refresh.
 - **Expected:** A short "Making the copy…" message shows; then "YOUR SKINS" lists "Console colors
@@ -12177,27 +12194,29 @@ in the library.
   art), and the bundled card is no longer in use. The bundled card itself is unchanged.
 - **Check:**
   ```bash
-  adb shell ls $SKINS/SFC/console-colors-copy
+  adb shell ls $SKINS/NDS/console-colors-copy
   # skin.json fold-landscape fold-portrait phone-landscape phone-portrait tablet-landscape tablet-portrait
-  adb shell ls $SKINS/SFC/console-colors-copy/phone-portrait
-  # background.png a.png b.png x.png y.png l.png r.png start.png select.png dpad.png dpad-ball.png
-  # save.png load.png turbo.png slow-motion.png fast-forward.png menu.png
-  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"].get("custom"))'
+  adb shell ls $SKINS/NDS/console-colors-copy/phone-portrait
+  # background.png and one PNG per control: a.png b.png x.png y.png l.png r.png start.png select.png
+  # dpad.png dpad-ball.png save.png load.png turbo.png slow-motion.png fast-forward.png menu.png among them
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["NDS"].get("custom"))'
   # own:console-colors-copy
   ```
 
 ### RT-794 — The copy looks and plays like its source, upright and sideways
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
-- **Preconditions:** RT-793 (the SNES copy in use).
+- **Preconditions:** RT-793 (the NDS copy in use); the NDS screen layout on both screens one over
+  the other (the copy has no page per layout, RT-795).
 - **Steps:**
-  1. Launch the SNES game upright; press every button, the D-pad (its ball follows the thumb),
+  1. Launch the NDS game upright; press every button, the D-pad (its ball follows the thumb),
      save, load, turbo, slow motion, fast forward and the menu key.
   2. Turn the phone sideways and do the same.
   3. Quit; pick "Console colors" under "Bundled"; launch the game again, both ways, and compare.
 - **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
-  motion before fast forward. Every control presses what it does on the bundled skin; turbo, slow
-  motion and fast forward light (an accent tile behind the key) while on.
+  motion before fast forward. Every control presses what it does on the bundled skin (the screens
+  key aside, RT-795); turbo, slow motion and fast forward light (an accent tile behind the key) while
+  on.
 - **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
   `PackageConversionTest.everyBundledPackagePlansIntoASkinTheFormatAccepts` (every package plans into
   a skin the format accepts, every item a control, slow motion and the D-pad in every layout).
@@ -12205,13 +12224,16 @@ in the library.
 ### RT-795 — Sticks, two screens and the tablet art come across too
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
-- **Preconditions:** An N64 or PS game, and an NDS game, in the library; a tablet, or the emulator
-  at tablet size (`adb shell wm size 1600x2560 && adb shell wm density 320`).
+- **Preconditions:** An N64 or PS game, and an NDS game, in the library; `N64.deltaskin` (or
+  `PS.manicskin`) taken from `$OLD_APK` (`unzip -p $OLD_APK assets/skins/N64.deltaskin > N64.deltaskin`)
+  and imported with "Import .zip" (the N64's and PS's bundled skins are copied as they are since
+  issue 806); a tablet, or the emulator at tablet size
+  (`adb shell wm size 1600x2560 && adb shell wm density 320`).
 - **Steps:**
-  1. Make a copy of the N64 (or PS) "Console colors" and play: move each stick.
-  2. Make a copy of the NDS "Console colors" and play upright and sideways.
-  3. At tablet size, play the SNES copy (RT-793) both ways.
-- **Expected:** The sticks' knobs move with the thumb and steer like the bundled skin's. The NDS copy
+  1. "Duplicate" the imported N64 (or PS) package, use the copy and play: move each stick.
+  2. Play the NDS copy (RT-793) upright and sideways.
+  3. At tablet size, play the NDS copy both ways.
+- **Expected:** The sticks' knobs move with the thumb and steer like the package's. The NDS copy
   shows both screens one over the other; its screens key is drawn and does nothing (the format has
   no page per NDS layout). At tablet size the copy draws the iPad art, as the bundled skin does.
 - **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
@@ -12219,9 +12241,9 @@ in the library.
 ### RT-796 — "Duplicate" on an imported Delta or Manic skin makes a copy of your own
 - **Area:** Android — Copy of a Delta or Manic skin
 - **Mode:** MANUAL
-- **Preconditions:** A `.deltaskin` imported for the GBA through "Import .zip" (for instance the APK's
-  own: `unzip -p OpenEmuxMobile.apk assets/skins/GBA.deltaskin > GBA.deltaskin`), listed under
-  "Imported".
+- **Preconditions:** A `.deltaskin` imported for the GBA through "Import .zip" (for instance the one
+  an earlier release bundled: `unzip -p $OLD_APK assets/skins/GBA.deltaskin > GBA.deltaskin`), listed
+  under "Imported".
 - **Steps:**
   1. On its row under "Imported", tap "⋮".
   2. Tap "Duplicate".
@@ -12240,7 +12262,7 @@ in the library.
 - **Steps:**
   1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
      D-pad to "Duplicate", A.
-  2. With the gamepad only: "⋮" of a SNES bundled card → "Create copy and edit" → "Create copy".
+  2. With the gamepad only: "⋮" of an NDS bundled card → "Create copy and edit" → "Create copy".
   3. Switch the app to each of German, Spanish, French, Japanese, Portuguese (Brazil), Tamil and
      Chinese and open the imported sheet again.
 - **Expected:** Left from the "⋮" goes back to the row; both copies are made. The lock line and the
@@ -12346,6 +12368,266 @@ layout) copied to the device: `adb push NDS-template.zip /sdcard/Download/`.
   unchanged.
 - **Check:** `MANUAL`. JVM suite `SkinFormatTest.screenLayoutPagesAreChecked`
   (`INCOMPLETE_SCREEN_LAYOUTS`, `UNKNOWN_SCREEN_LAYOUT`, `SCREEN_LAYOUTS_NOT_NDS`, `BAD_SCREENS`).
+
+## Android — Bundled skins for the eleven single-screen consoles in OpenEmux's format
+
+The eleven single-screen consoles whose bundled skins were Delta/Manic packages now ship them in
+OpenEmux's own skin format (issue 806): NES (`FC`), SNES (`SFC`), Game Boy (`GB`), Game Boy Color
+(`GBC`), Game Boy Advance (`GBA`), Mega Drive (`MD`), Master System (`SMS`), Nintendo 64 (`N64`),
+GameCube (`GC`), PlayStation (`PS`) and PSP (`PSP`), in `assets/skins/<console>.zip`,
+`dark/<console>.zip` and `<colour>/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android). Every variant they had
+is kept: console colours, Dark and the official colours of issue 720 (FC red; SFC purple; GB red,
+yellow, green, blue, black, white, clear; GBC red, purple, green, yellow, teal; GBA white, black,
+clear blue, clear pink, silver, orange; N64 grey, black, red, blue, green, yellow, gold; GC black,
+silver, orange; PSP white, silver, blue; MD, SMS and PS console colours and Dark only). Each has six
+layouts: phone and tablet as before, upright and sideways, plus fold, new for these consoles. The
+console colours and Dark images are PNG, the colour variants' WebP, which the format now accepts
+for any image (`<name>.webp` instead of `<name>.png`, never both). The NDS stays a Delta package
+until issue 808. The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone,
+a tablet and a foldable (or headless emulators of each) with `adb`. `$PKG` is `com.openemux.mobile`,
+`$SKINS` is `/sdcard/Android/data/$PKG/files/skins`, and `$OLD_APK` is the APK of the release before
+issue 806.
+
+### RT-814 — Each of the eleven consoles opens with its bundled skin, looking as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** One game of each of FC, SFC, GB, GBC, GBA, MD, SMS, N64, GC, PS and PSP in the
+  library; nothing picked under "Your skins" or "Imported" for them; each console's "Controller
+  skins" on "Console colors". Screenshots of the same games taken with `$OLD_APK` installed (phone
+  upright and sideways, tablet upright and sideways).
+- **Steps:**
+  1. On a phone, start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side, `adb shell wm size 1600x2560 &&
+     adb shell wm density 320`), start each game upright and sideways.
+  3. Compare each screenshot side by side with the previous release's.
+- **Expected:** Each game shows the same skin as before: the same art and colours (the light grey
+  SNES with coloured X, Y, A and B, the purple GBA, the black PSP), every control in the same place
+  and at the same size, the picture in the same spot and never covered; the tablet gets its own
+  layouts, not the phone's stretched. Nothing falls back to the app's plain drawn skin.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p > <console>-<form>-<orientation>.png`
+  and compare with the old ones; logcat tag `OpenEmuxSkin` shows `drawing OpenEmux <console name>`
+  with `(phone-portrait, phone-landscape)` on the phone and `(tablet-portrait, tablet-landscape)` on
+  the tablet (`adb logcat -s OpenEmuxSkin`), and no `falling back` line.
+- **Restore:** `adb shell wm size reset && adb shell wm density reset`.
+
+### RT-815 — The eleven consoles get a fold layout on a foldable's inner screen
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games on a foldable, or a Pixel Fold emulator (`adb emu unfold`,
+  `hinge-angle0 180`).
+- **Steps:**
+  1. Unfolded flat, start each game upright, then turn the device sideways.
+  2. Fold it (`adb emu fold`) during one of the games, then unfold it again.
+- **Expected:** Unfolded, each game shows its skin's fold layout, made for the nearly square inner
+  screen (the picture large, the controls at the sides or under it, nothing stretched or covering the
+  picture), not the tablet or phone layout. Folded, the outer screen shows the phone layout;
+  unfolding brings the fold layout back, the game running on.
+- **Check:** `MANUAL`: a screenshot per console and orientation; unfolded, logcat tag
+  `OpenEmuxSkin` reads `drawing OpenEmux <console name> (fold-portrait, fold-landscape)`, folded
+  `(phone-portrait, phone-landscape)`.
+
+### RT-816 — Every variant is listed and drawn with the same layout
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games.
+- **Steps:**
+  1. Settings → each of the eleven consoles → "Controller skins".
+  2. For the Game Boy, tap each card under "BUNDLED" in turn and start the game, upright and
+     sideways.
+  3. Do the same for one colour of the GBA ("Clear Blue"), the N64 ("Gold"), the GameCube
+     ("Orange") and the PSP ("Silver"), and for "Dark" on the Mega Drive.
+  4. Tap "Console colors" on each console again.
+- **Expected:** "BUNDLED" lists "Console colors", "Dark" and the console's official colours, exactly
+  as the previous release: FC Red; SFC Purple; GB Red, Yellow, Green, Blue, Black, White, Clear; GBC
+  Red, Purple, Green, Yellow, Teal; GBA White, Black, Clear Blue, Clear Pink, Silver, Orange; N64
+  Grey, Black, Red, Blue, Green, Yellow, Gold; GC Black, Silver, Orange; PSP White, Silver, Blue;
+  MD, SMS and PS only "Console colors" and "Dark". Every card has its Phone, Tablet and Fold badges
+  lit. Each variant draws in its colours with every control in the same place as "Console colors";
+  the translucent ones (Clear, Clear Blue, Clear Pink) look as they did before.
+- **Check:** `MANUAL`: screenshot the lists and the games; after step 4,
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin).get("consoles",{}); print({k: v.get("skin","console") for k,v in c.items()})'
+  # every console: console
+  ```
+
+### RT-817 — A variant picked before the update is still picked after it
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `$OLD_APK` installed with a game of GB, SFC, N64 and PSP; their "Controller
+  skins" set to "Red" (GB), "Purple" (SFC), "Dark" (N64) and "Silver" (PSP).
+- **Steps:**
+  1. Read the choices (Check), then install this build over it: `adb install -r <apk>`.
+  2. Open the app; Settings → each of the four consoles → "Controller skins".
+  3. Start each game.
+- **Expected:** Each console still has the same card ringed with "In use" and the section title
+  reads the same name on its right; each game opens on that variant, now drawn from the zip (the GB
+  red, the SNES purple, the N64 Dark, the PSP silver). The other consoles stay on "Console colors".
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]; print(*(c.get(k,{}).get("skin","console") for k in ("GB","SFC","N64","PSP")))'
+  # before and after step 1: red purple dark silver
+  ```
+  and logcat tag `OpenEmuxSkin` reads `drawing OpenEmux <console name> <variant>` (for instance
+  `drawing OpenEmux Game Boy Red`, `drawing OpenEmux Nintendo 64 Dark`) at each start.
+
+### RT-818 — Every control, quick action and stick works as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games; RetroArch's input test, or games where each button does
+  something visible; RetroAchievements hardcore off.
+- **Steps:**
+  1. On each console press the D-pad's four directions and diagonals and every button and shoulder
+     on the skin, upright and sideways.
+  2. Use "save", "load", "turbo", "slow-motion" and "fast-forward" on the frame (slow motion sits
+     between turbo and fast forward, as the packages had it), and the menu key.
+  3. On the N64, GameCube (main stick and "C" stick), PlayStation (both sticks) and PSP, push each
+     stick a little and all the way, then let go.
+  4. On the GameCube, press "L" and "R" slowly, a little and then all the way.
+- **Expected:** Each control reaches the core as it did on the previous release (the Mega Drive's
+  A, B, C, X, Y, Z and MODE, the NES's B and A, the SNES's L and R, the PlayStation's L2/R2 and
+  SELECT/START); the D-pad's ball follows the thumb (RT-408). Each quick action works, turbo, slow motion
+  and fast forward light while on, and the menu opens. Each stick's knob moves with the thumb and recentres on
+  release, a small push giving a small value (RT-394, RT-397). The GameCube's triggers stay analog: a
+  light press gives a partial value before the full press.
+- **Check:** `MANUAL`, plus the generated config while a game runs:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|dpad_area|_movable'
+  ```
+  one `dpad_area` per overlay, an `analog_left`/`analog_right` desc per stick, each with
+  `_movable = true`. The binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-819 — "Create copy and edit" copies the zip as it is, every layout and image
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game; no skin of your own for the SNES; the APK under test on the
+  computer.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "⋮" on the "Purple" card → "Create copy and edit" →
+     "Create copy" with "Purple copy" filled in.
+  2. In the editor that opens (RT-781), move a button, tap "Save", then "Close editor".
+  3. Launch the SNES game upright and sideways.
+  4. Repeat step 1 on "Console colors".
+- **Expected:** Step 1 opens the skin editor on "Purple copy" with the purple art (no conversion:
+  the copy is the bundled zip's files). Step 2 shows "Skin saved". "YOUR SKINS" lists "Purple copy"
+  ringed with "In use", its Phone, Tablet and Fold badges lit; the "Purple" card under "BUNDLED" is
+  unchanged. Step 3 shows the purple skin with the moved button where it was put, every control
+  pressing as on the bundled skin. Step 4's copy has PNG images.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC/purple-copy
+  # skin.json fold-landscape fold-portrait phone-landscape phone-portrait tablet-landscape tablet-portrait
+  adb shell ls $SKINS/SFC/purple-copy/phone-portrait            # *.webp, the same names as in the zip, no *.png
+  unzip -p <apk> assets/skins/purple/SFC.zip > SFC-purple.zip
+  unzip -p SFC-purple.zip phone-portrait/a.webp | md5sum
+  adb shell md5sum $SKINS/SFC/purple-copy/phone-portrait/a.webp   # the same sum
+  adb shell ls $SKINS/SFC/console-colors-copy/phone-portrait    # *.png (step 4)
+  ```
+
+### RT-820 — Importing and duplicating a Delta or Manic skin still works on these consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game and a Game Boy game; on the phone's Downloads, the packages the
+  previous release bundled: `unzip -p $OLD_APK assets/skins/GBA.deltaskin > GBA.deltaskin` and
+  `unzip -p $OLD_APK assets/skins/GB.manicskin > GB.manicskin`, pushed with
+  `adb push <file> /sdcard/Download/`.
+- **Steps:**
+  1. Settings → Game Boy Advance → "Controller skins" → "Import .zip" → pick `GBA.deltaskin` →
+     "Import".
+  2. Tap its card under "IMPORTED" and launch the GBA game.
+  3. On its "⋮", tap "Duplicate"; use the copy and launch the game again.
+  4. Repeat steps 1 and 2 with `GB.manicskin` on the Game Boy.
+  5. Tap "Console colors" on both consoles.
+- **Expected:** Step 1: the sheet reads "A Delta or Manic EMU skin: it goes under Imported, as it
+  is." and the package is listed under "IMPORTED". Step 2: the game draws the package (RT-766).
+  Step 3: after "Making the copy…", "YOUR SKINS" lists "<package name> (copy)" in use, and the game
+  looks and plays like the package (RT-796). Step 4: the Manic package imports and plays the same way.
+  Step 5: the bundled skins in OpenEmux's format are back.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GBA $SKINS/GB    # GBA.deltaskin and the copy's folder; GB.manicskin
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]; print(c["GBA"].get("custom"), c["GB"].get("custom"))'
+  # after step 4: own:<copy folder> pkg:GB.manicskin · after step 5: None None
+  ```
+
+### RT-821 — A skin of your own with a WebP image draws it
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `mine`, the SNES template unzipped (`SFC-template.zip`, RT-725) on the computer;
+  a SNES game.
+- **Steps:**
+  1. On the computer, paint `mine/phone-portrait/a.png` a solid red (keep its size), save it as
+     `mine/phone-portrait/a.webp` (`python3 -c 'from PIL import Image; Image.open("a.png").save("a.webp")'`)
+     and delete `a.png`.
+  2. `adb push mine $SKINS/SFC/`; Settings → SNES → "Controller skins" → tap the `mine` card.
+  3. Launch the SNES game upright and press A.
+- **Expected:** The A button is drawn from the red WebP image, at its size, and presses A; every
+  other control is drawn from its PNG as before.
+- **Check:** `MANUAL`: screenshot; logcat tag `OpenEmuxSkin` shows `drawing <the skin's name>` and
+  no `not drawn` line.
+
+### RT-822 — An image as both PNG and WebP is refused, and the game falls back
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-821 (`mine` in use, with `phone-portrait/a.webp` and no `a.png`).
+- **Steps:**
+  1. Push a PNG of the same image next to it: `adb push a.png $SKINS/SFC/mine/phone-portrait/`.
+  2. Launch the SNES game upright.
+- **Expected:** The skin is refused as a whole (one image in two formats) and the game draws the
+  bundled SNES skin instead; nothing crashes.
+- **Check:** `adb logcat -s OpenEmuxSkin` shows `mine not drawn: falling back to the bundled skin`
+  with `DUPLICATE_ID` and `image a is both a.png and a.webp`.
+- **Restore:** `adb shell rm $SKINS/SFC/mine/phone-portrait/a.png`.
+
+### RT-823 — A template of a skin with WebP images is all PNG; an imported zip keeps its WebP
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-819's "Purple copy"; RT-821's `mine` folder on the computer, zipped
+  (`zip -r mine.zip mine`) and pushed to `/sdcard/Download/`.
+- **Steps:**
+  1. "⋮" on "Purple copy" → "Download as template" → "Save .zip"; `adb pull` the zip and unzip it.
+  2. Settings → SNES → "Controller skins" → "Import .zip" → pick `mine.zip` → "A new skin", name it
+     "WebP import" → "Import".
+- **Expected:** Step 1: "Template saved"; the template holds `skin.json`, `README.txt` and the six
+  layout folders, every image a PNG (none WebP) at the size `README.txt` lists for it, the art the
+  same as the copy's. Step 2: "Skin imported"; the new skin keeps `a.webp` as WebP and draws it as in
+  RT-821.
+- **Check:**
+  ```bash
+  unzip -l <template>.zip | grep -c '\.webp'      # 0
+  python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(24); print(struct.unpack(">II", d[16:24]))' <template>/phone-portrait/a.png
+  # equals the "a.png" line of README.txt
+  adb shell ls $SKINS/SFC/webp-import/phone-portrait   # a.webp, and no a.png
+  ```
+
+### RT-824 — The thirty own-format consoles' zips are valid, complete and press the same binds
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the unit suite (`./gradlew --no-daemon testDebugUnitTest` in `pkg/android/openemux`).
+- **Expected:** Thirty consoles ship in OpenEmux's own format, in console colours and Dark, and of
+  the Delta/Manic packages only `NDS.deltaskin` is left in any variant folder; every variant the
+  picker lists is a zip in its folder and no zip ships that it does not list, 93 own-format zips in
+  all (30 consoles twice, plus the 33 official colours of the eleven); each zip has the six layouts,
+  every image at its element's size (a D-pad's ball and a stick's knob included), PNG for console
+  colours and Dark and WebP for the colours; every variant has the console colours' layout (sizes,
+  screens, frame, every element's id, type, bind, rect and label); every control presses the bind
+  the drawn skin uses for that console, and the quick actions and the menu are there. The skin
+  format reads `<name>.webp` for `<name>.png` and refuses both at once (`DUPLICATE_ID`); an imported
+  zip keeps its WebP images. "Create copy and edit" copies every own-format bundled zip with every
+  layout, element and file, and only the NDS's bundled packages (with the eleven's former packages,
+  kept as test files) still go through the conversion, which still plans each into a skin the format
+  accepts. The templates match the bundled layouts.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/BundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinConversionTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/PackageConversionTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinImportTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
 
 ## Retired
 
