@@ -602,6 +602,64 @@ class UnreachableGamepadButtonMigrationTests(unittest.TestCase):
         self.assertEqual(cleared["up"], "h0up")
 
 
+class AProfileSavedBeforeItsConsoleGainedButtonsTests(unittest.TestCase):
+    """Issue 816: the consoles whose list was short of what their core reads.
+
+    first_boot writes a profile for every console, so everybody who has run
+    the app has a Mega Drive profile with no X and no Y in it. Loading it has
+    to hand those two their buttons, on the keyboard and on every pad, or the
+    fix reaches only fresh installs.
+    """
+
+    def _saved_without(self, manager, console, actions):
+        profile = manager.default_profile(console)
+        for device in profile["devices"].values():
+            for action in actions:
+                device["bindings"].pop(action, None)
+        manager.ensure_dir()
+        manager.profile_path(console).write_text(json.dumps(profile), encoding="utf-8")
+
+    def test_the_mega_drive_gains_x_and_y_on_every_device(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            self._saved_without(manager, "MD", ("x", "y"))
+            profile = manager.load_profile("MD")
+            on_disk = json.loads(manager.profile_path("MD").read_text(encoding="utf-8"))
+        self.assertEqual(profile["devices"]["keyboard"]["bindings"]["x"], "s")
+        self.assertEqual(profile["devices"]["keyboard"]["bindings"]["y"], "c")
+        for device_id in ("gamepad_p1", "gamepad_p2", "gamepad_p3", "gamepad_p4"):
+            bindings = profile["devices"][device_id]["bindings"]
+            self.assertEqual((bindings["x"], bindings["y"]), ("2", "3"), device_id)
+        # And it is written back, so the next launch reads it filled.
+        self.assertEqual(on_disk["devices"]["gamepad_p1"]["bindings"]["x"], "2")
+
+    def test_the_nintendo_64_gains_z_and_its_c_buttons_wait_to_be_bound(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            self._saved_without(manager, "N64", ("l2", "r_up", "r_down", "r_left", "r_right"))
+            profile = manager.load_profile("N64")
+        keyboard = profile["devices"]["keyboard"]["bindings"]
+        self.assertEqual(keyboard["l2"], "e")
+        self.assertEqual(profile["devices"]["gamepad_p1"]["bindings"]["l2"], "+2")
+        for action in ("r_up", "r_down", "r_left", "r_right"):
+            self.assertEqual(keyboard[action], "")
+
+    def test_a_binding_the_user_made_is_left_alone(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = InputProfileManager(tmp_dir)
+            profile = manager.default_profile("PS")
+            for device in profile["devices"].values():
+                device["bindings"].pop("l2", None)
+                device["bindings"].pop("r2", None)
+            profile["devices"]["keyboard"]["bindings"]["a"] = "e"  # L2's default key
+            manager.ensure_dir()
+            manager.profile_path("PS").write_text(json.dumps(profile), encoding="utf-8")
+            loaded = manager.load_profile("PS")["devices"]["keyboard"]["bindings"]
+        self.assertEqual(loaded["a"], "e")
+        self.assertNotIn(loaded["l2"], ("", "e"))
+        self.assertEqual(loaded["r2"], "q")
+
+
 class AProfileFileThatIsNotAProfileTests(unittest.TestCase):
     """The file is hand-editable, so every shape of nonsense has to survive."""
 

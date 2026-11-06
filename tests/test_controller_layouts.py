@@ -88,15 +88,42 @@ class ActionsTests(unittest.TestCase):
         self.assertEqual(cl.actions_for_element("PS", "button", "l1"), ("l1",))
         self.assertEqual(cl.actions_for_element("FC", "button", "menu"), ("menu_toggle",))
 
+    def test_every_control_a_core_reads_has_its_action(self):
+        # Issue 816: each of these was drawn as not remappable (and, worse,
+        # written as unbound at launch) because its RetroPad button was
+        # missing from the console's actions.
+        self.assertEqual(cl.actions_for_element("N64", "button", "z"), ("l2",))
+        self.assertEqual(cl.actions_for_element("MD", "button", "a"), ("y",))
+        self.assertEqual(cl.actions_for_element("S32X", "button", "y"), ("x",))
+        self.assertEqual(cl.actions_for_element("PSP", "button", "x"), ("x",))
+        self.assertEqual(cl.actions_for_element("PS", "button", "r2"), ("r2",))
+        self.assertEqual(cl.actions_for_element("SATURN", "button", "l"), ("l2",))
+        self.assertEqual(cl.actions_for_element("GC", "button", "r"), ("r2",))
+        self.assertEqual(cl.actions_for_element("FDS", "button", "disk"), ("l1",))
+        self.assertEqual(cl.actions_for_element("VB", "button", "l"), ("l1",))
+        self.assertEqual(cl.actions_for_element("VB", "dpad", "dpad2"), ("l2", "l3", "r2", "r3"))
+        self.assertEqual(cl.actions_for_element("VECTREX", "button", "y"), ("y",))
+        self.assertEqual(cl.actions_for_element("A7800", "button", "x"), ("x",))
+        self.assertEqual(cl.actions_for_element("INTV", "button", "y"), ("y",))
+
+    def test_the_right_stick_and_the_c_buttons_remap_its_four_directions(self):
+        self.assertEqual(cl.actions_for_element("N64", "button", "cUp"), ("r_up",))
+        self.assertEqual(cl.actions_for_element("N64", "button", "cLeft"), ("r_left",))
+        for console in ("PS", "GC"):
+            self.assertEqual(
+                cl.actions_for_element(console, "stick", "rightAnalogStick"),
+                ("r_up", "r_down", "r_left", "r_right"),
+            )
+
     def test_targets_outside_the_consoles_actions_are_not_remappable(self):
-        # N64 Z is RetroPad L2, which the desktop does not offer for the N64.
-        self.assertEqual(cl.actions_for_element("N64", "button", "z"), ())
-        self.assertEqual(cl.actions_for_element("N64", "button", "cUp"), ())
-        self.assertEqual(cl.actions_for_element("FDS", "button", "disk"), ())
-        self.assertEqual(cl.actions_for_element("VB", "dpad", "dpad2"), ())
-        self.assertEqual(cl.actions_for_element("PS", "stick", "rightAnalogStick"), ())
-        # A quick-action name never reaches a desktop action.
+        # The Game Boy Advance has no X; nothing reads one there.
+        self.assertEqual(cl.actions_for_element("GBA", "button", "x"), ())
+        self.assertEqual(cl.actions_for_element("SFC", "button", "l2"), ())
+        self.assertEqual(cl.actions_for_element("SFC", "stick", "rightAnalogStick"), ())
+        # A quick-action name never reaches a desktop action, and neither does
+        # the Android skins' own keypad switch.
         self.assertEqual(cl.actions_for_element("FC", "button", "quickSave"), ())
+        self.assertEqual(cl.actions_for_element("CV", "button", "keypadToggle"), ())
 
     def test_dpad_and_left_stick(self):
         self.assertEqual(cl.actions_for_element("FC", "dpad", "dpad"), ("up", "down", "left", "right"))
@@ -139,7 +166,20 @@ class CommittedArtTests(unittest.TestCase):
         self.assertEqual(by_id["dpad"].actions, ("up", "down", "left", "right"))
         self.assertEqual(by_id["stick"].actions, ("l_up", "l_down", "l_left", "l_right"))
         self.assertEqual(set(by_id["stick"].images), {"base", "knob"})
-        self.assertEqual(by_id["z"].actions, ())
+        self.assertEqual(by_id["z"].actions, ("l2",))
+        self.assertEqual(by_id["c-down"].actions, ("r_down",))
+
+    def test_only_the_android_keypad_switch_is_left_with_no_action(self):
+        # Every control a core reads is remappable from its drawing (issue
+        # 816). What is left opens the on-screen keypad of the Android skins,
+        # which has nothing behind it on the desktop.
+        left = sorted(
+            (console, element.bind)
+            for console in EXPORTED
+            for element in cl.layout_for(console).elements
+            if len(element.actions) < (4 if element.type in ("dpad", "stick") else 1)
+        )
+        self.assertEqual(left, [(console, "keypadToggle") for console in ("A5200", "CV", "INTV", "O2")])
 
     def test_aliases_and_missing(self):
         self.assertEqual(cl.layout_for("NES").console, "FC")

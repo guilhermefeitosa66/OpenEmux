@@ -4004,14 +4004,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** RT-829.
 - **Steps:**
-  1. Console "FDS - Famicom Disk System": hover the disk button on the drawing.
+  1. Console "CV - ColecoVision": hover the "Keypad" button on the drawing.
   2. Console "SFC - Super Nintendo", device "Player 2 gamepad": hover the Menu button.
 - **Expected:** Both show the tooltip "Not remappable on the desktop", take no click and are skipped
   by Tab; the caption stays empty. On "Keyboard" or "Player 1 gamepad" the SNES Menu button is a
-  normal target ("RetroArch menu: f1").
+  normal target ("RetroArch menu: f1"). The "Keypad" button (also on the Atari 5200, the
+  Intellivision and the Odyssey²) opens the on-screen keypad of the Android skin and has nothing
+  behind it on the desktop; it is the only kind of control left not remappable (RT-836).
 - **Check:** screenshots of both tooltips; suite files `tests/test_controller_drawing.py`
-  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`) and `tests/test_preferences.py`
-  (`test_the_menu_button_is_not_remappable_on_a_later_port`).
+  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`), `tests/test_preferences.py`
+  (`test_the_menu_button_is_not_remappable_on_a_later_port`) and `tests/test_controller_layouts.py`
+  (`test_only_the_android_keypad_switch_is_left_with_no_action`).
 
 ### RT-834 — The drawing follows light and dark style and narrow widths
 - **Area:** Input
@@ -4030,6 +4033,80 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   scrollbar.
 - **Check:** the screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
 - **Restore:** the previous style, and `make devbox-res RES=1600x1000`.
+
+### RT-836 — Every button a console's core reads is listed, remappable and alive in game
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "MD - Mega Drive": read the "Game Controls" rows and hover
+     the drawn "A" and "Y" buttons.
+  2. The same on "N64 - Nintendo 64" (the "Z" button), "PS - PlayStation" ("L2", "R2"),
+     "PSP - PlayStation Portable" (triangle and square), "SATURN" and "GC" ("L", "R"),
+     "FDS" ("Disk"), "VB - Virtual Boy" ("L", "R" and the right D-pad), "VECTREX" ("3", "4"),
+     "A7800" ("Pause") and "INTV" (the top side button).
+- **Expected:** Each of those buttons is a normal target on the drawing, with a row in "Game
+  Controls": the Mega Drive, the 32X and the Mega-CD list X and Y next to A, B, L1 and R1 (the
+  six-button pad: A on Y, B on B, C on A, X on L1, Y on X, Z on R1); the Nintendo 64 lists L2 (Z);
+  the PlayStation, the Saturn and the GameCube list L2 and R2; the PSP lists X and Y; the Virtual
+  Boy lists L1, R1, L2, L3, R2 and R3. They used to be drawn as "Not remappable on the desktop" and,
+  worse, were written as unbound at every launch, so they did nothing in game on a keyboard and on
+  a pad alike. A profile saved by an earlier version gains them on load, on the keyboard and on
+  every pad, with nothing the user bound changed.
+- **Check:** suite files `tests/test_input_actions.py` (`EveryButtonACoreReadsHasItsActionTests`),
+  `tests/test_input_profiles.py` (`AProfileSavedBeforeItsConsoleGainedButtonsTests`) and
+  `tests/test_controller_layouts.py` (`ActionsTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core import controller_layouts as cl
+  from openemux.core.input_actions import default_bindings_for_device, to_retroarch_overrides
+  left = sorted(
+      (p.name, e.bind) for p in cl.CONTROLLERS_DIR.iterdir() if p.is_dir()
+      for e in cl.layout_for(p.name).elements
+      if len(e.actions) < (4 if e.type in ("dpad", "stick") else 1)
+  )
+  assert left == [(c, "keypadToggle") for c in ("A5200", "CV", "INTV", "O2")], left
+  for console, device, key in (("MD", "keyboard", "input_player1_y"), ("MD", "gamepad", "input_player1_x_btn"),
+                               ("N64", "keyboard", "input_player1_l2"), ("PS", "gamepad", "input_player1_r2_axis"),
+                               ("PSP", "gamepad", "input_player1_y_btn")):
+      overrides = to_retroarch_overrides(default_bindings_for_device(device, console), device, console)
+      assert overrides[key] != '"nul"', f"{console} {device}: {key} is written unbound"
+  print("RT-836 OK")
+  EOF
+  ```
+
+### RT-837 — The right stick's directions and the N64's C buttons can be bound to keys
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "N64 - Nintendo 64", "Device" on "Keyboard": find the rows
+     "Right stick up", "Right stick down", "Right stick left" and "Right stick right", under the
+     "Analog stick" ones.
+  2. Click the drawn C-up button, press 8; "Save"; launch an N64 game and press 8.
+  3. Look for the same rows on "PS - PlayStation" and "GC - GameCube" (and the drawn right stick,
+     four targets), and on "PSP" and "SFC".
+- **Expected:** The four rows exist on the Nintendo 64, the PlayStation and the GameCube, the
+  consoles whose core reads a right stick, and nowhere else. They start unbound, on a new install
+  and on an existing profile alike, and "Map all" does not ask for them. On the Nintendo 64 they
+  are the C buttons (Mupen64Plus reads them from the right stick), so the four drawn C buttons are
+  normal targets: after step 2 the row and the drawing read "8" and the key presses C-up in game.
+  A keyboard could not press a C button before.
+- **Check:** step 2's game session is for the human; suite file `tests/test_input_actions.py`
+  (`KeyboardRightStickTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.input_actions import get_actions_for_console, normalize_bindings, to_retroarch_overrides
+  for console in ("N64", "PS", "GC"):
+      assert "r_up" in get_actions_for_console(console), console
+  for console in ("PSP", "SATURN", "SFC", "MD"):
+      assert "r_up" not in get_actions_for_console(console), console
+  assert normalize_bindings({}, "keyboard", "N64")["r_up"] == ""
+  overrides = to_retroarch_overrides({"r_up": "8"}, "keyboard", "N64")
+  assert overrides["input_player1_r_y_minus"] == '"num8"', overrides.get("input_player1_r_y_minus")
+  print("RT-837 OK")
+  EOF
+  ```
 
 ## Shaders
 

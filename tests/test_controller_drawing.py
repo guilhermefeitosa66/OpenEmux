@@ -141,7 +141,9 @@ class ControllerDrawingTests(unittest.TestCase):
 
     def test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip(self):
         drawing = ControllerDrawing(
-            layout_for("FDS"), on_activate=lambda _a: None, not_remappable_text="not remappable"
+            # The keypad switch of the Android skin: the only kind of control
+            # left with nothing to remap on the desktop (issue 816).
+            layout_for("CV"), on_activate=lambda _a: None, not_remappable_text="not remappable"
         )
         inert = [c for c in _children(drawing) if c.has_css_class("controller-inert")]
         self.assertEqual(len(inert), 1)

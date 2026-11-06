@@ -23,6 +23,10 @@ ACTION_ORDER = [
     "l_down",
     "l_left",
     "l_right",
+    "r_up",
+    "r_down",
+    "r_left",
+    "r_right",
     "turbo",
     "enable_hotkey",
     "menu_toggle",
@@ -54,6 +58,13 @@ ACTION_ORDER = [
 #: profiles that predate them.
 OPTIONAL_ACTIONS = {
     "turbo",
+    # The right stick's directions (the N64's C buttons among them) came after
+    # the profiles that are out there: handing each a fallback letter would
+    # rebind keys behind the user's back, so they wait to be bound.
+    "r_up",
+    "r_down",
+    "r_left",
+    "r_right",
     "state_slot_increase",
     "state_slot_decrease",
     "volume_up",
@@ -114,9 +125,15 @@ ANALOG_STICK_DIRECTION_ACTIONS = ["l_up", "l_down", "l_left", "l_right"]
 #: would be a dead end: the core has no analog input for them to reach.
 ANALOG_STICK_CONSOLES = {"N64", "PS", "PSP", "GC", "SATURN"}
 
-GAMEPLAY_ACTIONS_2BTN = ["up", "down", "left", "right", "a", "b", "start", "select"]
-GAMEPLAY_ACTIONS_2BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "l1", "r1", "start", "select"]
-GAMEPLAY_ACTIONS_4BTN_SHOULDER = ["up", "down", "left", "right", "a", "b", "x", "y", "l1", "r1", "start", "select"]
+#: The right stick, the same way (issue 816). Never auto-filled: see
+#: OPTIONAL_ACTIONS.
+RIGHT_STICK_DIRECTION_ACTIONS = ["r_up", "r_down", "r_left", "r_right"]
+
+#: Consoles whose core reads a right stick: the PlayStation's DualShock, the
+#: GameCube's C stick, and the Nintendo 64, whose four C buttons Mupen64Plus
+#: reads from it. Without these a keyboard cannot press a C button at all.
+RIGHT_STICK_CONSOLES = {"N64", "PS", "GC"}
+
 GAMEPLAY_ACTIONS_FULL = [
     "up",
     "down",
@@ -136,9 +153,34 @@ GAMEPLAY_ACTIONS_FULL = [
     "select",
 ]
 
+
+def _gameplay(*buttons):
+    """The D-pad, Start and Select plus `buttons`, in GAMEPLAY_ACTIONS_FULL's order."""
+    wanted = {"up", "down", "left", "right", "start", "select", *buttons}
+    return [action for action in GAMEPLAY_ACTIONS_FULL if action in wanted]
+
+
+GAMEPLAY_ACTIONS_2BTN = _gameplay("a", "b")
+GAMEPLAY_ACTIONS_2BTN_SHOULDER = _gameplay("a", "b", "l1", "r1")
+GAMEPLAY_ACTIONS_4BTN = _gameplay("a", "b", "x", "y")
+GAMEPLAY_ACTIONS_4BTN_SHOULDER = _gameplay("a", "b", "x", "y", "l1", "r1")
+GAMEPLAY_ACTIONS_4BTN_TRIGGERS = _gameplay("a", "b", "x", "y", "l1", "r1", "l2", "r2")
+
+#: The RetroPad buttons each console's core reads, as desktop actions.
+#:
+#: This is not only what Preferences lists. ``to_retroarch_overrides`` writes
+#: every RetroPad button a console does NOT name here as unbound (issue #281),
+#: so a button missing from its console's row is dead in game, on a keyboard
+#: and on a pad alike. That was the case of the Mega Drive's A and Y, the
+#: Nintendo 64's Z, the PlayStation's L2 and R2 and the PSP's triangle and
+#: square until issue 816, when the controller drawings (issue 760) put every
+#: control of every console on screen and showed which ones had no action.
+#: ``core/controller_layouts.py`` holds the table of where each control sits on
+#: the RetroPad; a control it names has to be listed here.
 CONSOLE_GAMEPLAY_ACTIONS = {
     "FC": GAMEPLAY_ACTIONS_2BTN,
-    "FDS": GAMEPLAY_ACTIONS_2BTN,
+    # Nestopia and FCEUmm turn the disk over on L.
+    "FDS": _gameplay("a", "b", "l1"),
     "GB": GAMEPLAY_ACTIONS_2BTN,
     "GBC": GAMEPLAY_ACTIONS_2BTN,
     "GG": GAMEPLAY_ACTIONS_2BTN,
@@ -148,26 +190,36 @@ CONSOLE_GAMEPLAY_ACTIONS = {
     "NGP": GAMEPLAY_ACTIONS_2BTN,
     "CV": GAMEPLAY_ACTIONS_2BTN,
     "O2": GAMEPLAY_ACTIONS_2BTN,
-    "VECTREX": GAMEPLAY_ACTIONS_2BTN,
-    "VB": GAMEPLAY_ACTIONS_2BTN,
+    # Four buttons in a row: 1 and 2 on A and B, 3 and 4 on X and Y.
+    "VECTREX": GAMEPLAY_ACTIONS_4BTN,
+    # Beetle VB reads L and R, and the right D-pad from L2, L3, R2 and R3.
+    "VB": _gameplay("a", "b", "l1", "r1", "l2", "l3", "r2", "r3"),
     "GBA": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
     "LYNX": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
-    "MD": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
-    "MCD": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
-    "S32X": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
+    # The six-button pad (Genesis Plus GX, PicoDrive): A on Y, B on B, C on A,
+    # X on L, Y on X, Z on R. The 32X and the Mega-CD play with the same pad.
+    "MD": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
+    "MCD": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
+    "S32X": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
     "PCE": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
     "PCECD": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
-    "PSP": GAMEPLAY_ACTIONS_2BTN_SHOULDER,
+    # Cross, circle, square and triangle, and the two shoulders.
+    "PSP": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
     "SFC": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
-    "SATURN": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
-    "PS": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
-    "GC": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
-    "N64": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
+    # Beetle Saturn has the pad's L and R on L2 and R2 (C and Z take R and L).
+    "SATURN": GAMEPLAY_ACTIONS_4BTN_TRIGGERS,
+    "PS": GAMEPLAY_ACTIONS_4BTN_TRIGGERS,
+    # Dolphin: Z on R, the analog L and R on L2 and R2.
+    "GC": GAMEPLAY_ACTIONS_4BTN_TRIGGERS,
+    # Mupen64Plus: the Z trigger on L2.
+    "N64": _gameplay("a", "b", "x", "y", "l1", "r1", "l2"),
     "NDS": GAMEPLAY_ACTIONS_4BTN_SHOULDER,
     "A2600": GAMEPLAY_ACTIONS_2BTN,
     "A5200": GAMEPLAY_ACTIONS_2BTN,
-    "A7800": GAMEPLAY_ACTIONS_2BTN,
-    "INTV": GAMEPLAY_ACTIONS_2BTN,
+    # ProSystem pauses the console on X.
+    "A7800": _gameplay("a", "b", "x"),
+    # FreeIntv's third action button is on Y.
+    "INTV": _gameplay("a", "b", "y"),
 }
 
 DEFAULT_KEYBOARD_BINDINGS = {
@@ -317,6 +369,12 @@ PLAYER_ACTION_SUFFIXES = {
     "l_down": "l_y_plus",
     "l_left": "l_x_minus",
     "l_right": "l_x_plus",
+    # The right stick's, the same way (issue 816): the N64's C buttons, the
+    # DualShock's right stick, the GameCube's C stick.
+    "r_up": "r_y_minus",
+    "r_down": "r_y_plus",
+    "r_left": "r_x_minus",
+    "r_right": "r_x_plus",
     # The turbo modifier: hold it (or use single-button modes) to auto-fire.
     "turbo": "turbo",
 }
@@ -386,6 +444,8 @@ def get_actions_for_console(console):
     # Only where the core reads a stick at all (issue #158).
     if system_id in ANALOG_STICK_CONSOLES:
         actions += list(ANALOG_STICK_DIRECTION_ACTIONS)
+    if system_id in RIGHT_STICK_CONSOLES:
+        actions += list(RIGHT_STICK_DIRECTION_ACTIONS)
     # Turbo rides along for every console: RetroArch implements it at the
     # frontend level, so it is not a per-console capability.
     return actions + ["turbo"] + list(GLOBAL_HOTKEY_ACTIONS)
@@ -420,7 +480,24 @@ def normalize_bindings(bindings, device_type, console=None):
         normalized[action] = str(value).strip().lower() if value is not None else ""
 
     # Fill missing values from defaults and then fallback letters.
-    used_keys = {value for value in normalized.values() if value}
+    #
+    # Hotkeys are exempt from the dedup on purpose: they only fire while
+    # enable_hotkey is held, so sharing a token with a gameplay button is
+    # what a modifier *is* (Select + X), not a conflict. Without this the
+    # enable_hotkey default is rejected for colliding with `select` and
+    # the whole hotkey set stays dead (issue #124).
+    #
+    # On a pad that holds in the other direction too: a token a hotkey has is
+    # still free for a gameplay button. A profile saved before its console
+    # gained X and Y (the Mega Drive, issue 816) already carries Select + X on
+    # button 2, and counting that as taken left X unbound -- which is written
+    # as dead in game. A keyboard has no modifier, so there a hotkey's key
+    # stays taken.
+    hotkeys_share = device_type == "gamepad"
+    used_keys = {
+        value for action, value in normalized.items()
+        if value and not (hotkeys_share and action in GLOBAL_HOTKEY_ACTIONS)
+    }
     fallback_index = 0
     for action in allowed_actions:
         if normalized[action]:
@@ -430,15 +507,11 @@ def normalize_bindings(bindings, device_type, console=None):
         if action in OPTIONAL_ACTIONS:
             continue
         default_value = defaults.get(action, "")
-        # Hotkeys are exempt from the dedup on purpose: they only fire while
-        # enable_hotkey is held, so sharing a token with a gameplay button is
-        # what a modifier *is* (Select + X), not a conflict. Without this the
-        # enable_hotkey default is rejected for colliding with `select` and
-        # the whole hotkey set stays dead (issue #124).
         is_hotkey = action in GLOBAL_HOTKEY_ACTIONS
         if default_value and (is_hotkey or default_value not in used_keys):
             normalized[action] = default_value
-            used_keys.add(default_value)
+            if not (hotkeys_share and is_hotkey):
+                used_keys.add(default_value)
             continue
         # A gamepad has no letters. Handing a pad profile a keyboard fallback
         # key produces a binding that can never fire, which reads in the UI as
