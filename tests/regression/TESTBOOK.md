@@ -11895,8 +11895,9 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   3. Close the editor; on the bundled "Dark" card tap "⋮" → "Create copy and edit" → "Create copy".
 - **Expected:** Step 1's sheet lists "Edit" (pencil) first. Step 2 opens the editor full screen: the
   skin drawn as in game, a dotted grid over all of it, a toolbar over the game screen with "Close
-  editor", "Mine" over "Phone · Upright", Undo and Redo (greyed), "Save" (greyed), and a bar with
-  "Snap" (on) and "⋯"; the screen area reads "Tap a control to change it." / "Drag to move · pinch to
+  editor", "Mine" over "Phone · Upright", the rotate icon ("Switch upright and sideways", issue 785),
+  Undo and Redo (greyed), "Save" (greyed), and a bar with "Snap" (on), "Try" (issue 785) and "⋯"; the
+  screen area reads "Tap a control to change it." / "Drag to move · pinch to
   resize.". Step 3 opens the editor on "Dark copy", already in use.
 - **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > editor.png`).
 
@@ -12010,7 +12011,9 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
   2. Open a skin of your own made only for tablets (or delete its `phone-landscape` layout) and turn sideways.
 - **Expected:** Sideways the editor shows "Phone · Sideways" and its own layout; back upright the
   first change is still there. A skin without the layout shows "This skin has no Phone · Sideways
-  layout yet. Turn the device to edit another one." with "Close editor".
+  layout yet. Turn the device to edit another one." with "Edit the Upright layout" (issue 785, when the
+  skin has that one: it shows it without turning the phone) and "Close editor". The toolbar's switch
+  is RT-798.
 - **Check:** `MANUAL`.
 
 ### RT-791 — The editor with a gamepad, and in every language
@@ -12020,11 +12023,123 @@ made as in RT-770 and renamed "Mine" (its folder `console-colors-copy`).
 - **Steps:**
   1. L1/R1 to pick controls, X to switch group ↔ one, D-pad to nudge, Y to toggle Snap, Select to
      undo, Start to save, B to clear the selection and then to leave.
-  2. Switch the app to Português (Brasil) and open the editor again.
-- **Expected:** Each button does what it says, the hint bar shows them, and B with changes opens the
-  leave dialog. In Portuguese every text of the editor is translated ("Ímã", "Salvar", "Desfazer").
+  2. With a control picked, L2 and R2 (issue 785).
+  3. With nothing picked, move the focus with the D-pad to the layout field, the rotate icon, "Try"
+     and "⋯", and press A on each; in Try, L1/R1.
+  4. Switch the app to Português (Brasil) and open the editor again.
+- **Expected:** Each button does what it says, the hint bar shows them (with "L2/R2 Size"), and B with
+  changes opens the leave dialog. L2 makes the picked control 5 % smaller, R2 5 % larger. A opens the
+  Layouts panel, switches upright/sideways, starts Try and opens More; in Try, L1/R1 press the
+  previous/next control and name it. In Portuguese every text of the editor is translated ("Ímã", "Salvar", "Desfazer").
 - **Check:** JVM suite `SkinEditorTextTest.everyLocaleHasEveryStringWithItsArguments`.
 
+
+### RT-798 — The toolbar switches between the upright and the sideways layout
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, the phone held upright, "Mine" has both phone layouts.
+- **Steps:**
+  1. Tap the rotate icon ("Switch upright and sideways") next to the layout field.
+  2. Tap it again; then tap it once more and turn the phone sideways and upright again.
+- **Expected:** Step 1 shows "Phone · Sideways" and the sideways layout fitted into the upright
+  screen, editable as usual. Step 2 goes back to "Phone · Upright". Turning the phone always follows
+  the phone again. A phone never shows a Tablet or Fold layout here.
+- **Check:** JVM suite `SkinLayoutsEditTest` in openemux-android; `MANUAL` screenshot.
+
+### RT-799 — The Layouts panel shows this phone's layouts and the other forms
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781 ("Mine" has phone, tablet and fold layouts, like the bundled skin it was
+  copied from).
+- **Steps:**
+  1. Tap the layout field ("Mine" / "Phone · Upright").
+  2. Tap the "Sideways" card; tap the check button.
+- **Expected:** A "Layouts" panel opens over the game screen: "This phone edits the phone layouts.
+  Turn the phone to switch between them.", "ON THIS PHONE" with an "Upright" card ("Editing", ringed)
+  and a "Sideways" card ("Changed" when it has unsaved changes), "OTHER SCREENS IN THIS SKIN" with
+  "Offer on tablets" and "Offer on folds" (both on, "Edit it on a tablet or in the .zip"), the
+  Phone/Tablet/Fold badges (all lit), "These switches are the badges you see on the skin." and
+  "Reset layout". There is no switch for Phone. Step 2 shows the sideways layout; the check closes
+  the panel.
+- **Check:** `MANUAL` screenshot.
+
+### RT-800 — Switching a form off asks, removes its layouts on Save, and Undo brings them back
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-799.
+- **Steps:**
+  1. Layouts panel → switch "Offer on tablets" off; "Cancel".
+  2. Switch it off again → "Remove"; close the panel; Undo; Redo.
+  3. "Save", close the editor.
+- **Expected:** Step 1 asks "Remove the Tablet layouts?" — "Both of its layouts leave this skin when
+  you save. Until then, Undo brings them back." with "Remove" and "Cancel"; "Cancel" leaves it on.
+  After "Remove" the line reads "Off: on a tablet this skin is not listed" and the Tablet badge in the
+  panel goes grey; Undo turns it back on, Redo off again. After step 3 the "Mine" card shows Phone and
+  Fold lit and Tablet grey, and the skin's tablet folders are gone; on a tablet "Mine" is dimmed.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GG/console-colors-copy     # no tablet-portrait, no tablet-landscape
+  ```
+
+### RT-801 — Switching a form on lights its badge and draws the skin there
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-800 (Tablet off and saved).
+- **Steps:**
+  1. Edit "Mine" → Layouts panel → switch "Offer on tablets" on → close the panel → "Save".
+  2. Make the emulator a tablet (`adb shell wm size 1600x2560`, `adb shell wm density 320`; `reset`
+     both afterwards) and use "Mine" in a Game Gear game, upright and sideways.
+- **Expected:** Step 1 turns the line into "Edit it on a tablet or in the .zip", lights the Tablet
+  badge and "Save"; the card then shows all three badges lit. Step 2: "Mine" can be picked on the
+  tablet and its controls are drawn from the closest layout's positions and colours (no images), the
+  game screen where that layout has it, every control pressing its button.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json | grep -o '"tablet-[a-z]*"'   # tablet-portrait, tablet-landscape
+  ```
+
+### RT-802 — Moving the screen area moves where the game is drawn
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, a Game Gear game in the library.
+- **Steps:**
+  1. "⋯" → "Screen area".
+  2. Drag the screen down by about a fifth of its height; pinch it a little smaller.
+  3. "Save", close the editor and play the game with "Mine".
+- **Expected:** Step 1 frames the game screen with its frame and the quick actions on it, labelled
+  "Screen area", with "Size" / "Nudge" / "Reset"; the actions bar moves to the bottom so it does not
+  cover the screen. Step 2 moves and resizes the screen, the frame and the quick actions together,
+  snapping like a control. In game the picture is drawn at the new place and size, inside the moved
+  frame, and every control still presses its button.
+- **Check:** JVM suite `SkinLayoutsEditTest.theScreenAreaMovesResizesAndResetsTogether`; `MANUAL`.
+
+### RT-803 — Try lights each control and says what it sends
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "Try" in the bottom bar.
+  2. Press and hold "1"; release; press "Start", the D-pad and a quick action.
+  3. Tap "Back to editing".
+- **Expected:** The toolbar becomes "Try it: press any control" with "Back to editing". A held control
+  is lit with the accent ring; over the screen "You pressed", its name in large letters and "sends 1
+  to the game" ("sends Start to the game", "sends the D-pad to the game", "sends a quick save to the
+  game"…). "Last:" lists the last four presses. Nothing moves while trying; step 3 goes back to editing
+  with nothing selected.
+- **Check:** JVM suite `SkinLayoutsEditTest.tryNamesWhatAControlSends`; `MANUAL` screenshot.
+
+### RT-804 — Panels open away from what is being edited
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Upright: select the face buttons; then "⋯" → "Screen area".
+  2. Turn sideways: select the D-pad (left) and open the Layouts panel; select the face buttons
+     (right) and open it again.
+- **Expected:** Upright with the face buttons selected, the actions bar sits over the game screen;
+  with the screen area selected it moves to the bottom. Sideways the Layouts panel opens on the right
+  when the D-pad is selected and on the left when the face buttons are: it never covers the selection.
+- **Check:** JVM suite `SkinLayoutsEditTest.panelsOpenAwayFromTheSelection`; `MANUAL`.
 
 ## Android — Copy of a Delta or Manic skin
 
