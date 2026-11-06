@@ -1,0 +1,85 @@
+{
+  "background": "background.png",
+  "console": "PCECD",
+  "elements": [
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 12
+    },
+    {
+      "bind": "dpad",
+      "height": 210,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 210,
+      "x": 30,
+      "y": 176
+    },
+    {
+      "bind": "b",
+      "height": 90,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 90,
+      "x": 294,
+      "y": 236
+    },
+    {
+      "bind": "a",
+      "height": 90,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 90,
+      "x": 408,
+      "y": 236
+    },
+    {
+      "bind": "select",
+      "height": 26,
+      "id": "select",
+      "images": {
+        "button": "select.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 160,
+      "y": 570
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 298,
+      "y": 570
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 670,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

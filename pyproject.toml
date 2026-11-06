@@ -104,6 +104,9 @@ openemux = [
     # this is the index GTK falls back to on a host with no hicolor of its own.
     "ui/assets/icons/symbolic/hicolor/index.theme",
     "ui/assets/icons/ATTRIBUTION.md",
+    # The controller drawings for the input page (issue 814): the PNGs ride on
+    # the pattern above, each console's layout.json needs its own.
+    "ui/assets/controllers/*/layout.json",
     # The game-name database (issue #184), consumed by the staged cover
     # lookup and the cover-picker suggestions.
     "data/games.db.zip",

@@ -61,6 +61,12 @@ dragging the controls anywhere on the screen, as paid emulator apps do, which
 became the editor's move, magnetic grid and resize in
 [#784](https://github.com/guilhermefeitosa66/OpenEmux/issues/784).
 
+Suggested remapping the desktop controls on a drawing of the console's
+controller, which became
+[#760](https://github.com/guilhermefeitosa66/OpenEmux/issues/760); its first
+part, [#814](https://github.com/guilhermefeitosa66/OpenEmux/issues/814), brings
+the Android skins' controller art to the desktop.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no

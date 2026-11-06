@@ -1,0 +1,98 @@
+{
+  "background": "background.png",
+  "console": "A5200",
+  "elements": [
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 12
+    },
+    {
+      "bind": "analogStick",
+      "height": 168,
+      "id": "stick",
+      "images": {
+        "base": "stick-base.png",
+        "knob": "stick-knob.png"
+      },
+      "type": "stick",
+      "width": 168,
+      "x": 51,
+      "y": 196
+    },
+    {
+      "bind": "a",
+      "height": 93,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 92,
+      "x": 296,
+      "y": 261
+    },
+    {
+      "bind": "b",
+      "height": 93,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 92,
+      "x": 404,
+      "y": 207
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 92,
+      "y": 570
+    },
+    {
+      "bind": "select",
+      "height": 26,
+      "id": "select",
+      "images": {
+        "button": "select.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 230,
+      "y": 570
+    },
+    {
+      "bind": "keypadToggle",
+      "height": 26,
+      "id": "keypad-toggle",
+      "images": {
+        "button": "keypad-toggle.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 368,
+      "y": 570
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 670,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}
