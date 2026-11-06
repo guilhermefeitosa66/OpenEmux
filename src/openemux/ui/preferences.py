@@ -1338,8 +1338,6 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         Only a console change builds a new drawing; a device change keeps it
         and refreshes what each target says and whether it can be used.
         """
-        if self._drawing_group is None:
-            return
         if self._drawing is None or self._drawing_console != console_id:
             if self._drawing is not None:
                 self._drawing_card.remove(self._drawing)
