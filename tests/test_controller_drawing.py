@@ -1,5 +1,6 @@
 """The controller drawing widget (issue 815), built for real on the test display."""
 
+import re
 import shutil
 import tempfile
 import unittest
@@ -165,7 +166,13 @@ class ControllerDrawingTests(unittest.TestCase):
             queue_draw.assert_called_once()
 
     def _clips(self, drawing, width, height):
-        """The rounded clips in the drawing's snapshot: what lighting adds to it."""
+        """The rounded clips in the drawing's snapshot: what lighting adds to it.
+
+        Each as ``(child node, (x, y, width, height, radius))``. The shape is
+        read from the node's own serialization: reading ``GskRoundedRect``'s
+        ``corner`` array through PyGObject crashes the interpreter on the
+        versions the packages are built against.
+        """
         if drawing.get_parent() is None:
             window = Gtk.Window()
             window.set_child(drawing)
@@ -174,55 +181,56 @@ class ControllerDrawingTests(unittest.TestCase):
         snapshot = Gtk.Snapshot()
         drawing.do_snapshot(snapshot)
         node = snapshot.to_node()
-        children = [node.get_child(i) for i in range(node.get_n_children())]
-        return [child for child in children if isinstance(child, Gsk.RoundedClipNode)]
+        clips = []
+        for index in range(node.get_n_children()):
+            child = node.get_child(index)
+            if not isinstance(child, Gsk.RoundedClipNode):
+                continue
+            text = child.serialize().get_data().decode()
+            shape = re.search(r"clip: ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) / ([-\d.]+);", text)
+            clips.append((child.get_child(), tuple(round(float(v)) for v in shape.groups())))
+        return clips
 
     def test_a_lit_control_is_drawn_again_brighter_inside_its_target(self):
         self.assertEqual(self._clips(self.drawing, 360, 447), [])
         self.drawing.set_lit({"a", "start", "up"})
         clips = self._clips(self.drawing, 360, 447)
         # The control's own image, through a colour matrix: one per lit target.
-        images = [c for c in clips if isinstance(c.get_child(), Gsk.ColorMatrixNode)]
+        images = {shape[:2]: shape for child, shape in clips if isinstance(child, Gsk.ColorMatrixNode)}
         self.assertEqual(len(images), 3)
-        shapes = {
-            (round(c.get_clip().bounds.get_x()), round(c.get_clip().bounds.get_y())): c.get_clip()
-            for c in images
-        }
         scale = 360 / 540
         boxes = {}
         for action, radius in (("up", 8), ("start", 8), ("a", None)):
             target = next(t for t in self.drawing.targets if t.action == action)
             x, y, w, h = boxes[action] = target_box(target, scale, 0, 360, 447)
-            shape = shapes[(x, y)]
-            # Exactly the target: one arm of the D-pad, not the whole pad.
-            self.assertEqual((round(shape.bounds.get_width()), round(shape.bounds.get_height())), (w, h))
-            # A round button is clipped to a circle, the rest to rounded boxes.
-            self.assertEqual(round(shape.corner[0].width), radius if radius else round(min(w, h) / 2))
+            # Exactly the target (one arm of the D-pad, not the whole pad); a
+            # round button is clipped to a circle, the rest to rounded boxes.
+            self.assertEqual(images[(x, y)], (x, y, w, h, radius if radius else round(min(w, h) / 2)))
         pad = next(e for e in layout_for("SFC").elements if e.type == "dpad")
         self.assertLess(boxes["up"][2], pad.width * scale / 2)
 
     def test_a_lit_control_glows_in_the_widgets_colour(self):
         self.drawing.set_lit({"a"})
         clips = self._clips(self.drawing, 360, 447)
-        halos = [c for c in clips if isinstance(c.get_child(), Gsk.ColorNode)]
+        halos = [(child, shape) for child, shape in clips if isinstance(child, Gsk.ColorNode)]
         # Two shapes around the target, the wider one fainter, in the colour
         # the stylesheet gives the drawing (the accent).
         self.assertEqual(len(halos), 2)
         target = next(t for t in self.drawing.targets if t.action == "a")
-        _x, _y, w, _h = target_box(target, 360 / 540, 0, 360, 447)
-        widths = [round(h.get_clip().bounds.get_width()) for h in halos]
-        self.assertEqual(widths, [w + 26, w + 18])
-        alphas = [h.get_child().get_color().alpha for h in halos]
+        x, y, w, h = target_box(target, 360 / 540, 0, 360, 447)
+        radius = round(min(w, h) / 2)
+        self.assertEqual(
+            [shape for _child, shape in halos],
+            # Round like the button they are around, 13 and 9 px past it.
+            [(x - 13, y - 13, w + 26, h + 26, radius + 13), (x - 9, y - 9, w + 18, h + 18, radius + 9)],
+        )
+        alphas = [child.get_color().alpha for child, _shape in halos]
         self.assertLess(alphas[0], alphas[1])
         accent = self.drawing.get_color()
-        for halo in halos:
-            color = halo.get_child().get_color()
+        for child, _shape in halos:
+            color = child.get_color()
             self.assertAlmostEqual(color.red, accent.red, places=3)
             self.assertAlmostEqual(color.blue, accent.blue, places=3)
-            # Round like the button it is around.
-            self.assertEqual(
-                round(halo.get_clip().corner[0].width * 2), round(halo.get_clip().bounds.get_width())
-            )
 
     def test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip(self):
         drawing = ControllerDrawing(
