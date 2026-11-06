@@ -111,6 +111,44 @@ class ControllerDrawingTests(unittest.TestCase):
         self.assertEqual(inert[0].get_tooltip_text(), "not remappable")
         self.assertFalse(inert[0].get_focusable())
 
+    def _focused_actions(self, window, direction):
+        order = []
+        while self.drawing.child_focus(direction):
+            focused = window.get_focus()
+            order.append(next(t.action for t, c in self.drawing._children if c is focused))
+        return order
+
+    def test_tab_walks_the_targets_in_reading_order(self):
+        window = Gtk.Window()
+        window.set_child(self.drawing)
+        self.addCleanup(window.destroy)
+        self.drawing.do_size_allocate(360, 447, -1)
+        expected = [t.action for t in self.drawing.targets if t.action is not None]
+        self.assertEqual(self._focused_actions(window, Gtk.DirectionType.TAB_FORWARD), expected)
+        window.set_focus(None)
+        self.assertEqual(
+            self._focused_actions(window, Gtk.DirectionType.TAB_BACKWARD), list(reversed(expected))
+        )
+
+    def test_arrow_keys_keep_gtks_own_focus_chain(self):
+        window = Gtk.Window()
+        window.set_child(self.drawing)
+        self.addCleanup(window.destroy)
+        self.drawing.do_size_allocate(360, 447, -1)
+        self.drawing.buttons["up"][0].grab_focus()
+        # Whatever GTK decides for an arrow, it is GTK's call, not the Tab order's.
+        self.assertIsInstance(self.drawing.child_focus(Gtk.DirectionType.DOWN), bool)
+
+    def test_its_handlers_do_not_hold_it(self):
+        import gc
+        import weakref
+
+        ref = weakref.ref(self.drawing)
+        self.drawing.run_dispose()
+        self.drawing = None
+        gc.collect()
+        self.assertIsNone(ref())
+
     def test_disposing_it_lets_go_of_its_children(self):
         button = self.drawing.buttons["a"][0]
         self.drawing.run_dispose()

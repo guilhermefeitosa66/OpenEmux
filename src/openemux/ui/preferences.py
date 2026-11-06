@@ -1341,6 +1341,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if self._drawing is None or self._drawing_console != console_id:
             if self._drawing is not None:
                 self._drawing_card.remove(self._drawing)
+                # Unparent its targets now: by the time it is finalized its
+                # Python side, which does that in do_dispose, is gone.
+                self._drawing.run_dispose()
                 self._drawing = None
             self._drawing_highlight = None
             self._drawing_console = console_id
@@ -1396,9 +1399,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 else "input.capture.waiting_gamepad"
             )
             caption.set_text(self._drawing_target_text(action, self.t(waiting_key)))
+            # dim-label would fade the accent to half strength.
+            caption.remove_css_class("dim-label")
             caption.add_css_class("accent")
             return
         caption.remove_css_class("accent")
+        caption.add_css_class("dim-label")
         highlight = self._drawing_highlight
         if drawing is not None and highlight in self._input_buttons:
             caption.set_text(self._drawing_target_text(highlight))

@@ -95,17 +95,36 @@ class ControllerDrawing(Gtk.Widget):
         button.add_css_class("controller-target")
         if target.round:
             button.add_css_class("round")
-        button.connect("clicked", lambda _b, action=target.action: self._on_activate(action))
+        # The handlers hold the callbacks, never this widget: a closure on a
+        # child that points back at its parent is a cycle Python cannot see
+        # through, and every console change would leak a drawing and its art.
+        action, activate, highlight = target.action, self._on_activate, self._on_highlight
+        button.connect("clicked", lambda _b: activate(action))
         motion = Gtk.EventControllerMotion()
-        motion.connect("enter", lambda *_a, action=target.action: self._on_highlight(action))
-        motion.connect("leave", lambda *_a: self._on_highlight(None))
+        motion.connect("enter", lambda *_a: highlight(action))
+        motion.connect("leave", lambda *_a: highlight(None))
         button.add_controller(motion)
         focus = Gtk.EventControllerFocus()
-        focus.connect("enter", lambda *_a, action=target.action: self._on_highlight(action))
-        focus.connect("leave", lambda *_a: self._on_highlight(None))
+        focus.connect("enter", lambda *_a: highlight(action))
+        focus.connect("leave", lambda *_a: highlight(None))
         button.add_controller(focus)
         self.buttons.setdefault(target.action, []).append(button)
         return button
+
+    def do_focus(self, direction):
+        """Tab walks the targets in :func:`targets_for`'s order.
+
+        GTK's own focus chain sorts children by where they sit on screen, which
+        interleaves a pad's arms with the face buttons beside it.
+        """
+        if direction not in (Gtk.DirectionType.TAB_FORWARD, Gtk.DirectionType.TAB_BACKWARD):
+            return Gtk.Widget.do_focus(self, direction)
+        children = [child for _target, child in self._children]
+        if direction == Gtk.DirectionType.TAB_BACKWARD:
+            children.reverse()
+        current = self.get_focus_child()
+        start = children.index(current) + 1 if current in children else 0
+        return any(child.child_focus(direction) for child in children[start:])
 
     def do_dispose(self):
         for _target, child in self._children:
