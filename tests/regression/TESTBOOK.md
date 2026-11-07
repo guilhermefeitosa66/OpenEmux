@@ -14757,6 +14757,27 @@ logcat's `OpenEmuxSkin` lines.
 - **Check:** human only.
 - **Restore:** empty `files/skins/GBA/`.
 
+## Android — Language
+
+### RT-937 — Picking a language from the phone's sheet switches it, with no crash
+- **Area:** Android — Language
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD (or a phone) past the first-run setup, in portrait, with the app in
+  "Português (Brasil)".
+- **Steps:**
+  1. Open "Ajustes" and tap "Idioma": the languages open in a sheet.
+  2. Tap "English".
+  3. Open "Language" again and pick each of the other languages in turn, ending on the one you
+     started with.
+- **Expected:** Every pick closes the sheet and the app comes back in that language; it never
+  closes itself. (1.21.0 crashed here on any pick: the sheet's context was cast to an activity.)
+- **Check:** human only, plus in `pkg/android/openemux` of the Android repository
+  `./gradlew --no-daemon testDebugUnitTest --tests '*ActivityContextGuardTest'` (no context is cast
+  to an activity) and
+  `adb shell am instrument -w -e class com.openemux.mobile.ActivityContextInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
+  (after `./gradlew installDebug installDebugAndroidTest`, on a phone-size device past the first-run
+  setup; it picks "Deutsch" from the sheet and restores the language it found).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
