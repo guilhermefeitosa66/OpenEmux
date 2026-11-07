@@ -186,6 +186,9 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri Nov 06 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.21.1-1
+- Android: picking a language from the phone's sheet no longer crashes the app
+
 * Fri Nov 06 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.21.0-1
 - Input page: the console's controller drawn above the bindings; click a button to remap it
 - The drawn button lights while a mapped key or pad button is held, and while it is being remapped
