@@ -87,6 +87,11 @@
   </keywords>
 
   <releases>
+    <release version="1.21.1" date="2026-11-06">
+      <description>
+        <p>An Android fix: picking a language from Settings on a phone no longer closes the app. The desktop app is unchanged.</p>
+      </description>
+    </release>
     <release version="1.21.0" date="2026-11-06">
       <description>
         <p>Remap your controls on a drawing of the console's controller, with every button a console reads now remappable and alive in game; on Android, a skin editor and bundled skins for every console.</p>
