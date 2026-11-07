@@ -1,0 +1,133 @@
+{
+  "background": "background.png",
+  "console": "MD",
+  "elements": [
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 12
+    },
+    {
+      "bind": "dpad",
+      "height": 210,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 210,
+      "x": 30,
+      "y": 176
+    },
+    {
+      "bind": "x",
+      "height": 56,
+      "id": "x",
+      "images": {
+        "button": "x.png"
+      },
+      "type": "button",
+      "width": 58,
+      "x": 292,
+      "y": 224
+    },
+    {
+      "bind": "y",
+      "height": 58,
+      "id": "y",
+      "images": {
+        "button": "y.png"
+      },
+      "type": "button",
+      "width": 56,
+      "x": 368,
+      "y": 202
+    },
+    {
+      "bind": "z",
+      "height": 56,
+      "id": "z",
+      "images": {
+        "button": "z.png"
+      },
+      "type": "button",
+      "width": 58,
+      "x": 442,
+      "y": 182
+    },
+    {
+      "bind": "a",
+      "height": 78,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 270,
+      "y": 300
+    },
+    {
+      "bind": "b",
+      "height": 78,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 357,
+      "y": 279
+    },
+    {
+      "bind": "c",
+      "height": 78,
+      "id": "c",
+      "images": {
+        "button": "c.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 444,
+      "y": 258
+    },
+    {
+      "bind": "mode",
+      "height": 26,
+      "id": "mode",
+      "images": {
+        "button": "mode.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 160,
+      "y": 570
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 298,
+      "y": 570
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 670,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

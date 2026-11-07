@@ -604,6 +604,50 @@ libretro cores into its own directory on first boot, and under `Program Files`
 that write would fail for a standard user -- the app would install cleanly and
 then be unable to launch a game.
 
+#### Portable mode
+
+The two artifacts carry the same tree but one file: the `.zip` has
+`portable.txt` beside `OpenEmux.exe` (copied from `packaging/windows/`, removed
+again before NSIS runs; `build.sh` fails if the zip lacks it or the installer
+bundle has it). When the app finds the marker at start
+(`core/paths.portable_root()`), everything it writes stays in the unzipped
+folder and nothing reaches `%USERPROFILE%`, `%APPDATA%` or `%LOCALAPPDATA%`:
+
+```
+OpenEmux\
+  OpenEmux.exe
+  portable.txt
+  data\
+    openemux\   the config dir: settings, library, playlists, input, saves, states, BIOS
+    roms\       the default ROM folder (covers under roms\covers\)
+    cache\      XDG_CACHE_HOME: bytecode, artwork-manager scratch, fontconfig, pixbuf loaders
+    config\     XDG_CONFIG_HOME   share\  XDG_DATA_HOME   state\  XDG_STATE_HOME
+    tmp\        TEMP and TMP
+```
+
+OpenEmux's own roots follow `core/paths.py`; `core/portable.py` sets the XDG
+variables, `TEMP`/`TMP` and a fontconfig wrapper (MSYS2's `fonts.conf` names
+`%LOCALAPPDATA%\fontconfig\cache` first) from `main.prepare_process()`, before
+GTK is imported. Without the marker, the installer keeps `%USERPROFILE%\.openemux`
+and `%USERPROFILE%\games\roms` exactly as before. The bundled RetroArch already
+runs portable on both.
+
+Paths inside the portable folder are stored **relative** to it, with forward
+slashes (`data/roms/SFC/game.sfc`), so the folder can move to another drive
+letter or place: `core/paths.to_stored_path` / `from_stored_path` convert at the
+disk boundary of every store that persists a path -- the path keys of
+`config.yaml` (`config.PATH_SETTINGS`), the `.list` files (console playlists,
+favorites, collections, through `read_path_lines` / `write_path_lines`) and the
+stores keyed by ROM path (`cores.config`, `shaders.config`,
+`cartridge_colors.config`, `play_history.json`). In memory every path stays
+absolute, so lookups against the scanner's paths are unchanged. A path outside
+the folder (a ROM folder on another disk) stays absolute; an absolute path left
+by an older portable config is moved under the current folder when its old
+location is gone or is another portable folder (a copy made with the original
+still plugged in). Without the marker both helpers are the identity, so the
+installer and Linux write exactly what they always did. The RetroArch overrides
+written at launch still get absolute paths, computed from the current folder.
+
 #### The pinned MSYS2 runtime
 
 `packaging/windows/packages.lock` names every MSYS2 package the bundle ships,

@@ -15,8 +15,9 @@ Files: src/openemux/ui/assets/icons/systems/*
 Copyright: 2009-2023 OpenEmu Team
 License: BSD-3-clause-OpenEmu
 Comment: Console icons imported from https://github.com/OpenEmu/OpenEmu at
- commit 1d205104640d8410659d321809889cbfd06b99a9. Provenance, the naming
- convention and the full notice are recorded in
+ commit 1d205104640d8410659d321809889cbfd06b99a9. The Game Boy Color icon is
+ OpenEmu's Game Boy icon recoloured by OpenEmux, a derivative under the same
+ terms. Provenance, the naming convention and the full notice are recorded in
  src/openemux/ui/assets/icons/ATTRIBUTION.md, which ships with them.
 
 Files: src/openemux/ui/assets/icons/symbolic/*

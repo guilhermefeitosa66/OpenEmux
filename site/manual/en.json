@@ -150,7 +150,7 @@
   "install-windows.h31": "Windows (beta)",
   "install-windows.p1": "Both Windows builds carry GTK 4, the Python runtime and RetroArch itself, so there is nothing else to\n            install. They need Windows 10 or 11, 64-bit.",
   "install-windows.li1": "<strong>Installer</strong>, <code>OpenEmux-*-setup.exe</code>: installs for your user only, so it does\n              not ask for administrator rights. The builds are not code-signed yet, so SmartScreen warns about them;\n              <span class=\"ui\">More info → Run anyway</span> gets past it.",
-  "install-windows.li2": "<strong>Portable</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: unzip it anywhere and run\n              <code>OpenEmux.exe</code> from the <code>OpenEmux\\</code> folder inside. Useful on a USB stick or a\n              machine where you cannot install software.",
+  "install-windows.li2": "<strong>Portable</strong>, <code>OpenEmux-*-windows-x86_64.zip</code>: unzip it anywhere and run <code>OpenEmux.exe</code> from the <code>OpenEmux\\</code> folder inside. Everything it writes (settings, library, saves, states, BIOS, covers, caches) stays in the <code>data\\</code> folder beside it, never in your user profile, so it works from a USB stick. Paths inside the folder are stored relative to it: move it to another drive letter or place and the library, favorites, collections and settings come along, with no rescan.",
   "install-windows.p2": "The Windows build is new. If something misbehaves, please\n            <a href=\"https://github.com/guilhermefeitosa66/OpenEmux/issues\">open an issue</a>.",
   "install-verify.h31": "Verifying a download",
   "install-verify.p1": "Every release has a <code>SHA256SUMS</code> file. Put it next to what you downloaded and run:",

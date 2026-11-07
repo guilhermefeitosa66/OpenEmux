@@ -745,6 +745,32 @@ class SdlCaptureReader:
             self._pump.unsubscribe(self)
 
 
+class SdlHeldReader(SdlCaptureReader):
+    """Says which controls of a pad are held, the SDL equivalent of ``GamepadHeldReader``.
+
+    Same contract (issue 816): ``on_change(tokens)`` gets the frozen set of
+    binding tokens held right now on every change, from the pump thread, and
+    ``on_error(reason)`` fires once instead when nothing usable is connected.
+    The pump already reports releases, so this only keeps the set.
+    """
+
+    def __init__(self, on_change, on_error=None, device=None, pump=None):
+        super().__init__(None, on_error=on_error, device=device, pump=pump)
+        self._on_change = on_change
+        self._held = set()
+
+    def on_transition(self, pad, token, pressed):
+        if self._cancel.is_set() or not self._matches(pad):
+            return
+        before = len(self._held)
+        if pressed:
+            self._held.add(token)
+        else:
+            self._held.discard(token)
+        if len(self._held) != before:
+            self._on_change(frozenset(self._held))
+
+
 class SdlNavigator(NavigatorCore):
     """Continuous UI navigation, the SDL equivalent of ``GamepadNavigator``.
 

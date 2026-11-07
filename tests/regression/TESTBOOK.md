@@ -1319,6 +1319,37 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   print('RT-585 OK')"
   ```
 
+### RT-835 — The Game Boy Color has its own icon, not the Game Boy's
+- **Area:** Navigation & search
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. Look at the "GB - Game Boy" and "GBC - Game Boy Color" rows of the sidebar, and at the same
+     two consoles in the "Console" dropdown of "Settings" → "Input".
+- **Expected:** The Game Boy row shows the grey Game Boy; the Game Boy Color row shows the same
+  pixel-art handheld in yellow (the Pikachu edition: yellow body, blue around the screen and blue
+  buttons, a dark screen), the icon the Android app shows for it. The two used to be one file, so
+  the rows looked alike at a glance. Every other console's icon is unchanged; the Famicom and its
+  Disk System still share theirs.
+- **Check:** suite file `tests/test_icon_assets.py` (`TheGameBoyColorHasItsOwnIconTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  import re
+  from pathlib import Path
+  text = Path("src/openemux/ui/console_icons.py").read_text()
+  icons = Path("src/openemux/ui/assets/icons/systems")
+  name = {c: re.search(rf'"{c}": "([^"]+)"', text).group(1) for c in ("GB", "GBC")}
+  assert name["GB"] != name["GBC"], "GB and GBC name the same icon again"
+  assert (icons / name["GBC"]).read_bytes() != (icons / name["GB"]).read_bytes()
+  from PIL import Image
+  raw = Image.open(icons / name["GBC"]).convert("RGBA").tobytes()
+  solid = [raw[i:i + 3] for i in range(0, len(raw), 4) if raw[i + 3] > 200]
+  yellow = [p for p in solid if p[0] > 180 and p[1] > 130 and p[2] < 120]
+  assert len(yellow) > len(solid) * 0.3, f"only {len(yellow)} of {len(solid)} pixels are yellow"
+  print("RT-835 OK")
+  EOF
+  ```
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
@@ -3815,6 +3846,351 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   in the console row — not the one the library was showing.
 - **Check:** screenshot of the Input page; the console row must name the console from step 1.
 
+### RT-705 — A remapped control reaches the game as OpenEmux's, not RetroArch's
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: in "Settings" → "Input", remap "A" for a console to `g`, then launch
+  one of its games.
+- **Expected:** The launch's runtime override (`~/.openemux/runtime/runtime_<console>_*.cfg`)
+  carries `input_player1_a = "g"`, and no value for that key can come from the user's own
+  `retroarch.cfg`: every launch starts from RetroArch's stock default for every input key, players
+  1-16, with OpenEmux's values on top (issue #759).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_openemux_bindings_win_and_the_rest_is_retroarch_stock`),
+  `tests/test_input_baseline.py`.
+
+### RT-706 — A cleared control stays cleared in game
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: clear "B" for a console in "Settings" → "Input", then launch one of
+  its games and press RetroArch's stock key for B (`z`).
+- **Expected:** Nothing happens: the override carries `input_player1_b = "nul"`, which wins over
+  RetroArch's stock `z` from the baseline (issue #759; issue #281 stays fixed).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_openemux_bindings_win_and_the_rest_is_retroarch_stock`).
+
+### RT-707 — After "Reset defaults", hotkeys OpenEmux does not expose keep RetroArch's keys
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: press "Reset defaults" on a console's input page, launch one of its
+  games, press `Escape`.
+- **Expected:** The game closes: RetroArch's stock hotkeys that no OpenEmux binding claims stay on
+  their stock keys (`escape` quits, `f1` opens the menu, `h` resets), while one whose key an
+  OpenEmux binding took is unbound (issue #146).
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_a_reset_profile_keeps_the_unexposed_stock_hotkeys`).
+
+### RT-708 — A customised retroarch.cfg no longer mixes into a launch, and is left unchanged
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`) on its synthetic library; no
+  `~/.local/share/openemux-devbox/home/.config/retroarch/retroarch.cfg` of the test's own yet (if
+  one exists, copy it to `$SCRATCH/rt708-orig.cfg` first).
+- **Steps:**
+  1. Write the devbox's `~/.config/retroarch/retroarch.cfg` with exactly these lines:
+     `input_player1_a = "t"`, `input_exit_emulator = "q"`, `input_player2_a = "k"`,
+     `input_menu_toggle_gamepad_combo = "2"`, and record its sha256.
+  2. Launch any game from the grid (select it, `Return`), wait 10 s, close it.
+  3. Read the newest `~/.openemux/runtime/runtime_*.cfg` and `retroarch_*.log` in the devbox home.
+- **Expected:** The override has `input_exit_emulator = "escape"`, `input_player2_a = "nul"`,
+  `input_menu_toggle_gamepad_combo = "0"`, `auto_remaps_enable = "false"`, and
+  `input_player1_a` set to the console's OpenEmux binding (not `t`). The launch log's first lines
+  include `[openemux] input overrides from …/retroarch.cfg:` naming those four keys (only names,
+  no values). The file's sha256 is the same as in step 1.
+- **Check:**
+  ```bash
+  H=~/.local/share/openemux-devbox/home
+  O=$(ls -t $H/.openemux/runtime/runtime_*.cfg | head -1)
+  L=$(ls -t $H/.openemux/runtime/retroarch_*.log | head -1)
+  grep -qx 'input_exit_emulator = "escape"' "$O" && grep -qx 'input_player2_a = "nul"' "$O" \
+    && grep -qx 'input_menu_toggle_gamepad_combo = "0"' "$O" \
+    && grep -qx 'auto_remaps_enable = "false"' "$O" && ! grep -qx 'input_player1_a = "t"' "$O" \
+    && grep -q 'input overrides from .*retroarch.cfg: input_exit_emulator, input_menu_toggle_gamepad_combo, input_player1_a, input_player2_a$' "$L" \
+    && echo "RT-708 OK"
+  ```
+  plus `sha256sum` of the file equal to step 1's.
+- **Restore:** Delete the test's `retroarch.cfg` (or put `$SCRATCH/rt708-orig.cfg` back).
+
+### RT-709 — Without a retroarch.cfg the launch log says nothing was overridden
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: with no `~/.config/retroarch/retroarch.cfg`, launch a game and open
+  its launch log.
+- **Expected:** The game starts, and the log carries
+  `[openemux] input overrides from …/retroarch.cfg: none`.
+- **Check:** suite file `tests/test_retroarch_launcher.py`
+  (`TheInputBaselineTests.test_without_a_users_file_the_log_says_none`,
+  `TheUsersRetroArchConfigTests`).
+
+### RT-829 — The input page shows the console's controller drawing above the bindings
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** The devbox app running (`make devbox-app`).
+- **Steps:**
+  1. Open "Settings" → "Input"; "Console" on "SFC - Super Nintendo", "Device" on "Keyboard".
+  2. Scroll down past "Turbo" and capture the screen.
+  3. Change "Console" to "GB - Game Boy" and capture again.
+- **Expected:** A "Controller drawing" group, described "Click a button to remap it.", sits right
+  above "Game Controls" and shows the console's controller (the SNES pad, then the Game Boy), no
+  wider than 360 px, centred in its card. The whole card has the colour of that controller's body
+  (light grey for the SNES, the Game Boy's grey), from edge to edge and corner to corner: the art
+  does not read as a rectangle pasted on a card of the theme's colour, and no seam shows where the
+  art ends. The caption line sits under the card. Every console the app lists has one (issue 814
+  ships the art for all 31); a console whose layout cannot be read shows no group, only the list.
+- **Check:** the two screenshots show the group above "Game Controls" with each console's art on a
+  card of the body's colour, no visible edge beside the art; suite files `tests/test_preferences.py`
+  (`TheControllerDrawingTests.test_a_console_with_art_shows_its_drawing`,
+  `test_the_card_is_the_controller_and_the_caption_sits_under_it`,
+  `test_a_console_without_art_shows_only_the_list`, `test_switching_console_swaps_the_drawing_and_layouts_are_read_once`),
+  `tests/test_controller_drawing.py` (`test_the_body_fills_the_width_the_art_leaves`) and
+  `tests/test_controller_targets.py` (`BodyStopsTests`).
+
+### RT-830 — Clicking a button on the drawing remaps that action
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "A" button on the drawing.
+  2. Press K.
+  3. Hover the "A" button again.
+- **Expected:** After step 1 the group's description reads "Press a key for A", the caption under
+  the drawing reads "A: Press key..." in the accent colour, the A button is lit (RT-838) and
+  the "A" row in "Game Controls" reads "Press key..." with its row highlighted — the same capture
+  the row's button starts. After step 2 the caption, the tooltip of the drawn A and the "A" row all
+  read "k"; the description is back to "Click a button to remap it.". Pressing Escape during the
+  capture clears the binding, as it does from the row.
+- **Check:** a screenshot after each step; suite file `tests/test_preferences.py`
+  (`TheControllerDrawingTests.test_clicking_a_target_starts_the_rows_capture`,
+  `test_a_key_commits_and_the_drawing_follows`, `test_cancelling_clears_the_marking`).
+- **Restore:** "Reset defaults" for the SNES.
+
+### RT-831 — A binding made on the drawing works in game, keyboard and gamepad
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game in the library and a USB gamepad plugged in.
+- **Steps:**
+  1. "Settings" → "Input", "SFC - Super Nintendo", "Keyboard": click "A" on the drawing, press K,
+     "Save". Launch the game and press K.
+  2. Back in "Input", "Device" on "Player 1 gamepad": click "B" on the drawing, press a pad button
+     that is not B today, "Save". Launch the game and press that pad button.
+- **Expected:** K presses A in game; the chosen pad button presses B. During step 2 the caption
+  reads "B: Press button..." and the binding shows as "Button N" afterwards.
+- **Check:** human only.
+- **Restore:** "Reset defaults" for both devices.
+
+### RT-832 — Every target on the drawing works from the keyboard and has an accessible name
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "Turbo mode" row's title to put the focus near the drawing, then press Tab until the
+     focus reaches the drawing, and keep pressing Tab.
+  2. With the focus on the D-pad's up arm, press Enter, then press I.
+- **Expected:** The focus walks L → Menu → R → the D-pad's up, left, right, down → X → Y → A → B →
+  Select → Start, each with a solid accent outline, and then goes on into "Game Controls". The
+  caption names the focused target ("D-Pad Up: up"). Enter starts the capture for "D-Pad Up" and I
+  is stored for it. A screen reader announces each target as "<action>: <binding>".
+- **Check:** a screenshot per focus step; `accerciser` (or Orca) lists the targets' names; suite
+  files `tests/test_controller_targets.py` (`TargetsTests.test_targets_follow_reading_order_row_by_row`)
+  and `tests/test_controller_drawing.py` (`test_action_state_sets_tooltip_and_sensitivity`).
+- **Restore:** "Reset defaults" for the SNES.
+
+### RT-833 — A drawn control with no desktop action is shown but not remappable
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829.
+- **Steps:**
+  1. Console "CV - ColecoVision": hover the "Keypad" button on the drawing.
+  2. Console "SFC - Super Nintendo", device "Player 2 gamepad": hover the Menu button.
+- **Expected:** Both show the tooltip "Not remappable on the desktop", take no click and are skipped
+  by Tab; the caption stays empty. On "Keyboard" or "Player 1 gamepad" the SNES Menu button is a
+  normal target ("RetroArch menu: f1"). The "Keypad" button (also on the Atari 5200, the
+  Intellivision and the Odyssey²) opens the on-screen keypad of the Android skin and has nothing
+  behind it on the desktop; it is the only kind of control left not remappable (RT-836).
+- **Check:** screenshots of both tooltips; suite files `tests/test_controller_drawing.py`
+  (`test_a_control_with_no_action_gets_an_inert_area_with_a_tooltip`), `tests/test_preferences.py`
+  (`test_the_menu_button_is_not_remappable_on_a_later_port`) and `tests/test_controller_layouts.py`
+  (`test_only_the_android_keypad_switch_is_left_with_no_action`).
+
+### RT-834 — The drawing follows light and dark style and narrow widths
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829.
+- **Steps:**
+  1. Hover a button on the drawing in the light style, then switch to the dark style (the header
+     bar's style button) and hover it again.
+  2. Hover a button on a light body ("SFC - Super Nintendo") and on a dark one ("MD - Mega Drive").
+  3. `make devbox-res RES=520x900` and look at the drawing again.
+- **Expected:** The card is the same in both styles: the art on the console's body colour. The
+  hovered button gets a ring that is easy to see at a glance on the light body and on the dark one
+  alike: 3 px in the accent colour, with a dark line outside it and a light one inside it, over a
+  tint of the accent. Only the accent differs between themes. At 520 px the drawing shrinks with
+  the dialog, keeps its proportions, the body still fills the card, and the page has no horizontal
+  scrollbar.
+- **Check:** the screenshots; suite file `tests/test_controller_targets.py` (`SizeTests`).
+- **Restore:** the previous style, and `make devbox-res RES=1600x1000`.
+
+### RT-836 — Every button a console's core reads is listed, remappable and alive in game
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "MD - Mega Drive": read the "Game Controls" rows and hover
+     the drawn "A" and "Y" buttons.
+  2. The same on "N64 - Nintendo 64" (the "Z" button), "PS - PlayStation" ("L2", "R2"),
+     "PSP - PlayStation Portable" (triangle and square), "SATURN" and "GC" ("L", "R"),
+     "FDS" ("Disk"), "VB - Virtual Boy" ("L", "R" and the right D-pad), "VECTREX" ("3", "4"),
+     "A7800" ("Pause") and "INTV" (the top side button).
+- **Expected:** Each of those buttons is a normal target on the drawing, with a row in "Game
+  Controls": the Mega Drive, the 32X and the Mega-CD list X and Y next to A, B, L1 and R1 (the
+  six-button pad: A on Y, B on B, C on A, X on L1, Y on X, Z on R1); the Nintendo 64 lists L2 (Z);
+  the PlayStation, the Saturn and the GameCube list L2 and R2; the PSP lists X and Y; the Virtual
+  Boy lists L1, R1, L2, L3, R2 and R3. They used to be drawn as "Not remappable on the desktop" and,
+  worse, were written as unbound at every launch, so they did nothing in game on a keyboard and on
+  a pad alike. A profile saved by an earlier version gains them on load, on the keyboard and on
+  every pad, with nothing the user bound changed.
+- **Check:** suite files `tests/test_input_actions.py` (`EveryButtonACoreReadsHasItsActionTests`),
+  `tests/test_input_profiles.py` (`AProfileSavedBeforeItsConsoleGainedButtonsTests`) and
+  `tests/test_controller_layouts.py` (`ActionsTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core import controller_layouts as cl
+  from openemux.core.input_actions import default_bindings_for_device, to_retroarch_overrides
+  left = sorted(
+      (p.name, e.bind) for p in cl.CONTROLLERS_DIR.iterdir() if p.is_dir()
+      for e in cl.layout_for(p.name).elements
+      if len(e.actions) < (4 if e.type in ("dpad", "stick") else 1)
+  )
+  assert left == [(c, "keypadToggle") for c in ("A5200", "CV", "INTV", "O2")], left
+  for console, device, key in (("MD", "keyboard", "input_player1_y"), ("MD", "gamepad", "input_player1_x_btn"),
+                               ("N64", "keyboard", "input_player1_l2"), ("PS", "gamepad", "input_player1_r2_axis"),
+                               ("PSP", "gamepad", "input_player1_y_btn")):
+      overrides = to_retroarch_overrides(default_bindings_for_device(device, console), device, console)
+      assert overrides[key] != '"nul"', f"{console} {device}: {key} is written unbound"
+  print("RT-836 OK")
+  EOF
+  ```
+
+### RT-837 — The right stick's directions and the N64's C buttons can be bound to keys
+- **Area:** Input
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" → "Input", "Console" on "N64 - Nintendo 64", "Device" on "Keyboard": find the rows
+     "Right stick up", "Right stick down", "Right stick left" and "Right stick right", under the
+     "Analog stick" ones.
+  2. Click the drawn C-up button, press 8; "Save"; launch an N64 game and press 8.
+  3. Look for the same rows on "PS - PlayStation" and "GC - GameCube" (and the drawn right stick,
+     four targets), and on "PSP" and "SFC".
+- **Expected:** The four rows exist on the Nintendo 64, the PlayStation and the GameCube, the
+  consoles whose core reads a right stick, and nowhere else. They start unbound, on a new install
+  and on an existing profile alike, and "Map all" does not ask for them. On the Nintendo 64 they
+  are the C buttons (Mupen64Plus reads them from the right stick), so the four drawn C buttons are
+  normal targets: after step 2 the row and the drawing read "8" and the key presses C-up in game.
+  A keyboard could not press a C button before.
+- **Check:** step 2's game session is for the human; suite file `tests/test_input_actions.py`
+  (`KeyboardRightStickTests`), plus:
+  ```bash
+  PYTHONPATH=src .venv/bin/python - <<'EOF'
+  from openemux.core.input_actions import get_actions_for_console, normalize_bindings, to_retroarch_overrides
+  for console in ("N64", "PS", "GC"):
+      assert "r_up" in get_actions_for_console(console), console
+  for console in ("PSP", "SATURN", "SFC", "MD"):
+      assert "r_up" not in get_actions_for_console(console), console
+  assert normalize_bindings({}, "keyboard", "N64")["r_up"] == ""
+  overrides = to_retroarch_overrides({"r_up": "8"}, "keyboard", "N64")
+  assert overrides["input_player1_r_y_minus"] == '"num8"', overrides.get("input_player1_r_y_minus")
+  print("RT-837 OK")
+  EOF
+  ```
+
+### RT-838 — The button being remapped is lit on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard".
+- **Steps:**
+  1. Click the "B" button on the drawing and capture the screen while it waits for a key.
+  2. Press Escape, then click the D-pad's up arm and capture again; press Escape.
+  3. Switch to the dark style and repeat step 1.
+- **Expected:** While the capture waits, the drawn button is lit: its own image is visibly
+  brighter than its neighbours', with a ring and a soft glow in the accent colour around it. For
+  the D-pad only the arm being remapped lights, not the whole pad. The lit look is the same in the
+  light and in the dark style (only the accent differs between themes), and nothing is animated.
+  When the capture ends, by a key or by Escape, the button goes back to normal.
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests.test_the_button_being_captured_is_lit`) and
+  `tests/test_controller_drawing.py` (`test_a_lit_control_is_drawn_again_brighter_inside_its_target`,
+  `test_a_lit_control_glows_in_the_widgets_colour`).
+- **Restore:** "Reset defaults" for the SNES; the previous style.
+
+### RT-839 — Holding a mapped key lights its button on the drawing
+- **Area:** Input
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-829, console "SFC - Super Nintendo", device "Keyboard", default bindings
+  (A on Z, B on X).
+- **Steps:**
+  1. With nothing being captured, hold Z (`make devbox-xdo CMD='keydown z'`) and capture the
+     screen; release it (`CMD='keyup z'`) and capture again.
+  2. Hold Z and X together and capture; release both.
+  3. Hold a key bound to nothing (9) and capture.
+  4. Open the "Video" page, hold Z, come back to "Input".
+- **Expected:** While Z is down the drawn "A" button is lit (brighter image, accent ring and
+  glow) and nothing else is; it goes back to normal the moment the key comes up. Z and X together
+  light A and B together. A key bound to nothing lights nothing, and no binding changes. The
+  dialog's search does not open: a key that lights a drawn button and would type a character (Z)
+  shows its button instead of starting type-to-search, which would take the page away from under
+  it. Everything else is left to the dialog: the arrows still move the focus and Space and Enter
+  still activate while lighting the D-pad, Select and Start; a letter bound to nothing (V) still
+  starts the search; Ctrl and Alt shortcuts are untouched; and with the focus in a text field (the
+  search, once open) keys are text and light nothing. Keys pressed on another page light nothing.
+  Remapping A to another key on screen makes that key the one that lights it, even before "Save".
+- **Check:** the screenshots; suite files `tests/test_preferences.py`
+  (`TheDrawingLightsWhatIsPressedTests`, the keyboard tests) and `tests/test_input_held.py`.
+
+### RT-840 — Pressing a pad button lights its button on the drawing
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** A USB or Bluetooth gamepad connected; "Settings" → "Input", console
+  "SFC - Super Nintendo", "Device" on "Player 1 gamepad".
+- **Steps:**
+  1. With nothing being captured, press and hold each button of the pad in turn, then two at once.
+  2. Push the D-pad in each direction.
+  3. Press Start alone, then hold Select and press Start.
+  4. Set "Device" back to "Keyboard" and press the pad's buttons.
+  5. Click "A" on the drawing and press a pad button to bind it.
+- **Expected:** Each pad button lights the drawn button it is bound to for as long as it is held,
+  several at once when several are held, and an input bound to nothing lights nothing. The D-pad
+  lights the arm pushed. Start alone lights Start; Select + Start lights Select, Start and the
+  Menu button (the hotkey lights only with its modifier). The pad still navigates the dialog as
+  before: lighting never takes it away and never changes a binding. With "Keyboard" as the device
+  the pad lights nothing. During step 5 only the button being remapped is lit, and the pad lights
+  buttons again once the capture is over.
+- **Check:** human only (needs a physical pad); the rules are covered by `tests/test_input_held.py`
+  and `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`, the pad tests), the
+  readers by `tests/test_gamepad_held.py`.
+
+### RT-841 — No pad reader is left running once the input page is not in front
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. With a pad as the device on "Input", switch to another page and back.
+  2. Switch "Device" to "Keyboard", then to "Player 2 gamepad".
+  3. Start a capture and cancel it.
+  4. Close the dialog.
+- **Expected:** The pad is read for the drawing only while the input page is the page on screen, in
+  a dialog that is shown, in a window that has the focus, with a pad as the device and no capture
+  running. Leaving the page, picking the keyboard, starting a capture, hiding or closing the dialog
+  each stop the reader at once; coming back starts one again, and never a second one beside it.
+  Another port gets a reader on its own pad; a port with no pad plugged in is simply not read,
+  with no message. The reader only reads: it never grabs the pad.
+- **Check:** suite files `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`,
+  `WhetherTheInputPageIsLiveTests`) and `tests/test_gamepad_held.py`.
+
 ## Shaders
 
 ### RT-080 — Shader selection round-trips through the store
@@ -5646,8 +6022,8 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Preconditions:** The library above; phone in portrait, dark theme.
 - **Steps:**
   1. Open the "Library" tab (the shelf).
-- **Expected:** One card per row. Each card shows, from the left, the console's pixel icon (a
-  star for "Favorites"), large (about two thirds of the card's height) and sitting straight on the
+- **Expected:** First a row shared by two half-width cards, "All" (blue, grid icon) and
+  "Favorites" (purple, star), no taller than a console card (RT-849). Then one card per row. Each console card shows, from the left, the console's pixel icon, large (about two thirds of the card's height) and sitting straight on the
   card's own colour: no lighter or darker square behind it, no border, no shadow. Beside it the
   short tag ("NES", "SNES"), the console name (two lines at most, then "…") and "N games". No
   cartridges on any card. Nothing overlaps. The header ("OpenEmux", "Shelf", the counts and the artwork pill)
@@ -5661,7 +6037,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Steps:**
   1. Rotate the phone to landscape.
   2. Scroll to the end and back.
-- **Expected:** Two cards per row, "Favorites" first (top left), the order unchanged (left to
+- **Expected:** Two cards per row, "All games" first (top left) and "Favorites" beside it, the order unchanged (left to
   right, then down). The icon is the same size as in portrait, still on the card's own colour, and
   the name fits or ends in "…" on its second line. With an odd number of shelves the last card is on the left, as wide as the others. The scroll
   position and the order are kept across the rotation.
@@ -5672,7 +6048,7 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Press DPAD_DOWN until "Favorites" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  1. Press DPAD_DOWN until "All games" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
   2. Keep pressing DPAD_DOWN to the last row.
   3. Press L1 and R1.
   4. Focus a card in the right column, press A, then go back.
@@ -5692,8 +6068,8 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
   3. Focus a console in the right column with the gamepad, press Y, choose "Move up".
   4. Press Y again and choose "Restore default order".
 - **Expected:** While dragging the other cards make room and the dragged card stays under the
-  finger; the new order is kept after leaving the tab and after the restart. "Favorites" cannot be
-  dragged and stays first. "Move up" moves the console one place back in reading order (left to
+  finger; the new order is kept after leaving the tab and after the restart. "All games" and
+  "Favorites" cannot be dragged, never swap with a console and stay first. "Move up" moves the console one place back in reading order (left to
   right, then down). "Restore default order" brings back the default order.
 - **Check:** human only.
 
@@ -5735,6 +6111,65 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
   and the game launches with the same core. On the small phone the renamed cards show their full
   name with no "…".
 - **Check:** human only, plus `./gradlew --no-daemon testDebugUnitTest --tests '*ConsoleNamesTest'`
+
+### RT-849 — Portrait shows "All" and "Favorites" side by side and each opens its view
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-470's library (two favourite games); phone in portrait, dark theme.
+- **Steps:**
+  1. Open the shelf and look at the first row under the header.
+  2. Tap "All", then go back; tap "Favorites", then go back.
+  3. Switch to the light theme and look at the row again.
+  4. `adb shell settings put system font_scale 1.3`, look at the row, then
+     `adb shell settings put system font_scale 1.0`.
+- **Expected:** Step 1: one row with two cards of equal width, no taller than a console card.
+  Left: blue card, "LIBRARY" with a grid icon at the top right, "All" and the total game count.
+  Right: purple card, "FAVORITES" with a yellow star, "Favorites" and "2 games". Step 2: "All"
+  opens the library on the "All" chip with every game; "Favorites" on the "Favorites" chip. Step 3:
+  pale blue and pale purple cards with dark text. Step 4: both cards grow together, nothing is
+  clipped ("…" allowed).
+- **Check:** human only (`adb exec-out screencap -p > shelf-all-fav.png`).
+
+### RT-587 — With no favourites "All games" stands alone; an empty library shows neither
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-849's shelf.
+- **Steps:**
+  1. Unfavourite both favourite games and go back to the shelf.
+  2. Favourite one game again and go back to the shelf.
+  3. Import one more game and go back to the shelf.
+  4. On a fresh install (or after removing every game), open the shelf.
+- **Expected:** Step 1: "Favorites" is gone and "All games" is a full-width card like a console's
+  (grid icon on the left, "LIBRARY", "All games", the count). Step 2: the two half-width cards are
+  back, "Favorites" reading "1 game". Step 3: the "All" count goes up by one without reopening
+  the app. Step 4: the empty shelf as before (RT-500), no "All" card.
+- **Check:** human only.
+
+### RT-588 — Landscape and tablet show "All games" and "Favorites" as two full cards
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-849's shelf.
+- **Steps:**
+  1. Rotate the phone to landscape.
+  2. On a tablet (or `adb shell wm size 1600x2560 && adb shell wm density 320`), open the shelf in
+     both orientations; `adb shell wm size reset && adb shell wm density reset` afterwards.
+- **Expected:** "All games" and "Favorites" are the first two grid cards, each in one column like a
+  console card (large grid icon / star on the left, tag, name, count), before the consoles.
+- **Check:** human only (a screenshot per layout).
+
+### RT-589 — The gamepad moves between "All" and "Favorites" and Y ignores them
+- **Area:** Android — Shelf
+- **Mode:** MANUAL
+- **Preconditions:** RT-849's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
+- **Steps:**
+  1. Open the shelf: press DPAD_DOWN until a focus ring shows on "All".
+  2. Press DPAD_RIGHT, then DPAD_LEFT, then DPAD_DOWN.
+  3. Go back up to "Favorites", press A, then go back.
+  4. With "All" focused, press Y.
+- **Expected:** Step 2: the ring moves to "Favorites", back to "All", then to the first console.
+  Step 3: the Favorites view opens, and after going back the ring is on "Favorites". Step 4: no
+  reorder menu opens.
+- **Check:** human only.
   in `pkg/android/openemux` of `openemux-android`.
 
 ### RT-586 — Game Boy and Game Boy Color show different icons
@@ -5907,9 +6342,9 @@ so these are `MANUAL`: a person runs them on a Pixel Fold emulator (`avdmanager 
 `adb shell settings put system accelerometer_rotation 0` and `adb shell settings put system
 user_rotation 1`, and set the hinge with `adb emu sensor set hinge-angle0 <deg>` (180 = flat,
 90 = half open). The game logs the fold it sees: `adb logcat -s OpenEmuxGame:D`. The library needs
-a Game Boy Advance game and a Nintendo DS game (both open flat on their packaged skin, the drawn
-art from `assets/skins`) and a Game Gear game (a console that keeps the skin the app draws). The
-packaged skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
+a Game Boy Advance game and a Game Gear game (both open flat on their bundled skin in OpenEmux's own
+format, since issue 806 and issue 770, with fold layouts of their own) and a Nintendo DS game (open
+flat on its packaged skin, the drawn art from `assets/skins`). The bundled skins have no tabletop art: in tabletop every console shows the drawn tabletop skin, and
 opening flat brings each one's own skin back. Every scenario ends with `hinge-angle0 180` and
 `user_rotation 0`.
 
@@ -5947,8 +6382,8 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   6. With the Game Boy Advance game, `adb emu fold` (the outer screen); wait two seconds.
   7. `adb emu unfold`, `adb shell settings put system user_rotation 1` and
      `adb emu sensor set hinge-angle0 90`; wait two seconds.
-- **Expected:** Flat shows the game's own portrait skin (the packaged Game Boy Advance art, the
-  drawn Game Gear skin); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
+- **Expected:** Flat shows the game's own portrait skin (the fold layout of the bundled Game Boy
+  Advance and Game Gear skins); half open shows the drawn tabletop skin again, each time. The game never goes black or restarts: the timer or score carries on across every swap
   and `adb logcat | grep -i "core.*unload"` shows nothing. Turned so the fold runs down the
   middle, the game shows the landscape skin, never the tabletop one, and nothing crashes.
   Folded, the outer screen shows the phone skin, and nothing sits where the fold was; unfolded
@@ -6028,10 +6463,11 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Steps:**
   1. Open "Shelf", a console's library in the cartridge and cover views, and "Settings".
   2. Start a game and open the pause sheet.
-- **Expected:** The tabs move to a rail on the left side. The library is one row that scrolls
-  sideways. On "All" the games of every console follow one another in that row, with no header
-  slot between consoles, and a small console label sits above the row (RT-590). The pause sheet
-  shows its main page in two columns.
+- **Expected:** The tabs move to a rail on the left side. In the cartridge and cover views the
+  library has a single top row (back, the filter pager, search, sort, view toggle; no console chips
+  row, RT-857) and one row of games that scrolls sideways. On "All" the games of every console
+  follow one another in that row, with no header slot between consoles, and a small console label
+  sits above the row (RT-590). The pause sheet shows its main page in two columns.
 - **Check:** human only (a screenshot of each).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -6081,11 +6517,13 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Preconditions:** As RT-381 (phone, landscape), with at least four games in each of two consoles
   (e.g. "NES" and "SNES").
 - **Steps:**
-  1. Open a console's library and tap the "All" chip; use the cartridge view.
+  1. Open a console's library and step to "All games" with the filter pager's previous button; use
+     the cartridge view.
   2. Look at the row where the first console's games end and the next console's begin.
   3. Switch to the cover view, then open "Favorites" (with favorites in both consoles) and a search
      that matches games of both consoles, in each view.
-  4. Tap the "SNES" chip, a single console's page.
+  4. Step to "Super Nintendo" with the pager's next button (or pick it in the filter menu), a single
+     console's page.
 - **Expected:** No item of the row is a console header: the last game of the first console is
   followed directly by the first game of the next. Above the row, in small type, a label shows the
   console's pixel icon and "NES – Nintendo (NES) · 4 games"; the cartridges are as tall as before.
@@ -6123,6 +6561,90 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
   The tablet shows the grid with these header lines and no label above a row. Readable in both
   themes.
 - **Check:** human only (a screenshot of each).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-857 — Phone landscape has a single top row with a filter pager
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-381 (phone, landscape), touch only (no pad), a library with games in at
+  least three consoles (e.g. NES, SNES, GBA) and two favorites.
+- **Steps:**
+  1. `adb shell wm size 1080x2400` and `adb shell wm density 480` (about 800×360dp in landscape).
+     Open "All games" from the shelf in the "Cartridges" view, then a console's page; repeat in the
+     "Covers" view.
+  2. `adb shell wm size 1080x1920` (about 640×360dp). Open "Super Nintendo", then "All games".
+  3. Read the header row with TalkBack or `adb shell uiautomator dump`.
+- **Expected:** One row above the games: an icon-only back button, a "previous" chevron, the current
+  filter (console pixel icon, or a star for "Favorites", none for "All games") with its name, a
+  "next" chevron, then search, sort and the view toggle. There is no console chips row and no second
+  row. With 680dp or more of row the bare game count and a down caret follow the name; on narrower
+  rows they are hidden. At 640×360dp the name is fully readable (shrunk if needed, never cut) and
+  nothing overlaps. The filter's content description reads "Filter: <name>, <N> games. Change
+  filter"; the steps read "Previous filter: <name>" / "Next filter: <name>".
+- **Check:** human only (a screenshot of each; `adb shell uiautomator dump`).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-858 — Previous/next and the filter menu cycle the same filters in the same order
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-857, at 800×360dp, on "All games".
+- **Steps:**
+  1. Tap "next" until it dims, then "previous" until it dims; tap each dimmed one once more.
+  2. Tap the filter name.
+  3. Pick a console in the menu.
+- **Expected:** The filter goes All games → Favorites → each console with games in the shelf's
+  console order, and back; the games row updates each time. "Previous" is dimmed on "All games" and
+  "next" on the last console; tapping a dimmed one does nothing. The menu lists "All games",
+  "Favorites" and each console with games, each with its icon and game count, the current one
+  highlighted; picking one switches the list and closes the menu.
+- **Check:** human only (a screenshot of the menu and of the two ends).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-859 — With a gamepad the pager shows the shoulder labels and the shoulders switch the filter
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-857, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
+- **Steps:**
+  1. Set Settings → "Button labels" to "Xbox", open "All games" and press
+     `KEYCODE_BUTTON_R1` twice, then `KEYCODE_BUTTON_L1` once.
+  2. Repeat step 1 with "Nintendo", then "PlayStation".
+  3. From a focused game press UP, then LEFT/RIGHT along the row; press A on the filter name, move in
+     the menu with the D-pad, press A on a console, then reopen it and press B.
+- **Expected:** "Previous"/"next" show LB/RB, then L/R, then L1/R1 instead of chevrons; the caret is
+  hidden. Each shoulder press switches the filter and the label follows. The hint bar has no
+  "Console" hint. UP reaches the header row; LEFT/RIGHT walk back, previous, the filter name, next,
+  search, sort and the view buttons with a whole focus ring (also on a dimmed step). A opens the
+  menu, the D-pad moves in it, A picks, B closes it.
+- **Check:** human only (a screenshot per family).
+- **Restore:** "Button labels" back to "Automatic"; `adb shell wm size reset`,
+  `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-860 — Search opens in the same row and closing it brings the pager back
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-857, at 800×360dp.
+- **Steps:**
+  1. On "All games" tap search, then type part of a title that exists.
+  2. Tap × (close search).
+  3. Open "Super Nintendo" and tap search again.
+- **Expected:** The search field takes the pager's place in the header row; no second row appears
+  and the search button becomes ×. The placeholder reads "Search all games" on "All games" and
+  "Search in Super Nintendo" on that console. The list filters as you type. × clears the query and
+  brings the pager back.
+- **Check:** human only (a screenshot of each step).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-603 — Landscape tiles are taller than before, with and without the hint bar
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-857, at 800×360dp; an APK from before issue 669 to compare with.
+- **Steps:**
+  1. On a console's page in the "Cartridges" view, take a screenshot with each APK.
+  2. Repeat with a pad in use, so the hint bar shows.
+- **Expected:** With the new APK the cartridges are clearly taller in both cases (about 44dp more:
+  roughly 220 vs 176dp, and 180 vs 136dp with the hint bar).
+- **Check:** human only (the screenshots side by side; `adb shell uiautomator dump` gives the tile
+  bounds).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-385 — Gamepad focus moves through every screen after a rotation or resize
@@ -6188,6 +6710,99 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
   copper in every color. The console in step 5 looks exactly as before.
 - **Check:** human only (a screenshot of each console and color:
   `adb exec-out screencap -p > rt645-<console>-<color>.png`).
+### RT-604 — A phone on its side shows the game's detail in two halves
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator held sideways (`adb shell settings put system accelerometer_rotation 0`,
+  `adb shell settings put system user_rotation 1`), a Game Boy Advance game with an automatic state and
+  three slot states, and a Game Boy game.
+- **Steps:**
+  1. Open the Game Boy Advance game from the library.
+  2. Look at both halves.
+  3. Go back and open the Game Boy game.
+- **Expected:** Left: Back, Favourite and More options above the cartridge, sized to the height left,
+  then the title and "Game Boy Advance · <core> · <time played>" on one line each. Right: "Continue"
+  and "Restart", "Save states" with three thumbnails and "See all (4)", "Cartridge color" with its
+  swatches, then "Settings for this game" with Core, Shader, Controller skin and Cheats. The Game Boy
+  cartridge (taller than wide) fits the left half without being cut.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-605 — Continue, Restart and the colour fit 360dp of height, with or without the hint bar
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator held sideways (`adb shell settings put system accelerometer_rotation 0`,
+  `adb shell settings put system user_rotation 1`), a Game Boy Advance game with an automatic state and
+  three slot states, and a Game Boy game.
+- **Steps:**
+  1. `adb shell wm size 1600x720` and `adb shell wm density 320` (800×360dp); open the Game Boy
+     Advance game.
+  2. Press a D-pad key (`adb shell input keyevent KEYCODE_DPAD_DOWN`) so the gamepad hint bar shows.
+  3. Repeat at `adb shell wm size 1464x720` (732×360dp).
+- **Expected:** At each size, with and without the hint bar, "Continue", "Restart" and the whole row of
+  colour swatches are visible without scrolling; nothing is cut sideways and "Restart" is readable.
+  The settings card starts below them.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-606 — The right half shows that it scrolls
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp, the Game Boy Advance game open.
+- **Steps:**
+  1. Look at the foot of the right half, then scroll it to the end.
+  2. Scroll the colour swatches sideways to their end.
+- **Expected:** While more lies below, the foot of the right half fades into the page; at the end the
+  fade is gone and Core, Shader, Controller skin and Cheats are all reachable. While more swatches can
+  scroll in, the row's end fades; at its end the fade is gone. Tapping a swatch changes the cartridge
+  on the left; "See all", "Core" and "Shader" open their sheets as in portrait.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-607 — Rotating on the game's detail keeps the game, its sheet and the focus
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** A phone emulator in portrait (`user_rotation 0`), the Game Boy Advance game of RT-604,
+  a gamepad (or `adb shell input keyevent KEYCODE_DPAD_*`).
+- **Steps:**
+  1. Open the game, tap "Shader", then rotate to landscape (`user_rotation 1`).
+  2. Close the sheet, press a D-pad key, rotate back to portrait.
+  3. Rotate to the other landscape (`user_rotation 3`).
+- **Expected:** The same game stays on screen; the Shader sheet is still open after the first
+  rotation; after the second, "Continue" holds the gamepad's focus. In the other landscape nothing
+  sits under the camera cutout.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-608 — The gamepad walks the landscape detail left to right, then down
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp, the Game Boy Advance game open, gamepad mode.
+- **Steps:**
+  1. From "Continue" press Right, then Down repeatedly to the last setting.
+  2. Press Left from the right half, then Right from the header.
+  3. From "Continue" press Up; press L1, R1 and B.
+- **Expected:** Right goes to "Restart"; Down walks the thumbnails, "See all", the swatches and the
+  settings rows in that order, scrolling the right half. Left reaches the header on the left, Right
+  comes back to the right half. Up on "Continue" stays there (never the rail). L1/R1 open the
+  previous/next game of the console; B goes back.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
+
+### RT-609 — Hardcore, no states and box-art consoles on the landscape detail
+- **Area:** Android — Responsive layout
+- **Mode:** MANUAL
+- **Preconditions:** As RT-605 at 800×360dp; a game with no save states; a game of a console without
+  cartridge frames (a disc console).
+- **Steps:**
+  1. Open the game with no states.
+  2. With RetroAchievements hardcore active, open the Game Boy Advance game.
+  3. Open the disc console's game.
+- **Expected:** No states: "None yet. Save from the in-game menu." and "Play" alone. Hardcore:
+  "Continue" hidden. Disc console: its box art on the left, no "Cartridge color" block, the right half
+  still starting with the play button.
+- **Check:** human only.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ## Android — Gamepad navigation
 
@@ -6195,8 +6810,18 @@ The Android app's gamepad mode (#538): where scrolling puts the focused item, th
 never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
 gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
 `adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
-`KEYCODE_BUTTON_START`). The first D-pad press only enters gamepad mode. A library of a few games
-over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
+`KEYCODE_BUTTON_START`; `adb shell input gamepad keyevent ...` sends them from a gamepad source).
+No press is swallowed (#641): one that finds a focused item on screen acts on it, and one that finds
+nothing focused (after a tap, or with the focused item scrolled away by finger) lands focus visibly
+on the sensible item and does nothing else. A library of a few games over two consoles, one of them
+with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
+
+Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
+focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
+"Settings → General → Controller layout" ("Automatic", "Always", "Never"). The emulator has no real
+controller, and `adb shell input` is a virtual device that never counts as one: on a debug build a
+controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`
+(`false` disconnects it, `--ez clear true` goes back to the real devices).
 
 ### RT-434 — The landscape row keeps the focused game in the middle
 - **Area:** Android — Gamepad navigation
@@ -6208,6 +6833,8 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   3. With the last game focused, press RIGHT once more.
   4. Repeat in the covers view, and on the "All" page, where console headers sit in the row.
   5. Press UP into the header (search, sort, view toggle).
+  5. Press UP into the header row (back, previous, the filter name, next, search, sort, view
+     toggle) and walk it with LEFT/RIGHT.
 - **Expected:** The first games take focus without the row scrolling, and the first one rests at the
   row's left padding with nothing empty before it. From there on the focused game stays in the
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
@@ -6256,15 +6883,188 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
 ### RT-437 — Touch still works as before next to the gamepad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** RT-434's library; gamepad mode on with a game focused.
+- **Preconditions:** RT-434's library; no controller connected (or "Controller layout" set to
+  "Never"); gamepad mode on with a game focused.
 - **Steps:**
   1. Tap the screen, then scroll and fling the grid with a finger.
   2. Open the search and type a few letters.
   3. Press a D-pad key.
   4. Long-press a shelf and drag it to another place.
 - **Expected:** The tap hides the highlight and the hint bar; scrolling and flinging feel as they did.
+  The search field opens and scrolls normally while typing. The D-pad press brings the highlight
+  back on the item that had it when that item still shows (or, scrolled away, on the visible item
+  nearest where it was), on that first press: it never jumps to the screen's header or first item,
+  and the next press moves from there. The dragged shelf stays drawn above the others while it
+  moves.
+- **Check:** human only.
+
+### RT-844 — The first pad press after a touch acts
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; landscape; a console's covers view open with a game focused
+  from the pad.
+- **Steps:**
+  1. Tap an empty spot of the screen (the hint bar hides), then press RIGHT.
+  2. Press RIGHT again.
+  3. Tap an empty spot again, then press A.
+  4. Press A again.
+- **Expected:** 1: the highlight comes back on the game that had it, on that first press. 2: focus
+  moves one game right. 3: the highlight comes back, nothing opens. 4: that game's detail opens. No
+  press does nothing, and focus never lands on the header or the console chips.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
+
+### RT-845 — A press with the focused item scrolled away lands on a visible one
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-844, on a console with 30 or more games.
+- **Steps:**
+  1. Focus the third game from the pad.
+  2. Swipe the row (or grid) with a finger until that game is well off screen.
+  3. Press RIGHT (or DOWN in a vertical grid), then RIGHT again.
+  4. Repeat 2 and 3 pressing A instead of the D-pad, then A again.
+- **Expected:** 3: the first press lands the highlight on a game that is on screen, near where the
+  focused one was, without scrolling back to it; the second moves on from there. 4: the first A
+  only lands focus, the second opens that game's detail.
+- **Check:** human only.
+
+### RT-846 — Sheets, dialogs and the detail menu work with the pad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-434's library; landscape, then portrait.
+- **Steps:**
+  1. On the shelf, focus a console and press Y (shelf options sheet).
+  2. In a game's detail, press Y (the "…" menu); move to "Remove from library" and press A.
+  3. In the remove dialog, press RIGHT, LEFT, then B.
+  4. Open from the pad: the detail's "Core" and "Shader" sheets and "See all" save states; in
+     "Settings", "Theme", "Language", a console's "Color" sheet, "Device Name"; the library's
+     remove-selected dialog (START, select two games, X); the cancel-transfer dialog of a running
+     share.
+  5. In each one: D-pad down to its last item, A on an item, then reopen it and press B.
+- **Expected:** Focus enters each sheet, dialog or menu on its first item (in the remove dialogs, on
+  "Cancel") with the ring visible; the D-pad moves inside it and reaches its last item, the sheet
+  scrolling when it is taller than the screen; A picks the focused item; B closes it, and focus is
+  back on the button or row that opened it. A sheet's own buttons (X, Y, L1/R1, START) work while
+  it is open, and none of them reaches the screen behind it.
+- **Check:** human only.
+
+### RT-847 — Touch inside a sheet, then the pad
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** The shelf options sheet open from the pad (RT-846, step 1), its second row
+  focused.
+- **Steps:**
+  1. Tap the sheet's title (not a row), then press DOWN, and DOWN again.
+  2. Tap outside the sheet.
+- **Expected:** 1: the first DOWN brings the highlight back on the second row, the next moves to
+  the third. 2: the sheet closes as before.
+- **Check:** human only.
+
+### RT-848 — Every screen can be entered, used and left with the pad alone
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; landscape.
+- **Steps:**
+  1. With the pad only, walk every tab (L1/R1): Library, Recent, Import, Settings.
+  2. In "Settings", walk DOWN to "About" and open, with A, each of: "BIOS", "RetroAchievements",
+     a console's page, "Device Name", "Back up and restore", "Check for updates", "About", then
+     "Licenses" and a license text; on the license text, press DOWN several times, then UP.
+  3. In "Import", open "Receive games" and "Connect by Address"; in "Device Name" and "Connect by
+     Address", press DOWN and UP in the text field, and B with the keyboard open.
+  4. Leave each screen with B.
+- **Expected:** Every screen shows focus on an item as soon as it opens or on the first press; the
+  D-pad reaches every control; no press leaves focus on something invisible. DOWN and UP leave a
+  text field; B with the keyboard open closes the keyboard first, and the next B goes back. The
+  license text scrolls by most of a screen per press, both ways. Back on "Settings", focus is on
+  the row that opened the screen.
   The search field opens and scrolls normally while typing. The D-pad brings the highlight back on
-  the item that had it. The dragged shelf stays drawn above the others while it moves.
+  the item that had it. The dragged shelf stays drawn above the others while it moves. With a
+  controller connected (the gamepad layout) the tap keeps the highlight and the hint bar instead:
+  see RT-579.
+- **Check:** human only.
+
+### RT-578 — Connecting a controller shows the gamepad layout, disconnecting hides it
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; "Controller layout" on "Automatic"; no
+  controller connected; the app open on a console's shelf in landscape, nothing touched since.
+- **Steps:**
+  1. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`)
+     and press nothing.
+  2. Disconnect it (the same broadcast with `false`).
+  3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
+- **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), a ring on one game, and "L1" and
+  "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
+  Disconnecting removes the hint bar, the ring and the pills and gives the chips and the toggle
+  their old size, again without a restart. With the controller connected every main tab keeps its
+  hint bar. No toast or message announces either change.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
+
+### RT-579 — A tap in the gamepad layout moves the focus and keeps it visible
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-578's setup with a controller connected, on a console's shelf.
+- **Steps:**
+  1. Tap a console chip other than the current one, then press RIGHT
+     (`adb shell input keyevent KEYCODE_DPAD_RIGHT`).
+  2. Tap the view toggle's second button, then press DOWN, then A (`KEYCODE_BUTTON_A`).
+  3. Back on the shelf, scroll and fling the grid with a finger, open the search and type, and on
+     the "Shelf" page long-press a shelf and drag it.
+  4. Tap a game's cover and come back with B.
+- **Expected:** Each tap moves the ring to the tapped item and the hint bar never hides. RIGHT moves
+  one chip right on that same press; DOWN goes from the toggle into the grid on the first press,
+  and A opens the focused game. A scroll, a fling or a drag never moves the ring to the item under
+  the finger, and clicking, long-pressing, dragging and typing behave as in the touch layout.
+  Back on the shelf the ring is on the game that was tapped.
+- **Check:** human only.
+
+### RT-580 — The "Controller layout" setting
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; no controller connected.
+- **Steps:**
+  1. Open "Settings" → "General" → "Controller layout" and look at the choices.
+  2. Pick "Always" and close the sheet.
+  3. Force-stop and relaunch (`adb shell am force-stop $PKG`, then open the app).
+  4. Pick "Never", connect a controller (the broadcast with `true`), press DOWN, then tap the screen.
+  5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
+     connect the controller.
+  6. On a tablet-size window (`adb shell wm size 1600x2560`, `adb shell wm size reset` after), open
+     the setting.
+- **Expected:** The row sits right after "Controls" and shows the current choice; the default is
+  "Automatic". The sheet lists "Automatic" ("The controller layout while a controller is
+  connected."), "Always" ("For handhelds with built-in controls.") and "Never" ("The touch layout,
+  even with a controller connected."). "Always" shows the gamepad layout with no controller, a tap
+  does not hide it, and it is still on after the relaunch. "Never" with a controller shows the touch
+  layout: DOWN still moves the focus with the ring and the hint bar showing, the tap hides them
+  again, and the chips keep their touch size. "Never" survives the relaunch. "Automatic" follows the
+  controller again. In split view the setting opens as a pane with the same three choices.
+  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`,
+  `never` or `auto`.
+- **Check:** human only.
+
+### RT-581 — Gamepad layout targets and shoulders
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** RT-578's setup with a controller connected; then the same with none.
+- **Steps:**
+  1. On a console's shelf, compare the console chips and the view toggle with and without the
+     controller; press R1 and L1 (`KEYCODE_BUTTON_R1`, `KEYCODE_BUTTON_L1`).
+  2. Open a game's detail and walk the colour swatches and "See all" with the D-pad.
+  3. In "Settings", walk to the RetroAchievements links and, signed in, the "Sign out" pill;
+     after an import, the link back to the shelf on "Import".
+  4. On "Shelf", "Recent", "Import" and "Settings", press R1 and L1.
+  5. Do 1 to 4 with the D-pad only, in landscape, then in portrait; switch to pt-BR and to one CJK
+     language and look at the setting and the hint bar.
+  6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
+- **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
+  swatches are larger and every text link is a full-height target with its ring whole; without it
+  everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
+  the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
+  Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
+  nothing on these screens needs touch. The new texts are translated and not cut. The `adb` key
+  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips keep
+  their touch size and the hint bar hides again on the next tap.
 - **Check:** human only.
 
 ### RT-593 — Left/right crosses console groups in the landscape row with no stop
@@ -6315,14 +7115,15 @@ over two consoles, one of them with 10 or more, is enough. `$PKG` is `com.openem
   2. On a game's detail, portrait and landscape, press UP and LEFT from "Play" until focus stops moving.
   3. On the sort button and the view toggle, read the hint bar.
   4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
-     arrow, star and "More options" with a finger.
+     arrow, star and share button with a finger.
   5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
 - **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
-  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: focus stays
-  on "Play"; the back arrow, the star (X) and "More options" (Y) never take it. 3: the bar says
+  back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: from "Play"
+  focus reaches the pencil after the game's name (and "Search artwork…" when the game has no art);
+  the back arrow, the star (X) and the share button (Y) never take it. 3: the bar says
   "A: Choose", and A sorts or switches the view; on a game it says "A: Details", on "Play" "A: Play"
-  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens the
-  menu from any focused item.
+  (or "Continue"). 4 and 5: every tap works as before. B goes back, X toggles favorite and Y opens Share
+  Nearby from any focused item on the detail.
 - **Check:** human only; the focus parts also by
   `adb shell am instrument -w -e class com.openemux.mobile.ui.GamepadFocusInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
   (after `./gradlew installDebug installDebugAndroidTest`, on a device past the first-run setup).
@@ -6450,7 +7251,7 @@ consoles is enough. `$PKG` is `com.openemux.mobile`; the ROMs live in
 - **Mode:** MANUAL
 - **Preconditions:** RT-491's library.
 - **Steps:**
-  1. Open a game's detail, open its menu and pick "Remove from library"; confirm.
+  1. Open a game's detail, scroll to the end and tap "Remove from library"; confirm.
   2. Switch the app language to Português (Brasil) and enter selection mode; open the remove dialog.
 - **Expected:** After 1 the screen goes back to the library without that game, its file is gone and
   its saves stay, as before. After 2 the bar, the hints and the dialog are in Portuguese
@@ -6541,25 +7342,35 @@ PSP) has a second one, **Dark**: the same layout painted black, with dark grey c
 labels, for playing with the lights off. The choice is per console, in the console's settings (a
 "Default skin" section with two cards, below "Default shader") and from a game's detail screen (the
 "Controller skin" row opens the same choice), saved in `files/meta.json` as `consoles.<id>.skin` (`console` or `dark`; missing =
-`console`). The packages are built by `tools/skins/build.py` into `src/main/assets/skins/` and
-`src/main/assets/skins/dark/` ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`console`). The skins are built by `tools/skins/build.py` into `src/main/assets/skins/` and
+`src/main/assets/skins/dark/` (`<console>.zip` in OpenEmux's own format since issue 806; the NDS still
+a `.deltaskin`) ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`). The runner has no Android device, so these are `MANUAL`: a person runs them
 on a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`; a game's generated
 files are in `files/launch/current/`.
 
-### RT-670 — "Default skin" offers Console colors and Dark, Console colors by default
+### RT-670 — "Controller skins" offers Console colors and Dark, Console colors by default
 - **Area:** Android — Dark controller skins
 - **Mode:** MANUAL
 - **Preconditions:** A fresh install of the Android app (or one that never changed a console's skin)
   with a SNES game in the library.
 - **Steps:**
   1. Open Settings, then the SNES console.
-  2. Look at the "Default skin" section, below "Default shader".
+  2. Look at the "Controller skins" section, below "Default shader".
   3. Launch the SNES game, phone in portrait.
+- **Expected:** The section is titled "Controller skins" with "Console colors" on its right, says "Tap
+  a skin to use it in game. Each one says which screens it was made for. Bundled skins never change."
+  and shows, under "BUNDLED" (with a lock), two cards right there, without opening anything:
+  "Console colors" (ringed, "In use") and "Dark", each with lit "Phone", "Tablet" and "Fold" badges
+  (issue 782). A console the app draws its own skin for (Atari 5200, for example) shows the section
+  too, with its one "Console colors" card, so its "Edit" and "Duplicate" can be reached (issue 798,
+  RT-775); no "Default skin" row.
 - **Expected:** The section is titled "Default skin" with "Console colors" on its right, says "The
-  virtual controller every SNES game uses." and shows two cards right there, without opening anything:
-  "Console colors" (selected) and "Dark". A console the app has no Dark skin for (Atari 2600, for
+  virtual controller every SNES game uses." and shows its cards right there, without opening anything:
+  "Console colors" (selected), "Dark" and "Purple" (issue 720), each with a small color swatch. A console the app has no Dark skin for (Atari 2600, for
   example) shows no section, only a "Default skin" row reading "OpenEmux 2600" that opens nothing.
+  (issue 782). The Atari 5200, ColecoVision, Intellivision and Odyssey 2 show the same two cards
+  since issue 772 gave them bundled skins (RT-881); no "Default skin" row.
   The game opens on the usual light grey SNES skin with colored X, Y, A and B buttons.
 - **Check:**
   ```bash
@@ -6571,7 +7382,7 @@ files are in `files/launch/current/`.
 - **Mode:** MANUAL
 - **Preconditions:** Two SNES games and one GBA game in the library.
 - **Steps:**
-  1. Settings → SNES → tap the "Dark" card under "Default skin".
+  1. Settings → SNES → tap the "Dark" card under "Bundled" in "Controller skins".
   2. Launch the first SNES game in portrait, then turn the phone to landscape.
   3. Quit and launch the second SNES game.
   4. Quit and launch the GBA game.
@@ -6582,7 +7393,7 @@ files are in `files/launch/current/`.
 - **Check:**
   ```bash
   adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark
-  adb shell run-as $PKG ls cache/skins/dark   # SFC.deltaskin, copied when the SNES game launched
+  adb shell run-as $PKG ls cache/skins/dark   # SFC.zip, copied when the SNES game launched (SFC.deltaskin before issue 806)
   ```
 
 ### RT-672 — The Dark choice survives closing the game, restarting the app and updating it
@@ -6611,8 +7422,9 @@ files are in `files/launch/current/`.
 - **Expected:** Every key reaches the game. The D-pad's circle and each stick's knob follow the thumb
   and are visible on the black art. Turbo and fast forward show their on state clearly and go back
   off. Save and load work. Labels and glyphs are readable without glowing.
-- **Check:** none beyond the steps (the touch frames come from the same `info.json` layout as the
-  Console colors skin: `BundledSkinsTest` in the app's unit tests compares them).
+- **Check:** none beyond the steps (every control sits where the Console colors skin has it:
+  `OwnFormatBundledSkinsTest.everyVariantHasTheSameLayout` in the app's unit tests compares the
+  layouts since issue 806, `BundledSkinsTest` the NDS package's).
 
 ### RT-674 — Nintendo DS on Dark: every screen layout gets the Dark art
 - **Area:** Android — Dark controller skins
@@ -6632,31 +7444,12 @@ files are in `files/launch/current/`.
   adb shell run-as $PKG ls cache/skins/dark   # NDS.deltaskin
   ```
 
-### RT-675 — An imported skin still wins over both bundled ones
-- **Area:** Android — Dark controller skins
-- **Mode:** MANUAL
-- **Preconditions:** A `.deltaskin` for the SNES that is not one of the app's (any third-party Delta
-  skin); SNES set to Dark.
-- **Steps:**
-  1. Put it in the app's external files folder:
-     `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
-     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
-  2. Settings → SNES → the "Default skin" section.
-  3. Launch a SNES game. Quit, pick "Console colors", launch again.
-  4. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
-     and launch once more.
-- **Expected:** The section reads "Imported skin" on its right and shows "A skin you imported for SNES
-  is used instead." under the cards. Both launches in step 3
-  use the imported skin. After step 4 the game opens on the Console colors skin (the choice made in
-  step 3), and the section no longer shows the note.
-- **Check:** none beyond the steps.
-
 ### RT-676 — Switching back to Console colors restores the original skin
 - **Area:** Android — Dark controller skins
 - **Mode:** MANUAL
 - **Preconditions:** SNES set to Dark; a tablet or an emulator with a tablet-sized screen for step 3.
 - **Steps:**
-  1. Settings → SNES → the "Console colors" card under "Default skin".
+  1. Settings → SNES → the "Console colors" card under "Bundled" in "Controller skins".
   2. Launch a SNES game.
   3. On the tablet, set SNES to Dark again and launch the game in portrait and in landscape.
 - **Expected:** Step 2 shows the usual light grey SNES skin. Step 3 shows the Dark tablet art in both
@@ -6675,13 +7468,144 @@ files are in `files/launch/current/`.
   4. With the gamepad only: Settings (RB) → SNES (A) → D-pad down to the "Console colors" card → A.
   5. Launch the game.
 - **Expected:** Step 1 reads "Console colors" (never a fixed "OpenEmux SNES"). The sheet in step 2 is
-  titled "Default skin" with the same two cards as the console's settings, and the row then reads
+  titled "Controller skins" with the same groups and cards as the console's settings, and the row then reads
+  titled "Default skin" with the same cards as the console's settings, and the row then reads
   "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
   focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
   Step 5 opens the usual light grey SNES skin.
 - **Check:**
   ```bash
   adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["SFC"]["skin"])'   # dark after step 2, console after step 4
+  ```
+
+## Android — Controller skins in official colors
+
+Besides Console colors and Dark, nine of the bundled consoles also come in the official retail colors
+they (or, for home consoles, the controller the skin depicts) were sold in (issue 720): FC (Red), SFC
+(Purple), N64 (Grey, Black, Red, Blue, Green, Yellow, Gold), GB (Red, Yellow, Green, Blue, Black, White,
+Clear), GBC (Red, Purple, Green, Yellow, Teal), GBA (White, Black, Clear blue, Clear pink, Silver,
+Orange), NDS (Blue, Black, White, Turquoise, Pink), GC (Black, Silver, Orange) and PSP (White, Silver,
+Blue). PS, MD and SMS have none. Each is the console's layout in other colors, chosen in the same
+"Default skin" choice as Dark and saved in the same `consoles.<id>.skin` key of `files/meta.json` (the
+color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/build.py` into
+`src/main/assets/skins/<color>/`, listed for the picker in `src/main/assets/skins/variants.json`
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+`MANUAL`, like the Dark skin's section: `$PKG` is `com.openemux.mobile`.
+
+### RT-864 — Each console lists its official colors, each with a swatch
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a GBA and a PlayStation game in the library.
+- **Steps:**
+  1. Open Settings, then the GBA console, and look at the "Default skin" section.
+  2. Go back and open the PlayStation console.
+- **Expected:** GBA lists, in order: "Console colors", "Dark", "White", "Black", "Clear blue", "Clear
+  pink", "Silver" and "Orange". Every card has a small rounded square on the left of its name in that
+  skin's shell color, with a dot of its button color in the corner (purple with a light grey dot for
+  Console colors, black for Dark, white, black, light blue, pink, silver, orange). The color cards show
+  only the name. The PlayStation lists only "Console colors" and "Dark".
+- **Check:**
+  ```bash
+  adb pull "$(adb shell pm path $PKG | head -1 | cut -d: -f2 | tr -d '\r')" /tmp/oe.apk
+  unzip -p /tmp/oe.apk assets/skins/variants.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print([v["id"] for v in d["GBA"]], [v["id"] for v in d["PS"]])'
+  # ['console', 'dark', 'white', 'black', 'clear-blue', 'clear-pink', 'silver', 'orange'] ['console', 'dark']
+  ```
+
+### RT-865 — Picking a color gives every game of the console that skin, same layout
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** Two GBA games and one SNES game in the library; GBA on Console colors.
+- **Steps:**
+  1. Settings → GBA → tap "Clear blue".
+  2. Launch the first GBA game in portrait, then turn the phone to landscape.
+  3. Quit and launch the second GBA game.
+  4. Quit and launch the SNES game.
+- **Expected:** After step 1 the "Clear blue" card is selected and the section reads "Clear blue" on
+  its right. Both GBA games open on a light blue skin with the faint diagonal sheen of a translucent
+  shell. Every key, the screen and the chin's quick actions sit exactly where they do on Console colors,
+  in portrait and landscape. The SNES game keeps its own skin.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GBA"]["skin"])'   # clear-blue
+  adb shell run-as $PKG ls cache/skins/clear-blue   # GBA.deltaskin, copied when the GBA game launched
+  ```
+
+### RT-866 — A color choice survives closing the game, restarting the app and updating it
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** RT-865 done (GBA set to Clear blue).
+- **Steps:**
+  1. Force-stop the app (`adb shell am force-stop $PKG`) and open it again.
+  2. Open Settings → GBA, then launch a GBA game.
+  3. Install a newer build over this one (`adb install -r <apk>`), open the app and launch a GBA game
+     again.
+- **Expected:** The section still reads "Clear blue" and the games open on the Clear blue skin after
+  the restart and after the update.
+- **Check:** the `skin` key is still `clear-blue` after each step (same command as RT-865).
+
+### RT-867 — Every control works on the color skins of the controllers and the DS
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** N64 set to "Gold", NDS to "Pink", PSP to "White", GameCube to "Orange"; a game of
+  each (the NDS one on the DeSmuME core).
+- **Steps:**
+  1. In the N64 game, move the analog stick all the way round and press A, B, Z, every C button, L, R
+     and START.
+  2. In the NDS game, press the Screens key in the chin until it has gone through every layout, in
+     portrait and in landscape.
+  3. In the PSP game, press every face key and the shoulders.
+  4. In the GameCube game, move both sticks and press A, B, X, Y, Z, L and R.
+- **Expected:** Every key reaches the game. The N64 skin is gold with its stick, D-pad, Z and shoulders
+  in a deeper gold; A blue, B green, the C buttons yellow and START red stay as on the real
+  controller. Every NDS layout shows pink art with the picture filling the room the layout needs. The
+  PSP glyphs (triangle, circle, cross, square) read clearly on white. The GameCube skin is orange with
+  the yellow C stick. Knobs follow the thumb and are visible on each skin.
+- **Check:** none beyond the steps (the frames come from the same layout as Console colors:
+  `BundledSkinsTest` in the app's unit tests compares every color package with the console's).
+
+### RT-868 — An imported skin still wins over a color
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** A third-party `.deltaskin` for the SNES; SNES set to "Purple".
+- **Steps:**
+  1. `adb shell mkdir -p /sdcard/Android/data/$PKG/files/skins/SFC` then
+     `adb push <skin>.deltaskin /sdcard/Android/data/$PKG/files/skins/SFC/`.
+  2. Settings → SNES → the "Default skin" section, then launch a SNES game.
+  3. Remove the imported file (`adb shell rm /sdcard/Android/data/$PKG/files/skins/SFC/<skin>.deltaskin`)
+     and launch again.
+- **Expected:** Step 2 reads "Imported skin" on the section's right, shows "A skin you imported for
+  SNES is used instead." and the game uses the imported skin. After step 3 the game opens on the
+  North American colors: light grey with purple A and B and lavender X and Y.
+- **Check:** none beyond the steps.
+
+### RT-869 — Color names are plain words in every language
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** The app's language set to Português (Brasil) (Settings → Language, or the
+  phone's language).
+- **Steps:**
+  1. Open Settings → GBA, then GBC, then N64, and read the cards.
+- **Expected:** GBA: "Branco", "Preto", "Azul transparente", "Rosa transparente", "Prata",
+  "Laranja". GBC: "Vermelho", "Roxo", "Verde", "Amarelo", "Azul-petróleo". N64: "Cinza", "Preto",
+  "Vermelho", "Azul", "Verde", "Amarelo", "Dourado". No marketing name ("Glacier", "Grape", "Kiwi",
+  "Dandelion", "Fuchsia", "Arctic") appears in any language.
+- **Check:** none beyond the steps (`StringsSkinVariantTest` checks every locale has every name).
+
+### RT-870 — The color list from a game's detail screen, by gamepad
+- **Area:** Android — Controller skins in official colors
+- **Mode:** MANUAL
+- **Preconditions:** A Game Boy game in the library; GB on Console colors; a gamepad connected.
+- **Steps:**
+  1. Open the Game Boy game's detail screen and open the "Controller skin" row.
+  2. With the gamepad only, move down through the sheet to the last card, "Clear", and press A.
+  3. Close the sheet and launch the game.
+- **Expected:** The sheet lists "Console colors", "Dark", "Red", "Yellow", "Green", "Blue", "Black",
+  "White" and "Clear", each with its swatch; the focus ring reaches every card and the sheet scrolls to
+  keep it in view. The row then reads "Clear" and the game opens on a pale, translucent-looking grey
+  shell with the Game Boy's layout.
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GB"]["skin"])'   # clear
   ```
 
 ## Android — Update check
@@ -6812,11 +7736,11 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 ### RT-376 — Turbo on the strip shows whether it is on
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** The Android app installed with an Atari 2600 game in the library (a console that keeps
+- **Preconditions:** The Android app installed with an Atari 5200 game in the library (a console that keeps
   the drawn skin; the package skins are RT-462); no gamepad connected (with one, the gamepad layout
   shows: RT-564 to RT-571).
 - **Steps:**
-  1. Launch the Atari 2600 game, phone in portrait.
+  1. Launch the Atari 5200 game, phone in portrait.
   2. Tap the bolt (turbo) on the strip under the picture.
   3. Tap it again.
   4. Repeat steps 2-3 on a console with a light-bodied skin, on the red skin, and
@@ -6880,7 +7804,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 ### RT-572 — Slow motion on the strip shows its pill and slows the game
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** RT-376's game running (Atari 2600 or SNES, drawn skin), every toggle off.
+- **Preconditions:** RT-376's game running (Atari 5200, drawn skin, or SNES), every toggle off.
 - **Steps:**
   1. Phone in portrait: tap slow motion, the fourth button on the strip (a play triangle in a dashed
      ring, between turbo's bolt and fast forward's double arrow).
@@ -6930,13 +7854,17 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
 - **Check:** human only.
 
-### RT-462 — Turbo and fast forward light up on the bundled package skins
+### RT-462 — Turbo and fast forward light up on the package skins
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed with a GBA game and a game of a console that keeps the
-  drawn skin (e.g. Atari 2600) in the library; no skin in `files/skins/`; no gamepad connected.
+  drawn skin (e.g. Atari 5200) in the library; for the GBA, a skin package in use: since issue 806
+  the GBA's bundled skin is in OpenEmux's own format (its quick actions are RT-818), so take the
+  `GBA.deltaskin` the app bundled before (`unzip -p <apk of an earlier release> assets/skins/GBA.deltaskin > GBA.deltaskin`),
+  import it with "Import .zip" and pick it under "Imported"; nothing else in `files/skins/`; no
+  gamepad connected.
 - **Steps:**
-  1. Launch the GBA game, phone in portrait. Its skin is the bundled package: the quick actions sit
+  1. Launch the GBA game, phone in portrait. Its skin is the package: the quick actions sit
      in the bezel's chin, right under the picture.
   2. Tap the bolt (turbo) in the chin, then the double arrow (fast forward).
   3. Tap both again.
@@ -6950,11 +7878,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 
-### RT-577 — Slow motion on the bundled package skins, right before fast forward
+### RT-577 — Slow motion on the package skins, right before fast forward
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
-- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; no skin in
-  `files/skins/`; no gamepad connected; RetroAchievements hardcore off.
+- **Preconditions:** The Android app installed with an SNES and a GBA game in the library; for each,
+  the package the app bundled before issue 806 (`SFC.deltaskin`, `GBA.deltaskin` from an earlier
+  release's APK) imported and in use, as in RT-462; nothing else in `files/skins/`; no gamepad
+  connected; RetroAchievements hardcore off.
 - **Steps:**
   1. Launch the SNES game, phone in portrait, and look at the quick actions in the bezel's chin.
   2. Tap slow motion (the play triangle in a dashed ring, right before the double arrow).
@@ -6976,9 +7906,10 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
 that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
-is held (#546). It applies to every skin with a stick: the bundled package skins of PSP, PlayStation
-(both sticks), Nintendo 64 and GameCube (main and C stick), where the knob is the item's
-`thumbstick` image, the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
+is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
+(both sticks), Nintendo 64 and GameCube (main and C stick), in OpenEmux's own format since issue 806,
+where the knob is the stick's `-knob` image (the item's `thumbstick` image in the packages they
+replaced), the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
 `.manicskin` whose stick has a `thumbstick` image. The runner has no Android
 device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
 (`emulator -avd <avd> -no-window -read-only`) with `adb`, in portrait and in landscape. Touches are
@@ -7015,10 +7946,11 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
 - **Check:** human only, plus the generated config:
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_reach_|_range_mod|_movable|_saturate_pct|desc[0-9]+_overlay'
-  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and one *-knob<N>.png per stick
-  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.manicskin   # in openemux-android: *_knob<N>.png next to each representation's art
+  adb exec-out run-as $PKG ls files/launch/current/skin   # oe-portrait.png, oe-landscape.png and one oe-*-knob<N>.png per stick
+  unzip -l pkg/android/openemux/src/main/assets/skins/PSP.zip | grep -- -knob   # in openemux-android: the stick's knob image in each of the six layouts
   ```
-  Each `analog_left`/`analog_right` desc has `_overlay = "<orientation>-knob<N>.png"`,
+  Each `analog_left`/`analog_right` desc has `_overlay = "oe-<orientation>-knob<N>.png"`
+  (`<orientation>-knob<N>.png` on a Delta/Manic package),
   `_movable = true`, `_saturate_pct = 1.0`, `_range_mod = 2.0`, `_range_mod_exclusive = true` and
   four `_reach_*` values between 1.0 and 2.0.
 
@@ -7096,9 +8028,9 @@ The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openem
 eight-way area that presses the direction of the thumb's angle to its centre, a touch that starts on
 it keeps steering until the finger lifts, wherever the thumb goes, and a circle on the centre follows
 the thumb inside the D-pad. It applies to every skin with a D-pad, the Virtual Boy's second pad and
-the NDS layouts included, both to the skins the app draws and to the skin packages it ships for the
-twelve best-known consoles (FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS, PSP), whose circle is an
-image in the package. The runner has no Android device, so these are `MANUAL`: a person runs
+the NDS layouts included, both to the skins the app draws and to the skins it ships (in OpenEmux's
+own format for every console but the NDS since issue 806, the NDS's a Delta package), whose circle is
+an image in the skin. The runner has no Android device, so these are `MANUAL`: a person runs
 them on a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with `adb`, in
 portrait and in landscape. A held drag is driven with `adb shell input motionevent DOWN <x> <y>`,
 `MOVE <x> <y>` and `UP <x> <y>`; the pressed directions are read from RetroArch's input display or a
@@ -7120,15 +8052,17 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   `adb exec-out screencap -p > shot.png`), plus the generated config:
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'dpad_area|_dead_zone|_range_mod|_movable|_reach_|desc[0-9]+_overlay'
-  adb exec-out run-as $PKG ls files/launch/current/skin   # portrait.png, landscape.png and a circle image per D-pad
+  adb exec-out run-as $PKG ls files/launch/current/skin   # oe-portrait.png, oe-landscape.png and a circle image per D-pad (portrait.png, landscape.png on a package or the drawn skin)
   ```
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
   `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
-  `_overlay` naming the circle image (`<overlay>-knob<N>.png`, on a shipped skin package and on a
-  drawn skin alike) and `_movable = true`. The NES uses the shipped skin package, so the reach is its
-  D-pad's touch area over the circle's travel, a little over 1.5: `_reach_x` and `_reach_y`, or
+  `_overlay` naming the circle image (`<overlay>-knob<N>.png` on a package and on a drawn skin,
+  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. The NES ships in
+  OpenEmux's own format since issue 806, so `_reach_x` and `_reach_y` are both `1.3636` (the D-pad
+  over its ball's travel, 60/44). A Delta or Manic package (the NDS's, or an imported one) reaches as
+  far as its D-pad's touch area over the circle's travel: `_reach_x` and `_reach_y`, or
   `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
-  one side than the other. On a console with a drawn skin (e.g. the Virtual Boy) `_reach_x` and
+  one side than the other. On a console with a drawn skin (e.g. the ColecoVision) `_reach_x` and
   `_reach_y` are both `1.4182`.
 
 ### RT-409 — Sliding off the D-pad keeps steering
@@ -7192,8 +8126,9 @@ game's movement. `$PKG` is `com.openemux.mobile`.
 - **Mode:** MANUAL
 - **Preconditions:** As RT-408, with a game for SNES, Game Boy Advance, Mega Drive, PlayStation,
   Nintendo 64, Virtual Boy, Nintendo DS, PC Engine and a console with a keypad (e.g. ColecoVision).
-  The first six of those and the NDS use the shipped skin packages; the Virtual Boy, the PC Engine
-  and the keypad console use the drawn skins.
+  The NDS uses the shipped Delta package; the first six of those (since issue 806), the Virtual Boy
+  and the PC Engine (issues 770 and 771) their OpenEmux-format packages; and the keypad console the
+  drawn skin.
 - **Steps:**
   1. On each console, in portrait and in landscape, repeat RT-408 step 2 and RT-409 step 1.
   2. On the Virtual Boy, repeat them on the right-hand pad.
@@ -7364,10 +8299,12 @@ headless emulator, sizes simulated with `wm size` and `wm density 320`, so dp = 
 drawn when the game starts, so set the size **before** opening the game. The tablet skin starts at
 a smallest width of 600dp; anything narrower keeps the phone skins.
 
-Two kinds of skin meet a tablet. The twelve consoles that ship a skin package (FC, SFC, N64, GC,
-GB, GBC, GBA, NDS, MD, SMS, PS, PSP) keep the package and use its tablet (`ipad`) art. Every other
-console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a
-Virtual Boy game (a drawn skin with L and R), a Game Boy Advance game and a Nintendo DS game.
+Two kinds of skin meet a tablet. The NDS, which ships a Delta package, keeps the package and uses its
+tablet (`ipad`) art. The consoles bundled in OpenEmux's own format (issues 770 and 771, the Virtual
+Boy among them; since issue 806 also FC, SFC, N64, GC, GB, GBC, GBA, MD, SMS, PS and PSP, which
+shipped Delta/Manic packages before) use that skin's tablet layouts (RT-732, RT-744, RT-814). Every
+other console gets the drawn tablet skin, which is what RT-428 to RT-430 look at. The library needs a ColecoVision game (a console that keeps the
+drawn skin), a Game Boy Advance game and a Nintendo DS game.
 Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset` and
 `user_rotation 0`.
 
@@ -7377,18 +8314,17 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 2560x1600` and `adb shell wm density 320`
   (1280×800dp), which is landscape at `user_rotation 0`.
 - **Steps:**
-  1. Start the Virtual Boy game.
+  1. Start the ColecoVision game.
   2. Tap the strip's turbo and fast-forward keys, then each of them again.
 - **Expected:** The picture is large and centred, keeping its aspect, between two columns of
   controls of equal width. Right under the picture, at its width, the strip shows save, load,
-  turbo and fast forward, in that order. L and R are in the top corners, the menu key under L, the
-  console name at the top of the right column, the D-pad in the middle of the left column, A and B
-  in the right column, Select and Start lower down in each column, under the lowest button of their
-  column. The Virtual Boy's second D-pad sits in the right column above A and B. No control covers
-  the picture or another control: B stays clear of Start.
+  turbo and fast forward, in that order. The menu key is at the top of the left column, the
+  console name at the top of the right column, the D-pad in the middle of the left column, the two
+  fire buttons in the right column, the keypad key lower down, under the lowest button of its
+  column. No control covers the picture or another control.
   Turbo and fast forward light up while on and go dark on the second tap.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`, compared with the TabJogoGBA
-  board of the plan on #559: the same placement, in the Virtual Boy's colours).
+  board of the plan on #559: the same placement, in the ColecoVision's colours).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
 ### RT-429 — Tablet portrait puts the picture on top and the controls in the lower half
@@ -7397,12 +8333,11 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Preconditions:** As RT-380, then `adb shell wm size 1600x2560` and `adb shell wm density 320`
   (800×1280dp), portrait.
 - **Steps:**
-  1. Start the Virtual Boy game.
+  1. Start the ColecoVision game.
   2. Turn the device to landscape (`user_rotation 1`), then back to portrait.
 - **Expected:** In portrait the picture spans the full width at the top with the strip under it,
-  then a row with L on the left, the menu key in the middle and R on the right, the D-pad lower
-  left, the second D-pad and then A and B lower right, Select and Start between them and the
-  console name at the bottom.
+  then the menu key, the D-pad lower left, the two fire buttons lower right, the keypad key
+  between them and the console name at the bottom.
   Turning switches to the RT-428 layout and back, without restarting the game.
 - **Check:** human only (a screenshot of each orientation, compared with TabJogoRetrato).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
@@ -7423,7 +8358,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Check:** human only (the screenshots side by side).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`, `user_rotation 0`.
 
-### RT-431 — Consoles with a skin package use its tablet art on a tablet
+### RT-431 — Consoles with a bundled skin use its tablet art on a tablet
 - **Area:** Android — Tablet gameplay
 - **Mode:** MANUAL
 - **Preconditions:** As RT-428 (1280×800dp, landscape).
@@ -7432,7 +8367,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
      (`user_rotation 0`).
   2. Quit, start the Nintendo DS game in landscape and tap something on the lower screen.
   3. Open the pause menu in each game.
-- **Expected:** Both games show their package skin's tablet art, not the drawn tablet skin of
+- **Expected:** Both games show their bundled skin's tablet art (the GBA's tablet layouts, in
+  OpenEmux's format since issue 806; the NDS package's `ipad` art), not the drawn tablet skin of
   RT-428 and not the phone art stretched: the picture large, the controls sized for a tablet, in
   both orientations. The Nintendo DS package draws its two screens one over the other, as the
   package does, and the tap on the lower screen reaches the game. The pause menu is the side panel
@@ -7496,8 +8432,9 @@ with `adb`: a **Pixel Fold** AVD (`adb emu fold` / `adb emu unfold`) and a **Res
 `adb shell am start --windowingMode 5 ...`). The reload is logged by the engine:
 `adb logcat -s RetroArch:* OpenEmuxSkin:*`. The skins live under the app's
 `files/launch/current/` directory (`adb shell run-as com.openemux.mobile ls files/launch/current`
-on a debug build). The twelve consoles with a bundled skin package (Game Boy Advance and Nintendo
-DS among them) are redrawn from that package; the other consoles from the drawn skin.
+on a debug build). The consoles with a bundled skin (the Game Boy Advance's in OpenEmux's format
+since issue 806, the Nintendo DS's a Delta package) are redrawn from it; the other consoles from the
+drawn skin.
 
 ### RT-450 — Unfolding a Fold during a game redraws the skin for the inner screen
 - **Area:** Android — Window size changes in game
@@ -7508,8 +8445,8 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
   1. Start the GBA game and play for a few seconds, noting where the game is.
   2. Run `adb emu unfold`.
 - **Expected:** Within about a second the skin is redrawn for the inner screen: still the GBA's
-  bundled package skin (not the drawn one), now in its tablet art since the inner screen is 600dp
-  or more across, its buttons round, not stretched, and the picture well placed. The game goes on
+  bundled skin (not the drawn one), now in its fold layout (a window with a fold uses the `fold-*`
+  layouts since issue 806; the package before it drew its tablet art), its buttons round, not stretched, and the picture well placed. The game goes on
   from the same point (no restart, no state loaded) and the touch controls respond.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` before and after; the logcat shows
   one `OpenEmuxSkin` line with `OVERLAY_LOAD` and no core restart).
@@ -7582,10 +8519,10 @@ DS among them) are redrawn from that package; the other consoles from the drawn 
 ### RT-490 — A console with the drawn skin is redrawn with the drawn skin
 - **Area:** Android — Window size changes in game
 - **Mode:** MANUAL
-- **Preconditions:** As RT-450, with a PC Engine game in the library (a console with no bundled
+- **Preconditions:** As RT-450, with a ColecoVision game in the library (a console with no bundled
   skin package).
 - **Steps:**
-  1. Start the PC Engine game, folded.
+  1. Start the ColecoVision game, folded.
   2. Run `adb emu unfold`, then `adb emu fold`.
 - **Expected:** After each redraw the app's drawn skin is shown, fitted to the new screen, never a
   skin package: on the inner screen, in landscape, its tablet shape (the picture between two side
@@ -7878,7 +8815,7 @@ at least two consoles, one with cartridge frames (e.g. Game Boy Advance), and a 
   Right: "GBA · <core>", the title, time played and last played, favourite and more buttons,
   "Continue"/"Restart", up to four saved states in a row, "Settings for this game" with Core,
   Shader, Controller skin and Cheats, and the file's name, size and folder at the foot. The colour
-  changes the cartridge; Core and Shader open their sheets. The phone keeps today's single column.
+  changes the cartridge; Core and Shader open their sheets. A phone in portrait keeps today's single column.
 - **Check:** human only.
 
 ### RT-485 — The gamepad moves between the list and its detail
@@ -9423,14 +10360,18 @@ formatting, the checklist, the offer model, the discoverability and nothing-foun
 coordinator, the notification content, the QR code and the string parity across locales are covered
 by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionTest`,
 `OfferModelTest`, `DiscoverabilityTest`, `ShareCoordinatorTest`, `TransferNoticeTest`, `QrTest`,
-`StringsShareTest`).
+`StringsShareTest`); what a transfer delivered and why the rest did not, on both ends, by
+`DeliveryReportTest` and `PlacementTest`.
+`StringsShareTest`). One of the player's own controller skins goes to another Android device the
+same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
+`/sdcard/Android/data/$PKG/files/skins`.
 
 ### RT-524 — Every entry point opens Share Nearby with the right games
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
 - **Preconditions:** The app with at least two consoles and three games, first-run setup done.
 - **Steps:**
-  1. Open a game's detail, press "⋯" (or Y on a gamepad) and pick "Share Nearby".
+  1. Open a game's detail and tap the round share button at the top right (or press Y on a gamepad).
   2. Back in a console's library, long-press a game, select three, and press the share button in the
      selection bar; repeat with Select on a gamepad.
   3. On the "Shelf", long-press a console and pick "Share All Games Nearby".
@@ -9552,12 +10493,12 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
      (`adb shell stat -c %Y <saves>/<console>/<game>.srm`).
   3. Send the large game.
 - **Expected:** "Already in Your Library" lists the save with "Yours: <date> · newer" and
-  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace"),
-  and the items skipped for other reasons under "SKIPPED". After the transfer the save's mtime is
-  unchanged and the result says "1 save kept (yours was newer)"; when nothing at all was received
-  it reads "Nothing new was added: your library already had all of it." instead of "They’re in
-  your library". 3: "Not enough space." with the
-  needed, free and missing sizes; "Accept" is disabled.
+  "Incoming: <date>", the choices "Keep Newest · Keep Both · Replace · Skip" (art: "Skip · Replace";
+  a disc game of several files: only "Replace · Skip", see RT-842), and the items skipped for other
+  reasons under "SKIPPED". After the transfer the save's mtime is unchanged and the result says
+  "1 save kept (yours was newer)", with no "items skipped" count: a game that did not arrive is
+  listed by name instead (RT-842). 3: "Not enough space." with the needed, free and missing sizes;
+  "Accept" is disabled.
 - **Check:** human only (screenshots and the two `stat` lines).
 
 ### RT-533 — A transfer runs in a foreground service and can be cancelled from the notification
@@ -9631,8 +10572,10 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   2. Check that both show the same code; accept on the tablet.
   3. On the tablet press "Show in Library" and start the game.
 - **Expected:** The phone shows "1 Game Sent" / "<tablet> has them now."; the tablet "1 Game
-  Received" / "From <phone>. They’re in your library, ready to play.". The game is in the tablet's
-  library with its cover and label without restarting the app, and it starts with the phone's save.
+  Received" / "From <phone>. They’re in your library, ready to play.". The number received on the
+  tablet is the number of games selected on the phone, and both ends show the same number. The game
+  is in the tablet's library with its cover and label without restarting the app, and it starts with
+  the phone's save.
 - **Check:** human only.
 
 ### RT-538 — The share screens work with a gamepad and lay out in two columns on a wide window
@@ -9675,6 +10618,118 @@ by `./gradlew testDebugUnitTest --no-daemon` (`ShareFormatTest`, `SendSelectionT
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
 - **Check:** human only (screenshots).
 
+### RT-908 — "Share" on a skin of your own opens Share Nearby with that one skin
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone with a skin of your own for the SNES (`mine`, RT-737), a broken one (a
+  folder in `$SKINS/SFC/` whose `skin.json` is cut in half) and an imported `.deltaskin`.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "⋮" on the `mine` card.
+  2. Tap "Share".
+  3. Go back; open the "⋮" of the broken skin, of a bundled card and of the imported package.
+- **Expected:** 1: the sheet has "Share", with "With another Android device on this network", under
+  "Download as template" and above "Delete". 2: "Share Nearby" opens with the back link reading
+  "Controller skins", "<skin name> · <size>" under the title, and one row for what is sent: the
+  SNES chip, the skin's name and "Controller Skin · <size>", with nothing to check or uncheck and
+  no "What to Send" screen behind it. "DEVICES ON THIS NETWORK" and "THIS DEVICE" are there as for
+  games (RT-524). 3: none of the three sheets has "Share": only a readable skin of your own is sent.
+- **Check:** human only (a screenshot of the sheet and one of the screen).
+
+### RT-909 — A shared skin arrives under "Your skins" on the other Android device, not in use
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Two Android devices with the app on the same Wi-Fi (as RT-537); on the sender,
+  `mine` for the SNES with a control moved and saved in the editor (RT-787), so it can be told
+  apart; on the receiver, a SNES game, the SNES on "Dark" and no skin of its own for it.
+- **Steps:**
+  1. On the receiver open "Receive Games"; on the sender, `mine`'s "⋮" → "Share", then tap the
+     receiver.
+  2. Check that both show the same code; press "Accept" on the receiver.
+  3. On the receiver: Settings → SNES → "Controller skins"; launch the SNES game.
+  4. Tap the new card and launch the game again, upright and sideways.
+- **Expected:** 1: the sender waits for the receiver with the code; the receiver's sheet is titled
+  "Incoming Skin" and reads "<sender> wants to send you a controller skin (<size>).", with the same
+  code, one row (the SNES chip, the skin's name, "Controller Skin · <size>"), "Decline" and
+  "Accept". 2: the sender ends on "Skin Sent" / "<receiver> has it now."; the receiver on "Skin
+  Received" / "From <sender>. It’s in your Super Nintendo skins.", with "Close" and no "Show in
+  Library". 3: the skin is under "YOUR SKINS" with the name it has on the sender and the same
+  Phone, Tablet and Fold badges, and it is not in use: "Dark" keeps its ring and the game opens on
+  Dark. 4: the game shows the skin as the sender has it, the moved control included, in both
+  orientations.
+- **Check:** on the receiver, `adb shell ls $SKINS/SFC` lists the new folder (its `skin.json` and
+  layout folders) and no `shared-*.zip`, and RT-738's command prints `dark None` after step 3. JVM
+  suite `ShareSkinTest`, `ShareTransferLoopbackTest` (openemux-android).
+
+### RT-910 — A received skin whose name is taken becomes "Name (2)"
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** RT-909 done: the receiver already has the skin under the sender's name for it.
+- **Steps:**
+  1. Share the same skin with the receiver again and accept it there.
+  2. Open the receiver's SNES "Controller skins".
+- **Expected:** The offer shows the skin as before, with no conflict to review. Afterwards "YOUR
+  SKINS" has both: the first under its name, left as it was, and the new one as "<name> (2)" (a
+  third time gives "<name> (3)"). Neither is put in use by arriving.
+- **Check:** on the receiver, `adb shell grep -h '"name"' $SKINS/SFC/*/skin.json` lists `"<name>"`
+  and `"<name> (2)"`. JVM suite `SkinStoreShareTest.aNameThatIsTakenGetsTheNextNumber` and
+  `ShareSkinTest` (openemux-android).
+
+### RT-911 — A computer is listed but cannot be picked for a skin
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone with `mine` for the SNES and a game; a desktop OpenEmux with Share
+  nearby open on the same network (on an emulator, added with "Connect by Address").
+- **Steps:**
+  1. `mine`'s "⋮" → "Share".
+  2. Tap the computer's row.
+  3. Go back and share a game instead (RT-524); look at the same row.
+- **Expected:** 1: the computer is listed but greyed out, reading "Desktop · skins only go to
+  Android devices" where a row says how the device was found; a phone or a tablet in the list stays
+  enabled. 2: nothing happens: no code on the phone and no offer on the computer. 3: for a game the
+  computer's row is enabled again and reads "Desktop · found by …".
+- **Check:** human only (screenshots of both lists). JVM suite `ShareCoordinatorTest`,
+  `ShareSkinTest` (openemux-android).
+
+### RT-912 — An Android from before skin sharing answers that it cannot take the skin
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A phone with `mine` for the SNES; a second Android device with a build of
+  OpenEmux from before skin sharing, on "Receive Games".
+- **Steps:**
+  1. `mine`'s "⋮" → "Share", tap the other device, and accept there if it shows an offer.
+- **Expected:** The other device takes nothing (it does not know the kind of file and skips it).
+  The sender ends on "Skin Not Sent" / "<device> didn’t take it.", and under "NOT SENT" the skin's
+  row reads "SNES · <device> can’t take this skin. OpenEmux there may need an update." Neither side
+  shows "Transfer Failed".
+- **Check:** human only (a screenshot of the sender's card); on the other device
+  `adb shell ls $SKINS/SFC` is the same before and after. JVM suite `ShareTransferLoopbackTest`,
+  `ShareCoordinatorTest` (openemux-android).
+
+### RT-913 — A skin's zip, its offer and its import on the other device are checked by the unit suite
+- **Area:** Android — Share nearby
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the unit suite (`./gradlew --no-daemon testDebugUnitTest` in `pkg/android/openemux`).
+- **Expected:** A skin of the player's own is written as a zip of its `skin.json` and the images
+  its layouts have (a keypad page's too), with nothing else of its folder and nothing behind a
+  link; a broken skin, a package or a skin that is not there is not written; the zip reads back as
+  the same skin with every layout. It is offered as an entry with no ROM and one item of kind
+  `skin`, alone in what is sent, to a phone or a tablet and never to a desktop. The receiver stages
+  it in the console's skins folder and refuses one for a console it does not run, over the import's
+  limit, under a hidden name, among a game's files, made for another console, or that is no skin;
+  it imports it as a new skin of its own with every layout, the console still playing with the
+  skin it had, and under "<name> (2)" when the name is taken (within the name's limit). An import
+  that fails undoes the whole commit, and a cancel leaves nothing behind. The offer sheet's model,
+  the notification and both results speak of a skin, not of games; a receiver from before skins
+  answers the kind with a skip and the send ends with nothing gone.
+- **Check:** suite files `src/test/java/com/openemux/mobile/share/ShareSkinTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinStoreShareTest.kt`,
+  `src/test/java/com/openemux/mobile/share/ShareCoordinatorTest.kt`,
+  `src/test/java/com/openemux/mobile/share/ShareTransferLoopbackTest.kt`,
+  `src/test/java/com/openemux/mobile/share/TransferNoticeTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
 ## Share nearby — cross-device
 
 The paths of Share nearby that need two different devices: desktop → Android, Android → desktop,
@@ -9707,7 +10762,7 @@ NAT, so discovery itself is checked only on hardware.
 - **Steps:**
   1. On the computer, right-click a game and choose "Share Nearby…".
   2. On the phone, open the "Import" tab and tap "Receive games".
-  3. Close both, then do the reverse: share a game from the phone's detail "⋯" menu and open
+  3. Close both, then do the reverse: share a game from the phone's detail share button and open
      "Receive Games…" from the arrow beside the Import button on the computer.
 - **Expected:** Within a few seconds the computer lists the phone under "Devices on This Network"
   with a phone icon, its name and "Phone · found by mDNS and beacon" (or one of the two). In step 3
@@ -9737,8 +10792,8 @@ NAT, so discovery itself is checked only on hardware.
 - **Mode:** MANUAL (pipeline variant by address)
 - **Preconditions:** The test library's SFC game on the phone; the computer does not have it.
 - **Steps:**
-  1. On the computer, open "Receive Games…". On the phone, share the game from its detail "⋯"
-     menu and tap the computer.
+  1. On the computer, open "Receive Games…". On the phone, share the game from its detail share
+     button and tap the computer.
   2. Compare the codes, then press "Accept" in the computer's "Incoming Games" dialog.
   3. Press "Show in Library" and start the game.
 - **Expected:** The same code on both screens. The phone ends on "1 Game Sent" ("<computer> has
@@ -9896,6 +10951,57 @@ NAT, so discovery itself is checked only on hardware.
   `manual/#share` and `manual/#share-trouble`.
 - **Check:** `PYTHONPATH=src:tools .venv/bin/python -c "import build_site, pathlib; pages = [build_site.manual_output_path(l).read_text(encoding='utf-8') for l in build_site.ORDER]; assert all('id=\"share-trouble\"' in p and 'href=\"#share\"' in p and '53319' in p and '53318' in p for p in pages); readme = pathlib.Path('README.md').read_text(encoding='utf-8'); assert 'manual/#share)' in readme and 'manual/#share-trouble' in readme; print('RT-563 OK')"`
 
+### RT-861 — A game shared to the phone brings its console's BIOS into the system folder
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** A desktop OpenEmux with Share nearby, a PS game and `scph5501.bin` plus a
+  `notes.txt` in `<roms>/PS/bios/`; the phone (or emulator) without `scph5501.bin` in
+  `/sdcard/Android/data/$PKG/files/system/`.
+- **Steps:**
+  1. On the desktop, share the PS game to the phone (on an emulator, add the desktop with "Connect
+     by Address").
+  2. Read the game's line on the phone's "Incoming Games" sheet, then press "Accept".
+  3. When it ends, read the result card; then open "Settings" → "BIOS" and launch the game.
+- **Expected:** 2 lists "BIOS scph5501.bin" among the game's items. 3: the card ends with
+  "BIOS files added: scph5501.bin"; the BIOS screen shows the PlayStation BIOS present and the game
+  starts. `notes.txt` is not on the phone.
+- **Check:** `adb shell ls /sdcard/Android/data/$PKG/files/system/` lists `scph5501.bin` and no
+  `notes.txt`. Suite: `./gradlew testDebugUnitTest --no-daemon` (`ShareBiosTest`,
+  `ShareTransferLoopbackTest`).
+
+### RT-862 — The phone sends its BIOS with the first game of the console, to a desktop or a phone
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone with two PS games and `scph5501.bin` (any case) in
+  `/sdcard/Android/data/$PKG/files/system/`, plus a file there that is no catalog BIOS; a desktop
+  OpenEmux or a second phone to receive.
+- **Steps:**
+  1. Select both PS games and open "Share Nearby" → "What to Send"; expand both games.
+  2. Uncheck the first game, then check it again; uncheck "BIOS Files", then check it again.
+  3. Send to the desktop and accept there; repeat to a second phone.
+- **Expected:** 1: "BIOS Files" is listed under the first PS game only. 2: with the first game
+  unchecked the BIOS still count in the total (they go with the second game); with "BIOS Files"
+  unchecked the total drops by their size, and the game's own checkbox stays checked. 3: the
+  phone's card ends with "BIOS files sent: scph5501.bin"; the desktop has it in
+  `<roms>/PS/bios/scph5501.bin`, the second phone in its `files/system/`. The other file never goes.
+- **Check:** on the desktop, `ls <roms>/PS/bios/`. Suite: `ShareBiosTest`, `SendSelectionTest`.
+
+### RT-863 — A BIOS the phone already has is not sent again; a different one is kept unless replaced
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** RT-861 done.
+- **Steps:**
+  1. Share the same game from the desktop again and accept.
+  2. Replace the desktop's `<roms>/PS/bios/scph5501.bin` with a different file of the same name and
+     share again; on the sheet, open the conflicts.
+  3. Accept with the default; share again and pick "Replace" on the BIOS row.
+- **Expected:** 1: no BIOS conflict and the BIOS is not uploaded (the card has no "BIOS files
+  added" line). 2: one conflict row "Game · BIOS scph5501.bin" with only "Skip" (selected) and
+  "Replace". 3: with Skip the phone's file is unchanged; with Replace it has the desktop's bytes.
+- **Check:** `adb shell md5sum /sdcard/Android/data/$PKG/files/system/scph5501.bin` before and after
+  each step. Suite: `ShareBiosTest` (an older peer skipping the `bios` kind and still taking the
+  game is `PlacementTest`'s unknown-kind case).
+
 ## Android — System bars
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -9999,12 +11105,12 @@ release APK needs a real controller (USB or Bluetooth).
   (a real one, or "connect" once the game has opened).
 - **Steps:**
   1. Launch the Atari 2600 game, phone in landscape.
-  2. Repeat with the Mega Drive game (a bundled package skin).
+  2. Repeat with the Mega Drive game (a bundled skin, in OpenEmux's format since issue 806).
 - **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
   from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
   the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
   barely visible disc), not a grey band. The picture fits between the rails at full height. The
-  package skin shows the same drawn layout.
+  bundled skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
 
 ### RT-565 — Connecting and disconnecting the pad mid-game switches the layout without a restart
@@ -10206,7 +11312,8 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
 - **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
-  of the console chips read LB and RB. Step 2, with no restart, shows B (purple), X, − and L R, and the
+  of the console chips read LB and RB (portrait; in landscape the chips row is gone and the filter
+  pager's previous/next show the same faces, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the
   pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
   SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
@@ -10501,8 +11608,8 @@ on the device; a cover kept on the device is one received through "Share nearby"
   1. Open the game and look at its settings list.
   2. Tap the "Artwork" row.
 - **Expected:** In step 1 the list reads "Core", "Shader", "Artwork", "Controller skin", "Cheats",
-  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; "⋮"
-  lists only "Share" and "Remove from library". In step 2 the "Artwork" screen opens on the current
+  in that order, the "Artwork" row styled like its neighbours with the value "Automatic"; below the list
+  comes only the "Remove from library" card. In step 2 the "Artwork" screen opens on the current
   art, titled with the game and console, with the tabs "Current", "Search", "Edit" and "Import".
   "Current" shows a "Cover" card that says "Automatic", "Synced <date>",
   "WEBP · <width> × <height>" and "From the OpenEmux mirror", and a "Label" card that shows the
@@ -10799,10 +11906,2938 @@ on the device; a cover kept on the device is one received through "Share nearby"
   an empty box.
 - **Check:** human only.
 
+### RT-703 — The Windows portable zip writes nothing to the user profile
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) where OpenEmux was never run: no
+  `%USERPROFILE%\.openemux`, no `%USERPROFILE%\games`. `OpenEmux-*-windows-x86_64.zip` from the
+  release under test.
+- **Steps:**
+  1. Unzip it to a USB stick or any folder, check that `OpenEmux\portable.txt` sits beside
+     `OpenEmux.exe`, and run `OpenEmux.exe`.
+  2. Let the first boot finish, put a ROM into `OpenEmux\data\roms\<console>\`, scan, launch the
+     game and quit it, then change any setting in "Preferences".
+  3. In PowerShell, list what changed in the profile during the test:
+     `Get-ChildItem $env:USERPROFILE,$env:APPDATA,$env:LOCALAPPDATA -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-1) -and $_.FullName -match 'openemux|fontconfig|gtk|recently-used' }`
+  4. Delete `portable.txt` and run `OpenEmux.exe` again.
+- **Expected:** Steps 1-2: `OpenEmux\data\` holds `openemux\` (config, library, playlists,
+  states), `roms\`, `cache\`, `config\`, `share\`, `state\` and `tmp\`. Step 3 lists nothing.
+  Step 4: the app starts as a fresh install under `%USERPROFILE%\.openemux`, the way the installer
+  does.
+- **Check:** human only.
+- **Restore:** delete `%USERPROFILE%\.openemux` created by step 4.
+
+### RT-704 — Without the portable marker, every path is the one it always was
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable-mode suite.
+- **Expected:** With the marker, the config dir, the default ROM folder, the caches, the four XDG
+  variables, `TEMP`/`TMP` and the fontconfig cache resolve under `data\`; without it (the
+  installer) and on Linux, they are the paths of the previous release; `build.sh` puts the marker
+  in the zip only.
+- **Check:** suite files `tests/test_portable.py`, `tests/test_paths.py`,
+  `tests/test_pixbuf_loaders.py`, `tests/test_startup_preparation.py`.
+
+### RT-705 — A portable folder moved to another drive letter keeps the library
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) with two drives or a USB stick, and
+  `OpenEmux-*-windows-x86_64.zip` from the release under test unzipped to it (for example
+  `E:\OpenEmux`). A second ROM folder outside the portable folder, for example `C:\roms-outside\SFC`
+  with one ROM.
+- **Steps:**
+  1. Run `OpenEmux.exe`, let the first boot finish, put two ROMs into `OpenEmux\data\roms\SFC\`
+     and scan.
+  2. Star one game as a favorite, create a collection "Moved" with the other, pick a different core
+     and a shader for one game in its context menu, play one game for a few seconds, and change a
+     setting in "Preferences".
+  3. Quit the app and open `OpenEmux\data\openemux\config.yaml` and
+     `OpenEmux\data\openemux\playlists\FAVORITES.list` in Notepad.
+  4. Move the whole `OpenEmux` folder to another drive letter (or eject the stick and plug it into a
+     port that gets another letter) and run `OpenEmux.exe` from there.
+  5. In "Preferences", point the ROM folder at `C:\roms-outside`, scan, quit and open `config.yaml`
+     again.
+- **Expected:** Step 3: `roms_path: data/roms`, and the favorite line reads
+  `data/roms/SFC/<game>`, with no drive letter. Step 4: the two games are in the library without a
+  rescan, the favorite is starred, "Moved" holds its game, the per-game core and shader are still
+  picked, the played game is first under recently played and the setting kept its value. Step 5:
+  `roms_path` is the absolute `C:\roms-outside`, and its game launches.
+- **Check:** human only.
+
+### RT-706 — Portable paths are stored relative, and nothing changes off portable mode
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable paths suite.
+- **Expected:** With the marker, `config.yaml` path keys, console playlists, favorites,
+  collections, per-game cores, shaders and cartridge colors and play history are written relative
+  to the portable folder and read back under its new location after a move; absolute paths from an
+  older portable config are relocated; paths outside the folder stay absolute. Without the marker,
+  the files are byte for byte what they were.
+- **Check:** suite files `tests/test_portable_paths.py`, `tests/test_portable.py`.
+
+## Android — Skin templates for creators
+
+The templates skin creators start from
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux/tools/skins/templates/`): one zip per console with a bundled skin, in OpenEmux's
+own skin format (`docs/skin-format.md`), with placeholder art at the exact sizes, the guide
+(`README.md`) and the asset plan of every console (`ASSET-PLAN.md`). Playing a template needs the
+app to draw OpenEmux-format skins in game (issue 776). The runner has no Android device, so the in-game
+scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-725 — A template installed unchanged works in game
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a Game Boy Advance game; `GBA-template.zip`
+  from `tools/skins/templates/` in the openemux-android repository.
+- **Steps:**
+  1. Unzip `GBA-template.zip`: it gives one folder, `GBA-template/`.
+  2. Copy it to the device:
+     `adb push GBA-template /sdcard/Android/data/$PKG/files/skins/GBA/`.
+  3. Start the GBA game, upright, then turn the phone sideways.
+  4. Press every control: the D-pad's four directions, "A", "B", "L", "R", "START", "SELECT", the
+     menu key, and the quick actions "save", "load", "turbo", "fast-forward" on the frame.
+- **Expected:** The placeholder skin is drawn (light grey shapes, each with its name) in both
+  orientations, the game picture in its screen; every control does what its name says; the
+  D-pad's ball follows the thumb.
+- **Check:** `MANUAL`: screenshot each orientation with `adb exec-out screencap -p`; afterwards
+  `adb shell rm -r /sdcard/Android/data/$PKG/files/skins/GBA/GBA-template` brings back the bundled skin.
+
+### RT-726 — A template with one image replaced shows the new image
+- **Area:** Android — Skin templates
+- **Mode:** MANUAL
+- **Preconditions:** RT-725's template installed.
+- **Steps:**
+  1. Read the size of `phone-portrait/a.png` in the template's `README.txt`.
+  2. Make any PNG of that size (for instance a solid red circle) and save it over
+     `GBA-template/phone-portrait/a.png`.
+  3. Push the folder again and start the GBA game upright.
+  4. Delete `phone-portrait/b.png` from the folder, push again (remove the folder on the device
+     first) and start the game.
+- **Expected:** Step 3: the new image is drawn on A, the rest unchanged, and A still presses A.
+  Step 4: B is drawn from its colours, shape and label in `skin.json` (the bundled skin's colours),
+  and still presses B.
+- **Check:** `MANUAL`: screenshot after steps 3 and 4.
+
+### RT-727 — The templates are valid and generated deterministically
+- **Area:** Android — Skin templates
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout with Node and Pillow.
+- **Steps:**
+  1. Run the templates suite.
+  2. Rebuild one template: `python3 tools/skins/build.py --templates GBA` in `pkg/android/openemux`.
+- **Expected:** Every template is read by the app's skin reader, has the six layouts, every image
+  at the size `skin.json` gives, every control bound to an input the app presses, and phone and
+  tablet layouts equal to the bundled skin's; `ASSET-PLAN.md` is up to date and has a section for
+  each of the 31 consoles; the rebuild leaves `git status` clean.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinAssetPlanTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+### RT-728 — The first start of a portable folder offers to bring the installed data
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** A Windows 10/11 machine (or VM) where the installer of OpenEmux ran before:
+  `%USERPROFILE%\.openemux` holds a library with a favorite, a collection, a save state and a
+  changed setting, and `%USERPROFILE%\games\roms` holds the ROMs with their covers.
+  `OpenEmux-*-windows-x86_64.zip` from the release under test, unzipped to a new folder.
+- **Steps:**
+  1. In PowerShell, record the profile:
+     `Get-ChildItem $env:USERPROFILE\.openemux -Recurse -File | Get-FileHash | Out-File $env:TEMP\before.txt`
+  2. Run `OpenEmux.exe` from the portable folder.
+  3. Tick "Also copy the ROM folder (…)" and click "Copy".
+  4. Repeat step 1's command into `after.txt` and compare:
+     `Compare-Object (Get-Content $env:TEMP\before.txt) (Get-Content $env:TEMP\after.txt)`
+  5. Quit, open `OpenEmux\data\openemux\config.yaml` and
+     `OpenEmux\data\openemux\playlists\FAVORITES.list` in Notepad.
+  6. Move the portable folder to another drive letter and run `OpenEmux.exe` again.
+- **Expected:** Step 2 opens "Bring your existing data?" naming the profile folder, with "Start
+  Fresh" and "Copy". Step 3 shows "Copying your data…" with a progress bar, then the library with
+  the profile's games, favorite, collection, setting and save state, after a short first boot that
+  fetches the cores the portable RetroArch is missing.
+  Step 4 lists nothing. Step 5: `roms_path: data/roms`, the favorite reads `data/roms/<console>/<game>`
+  and no line names `.openemux` in the profile. Step 6: everything is still there, without a rescan.
+- **Check:** human only.
+
+### RT-729 — Start Fresh is remembered; Preferences can still import
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** RT-728's machine, and a newly unzipped portable folder.
+- **Steps:**
+  1. Run `OpenEmux.exe`, click "Start Fresh" and let the first boot finish.
+  2. Quit and run it again.
+  3. Open "Preferences" › "System" and find the "Portable" group.
+  4. Click "Import…" on "Import data from this computer", leave the ROM folder unticked, click
+     "Import", wait for the toast, quit and run `OpenEmux.exe` again.
+  5. Quit and run it once more.
+- **Expected:** Step 1 runs the normal first boot. Step 2 asks nothing. Step 3 shows "Import data
+  from this computer" naming the profile folder. Step 4 asks "Replace this portable copy's data?",
+  the row shows "Copying… N%", then the toast "Import ready. Restart OpenEmux to finish."; after the
+  restart the profile's library and settings are there, ROMs still launch from
+  `%USERPROFILE%\games\roms`, and `OpenEmux\data\openemux.before-import\` holds the old portable
+  data. Step 5: `openemux.before-import` is gone.
+- **Check:** human only.
+
+### RT-730 — A failed or interrupted import leaves the portable folder as it was
+- **Area:** Windows — Portable mode
+- **Mode:** MANUAL
+- **Preconditions:** RT-729's portable folder after step 1 (its own library), with a ROM folder big
+  enough that the copy takes a few seconds.
+- **Steps:**
+  1. "Preferences" › "System" › "Import…", tick "Also copy the ROM folder", click "Import" and end
+     `pythonw.exe` in Task Manager while the row says "Copying…".
+  2. Run `OpenEmux.exe` again and list `OpenEmux\data\`.
+- **Expected:** Step 2 shows the portable folder's own library and settings, unchanged, and
+  `data\` holds no `openemux.import-staging` folder.
+- **Check:** human only.
+
+### RT-731 — The portable import copies, rewrites and swaps safely, and never runs off portable mode
+- **Area:** Windows — Portable mode
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Run the portable import suite.
+- **Expected:** The import is offered only in portable mode with a profile `config.yaml`, before the
+  first boot and until declined; the profile is never changed; transient folders and symlinks are
+  not copied; free space is checked; paths into the profile (and into the ROM folder, when it is
+  copied) become relative to the portable folder while others stay absolute; a copy without its
+  manifest is thrown away, a refused rename is undone and retried on the next start, and the old
+  folder is kept one start as `*.before-import`. The dialogs, the Preferences group and the
+  first-start flow answer as RT-728 and RT-729 describe.
+- **Check:** suite files `tests/test_portable_import.py`, `tests/test_portable_import_dialog.py`,
+  `tests/test_app_bootstrap.py`, `tests/test_startup_preparation.py`.
+
+## Android — Import from "Open with" and "Share"
+
+ROM files open or shared from a file manager are imported into the library
+([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `ImportActivity`,
+`data/RomIntake.kt`, `ui/ImportFlow.kt`): the same import as Settings › Import, never a game launch.
+A file whose name is already in that console's folder is skipped and reported as "already in your
+library", on every import path. The runner has no Android device, so these are `MANUAL` (a phone
+with Files by Google, or a headless emulator with `adb`). `$PKG` is `com.openemux.mobile`; the ROM
+folders are under `/sdcard/Android/data/$PKG/files/`. The extension and duplicate rules are
+unit-tested in `RomIntakeTest` and the intent filters in `ManifestImportFiltersTest`.
+
+### RT-754 — "Open with" imports a ROM into its console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** The app installed; a Game Boy Advance ROM `game.gba` not yet in the library,
+  in `Download`.
+- **Steps:**
+  1. In Files by Google, open `Download`, long-press `game.gba`, open the "⋮" menu, "Open with".
+  2. Choose "Import to OpenEmux".
+- **Expected:** OpenEmux is in the list; the library comes up on the Game Boy Advance shelf with
+  the game in it, and a toast reads "1 game imported." No game starts.
+- **Check:** `MANUAL`: `adb shell ls /sdcard/Android/data/$PKG/files/` and find `game.gba` in the
+  GBA ROM folder.
+
+### RT-755 — Sharing several ROMs imports each into its console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `a.nes` and `b.sfc`, neither in the library, in `Download`.
+- **Steps:**
+  1. In Files by Google select both, tap "Share", choose "Import to OpenEmux".
+- **Expected:** A toast reads "2 games imported."; the NES and the Super Nintendo shelves each
+  show their game.
+- **Check:** `MANUAL`: both files are in their consoles' ROM folders.
+
+### RT-756 — A zip and a cue sheet with its track import as in Settings
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `game.zip` holding one `.gb` ROM; a PlayStation `disc.cue` with the
+  `disc.bin` it names. None of them in the library.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.zip`.
+  2. Select `disc.cue` and `disc.bin` together, "Share" › "Import to OpenEmux".
+- **Expected:** Step 1: the `.gb` is extracted into the Game Boy folder, toast "1 game imported.".
+  Step 2: both files land in the PlayStation folder and the toast counts one game, not two.
+- **Check:** `MANUAL`: the folders hold `*.gb`, `disc.cue` and `disc.bin`; the library lists one
+  PlayStation game.
+
+### RT-757 — An extension several consoles take asks for the console
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A `game.iso` not in the library.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.iso`.
+  2. In the ".iso files" sheet, choose a console.
+  3. Repeat with another `.iso`, and close the sheet without choosing.
+- **Expected:** Step 2: the game goes to the chosen console. Step 3: nothing is copied and no
+  toast reports an import.
+- **Check:** `MANUAL`: only the first `.iso` is in a ROM folder.
+
+### RT-758 — A game already in the library is not copied twice, and the batch goes on
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** RT-754 done (`game.gba` is in the library); a second ROM `new.gba` not in it.
+- **Steps:**
+  1. "Open with" › "Import to OpenEmux" on `game.gba` again.
+  2. Select `game.gba` and `new.gba`, "Share" › "Import to OpenEmux".
+- **Expected:** Step 1: toast "1 game is already in your library."; the shelf still shows a single
+  entry. Step 2: toast "1 game imported. 1 game is already in your library."; `new.gba` is added.
+- **Check:** `MANUAL`: the GBA folder holds one `game.gba` (same size as before) and `new.gba`.
+
+### RT-759 — Settings › Import reports a game already in the library
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** `game.gba` in the library.
+- **Steps:**
+  1. Settings › Import › "Choose files", pick `game.gba`.
+- **Expected:** The result line reads "1 game is already in your library."; the file is not
+  overwritten (it was before this change).
+- **Check:** `MANUAL`: the file's modification time in the GBA folder is unchanged.
+
+### RT-760 — A file no console plays is refused and nothing is copied
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A file `notes.xyz` (any content) in `Download`.
+- **Steps:**
+  1. Select it, "Share" › "Import to OpenEmux" (if the file manager offers it).
+- **Expected:** A toast reads "OpenEmux can't import notes.xyz: no console plays .xyz files.";
+  nothing is added to any ROM folder.
+- **Check:** `MANUAL`: `adb shell find /sdcard/Android/data/$PKG/files -name 'notes*'` finds nothing.
+
+### RT-761 — Works from a cold start and over a running game
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** Two ROMs not in the library, `c.nes` and `d.nes`.
+- **Steps:**
+  1. `adb shell am force-stop $PKG`, then "Open with" › "Import to OpenEmux" on `c.nes`.
+  2. Start any game, switch to Files by Google and "Open with" › "Import to OpenEmux" on `d.nes`.
+  3. Go back to the game from Recents.
+- **Expected:** Step 1: the app starts and imports `c.nes`. Step 2: the library comes up with
+  "1 game imported."; the game was paused, not closed. Step 3: the game is where it was left.
+- **Check:** `MANUAL`: both files are in the NES folder; the game's progress is intact.
+
+### RT-762 — OpenEmux is not offered for images, documents or APKs
+- **Area:** Android — Import from Open with and Share
+- **Mode:** MANUAL
+- **Preconditions:** A photo, a PDF, a `README.md` and an APK on the device.
+- **Steps:**
+  1. "Open with" on each of them.
+- **Expected:** "Import to OpenEmux" is not in any of the lists.
+- **Check:** `MANUAL`: also `adb shell cmd package query-activities -a android.intent.action.VIEW -t application/pdf`
+  does not list `$PKG/com.openemux.mobile.ImportActivity`.
+
+## Android — Bundled skins for the Sega, NEC and Disk System consoles
+
+Eight consoles that used the drawn skin ship a bundled skin (issue 770): Game Gear (`GG`),
+SG-1000 (`SG1000`), 32X (`S32X`), Mega-CD (`MCD`), Saturn (`SATURN`), PC Engine (`PCE`), PC Engine
+CD (`PCECD`) and Famicom Disk System (`FDS`). They are in OpenEmux's own skin format
+(`assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android)), with phone, tablet and
+fold layouts. The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone or a
+headless emulator with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-732 — Each of the eight consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with one game of each of GG, SG1000, S32X, MCD,
+  SATURN, PCE, PCECD and FDS (with its BIOS where the core needs one); nothing in
+  `files/skins/<console>/`; "Default skin" left on "Console colours".
+- **Steps:**
+  1. Start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
+  3. On a foldable unfolded flat, start one of them again.
+- **Expected:** Each game shows a skin with drawn art in the console's colours (Game Gear black
+  with a blue "START", PC Engine white with "II" and "I", Saturn grey with "A" to "Z", "L" and "R",
+  Disk System deep red and gold with "SELECT", "START" and "DISK"), not the app's plain drawn skin;
+  the landscape layout puts the controls on both sides of the picture; the tablet and the
+  unfolded foldable get their own layouts, the picture never covered.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
+  shows `drawing OpenEmux <console name>` and no fallback line.
+
+### RT-733 — Console colours and Dark for each of the eight
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's games.
+- **Steps:**
+  1. Open Settings › "Controller skin" › "Default skin" for each of the eight consoles.
+  2. Pick "Dark" for PCE and start the PC Engine game.
+- **Expected:** Each console lists exactly "Console colours" and "Dark"; the PC Engine game opens
+  with the black and dark grey skin, every control in the same place as the console colours one.
+- **Check:** `MANUAL`: screenshot the list and the game; pick "Console colours" again afterwards.
+
+### RT-734 — Every control presses what the drawn skin pressed
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's games; RetroArch's input test, or games where each button does
+  something visible.
+- **Steps:**
+  1. On each console press the D-pad's four directions and every button on the skin.
+  2. On the Disk System press "DISK" in a two-sided disk game.
+  3. On the Saturn press "L" and "R"; on the 32X and Mega-CD press "MODE".
+- **Expected:** Each control reaches the core as the drawn skin's did: Saturn's "L"/"R" on the
+  RetroPad's L2/R2, "MODE" on Select, PC Engine's "II"/"I" and "RUN", Game Gear's and SG-1000's "1",
+  "2" and "START"/"PAUSE"; "DISK" turns the disk over (the core reads it on L).
+- **Check:** `MANUAL`; the binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-735 — Quick actions and an imported skin on the new consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-732's PC Engine game; any `.deltaskin` package.
+- **Steps:**
+  1. On the PC Engine skin use "save", "load", "turbo" and "fast-forward" on the frame, and the
+     menu key.
+  2. Push the package: `adb push <file>.deltaskin /sdcard/Android/data/$PKG/files/skins/PCE/` and
+     start the game again.
+  3. Remove it (`adb shell rm /sdcard/Android/data/$PKG/files/skins/PCE/<file>.deltaskin`) and start
+     the game again.
+- **Expected:** Step 1: each quick action works and lights while on (turbo, fast forward); the
+  menu opens. Step 2: the imported package is drawn instead of the bundled skin. Step 3: the bundled
+  skin is back.
+- **Check:** `MANUAL`: screenshot after steps 2 and 3.
+
+### RT-736 — The bundled packages are valid and match the drawn skins
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the bundled skins suite.
+- **Expected:** The eight consoles ship a `.zip` in console colours and Dark; each is read by the
+  app's skin reader with the six layouts, every image at its element's size, the Dark one with the
+  same layout, every control pressing the bind the drawn skin uses for that console, and the
+  quick actions and the menu present; the templates for the eight match the packages' layouts.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinBindsTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Skin library per console
+
+Each console's "Controller skins" section (Settings → a console, and the "Controller skin" row of a
+game's detail screen) lists three groups (issue 782): "Your skins" (folders in OpenEmux's skin
+format under `files/skins/<console>/<id>/`), "Bundled" (read-only, with a lock) and "Imported"
+(`.deltaskin`/`.manicskin` packages). The runner has no Android device, so the in-game scenarios
+are `MANUAL`: a phone (or a phone-sized headless emulator) with `adb`. `$PKG` is
+`com.openemux.mobile`; `$SKINS` is `/sdcard/Android/data/$PKG/files/skins`. A skin of your own for the
+SNES is the SNES template unzipped (`SFC-template.zip`, RT-725), its folder renamed to `mine`; a
+tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entries removed from
+`skin.json` (folder `big`).
+
+### RT-737 — The list shows the three groups with their form badges
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** On a phone: `mine` and `big` pushed to `$SKINS/SFC/`, and a third-party SNES
+  `.deltaskin` with iPhone art only pushed there too.
+- **Steps:**
+  1. Settings → SNES → scroll to "Controller skins".
+- **Expected:** "YOUR SKINS" (count 2) with the cards "SFC template" (or the name in its
+  `skin.json`) and the tablet-only one; "BUNDLED" with a lock and "Console colors", "Dark"; "IMPORTED"
+  with the package. Badges: `mine` Phone/Tablet/Fold lit; `big` Tablet and Fold lit, Phone grey with a
+  dashed border; the package Phone lit, Tablet and Fold grey; the bundled ones all lit. The `big`
+  card is faded and reads "Not made for phones". On every card the badges sit on their own line under
+  the name, each word whole and readable (also in Portuguese, where "Dobrável" is the longest); if
+  the three do not fit, the last one wraps to a second line instead of shrinking.
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > list.png`).
+
+### RT-738 — Tapping a skin uses it in game, and a bundled pick keeps it for later
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins; SNES on "Console colors"; a SNES game.
+- **Steps:**
+  1. Tap the `mine` card, then launch the SNES game, upright and sideways.
+  2. Back in Settings → SNES, tap "Dark"; launch the game.
+  3. Tap the `mine` card again; launch the game.
+  4. Tap the imported package; launch the game.
+  5. Tap the `big` card.
+- **Expected:** Step 1: `mine` gets the ring and "In use", the section's right reads its name, and
+  the game shows the template's placeholder skin in both orientations. Step 2: the game shows the Dark
+  skin, `mine` stays in the list. Step 3: the template skin is back, unchanged. Step 4: the package is
+  drawn. Step 5: nothing changes (the package stays in use).
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["SFC"]; print(c["skin"], c.get("custom"))'
+  # step 1: console own:mine · step 2: dark None · step 3: dark own:mine · step 4: dark pkg:<file>
+  ```
+
+### RT-739 — Rename and duplicate a skin of your own
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** `mine` in `$SKINS/SFC/`.
+- **Steps:**
+  1. On the `mine` card, tap its "⋮" button: a sheet opens with "Use it" (also when it is in use,
+     RT-917), "Edit" (issue 784: RT-781), "Rename", "Duplicate", "Download as template", "Share"
+     (RT-908), "Delete".
+  2. "Rename" → type "Mine" → "Save".
+  3. Open the sheet again → "Duplicate".
+  4. Leave Settings and open SNES again.
+- **Expected:** The card reads "Mine" after step 2; a second card "Mine (copy)" appears after step 3;
+  both are still there after step 4. An empty name cannot be saved.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC        # mine  mine-copy  (the folder keeps its name on rename)
+  adb shell grep -h '"name"' $SKINS/SFC/mine/skin.json $SKINS/SFC/mine-copy/skin.json   # "Mine" / "Mine (copy)"
+  ```
+
+### RT-740 — Deleting the skin in use goes back to the bundled one picked before
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** SNES on "Dark", then `mine-copy` (RT-739) picked; a SNES game.
+- **Steps:**
+  1. `mine-copy`'s "⋮" → "Delete" (its line reads "The console goes back to Dark") → "Delete" in the
+     confirmation.
+  2. Launch the SNES game.
+- **Expected:** The card is gone, "Dark" has the ring and "In use", the game shows the Dark skin.
+  "Cancel" in the confirmation keeps everything.
+- **Check:** `adb shell ls $SKINS/SFC` no longer lists `mine-copy`; `custom` is gone from the SNES
+  entry of `meta.json` (RT-738's command prints `dark None`).
+
+### RT-741 — Bundled skins offer "Use it", never rename or delete
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** A console with a bundled skin (SNES).
+- **Steps:**
+  1. On the "Dark" card, tap "⋮".
+  2. Tap "Use it as it is".
+- **Expected:** The sheet shows the name, the three lit badges, a lock with "Bundled skins never
+  change." and only "Create copy and edit" and "Use it as it is": no rename, duplicate or delete.
+  Step 2 picks Dark. ("Create copy and edit" is on every bundled skin: issue 796, RT-769; issue 797,
+  RT-792; issue 798, RT-775; the SNES's zip is copied as it is since issue 806, RT-819.)
+  change." and only "Use it as it is": no rename, duplicate or delete. Step 2 picks Dark. (The eight
+  consoles whose bundled skin is in OpenEmux's format also offer "Create copy and edit", issue 796:
+  RT-769; so do the four keypad consoles since issue 772: RT-881.)
+  2. Tap "Use it".
+- **Expected:** The sheet shows the skin's miniature (RT-914), the name, the three lit badges, a
+  lock with "Bundled skins never change." and, under it, "Edit and Duplicate make a copy of your
+  own.", then the rows "Use it", "Edit", "Duplicate" and "Download as template": no "Rename", no
+  "Delete" and no "Share", and neither "Create copy and edit" nor "Use it as it is", which older
+  builds had. Step 2 picks Dark. ("Edit" and "Duplicate" are RT-770 and RT-919, on every bundled
+  skin: RT-769, RT-775; "Download as template" is RT-918; the SNES's zip is copied as it is since
+  issue 806, RT-819.)
+- **Check:** `MANUAL`.
+
+### RT-742 — The list works with a gamepad
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins; a gamepad connected.
+- **Steps:**
+  1. Settings (RB) → SNES (A) → D-pad down to "Controller skins", across the cards and their "⋮"
+     buttons.
+  2. On a card you can use: D-pad right, then left.
+  3. A on a card; A on a "⋮"; D-pad in the sheet; B.
+- **Expected:** The focus ring lands on each card and each "⋮" in turn. In step 2, right moves the
+  focus from the card to its own "⋮" (right again goes on to the next card) and left brings it back
+  to the card. A on a card picks it, A on "⋮" opens its sheet, whose rows take the focus; B closes it
+  with the focus back on the "⋮".
+- **Check:** `MANUAL`.
+
+### RT-743 — An update keeps the skin an install was playing with
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** A build from before issue 782 with a `.deltaskin` in `$SKINS/SFC/` (it was the one
+  in game).
+- **Steps:**
+  1. Install this build over it (`adb install -r <apk>`) and open the app.
+  2. Launch a SNES game; open Settings → SNES.
+- **Expected:** The game still shows the package; in the list it is under "Imported" with "In use".
+  Consoles with nothing in `skins/` keep their bundled skin.
+- **Check:** `meta.json` has `"skinsMigrated": true` and the SNES entry's `custom` is
+  `pkg:<file>`; JVM suite `SkinSelectionTest`, `SkinStoreTest` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+### RT-914 — Each skin card shows a miniature of the skin for this device, the way it is held
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins on a phone (`mine`, `big` and the package in `$SKINS/SFC/`); a
+  SNES game.
+- **Steps:**
+  1. Settings → SNES → "Controller skins", the phone upright.
+  2. Turn the phone sideways.
+  3. Tap "⋮" on "Console colors".
+  4. Open the SNES game's detail screen and tap the "Controller skin" row.
+- **Expected:** Step 1: every card under "YOUR SKINS" and "BUNDLED" shows the skin itself in small,
+  drawn as the game draws it (the console's body, the frame around a dark game screen, every
+  control in its place and colours), in the phone's upright layout, taller than wide: "Dark" shows
+  the dark art, "Purple" the purple one, `mine` the template's placeholder art. The tablet-only
+  `big` has no phone layout and shows one it has, faded like the rest of its card. Step 2: each
+  miniature is drawn again from the sideways layout, wider than tall. Step 3: the sheet's header
+  shows the same miniature beside the name. Step 4: the sheet's cards show the same miniatures. On
+  a tablet, or on a foldable's inner screen, the cards show the tablet or the fold layout instead.
+- **Check:** `MANUAL`: a screenshot each way (`adb exec-out screencap -p > cards.png`);
+  `adb shell run-as $PKG ls cache/skin-thumbs` lists one PNG per skin and orientation drawn so far.
+
+### RT-915 — Saving an edit changes the skin's miniature
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-914; `mine` in `$SKINS/SFC/`.
+- **Steps:**
+  1. Look at `mine`'s miniature. "⋮" → "Edit"; drag the face buttons well away from where they
+     are; "Close editor" → "Discard changes".
+  2. "Edit" again, move them the same way, tap "Save", then "Close editor".
+- **Expected:** After step 1 the card's miniature is as it was. After step 2 it shows the face
+  buttons where they were put, without leaving the list; the other cards keep theirs.
+- **Check:** `MANUAL`: a screenshot before and after; between the two,
+  `adb shell run-as $PKG ls cache/skin-thumbs` has one file under a new name (its old one gone)
+  and every other file as before.
+
+### RT-916 — A package, a broken skin and a card still loading keep the small controller drawing
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's `.deltaskin` in `$SKINS/SFC/`; a skin of your own that cannot be read:
+  `adb shell mkdir $SKINS/SFC/broken`, then `adb shell "echo '{' > $SKINS/SFC/broken/skin.json"`.
+- **Steps:**
+  1. Settings → SNES → "Controller skins".
+  2. `adb shell run-as $PKG rm -r cache/skin-thumbs`, `adb shell am force-stop $PKG`, then open the
+     app and the list again, watching the cards as they appear.
+- **Expected:** Step 1: the package's row under "IMPORTED" and the "broken" card ("Cannot be read")
+  show the small controller drawn in two colours that every card had before, and so does each
+  one's sheet. Step 2: a card whose miniature is not drawn yet shows that small controller for a
+  moment, then its miniature; no card is ever blank.
+- **Check:** `MANUAL`: screenshot.
+- **Restore:** `adb shell rm -r $SKINS/SFC/broken`.
+
+### RT-917 — "Use it" is always in the sheet of a skin that fits this device
+- **Area:** Android — Skin library
+- **Mode:** MANUAL
+- **Preconditions:** RT-737's skins on a phone; `mine` in use for the SNES.
+- **Steps:**
+  1. Tap "⋮" on the `mine` card (ringed, "In use").
+  2. Tap "Use it".
+  3. Tap "⋮" on the tablet-only `big` card.
+- **Expected:** Step 1's sheet starts with "Use it" although the skin is already in use (older
+  builds left the row out then). Step 2 closes the sheet and `mine` stays in use. Step 3's sheet
+  has no "Use it" (the card reads "Not made for phones") and starts with "Edit". The same goes for
+  an imported package's sheet: "Use it" whenever the package fits this device.
+- **Check:** `MANUAL`; RT-738's command still prints `own:mine` as `custom` after step 2.
+
+## Android — Bundled skins for the Atari, Lynx, Neo Geo Pocket, WonderSwan, Vectrex and Virtual Boy
+
+Seven more consoles that used the drawn skin ship a bundled skin (issue 771), in OpenEmux's own
+skin format like the eight of issue 770: Atari 2600 (`A2600`), Atari 7800 (`A7800`), Lynx (`LYNX`),
+Neo Geo Pocket (`NGP`), WonderSwan (`WS`), Vectrex (`VECTREX`) and Virtual Boy (`VB`), in
+`assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), with phone, tablet and
+fold layouts. The Virtual Boy's right pad is the format's second D-pad (`dpad2`). The runner has no
+Android device, so the in-game scenarios are `MANUAL`: a phone or a headless emulator with `adb`.
+`$PKG` is `com.openemux.mobile`.
+
+### RT-744 — Each of the seven consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with one game of each of A2600, A7800, LYNX, NGP,
+  WS, VECTREX and VB (with its BIOS where the core needs one); nothing in `files/skins/<console>/`;
+  each console's "Controller skins" left on "Console colors".
+- **Steps:**
+  1. Start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side) start one of them again.
+  3. On a foldable unfolded flat, start one of them again.
+- **Expected:** Each game shows a skin with drawn art in the console's colours, not the app's plain
+  drawn skin: the 2600 brown with one red "FIRE" button and "SELECT", "RESET"; the 7800 black with
+  red "1" and "2" and "SELECT", "PAUSE", "RESET"; the Lynx with "B", "A" and "OPTION 1",
+  "OPTION 2", "PAUSE"; the Neo Geo Pocket with "A" on the left, "B" on the right and "OPTION"; the
+  WonderSwan light grey with "B", "A" and "START"; the Vectrex with "1" to "4" in a row and no keys
+  below, its picture upright; the Virtual Boy black and red with two D-pads side by side, "B" and
+  "A" under the right one, "L", "R", "SELECT" and "START". The landscape layout puts the controls on
+  both sides of the picture; the tablet and the unfolded foldable get their own layouts, the picture
+  never covered.
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p`; logcat tag `OpenEmuxSkin`
+  shows `drawing OpenEmux <console name>` and no fallback line.
+
+### RT-745 — Console colours and Dark for each of the seven
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's games.
+- **Steps:**
+  1. Open Settings → each of the seven consoles → scroll to "Controller skins".
+  2. In Settings → Virtual Boy, tap the "Dark" card and start the Virtual Boy game.
+  3. Tap "Console colors" again.
+- **Expected:** Each console's "BUNDLED" group lists exactly "Console colors" (with "In use") and
+  "Dark"; after step 2 "Dark" has the ring and "In use", and the Virtual Boy game opens with the
+  black and dark grey skin, every control in the same place as the console colors one. After step 3
+  "Console colors" is in use again.
+- **Check:** `MANUAL`: screenshot the list and the game, plus
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["VB"]; print(c["skin"])'
+  # step 2: dark · step 3: console
+  ```
+
+### RT-746 — Every control presses what the drawn skin pressed, the Virtual Boy's right pad included
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's games; RetroArch's input test, or games where each button does
+  something visible.
+- **Steps:**
+  1. On each console press the D-pad's four directions and every button and key on the skin.
+  2. On the Virtual Boy slide on the right D-pad in each direction.
+  3. On the Atari 7800, read the two face buttons upright and sideways (RT-458).
+- **Expected:** Each control reaches the core as the drawn skin's did: the 2600's "FIRE" on B and
+  "RESET" on Start; the 7800's "1" (lower left) on B, "2" (upper right) on A, "PAUSE" on Start and
+  "RESET" on X; the Lynx's "OPTION 1" on R and "OPTION 2" on L; the Neo Geo Pocket's "A" on B and
+  "B" on A; the Vectrex's "1" to "4" on A, B, X and Y; the Virtual Boy's right pad up on L2, down on
+  L3, left on R2 and right on R3, steering like the left one (one circle following the thumb).
+- **Check:** `MANUAL`, plus for the Virtual Boy:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E '_(up|down|left|right) = '
+  ```
+  The right pad's `dpad_area` desc carries `_up = "l2"`, `_down = "l3"`, `_left = "r2"`,
+  `_right = "r3"`; the left pad's carries none. The binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-747 — Quick actions and an imported skin on the new consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-744's Lynx game; any `.deltaskin` package.
+- **Steps:**
+  1. On the Lynx skin use "save", "load", "turbo" and "fast-forward" on the frame, and the menu key.
+  2. Push the package: `adb push <file>.deltaskin /sdcard/Android/data/$PKG/files/skins/LYNX/` and
+     start the game again.
+  3. Settings → Lynx → "Controller skins": tap the package's card in the "IMPORTED" group, then
+     start the game again.
+  4. Tap "Console colors" in the "BUNDLED" group and start the game again.
+- **Expected:** Step 1: each quick action works and lights while on (turbo, fast forward); the
+  menu opens. Step 2: the bundled Lynx skin is still drawn (a package does not win by being in the
+  folder, RT-738). Step 3: the package has "In use" and is drawn instead of the bundled skin.
+  Step 4: the bundled skin is back.
+- **Check:** `MANUAL`: screenshot after steps 2, 3 and 4; logcat tag `OpenEmuxSkin` reads
+  `drawing OpenEmux Lynx` after steps 2 and 4, and
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["LYNX"]; print(c["skin"], c.get("custom"))'
+  # step 3: console pkg:<file> · step 4: console None
+  ```
+
+### RT-748 — The seven packages are valid, match the drawn skins and read a second D-pad
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the bundled skins and skin format suites.
+- **Expected:** The seven consoles ship a `.zip` in console colours and Dark; each is read by the
+  app's skin reader with the six layouts, every image at its element's size, the Dark one with the
+  same layout, every control pressing the bind the drawn skin uses for that console (the Virtual
+  Boy's right pad as a `dpad2` element on L2, L3, R2, R3; the 7800's "1" lower left on B), and the
+  quick actions and the menu present; the templates for the seven match the packages' layouts. A
+  `dpad2` element reads and writes back with its bind, and on a console with one D-pad it is drawn
+  and presses nothing.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinBindsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/OpenEmuxSkinLayoutsTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Renaming a game
+
+The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`) renames a game from its detail screen (issue 790): the pencil at the end of
+the game's name opens a sheet with the file name selected and its extension fixed after the field. The file
+moves on disk and everything the app keeps under the old name follows it: favorite, per-game core,
+shader and colour, last played, save states (the auto state included) with their thumbnails,
+battery saves, playtime, covers and labels. The runner has no Android device, so the in-app
+scenarios are `MANUAL`: a phone or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`;
+the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
+`states/<console>/`, `saves/<console>/`, `playtime/`).
+
+### RT-749 — Renaming a game keeps its states, saves, artwork and settings
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done, a Super Nintendo game in the
+  library named with tags (e.g. "Super Mario World (USA).sfc") that has a cover, is a favorite, has
+  its own shader picked on the detail screen, a manual save state, an auto state (played, then left
+  with Home) and some playtime; RetroAchievements hardcore off.
+- **Steps:**
+  1. Open the game's detail screen and tap the pencil at the end of the game's name.
+  2. Check the sheet: the name without ".sfc" is selected, ".sfc" is shown after the field.
+  3. Type "Mario World" and tap "Rename".
+  4. Go back to the library and find the game; open it again.
+  5. Tap "Continue".
+- **Expected:** Step 2 shows "Rename game", the "File name" field with the old name selected and
+  ".sfc" fixed. After step 3 the detail screen shows "Mario World" with the same cover, the star
+  filled, the same shader, the same playtime and the same save states. In step 4 the game sits in its
+  new alphabetical place in the library. Step 5 resumes the game where the auto state left it.
+- **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/" "/sdcard/Android/data/$PKG/files/states/SFC/" "/sdcard/Android/data/$PKG/files/playtime/"`
+  lists "Mario World.sfc", "Mario World.state*" and "SFC_Mario World.txt", and none of the old names.
+
+### RT-750 — A name that cannot be used is refused and nothing changes
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with two Super Nintendo games, "Alpha.sfc" and
+  "Beta.sfc".
+- **Steps:**
+  1. Open "Alpha", tap the pencil after its name, and type "beta".
+  2. Clear the field.
+  3. Type "Al:pha".
+  4. Type ".alpha".
+  5. Tap "Cancel".
+- **Expected:** Step 1 shows "Another Super Nintendo game already has this name." in red and
+  "Rename" is disabled; step 2 shows "Type a name."; step 3 the message about the characters a name
+  cannot use; step 4 "A name cannot start with a dot.". After step 5 the game is still "Alpha" and
+  its file is unchanged.
+- **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/"` still lists "Alpha.sfc" and
+  "Beta.sfc".
+
+### RT-751 — Renaming a game with the gamepad only
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a gamepad connected and one game in the library;
+  a phone (or emulator) with an on-screen keyboard that the D-pad can drive, or a hardware keyboard.
+- **Steps:**
+  1. With the gamepad, open the game's detail screen and press UP from "Play" until the pencil
+     after the game's name has the focus ring; press A.
+  2. Type a new name and move down to "Rename" with the D-pad; press A.
+  3. Focus the pencil again, press A, then press B.
+- **Expected:** In step 1 the pencil takes the focus right above "Play" and A opens the sheet; the
+  D-pad leaves the field for the buttons and A on "Rename" renames the game, the screen showing the
+  new title. In step 3 B closes the sheet and nothing changes.
+- **Check:** human only.
+
+### RT-752 — The rename moves every file and undoes a failure half-way
+- **Area:** Android — Renaming a game
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the rename suite.
+- **Expected:** A rename moves the ROM, every state and thumbnail (slots, auto, scratch), the battery
+  saves of that game only, playtime, covers and labels with their records, and moves the metadata and
+  the library index entry; a change of case goes through a temporary name; a mirror cover the new
+  name would lose is kept as a synced file; empty, forbidden-character, dot-leading, too long,
+  clashing names and leftovers under the new name are refused; a move that fails at any step, or
+  metadata that cannot be written, leaves every file, the list and the metadata as they were.
+- **Check:** suite file `src/test/java/com/openemux/mobile/data/RomRenameTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+### RT-753 — The detail screen shows its actions instead of a "⋯" menu
+- **Area:** Android — Renaming a game
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed with a game you can remove (a copy); a gamepad for
+  step 5.
+- **Steps:**
+  1. Open the game's detail screen, in portrait, landscape and (on a tablet) the list + detail pane.
+  2. Tap the round share button at the top right.
+  3. Scroll to the end of the screen and tap "Remove from library", then "Cancel".
+  4. Tap "Remove from library" again, then "Remove".
+  5. With the gamepad, open another game, read the hint bar, press Y, then press DOWN from "Play"
+     until the focus stops.
+- **Expected:** 1: no "⋯" button anywhere; the top right holds the star and a round share icon, the
+  game's name ends with a pencil, and the last item, after "Cheats — Coming soon", is a card with a
+  bin icon and "Remove from library" in red. 2: "Share Nearby" opens with that game. 3: "Remove
+  <title>?" asks first; Cancel keeps the game. 4: the screen goes back to the library without the
+  game. 5: the bar says "Y: Share Nearby" and Y opens "Share Nearby"; DOWN ends on "Remove from
+  library" with a focus ring.
+- **Check:** human only.
+## Android — Skin template zip
+
+A skin of your own can be downloaded as a template zip and imported back (issue 787): "Download as
+template" in its "⋮" sheet, and "Import .zip" under the console's skin list. Same setup as "Android —
+Skin library per console": `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`, and `mine` is the SNES template unzipped into `$SKINS/SFC/mine`
+(RT-737). The runner has no Android device: every scenario is `MANUAL` on a phone with `adb`, and the
+zip edits happen on a computer. A bundled skin's sheet has "Download as template" too (RT-918).
+
+### RT-763 — "Download as template" saves every layout, one image per element at its size
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** `mine` in `$SKINS/SFC/`, on a phone.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → the `mine` card's "⋮" → "Download as template" (under
+     "Duplicate", with "A .zip with every layout: phone, tablet, fold").
+  2. Read the sheet; tap "Save .zip" and save it to Downloads.
+  3. `adb pull` the zip and unzip it on the computer.
+- **Expected:** The sheet reads "Download as template", the skin's name in its lead line, three numbered
+  steps (Save the .zip, Edit the images, Import it back) and the note about file names and folders.
+  Saving shows "Saving…" on the button, then the toast "Template saved" and the sheet closes. The zip
+  holds one folder named after the skin with `skin.json`, `README.txt` and the six layout folders
+  (also `tablet-*` and `fold-*`, which a phone cannot edit). Every PNG has the size `README.txt` lists
+  for it, and every element of every layout has its image(s).
+- **Check:** `MANUAL`:
+  ```bash
+  unzip -l <skin>.zip | grep -c '\.png'          # one per element, background and frame, six layouts
+  python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(24); print(struct.unpack(">II", d[16:24]))' <skin>/phone-portrait/a.png
+  # equals the "a.png" line of README.txt
+  ```
+
+### RT-764 — A repainted template imports as a new skin
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-763's zip, unzipped. On the computer: repaint `phone-portrait/a.png` (keep its
+  size), delete `phone-portrait/b.png`, zip the folder again, `adb push` it to `/sdcard/Download/`.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "Import .zip" (under the groups) → pick the zip.
+  2. Keep "A new skin", name it "Repainted" → "Import".
+  3. Tap the "Repainted" card; launch a SNES game upright and sideways.
+- **Expected:** Step 1 opens "Import skin" with the file name, "Super Nintendo", the Phone/Tablet/Fold
+  badges and a green "Ready to import"; "Save it as" offers "A new skin" (name field filled with the
+  skin's name) and "Replace one of your skins", and the lock note says bundled skins are not listed.
+  Step 2: toast "Skin imported", a "Repainted" card in "Your skins". Step 3: A shows the new art, B is
+  drawn in its colours (a plain circle with its letter), every control sits where it was.
+- **Check:** `adb shell run-as $PKG ls files/skins/SFC/repainted/phone-portrait` lists `a.png` and no
+  `b.png`; no `.tmp` folder in `files/skins/SFC/`.
+
+### RT-765 — Replacing one of your skins keeps its name, its place and its selection
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-764's zip; `mine` in use for the SNES.
+- **Steps:**
+  1. "Import .zip" → pick the zip → "Replace one of your skins" → tap the `mine` chip → "Import".
+  2. Launch a SNES game.
+  3. Unzip it again, delete both `fold-*` folders, zip, push, and import it once more over `mine`.
+- **Expected:** "Import" stays disabled until a chip is picked. Bundled skins are never among the chips.
+  After step 1 the `mine` card keeps its name and "In use"; the game shows the repainted A, and B keeps
+  the image `mine` had before. After step 3 its Fold badge is grey with a dashed border.
+- **Check:** `adb shell run-as $PKG cat files/meta.json` still has `"custom": "own:mine"` for SFC;
+  `skin.json` in `files/skins/SFC/mine` has no `fold-portrait`/`fold-landscape` after step 3.
+
+### RT-766 — A Delta or Manic EMU package imports under Imported
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** A third-party SNES `.deltaskin` in `/sdcard/Download/`.
+- **Steps:**
+  1. "Import .zip" → pick the package.
+  2. "Import".
+- **Expected:** The sheet shows the package's name, "Super Nintendo", its badges and "A Delta or Manic
+  EMU skin: it goes under Imported, as it is." with no new/replace choice. After step 2 it is listed
+  under "Imported" and can be used in game.
+- **Check:** `adb shell run-as $PKG ls files/skins/SFC` shows a new `*.deltaskin`.
+
+### RT-767 — A zip that is not a skin for this console is refused and leaves nothing
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** In `/sdcard/Download/`: the GBA template zip (`GBA-template.zip`), a `.txt` file, a
+  zip of a few photos, a copy of RT-763's zip with `skin.json` cut in half, and a zip made with
+  `zip evil.zip ../outside.png skin.json` (an entry that climbs out).
+- **Steps:**
+  1. In the SNES list, "Import .zip" each file in turn; read the sheet and tap "Close".
+- **Expected:** GBA template: "This skin is for Game Boy Advance. Open Game Boy Advance's skins to
+  import it." The `.txt` and the photos: "This file is not a skin." The cut `skin.json`: "This skin
+  can't be read (BAD_JSON)." The climbing zip: "This zip has files outside its folder, so it was not
+  imported." None offers "Import"; the list is unchanged after each.
+- **Check:** `adb shell run-as $PKG ls -a files/skins/SFC` is the same before and after (no new
+  folder, no `.tmp`/`.old`); `adb shell run-as $PKG ls cache/skin-import` is empty after closing.
+
+### RT-768 — Template and import work with a gamepad and in every language
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** RT-764's zip; a gamepad connected.
+- **Steps:**
+  1. With the pad only: open `mine`'s "⋮" → "Download as template" → "Save .zip" (the system file
+     picker may need touch).
+  2. With the pad only: "Import .zip" → pick the zip → move between "A new skin", the name field,
+     "Replace one of your skins", the chips, "Cancel" and "Import"; import over `mine`.
+  3. Switch the app to Português (Brasil) and open both sheets again.
+- **Expected:** The focus ring reaches every control of both sheets, A activates it, B closes the sheet
+  with the focus back where it was. In Portuguese every text of both sheets and the "Importar .zip"
+  button is translated.
+
+### RT-918 — A bundled skin downloads as a template too
+- **Area:** Android — Skin template zip
+- **Mode:** MANUAL
+- **Preconditions:** A phone; the SNES with its bundled skins.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "⋮" on the bundled "Console colors" card → "Download as
+     template" (the last row, with "A .zip with every layout: phone, tablet, fold").
+  2. Read the sheet; tap "Save .zip" and save it to Downloads.
+  3. `adb pull` the zip and unzip it on the computer.
+  4. Back on the phone, "Import .zip" → pick the zip → "A new skin" → "Import"; use the new skin in a
+     SNES game.
+  5. Do steps 1 and 2 on the "Purple" card.
+- **Expected:** The sheet is the one a skin of your own gets (RT-763), its lead line naming the
+  bundled skin with its console ("Super Nintendo Console colors as a .zip, with every layout it
+  has…"). Saving shows "Saving…", then the toast "Template saved". The zip holds one folder with
+  `skin.json`, `README.txt` and the six layout folders, one PNG per element at the size
+  `README.txt` lists for it; "Purple", whose art is WebP, comes as PNG too (RT-823). Step 4: the
+  imported skin is listed under "Your skins" and looks and plays like the bundled one. The bundled
+  cards are unchanged, still under "BUNDLED" with their lock.
+- **Check:** `MANUAL`:
+  ```bash
+  unzip -l <skin>.zip | grep -c '\.png'          # one per element, background and frame, six layouts
+  unzip -l <skin>.zip | grep -c '\.webp'         # 0, for "Purple" as well
+  ```
+
+## Android — Copy of a bundled skin
+
+"Edit" and "Duplicate" in a bundled skin's sheet each make a skin of your own out of it (issue 796,
+part 1 of issue 783, as "Create copy and edit", which asked for a name): "Edit" a copy named
+"<name> - edited", put in use and opened in the editor; "Duplicate" a copy named "<name> (copy)",
+only listed. Where the bundled skin ships in OpenEmux's own format they copy it as it is: Game Gear,
+SG-1000, 32X, Mega-CD, Saturn, PC Engine, PC Engine CD and Famicom Disk System, in "Console colors"
+and "Dark", and since issue 806 the eleven consoles of RT-819 in every variant. Same setup as the skin library section: a phone (or a phone-sized headless
+emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`.
+
+### RT-769 — A bundled skin's sheet offers "Edit" and "Duplicate", which make a copy of your own
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A Game Gear game in the library; no skin of your own for Game Gear.
+- **Steps:**
+  1. Settings → Game Gear → "Controller skins" → on the "Console colors" card, tap "⋮".
+  2. Do the same on the "Dark" card.
+- **Expected:** Both sheets show the lock note "Bundled skins never change." with "Edit and
+  Duplicate make a copy of your own." under it, then the rows "Use it", "Edit" (pencil icon),
+  "Duplicate" and "Download as template" ("A .zip with every layout: phone, tablet, fold"), in that
+  order. There is no "Create copy and edit" row.
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > sheet.png`).
+
+### RT-770 — "Edit" on a bundled skin makes "<name> - edited", uses it and opens it in the editor
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-769.
+- **Steps:**
+  1. On "Console colors", tap "⋮" → "Edit".
+  2. Read the editor's toolbar, then tap "Close editor".
+  3. Tap "⋮" on "Console colors" again → "Edit", and close the editor.
+- **Expected:** Step 1 asks for no name: after a short "Making the copy…" the skin editor opens
+  (RT-781) on "Console colors - edited". After step 2, "YOUR SKINS" (count 1) shows the card
+  "Console colors - edited" ringed with "In use", its Phone, Tablet and Fold badges lit like the
+  bundled card's, and the "Console colors" card is no longer in use. Step 3 adds a second copy,
+  "Console colors - edited (2)" (count 2), the new one in use. The bundled card stays under
+  "BUNDLED", unchanged.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GG                        # console-colors-edited  console-colors-edited-2
+  adb shell ls $SKINS/GG/console-colors-edited  # skin.json and the six layout folders
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["consoles"]["GG"].get("custom"))'
+  # own:console-colors-edited-2
+  ```
+
+### RT-919 — "Duplicate" on a bundled skin makes "<name> (copy)" under Your skins, not in use
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-769, with "Dark" picked for Game Gear.
+- **Steps:**
+  1. On "Console colors", tap "⋮" → "Duplicate".
+  2. Do it once more.
+- **Expected:** Step 1 asks for no name and opens no editor: after a short "Making the copy…" the
+  list shows "Console colors (copy)" under "YOUR SKINS" (count 1) with its Phone, Tablet and Fold
+  badges lit, not in use: "Dark" keeps its ring and "In use". Step 2 adds "Console colors (copy) (2)"
+  (count 2), not in use either. The bundled card stays under "BUNDLED", unchanged.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GG                      # console-colors-copy  console-colors-copy-2
+  adb shell ls $SKINS/GG/console-colors-copy  # skin.json and the six layout folders
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["GG"]; print(c.get("skin"), c.get("custom"))'
+  # dark None
+  ```
+
+### RT-771 — The copy looks and plays like the bundled skin, which stays as it was
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-770 (a copy in use); a Game Gear game.
+- **Steps:**
+  1. Launch the game upright, then sideways; press every control.
+  2. Quit; pick "Console colors" under "Bundled"; launch the game again, both ways.
+  3. On the "Dark" card, "⋮" → "Edit", close the editor (the copy, "Dark - edited", is in use) and
+     launch the game.
+- **Expected:** Steps 1 and 2 look the same (same art, same positions) and every control presses the
+  same button. Step 3 shows the dark art. The bundled skins still read "Bundled skins never change."
+  and are not listed under "Your skins".
+- **Check:** JVM suite `SkinConversionTest` (every own-format bundled package copies with the same
+  layouts, elements and files, and its source untouched) in openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`.
+
+### RT-774 — Copying works from a game's detail screen and with a gamepad
+- **Area:** Android — Copy of a bundled skin
+- **Mode:** MANUAL
+- **Preconditions:** A Game Gear game; a gamepad connected.
+- **Steps:**
+  1. With the gamepad only: open the game's detail screen → the "Controller skin" row (A) → D-pad to
+     the "⋮" of "Console colors" (A) → D-pad to "Duplicate" (A).
+  2. "⋮" of "Console colors" again (A) → D-pad to "Edit" (A); in the editor that opens, B.
+- **Expected:** The focus ring lands on each row of the sheet in turn ("Use it", "Edit", "Duplicate",
+  "Download as template"). Step 1 lists "Console colors (copy)" under "Your skins", not in use.
+  Step 2 makes "Console colors - edited", opens it in the editor, and B closes the editor: the
+  sheet's list shows it under "Your skins" with "In use", and the detail screen's skin row then
+  reads "Console colors - edited".
+- **Check:** `MANUAL`.
+
+## Android — Bundled skins with a keypad: Atari 5200, ColecoVision, Intellivision and Odyssey 2
+
+Four more consoles that used the drawn skin ship a bundled skin (issue 772), in OpenEmux's own skin
+format like those of issues 770 and 771: Atari 5200 (`A5200`), ColecoVision (`CV`), Intellivision
+(`INTV`) and Odyssey 2 (`O2`), in `assets/skins/<console>.zip` and `dark/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android). Their games need the
+controller's keypad, so each layout has a **keypad page** (the format's `keypad`, docs/skin-format.md):
+a "KEYPAD" key in the centre row opens it, and on it a "CONTROLS" key in the same place goes back.
+The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone or a headless
+emulator with `adb`. `$PKG` is `com.openemux.mobile`.
+
+### RT-881 — Each of the four consoles opens with its bundled skin
+- **Area:** Android — Bundled skins
+On the consoles the app ships no skin package for (Atari 5200, ColecoVision, Intellivision and
+Odyssey²), the game plays the app's drawn skin. "Edit" and "Duplicate" convert it into OpenEmux's
+own format (issue 798, part 3 of issue 783): Phone, Tablet and Fold layouts, upright and sideways,
+laid out as the game draws the skin, with its colours, labels and binds. The keypad, which the drawn
+skin opens over the face buttons with its "KEYPAD" key, has keys of its own in the copy. Same setup
+as the copy of a bundled skin above.
+
+### RT-882 — "KEYPAD" opens the keypad page and "CONTROLS" goes back, in both orientations
+- **Area:** Android — Bundled skins
+  1. Settings → Odyssey² → look below "Default shader".
+  2. On the "Console colors" card, tap "⋮".
+  3. Open the Odyssey² game's detail screen and tap the "Controller skin" row.
+- **Expected:** Step 1 shows the "Controller skins" section with one "Console colors" card under
+  "BUNDLED", in use, with its Phone, Tablet and Fold badges lit; there is no "Default skin" row
+  reading "OpenEmux O2". Step 2's sheet shows "Bundled skins never change.", "Edit and Duplicate
+  make a copy of your own.", "Use it", "Edit" and "Duplicate". Step 3 opens the same list.
+- **Check:** `MANUAL`; JVM suite `SkinValueLabelTest.aBundledSkinToCopyIsEnoughToShowTheList`.
+
+### RT-798 — Every control and keypad key presses what the drawn skin pressed, Gearcoleco included
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-881's games; RetroArch's input test, or games that ask for a number on the
+  keypad (a game's skill level, a menu choice).
+- **Steps:**
+  1. On each console press the D-pad (or move the stick), every button and, on the keypad page,
+     every key.
+  2. Switch the ColecoVision game's core to Gearcoleco and repeat step 1 on it.
+- **Expected:** Each control reaches the core as the drawn skin's did: the 5200's "2" on A, "1" on
+  B, "PAUSE" on Select, its keypad typed on the keyboard's number pad with "*" and "#"; the
+  ColecoVision's "L" on A, "R" on B, its keypad on the joypad (1 X, 2 Y, 3 R, 4 L, 5 R2, 6 L2,
+  7 R3, 8 L3, 9 and 0 on the right stick, "*" Select, "#" Start) with blueMSX, and the same keys
+  reaching the game on Gearcoleco; the Intellivision's "1" on Y, "2" on B, "3" on A, its keypad from
+  the keyboard with "CLR" and "ENT"; the Odyssey 2's "ACTION" on B, its keypad from the keyboard with
+  "CLR" (End) and "ENT" (Return).
+- **Check:** `MANUAL`; the binds are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android), per
+  core.
+
+### RT-799 — Dark, quick actions, an imported skin and a gamepad on the keypad consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-881's games; any `.deltaskin` package; a gamepad (or the emulator's
+  keyboard as one).
+- **Steps:**
+  1. Settings → ColecoVision → "Controller skins": tap "Dark" and start the game; open the keypad.
+  2. On the skin use "save", "load", "turbo" and "fast-forward" on the frame and the menu key, on
+     both pages.
+  3. Push the package to `files/skins/CV/`, pick it in the "IMPORTED" group and start the game.
+  4. Pick "Console colors" again, start the game, connect the gamepad and tap the gamepad layout's
+     keypad key, then disconnect it.
+- **Expected:** Step 1: "BUNDLED" lists exactly "Console colors" and "Dark"; the Dark skin has every
+  control and key in the same place. Step 2: each quick action works and lights while on; the menu
+  opens. Step 3: the package is drawn instead of the bundled skin. Step 4: the gamepad layout's
+  keypad key opens the drawn keypad; disconnecting the gamepad shows the bundled skin's keypad page.
+- **Check:** `MANUAL`: screenshot each step, plus
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]["CV"]; print(c["skin"], c.get("custom"))'
+  # step 1: dark None · step 3: … pkg:<file> · step 4: console None
+  ```
+
+### RT-800 — The four packages are valid, each layout has a keypad page, and the format reads it
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the bundled skins and skin format suites.
+- **Expected:** The four consoles ship a `.zip` in console colours and Dark; each is read with the
+  six layouts, each layout with a keypad page (its own `keypad/background.png`, the twelve keys and
+  the `keypadToggle` key on both pages), every image at its element's size, the Dark one with the
+  same layout, every control and key pressing the bind the drawn skin uses (per core); the templates
+  match the packages, keypad pages included. A layout's `keypad` reads and writes back, is checked
+  like a layout, and its pages are only used when both layouts of a form have one with a toggle.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/OpenEmuxSkinLayoutsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinSpecsTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt`,
+  `src/test/java/com/openemux/mobile/game/TabletopTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — Skin editor
+
+"Edit" opens a skin of your own in a full-screen editor on the layout for this device and rotation
+(issue 784, part 3 of issue 666). Same setup as the copy section: a phone (or a phone-sized headless
+emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
+`/sdcard/Android/data/$PKG/files/skins`. "Mine" below is a copy of the Game Gear's "Console colors"
+made with "Duplicate" (RT-919) and renamed "Mine" (its folder `console-colors-copy`).
+
+### RT-781 — Edit opens the editor, on a skin of your own and on a bundled skin's copy
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** "Mine" under "Your skins" for Game Gear.
+- **Steps:**
+  1. Settings → Game Gear → "Controller skins" → "⋮" on "Mine".
+  2. Tap "Edit".
+  3. Close the editor; on the bundled "Dark" card tap "⋮" → "Edit".
+- **Expected:** Step 1's sheet lists "Edit" (pencil) under "Use it". Step 2 opens the editor full
+  screen: the skin drawn as in game, a dotted grid over all of it, a toolbar over the game screen
+  with "Close editor", "Mine" over "Phone · Upright", the rotate icon ("Switch upright and
+  sideways", issue 785), Undo and Redo (greyed), "Save" (greyed), and a bar with "Grid" (on), "Try"
+  (issue 785) and "⋯" ("More", which lists "Body", "Screen frame" and "Reset layout"); the screen
+  area reads "Tap a control to change it." / "Drag to move · pinch to resize.". Step 3 opens the
+  editor on "Dark - edited", a copy made without asking for a name and already in use (RT-770).
+- **Check:** `MANUAL`: screenshot (`adb exec-out screencap -p > editor.png`).
+
+### RT-782 — First tap selects the group, the second one control
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, editor open on "Mine".
+- **Steps:**
+  1. Tap the "1" button once; tap it again; tap the D-pad; tap an empty spot.
+- **Expected:** The first tap frames both face buttons with the label "Face buttons · tap again for
+  one" and a round handle at the corner; the second frames only "1". The bottom bar becomes "Colour",
+  "Texture" (issue 786), "Size" (100%), "Nudge", "Reset". The D-pad is framed alone ("D-pad"). The empty tap clears the selection
+  and brings back "Snap" and "⋯".
+  one" and a round handle at the corner; the second frames only "1", labelled "1 · tap again for
+  its label" (the third tap is RT-920). The bottom bar becomes "Colour", "Texture", "Size" (100%),
+  "Nudge", "Reset". The D-pad is framed alone ("D-pad"). The empty tap lets go of the selection
+  and brings back "Grid", "Try" and "⋯" (a tap there with nothing selected is RT-926).
+- **Check:** JVM suite `SkinEditTest.theFirstTapTakesTheGroupTheSecondOneControl` in openemux-android.
+
+### RT-783 — Dragging snaps to the grid, other controls and the mirror, with a guide
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Drag the face buttons slowly up and down past the D-pad's height.
+  2. Drag them sideways towards where the D-pad would be mirrored on the right.
+  3. Drag "Start" across the middle of the screen.
+- **Expected:** The controls move in grid steps; at the D-pad's centre line a line crosses the screen
+  with "Lined up with D-pad", at the mirror spot "Mirrors D-pad", at the middle "Centre of the
+  screen", each with a light buzz. "Save" and Undo light up after the first drag.
+- **Check:** JVM suite `SkinEditTest` (`snapsTo*`, `theNearestTargetWins`).
+
+### RT-784 — Grid off, or a second finger, moves freely
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "Grid" (it turns grey), drag a control across the D-pad's height.
+  2. Turn "Grid" back on; drag a control while a second finger rests on the screen.
+- **Expected:** With "Grid" off the dotted grid disappears from the stage; turned back on, the dots
+  show again, and a control dragged with one finger lands on them (RT-783). In step 1 and in step 2
+  alike the control follows the finger exactly, with no guide line and no buzz.
+- **Check:** `MANUAL`; JVM suite `SkinEditTest.aFreeDragDoesNotSnap`.
+
+### RT-785 — Resizing by pinch, handle and the Size tool
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-782 (one control selected).
+- **Steps:**
+  1. Pinch outwards on the selection; pinch inwards.
+  2. Drag the corner handle away from the control.
+  3. "Size" → "Larger" until it stops; "Smaller" until it stops; "Done".
+  4. Select the face buttons group and pinch.
+- **Expected:** While resizing a white pill shows the size in 5 % steps, above the finger that
+  resizes (above the upper of the two in a pinch) and never under it, where the hand would cover
+  the number; it never goes past 200 % or below 50 %, where the matching button greys out. The
+  group grows about its centre, both buttons together. A control at the screen's edge is pushed
+  back inside.
+- **Check:** JVM suite `SkinEditTest` (`resize*`, `theSizeToolStepsAndStopsAtTheLimits`).
+
+### RT-786 — Nudge, Reset, Reset layout, Undo and Redo
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-782.
+- **Steps:**
+  1. "Nudge" → tap each arrow once → "Done".
+  2. "Reset".
+  3. Move two controls; "⋯" → "Reset layout".
+  4. Tap Undo until it greys out; then Redo until it greys out.
+- **Expected:** Each arrow moves the selection one grid step. "Reset" puts it back where the skin has
+  it, at 100 %. "Reset layout" puts every control back. Undo walks back through every change, Redo
+  forward again.
+- **Check:** JVM suite `SkinEditTest.nudgeResetAndResetLayout`, `aDragIsOneUndoStepWithItsGuides`.
+
+### RT-787 — Save updates the skin and the game shows it
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
+- **Steps:**
+  1. Move the face buttons and make the D-pad 120 %; tap "Save".
+  2. Launch the game; press every control.
+- **Expected:** "Skin saved"; the editor stays open with Undo and "Save" greyed. In game the controls
+  are where they were put, at their new size, and each one presses its button.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json   # the moved elements' x, y, width, height changed; binds as before
+  ```
+
+### RT-788 — Leaving with changes: Save, Save as a new skin, Discard
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control; tap "Close editor" (or Back).
+  2. Tap "Save as a new skin…"; keep the name "Mine copy"; "Save".
+  3. Edit "Mine" again, move a control, "Close editor" → "Discard changes".
+- **Expected:** Step 1 shows "Save changes to Mine?", "Your changes to this skin are not saved yet.",
+  "Save", "Save as a new skin…", "Discard changes" and the draft note. Step 2 adds "Mine copy"
+  with the change, in use, and "Mine" stays as it was. Step 3 leaves "Mine" as it was. Closing with no
+  changes closes at once.
+- **Check:** `adb shell ls -a $SKINS/GG` lists `mine-copy` and no `.*.draft.json`.
+
+### RT-789 — A draft survives the app being closed
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control; without saving, `adb shell am force-stop com.openemux.mobile`.
+  2. Open the app, the same skin's "⋮" → "Edit".
+- **Expected:** "Your unsaved changes are back." The control is where it was left and "Save" is lit.
+- **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json`.
+
+### RT-790 — The other rotation, and a layout the skin does not have
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Move a control upright; turn the phone sideways; move a control; turn back.
+  2. Open a skin of your own made only for tablets (or delete its `phone-landscape` layout) and turn sideways.
+- **Expected:** Sideways the editor shows "Phone · Sideways" and its own layout; back upright the
+  first change is still there. A skin without the layout shows "This skin has no Phone · Sideways
+  layout yet. Turn the device to edit another one." with "Edit the Upright layout" (issue 785, when the
+  skin has that one: it shows it without turning the phone) and "Close editor". The toolbar's switch
+  is RT-807.
+- **Check:** `MANUAL`.
+
+### RT-791 — The editor with a gamepad, and in every language
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a gamepad connected.
+- **Steps:**
+  1. L1/R1 to pick controls, X to switch group ↔ one, D-pad to nudge, Y to toggle Grid, Select to
+     undo, Start to save, B to clear the selection and then to leave.
+  2. With a control picked, L2 and R2 (issue 785).
+  3. With nothing picked, move the focus with the D-pad to the layout field, the rotate icon, "Try"
+     and "⋯", and press A on each; in Try, L1/R1.
+  4. Switch the app to Português (Brasil) and open the editor again.
+- **Expected:** Each button does what it says, the hint bar shows them (with "L2/R2 Size"), and B with
+  changes opens the leave dialog. L2 makes the picked control 5 % smaller, R2 5 % larger. A opens the
+  Layouts panel, switches upright/sideways, starts Try and opens More; in Try, L1/R1 press the
+  previous/next control and name it. In Portuguese every text of the editor is translated ("Salvar", "Desfazer", "Tamanho").
+- **Check:** JVM suite `SkinEditorTextTest.everyLocaleHasEveryStringWithItsArguments`.
+
+
+### RT-807 — The toolbar switches between the upright and the sideways layout
+- **Area:** Android — Skin editor
+## Android — Skin editor: colours, palettes and textures
+
+The editor's Colour and Texture (issue 786, part 5 of issue 666): every part of a control, the
+background and the screen frame take a colour or a picture from the device. Same setup as the skin
+editor section; "Mine" open in the editor (RT-781). The panel opens over the game screen upright and
+on the side away from the selection sideways.
+
+### RT-884 — A preset colour paints the selection live and in game
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "1" twice (one button), tap "Colour".
+  2. Tap the red circle of the preset row; tap the check ("Done").
+  3. "Save", close the editor and play a Game Gear game with "Mine".
+- **Expected:** Step 1 opens the panel: "Colour" | "Texture", "Paint" with "Button" | "Letter", the
+  "This control" / "Face buttons" / "All buttons" chips, seven colour circles and a dashed last one,
+  the saturation square with the hue bar, "Hex" and the colour's code. Step 2 turns "1" red on the
+  stage at once, with a white ring on the red circle; "Done" brings back the actions bar and Undo is
+  lit. In game "1" is red.
+- **Check:** `adb shell cat $SKINS/GG/console-colors-copy/skin.json` shows `"button": "#EF4444"` on
+  the "1" element; JVM suite `SkinEditPaintTest.aColourIsLiveUntilItIsDoneThenOneUndoStep`.
+
+### RT-885 — Letter, hex, the picker and recent colours
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-884, the panel open on "1".
+- **Steps:**
+  1. "Paint" → "Letter"; type `22C55E` in "Hex".
+  2. Drag across the saturation square, then along the hue bar.
+  3. Close the panel, select "2", open "Colour".
+- **Expected:** The letter of "1" turns green when the sixth digit is typed; dragging moves the
+  colour live on the stage (one Undo step per drag). "Recent" lists the colours applied, newest
+  first, and is there for "2" too.
+- **Check:** JVM suite `SkinPaintTest` (`hexReadsSixDigitsWithOrWithoutTheHash`, `hsvRoundTripsEverySextant`, `recentColoursAreNewestFirstWithoutRepeats`).
+
+### RT-886 — A letter too close to its button warns
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-884, the panel open on "1".
+- **Steps:**
+  1. "Paint" → "Button", type `808080`; "Paint" → "Letter", type `8A8A8A`.
+  2. Type `FFFFFF`.
+- **Expected:** Step 1 shows a warning line "Low contrast: the letter may be hard to read."; step 2
+  removes it.
+- **Check:** JVM suite `SkinPaintTest.aLetterTooCloseToItsButtonIsFlagged`.
+
+### RT-887 — Apply to the group or to every button
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Select "1" alone → "Colour" → chip "Face buttons" → the blue circle.
+  2. Chip "All buttons" → the yellow circle.
+  3. Select the D-pad → "Colour" → "Paint" → "Ball" → a colour.
+- **Expected:** Step 1 paints "1" and "2" blue; step 2 paints every button (also "Start") yellow.
+  Step 3 has no "All" chip (one D-pad) and changes the ball only, not the pad.
+- **Check:** JVM suite `SkinPaintTest.applyToOffersOnlyScopesThatChangeMore`.
+
+### RT-888 — The last circle opens Palettes
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-884, the panel open.
+- **Steps:**
+  1. Tap the dashed last circle of the preset row.
+  2. Tap "Dracula".
+  3. Close the editor and open it again on any skin; open "Colour".
+- **Expected:** Step 1 shows "Palettes" ("sets the colour row") with Basic (marked "✓ In the colour
+  row"), Dracula, Pastel, Nord, Gruvbox, Neon, Earth and Green screen, each a stripe of its colours.
+  Step 2 goes back to the colour tab with Dracula's colours in the preset row; step 3 still shows them.
+- **Check:** JVM suite `SkinPaintTest.palettesAreValidAndBasicIsTheFallback`.
+
+### RT-889 — Screen frame: frame, icons, and the active toggle in game
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, with nothing selected.
+- **Steps:**
+  1. "⋯" → "Screen frame": "Paint" → "Frame" → a dark blue; "Icons" → yellow; "Active" → pink, then
+     "Icon when on" → "Dark".
+  2. "Save", play a game with "Mine", tap the turbo quick action, then tap it again.
+- **Expected:** Step 1's panel reads "Editing Screen frame", "Active" shows the note "Off: icon
+  colour. On (turbo, fast-forward): this background." with a preview tile. In game the frame is dark
+  blue and its icons yellow; turbo on shows a pink tile with a black bolt, off goes back to yellow.
+- **Check:** `skin.json` has `"frame": {..., "colors": {"frame": ..., "icons": "#FACC15", "active": "#F472B6", "activeIcon": "dark"}}`.
+
+### RT-890 — Background colour
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, with nothing selected.
+- **Steps:**
+  1. "⋯" → "Background" → a colour; "Done"; "Save"; play.
+- **Expected:** The background changes on the stage and in game. Where the skin had a background
+  picture the panel says "A colour here replaces the part's image." and the picture gives way to the
+  colour.
+- **Check:** JVM suite `SkinEditPaintTest.iconsDropTheQuickActionsImagesAndTheFramesColoursChange`.
+
+### RT-891 — A picture as a button's texture
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a photo on the device (`adb push photo.jpg /sdcard/Pictures/`).
+- **Steps:**
+  1. Select "1" alone → "Texture" → "Choose image" → the photo.
+  2. Try "Stretch", "Fit" and "Repeat"; drag and pinch on the preview; drag the zoom bar.
+  3. "Done", "Save", play.
+- **Expected:** Step 1 shows the picture's name and its size ("4032 × 3024" for a phone photo) and
+  "1" on the stage filled with it, clipped round, its letter on top. Each fill, drag and zoom shows
+  on the stage at once. In game "1" shows the picture the same way and still presses "1".
+- **Check:** `adb shell ls $SKINS/GG/console-colors-copy/phone-portrait/` lists the button's PNG;
+  JVM suite `SkinPaintTest.stretchCoversTheBoxAndFitShowsTheWholePicture`.
+
+### RT-892 — Removing a texture brings the colour back; a colour replaces an image
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-891.
+- **Steps:**
+  1. "1" → "Texture" → "Remove texture, back to colour".
+  2. Select the D-pad (it has a drawn image) → "Colour" → "Pad" → a colour; then Undo.
+  3. On "Letter", open "Texture".
+- **Expected:** Step 1 shows "1" in its colour again. Step 2 shows the note "A colour here replaces
+  the part's image." and the pad becomes a plain cross in that colour; Undo brings the image back.
+  Step 3 says "This part takes a colour only."
+- **Check:** JVM suite `SkinEditPaintTest.aTextureReplacesTheImageAndRemovingItBringsTheColourBack`.
+
+### RT-893 — Paint survives the app being closed, and Discard leaves the skin
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Paint "1" red and give "2" a texture (RT-891), without saving;
+     `adb shell am force-stop com.openemux.mobile`.
+  2. Open the app, "⋮" → "Edit" on the same skin.
+  3. "Close editor" → "Discard"; open the editor again.
+- **Expected:** Step 2 says "Your unsaved changes are back." with "1" red and "2" textured. After
+  step 3 both are as last saved.
+- **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json` and the
+  folder `.console-colors-copy.draft` (`images.json` and a `t-….png`); after step 3 both are gone.
+
+### RT-894 — Colour and Texture with a gamepad, and in every language
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a gamepad connected.
+- **Steps:**
+  1. Pick "1" with L1/R1, move to "Colour" with the D-pad and press A.
+  2. Move through the tabs, "Paint", the chips, the colour circles and the dashed circle (A opens
+     Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
+  3. B closes the panel, B again clears the selection.
+  4. Switch the app to Português (Brasil) and open the panel.
+- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+  nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
+  "Pintar", "Paletas", "Remover textura, voltar para a cor".
+- **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
+
+## Android — Copy of a Delta or Manic skin
+
+"Create copy and edit" also works on the bundled skins that ship as Delta/Manic packages (issue 797,
+part 2 of issue 783): FC, SFC, N64, GC, GB, GBC, GBA, NDS, MD, SMS, PS and PSP, in every colour
+variant. The copy is converted into OpenEmux's own format: one layout per form and orientation the
+package has art for, the background with every control lifted off it and one image per control. An
+imported `.deltaskin`/`.manicskin` gets the same conversion through "Duplicate" on its row's menu.
+Same setup as the section above (`$PKG`, `$SKINS`); a SNES game (`Super Mario World`) and a GBA game
+in the library.
+
+### RT-883 — A bundled Delta or Manic skin offers "Create copy and edit"
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, the phone held upright, "Mine" has both phone layouts.
+- **Steps:**
+  1. Tap the rotate icon ("Switch upright and sideways") next to the layout field.
+  2. Tap it again; then tap it once more and turn the phone sideways and upright again.
+- **Expected:** Step 1 shows "Phone · Sideways" and the sideways layout fitted into the upright
+  screen, editable as usual. Step 2 goes back to "Phone · Upright". Turning the phone always follows
+  the phone again. A phone never shows a Tablet or Fold layout here.
+- **Check:** JVM suite `SkinLayoutsEditTest` in openemux-android; `MANUAL` screenshot.
+
+### RT-808 — The Layouts panel shows this phone's layouts and the other forms
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781 ("Mine" has phone, tablet and fold layouts, like the bundled skin it was
+  copied from).
+- **Steps:**
+  1. Tap the layout field ("Mine" / "Phone · Upright").
+  2. Tap the "Sideways" card; tap the check button.
+- **Expected:** A "Layouts" panel opens over the game screen: "This phone edits the phone layouts.
+  Turn the phone to switch between them.", "ON THIS PHONE" with an "Upright" card ("Editing", ringed)
+  and a "Sideways" card ("Changed" when it has unsaved changes), "OTHER SCREENS IN THIS SKIN" with
+  "Offer on tablets" and "Offer on folds" (both on, "Edit it on a tablet or in the .zip"), the
+  Phone/Tablet/Fold badges (all lit), "These switches are the badges you see on the skin." and
+  "Reset layout". There is no switch for Phone. Step 2 shows the sideways layout; the check closes
+  the panel.
+- **Check:** `MANUAL` screenshot.
+
+### RT-809 — Switching a form off asks, removes its layouts on Save, and Undo brings them back
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-808.
+- **Steps:**
+  1. Layouts panel → switch "Offer on tablets" off; "Cancel".
+  2. Switch it off again → "Remove"; close the panel; Undo; Redo.
+  3. "Save", close the editor.
+- **Expected:** Step 1 asks "Remove the Tablet layouts?" — "Both of its layouts leave this skin when
+  you save. Until then, Undo brings them back." with "Remove" and "Cancel"; "Cancel" leaves it on.
+  After "Remove" the line reads "Off: on a tablet this skin is not listed" and the Tablet badge in the
+  panel goes grey; Undo turns it back on, Redo off again. After step 3 the "Mine" card shows Phone and
+  Fold lit and Tablet grey, and the skin's tablet folders are gone; on a tablet "Mine" is dimmed.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GG/console-colors-copy     # no tablet-portrait, no tablet-landscape
+  ```
+
+### RT-810 — Switching a form on lights its badge and draws the skin there
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-809 (Tablet off and saved).
+- **Steps:**
+  1. Edit "Mine" → Layouts panel → switch "Offer on tablets" on → close the panel → "Save".
+  2. Make the emulator a tablet (`adb shell wm size 1600x2560`, `adb shell wm density 320`; `reset`
+     both afterwards) and use "Mine" in a Game Gear game, upright and sideways.
+- **Expected:** Step 1 turns the line into "Edit it on a tablet or in the .zip", lights the Tablet
+  badge and "Save"; the card then shows all three badges lit. Step 2: "Mine" can be picked on the
+  tablet and its controls are drawn from the closest layout's positions and colours (no images), the
+  game screen where that layout has it, every control pressing its button.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json | grep -o '"tablet-[a-z]*"'   # tablet-portrait, tablet-landscape
+  ```
+
+### RT-812 — Try lights each control and says what it sends
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "Try" in the bottom bar.
+  2. Press and hold "1"; release; press "Start", the D-pad and a quick action.
+  3. Tap "Back to editing".
+- **Expected:** The toolbar becomes "Try it: press any control" with "Back to editing". A held control
+  is lit with the accent ring; over the screen "You pressed", its name in large letters and "sends 1
+  to the game" ("sends Start to the game", "sends the D-pad to the game", "sends a quick save to the
+  game"…). "Last:" lists the last four presses. Nothing moves while trying; step 3 goes back to editing
+  with nothing selected.
+- **Check:** JVM suite `SkinLayoutsEditTest.tryNamesWhatAControlSends`; `MANUAL` screenshot.
+
+### RT-813 — Panels open away from what is being edited
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Upright: select the face buttons; then drag "START" up over the game screen, where the bar is
+     (Undo afterwards).
+  2. Turn sideways: select the D-pad (left) and open the Layouts panel; select the face buttons
+     (right) and open it again.
+- **Expected:** Upright with the face buttons selected, the actions bar sits over the game screen;
+  with a control over the game screen it moves to the bottom, clear of the selection. With the
+  screen's frame or the body selected (RT-924, RT-926) it stays over the game screen: neither is in
+  its way. Sideways the Layouts panel opens on the right when the D-pad is selected and on the left
+  when the face buttons are: it never covers the selection.
+- **Check:** JVM suite `SkinLayoutsEditTest.panelsOpenAwayFromTheSelection`; `MANUAL`.
+
+## Android — Skin editor: colours, palettes and textures
+
+The editor's Colour and Texture (issue 786, part 5 of issue 666): every part of a control, the
+background and the screen frame take a colour or a picture from the device. Same setup as the skin
+editor section; "Mine" open in the editor (RT-781). The panel opens over the game screen upright and
+on the side away from the selection sideways.
+
+### RT-895 — A preset colour paints the selection live and in game
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Tap "1" twice (one button), tap "Colour".
+  2. Tap the red circle of the preset row; tap the check ("Done").
+  3. "Save", close the editor and play a Game Gear game with "Mine".
+- **Expected:** Step 1 opens the panel: "Colour" | "Texture", "Paint" with "Button" | "Letter", the
+  "This control" / "Face buttons" / "All buttons" chips, seven colour circles and a dashed last one,
+  the saturation square with the hue bar, "Hex" and the colour's code. Step 2 turns "1" red on the
+  stage at once, with a white ring on the red circle; "Done" brings back the actions bar and Undo is
+  lit. In game "1" is red.
+- **Check:** `adb shell cat $SKINS/GG/console-colors-copy/skin.json` shows `"button": "#EF4444"` on
+  the "1" element; JVM suite `SkinEditPaintTest.aColourIsLiveUntilItIsDoneThenOneUndoStep`.
+
+### RT-896 — Letter, hex, the picker and recent colours
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-895, the panel open on "1".
+- **Steps:**
+  1. "Paint" → "Letter"; type `22C55E` in "Hex".
+  2. Drag across the saturation square, then along the hue bar.
+  3. Close the panel, select "2", open "Colour".
+- **Expected:** The letter of "1" turns green when the sixth digit is typed; dragging moves the
+  colour live on the stage (one Undo step per drag). "Recent" lists the colours applied, newest
+  first, and is there for "2" too.
+- **Check:** JVM suite `SkinPaintTest` (`hexReadsSixDigitsWithOrWithoutTheHash`, `hsvRoundTripsEverySextant`, `recentColoursAreNewestFirstWithoutRepeats`).
+
+### RT-897 — A letter too close to its button warns
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-895, the panel open on "1".
+- **Steps:**
+  1. "Paint" → "Button", type `808080`; "Paint" → "Letter", type `8A8A8A`.
+  2. Type `FFFFFF`.
+- **Expected:** Step 1 shows a warning line "Low contrast: the letter may be hard to read."; step 2
+  removes it.
+- **Check:** JVM suite `SkinPaintTest.aLetterTooCloseToItsButtonIsFlagged`.
+
+### RT-898 — Apply to the group or to every button
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Select "1" alone → "Colour" → chip "Face buttons" → the blue circle.
+  2. Chip "All buttons" → the yellow circle.
+  3. Select the D-pad → "Colour" → "Paint" → "Ball" → a colour.
+- **Expected:** Step 1 paints "1" and "2" blue; step 2 paints every button (also "Start") yellow.
+  Step 3 has no "All" chip (one D-pad) and changes the ball only, not the pad.
+- **Check:** JVM suite `SkinPaintTest.applyToOffersOnlyScopesThatChangeMore`.
+
+### RT-899 — The last circle opens Palettes
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-895, the panel open.
+- **Steps:**
+  1. Tap the dashed last circle of the preset row.
+  2. Tap "Dracula".
+  3. Close the editor and open it again on any skin; open "Colour".
+- **Expected:** Step 1 shows "Palettes" ("sets the colour row") with Basic (marked "✓ In the colour
+  row"), Dracula, Pastel, Nord, Gruvbox, Neon, Earth and Green screen, each a stripe of its colours.
+  Step 2 goes back to the colour tab with Dracula's colours in the preset row; step 3 still shows them.
+- **Check:** JVM suite `SkinPaintTest.palettesAreValidAndBasicIsTheFallback`.
+
+### RT-900 — Screen frame: frame, icons, and the active toggle in game
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, with nothing selected.
+- **Steps:**
+  1. "⋯" → "Screen frame": "Paint" → "Frame" → a dark blue; "Icons" → yellow; "Active" → pink, then
+     "Icon when on" → "Dark".
+  2. "Save", play a game with "Mine", tap the turbo quick action, then tap it again.
+- **Expected:** Step 1's panel reads "Editing Screen frame", "Active" shows the note "Off: icon
+  colour. On (turbo, fast-forward): this background." with a preview tile. In game the frame is dark
+  blue and its icons yellow; turbo on shows a pink tile with a black bolt, off goes back to yellow.
+- **Check:** `skin.json` has `"frame": {..., "colors": {"frame": ..., "icons": "#FACC15", "active": "#F472B6", "activeIcon": "dark"}}`.
+
+### RT-901 — Background colour
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, with nothing selected.
+- **Steps:**
+  1. "⋯" → "Background" → a colour; "Done"; "Save"; play.
+- **Expected:** The background changes on the stage and in game. Where the skin had a background
+  picture the panel says "A colour here replaces the part's image." and the picture gives way to the
+  colour.
+- **Check:** JVM suite `SkinEditPaintTest.iconsDropTheQuickActionsImagesAndTheFramesColoursChange`.
+
+### RT-902 — A picture as a button's texture
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a photo on the device (`adb push photo.jpg /sdcard/Pictures/`).
+- **Steps:**
+  1. Select "1" alone → "Texture" → "Choose image" → the photo.
+  2. Try "Stretch", "Fit" and "Repeat"; drag and pinch on the preview; drag the zoom bar.
+  3. "Done", "Save", play.
+- **Expected:** Step 1 shows the picture's name and its size ("4032 × 3024" for a phone photo) and
+  "1" on the stage filled with it, clipped round, its letter on top. Each fill, drag and zoom shows
+  on the stage at once. In game "1" shows the picture the same way and still presses "1".
+- **Check:** `adb shell ls $SKINS/GG/console-colors-copy/phone-portrait/` lists the button's PNG;
+  JVM suite `SkinPaintTest.stretchCoversTheBoxAndFitShowsTheWholePicture`.
+
+### RT-903 — Removing a texture brings the colour back; a colour replaces an image
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-902.
+- **Steps:**
+  1. "1" → "Texture" → "Remove texture, back to colour".
+  2. Select the D-pad (it has a drawn image) → "Colour" → "Pad" → a colour; then Undo.
+  3. On "Letter", open "Texture".
+- **Expected:** Step 1 shows "1" in its colour again. Step 2 shows the note "A colour here replaces
+  the part's image." and the pad becomes a plain cross in that colour; Undo brings the image back.
+  Step 3 says "This part takes a colour only."
+- **Check:** JVM suite `SkinEditPaintTest.aTextureReplacesTheImageAndRemovingItBringsTheColourBack`.
+
+### RT-904 — Paint survives the app being closed, and Discard leaves the skin
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Paint "1" red and give "2" a texture (RT-902), without saving;
+     `adb shell am force-stop com.openemux.mobile`.
+  2. Open the app, "⋮" → "Edit" on the same skin.
+  3. "Close editor" → "Discard"; open the editor again.
+- **Expected:** Step 2 says "Your unsaved changes are back." with "1" red and "2" textured. After
+  step 3 both are as last saved.
+- **Check:** after step 1, `adb shell ls -a $SKINS/GG` lists `.console-colors-copy.draft.json` and the
+  folder `.console-colors-copy.draft` (`images.json` and a `t-….png`); after step 3 both are gone.
+
+### RT-905 — Colour and Texture with a gamepad, and in every language
+- **Area:** Android — Skin editor: colours, palettes and textures
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a gamepad connected.
+- **Steps:**
+  1. Pick "1" with L1/R1, move to "Colour" with the D-pad and press A.
+  2. Move through the tabs, "Paint", the chips, the colour circles and the dashed circle (A opens
+     Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
+  3. B closes the panel, B again clears the selection.
+  4. Switch the app to Português (Brasil) and open the panel.
+- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+  nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
+  "Pintar", "Paletas", "Remover textura, voltar para a cor".
+- **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
+### RT-920 — A third tap selects the control's label, and one more starts over
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, editor open on "Mine", nothing selected.
+- **Steps:**
+  1. Tap the "1" button four times, reading the tag over the selection after each tap.
+  2. Tap an empty spot; tap the "START" key three times.
+  3. Tap an empty spot; tap the D-pad twice.
+- **Expected:** Each tap goes one step in. On "1": its group ("Face buttons · tap again for one"),
+  then that one button ("1 · tap again for its label"), then its label, outlined on its own with a
+  corner handle of its own ("1 · Label"); the fourth tap starts over at the group. "START", a
+  control with no group, goes straight to itself ("START · tap again for its label"), then to its
+  label ("START · Label"), then back to itself. The D-pad has no label to select (its arrows are
+  painted with it, RT-928): both taps select the D-pad ("D-pad").
+- **Check:** `MANUAL`: a screenshot after each tap (`adb exec-out screencap -p > tap.png`).
+
+### RT-921 — A selected label moves, grows and is painted on its own, and is saved with the skin
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-920, with the label of "1" selected ("1 · Label"); a Game Gear game; "Mine"
+  in use.
+- **Steps:**
+  1. Drag the label to the right, off its button; tap "Reset".
+  2. Drag it off the button again. Read the bottom bar; "Size" → "Larger" twice → "Done"; "Nudge" →
+     the down arrow → "Done".
+  3. "Colour" → the yellow circle → the check.
+  4. "Save", close the editor and launch the game.
+- **Expected:** Step 1: the drag moves the label alone, the button staying where it is, and "Reset"
+  puts it back on the middle of the button. Step 2: the bar offers "Colour", "Size", "Nudge" and
+  "Reset", with no "Texture"; the label grows and steps down by itself. Step 3: the panel opens on
+  "Label", with no "Texture" tab, and the "1" turns yellow. Step 4: "Skin saved"; in game the "1"
+  is beside its button, larger and yellow, and the button still presses "1". A button whose image
+  held its label is drawn from its colours once the label leaves it, with the same shape, relief
+  and shading (RT-930). Selecting the button itself and dragging it takes the moved label along.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # the element labelled "1" has a "labelOffset", a larger "labelSize" and "letter": "#FACC15" in its "colors"
+  ```
+
+### RT-922 — The words under the centre keys are labels: they can be moved and painted
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
+- **Steps:**
+  1. Drag the "START" key to another place.
+  2. Tap "START" until its tag reads "START · Label"; drag the word from under its key to above it.
+  3. "Colour" → the green circle → the check.
+  4. "Save", close the editor and launch the game.
+- **Expected:** Step 1: the word "START" goes with its key, and nothing of it stays where it was
+  (older builds had the word painted in the background: it stayed behind and could not be
+  changed). Step 2 moves the word alone, the key staying where it is. Step 3 paints the word green.
+  Step 4: in game "START" reads above its key, in green, and the key still presses Start. The same
+  goes for "SELECT" and the other words under centre keys on the consoles that have them.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # the "start" element has "label": "START", a "labelOffset" whose y is below 0 and "letter": "#22C55E" in its "colors"
+  ```
+
+### RT-923 — Moving a control leaves nothing of it behind
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game; "Mine" in use; the APK under test on the computer.
+- **Steps:**
+  1. Drag the face buttons well away from where they are; do the same with the D-pad and "START".
+  2. Look at the places they left, and at each control where it is now.
+  3. "Save", close the editor and launch the game.
+- **Expected:** Where each control was, only the console's body shows: no second button, no ring,
+  no shadow and no word (older builds kept a copy of the control painted in the background). Each
+  control is whole where it is now, with its relief (a darker layer of the same shape just under
+  it) and no soft drop shadow around it. The game shows the same.
+- **Check:** `MANUAL`: a screenshot of the stage after step 1 and one in game. The bundled
+  background image holds the body alone:
+  ```bash
+  unzip -p <apk> assets/skins/GG.zip > GG.zip && unzip -p GG.zip phone-portrait/background.png > background.png
+  # background.png shows the console's body with no button, no D-pad and no "START"
+  ```
+
+### RT-924 — Quick actions stay on the frame, and tapping one or the frame selects "Screen frame"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, nothing selected.
+- **Steps:**
+  1. Try to drag the "save" quick action off the frame; pinch on it.
+  2. Tap an empty spot, then tap the turbo quick action.
+  3. Tap an empty spot, then tap the frame itself, between two quick actions in the strip under
+     the game screen.
+- **Expected:** Step 1 moves and resizes nothing: the quick actions stay where the skin has them
+  (older builds moved and resized them). Each of those touches, like the tap of step 2, selects
+  "Screen frame": the frame is outlined along its edge with that tag and no round handle at its
+  corner, and the bottom bar shows only "Colour" (no "Texture", "Size", "Nudge" or "Reset"). Step 3
+  selects the same from the frame itself. Undo and "Save" stay greyed: nothing changed. With a
+  gamepad, L1/R1 stop on "Screen frame" where the quick actions were.
+- **Check:** `MANUAL`: screenshot; in `adb shell cat $SKINS/GG/console-colors-copy/skin.json` the
+  `action` elements and the `frame` keep their `x`, `y`, `width` and `height`.
+
+### RT-925 — The screen frame takes "Frame", "Icons" and "Active" colours and keeps its rounded corners
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, the phone upright; a Game Gear game; "Mine" in use.
+- **Steps:**
+  1. Tap a quick action (the tag reads "Screen frame") → "Colour".
+  2. "Frame" → the blue circle; "Icons" → the yellow circle; "Active" → the pink circle; the check.
+  3. "Save", close the editor, launch the game and tap the turbo quick action.
+  4. Back in the editor with nothing selected: "⋯" → "Screen frame" → "Frame" → the green circle.
+- **Expected:** Step 1 opens the panel at the bottom of the screen, clear of the frame: titled
+  "Colour" with no "Texture" tab, "Editing Screen frame", and the parts "Frame", "Icons" and
+  "Active". Step 2 paints each on the stage at once, and the frame painted blue keeps its rounded
+  corners (older builds drew a painted frame square). Step 3: in game the frame is blue with
+  rounded corners, its icons yellow, and turbo on shows a pink tile. Step 4 selects the frame as a
+  tap on it does (outlined, "Screen frame") and opens the same panel; the green picked there shows
+  on the frame at once (older builds did not apply a colour picked this way).
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # after step 3 phone-portrait's "frame" keeps its "radius" and has "colors": {"frame": "#3B82F6", "icons": "#FACC15", "active": "#F472B6", ...}
+  ```
+
+### RT-926 — Tapping an empty part of the console selects "Body"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, nothing selected.
+- **Steps:**
+  1. Tap an empty part of the console: no control, not the frame, not the game screen.
+  2. Tap another empty part of the console.
+  3. Tap the game screen; then select the face buttons and tap an empty part of the console.
+  4. With nothing selected: "⋯" → "Body".
+- **Expected:** Step 1 outlines the whole page along its edge, with a "Body" tag inside the outline
+  at the bottom and no round handle; the bottom bar shows "Colour" and "Texture" only: the body is
+  painted, never moved or resized. Step 2 lets go of it and brings back "Grid", "Try" and "⋯".
+  Step 3: the tap on the game screen selects nothing, and with a control selected the tap on the
+  body only lets go of the control. Step 4 selects the body the same way and opens its panel:
+  "Colour" | "Texture" and "Editing Body".
+- **Check:** `MANUAL`: a screenshot of steps 1 and 4.
+
+### RT-927 — The paint panel paints what is selected, all of it
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game; "Mine" in use.
+- **Steps:**
+  1. Tap "1" once (both face buttons are framed) → "Colour" → the red circle → the check.
+  2. Tap "1" again (only "1" is framed) → "Colour" → the blue circle → the check.
+  3. "Save", close the editor and launch the game.
+- **Expected:** The panel shows "Colour" | "Texture" and the check, the part toggles right under
+  them, then the colour circles, the picker and "Hex". There is no "Paint" caption and there are no
+  "Apply to" chips ("This control", "Face buttons", "All buttons"), which older builds had: the
+  panel paints the selection. Step 1 paints "1" and "2" red together; step 2 paints "1" alone
+  blue. In game "1" is blue and "2" red.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # "button": "#3B82F6" on the element labelled "1", "button": "#EF4444" on the one labelled "2"
+  ```
+
+### RT-928 — The part toggles follow the kind of control, with "Relief" and "Label" among them
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; the Nintendo 64 with its bundled skins, for the stick.
+- **Steps:**
+  1. Select "1" alone → "Colour"; read the toggles.
+  2. Select the D-pad → "Colour"; read the toggles; "Label" → the yellow circle.
+  3. Close the editor. Settings → Nintendo 64 → "Controller skins" → "⋮" on "Console colors" →
+     "Edit"; select the stick → "Colour".
+- **Expected:** Step 1: "Button", "Relief" and "Label" (older builds had "Button" and "Letter").
+  Step 2: "Pad", "Ball", "Relief" and "Label"; the D-pad's label is its four arrows, which turn
+  yellow together. Step 3: "Base" and "Knob" only: a stick has no relief and no label of its own.
+- **Check:** `MANUAL`: a screenshot of each panel.
+- **Restore:** Step 3 made "Console colors - edited" for the Nintendo 64 and put it in use: tap the
+  bundled "Console colors" card again and delete the copy ("⋮" → "Delete").
+
+### RT-929 — A relief left alone follows its button's colour; one picked keeps its colour
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Select "1" alone → "Colour" → "Button" → the red circle.
+  2. "Relief" → the blue circle.
+  3. "Button" → the green circle; the check; "Save".
+- **Expected:** Step 1: the button turns red and the layer under it a darker red, by itself. Step
+  2: the relief turns blue. Step 3: the button turns green and its relief stays blue. "2", not
+  selected, keeps its colours throughout.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # the element labelled "1" has "button": "#22C55E" and "relief": "#3B82F6" in its "colors"
+  ```
+
+### RT-930 — A control repainted keeps its relief and shading
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Game Gear's "Console colors" whose buttons were never painted (a
+  new one from "Duplicate", RT-919), in use and open in the editor; a Game Gear game.
+- **Steps:**
+  1. Select "1" alone → "Colour" → "Button" → the orange circle → the check.
+  2. Compare "1" with "2" on the stage.
+  3. "Save", close the editor and launch the game.
+- **Expected:** The panel notes "A colour here replaces the part's image." "1" is drawn in orange
+  with the shape it had, its relief under it in a darker orange, and the shading of the bundled
+  art, lit from above: beside "2", still drawn from its image, only the colour differs, and it is
+  not a flat disc. The game shows the same, and "1" still presses "1".
+- **Check:** `MANUAL`: a screenshot of the stage and one in game.
+
+### RT-932 — The menu key is painted like any button: "Button", "Relief", "Label"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781; a Game Gear game.
+- **Steps:**
+  1. Tap the menu key (the pill with three lines) → "Colour". Read the part toggles.
+  2. "Button" → the red circle.
+  3. "Relief" → the blue circle.
+  4. "Label" → the yellow circle; the check; "Save"; close the editor and launch the game.
+- **Expected:** The toggles are "Button", "Relief" and "Label". Step 2: the key stays a pill, now
+  red, with its three lines on it and a darker red layer under it: it does not vanish. Step 3: the
+  layer under it turns blue. Step 4: the three lines turn yellow. The game shows the key the same,
+  and tapping it opens the pause menu.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # the element with "bind": "menu" has "button": "#EF4444", "relief": "#3B82F6" and
+  # "letter": "#FACC15" in its "colors", and a "depth" above 0
+  ```
+
+### RT-933 — The D-pad's ball keeps its size when it is painted
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Game Gear's "Console colors" whose D-pad was never painted (a
+  new one from "Duplicate", RT-919), open in the editor.
+- **Steps:**
+  1. Take a screenshot of the stage.
+  2. Tap the D-pad → "Colour" → "Ball" → the green circle → the check.
+  3. Take a screenshot of the stage again.
+- **Expected:** The ball turns green, a disc ringed in the same green, centred on the pad as it
+  was and as large as it was: it does not grow. The pad, its relief and its arrows keep their
+  colours.
+- **Check:** `MANUAL`: the two screenshots; the ball is as wide in the second as in the first.
+
+### RT-934 — A colour goes to every layout of the skin
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781, the phone held upright; a Game Gear game.
+- **Steps:**
+  1. Select "1" alone → "Colour" → "Button" → the red circle. Read the line under the picker. The
+     check.
+  2. Tap an empty part of the console → "Colour" → the blue circle → the check.
+  3. Tap the frame → "Colour" → "Frame" → the green circle → the check.
+  4. Tap the toolbar's "Switch upright and sideways".
+  5. "Save", close the editor, launch the game and turn the phone both ways.
+- **Expected:** The panel reads "A colour goes to every layout of this skin. Textures, places and
+  sizes stay with this one." After step 4 the sideways layout shows "1" in red, the body in blue
+  and the frame in green, every control where the sideways layout had it. The game shows the same
+  colours upright and sideways.
+- **Check:**
+  ```bash
+  adb shell cat $SKINS/GG/console-colors-copy/skin.json
+  # in every layout of "layouts" (phone, tablet and fold, upright and sideways): "background" has
+  # "color": "#3B82F6", "frame"."colors" has "frame": "#22C55E", and the element labelled "1" has
+  # "button": "#EF4444"
+  ```
+
+### RT-935 — A place, a size and a texture stay with the layout they were made in
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** A copy of the Game Gear's "Console colors" never edited (a new one from
+  "Duplicate", RT-919), open in the editor, the phone held upright; a picture on the device.
+- **Steps:**
+  1. Drag "2" somewhere else, and resize the D-pad to 120%.
+  2. Select "1" alone → "Texture" → "Choose image" → the picture → the check.
+  3. Tap the toolbar's "Switch upright and sideways".
+  4. Sideways, select "1" alone → "Colour" → "Button" → the purple circle → the check.
+  5. Tap "Switch upright and sideways" again.
+- **Expected:** After step 3 the sideways layout is as the skin had it: "2" and the D-pad where
+  and as large as they were there, and "1" with no picture on it. After step 5, upright, "1" still
+  shows the picture of step 2 (the purple of step 4 is under it: its relief turned a darker
+  purple), "2" is where step 1 left it and the D-pad is at 120%.
+- **Check:** `MANUAL`: a screenshot of each layout after step 5.
+
+### RT-936 — The palette row names the palette and opens "Palettes"
+- **Area:** Android — Skin editor
+- **Mode:** MANUAL
+- **Preconditions:** RT-781.
+- **Steps:**
+  1. Select a control → "Colour". Read the row above the colour circles.
+  2. Tap that row.
+  3. Tap "Dracula".
+  4. Tap the last, dashed circle of the colour row, then the back arrow.
+  5. Close the editor and open it again → select a control → "Colour".
+- **Expected:** Step 1: the row reads "Palette", "Basic" and, at its end, "Palettes" with a
+  chevron. Step 2 opens "Palettes" ("sets the colour row") with "Basic", "Dracula", "Pastel",
+  "Nord", "Gruvbox", "Neon", "Earth" and "Green screen", "Basic" marked "✓ In the colour row".
+  Step 3 goes back to the colour panel: the row reads "Dracula" and the seven circles are
+  Dracula's colours. Step 4: the dashed circle opens the same list. Step 5: the row still reads
+  "Dracula".
+- **Check:** `MANUAL`: a screenshot after steps 1, 2 and 3.
+
+## Android — Copy of a Delta or Manic skin
+
+"Create copy and edit" also worked on the bundled skins that shipped as Delta/Manic packages (issue 797,
+part 2 of issue 783). Since issue 808 no bundled skin is a package: every console, the NDS included,
+ships in OpenEmux's own format and its copy is the zip as it is (RT-819, RT-828). The conversion stays
+for the packages a player imports: "Duplicate" on an imported `.deltaskin`/`.manicskin` row's menu
+converts it into OpenEmux's own format, one layout per form and orientation the package has art for,
+the background with every control lifted off it and one image per control.
+Same setup as the section above (`$PKG`, `$SKINS`); an NDS game and a GBA game in the library.
+`$OLD_APK` is the APK of a release before issue 806, whose `assets/skins/` still holds the Delta/Manic
+packages of the twelve consoles that moved (`NDS.deltaskin` included).
+
+### RT-794 — The copy looks and plays like its source, upright and sideways
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** `NDS.deltaskin` taken from `$OLD_APK`
+  (`unzip -p $OLD_APK assets/skins/NDS.deltaskin > NDS.deltaskin`), imported with "Import .zip",
+  then "Duplicate" on its row under "Imported" (RT-796) and the copy used ("the NDS copy"); the NDS
+  screen layout on both screens one over the other (the copy has no page per layout, RT-795).
+- **Steps:**
+  1. Launch the NDS game upright; press every button, the D-pad (its ball follows the thumb),
+     save, load, turbo, slow motion, fast forward and the menu key.
+  2. Turn the phone sideways and do the same.
+  3. Quit; use the imported package under "Imported"; launch the game again, both ways, and compare.
+- **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
+  motion before fast forward. Every control presses what it does on the package (the screens
+  key aside, RT-795); turbo, slow motion and fast forward light (an accent tile behind the key) while
+  on.
+- **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
+  `PackageConversionTest.everyBundledPackagePlansIntoASkinTheFormatAccepts` (every package the app
+  once shipped, kept as a test file, plans into a skin the format accepts, every item a control, slow
+  motion and the D-pad in every layout).
+
+### RT-795 — Sticks, two screens and the tablet art come across too
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** An N64 or PS game, and an NDS game, in the library; `N64.deltaskin` (or
+  `PS.manicskin`) taken from `$OLD_APK` (`unzip -p $OLD_APK assets/skins/N64.deltaskin > N64.deltaskin`)
+  and imported with "Import .zip" (the N64's and PS's bundled skins are copied as they are since
+  issue 806); a tablet, or the emulator at tablet size
+  (`adb shell wm size 1600x2560 && adb shell wm density 320`).
+- **Steps:**
+  1. "Duplicate" the imported N64 (or PS) package, use the copy and play: move each stick.
+  2. Play the NDS copy (RT-794) upright and sideways.
+  3. At tablet size, play the NDS copy both ways.
+- **Expected:** The sticks' knobs move with the thumb and steer like the package's. The NDS copy
+  shows both screens one over the other; its screens key is drawn and does nothing (the format has
+  no page per NDS layout). At tablet size the copy draws the iPad art, as the package does.
+- **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
+
+### RT-796 — "Duplicate" on an imported Delta or Manic skin makes a copy of your own
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** A `.deltaskin` imported for the GBA through "Import .zip" (for instance the one
+  an earlier release bundled: `unzip -p $OLD_APK assets/skins/GBA.deltaskin > GBA.deltaskin`), listed
+  under "Imported".
+- **Steps:**
+  1. On its row under "Imported", tap "⋮".
+  2. Tap "Duplicate".
+  3. Use the copy and launch the GBA game.
+- **Expected:** The sheet shows the lock line "Imported skins stay as they are. Duplicate makes a copy
+  of your own.", "Use it" (also when it is in use, RT-917) and "Duplicate". After "Making the
+  copy…", "YOUR SKINS" lists "<package name> (copy)" with the package's badges; the package stays
+  under "Imported". In game the copy looks and plays like the package.
+- **Check:** `adb shell ls $SKINS/GBA` lists the package file unchanged (same size as before) and the
+  new folder with its `skin.json`.
+
+### RT-797 — The copy and Duplicate work with a gamepad and in every language
+- **Area:** Android — Copy of a Delta or Manic skin
+- **Mode:** MANUAL
+- **Preconditions:** RT-796's imported package; a gamepad connected.
+- **Steps:**
+  1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
+     D-pad to "Duplicate", A.
+  2. With the gamepad only: "⋮" of an NDS bundled card → "Edit" (since issue 808 a copy of the zip
+     as it is, RT-828); B closes the editor that opens.
+  3. Switch the app to each of German, Spanish, French, Japanese, Portuguese (Brazil), Tamil and
+     Chinese and open the imported sheet again.
+- **Expected:** Left from the "⋮" goes back to the row; both copies are made. The lock line and the
+  "Making the copy…" message are translated in every language.
+- **Check:** `MANUAL`.
+
+## Android — NDS screen-layout pages
+
+An NDS skin in OpenEmux's own format can carry one page per DS screen layout (issue 807, part 2 of
+issue 802): `screenLayouts` with `top`, `bottom` and `side` in each layout, each with its own art
+in `<layout>/<page>/`. The `screens` key steps through them and the core's screens follow, as with
+the bundled DS skin. Same setup as the sections above (`$PKG`, `$SKINS`); an NDS game in the library
+played on DeSmuME (the default NDS core), and the NDS template from the Android repository
+(`pkg/android/openemux/tools/skins/templates/NDS-template.zip`, which has the three pages in every
+layout) copied to the device: `adb push NDS-template.zip /sdcard/Download/`.
+
+### RT-801 — An NDS skin with screen-layout pages steps through them upright
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** Settings → NDS → "Controller skins" → "Import .zip" → `NDS-template.zip`, as a
+  new skin; it is in use.
+- **Steps:**
+  1. Launch the NDS game upright.
+  2. Tap the SCREENS key three times, pausing after each.
+- **Expected:** The game opens on the layout used last (both screens one over the other on a fresh
+  install), drawn with the template's placeholder art. Each tap moves to the next page: the top
+  screen only, the bottom screen only, both one over the other again. Each page has its own art and
+  controls, the game's picture fills that page's screen area, and a short message names the layout
+  ("Top screen only", "Bottom screen only", "One above the other").
+- **Check:** `MANUAL`: a screenshot per page (`adb exec-out screencap -p > page.png`); `adb logcat -d
+  -s OpenEmuxSkin` shows `drawing <the skin's name> (phone-portrait, phone-landscape, screen-layout pages)`.
+  JVM suite `OpenEmuxSkinLayoutsTest.anNdsSkinsPagesAreAPackagesWithOneArtPerLayout`.
+
+### RT-802 — Sideways and on a tablet the pages follow too
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801; the emulator at tablet size for step 3 (`adb shell wm size 1600x2560 &&
+  adb shell wm density 320`).
+- **Steps:**
+  1. In game, turn the phone sideways and tap SCREENS until it comes back to the first page.
+  2. Turn it upright again.
+  3. At tablet size, play again upright and sideways, stepping with SCREENS.
+- **Expected:** Sideways shows the landscape layout's pages (top only, bottom only, one over the
+  other); upright comes back on the upright layout used last. At tablet size the tablet layouts'
+  pages are drawn, and sideways the cycle also has both screens side by side.
+- **Check:** `MANUAL`; `adb shell wm size reset && adb shell wm density reset` afterwards.
+
+### RT-803 — The pause menu's screen layout switches the page and is remembered
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801.
+- **Steps:**
+  1. Upright, pause the game and pick "Side by side" under the screens.
+  2. Resume; quit the game and launch it again.
+- **Expected:** The side page is drawn (its own art, the two screens side by side) and the core
+  shows the screens side by side in its two areas. The next launch opens on it.
+- **Check:** `MANUAL`; `adb shell run-as $PKG cat files/nds-layout` has `portrait=side`.
+
+### RT-804 — Download as template, import and the editor keep the pages
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801's imported skin.
+- **Steps:**
+  1. On its row, "⋮" → "Edit": look at the editor's top bar.
+  2. Move the A button a little and save.
+  3. "⋮" → "Download as template"; open the zip on a computer.
+  4. "⋮" → "Duplicate", and use the copy in game.
+- **Expected:** The top bar's subtitle reads "Phone · Portrait · One above the other": the editor
+  shows and edits the default page. After saving, the pages are still there and still step in game.
+  The downloaded zip has `phone-portrait/top/`, `bottom/` and `side/` with their images, and its
+  `skin.json` keeps `screenLayouts`. The duplicate steps through the pages too.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/NDS                      # the imported skin's folder, then:
+  adb shell ls $SKINS/NDS/<its folder>/phone-portrait/side
+  # a.png b.png background.png dpad-ball.png dpad.png fast-forward.png frame.png l.png load.png ...
+  ```
+  JVM suites `SkinEditTest.patchKeepsAnNdsSkinsScreenLayoutPages`,
+  `SkinImportTest.screenLayoutPagesImagesAreImported`,
+  `SkinTemplateTest.screenLayoutPagesAreInTheReadmeAndTheZipAndReadBack`.
+
+### RT-805 — A skin without pages, or on melonDS, plays as before
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** RT-801's skin; a copy of the template zip with `screenLayouts` removed from
+  every layout of its `skin.json`, imported as a second skin.
+- **Steps:**
+  1. Use the second skin and play upright: tap SCREENS.
+  2. Use the first skin again, set the NDS core to melonDS and play upright: tap SCREENS.
+- **Expected:** In both cases the skin draws the two screens one over the other and SCREENS is
+  drawn and changes nothing on screen, as before issue 807.
+- **Check:** `MANUAL`. JVM suite `OpenEmuxSkinLayoutsTest.screenLayoutPagesNeedTheNdsAndBothLayouts`.
+
+### RT-806 — A skin with broken screen-layout pages is refused
+- **Area:** Android — NDS screen-layout pages
+- **Mode:** MANUAL
+- **Preconditions:** Three copies of the template zip, edited in their `skin.json`: one with `side`
+  removed from `phone-portrait`'s `screenLayouts`, one with a `stacked` page added, one with
+  `console` changed to `GBA` (and its two screens cut to one).
+- **Steps:**
+  1. Import each zip through NDS (the third through GBA) → "Import .zip".
+- **Expected:** Each one is refused with "This skin can't be read (…)" naming the error, and the skin list is
+  unchanged.
+- **Check:** `MANUAL`. JVM suite `SkinFormatTest.screenLayoutPagesAreChecked`
+  (`INCOMPLETE_SCREEN_LAYOUTS`, `UNKNOWN_SCREEN_LAYOUT`, `SCREEN_LAYOUTS_NOT_NDS`, `BAD_SCREENS`).
+
+## Android — Bundled skins for the eleven single-screen consoles in OpenEmux's format
+
+The eleven single-screen consoles whose bundled skins were Delta/Manic packages now ship them in
+OpenEmux's own skin format (issue 806): NES (`FC`), SNES (`SFC`), Game Boy (`GB`), Game Boy Color
+(`GBC`), Game Boy Advance (`GBA`), Mega Drive (`MD`), Master System (`SMS`), Nintendo 64 (`N64`),
+GameCube (`GC`), PlayStation (`PS`) and PSP (`PSP`), in `assets/skins/<console>.zip`,
+`dark/<console>.zip` and `<colour>/<console>.zip` in
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android). Every variant they had
+is kept: console colours, Dark and the official colours of issue 720 (FC red; SFC purple; GB red,
+yellow, green, blue, black, white, clear; GBC red, purple, green, yellow, teal; GBA white, black,
+clear blue, clear pink, silver, orange; N64 grey, black, red, blue, green, yellow, gold; GC black,
+silver, orange; PSP white, silver, blue; MD, SMS and PS console colours and Dark only). Each has six
+layouts: phone and tablet as before, upright and sideways, plus fold, new for these consoles. The
+console colours and Dark images are PNG, the colour variants' WebP, which the format now accepts
+for any image (`<name>.webp` instead of `<name>.png`, never both). Issue 808 moved
+the NDS too (RT-825 to RT-828). The runner has no Android device, so the in-game scenarios are `MANUAL`: a phone,
+a tablet and a foldable (or headless emulators of each) with `adb`. `$PKG` is `com.openemux.mobile`,
+`$SKINS` is `/sdcard/Android/data/$PKG/files/skins`, and `$OLD_APK` is the APK of the release before
+issue 806.
+
+### RT-814 — Each of the eleven consoles opens with its bundled skin, laid out and coloured as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** One game of each of FC, SFC, GB, GBC, GBA, MD, SMS, N64, GC, PS and PSP in the
+  library; nothing picked under "Your skins" or "Imported" for them; each console's "Controller
+  skins" on "Console colors". Screenshots of the same games taken with `$OLD_APK` installed (phone
+  upright and sideways, tablet upright and sideways).
+- **Steps:**
+  1. On a phone, start each game upright, then turn the phone sideways.
+  2. On a tablet (or an emulator 600 dp or more on its short side, `adb shell wm size 1600x2560 &&
+     adb shell wm density 320`), start each game upright and sideways.
+  3. Compare each screenshot side by side with the previous release's.
+- **Expected:** Each game shows the same skin as before: the same art and colours (the light grey
+  SNES with coloured X, Y, A and B, the purple GBA, the black PSP), every control in the same place
+  and at the same size, the picture in the same spot and never covered; the tablet gets its own
+  layouts, not the phone's stretched. Nothing falls back to the app's plain drawn skin. One thing
+  differs from the old screenshots: the soft drop shadow around each control is gone, and what
+  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-923).
+  The words under the centre keys ("START", "SELECT") are where they were, now drawn by the app
+  (RT-922).
+- **Check:** `MANUAL`: screenshot each with `adb exec-out screencap -p > <console>-<form>-<orientation>.png`
+  and compare with the old ones; logcat tag `OpenEmuxSkin` shows `drawing OpenEmux <console name>`
+  with `(phone-portrait, phone-landscape)` on the phone and `(tablet-portrait, tablet-landscape)` on
+  the tablet (`adb logcat -s OpenEmuxSkin`), and no `falling back` line.
+- **Restore:** `adb shell wm size reset && adb shell wm density reset`.
+
+### RT-815 — The eleven consoles get a fold layout on a foldable's inner screen
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games on a foldable, or a Pixel Fold emulator (`adb emu unfold`,
+  `hinge-angle0 180`).
+- **Steps:**
+  1. Unfolded flat, start each game upright, then turn the device sideways.
+  2. Fold it (`adb emu fold`) during one of the games, then unfold it again.
+- **Expected:** Unfolded, each game shows its skin's fold layout, made for the nearly square inner
+  screen (the picture large, the controls at the sides or under it, nothing stretched or covering the
+  picture), not the tablet or phone layout. Folded, the outer screen shows the phone layout;
+  unfolding brings the fold layout back, the game running on.
+- **Check:** `MANUAL`: a screenshot per console and orientation; unfolded, logcat tag
+  `OpenEmuxSkin` reads `drawing OpenEmux <console name> (fold-portrait, fold-landscape)`, folded
+  `(phone-portrait, phone-landscape)`.
+
+### RT-816 — Every variant is listed and drawn with the same layout
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games.
+- **Steps:**
+  1. Settings → each of the eleven consoles → "Controller skins".
+  2. For the Game Boy, tap each card under "BUNDLED" in turn and start the game, upright and
+     sideways.
+  3. Do the same for one colour of the GBA ("Clear Blue"), the N64 ("Gold"), the GameCube
+     ("Orange") and the PSP ("Silver"), and for "Dark" on the Mega Drive.
+  4. Tap "Console colors" on each console again.
+- **Expected:** "BUNDLED" lists "Console colors", "Dark" and the console's official colours, exactly
+  as the previous release: FC Red; SFC Purple; GB Red, Yellow, Green, Blue, Black, White, Clear; GBC
+  Red, Purple, Green, Yellow, Teal; GBA White, Black, Clear Blue, Clear Pink, Silver, Orange; N64
+  Grey, Black, Red, Blue, Green, Yellow, Gold; GC Black, Silver, Orange; PSP White, Silver, Blue;
+  MD, SMS and PS only "Console colors" and "Dark". Every card has its Phone, Tablet and Fold badges
+  lit. Each variant draws in its colours with every control in the same place as "Console colors";
+  the translucent ones (Clear, Clear Blue, Clear Pink) look as they did before.
+- **Check:** `MANUAL`: screenshot the lists and the games; after step 4,
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin).get("consoles",{}); print({k: v.get("skin","console") for k,v in c.items()})'
+  # every console: console
+  ```
+
+### RT-817 — A variant picked before the update is still picked after it
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `$OLD_APK` installed with a game of GB, SFC, N64 and PSP; their "Controller
+  skins" set to "Red" (GB), "Purple" (SFC), "Dark" (N64) and "Silver" (PSP).
+- **Steps:**
+  1. Read the choices (Check), then install this build over it: `adb install -r <apk>`.
+  2. Open the app; Settings → each of the four consoles → "Controller skins".
+  3. Start each game.
+- **Expected:** Each console still has the same card ringed with "In use" and the section title
+  reads the same name on its right; each game opens on that variant, now drawn from the zip (the GB
+  red, the SNES purple, the N64 Dark, the PSP silver). The other consoles stay on "Console colors".
+- **Check:**
+  ```bash
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]; print(*(c.get(k,{}).get("skin","console") for k in ("GB","SFC","N64","PSP")))'
+  # before and after step 1: red purple dark silver
+  ```
+  and logcat tag `OpenEmuxSkin` reads `drawing OpenEmux <console name> <variant>` (for instance
+  `drawing OpenEmux Game Boy Red`, `drawing OpenEmux Nintendo 64 Dark`) at each start.
+
+### RT-818 — Every control, quick action and stick works as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-814's games; RetroArch's input test, or games where each button does
+  something visible; RetroAchievements hardcore off.
+- **Steps:**
+  1. On each console press the D-pad's four directions and diagonals and every button and shoulder
+     on the skin, upright and sideways.
+  2. Use "save", "load", "turbo", "slow-motion" and "fast-forward" on the frame (slow motion sits
+     between turbo and fast forward, as the packages had it), and the menu key.
+  3. On the N64, GameCube (main stick and "C" stick), PlayStation (both sticks) and PSP, push each
+     stick a little and all the way, then let go.
+  4. On the GameCube, press "L" and "R" slowly, a little and then all the way.
+- **Expected:** Each control reaches the core as it did on the previous release (the Mega Drive's
+  A, B, C, X, Y, Z and MODE, the NES's B and A, the SNES's L and R, the PlayStation's L2/R2 and
+  SELECT/START); the D-pad's ball follows the thumb (RT-408). Each quick action works, turbo, slow motion
+  and fast forward light while on, and the menu opens. Each stick's knob moves with the thumb and recentres on
+  release, a small push giving a small value (RT-394, RT-397). The GameCube's triggers stay analog: a
+  light press gives a partial value before the full press.
+- **Check:** `MANUAL`, plus the generated config while a game runs:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|dpad_area|_movable'
+  ```
+  one `dpad_area` per overlay, an `analog_left`/`analog_right` desc per stick, each with
+  `_movable = true`. The binds themselves are checked by
+  `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt` (openemux-android).
+
+### RT-819 — "Edit" on a bundled skin copies the zip as it is, every layout and image
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game; no skin of your own for the SNES; the APK under test on the
+  computer.
+- **Steps:**
+  1. Settings → SNES → "Controller skins" → "⋮" on the "Purple" card → "Edit".
+  2. In the editor that opens (RT-781), move a button, tap "Save", then "Close editor".
+  3. Launch the SNES game upright and sideways.
+  4. Repeat step 1 on "Console colors".
+- **Expected:** Step 1 opens the skin editor on "Purple - edited" with the purple art (no conversion:
+  the copy is the bundled zip's files). Step 2 shows "Skin saved". "YOUR SKINS" lists the card
+  "Purple - edited" ringed with "In use", its Phone, Tablet and Fold badges lit; the "Purple" card
+  under "BUNDLED" is unchanged. Step 3 shows the purple skin with the moved button where it was
+  put, every control pressing as on the bundled skin. Step 4's copy has PNG images.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC/purple-edited
+  # skin.json fold-landscape fold-portrait phone-landscape phone-portrait tablet-landscape tablet-portrait
+  adb shell ls $SKINS/SFC/purple-edited/phone-portrait            # *.webp, the same names as in the zip, no *.png
+  unzip -p <apk> assets/skins/purple/SFC.zip > SFC-purple.zip
+  unzip -p SFC-purple.zip phone-portrait/a.webp | md5sum
+  adb shell md5sum $SKINS/SFC/purple-edited/phone-portrait/a.webp   # the same sum
+  adb shell ls $SKINS/SFC/console-colors-edited/phone-portrait    # *.png (step 4)
+  ```
+
+### RT-820 — Importing and duplicating a Delta or Manic skin still works on these consoles
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game and a Game Boy game; on the phone's Downloads, the packages the
+  previous release bundled: `unzip -p $OLD_APK assets/skins/GBA.deltaskin > GBA.deltaskin` and
+  `unzip -p $OLD_APK assets/skins/GB.manicskin > GB.manicskin`, pushed with
+  `adb push <file> /sdcard/Download/`.
+- **Steps:**
+  1. Settings → Game Boy Advance → "Controller skins" → "Import .zip" → pick `GBA.deltaskin` →
+     "Import".
+  2. Tap its card under "IMPORTED" and launch the GBA game.
+  3. On its "⋮", tap "Duplicate"; use the copy and launch the game again.
+  4. Repeat steps 1 and 2 with `GB.manicskin` on the Game Boy.
+  5. Tap "Console colors" on both consoles.
+- **Expected:** Step 1: the sheet reads "A Delta or Manic EMU skin: it goes under Imported, as it
+  is." and the package is listed under "IMPORTED". Step 2: the game draws the package (RT-766).
+  Step 3: after "Making the copy…", "YOUR SKINS" lists "<package name> (copy)" in use, and the game
+  looks and plays like the package (RT-796). Step 4: the Manic package imports and plays the same way.
+  Step 5: the bundled skins in OpenEmux's format are back.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/GBA $SKINS/GB    # GBA.deltaskin and the copy's folder; GB.manicskin
+  adb shell run-as $PKG cat files/meta.json | python3 -c 'import json,sys; c=json.load(sys.stdin)["consoles"]; print(c["GBA"].get("custom"), c["GB"].get("custom"))'
+  # after step 4: own:<copy folder> pkg:GB.manicskin · after step 5: None None
+  ```
+
+### RT-821 — A skin of your own with a WebP image draws it
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `mine`, the SNES template unzipped (`SFC-template.zip`, RT-725) on the computer;
+  a SNES game.
+- **Steps:**
+  1. On the computer, paint `mine/phone-portrait/a.png` a solid red (keep its size), save it as
+     `mine/phone-portrait/a.webp` (`python3 -c 'from PIL import Image; Image.open("a.png").save("a.webp")'`)
+     and delete `a.png`.
+  2. `adb push mine $SKINS/SFC/`; Settings → SNES → "Controller skins" → tap the `mine` card.
+  3. Launch the SNES game upright and press A.
+- **Expected:** The A button is drawn from the red WebP image, at its size, and presses A; every
+  other control is drawn from its PNG as before.
+- **Check:** `MANUAL`: screenshot; logcat tag `OpenEmuxSkin` shows `drawing <the skin's name>` and
+  no `not drawn` line.
+
+### RT-822 — An image as both PNG and WebP is refused, and the game falls back
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-821 (`mine` in use, with `phone-portrait/a.webp` and no `a.png`).
+- **Steps:**
+  1. Push a PNG of the same image next to it: `adb push a.png $SKINS/SFC/mine/phone-portrait/`.
+  2. Launch the SNES game upright.
+- **Expected:** The skin is refused as a whole (one image in two formats) and the game draws the
+  bundled SNES skin instead; nothing crashes.
+- **Check:** `adb logcat -s OpenEmuxSkin` shows `mine not drawn: falling back to the bundled skin`
+  with `DUPLICATE_ID` and `image a is both a.png and a.webp`.
+- **Restore:** `adb shell rm $SKINS/SFC/mine/phone-portrait/a.png`.
+
+### RT-823 — A template of a skin with WebP images is all PNG; an imported zip keeps its WebP
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-819's "Purple - edited"; RT-821's `mine` folder on the computer, zipped
+  (`zip -r mine.zip mine`) and pushed to `/sdcard/Download/`.
+- **Steps:**
+  1. "⋮" on "Purple - edited" → "Download as template" → "Save .zip"; `adb pull` the zip and unzip it.
+  2. Settings → SNES → "Controller skins" → "Import .zip" → pick `mine.zip` → "A new skin", name it
+     "WebP import" → "Import".
+- **Expected:** Step 1: "Template saved"; the template holds `skin.json`, `README.txt` and the six
+  layout folders, every image a PNG (none WebP) at the size `README.txt` lists for it, the art the
+  same as the copy's. Step 2: "Skin imported"; the new skin keeps `a.webp` as WebP and draws it as in
+  RT-821.
+- **Check:**
+  ```bash
+  unzip -l <template>.zip | grep -c '\.webp'      # 0
+  python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(24); print(struct.unpack(">II", d[16:24]))' <template>/phone-portrait/a.png
+  # equals the "a.png" line of README.txt
+  adb shell ls $SKINS/SFC/webp-import/phone-portrait   # a.webp, and no a.png
+  ```
+
+### RT-931 — A copy of a WebP colour variant takes a colour or a texture where it had an image
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-819's "Purple - edited" in use (a copy of the SNES's "Purple", whose images
+  are WebP); a SNES game; a photo on the phone (`adb push photo.jpg /sdcard/Pictures/`).
+- **Steps:**
+  1. "⋮" on "Purple - edited" → "Edit", the phone upright; select "A" alone → "Colour" → "Button" →
+     the green circle → the check.
+  2. Select "B" alone → "Texture" → "Choose image" → the photo → the check.
+  3. Tap an empty spot to let go of "B"; "⋯" → "Body" → the orange circle → the check.
+  4. "Save", close the editor and launch the SNES game upright.
+- **Expected:** Each change shows on the stage at once, and in game after step 4: "A" green
+  instead of its purple art, "B" filled with the photo, the body orange. Older builds went on
+  drawing the WebP image, so a colour picked on a copy of a colour variant was not applied. Nothing
+  falls back to the bundled skin.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/SFC/purple-edited/phone-portrait
+  # no a.webp (A is drawn from its colours), b.png and no b.webp, no background.webp
+  ```
+  and `adb logcat -s OpenEmuxSkin` shows `drawing` the copy, with no `not drawn` and no
+  `DUPLICATE_ID` line.
+
+### RT-824 — The thirty-one own-format consoles' zips are valid, complete and press the same binds
+- **Area:** Android — Bundled skins
+- **Mode:** AUTO-SUITE
+- **Preconditions:** An openemux-android checkout.
+- **Steps:**
+  1. Run the unit suite (`./gradlew --no-daemon testDebugUnitTest` in `pkg/android/openemux`).
+- **Expected:** Thirty-one consoles ship in OpenEmux's own format, in console colours and Dark, and
+  no Delta/Manic package is left in any variant folder (issue 808: the NDS's moved last); every
+  variant the picker lists is a zip in its folder and no zip ships that it does not list, 100
+  own-format zips in all (31 consoles twice, plus the 33 official colours of the eleven and the NDS's
+  five); each zip has the six layouts, every image at its element's size (a D-pad's ball and a
+  stick's knob included), PNG for console colours and Dark and WebP for the colours; the NDS's have
+  the `top`, `bottom` and `side` screen-layout pages in every layout and variant, each image there at
+  its size and SCREENS on every page; every variant has the console colours' layout (sizes, screens,
+  frame, every element's id, type, bind, rect and label, the NDS's pages included); every control
+  presses the bind the drawn skin uses for that console, and the quick actions and the menu are
+  there. The skin format reads `<name>.webp` for `<name>.png` and refuses both at once
+  (`DUPLICATE_ID`); an imported zip keeps its WebP images. "Edit" and "Duplicate" copy every
+  own-format bundled zip with every layout, element and file, and a bundled file that is not one is
+  offered no copy; the conversion of a Delta/Manic package still plans each package the app once
+  shipped (kept as test files, the NDS's included) into a skin the format accepts. The templates
+  match the bundled layouts.
+- **Check:** suite files `src/test/java/com/openemux/mobile/launch/OwnFormatBundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/BundledSkinsTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinConversionTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/PackageConversionTest.kt`,
+  `src/test/java/com/openemux/mobile/launch/SkinTemplatesTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinFormatTest.kt`,
+  `src/test/java/com/openemux/mobile/data/SkinImportTest.kt` (openemux-android,
+  `./gradlew --no-daemon testDebugUnitTest`).
+
+## Android — DS bundled skin in OpenEmux's format
+
+The Nintendo DS's bundled skin, in all seven variants (Console colors, Dark, Black, Blue, Pink,
+Turquoise, White), ships as `NDS.zip` in OpenEmux's own format instead of `NDS.deltaskin` (issue 808,
+part 3 of issue 802), with the screen-layout pages of issue 807 (`top`, `bottom`, `side`) in each of
+its six layouts. In game it must look and play as the package did. The runner has no Android device,
+so these are `MANUAL`: a phone, a tablet and a foldable (or headless emulators of each) with `adb`.
+`$PKG` is `com.openemux.mobile`, `$SKINS` is `/sdcard/Android/data/$PKG/files/skins`, `$OLD_APK` the
+APK of the release before issue 808; an NDS game in the library played on DeSmuME (the default core).
+
+### RT-825 — The DS opens with its bundled skin, laid out and coloured as before
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** Nothing picked under "Your skins" or "Imported" for the NDS; its "Controller
+  skins" on "Console colors"; screenshots of the same game taken with `$OLD_APK` installed (phone
+  upright and sideways, tablet upright and sideways), the screen layout on both screens one over the
+  other.
+- **Steps:**
+  1. On a phone, start the game upright, then turn the phone sideways.
+  2. On a tablet (`adb shell wm size 1600x2560 && adb shell wm density 320`), do the same.
+  3. On a foldable's inner screen (or a Pixel Fold emulator unfolded), do the same.
+  4. Press every button, the D-pad, save, load, turbo, fast forward and the menu key.
+- **Expected:** Steps 1–2 show the same skin as the screenshots: the titanium DS art, every control
+  in the same place and at the same size, both screens in the same spot and never covered; the
+  tablet gets its own layouts. Step 3 shows a fold layout of its own, not the phone's stretched.
+  Every control does what it did. Nothing falls back to the app's plain drawn skin. One thing
+  differs from the old screenshots: the soft drop shadow around each control is gone, and what
+  lifts a control is its relief alone, a darker layer of the same shape just under it (RT-923).
+- **Check:** `MANUAL`: screenshots (`adb exec-out screencap -p > nds-<form>-<orientation>.png`);
+  `adb logcat -s OpenEmuxSkin` shows `drawing` the DS skin with `(phone-portrait, phone-landscape)`
+  on the phone, `(tablet-portrait, tablet-landscape)` on the tablet, and no `falling back` line.
+- **Restore:** `adb shell wm size reset && adb shell wm density reset`.
+
+### RT-826 — SCREENS steps through the DS screen layouts, each with its own art
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** RT-825.
+- **Steps:**
+  1. Upright on the phone, press SCREENS repeatedly until it comes back to the start.
+  2. Turn sideways and do the same; then on the tablet, both ways.
+- **Expected:** Each press goes to the next layout (both screens, top only, bottom only, side by
+  side, as the old package did), and each draws its own art: the picture takes the room the layout
+  needs, no control covers a screen and SCREENS is on every page. Touching the bottom screen lands
+  where it is tapped in every layout.
+- **Check:** `MANUAL`: a screenshot per layout, compared with `$OLD_APK`'s.
+
+### RT-827 — The DS colours draw the same layout, and an update keeps the one picked
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** `$OLD_APK` installed, the NDS's "Controller skins" on "Blue".
+- **Steps:**
+  1. Install this build over it (`adb install -r`) and start the NDS game.
+  2. Pick in turn "Dark", "Black", "Pink", "Turquoise" and "White", starting the game each time.
+- **Expected:** Step 1 opens in Blue, as before the update. Each variant draws in its colours with the
+  same layout, pages and controls as "Console colors".
+- **Check:** `MANUAL`; `adb shell run-as $PKG cat files/meta.json` keeps `"skin": "blue"` for NDS
+  after step 1.
+
+### RT-828 — "Edit" on the DS's bundled skin copies the zip with its screen-layout pages
+- **Area:** Android — Bundled skins
+- **Mode:** MANUAL
+- **Preconditions:** No skin of your own for the NDS.
+- **Steps:**
+  1. Settings → Nintendo DS → "Controller skins" → "⋮" on "Console colors" → "Edit".
+- **Expected:** The copy, "Console colors - edited", is the zip as it is (nothing is converted): a
+  short "Making the copy…", then it opens in the editor, listed under "YOUR SKINS" in use with
+  Phone, Tablet and Fold lit; in game it plays like the bundled skin, SCREENS included.
+- **Check:**
+  ```bash
+  adb shell ls $SKINS/NDS/console-colors-edited/phone-portrait
+  # background.png frame.png ... and the bottom, side and top folders
+  ```
+### RT-842 — A disc game that is already on the phone is never dropped silently
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** On the phone, a PS game made of a `.cue` and its `.bin` (for example
+  `<roms>/PS/Disc.cue`) whose content differs from the sender's game of the same name; the sender (a
+  desktop OpenEmux or a second device) has that game plus two games the phone does not have.
+- **Steps:**
+  1. Send the three games to the phone; on the sheet press "Review 1 Conflict".
+  2. Leave the choice as it is, go back and press "Accept"; put the app in the background before the
+     transfer ends (or check the notification afterwards).
+  3. Compare the local sheet before and after: `adb shell stat -c '%s %Y' <roms>/PS/Disc.cue`.
+  4. Send the same three games again; this time choose "Replace" on the disc game and accept.
+  5. Send two games the phone already has, identical, and accept.
+- **Expected:** 1: one card for the disc game (not one per file), with only "Replace · Skip",
+  "Skip" selected, and the line "A game with several files can’t be kept twice. Replace yours or
+  skip it."; its files are not repeated under "SKIPPED". 2: the result shows a warning badge,
+  "2 of 3 Games Received", "From <sender>. These weren’t added:", and under "NOT RECEIVED" the disc
+  game as "<title>" / "PS · Already there"; the notification reads "2 games received, 1 skipped".
+  3: the local `.cue` is unchanged. 4: "3 Games Received" with the check badge, and the `.cue` and
+  `.bin` on the phone are the sender's. 5: "No Games Received", "From <sender>. Nothing new was
+  added to your library:" and both games listed; no "Show in Library".
+- **Check:** human only (screenshots and the `stat` lines); the plan and the count are covered by
+  `PlacementTest`, `OfferModelTest` and `DeliveryReportTest`.
+
+### RT-843 — Android lists the games the receiver did not take, on the result and the notification
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** The phone and a desktop OpenEmux (or a second device) that can see each other;
+  on the phone three games of one console, one of which the receiver already has, identical.
+- **Steps:**
+  1. Share the three games from the phone; on the receiver uncheck one of the other two and accept.
+     Put the phone's app in the background before the transfer ends.
+  2. From the console's entry point, share the whole console to the same receiver and accept
+     everything there.
+  3. Share a single game the receiver has, identical.
+  4. Repeat 1 in the light theme, on a wide window (`adb shell wm size 1280x800`, restore with
+     `adb shell wm size reset`) and in Português (Brasil).
+- **Expected:** 1: the phone shows a warning badge, "1 of 3 Games Sent", "<receiver> has 1 of them.
+  These didn’t go:", and under "NOT SENT" the unchecked game ("Not accepted on <receiver>") and the
+  game it already had ("Already on <receiver>"), each with the console's short name; the
+  notification reads "1 game sent, 2 skipped". The receiver's own result counts the same game.
+  2: "<N-1> of <N> Games Sent", with the game the receiver already had listed. 3: "No Games Sent",
+  "<receiver> didn’t take any of them:" and the game listed. 4: the list scrolls with the sheet,
+  "Close" keeps the gamepad focus, and every text is translated and readable in both themes.
+- **Check:** human only (screenshots); the count is covered by `DeliveryReportTest` and
+  `ShareCoordinatorTest`.
+
+## Android — BIOS import
+
+Settings → BIOS on the Android app imports a console's BIOS files from the system file picker
+(issue 668; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
+`pkg/android/openemux`). Each console card has its own "Import" button; a picked file is accepted only
+when its name (any case) is one that console expects, and is saved in the system folder under the
+catalog's spelling. Game Boy Advance also accepts its known BIOS by content. One sheet then lists the
+imported files and the rejected ones with a reason. `MANUAL`, like the other Android sections: a phone
+or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. Placeholder files (contents are
+not checked) are made with `head -c 2048 /dev/urandom > <name>` and pushed with
+`adb push <name> /sdcard/Download/bios-qa/`. The system folder is
+`/sdcard/Android/data/$PKG/files/system/` (`adb shell ls` it). The matching
+logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.kt`.
+
+### RT-850 — Importing a console's BIOS by name, all files good
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `scph5501.bin` and `SCPH1001.BIN` in `/sdcard/Download/bios-qa/`; no
+  PlayStation BIOS imported yet.
+- **Steps:**
+  1. Open Settings → "BIOS". Look at the "Sony PlayStation" card.
+  2. Tap its "Import" button and pick `scph5501.bin` and `SCPH1001.BIN` in the file picker.
+  3. Tap "Done".
+- **Expected:** The screen has no "Import from device" button; under the intro a paragraph says to
+  use Import on a console. Each console card shows the "x of y" count under its name and an "Import"
+  button at the end of its header. After the pick, one sheet titled "2 files imported" lists both
+  files under "Imported"; `SCPH1001.BIN` reads "Saved as scph1001.bin". "Sony PlayStation expects"
+  lists all eight names. Behind the sheet, the card already reads "1 of 1" with a green check.
+- **Check:** human only (a screenshot of the screen and of the sheet); the system folder has
+  `scph5501.bin` and `scph1001.bin`, both lowercase, and no `.part` file.
+
+### RT-851 — A mixed batch imports the good files and explains the rest
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `scph5500.bin`, `bios_CD_U.bin` and `psx bios (copy).bin` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Settings → "BIOS" → "PS1 - Sony PlayStation" → "Import", pick the three files.
+- **Expected:** One sheet titled "1 of 3 files imported": `scph5500.bin` under "Imported";
+  `bios_CD_U.bin` and `psx bios (copy).bin` under "Not imported", each with "Not a name this console
+  expects" in amber. No error dialog, and nothing else is written to the system folder.
+- **Check:** human only (a screenshot of the sheet); the system folder has no `bios_CD_U.bin`.
+
+### RT-852 — A batch with no good file imports nothing
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** `5200.rom` and `random.bin` in `/sdcard/Download/bios-qa/`; no Lynx BIOS.
+- **Steps:**
+  1. Settings → "BIOS" → "Atari Lynx" → "Import", pick both files.
+  2. Import `scph5501.bin` for "Sony PlayStation" again, once with different bytes and once with the
+     same bytes.
+- **Expected:** Step 1: the sheet reads "No files imported", both files rejected with "Not a name
+  this console expects", and "Atari Lynx expects" names `lynxboot.img`; the Lynx card is unchanged.
+  Step 2: with different bytes the file's row reads "Replaced the file that was there"; with the same
+  bytes it has no note.
+- **Check:** human only (a screenshot of each sheet).
+
+### RT-853 — The Settings BIOS tile and the console card see an import at once
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** A Lynx game in the library, no Lynx BIOS, `lynxboot.img` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Open Settings and read the "BIOS" tile.
+  2. Open "BIOS", import `lynxboot.img` for "Atari Lynx", tap "Done" and go back to Settings.
+  3. Open the Lynx console's settings.
+- **Expected:** Before the import the tile counts the Lynx among the consoles that need files; after
+  it, without restarting the app, it no longer does. The Lynx console card's "BIOS" row reads
+  "Found" with a green check.
+- **Check:** human only (a screenshot before and after).
+
+### RT-854 — Importing with a gamepad
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK, a pad said to be connected (`adb shell am broadcast -a
+  com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`), `bios_CD_U.bin` in
+  `/sdcard/Download/bios-qa/`.
+- **Steps:**
+  1. Open Settings → "BIOS" with the D-pad (`adb shell input keyevent KEYCODE_DPAD_DOWN`,
+     `KEYCODE_BUTTON_A`).
+  2. Move down with the D-pad to the "Sega CD" card's "Import" button and press A; pick the file.
+  3. Press A on the sheet.
+- **Expected:** The hint bar shows "A Import" and "B Back". D-pad down moves from one "Import" button
+  to the next, with the focus ring on the button. A opens the picker. The sheet opens with the focus
+  on "Done"; A closes it and the focus is back on the Sega CD "Import" button.
+- **Check:** human only (a screenshot with the focus ring on the button and on "Done").
+
+### RT-855 — Importing in the tablet list and detail layout
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** Tablet size (`adb shell wm size 1600x2560`, `adb shell wm density 320`), the
+  files of RT-851.
+- **Steps:**
+  1. Open Settings and tap the "BIOS" tile, which opens beside the list.
+  2. Repeat RT-851 in the detail pane.
+- **Expected:** The same result as RT-851; the sheet opens over the whole window and the list pane
+  still shows Settings. The BIOS tile in the list updates after the import.
+- **Check:** human only (a screenshot).
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
+
+### RT-856 — Backing out of the picker changes nothing
+- **Area:** Android — BIOS import
+- **Mode:** MANUAL
+- **Preconditions:** None.
+- **Steps:**
+  1. Settings → "BIOS" → any console's "Import", then press back in the file picker.
+- **Expected:** The BIOS screen comes back with no sheet and no change; its "Import" buttons still
+  work.
+- **Check:** human only.
+## Android — OpenEmux-format skins
+
+Skins in OpenEmux's own format (a folder with `skin.json`, issue 775) drawn in game (issue 776).
+Screenshots of a running game can come out black on an emulator; then check the page images the
+launch wrote (`adb exec-out run-as com.openemux.mobile tar cf - files/launch/current/skin`) and
+logcat's `OpenEmuxSkin` lines.
+
+### RT-871 — An OpenEmux-format skin is drawn from its images, upright and sideways
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Start the Game Boy Advance game upright.
+  2. Turn to landscape (`adb shell settings put system user_rotation 1`).
+- **Expected:** Upright, the portrait layout scaled to the screen keeping its proportions and
+  centred: the background image behind everything, the frame in its colour, the game's picture in
+  the layout's screen, B and the D-pad ball from their images. Sideways, the landscape layout, the
+  game in its own screen. logcat says `OpenEmuxSkin: drawing <name> (phone-portrait, phone-landscape)`.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin: drawing'`; human (screenshots or the page images).
+- **Restore:** `user_rotation 0`; delete the skin folder.
+
+### RT-872 — An element with no image is drawn in its colours
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Start the game; look at A (no `a.png`) and B (`b.png`).
+  2. Replace `b.png` with a file that is not a picture; start the game again.
+- **Expected:** A is drawn as its `shape` in its `button` colour with its `label` in its `letter`
+  colour; B shows its image. After step 2, B is drawn in its colours too, the game starts, and
+  logcat warns that the file is not an image.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin.*drawn in its colours'`; human (screenshot).
+- **Restore:** delete the skin folder.
+
+### RT-873 — Every control of an OpenEmux-format skin responds, ball and knob follow the thumb
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. For the stick, a PlayStation skin with an `analogStick` element.
+- **Steps:**
+  1. In game, press A, B, L, R, Start and Select; drag the D-pad in all eight directions and let go.
+  2. In the PlayStation game, drag the stick around and let go.
+  3. Tap "save" (quickSave), then turbo and fast forward twice each, and menu.
+- **Expected:** Every input reaches the game. The D-pad's ball and the stick's knob move with the
+  thumb and go back to the centre on release. Quick save saves a state; turbo and fast forward
+  light in the frame's `active` colour while on and go back when off; menu opens the pause menu.
+- **Check:** human only.
+- **Restore:** delete the skin folders.
+
+### RT-710 — A skin without the form's two layouts is not used
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Remove the `phone-landscape` entry from `skin.json`; start the game.
+  2. Put it back and run the game on a tablet AVD (`adb shell wm size 1600x2560`, density 320),
+     the skin having no `tablet-*` layouts.
+- **Expected:** In both cases the console's bundled skin is drawn, and logcat says which layout is
+  missing (`has no phone-landscape layout`, `has no tablet-portrait layout`).
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin.*has no'`.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`; delete the skin folder.
+
+### RT-711 — A broken OpenEmux-format skin falls back without crashing the game
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`.
+- **Steps:**
+  1. Replace `skin.json` with `{bad`; start the game.
+- **Expected:** The game starts with the bundled skin; logcat has `OpenEmuxSkin: <folder> not
+  drawn: falling back to the bundled skin` with the read error; no crash.
+- **Check:** `adb logcat -d | grep -E 'OpenEmuxSkin.*not drawn|FATAL EXCEPTION'` (the first only).
+- **Restore:** delete the skin folder.
+
+### RT-712 — Tablet and foldable use their own layouts
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. The skin also has `tablet-*` and `fold-*` layouts (in different colours, to tell them apart).
+- **Steps:**
+  1. On a tablet AVD, start the game upright and sideways.
+  2. On the foldable AVD unfolded (`openemux-fold`), start the game upright and sideways.
+- **Expected:** The tablet draws the `tablet-*` layouts, the unfolded foldable the `fold-*` ones,
+  in both orientations; a phone (or the foldable folded) the `phone-*` ones.
+- **Check:** `adb logcat -d | grep 'OpenEmuxSkin: drawing'` names the form's layouts.
+- **Restore:** `adb shell wm size reset`, `adb shell wm density reset`; delete the skin folder.
+
+### RT-713 — NDS: both screens go where the skin puts them
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game in the library. A test skin folder
+  `qa-skin/` written by hand from `pkg/android/openemux/docs/skin-format.md` (openemux-android):
+  `skin.json` for console `GBA` with `phone-portrait` and `phone-landscape` layouts (screens, a
+  frame with colours, a D-pad, A, B, L, R, Start, Select and the quick actions `quickSave`,
+  `turbo`, `toggleFastForward`, `menu`), and in `phone-portrait/` a `background.png`, `b.png` and
+  `dpad-ball.png` at their elements' sizes. Pushed with
+  `adb push qa-skin /sdcard/Android/data/com.openemux.mobile/files/skins/GBA/`. An NDS skin instead, with two screens one over the other in each layout.
+- **Steps:**
+  1. Start the Nintendo DS game upright and sideways; tap the lower screen.
+- **Expected:** Both screens show inside the box the two screen rects make, one over the other, and
+  the tap reaches the game.
+- **Check:** human only.
+- **Restore:** delete the skin folder.
+
+### RT-714 — Delta/Manic packages and the bundled skins are unchanged
+- **Area:** Android — OpenEmux-format skins
+- **Mode:** MANUAL
+- **Preconditions:** A phone AVD with a Game Boy Advance game; no skin folder.
+- **Steps:**
+  1. Start the game with nothing in `files/skins/GBA/`.
+  2. Put a `.deltaskin` there and start it again; then add an OpenEmux skin folder named after it
+     alphabetically (`z-skin/`) and start it again.
+- **Expected:** Step 1 draws the bundled skin, step 2 the `.deltaskin`, both exactly as before;
+  with both present, the first by name (the `.deltaskin`) is used.
+- **Check:** human only.
+- **Restore:** empty `files/skins/GBA/`.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-772 — A blank name or Cancel creates nothing
+- **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
+- **Reason:** The "Name your copy" sheet went away with "Create copy and edit": "Edit" and
+  "Duplicate" on a bundled skin ask for no name, so there is no blank name to refuse and no
+  "Cancel" (RT-770, RT-919). A copy is named afterwards with "Rename", which still refuses an empty
+  name (RT-739).
+
+### RT-811 — Moving the screen area moves where the game is drawn
+- **Retired:** 2026-11-06 (skin editor: body, screen frame and labels, no issue).
+- **Reason:** "Screen area" was taken out of the editor's "⋯" menu: the game screen can no longer
+  be moved or resized. The frame around it and the quick actions on it are painted, never moved
+  (RT-924, RT-925).
+
+### RT-792 — A bundled Delta or Manic skin offers "Create copy and edit"
+- **Retired:** 2026-11-06 (issue 808).
+- **Reason:** No bundled skin is a Delta/Manic package any more: the NDS's, the last, ships in
+  OpenEmux's own format, and its "Create copy and edit" copies the zip (RT-828). The conversion is
+  reached through "Duplicate" on an imported package (RT-796, RT-794).
+
+### RT-793 — The converted copy is named, listed under Your skins, used and has the source's layouts
+- **Retired:** 2026-11-06 (issue 808).
+- **Reason:** It converted the bundled NDS package, which is now a zip copied as it is (RT-828). The
+  converted copy of a package is RT-796's "Duplicate", which RT-794 and RT-795 play.
+
+### RT-773 — Consoles whose bundled skin cannot be copied yet do not offer it
+- **Retired:** 2026-11-06 (issue 797).
+- **Reason:** Every console's bundled skin can be copied now: the OpenEmux-format packages (RT-769),
+  the drawn skin (issue 798, RT-775) and the Delta/Manic packages (issue 797, RT-792). The JVM suite
+  `SkinConversionTest.theAppsOwnAssetsAnswerForEveryConsole` checks each console's kind of copy.
+### RT-775 — A drawn-skin console lists its skin and offers "Create copy and edit"
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-776 — The copy is named, listed under Your skins with three forms and used
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-777 — Upright on a phone the copy looks and plays like the drawn skin
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-778 — Sideways the keypad goes under the face buttons
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-779 — On a tablet the keypad sits between the controls
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-780 — The ColecoVision copy presses the same on either core
+- **Retired:** 2026-11-06 (issue 772).
+- **Reason:** The drawn skin's copy (issue 798) was for the consoles with no bundled package: the Atari
+  5200, ColecoVision, Intellivision and Odyssey 2. Issue 772 ships packages for them, so they play
+  their bundled skin and "Create copy and edit" copies it, keypad page included (RT-769's path,
+  RT-881); no console is left on the drawn skin.
+
+### RT-675 — An imported skin still wins over both bundled ones
+- **Retired:** 2026-11-05 (issue 782).
+- **Reason:** An imported package no longer wins by being there: each console saves the skin in
+  use, and a package is picked from the "Imported" group like any other skin. An install that
+  already had one keeps it (RT-743); picking it is RT-738.
 
 ### RT-683 — Sync now offline says so and changes nothing
 - **Retired:** 2026-11-03 (issue 753).

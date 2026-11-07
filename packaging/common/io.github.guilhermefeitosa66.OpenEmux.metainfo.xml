@@ -87,6 +87,17 @@
   </keywords>
 
   <releases>
+    <release version="1.21.0" date="2026-11-06">
+      <description>
+        <p>Remap your controls on a drawing of the console's controller, with every button a console reads now remappable and alive in game; on Android, a skin editor and bundled skins for every console.</p>
+        <ul>
+          <li>The Input page draws the console's controller: click a button to remap it, and the button lights while a mapped key or pad button is held</li>
+          <li>Buttons that did nothing in game on the Mega Drive, Nintendo 64, PlayStation, PSP, Saturn, GameCube, Virtual Boy, Vectrex and Disk System are back, and the right stick can be bound to keys</li>
+          <li>Windows portable mode keeps all data inside the zip folder</li>
+          <li>Android: the OpenEmux skin format, a skin editor, bundled skins for every console and skin sharing</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.20.0" date="2026-11-02">
       <description>
         <p>Cartridges re-rendered with real relief and shadows, and a cleaner cartridge view.</p>

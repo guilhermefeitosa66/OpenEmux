@@ -25,6 +25,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from openemux.core.paths import portable_data_dir
 from openemux.core.platform import IS_WINDOWS, popen_kwargs
 
 logger = logging.getLogger(__name__)
@@ -142,8 +143,16 @@ def _query(tool, loaders_dir, runner=None):
 
 
 def _candidate_paths(cache_path, environ):
-    """Where to try writing, best first: beside the loaders, then per-user."""
+    """Where to try writing, best first: beside the loaders, then per-user.
+
+    A portable install's fallback is its own cache folder, never the profile
+    (issue #766).
+    """
     yield cache_path
+    portable = portable_data_dir("cache")
+    if portable is not None:
+        yield portable / "openemux" / CACHE_NAME
+        return
     local = environ.get("LOCALAPPDATA")
     if local:
         yield Path(local) / "OpenEmux" / CACHE_NAME

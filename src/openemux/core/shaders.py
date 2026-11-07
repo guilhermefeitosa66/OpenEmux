@@ -5,7 +5,7 @@ import yaml
 
 from openemux.core.atomic_write import atomic_write_text
 from openemux.core.state_recovery import quarantine_state_file
-from openemux.core.paths import get_project_root, store_path
+from openemux.core.paths import from_stored_path, get_project_root, store_path, with_stored_keys
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 from openemux.core.video_driver import default_video_driver, preset_backends
 
@@ -113,7 +113,7 @@ class ShaderConfigStore:
             for key, value in (raw.get("rom_overrides") or {}).items():
                 if not key:
                     continue
-                rom_overrides[str(key)] = normalize_shader_id(value)
+                rom_overrides[from_stored_path(str(key))] = normalize_shader_id(value)
             data["rom_overrides"] = rom_overrides
             return data
         except Exception as exc:
@@ -145,7 +145,8 @@ class ShaderConfigStore:
             rom_overrides[str(key)] = normalize_shader_id(raw_value)
         payload["rom_overrides"] = rom_overrides
 
-        atomic_write_text(self.config_file, yaml.safe_dump(payload, sort_keys=True))
+        stored = dict(payload, rom_overrides=with_stored_keys(rom_overrides))
+        atomic_write_text(self.config_file, yaml.safe_dump(stored, sort_keys=True))
         return payload
 
     def get_settings(self):

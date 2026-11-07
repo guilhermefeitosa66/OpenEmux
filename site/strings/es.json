@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>La forma de siempre</h3>",
   "install.installer_note": "<p>Se instala solo para tu usuario, así que no pide permisos de administrador. Las versiones aún no están firmadas: SmartScreen mostrará una advertencia, y con <em>Más información → Ejecutar de todas formas</em> la superas.</p>",
   "install.portable_title": "<h3>Sin instalar nada</h3>",
-  "install.portable_note": "<p>Descomprímelo donde quieras y ejecuta <code>OpenEmux.exe</code> desde la carpeta <code>OpenEmux\\</code> que hay dentro. Ideal para una memoria USB o un equipo en el que no puedes instalar programas.</p>",
+  "install.portable_note": "<p>Descomprímelo donde quieras y ejecuta <code>OpenEmux.exe</code> desde la carpeta <code>OpenEmux\\</code> que hay dentro. Los ajustes, la biblioteca, las partidas y las portadas se quedan en su carpeta <code>data\\</code> y nada va a tu perfil de usuario, así que funciona desde una memoria USB. Si mueves la carpeta a otra letra de unidad u otro lugar, todo se conserva.</p>",
   "install.verify_title": "<h3>Verifica tu descarga</h3>",
   "install.verify_lede": "<p>Cada versión incluye un archivo <code>SHA256SUMS</code>. Colócalo junto al archivo que descargaste y ejecuta:</p>",
   "install.verify_ok": "<p><code>OK</code> significa que el archivo es exactamente el que se publicó. Cualquier otro resultado significa que está dañado o alterado: no lo ejecutes.</p>",

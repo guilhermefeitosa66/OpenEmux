@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>いつもの方法で</h3>",
   "install.installer_note": "<p>現在のユーザーだけにインストールされるので、管理者権限の確認は出ません。 ビルドにはまだコード署名がないため SmartScreen の警告が表示されますが、<em>詳細情報 → 実行</em> で 先に進めます。</p>",
   "install.portable_title": "<h3>インストール不要</h3>",
-  "install.portable_note": "<p>好きな場所に展開して、<code>OpenEmux.exe</code> を実行してください（中にある <code>OpenEmux\\</code> フォルダーに入っています）。USB メモリーや、ソフトウェアをインストールできないマシンにぴったりです。</p>",
+  "install.portable_note": "<p>好きな場所に展開して、<code>OpenEmux.exe</code> を実行してください（中にある <code>OpenEmux\\</code> フォルダーに入っています）。設定、ライブラリー、セーブ、カバー画像はその中の <code>data\\</code> フォルダーに保存され、ユーザープロファイルには何も書き込まれないので、USB メモリーからそのまま使えます。フォルダーを別のドライブ文字や場所に移しても、そのまま使えます。</p>",
   "install.verify_title": "<h3>ダウンロードを検証する</h3>",
   "install.verify_lede": "<p>すべてのリリースに <code>SHA256SUMS</code> ファイルが付いています。ダウンロードしたファイルと同じ場所に置いて、 次を実行してください:</p>",
   "install.verify_ok": "<p><code>OK</code> と表示されれば、ファイルは公開されたものとまったく同じです。 それ以外の場合は破損または改ざんされています。実行しないでください。</p>",

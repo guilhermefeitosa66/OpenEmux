@@ -59,7 +59,7 @@
   "install.installer_title": "<h3>The usual way</h3>",
   "install.installer_note": "<p>Installs for your user only, so no administrator prompt. The builds are not code-signed yet: SmartScreen will warn, and <em>More info → Run anyway</em> gets past it.</p>",
   "install.portable_title": "<h3>Nothing installed</h3>",
-  "install.portable_note": "<p>Unzip it anywhere and run <code>OpenEmux.exe</code> from the <code>OpenEmux\\</code> folder inside. Good for a USB stick or a machine you cannot install software on.</p>",
+  "install.portable_note": "<p>Unzip it anywhere and run <code>OpenEmux.exe</code> from the <code>OpenEmux\\</code> folder inside. Settings, library, saves and covers stay in its <code>data\\</code> folder and nothing goes to your user profile, so it works from a USB stick. Moving the folder to another drive letter or place keeps everything.</p>",
   "install.verify_title": "<h3>Verify your download</h3>",
   "install.verify_lede": "<p>Every release ships a <code>SHA256SUMS</code> file. Put it next to the artifact you downloaded and run:</p>",
   "install.verify_ok": "<p><code>OK</code> means the file is exactly what was published. Anything else means it is corrupt or tampered with — don't run it.</p>",

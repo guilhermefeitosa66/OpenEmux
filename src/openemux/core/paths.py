@@ -1,8 +1,9 @@
+import functools
 import os
 import shutil
 from pathlib import Path
 
-from openemux.core.atomic_write import atomic_write_text
+from openemux.core.atomic_write import atomic_write_lines, atomic_write_text
 from openemux.core.platform import IS_WINDOWS
 
 #: How the ``.list`` files encode a ROM path.
@@ -66,15 +67,203 @@ STORE_FILENAMES = {
 }
 
 
+#: The file the Windows portable ``.zip`` ships beside ``OpenEmux.exe`` and the
+#: installer never does (issue #766). Its presence is the whole question.
+PORTABLE_MARKER = "portable.txt"
+
+#: The folder, beside the marker, that holds everything a portable install
+#: writes. One name so a user can see -- and back up, or wipe -- all of it.
+PORTABLE_DATA_DIR = "data"
+
+
+def portable_root():
+    """The folder of a portable Windows install, or ``None``.
+
+    Portable means the ``.zip``: :data:`PORTABLE_MARKER` sits in the project
+    root, which the launcher exports as the folder holding ``OpenEmux.exe``.
+    Without it -- the installer, a source checkout under MSYS2 -- the app keeps
+    the user-profile paths it always had. Linux never asks the disk at all.
+    """
+    if not IS_WINDOWS:
+        return None
+    return _portable_root_at(str(get_project_root()))
+
+
+@functools.lru_cache(maxsize=None)
+def _portable_root_at(root):
+    """Looked up once per process: the marker does not come and go mid-run."""
+    root = Path(root)
+    return root if (root / PORTABLE_MARKER).is_file() else None
+
+
+def portable_data_dir(name):
+    """``<portable root>/data/<name>``, or ``None`` off a portable install."""
+    root = portable_root()
+    if root is None:
+        return None
+    return root / PORTABLE_DATA_DIR / name
+
+
+def to_stored_path(path):
+    """``path`` the way a store writes it to disk.
+
+    A USB stick gets whatever drive letter Windows hands it, so a portable
+    install writes a path inside its own folder relative to it, with forward
+    slashes -- ``data/roms/SFC/game.sfc`` -- and :func:`from_stored_path` puts
+    it back under wherever the folder is today (issue #767). A path outside the
+    folder (ROMs on another disk) stays absolute. Everywhere else this is
+    ``str(path)``, so the installer and Linux write exactly what they always
+    wrote.
+    """
+    return _to_stored(path, portable_root())
+
+
+def _to_stored(path, root):
+    """:func:`to_stored_path` against an already looked-up ``root``.
+
+    The batch helpers below look the root up once per file: it is
+    ``get_project_root()`` underneath, a ``resolve()`` per call, and a
+    playlist holds one path per ROM.
+    """
+    text = str(path)
+    if root is None or not text:
+        return text
+    candidate = Path(text)
+    if not candidate.is_absolute():
+        return text
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError:
+        return text
+    if ".." in relative.parts:
+        return text
+    return relative.as_posix()
+
+
+def from_stored_path(value):
+    """A path read from a store, as the absolute path the app works with.
+
+    The other half of :func:`to_stored_path`: a relative value resolves against
+    the current portable root. An absolute one written before paths were
+    stored relative still points at the folder's old location; when that
+    location is gone (or is another portable folder this one was copied from)
+    and the same ``data/...`` tail exists under the current root, the current
+    one is returned, so a config written by the first portable release
+    survives the move too. Outside portable mode the value
+    comes back untouched.
+    """
+    return _from_stored(value, portable_root())
+
+
+def _from_stored(value, root):
+    """:func:`from_stored_path` against an already looked-up ``root``."""
+    if root is None or not value:
+        return value
+    text = str(value)
+    candidate = Path(text)
+    if not candidate.is_absolute():
+        return str(root / candidate)
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return _relocated(candidate, root) or text
+    return text
+
+
+def _relocated(path, root):
+    """``path`` moved under ``root``, if it lived in a portable folder now gone.
+
+    Split at a ``data`` component: what is before it is where the portable
+    folder used to be, what follows is where the file sits inside it. Only
+    when the file is there under the current folder and the old one is gone,
+    or is itself a portable folder -- a copy made while the old stick was
+    still plugged in follows the copy, not the original. A ROM folder that
+    merely has ``data`` in its name, on a disk that is still there, is left
+    alone.
+    """
+    parts = path.parts
+    for index in range(1, len(parts)):
+        if parts[index].casefold() != PORTABLE_DATA_DIR:
+            continue
+        old_root = Path(*parts[:index])
+        moved = root.joinpath(*parts[index:])
+        if not moved.exists():
+            continue
+        if not old_root.exists() or (old_root / PORTABLE_MARKER).is_file():
+            return str(moved)
+    return None
+
+
+def with_stored_keys(mapping):
+    """A copy of ``mapping`` whose keys -- ROM paths -- are in stored form.
+
+    For the stores keyed by ROM path (per-game cores, shaders, cartridge
+    colours, play history): in memory the keys stay the scanner's absolute
+    paths, on disk they go through :func:`to_stored_path`.
+    """
+    root = portable_root()
+    return {_to_stored(key, root): value for key, value in mapping.items()}
+
+
+def read_path_lines(list_file):
+    """The paths in a ``.list`` file, one per line, as absolute paths.
+
+    Blank lines are skipped and order and duplicates are kept: each caller
+    decides what a duplicate means. Raises ``OSError`` like ``open`` does.
+    """
+    root = portable_root()
+    with open(list_file, "r", encoding="utf-8", errors=PATH_ERRORS) as handle:
+        lines = [line.strip() for line in handle]
+    return [_from_stored(line, root) for line in lines if line]
+
+
+def write_path_lines(list_file, paths):
+    """Write ``paths`` to a ``.list`` file in their stored form, atomically."""
+    root = portable_root()
+    atomic_write_lines(
+        list_file, [_to_stored(path, root) for path in paths], errors=PATH_ERRORS
+    )
+
+
 def default_config_dir():
     """Where the app keeps its own data.
 
     The one place that answers it. ``XDG_CONFIG_HOME`` and ``XDG_DATA_HOME``
     are deliberately *not* consulted yet -- moving an existing install's data
     is a migration, not a rename -- but when they are, this is the single site
-    that changes, and ``migrate_legacy_config_dir`` above is the pattern.
+    that changes, and ``migrate_legacy_config_dir`` above is the pattern. A
+    portable Windows install keeps it inside its own folder (issue #766).
+    """
+    portable = portable_data_dir("openemux")
+    if portable is not None:
+        return portable
+    return profile_config_dir()
+
+
+def profile_config_dir():
+    """The config dir in the user profile, where the installer keeps it.
+
+    What :func:`default_config_dir` answers off a portable install. A portable
+    one asks for it to offer bringing that data along (issue #768).
     """
     return Path.home() / CONFIG_DIR_NAME
+
+
+def profile_roms_dir():
+    """The default ROM folder in the user profile, portable install or not."""
+    return get_real_home() / "games" / "roms"
+
+
+def default_roms_path():
+    """The ROM folder a fresh config starts with.
+
+    ``~/games/roms`` in the *real* home (a Flatpak's ``$HOME`` is its sandbox),
+    or the portable folder's own ``data/roms``.
+    """
+    portable = portable_data_dir("roms")
+    if portable is not None:
+        return portable
+    return profile_roms_dir()
 
 
 def store_path(name, config_dir=None):
@@ -98,13 +287,24 @@ def bytecode_cache_dir():
     --delete-data`` takes it away with everything else the app left behind,
     and no bytecode of a sandboxed install is left sitting in the real home.
     """
+    return user_cache_dir() / "openemux" / "bytecode"
+
+
+def user_cache_dir():
+    """The per-user cache root: ``%LOCALAPPDATA%``, ``$XDG_CACHE_HOME`` or ``~/.cache``.
+
+    A portable install's is ``data/cache`` inside its folder, which is also
+    what ``main.prepare_process`` points ``XDG_CACHE_HOME`` at, so GLib's
+    answer and this one agree.
+    """
+    portable = portable_data_dir("cache")
+    if portable is not None:
+        return portable
     if IS_WINDOWS:
         base = os.environ.get("LOCALAPPDATA")
-        root = Path(base) if base else Path.home() / "AppData" / "Local"
-    else:
-        base = os.environ.get("XDG_CACHE_HOME")
-        root = Path(base) if base else Path.home() / ".cache"
-    return root / "openemux" / "bytecode"
+        return Path(base) if base else Path.home() / "AppData" / "Local"
+    base = os.environ.get("XDG_CACHE_HOME")
+    return Path(base) if base else Path.home() / ".cache"
 
 
 def migrate_legacy_config_dir():
@@ -119,7 +319,12 @@ def migrate_legacy_config_dir():
     (2) repair absolute paths baked into ``config.yaml`` that still point at the
     legacy dir (e.g. ``library.playlists_dir``), so a moved install resolves its
     data under the new location instead of recreating an empty legacy dir.
+
+    Not for a portable install: its data was never in the profile, and moving
+    a folder there is exactly what it promises not to do (issue #766).
     """
+    if portable_root() is not None:
+        return
     home = Path.home()
     legacy = home / LEGACY_CONFIG_DIR_NAME
     current = home / CONFIG_DIR_NAME

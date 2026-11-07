@@ -1,0 +1,73 @@
+{
+  "background": "background.png",
+  "console": "CV",
+  "elements": [
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 12
+    },
+    {
+      "bind": "dpad",
+      "height": 210,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 210,
+      "x": 30,
+      "y": 176
+    },
+    {
+      "bind": "a",
+      "height": 93,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 92,
+      "x": 296,
+      "y": 261
+    },
+    {
+      "bind": "b",
+      "height": 93,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 92,
+      "x": 404,
+      "y": 207
+    },
+    {
+      "bind": "keypadToggle",
+      "height": 26,
+      "id": "keypad-toggle",
+      "images": {
+        "button": "keypad-toggle.png"
+      },
+      "type": "button",
+      "width": 80,
+      "x": 230,
+      "y": 570
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 670,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

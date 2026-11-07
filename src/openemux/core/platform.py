@@ -145,17 +145,6 @@ def cfg_path(value):
     return str(value).replace("\\", "/")
 
 
-def default_config_dir():
-    """The user's OpenEmux data directory.
-
-    Stays ``~/.openemux`` on Windows too (``C:\\Users\\<user>\\.openemux``).
-    ``%APPDATA%`` is the native convention and may be worth moving to later, but
-    that is a migration with real risk to existing libraries, and it buys
-    nothing for a first Windows release.
-    """
-    return Path.home() / ".openemux"
-
-
 def user_retroarch_dirs():
     """Directories where a *user-installed* RetroArch keeps its cores.
 

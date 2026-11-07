@@ -177,6 +177,15 @@ test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/LICENSE
 test -f /opt/openemux/src/openemux/ui/assets/icons/symbolic/hicolor/index.theme
 echo "all $PKG_ICONS symbolic icons present"
 
+echo "==> verify the controller drawings all shipped"
+SRC_PADS="$(find src/openemux/ui/assets/controllers -name layout.json | wc -l)"
+PKG_PADS="$(find /opt/openemux/src/openemux/ui/assets/controllers -name layout.json | wc -l)"
+if [ "$SRC_PADS" -eq 0 ] || [ "$SRC_PADS" -ne "$PKG_PADS" ]; then
+  echo "FAIL: expected $SRC_PADS controller layouts in the package, found $PKG_PADS" >&2
+  exit 1
+fi
+echo "all $PKG_PADS controller layouts present"
+
 echo "==> import smoke test against installed deps"
 OPENEMUX_PROJECT_ROOT=/opt/openemux PYTHONPATH=/opt/openemux/src python3 - <<'PY'
 import gi

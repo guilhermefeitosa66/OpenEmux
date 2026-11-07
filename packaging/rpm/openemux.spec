@@ -186,6 +186,15 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri Nov 06 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.21.0-1
+- Input page: the console's controller drawn above the bindings; click a button to remap it
+- The drawn button lights while a mapped key or pad button is held, and while it is being remapped
+- Every button a console's core reads is remappable and alive in game (Mega Drive A/Y, N64 Z and C, PS L2/R2, PSP, Saturn, GC, VB, Vectrex, FDS); right stick directions bindable
+- Input configuration kept in a RetroArch-format file of its own
+- Windows portable mode keeps all data inside the zip folder, paths relative, import from an installed copy
+- Game Boy Color has its own icon
+- Android: OpenEmux skin format, skin editor, bundled skins for every console, skin sharing, rename a game, import ROMs via Open with and Share
+
 * Mon Nov 02 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.20.0-1
 - Cartridge frames re-rendered with real relief and shadows, NDS card included
 - Cartridge view: the shadow follows the cartridge, no box on hover

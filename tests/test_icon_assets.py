@@ -125,6 +125,45 @@ class NothingShipsThatTheUiNeverDisplaysTests(unittest.TestCase):
                 )
 
 
+class TheGameBoyColorHasItsOwnIconTests(unittest.TestCase):
+    """GB and GBC named one file, so two rows of the sidebar looked alike."""
+
+    def _file(self, console):
+        text = (PACKAGE_ROOT / "ui" / "console_icons.py").read_text(encoding="utf-8")
+        return re.search(rf'"{console}": "([^"]+)"', text).group(1)
+
+    def test_the_two_consoles_name_different_files_that_differ(self):
+        game_boy, color = self._file("GB"), self._file("GBC")
+        self.assertNotEqual(game_boy, color)
+        for ours, theirs in (
+            (color, game_boy),
+            (color.replace("@2x.png", ".png"), game_boy.replace("@2x.png", ".png")),
+        ):
+            with self.subTest(icon=ours):
+                self.assertTrue((SYSTEMS_DIR / ours).is_file())
+                self.assertNotEqual(
+                    (SYSTEMS_DIR / ours).read_bytes(), (SYSTEMS_DIR / theirs).read_bytes()
+                )
+
+    def test_no_other_two_consoles_share_an_icon_but_the_famicom_pair(self):
+        # The Famicom and its Disk System are one machine with an add-on, and
+        # OpenEmu draws them as one; any other pair sharing a file is the
+        # Game Boy Color mistake again.
+        text = (PACKAGE_ROOT / "ui" / "console_icons.py").read_text(encoding="utf-8")
+        block = text.split("CONSOLE_ICON_FILES = {", 1)[1].split("}", 1)[0]
+        by_file = {}
+        for console, name in re.findall(r'"([A-Z0-9]+)": "([^"]+\.png)"', block):
+            by_file.setdefault(name, []).append(console)
+        shared = sorted(sorted(consoles) for consoles in by_file.values() if len(consoles) > 1)
+        self.assertEqual(shared, [["FC", "FDS"]])
+
+    def test_the_recolour_is_recorded_as_a_derivative_of_openemus_icon(self):
+        attribution = " ".join(ATTRIBUTION.read_text(encoding="utf-8").split())
+        self.assertIn("gameboy_color__gbc_library.png", attribution)
+        self.assertIn("derivative of OpenEmu's artwork", attribution)
+        self.assertIn("Game Boy Color icon", " ".join(COPYRIGHT.read_text(encoding="utf-8").split()))
+
+
 class TheThirdPartyTermsShipWithTheArtworkTests(unittest.TestCase):
     """Installing the bare MIT LICENSE claimed MIT over ~18 MB that was not."""
 

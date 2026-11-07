@@ -1,0 +1,183 @@
+{
+  "background": "background.png",
+  "console": "PS",
+  "elements": [
+    {
+      "bind": "l2",
+      "height": 60,
+      "id": "l2",
+      "images": {
+        "button": "l2.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 18,
+      "y": 7
+    },
+    {
+      "bind": "l1",
+      "height": 60,
+      "id": "l1",
+      "images": {
+        "button": "l1.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 123,
+      "y": 7
+    },
+    {
+      "bind": "r1",
+      "height": 60,
+      "id": "r1",
+      "images": {
+        "button": "r1.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 324,
+      "y": 7
+    },
+    {
+      "bind": "r2",
+      "height": 60,
+      "id": "r2",
+      "images": {
+        "button": "r2.png"
+      },
+      "type": "button",
+      "width": 93,
+      "x": 429,
+      "y": 7
+    },
+    {
+      "bind": "menu",
+      "height": 50,
+      "id": "menu",
+      "images": {
+        "button": "menu.png"
+      },
+      "type": "button",
+      "width": 78,
+      "x": 231,
+      "y": 12
+    },
+    {
+      "bind": "dpad",
+      "height": 210,
+      "id": "dpad",
+      "images": {
+        "pad": "dpad.png"
+      },
+      "type": "dpad",
+      "width": 210,
+      "x": 30,
+      "y": 148
+    },
+    {
+      "bind": "x",
+      "height": 68,
+      "id": "x",
+      "images": {
+        "button": "x.png"
+      },
+      "type": "button",
+      "width": 68,
+      "x": 362,
+      "y": 148
+    },
+    {
+      "bind": "y",
+      "height": 69,
+      "id": "y",
+      "images": {
+        "button": "y.png"
+      },
+      "type": "button",
+      "width": 69,
+      "x": 291,
+      "y": 218
+    },
+    {
+      "bind": "a",
+      "height": 69,
+      "id": "a",
+      "images": {
+        "button": "a.png"
+      },
+      "type": "button",
+      "width": 69,
+      "x": 432,
+      "y": 218
+    },
+    {
+      "bind": "b",
+      "height": 70,
+      "id": "b",
+      "images": {
+        "button": "b.png"
+      },
+      "type": "button",
+      "width": 68,
+      "x": 362,
+      "y": 288
+    },
+    {
+      "bind": "analogStick",
+      "height": 138,
+      "id": "stick",
+      "images": {
+        "base": "stick-base.png",
+        "knob": "stick-knob.png"
+      },
+      "type": "stick",
+      "width": 138,
+      "x": 66,
+      "y": 398
+    },
+    {
+      "bind": "rightAnalogStick",
+      "height": 138,
+      "id": "stick2",
+      "images": {
+        "base": "stick2-base.png",
+        "knob": "stick2-knob.png"
+      },
+      "type": "stick",
+      "width": 138,
+      "x": 327,
+      "y": 398
+    },
+    {
+      "bind": "select",
+      "height": 26,
+      "id": "select",
+      "images": {
+        "button": "select.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 160,
+      "y": 570
+    },
+    {
+      "bind": "start",
+      "height": 26,
+      "id": "start",
+      "images": {
+        "button": "start.png"
+      },
+      "type": "button",
+      "width": 82,
+      "x": 298,
+      "y": 570
+    }
+  ],
+  "format": 1,
+  "scale": 0.5,
+  "size": {
+    "height": 670,
+    "width": 540
+  },
+  "source": "phone-portrait"
+}

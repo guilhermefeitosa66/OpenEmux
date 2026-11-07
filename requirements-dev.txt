@@ -10,7 +10,7 @@ coverage[toml]
 # Correctness-only linter (issue #243). Pinned to a minor line: ruff adds rules
 # between releases, and a rule appearing on its own would fail CI on code
 # nobody touched.
-ruff~=0.17.2
+ruff~=0.17.3
 
 # Encodes the site's AVIF/WebP screenshot widths (tools/build_site.py --images,
 # issue #683). Build-time only: the published site and the app never import it,

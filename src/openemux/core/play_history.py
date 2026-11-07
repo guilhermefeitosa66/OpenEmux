@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from openemux.core.atomic_write import atomic_write_text
-from openemux.core.paths import store_path
+from openemux.core.paths import from_stored_path, store_path, with_stored_keys
 from openemux.core.state_recovery import quarantine_state_file
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class PlayHistory:
         entries = {}
         for path, entry in data.items():
             if isinstance(entry, dict):
-                entries[str(path)] = {
+                entries[from_stored_path(str(path))] = {
                     "last_played": _as_float(entry.get("last_played")),
                     "play_count": _as_int(entry.get("play_count")),
                 }
@@ -61,7 +61,7 @@ class PlayHistory:
         try:
             atomic_write_text(
                 self.history_file,
-                json.dumps(self._entries, indent=2, sort_keys=True),
+                json.dumps(with_stored_keys(self._entries), indent=2, sort_keys=True),
             )
         except OSError as exc:
             logger.info("play history not saved: %s", exc)

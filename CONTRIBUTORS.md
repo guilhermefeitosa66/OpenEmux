@@ -45,6 +45,30 @@ After trying the in-game control bar, suggested an option to make it
 semi-transparent for people who keep it on screen, which became
 [#477](https://github.com/guilhermefeitosa66/OpenEmux/issues/477).
 
+After testing input remapping again, pointed out that the bindings in game were
+still a mix of OpenEmux's and RetroArch's own defaults, and suggested OpenEmux
+own the whole controller configuration. That became
+[#759](https://github.com/guilhermefeitosa66/OpenEmux/issues/759): every launch
+now starts from RetroArch's stock input defaults with OpenEmux's bindings on
+top, so nothing from a user's `retroarch.cfg` mixes in.
+
+For the Android skin editor, asked that going back to a bundled skin never
+throw a custom layout away. In
+[#782](https://github.com/guilhermefeitosa66/OpenEmux/issues/782) each console
+keeps the player's skins in a list of their own, so a custom skin is still
+there, unchanged, after playing a while with a bundled one. Suggested
+dragging the controls anywhere on the screen, as paid emulator apps do, which
+became the editor's move, magnetic grid and resize in
+[#784](https://github.com/guilhermefeitosa66/OpenEmux/issues/784).
+
+Suggested remapping the desktop controls on a drawing of the console's
+controller, which became
+[#760](https://github.com/guilhermefeitosa66/OpenEmux/issues/760); its first
+part, [#814](https://github.com/guilhermefeitosa66/OpenEmux/issues/814), brings
+the Android skins' controller art to the desktop, and the second,
+[#815](https://github.com/guilhermefeitosa66/OpenEmux/issues/815), draws that
+controller on the input page so a click on one of its buttons remaps it.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
@@ -148,6 +172,26 @@ Asked *"Any retroachievements?"* on Reddit, in the thread presenting the Android
 question became [#515](https://github.com/guilhermefeitosa66/OpenEmux/issues/515): the Android app
 signs in to RetroAchievements once in Settings, hands the account to every game it launches, and
 keeps hardcore mode off until the player asks for it.
+
+### maxpelle72 ([@maxpelle72](https://github.com/maxpelle72))
+
+Asked for the user data to live in the executable's folder in
+[#757](https://github.com/guilhermefeitosa66/OpenEmux/issues/757). That request became the Windows
+portable mode: the `.zip` now keeps settings, library, saves, covers and caches in its own `data\`
+folder and writes nothing to the user profile, so it really does run from a USB stick
+([#766](https://github.com/guilhermefeitosa66/OpenEmux/issues/766)), and stores the paths inside
+that folder relative to it, so the stick can come back on another drive letter with everything in
+place ([#767](https://github.com/guilhermefeitosa66/OpenEmux/issues/767)). Someone moving from the
+installer can bring everything along too: the portable copy offers to copy the profile's settings,
+library and saves into its folder, without touching the original
+([#768](https://github.com/guilhermefeitosa66/OpenEmux/issues/768)).
+
+### JuamPiX84 (Reddit)
+
+Asked on Reddit for a way to rename a game inside the Android app. That request became
+[#790](https://github.com/guilhermefeitosa66/OpenEmux/issues/790): "Rename…" on a game's detail
+screen renames its file and carries its save states, battery saves, playtime, artwork and per-game
+settings along, so the game resumes where it was under its new name.
 
 ## How contributions are credited
 

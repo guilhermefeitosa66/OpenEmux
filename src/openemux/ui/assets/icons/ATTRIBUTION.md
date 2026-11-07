@@ -19,6 +19,17 @@ support, regional variants it does not use, and OpenEmu's own
 that shipped in every package without ever being displayed. Re-import from the
 commit above if a console is ever added.
 
+One icon is not in OpenEmu: `gameboy_color__gbc_library.png` and its `@2x`.
+OpenEmu draws the Game Boy Color with the Game Boy's icon, which left two rows
+of the sidebar looking alike. These two files are that Game Boy icon
+(`gameboy__gameboy_library*.png`) recoloured to the yellow Pokemon "Pikachu"
+edition -- yellow body, blue screen bezel and buttons, a dark screen -- with
+the outline, the shading and the drop shadow kept pixel for pixel. The `@2x`
+file is the Android app's `console_gbc.png`, byte for byte, and the recolour is
+`pkg/android/openemux/tools/gen-console-gbc.py` in `openemux-android`; the
+16 px file is the same recolour applied to the 16 px Game Boy icon. They are a
+derivative of OpenEmu's artwork and stay under the terms below.
+
 ### License
 
 The OpenEmu repository ships no separate license file; every source file in it
