@@ -87,6 +87,18 @@
   </keywords>
 
   <releases>
+    <release version="1.22.0" date="2026-11-09">
+      <description>
+        <p>An Android release about what happens while you play. The desktop app has no changes.</p>
+        <ul>
+          <li>Android: change and edit the skin from the in-game pause menu</li>
+          <li>Android: save states show the whole picture, can be deleted, and the in-game menu picks the slot</li>
+          <li>Android: keep using the app while a Share nearby transfer runs</li>
+          <li>Android: Restart game restarts after one confirmation</li>
+          <li>Android: larger invisible start zones for the on-screen D-pad and sticks</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.21.1" date="2026-11-06">
       <description>
         <p>An Android fix: picking a language from Settings on a phone no longer closes the app. The desktop app is unchanged.</p>

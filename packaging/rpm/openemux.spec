@@ -186,6 +186,14 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Mon Nov 09 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.22.0-1
+- Android: change and edit the skin from the in-game pause menu
+- Android: save states show the whole picture, can be deleted, and the in-game menu picks the slot
+- Android: keep using the app while a Share nearby transfer runs
+- Android: Restart game restarts after one confirmation
+- Android: larger invisible start zones for the on-screen D-pad and sticks
+- Desktop: no changes from 1.21.1
+
 * Fri Nov 06 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.21.1-1
 - Android: picking a language from the phone's sheet no longer crashes the app
 
