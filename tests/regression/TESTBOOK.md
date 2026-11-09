@@ -7905,8 +7905,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
-that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
-is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
+that follows the thumb, with a touch zone well past the drawn circle (issue 826) that widens once
+the stick is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
 (both sticks), Nintendo 64 and GameCube (main and C stick), in OpenEmux's own format since issue 806,
 where the knob is the stick's `-knob` image (the item's `thumbstick` image in the packages they
 replaced), the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
@@ -8017,10 +8017,34 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   knob is whatever the skin's art paints, it does not move) and nothing else changes. Without it,
   the bundled skin is back, with its moving knob.
 - **Check:** human only, plus the generated config with the user's skin: the stick's desc has
-  `_saturate_pct = 0.65` and none of `_overlay`, `_movable`, `_reach_*` or `_range_mod`:
+  `_saturate_pct = 0.65` and neither `_overlay` nor `_movable`; it has the same `_reach_*`,
+  `_hitbox_rect` and `_range_mod` as a stick with a knob (issue 826):
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
   ```
+
+### RT-939 — A touch beside the stick grabs it
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394.
+- **Steps:**
+  1. Open the Nintendo 64 game in portrait. Without touching the well first, press about one thumb's
+     width to the left of it, and hold. Repeat to the right, above and below.
+  2. From a press outside the well, slide back in towards the centre and hold just off it.
+  3. Press every button next to the stick on its drawn area.
+  4. Turn the phone to landscape and repeat steps 1–3.
+  5. Repeat steps 1–4 on PlayStation (both sticks) and GameCube (main and "C" stick).
+- **Expected:** Each press outside the well moves the character at once, in that direction, and the
+  knob goes to the end of its travel on that side. Sliding back gives partial deflection (a walk).
+  Each button responds on its drawn area and the stick does not move. Nothing new is drawn around
+  the well.
+- **Check:** human only, plus the generated config: each stick has `_hitbox_rect = true` and its
+  `_reach_left`, `_reach_up`, `_reach_right` and `_reach_down` over 1 by more than the well's own
+  edge, unequal on the side where a neighbour stops it:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_hitbox_rect|_reach_'
+  ```
+
 ## Android — On-screen D-pad
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -8057,13 +8081,11 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
   `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
   `_overlay` naming the circle image (`<overlay>-knob<N>.png` on a package and on a drawn skin,
-  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. The NES ships in
-  OpenEmux's own format since issue 806, so `_reach_x` and `_reach_y` are both `1.3636` (the D-pad
-  over its ball's travel, 60/44). A Delta or Manic package (the NDS's, or an imported one) reaches as
-  far as its D-pad's touch area over the circle's travel: `_reach_x` and `_reach_y`, or
-  `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
-  one side than the other. On a console with a drawn skin (e.g. the ColecoVision) `_reach_x` and
-  `_reach_y` are both `1.4182`.
+  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. Its reach
+  (`_reach_x` and `_reach_y`, or `_reach_left`/`_reach_right` and `_reach_up`/`_reach_down` when the
+  two sides differ) is over the D-pad's own edge on every side a neighbour leaves free, 2.7 on the
+  NES's free sides (the D-pad's half-size past the art, over the ball's travel), and shorter on a
+  side where a neighbouring control or the game picture stops it (issue 826).
 
 ### RT-409 — Sliding off the D-pad keeps steering
 - **Area:** Android — On-screen D-pad
@@ -8165,6 +8187,26 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   ```
   One `dpad_area` desc per overlay with `_dead_zone = 0.25` and no `_movable` line.
 
+
+### RT-938 — A touch beside the D-pad starts the movement
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, the NES game open, a character that walks; an imported `.deltaskin`
+  with a D-pad for the second half.
+- **Steps:**
+  1. In portrait, without touching the D-pad first, press about one thumb's width to its left and
+     hold. Repeat to the right, above and below.
+  2. From a press outside the D-pad, drag around it without lifting.
+  3. Press A, B, Start, Select, the menu, save and load on their drawn areas, including the ones
+     closest to the D-pad.
+  4. Turn the phone to landscape and repeat steps 1–3.
+  5. Repeat steps 1–4 with the imported skin.
+  6. On the NDS, touch the bottom screen right next to the D-pad.
+- **Expected:** Each press outside the D-pad moves the character at once, in that direction. The
+  drag steers by the thumb's angle, as one started on the D-pad does. Each button responds on its
+  drawn area and the D-pad does not move. On the NDS the game gets the touch and the D-pad does not.
+  The controls look as they did before, and no zone is visible.
+- **Check:** human only, plus the reach of the generated config (see RT-408).
 
 ## Android — Tablet layout
 
