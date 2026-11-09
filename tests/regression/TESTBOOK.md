@@ -10605,7 +10605,7 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
   4. Swap the roles: send the large game from the phone and cancel there mid-transfer ("Cancel
      Transfer", then confirm).
 - **Expected:** The sheet shows "Receiving from <device>", a bar, "<done> of <total>", "File i of n"
-  and "You can turn off the screen or leave the app…". The notification "Receiving from <device>"
+  and "You can keep using the app, play a game, leave the app or turn off the screen…". The notification "Receiving from <device>"
   has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
   file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
   notification is gone when the service stops. When the phone is the sender, the receiving device
@@ -10625,6 +10625,77 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
 - **Expected:** The transfer finished or is still progressing; it never failed. On a phone, also with
   the power button and the phone on battery.
 - **Check:** human only; `adb logcat -d -s OpenEmuxShare` shows no failure between the two key events.
+
+### RT-943 — Back leaves a running transfer without cancelling it, and the chip brings it back
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533.
+- **Steps:**
+  1. Accept. Press Back.
+  2. Open another tab and a game's page.
+  3. Tap the chip above the tabs.
+  4. Press "Continue in Background".
+  5. Tap the transfer notification.
+  6. Press "Cancel Transfer", then "Keep Going".
+- **Expected:** Step 1 closes the view with no question, and a chip "Receiving · <n>%" shows. The
+  percentage keeps rising through step 2, and the app responds as usual. Steps 3 and 5 open the view
+  with its bar and buttons. Step 4 closes it again. Step 6 asks "Cancel the transfer?" and the
+  transfer goes on.
+- **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground"`
+  shows the service in the foreground after steps 1 and 4.
+
+### RT-944 — With a gamepad, B leaves the transfer and Start brings it back
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, with a gamepad connected.
+- **Steps:**
+  1. Accept. Press B.
+  2. Press Start.
+  3. Press B. Let the transfer end, close its result and press Start.
+- **Expected:** Step 1 closes the view and the chip shows the Start badge. Step 2 opens the view.
+  In step 3, with no transfer running, Start opens Settings as usual.
+- **Check:** human only.
+
+### RT-945 — A game can be played while a transfer runs
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, and a playable game in the library.
+- **Steps:**
+  1. Accept. Press Back and start the game. Play for a minute.
+  2. Let the transfer end during play.
+  3. Leave the game.
+- **Expected:** The game runs normally through the transfer, and the notification keeps advancing.
+  When it ends, the "<n> game received" notification appears over the game. Back in the app, the
+  result card shows and the games are in the library with no restart.
+- **Check:** `adb logcat -d -s OpenEmuxShare` shows no failure during the game.
+
+### RT-946 — Minimizing does not stop a transfer, and its result waits for the player
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, on a physical phone running on battery.
+- **Steps:**
+  1. Accept, press Home and use another app until the transfer ends.
+  2. Return to OpenEmux.
+  3. Repeat, stopping the sender midway with the view closed.
+- **Expected:** Step 1 completes, with a notification saying how it ended. Step 2 shows the result
+  card, and the games are in the library. Step 3 ends in a failure result that says the connection
+  was lost, and nothing partial stays in the library.
+- **Check:** human only.
+
+### RT-947 — A send keeps going after leaving its screen, but not before the answer
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Two devices on one network, and a large game to send from the phone.
+- **Steps:**
+  1. Send. Before the receiver answers, press Back.
+  2. Press "Keep Going", and accept on the receiver.
+  3. Press Back with the bytes moving.
+  4. Tap the chip, then press "Continue in Background".
+  5. Let it end while on another screen.
+- **Expected:** Step 1 asks "Cancel the transfer?". Step 3 leaves the screen with no question and the
+  chip shows "Sending · <n>%". Step 4 opens the progress view and closes it. Step 5 shows the result
+  card over the screen in use.
+- **Check:** human only.
 
 ### RT-535 — The phone stops being discoverable 30 seconds after its share screens close
 - **Area:** Android — Share nearby
