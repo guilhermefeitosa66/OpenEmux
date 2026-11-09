@@ -5854,6 +5854,58 @@ must be off, since it turns auto save off.
 - **Check:** human only (a screenshot after step 1, `adb shell stat -c %y '<path>'` around steps 2
   and 4).
 
+## Android — Skin from the pause menu
+
+The Android app's pause sheet changing the console's skin and opening the skin editor over the
+paused game, with the game session kept: no save state by the player, no quit, no relaunch (issue 827).
+
+### RT-940 — Change skin from the pause menu applies to the running game and persists
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a console with more than one bundled skin (Super Nintendo), a game
+  running.
+- **Steps:**
+  1. Open the pause sheet. Note the point the game is at.
+  2. Tap "Change skin". The console's skins appear as on the console's skin screen: the same cards,
+     with their miniatures and form badges, under "Your skins", "Bundled" and "Imported", the one in
+     use outlined and saying "In use". There is no actions button on the cards and no "Import .zip".
+  3. Tap another one, then close the sheet with its × button.
+  4. Quit the game and launch it again.
+  5. Open the skin screen of the console in the library.
+- **Expected:** After step 3 the new skin is on screen, the game continues from the same point and
+  no state was saved or loaded by the player. During steps 1 to 3 the game stays paused and silent.
+  After step 4 the game opens with the picked skin. In step 5 the same skin is marked in use. A skin
+  not made for the device's form, or unreadable, is shown disabled and says why. Same in landscape.
+- **Check:** human only (a screenshot after step 3 and after step 4).
+
+### RT-941 — Edit skin from the pause menu changes the running game
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a skin of the player's own in use for the console, a game running.
+- **Steps:**
+  1. Open the pause sheet and tap "Edit skin". The editor opens on the skin in use, for the
+     orientation being played.
+  2. Move and resize a control, tap "Save", then close the editor.
+  3. The pause sheet is back. Close it with its × button and touch the moved control.
+- **Expected:** After step 3 the edited layout is on screen, the game continues from the same point
+  and the touch zone is where the control now is. The game stays paused and silent while the editor
+  is open. Same in landscape, editing the landscape layout.
+- **Check:** human only (a screenshot after step 3).
+
+### RT-942 — Cancelling an edit from the pause menu leaves the skin as it was
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a bundled skin in use for the console, a game running.
+- **Steps:**
+  1. Open the pause sheet and tap "Edit skin". A copy opens in the editor.
+  2. Move a control, close the editor and discard the changes.
+  3. Open the console's skin screen after quitting the game.
+  4. Repeat steps 1 and 2, this time tapping "Save" before closing, and resume.
+- **Expected:** After step 2 the pause sheet is back, with the bundled skin still in use. In step 3
+  no copy is listed. After step 4 the copy is the skin in use and the game shows it. An imported
+  skin in use behaves the same way, through a duplicate.
+- **Check:** human only (a screenshot after step 2 and after step 4).
+
 ## Android — RetroAchievements
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -7905,8 +7957,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`) drawing the on-screen stick as a well in the skin plus a knob of its own
-that follows the thumb, with a touch zone larger than the drawn circle that widens once the stick
-is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
+that follows the thumb, with a touch zone well past the drawn circle (issue 826) that widens once
+the stick is held (#546). It applies to every skin with a stick: the bundled skins of PSP, PlayStation
 (both sticks), Nintendo 64 and GameCube (main and C stick), in OpenEmux's own format since issue 806,
 where the knob is the stick's `-knob` image (the item's `thumbstick` image in the packages they
 replaced), the drawn `standard(..., stick = true)` skins, and a user's own `.deltaskin` or
@@ -8017,10 +8069,34 @@ values read from RetroArch's input display or a game's walk/run. `$PKG` is `com.
   knob is whatever the skin's art paints, it does not move) and nothing else changes. Without it,
   the bundled skin is back, with its moving knob.
 - **Check:** human only, plus the generated config with the user's skin: the stick's desc has
-  `_saturate_pct = 0.65` and none of `_overlay`, `_movable`, `_reach_*` or `_range_mod`:
+  `_saturate_pct = 0.65` and neither `_overlay` nor `_movable`; it has the same `_reach_*`,
+  `_hitbox_rect` and `_range_mod` as a stick with a knob (issue 826):
   ```bash
   adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_saturate_pct|_movable|_reach_'
   ```
+
+### RT-939 — A touch beside the stick grabs it
+- **Area:** Android — On-screen analog stick
+- **Mode:** MANUAL
+- **Preconditions:** As RT-394.
+- **Steps:**
+  1. Open the Nintendo 64 game in portrait. Without touching the well first, press about one thumb's
+     width to the left of it, and hold. Repeat to the right, above and below.
+  2. From a press outside the well, slide back in towards the centre and hold just off it.
+  3. Press every button next to the stick on its drawn area.
+  4. Turn the phone to landscape and repeat steps 1–3.
+  5. Repeat steps 1–4 on PlayStation (both sticks) and GameCube (main and "C" stick).
+- **Expected:** Each press outside the well moves the character at once, in that direction, and the
+  knob goes to the end of its travel on that side. Sliding back gives partial deflection (a walk).
+  Each button responds on its drawn area and the stick does not move. Nothing new is drawn around
+  the well.
+- **Check:** human only, plus the generated config: each stick has `_hitbox_rect = true` and its
+  `_reach_left`, `_reach_up`, `_reach_right` and `_reach_down` over 1 by more than the well's own
+  edge, unequal on the side where a neighbour stops it:
+  ```bash
+  adb exec-out run-as $PKG sh -c 'cat files/launch/current/skin/skin.cfg' | grep -E 'analog_(left|right)|_hitbox_rect|_reach_'
+  ```
+
 ## Android — On-screen D-pad
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
@@ -8057,13 +8133,11 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   Each overlay has exactly one `dpad_area` desc per D-pad (no `up|left`-style cells), with
   `_range_mod = 20.0`, `_range_mod_exclusive = true`, `_dead_zone = 0.25`,
   `_overlay` naming the circle image (`<overlay>-knob<N>.png` on a package and on a drawn skin,
-  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. The NES ships in
-  OpenEmux's own format since issue 806, so `_reach_x` and `_reach_y` are both `1.3636` (the D-pad
-  over its ball's travel, 60/44). A Delta or Manic package (the NDS's, or an imported one) reaches as
-  far as its D-pad's touch area over the circle's travel: `_reach_x` and `_reach_y`, or
-  `_reach_left`/`_reach_right` (`_reach_up`/`_reach_down`) when the touch area sits further out on
-  one side than the other. On a console with a drawn skin (e.g. the ColecoVision) `_reach_x` and
-  `_reach_y` are both `1.4182`.
+  `oe-<overlay>-knob<N>.png` on a skin in OpenEmux's format) and `_movable = true`. Its reach
+  (`_reach_x` and `_reach_y`, or `_reach_left`/`_reach_right` and `_reach_up`/`_reach_down` when the
+  two sides differ) is over the D-pad's own edge on every side a neighbour leaves free, 2.7 on the
+  NES's free sides (the D-pad's half-size past the art, over the ball's travel), and shorter on a
+  side where a neighbouring control or the game picture stops it (issue 826).
 
 ### RT-409 — Sliding off the D-pad keeps steering
 - **Area:** Android — On-screen D-pad
@@ -8165,6 +8239,26 @@ game's movement. `$PKG` is `com.openemux.mobile`.
   ```
   One `dpad_area` desc per overlay with `_dead_zone = 0.25` and no `_movable` line.
 
+
+### RT-938 — A touch beside the D-pad starts the movement
+- **Area:** Android — On-screen D-pad
+- **Mode:** MANUAL
+- **Preconditions:** As RT-408, the NES game open, a character that walks; an imported `.deltaskin`
+  with a D-pad for the second half.
+- **Steps:**
+  1. In portrait, without touching the D-pad first, press about one thumb's width to its left and
+     hold. Repeat to the right, above and below.
+  2. From a press outside the D-pad, drag around it without lifting.
+  3. Press A, B, Start, Select, the menu, save and load on their drawn areas, including the ones
+     closest to the D-pad.
+  4. Turn the phone to landscape and repeat steps 1–3.
+  5. Repeat steps 1–4 with the imported skin.
+  6. On the NDS, touch the bottom screen right next to the D-pad.
+- **Expected:** Each press outside the D-pad moves the character at once, in that direction. The
+  drag steers by the thumb's angle, as one started on the D-pad does. Each button responds on its
+  drawn area and the D-pad does not move. On the NDS the game gets the touch and the D-pad does not.
+  The controls look as they did before, and no zone is visible.
+- **Check:** human only, plus the reach of the generated config (see RT-408).
 
 ## Android — Tablet layout
 
@@ -10512,7 +10606,7 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
   4. Swap the roles: send the large game from the phone and cancel there mid-transfer ("Cancel
      Transfer", then confirm).
 - **Expected:** The sheet shows "Receiving from <device>", a bar, "<done> of <total>", "File i of n"
-  and "You can turn off the screen or leave the app…". The notification "Receiving from <device>"
+  and "You can keep using the app, play a game, leave the app or turn off the screen…". The notification "Receiving from <device>"
   has a progress bar and "Cancel". Both cancels end in "Transfer Cancelled" on both sides, and no
   file or `.tmp` is left in `roms/<console>`, `saves/<console>` or `states/<console>`. The
   notification is gone when the service stops. When the phone is the sender, the receiving device
@@ -10532,6 +10626,88 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
 - **Expected:** The transfer finished or is still progressing; it never failed. On a phone, also with
   the power button and the phone on battery.
 - **Check:** human only; `adb logcat -d -s OpenEmuxShare` shows no failure between the two key events.
+
+### RT-943 — Back leaves a running transfer without cancelling it, and the chip brings it back
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533.
+- **Steps:**
+  1. Accept. Press Back.
+  2. Open another tab and a game's page.
+  3. Tap the chip above the tabs.
+  4. Press "Continue in Background".
+  5. Tap the transfer notification.
+  6. Press "Cancel Transfer", then "Keep Going".
+- **Expected:** Step 1 closes the view with no question, and a chip "Receiving · <n>%" shows. The
+  percentage keeps rising through step 2, and the app responds as usual. Steps 3 and 5 open the view
+  with its bar and buttons. Step 4 closes it again. Step 6 asks "Cancel the transfer?" and the
+  transfer goes on.
+- **Check:** `adb shell dumpsys activity services $PKG | grep -E "TransferService|isForeground"`
+  shows the service in the foreground after steps 1 and 4.
+
+### RT-944 — With a gamepad, B leaves the transfer and Start brings it back
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, with a gamepad connected.
+- **Steps:**
+  1. Accept. Press B.
+  2. Press Start.
+  3. Press B. Let the transfer end, close its result and press Start.
+- **Expected:** Step 1 closes the view and the chip shows the Start badge. Step 2 opens the view.
+  In step 3, with no transfer running, Start opens Settings as usual.
+- **Check:** human only.
+
+### RT-945 — A game can be played while a transfer runs
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, and a playable game in the library.
+- **Steps:**
+  1. Accept. Press Back and start the game. Play for a minute.
+  2. Let the transfer end during play.
+  3. Leave the game.
+- **Expected:** The game runs normally through the transfer, and the notification keeps advancing.
+  When it ends, the "<n> game received" notification appears over the game. Back in the app, the
+  result card shows and the games are in the library with no restart.
+- **Check:** `adb logcat -d -s OpenEmuxShare` shows no failure during the game.
+
+### RT-946 — Minimizing does not stop a transfer, and its result waits for the player
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, on a physical phone running on battery.
+- **Steps:**
+  1. Accept, press Home and use another app until the transfer ends.
+  2. Return to OpenEmux.
+  3. Repeat, stopping the sender midway with the view closed.
+- **Expected:** Step 1 completes, with a notification saying how it ended. Step 2 shows the result
+  card, and the games are in the library. Step 3 ends in a failure result that says the connection
+  was lost, and nothing partial stays in the library.
+- **Check:** human only.
+
+### RT-947 — A send keeps going after leaving its screen, but not before the answer
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** Two devices on one network, and a large game to send from the phone.
+- **Steps:**
+  1. Send. Before the receiver answers, press Back.
+  2. Press "Keep Going", and accept on the receiver.
+  3. Press Back with the bytes moving.
+  4. Tap the chip, then press "Continue in Background".
+  5. Let it end while on another screen.
+- **Expected:** Step 1 asks "Cancel the transfer?". Step 3 leaves the screen with no question and the
+  chip shows "Sending · <n>%". Step 4 opens the progress view and closes it. Step 5 shows the result
+  card over the screen in use.
+- **Check:** human only.
+
+### RT-948 — A backup cannot be restored while a transfer runs
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, and a backup archive on the phone.
+- **Steps:**
+  1. Accept. Press Back and open Settings, then "Back up and restore".
+  2. Let the transfer end.
+- **Expected:** During the transfer the restore button is off and a warning says a game transfer is
+  running. Creating a backup stays available. After step 2 the warning is gone and restore works.
+- **Check:** human only.
 
 ### RT-535 — The phone stops being discoverable 30 seconds after its share screens close
 - **Area:** Android — Share nearby
@@ -14777,6 +14953,119 @@ logcat's `OpenEmuxSkin` lines.
   `adb shell am instrument -w -e class com.openemux.mobile.ActivityContextInstrumentedTest com.openemux.mobile.test/androidx.test.runner.AndroidJUnitRunner`
   (after `./gradlew installDebug installDebugAndroidTest`, on a phone-size device past the first-run
   setup; it picks "Deutsch" from the sheet and restores the language it found).
+
+## Android — Restart from the in-game menu
+
+"Restart game" in the Android app's in-game menu (`pkg/android/openemux` of the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android)) asks first and then
+restarts in one go. The runner has no Android device, so these are `MANUAL`.
+
+### RT-949 — Restarting from the in-game menu asks once and restarts
+- **Area:** Android — Restart from the in-game menu
+- **Mode:** MANUAL
+- **Preconditions:** The app past the first-run setup, a game started and played past its title
+  screen; a gamepad connected for step 4; a foldable for step 5, if there is one.
+- **Steps:**
+  1. Open the in-game menu and press "Restart game".
+  2. Press "Restart".
+  3. Repeat steps 1 and 2 in landscape.
+  4. With the gamepad, open the menu, select "Restart game" and press A, then move to "Restart" and
+     press A.
+  5. Half open the foldable and repeat steps 1 and 2.
+- **Expected:** Step 1 shows a dialog titled "Restart game?" with "Restart" and "Cancel". Step 2
+  closes the dialog and the menu and the game is back at its beginning, on that one press, with no
+  "press again" message. With the gamepad, focus starts on "Cancel" and cannot leave the dialog.
+  Half open, the dialog stays below the fold.
+- **Check:** human only (`adb logcat -d | grep -i "press again"` prints nothing for this flow).
+
+### RT-950 — Cancelling the restart leaves the game and the menu as they were
+- **Area:** Android — Restart from the in-game menu
+- **Mode:** MANUAL
+- **Preconditions:** A game started and played past its title screen; a gamepad connected for step 3.
+- **Steps:**
+  1. Open the in-game menu, press "Restart game" and press "Cancel".
+  2. Press "Restart game" again and tap outside the dialog.
+  3. With the gamepad, open the dialog and press B.
+  4. Press "Back to game".
+  5. Leave the game, and on its screen press "Restart".
+- **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
+  focus is back on "Restart game". Step 4 returns to the game exactly where it was. Step 5 starts
+  the game from the beginning, as it always has.
+- **Check:** human only.
+
+## Android — Save states
+
+Listing, deleting and saving states in the Android app (`pkg/android/openemux` of the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android)). The states of a game
+are `<rom>.state`, `<rom>.state<N>` and `<rom>.state.auto` under the app's save-state folder
+(`/sdcard/Android/data/com.openemux.mobile/files/states/<system>/`), each with a `.png` picture
+beside it. Slot numbers run from 0 to 99. The runner has no Android device, so these are `MANUAL`.
+
+### RT-938 — A save state's thumbnail shows the whole picture
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** The app past the first-run setup, with a save state on a game whose picture is
+  not 3:2 (an NES or Super Nintendo game) and on one whose picture is (a Game Boy Advance game).
+- **Steps:**
+  1. Open each game and look at its "Save states" section, in portrait and in landscape, and on a
+     tablet if there is one.
+  2. Tap "See all" and compare.
+  3. Start the game, open the in-game menu and open "Save states".
+- **Expected:** Every thumbnail is a tile with the same 3:2 proportions in all three places and shows
+  the whole frame: nothing is cut off, and a picture of another shape has black bars on its sides.
+- **Check:** human only (screenshots of the three places).
+
+### RT-939 — A press and hold and the three-dots button open the same menu
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with at least two save states; a gamepad connected for step 3.
+- **Steps:**
+  1. On the game's screen, press and hold a thumbnail.
+  2. Close the menu and tap the three-dots button on the thumbnail.
+  3. With the gamepad, focus the thumbnail and press D-pad Right, then A.
+  4. Repeat steps 1 to 3 under "See all", and on the in-game "Save states" page.
+- **Expected:** Each way opens a menu with "Delete" (on the in-game page, a page with "Delete"). The
+  button takes the gamepad's focus, and D-pad Left goes back to the thumbnail. A short tap on the
+  thumbnail still opens the game at that state.
+- **Check:** human only.
+
+### RT-940 — Deleting a state asks first and removes only that state
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1, 2 and 3 and an auto state. Note their files with
+  `adb shell ls '<save-state folder>'`.
+- **Steps:**
+  1. Open the menu of slot 2, choose "Delete", then "Cancel".
+  2. Open it again, choose "Delete" and confirm.
+  3. In the in-game "Save states" page, delete slot 3 the same way.
+  4. Under "See all", delete the auto state.
+  5. Delete the last state under "See all".
+- **Expected:** Step 1 changes nothing. After each confirmation the state leaves the list at once and
+  a toast says so; its `.state` file and its `.png` are gone from the folder, and the other states
+  keep their slot numbers and files. After step 4 the game's screen offers "Play" instead of
+  "Continue". After step 5 "See all" closes.
+- **Check:** human only (`adb shell ls '<save-state folder>'` after each step).
+
+### RT-941 — The in-game menu saves to the slot it shows
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 2, no state in slot 3; a gamepad connected for
+  step 5.
+- **Steps:**
+  1. Start the game and open the in-game menu.
+  2. Press "Save state".
+  3. Press the left arrow until the slot reads 1, and press "Save state".
+  4. Press the left arrow past 0, then the right arrow past 99.
+  5. Repeat the arrows and "Save state" with the gamepad, on a phone in portrait, in landscape and
+     on a half-open foldable in tabletop posture.
+- **Expected:** Step 1: the button reads "Slot 3 · Empty". Step 2: the toast says "State saved to
+  slot 3", the button stays on slot 3 and reads "Slot 3 · In use", and the state is in the list.
+  Step 3: while on slot 1 the button reads "Slot 1 · In use"; saving replaces that state and its
+  picture and adds no new one. Step 4: the number wraps from 0 to 99 and from 99 to 0. Step 5: the
+  arrows and "Save state" are separate focus stops, "Save state" focused first, and nothing is cut
+  off in any of the three layouts.
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes and
+  no new file appears).
 
 ## Retired
 
