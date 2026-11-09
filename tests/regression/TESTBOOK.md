@@ -5868,7 +5868,7 @@ paused game, with the game session kept: no save state by the player, no quit, n
   1. Open the pause sheet. Note the point the game is at.
   2. Tap "Change skin". The console's skins appear as on the console's skin screen: the same cards,
      with their miniatures and form badges, under "Your skins", "Bundled" and "Imported", the one in
-     use outlined and saying "In use". There is no actions button on the cards and no "Import skin".
+     use outlined and saying "In use". There is no actions button on the cards and no "Import .zip".
   3. Tap another one, then close the sheet with its × button.
   4. Quit the game and launch it again.
   5. Open the skin screen of the console in the library.
