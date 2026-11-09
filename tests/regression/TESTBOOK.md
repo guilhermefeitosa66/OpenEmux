@@ -14871,6 +14871,80 @@ logcat's `OpenEmuxSkin` lines.
   (after `./gradlew installDebug installDebugAndroidTest`, on a phone-size device past the first-run
   setup; it picks "Deutsch" from the sheet and restores the language it found).
 
+## Android — Save states
+
+Listing, deleting and saving states in the Android app (`pkg/android/openemux` of the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android)). The states of a game
+are `<rom>.state`, `<rom>.state<N>` and `<rom>.state.auto` under the app's save-state folder
+(`/sdcard/Android/data/com.openemux.mobile/files/states/<system>/`), each with a `.png` picture
+beside it. Slot numbers run from 0 to 99. The runner has no Android device, so these are `MANUAL`.
+
+### RT-938 — A save state's thumbnail shows the whole picture
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** The app past the first-run setup, with a save state on a game whose picture is
+  not 3:2 (an NES or Super Nintendo game) and on one whose picture is (a Game Boy Advance game).
+- **Steps:**
+  1. Open each game and look at its "Save states" section, in portrait and in landscape, and on a
+     tablet if there is one.
+  2. Tap "See all" and compare.
+  3. Start the game, open the in-game menu and open "Save states".
+- **Expected:** Every thumbnail is a tile with the same 3:2 proportions in all three places and shows
+  the whole frame: nothing is cut off, and a picture of another shape has black bars on its sides.
+- **Check:** human only (screenshots of the three places).
+
+### RT-939 — A press and hold and the three-dots button open the same menu
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with at least two save states; a gamepad connected for step 3.
+- **Steps:**
+  1. On the game's screen, press and hold a thumbnail.
+  2. Close the menu and tap the three-dots button on the thumbnail.
+  3. With the gamepad, focus the thumbnail and press D-pad Right, then A.
+  4. Repeat steps 1 to 3 under "See all", and on the in-game "Save states" page.
+- **Expected:** Each way opens a menu with "Delete" (on the in-game page, a page with "Delete"). The
+  button takes the gamepad's focus, and D-pad Left goes back to the thumbnail. A short tap on the
+  thumbnail still opens the game at that state.
+- **Check:** human only.
+
+### RT-940 — Deleting a state asks first and removes only that state
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1, 2 and 3 and an auto state. Note their files with
+  `adb shell ls '<save-state folder>'`.
+- **Steps:**
+  1. Open the menu of slot 2, choose "Delete", then "Cancel".
+  2. Open it again, choose "Delete" and confirm.
+  3. In the in-game "Save states" page, delete slot 3 the same way.
+  4. Under "See all", delete the auto state.
+  5. Delete the last state under "See all".
+- **Expected:** Step 1 changes nothing. After each confirmation the state leaves the list at once and
+  a toast says so; its `.state` file and its `.png` are gone from the folder, and the other states
+  keep their slot numbers and files. After step 4 the game's screen offers "Play" instead of
+  "Continue". After step 5 "See all" closes.
+- **Check:** human only (`adb shell ls '<save-state folder>'` after each step).
+
+### RT-941 — The in-game menu saves to the slot it shows
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 2, no state in slot 3; a gamepad connected for
+  step 5.
+- **Steps:**
+  1. Start the game and open the in-game menu.
+  2. Press "Save state".
+  3. Press the left arrow until the slot reads 1, and press "Save state".
+  4. Press the left arrow past 0, then the right arrow past 99.
+  5. Repeat the arrows and "Save state" with the gamepad, on a phone in portrait, in landscape and
+     on a half-open foldable in tabletop posture.
+- **Expected:** Step 1: the button reads "Slot 3 · Empty". Step 2: the toast says "State saved to
+  slot 3", the button stays on slot 3 and reads "Slot 3 · In use", and the state is in the list.
+  Step 3: while on slot 1 the button reads "Slot 1 · In use"; saving replaces that state and its
+  picture and adds no new one. Step 4: the number wraps from 0 to 99 and from 99 to 0. Step 5: the
+  arrows and "Save state" are separate focus stops, "Save state" focused first, and nothing is cut
+  off in any of the three layouts.
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes and
+  no new file appears).
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
