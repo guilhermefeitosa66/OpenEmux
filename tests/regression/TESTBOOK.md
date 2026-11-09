@@ -5854,6 +5854,57 @@ must be off, since it turns auto save off.
 - **Check:** human only (a screenshot after step 1, `adb shell stat -c %y '<path>'` around steps 2
   and 4).
 
+## Android — Skin from the pause menu
+
+The Android app's pause sheet changing the console's skin and opening the skin editor over the
+paused game, with the game session kept: no save state by the player, no quit, no relaunch (issue 827).
+
+### RT-940 — Change skin from the pause menu applies to the running game and persists
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a console with more than one bundled skin (Super Nintendo), a game
+  running.
+- **Steps:**
+  1. Open the pause sheet. Note the point the game is at.
+  2. Tap "Change skin". The console's skins are listed under "Your skins", "Bundled" and "Imported",
+     the one in use marked.
+  3. Tap another one, then close the sheet with its × button.
+  4. Quit the game and launch it again.
+  5. Open the skin screen of the console in the library.
+- **Expected:** After step 3 the new skin is on screen, the game continues from the same point and
+  no state was saved or loaded by the player. During steps 1 to 3 the game stays paused and silent.
+  After step 4 the game opens with the picked skin. In step 5 the same skin is marked in use. A skin
+  not made for the device's form, or unreadable, is shown disabled and says why. Same in landscape.
+- **Check:** human only (a screenshot after step 3 and after step 4).
+
+### RT-941 — Edit skin from the pause menu changes the running game
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a skin of the player's own in use for the console, a game running.
+- **Steps:**
+  1. Open the pause sheet and tap "Edit skin". The editor opens on the skin in use, for the
+     orientation being played.
+  2. Move and resize a control, tap "Save", then close the editor.
+  3. The pause sheet is back. Close it with its × button and touch the moved control.
+- **Expected:** After step 3 the edited layout is on screen, the game continues from the same point
+  and the touch zone is where the control now is. The game stays paused and silent while the editor
+  is open. Same in landscape, editing the landscape layout.
+- **Check:** human only (a screenshot after step 3).
+
+### RT-942 — Cancelling an edit from the pause menu leaves the skin as it was
+
+- **Mode:** MANUAL
+- **Preconditions:** Android app, a bundled skin in use for the console, a game running.
+- **Steps:**
+  1. Open the pause sheet and tap "Edit skin". A copy opens in the editor.
+  2. Move a control, close the editor and discard the changes.
+  3. Open the console's skin screen after quitting the game.
+  4. Repeat steps 1 and 2, this time tapping "Save" before closing, and resume.
+- **Expected:** After step 2 the pause sheet is back, with the bundled skin still in use. In step 3
+  no copy is listed. After step 4 the copy is the skin in use and the game shows it. An imported
+  skin in use behaves the same way, through a duplicate.
+- **Check:** human only (a screenshot after step 2 and after step 4).
+
 ## Android — RetroAchievements
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
