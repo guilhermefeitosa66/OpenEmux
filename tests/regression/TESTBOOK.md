@@ -10697,6 +10697,17 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
   card over the screen in use.
 - **Check:** human only.
 
+### RT-948 — A backup cannot be restored while a transfer runs
+- **Area:** Android — Share nearby
+- **Mode:** MANUAL
+- **Preconditions:** As RT-533, and a backup archive on the phone.
+- **Steps:**
+  1. Accept. Press Back and open Settings, then "Back up and restore".
+  2. Let the transfer end.
+- **Expected:** During the transfer the restore button is off and a warning says a game transfer is
+  running. Creating a backup stays available. After step 2 the warning is gone and restore works.
+- **Check:** human only.
+
 ### RT-535 — The phone stops being discoverable 30 seconds after its share screens close
 - **Area:** Android — Share nearby
 - **Mode:** MANUAL
