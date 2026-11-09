@@ -14953,6 +14953,45 @@ logcat's `OpenEmuxSkin` lines.
   (after `./gradlew installDebug installDebugAndroidTest`, on a phone-size device past the first-run
   setup; it picks "Deutsch" from the sheet and restores the language it found).
 
+## Android — Restart from the in-game menu
+
+"Restart game" in the Android app's in-game menu (`pkg/android/openemux` of the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android)) asks first and then
+restarts in one go. The runner has no Android device, so these are `MANUAL`.
+
+### RT-949 — Restarting from the in-game menu asks once and restarts
+- **Area:** Android — Restart from the in-game menu
+- **Mode:** MANUAL
+- **Preconditions:** The app past the first-run setup, a game started and played past its title
+  screen; a gamepad connected for step 4; a foldable for step 5, if there is one.
+- **Steps:**
+  1. Open the in-game menu and press "Restart game".
+  2. Press "Restart".
+  3. Repeat steps 1 and 2 in landscape.
+  4. With the gamepad, open the menu, select "Restart game" and press A, then move to "Restart" and
+     press A.
+  5. Half open the foldable and repeat steps 1 and 2.
+- **Expected:** Step 1 shows a dialog titled "Restart game?" with "Restart" and "Cancel". Step 2
+  closes the dialog and the menu and the game is back at its beginning, on that one press, with no
+  "press again" message. With the gamepad, focus starts on "Cancel" and cannot leave the dialog.
+  Half open, the dialog stays below the fold.
+- **Check:** human only (`adb logcat -d | grep -i "press again"` prints nothing for this flow).
+
+### RT-950 — Cancelling the restart leaves the game and the menu as they were
+- **Area:** Android — Restart from the in-game menu
+- **Mode:** MANUAL
+- **Preconditions:** A game started and played past its title screen; a gamepad connected for step 3.
+- **Steps:**
+  1. Open the in-game menu, press "Restart game" and press "Cancel".
+  2. Press "Restart game" again and tap outside the dialog.
+  3. With the gamepad, open the dialog and press B.
+  4. Press "Back to game".
+  5. Leave the game, and on its screen press "Restart".
+- **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
+  focus is back on "Restart game". Step 4 returns to the game exactly where it was. Step 5 starts
+  the game from the beginning, as it always has.
+- **Check:** human only.
+
 ## Android — Save states
 
 Listing, deleting and saving states in the Android app (`pkg/android/openemux` of the
